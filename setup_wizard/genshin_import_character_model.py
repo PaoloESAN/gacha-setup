@@ -145,7 +145,11 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
         # Hide EffectMesh (gets deleted later on) and EyeStar
         for object in bpy.data.objects:
             if 'EffectMesh' in object.name or 'EyeStar' in object.name:
-                bpy.data.objects[object.name].hide_set(True)
+                try:
+                    bpy.data.objects[object.name].hide_set(True)
+                except RuntimeError:
+                    # Object is not in the active View Layer, use hide_viewport instead
+                    bpy.data.objects[object.name].hide_viewport = True
                 bpy.data.objects[object.name].hide_render = True
 
     def reset_pose_location_and_rotation(self):

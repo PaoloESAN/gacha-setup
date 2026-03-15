@@ -93,7 +93,13 @@ def make_material_dic(context, texture_dic, material_dic, custom_property_dic):
                     if node.bl_idname == 'ShaderNodeBsdfPrincipled':
                         bsdf = node
             if bsdf != None and material_output != None:
-                input_name_list = ['Base Color', 'Metallic', 'Specular', 'Roughness', 'Emission', 'Alpha', 'Normal', 'Bump', 'Displacement', 'Ambient']
+                # Blender 4.0+ renamed Principled BSDF inputs:
+                #   "Specular" -> "Specular IOR Level"
+                #   "Emission" -> "Emission Color"
+                if bpy.app.version >= (4, 0, 0):
+                    input_name_list = ['Base Color', 'Metallic', 'Specular IOR Level', 'Roughness', 'Emission Color', 'Alpha', 'Normal', 'Bump', 'Displacement', 'Ambient']
+                else:
+                    input_name_list = ['Base Color', 'Metallic', 'Specular', 'Roughness', 'Emission', 'Alpha', 'Normal', 'Bump', 'Displacement', 'Ambient']
                 use_mix_rgb = (material[4] != -1 and material[40] != -1)
                 mix_rgb_node = None
                 for (i, input_name) in enumerate(input_name_list):
@@ -102,7 +108,8 @@ def make_material_dic(context, texture_dic, material_dic, custom_property_dic):
                         continue
                     # we only setup base color and emission color, leave other values as default, because the meanings of other values between BSDF and phone shading are different.
                     if i == 0 or i == 4:
-                        bsdf.inputs[input_name].default_value = (material[i*4+1], material[i*4+2], material[i*4+3], 1.0)
+                        if bsdf.inputs.get(input_name) is not None:
+                            bsdf.inputs[input_name].default_value = (material[i*4+1], material[i*4+2], material[i*4+3], 1.0)
                     # setup texture image
                     if material[i*4+4] != -1:
                         image = texture_dic[material[i*4+4]][-1]
@@ -159,7 +166,9 @@ def make_material_dic(context, texture_dic, material_dic, custom_property_dic):
                                     ob.node_tree.links.new(bsdf.inputs['Base Color'], mix_rgb_node.outputs['Color'])
                                     ob.node_tree.links.new(mix_rgb_node.inputs['Color2'], texImage.outputs['Color'])
                             else:
-                                ob.node_tree.links.new(bsdf.inputs[input_name], texImage.outputs['Color'])
+                                # Safe check: skip if the input doesn't exist on this Blender version
+                                if bsdf.inputs.get(input_name) is not None:
+                                    ob.node_tree.links.new(bsdf.inputs[input_name], texImage.outputs['Color'])
         # make custom properties for material
         custom_property_index = material[41]
         if custom_property_index != -1:
@@ -428,18 +437,21 @@ def make_mesh_dic(context, hierarchy_dic, node_dic, bind_pose_dic, vertex_dic, p
                     # free split vertex normals
                     ob.data.free_normals_split()
                     # auto display split vertex normals
-                    ob.data.use_auto_smooth = True
+                    if bpy.app.version < (4, 1, 0):
+                        ob.data.use_auto_smooth = True
                 # generate normals
                 else:
                     #recalculate_normals(ob)
                     if use_auto_smooth:
                         # let the mesh look better based on the sharpness between faces
-                        ob.data.use_auto_smooth = True
-                        # angle gate set to 60 degrees
-                        ob.data.auto_smooth_angle = (my_angle / 180.0) * math.pi
+                        if bpy.app.version < (4, 1, 0):
+                            ob.data.use_auto_smooth = True
+                            # angle gate set to 60 degrees
+                            ob.data.auto_smooth_angle = (my_angle / 180.0) * math.pi
                     else:
                         # let the mesh look very smoothly based on vertex normals
-                        ob.data.use_auto_smooth = False
+                        if bpy.app.version < (4, 1, 0):
+                            ob.data.use_auto_smooth = False
                     if my_shade_mode == 'Smooth':
                         # mark object as smooth (example of using ops on active object)
                         bpy.ops.object.shade_smooth()

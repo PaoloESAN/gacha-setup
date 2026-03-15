@@ -1,5 +1,8 @@
 import bpy
-import bpy_types
+try:
+    import bpy_types
+except ImportError:
+    bpy_types = bpy.types  # Blender 5.0+ removed standalone bpy_types module
 import bmesh
 import math
 import mathutils

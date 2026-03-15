@@ -98,6 +98,16 @@ class GI_PT_Basic_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
 
         OperatorFactory.create(
             sub_layout,
+            'hoyoverse.prepare_for_new_character',
+            'Prepare for New Character',
+            icon='FILE_NEW',
+            game_type=GameType.GENSHIN_IMPACT.name,
+        )
+
+        sub_layout.separator()
+
+        OperatorFactory.create(
+            sub_layout,
             'genshin.set_up_character',
             'Set Up Character',
             icon='OUTLINER_OB_ARMATURE',
