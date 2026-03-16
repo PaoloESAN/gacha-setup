@@ -917,21 +917,39 @@ def rig_character(
     # Remove old unused wgt collection                
     bpy.data.collections.remove(bpy.data.collections.get("WG"))
 
+    def get_and_rename_empty(empty_name):
+        obj = bpy.data.objects.get(empty_name)
+        if obj:
+            obj.name = f"{empty_name}_{char_name}"
+            return obj.name
+        return None
+
     # Obfuscate light driving stuff not needed, keep the main light.        
-    move_into_collection("Face Light Direction","wgt")
-    move_into_collection("Head Driver","wgt")
-    move_into_collection("Main Light Direction",char_name)
+    new_name = get_and_rename_empty("Face Light Direction")
+    if new_name: move_into_collection(new_name,"wgt")
+    
+    new_name = get_and_rename_empty("Head Driver")
+    if new_name: move_into_collection(new_name,"wgt")
+    
+    new_name = get_and_rename_empty("Main Light Direction")
+    if new_name: move_into_collection(new_name,char_name)
 
     # V3 Shader Support - New empty names
-    move_into_collection("Head Origin","wgt")
-    move_into_collection("Light Direction",char_name)
+    new_name = get_and_rename_empty("Head Origin")
+    if new_name: move_into_collection(new_name,"wgt")
+    
+    new_name = get_and_rename_empty("Light Direction")
+    if new_name: move_into_collection(new_name,char_name)
 
     bpy.data.collections["wgt"].hide_select = True
     bpy.data.collections["wgt"].hide_viewport = True
     bpy.data.collections["wgt"].hide_render = True
 
-    move_into_collection("Head Forward", "wgt")
-    move_into_collection("Head Up", "wgt")
+    new_name = get_and_rename_empty("Head Forward")
+    if new_name: move_into_collection(new_name, "wgt")
+    
+    new_name = get_and_rename_empty("Head Up")
+    if new_name: move_into_collection(new_name, "wgt")
 
 
     # IMPORTANT: This must be done before deleting the "Collection" collection in case Lighting Panel gets appended in there

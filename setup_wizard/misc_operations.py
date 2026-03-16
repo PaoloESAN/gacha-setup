@@ -533,6 +533,29 @@ class HYV_OT_PrepareForNewCharacter(Operator, CustomOperatorProperties):
                         if mat.node_tree:
                             self._rename_node_groups_recursively(mat.node_tree, suffix, visited_trees)
 
+        # 6.5 Make Empties unique if not already done by Finish Setup
+        empties_to_rename = [
+            'Head Forward',
+            'Head Up',
+            'Light Direction',
+            'Main Light Direction',
+            'Face Light Direction',
+            'Head Driver',
+            'Head Origin'
+        ]
+        
+        # Try to infer character name from armature in the new_collection to match rig_script logic
+        armatures_in_col = [obj for obj in new_collection.all_objects if obj.type == 'ARMATURE']
+        empty_suffix = f'_{character_label}'
+        if armatures_in_col:
+            inferred_char_name = armatures_in_col[0].name.replace('Rig', '')
+            empty_suffix = f'_{inferred_char_name}'
+
+        for empty_name in empties_to_rename:
+            empty_obj = bpy.data.objects.get(empty_name)
+            if empty_obj:
+                empty_obj.name = f"{empty_name}{empty_suffix}"
+
         # 7. Deselect all
         bpy.ops.object.select_all(action='DESELECT')
 

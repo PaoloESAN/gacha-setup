@@ -146,10 +146,11 @@ class GameMaterialImporter:
         light_direction_empties_to_append = \
             [empty_object for empty_object in LightDirectionEmptyNames.LIGHT_DIRECTION_EMPTIES_FILE_IMPORT 
              if not bpy.data.objects.get(empty_object.get('name'))]
-        bpy.ops.wm.append(
-            directory=os.path.join(object_file_path),
-            files=light_direction_empties_to_append
-        )
+        if light_direction_empties_to_append:
+            bpy.ops.wm.append(
+                directory=os.path.join(object_file_path),
+                files=light_direction_empties_to_append
+            )
 
     def __get_outlines_node_group_from_shader_blend_file(self, shader_blend_file_path):
         with bpy.data.libraries.load(shader_blend_file_path) as (data_from, data_to):

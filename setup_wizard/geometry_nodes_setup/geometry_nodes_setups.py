@@ -292,13 +292,21 @@ class GameGeometryNodesSetup(ABC):
     Use existing object if it exists, otherwise attempt to set it with known object names for GI or HSR shaders
     '''
     def set_up_light_vectors_modifier(self, light_vectors_modifier):
+        armature = [obj for obj in bpy.context.selected_objects if obj.type == 'ARMATURE']
+        if not armature:
+            armature = [obj for obj in bpy.data.objects if obj.type == 'ARMATURE']
+        char_name = armature[0].name.replace("Rig", "") if armature else ""
+
+        def get_empty(name):
+            return bpy.data.objects.get(f"{name}_{char_name}") or bpy.data.objects.get(name)
+
         light_vectors_modifier[LIGHT_VECTORS_LIGHT_DIRECTION] = \
             light_vectors_modifier[LIGHT_VECTORS_LIGHT_DIRECTION] or \
-            bpy.data.objects.get(LightDirectionEmptyNames.LIGHT_DIRECTION) or \
-            bpy.data.objects.get(LightDirectionEmptyNames.MAIN_LIGHT_DIRECTION)
-        light_vectors_modifier[LIGHT_VECTORS_HEAD_ORIGIN] = light_vectors_modifier[LIGHT_VECTORS_HEAD_ORIGIN] or bpy.data.objects.get(LightDirectionEmptyNames.HEAD_ORIGIN)
-        light_vectors_modifier[LIGHT_VECTORS_HEAD_FORWARD] = light_vectors_modifier[LIGHT_VECTORS_HEAD_FORWARD] or bpy.data.objects.get(LightDirectionEmptyNames.HEAD_FORWARD)
-        light_vectors_modifier[LIGHT_VECTORS_HEAD_UP] = light_vectors_modifier[LIGHT_VECTORS_HEAD_UP] or bpy.data.objects.get(LightDirectionEmptyNames.HEAD_UP) 
+            get_empty(LightDirectionEmptyNames.LIGHT_DIRECTION) or \
+            get_empty(LightDirectionEmptyNames.MAIN_LIGHT_DIRECTION)
+        light_vectors_modifier[LIGHT_VECTORS_HEAD_ORIGIN] = light_vectors_modifier[LIGHT_VECTORS_HEAD_ORIGIN] or get_empty(LightDirectionEmptyNames.HEAD_ORIGIN)
+        light_vectors_modifier[LIGHT_VECTORS_HEAD_FORWARD] = light_vectors_modifier[LIGHT_VECTORS_HEAD_FORWARD] or get_empty(LightDirectionEmptyNames.HEAD_FORWARD)
+        light_vectors_modifier[LIGHT_VECTORS_HEAD_UP] = light_vectors_modifier[LIGHT_VECTORS_HEAD_UP] or get_empty(LightDirectionEmptyNames.HEAD_UP) 
 
 
 class GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
@@ -313,7 +321,8 @@ class GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
         self.clone_outlines(self.material_names)
         for mesh_name in meshes_to_create_outlines_on:
             for object_name, object_data in bpy.context.scene.objects.items():
-                if object_data.type == 'MESH' and (mesh_name == object_name or f'_{mesh_name}' in object_name):
+                object_name_matches = (mesh_name == object_name or object_name.startswith(f"{mesh_name}.") or f'_{mesh_name}' in object_name)
+                if object_data.type == 'MESH' and object_name_matches:
                     self.create_geometry_nodes_modifier(f'{object_name}{BODY_PART_SUFFIX}')
                     self.fix_meshes_by_setting_genshin_materials(object_name)
 
@@ -333,7 +342,7 @@ class GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
             if not geometry_nodes_modifier:
                 geometry_nodes_modifier = mesh.modifiers.new(f'{NAME_OF_GEOMETRY_NODES_MODIFIER} {mesh_name}', 'NODES')
                 geometry_nodes_modifier.node_group = outlines_node_group
-            self.set_up_modifier_default_values(geometry_nodes_modifier, mesh)
+                self.set_up_modifier_default_values(geometry_nodes_modifier, mesh)
         return geometry_nodes_modifier
 
 
@@ -387,7 +396,7 @@ class V3_GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
         # Set up Light Vectors for meshes that match the expected mesh name list
         for mesh_name in meshes_to_create_light_vectors_on:  # It is important that this is created and placed before Outlines!!
             for object_name, object_data in bpy.context.scene.objects.items():
-                object_name_matches = (mesh_name == object_name or f'_{mesh_name}' in object_name)
+                object_name_matches = (mesh_name == object_name or object_name.startswith(f"{mesh_name}.") or f'_{mesh_name}' in object_name)
                 if object_data.type == 'MESH' and object_name_matches:
                     self.create_light_vectors_modifier(f'{object_name}{BODY_PART_SUFFIX}')
         # Set up Light Vectors for meshes that have keywords in their names (Ex. SkillObj)
@@ -399,7 +408,7 @@ class V3_GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
         # Set up Outlines for meshes that match the expected mesh name list
         for mesh_name in meshes_to_create_outlines_on:
             for object_name, object_data in bpy.context.scene.objects.items():
-                object_name_matches = (mesh_name == object_name or f'_{mesh_name}' in object_name)
+                object_name_matches = (mesh_name == object_name or object_name.startswith(f"{mesh_name}.") or f'_{mesh_name}' in object_name)
                 if object_data.type == 'MESH' and object_name_matches:
                     self.create_geometry_nodes_modifier(f'{object_name}{BODY_PART_SUFFIX}')
                     self.fix_meshes_by_setting_genshin_materials(object_name)
@@ -426,7 +435,7 @@ class V3_GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
             if not geometry_nodes_modifier:
                 geometry_nodes_modifier = mesh.modifiers.new(f'{NAME_OF_GEOMETRY_NODES_MODIFIER} {mesh_name}', 'NODES')
                 geometry_nodes_modifier.node_group = outlines_node_group
-            self.set_up_modifier_default_values(geometry_nodes_modifier, mesh)
+                self.set_up_modifier_default_values(geometry_nodes_modifier, mesh)
         return geometry_nodes_modifier 
 
     def set_up_modifier_default_values(self, modifier, mesh):
@@ -742,7 +751,7 @@ class HonkaiStarRailGeometryNodesSetup(GameGeometryNodesSetup):
             if not geometry_nodes_modifier:
                 geometry_nodes_modifier = mesh.modifiers.new(f'{NAME_OF_GEOMETRY_NODES_MODIFIER} {mesh_name}', 'NODES')
                 geometry_nodes_modifier.node_group = outlines_node_group
-            self.set_up_modifier_default_values(geometry_nodes_modifier, mesh)
+                self.set_up_modifier_default_values(geometry_nodes_modifier, mesh)
         return geometry_nodes_modifier
 
 
@@ -837,7 +846,7 @@ class PunishingGrayRavenGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
             if not geometry_nodes_modifier:
                 geometry_nodes_modifier = mesh.modifiers.new(f'{NAME_OF_GEOMETRY_NODES_MODIFIER} {mesh_name}', 'NODES')
                 geometry_nodes_modifier.node_group = outlines_node_group
-            self.set_up_modifier_default_values(geometry_nodes_modifier, mesh)
+                self.set_up_modifier_default_values(geometry_nodes_modifier, mesh)
         return geometry_nodes_modifier
 
     def set_up_modifier_default_values(self, modifier, mesh):
@@ -926,5 +935,5 @@ class V2_PunishingGrayRavenGeometryNodesSetup(GameGeometryNodesSetup):
             if not geometry_nodes_modifier:
                 geometry_nodes_modifier = mesh.modifiers.new(f'{NAME_OF_GEOMETRY_NODES_MODIFIER} {mesh_name}', 'NODES')
                 geometry_nodes_modifier.node_group = outlines_node_group
-            self.set_up_modifier_default_values(geometry_nodes_modifier, mesh)
+                self.set_up_modifier_default_values(geometry_nodes_modifier, mesh)
         return geometry_nodes_modifier

@@ -69,6 +69,11 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         for mesh in meshes:
             for material_slot in mesh.material_slots:
                 material_name = material_slot.name
+                
+                # If it already has our shader prefix, it was processed previously (e.g. earlier character).
+                if material_name.startswith(self.material_names.MATERIAL_PREFIX):
+                    continue
+
                 mesh_body_part_name = None
                 character_type = None
 
@@ -285,6 +290,10 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         for mesh in meshes:
             for material_slot in mesh.material_slots:
                 material_name = material_slot.name
+                
+                if material_name.startswith(self.shader_material_names.MATERIAL_PREFIX):
+                    continue
+
                 mesh_body_part_name = self.find_body_part_name(material_name)
 
                 # Another hacky-solution, some characters only have a "Body" material, but the shader materials
@@ -474,6 +483,10 @@ class PunishingGrayRavenDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         for mesh in meshes:
             for material_slot in mesh.material_slots:
                 material_name = material_slot.name
+                
+                if material_name.startswith(JaredNytsPunishingGrayRavenShaderMaterialNames.MATERIAL_PREFIX):
+                    continue
+
                 material_identifier_service = PunishingGrayRavenMaterialIdentifierService()
                 mesh_body_part_name = material_identifier_service.get_body_part_name(material_name) or \
                     self.find_body_part_name(material_name)  # If in different naming schema, fallback to best guess mode

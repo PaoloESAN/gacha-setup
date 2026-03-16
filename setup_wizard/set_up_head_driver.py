@@ -16,10 +16,29 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
     bl_label = 'Genshin: Setup Head Driver'
 
     def execute(self, context):
-        head_driver_object = bpy.data.objects.get(HEAD_DRIVER_OBJECT_NAME) or bpy.data.objects.get(HEAD_ORIGIN_OBJECT_NAME)
+        # Try to find the correct armature
+        armatures = [obj for obj in bpy.context.selected_objects if obj.type == 'ARMATURE']
+        if not armatures:
+            armatures = [obj for obj in bpy.data.objects if obj.type == 'ARMATURE']
+            
+        if not armatures:
+            self.report({'ERROR'}, "No armature found")
+            return {'CANCELLED'}
+            
+        armature = armatures[0]
+        char_name = armature.name.replace("Rig", "") if "Rig" in armature.name else armature.name
+
+        head_driver_object = bpy.data.objects.get(f"{HEAD_DRIVER_OBJECT_NAME}_{char_name}") or \
+                             bpy.data.objects.get(f"{HEAD_ORIGIN_OBJECT_NAME}_{char_name}") or \
+                             bpy.data.objects.get(HEAD_DRIVER_OBJECT_NAME) or \
+                             bpy.data.objects.get(HEAD_ORIGIN_OBJECT_NAME)
+
+        if not head_driver_object:
+            self.report({'ERROR'}, "Head Driver not found")
+            return {'CANCELLED'}
+            
         child_of_constraint = head_driver_object.constraints[0]  # expecting 1 constraint head driver
 
-        armature = [object for object in bpy.data.objects if object.type == 'ARMATURE'][0]  # expecting 1 armature
         armature_bones = armature.data.bones
         head_bone_names = [bone_name for bone_name in armature_bones.keys() if 'Head' in bone_name]
         if head_bone_names:

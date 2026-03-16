@@ -205,11 +205,22 @@ class GI_OT_DeleteEmpties(Operator, CustomOperatorProperties):
         scene = bpy.context.scene
         empties_to_not_delete = [
             'Head Forward',
-            'Head Up'
+            'Head Up',
+            'Light Direction',
+            'Main Light Direction',
+            'Face Light Direction',
+            'Head Driver',
+            'Head Origin'
         ]
         for object in scene.objects:
-            if object.type == 'EMPTY' and object.name not in empties_to_not_delete:
-                bpy.data.objects.remove(object)
+            if object.type == 'EMPTY':
+                should_delete = True
+                for name_to_keep in empties_to_not_delete:
+                    if object.name.startswith(name_to_keep):
+                        should_delete = False
+                        break
+                if should_delete:
+                    bpy.data.objects.remove(object)
 
         self.report({'INFO'}, 'Deleted Empties')
         if self.next_step_idx:

@@ -506,18 +506,32 @@ def rig_character(
     #     bpy.data.objects["Weapon"].hide_render = True
     # except:
     #     pass
+    x = original_name.split("_")
     try:
-        bpy.context.view_layer.objects.active = bpy.data.objects.get("Head Origin") or bpy.data.objects.get("Head Driver")
-        bpy.ops.constraint.childof_set_inverse(constraint="Child Of", owner='OBJECT')
+        head_driver_name = f"Head Driver_{x[-2]}"
+        head_origin_name = f"Head Origin_{x[-2]}"
+        head_driver_object = bpy.data.objects.get(head_driver_name) or bpy.data.objects.get(head_origin_name)
+        if not head_driver_object:
+            head_driver_object = bpy.data.objects.get("Head Origin") or bpy.data.objects.get("Head Driver")
+        if head_driver_object:
+            bpy.context.view_layer.objects.active = head_driver_object
+            bpy.ops.constraint.childof_set_inverse(constraint="Child Of", owner='OBJECT')
     except:
         pass
-    x = original_name.split("_")
     bpy.data.objects["rigify"].users_collection[0].name = x[-2]
     bpy.data.objects["rigify"].name = x[-2] + "Rig"
 
 try:
-    bpy.context.scene.objects["Head Forward"].hide_viewport = True
-    bpy.context.scene.objects["Head Up"].hide_viewport = True
+    armatures = [obj for obj in bpy.context.selected_objects if obj.type == 'ARMATURE']
+    if not armatures:
+        armatures = [obj for obj in bpy.data.objects if obj.type == 'ARMATURE']
+    if armatures:
+        armature = armatures[0]
+        char_name = armature.name.replace("Rig", "") if "Rig" in armature.name else armature.name
+        head_fwd = bpy.context.scene.objects.get(f"Head Forward_{char_name}") or bpy.context.scene.objects.get("Head Forward")
+        head_up = bpy.context.scene.objects.get(f"Head Up_{char_name}") or bpy.context.scene.objects.get("Head Up")
+        if head_fwd: head_fwd.hide_viewport = True
+        if head_up: head_up.hide_viewport = True
 except:
     pass
 
