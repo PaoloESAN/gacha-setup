@@ -77,7 +77,8 @@ class GenshinImpactCharacterRigger(CharacterRigger):
                                    obj.type == 'MESH' for modifier in obj.modifiers if 
                                    'Light Vectors' in modifier.name]
 
-        armature: Armature = [obj for obj in bpy.data.objects if obj.type == 'ARMATURE'][0]
+        armatures = [obj for obj in bpy.context.selected_objects if obj.type == 'ARMATURE']
+        armature: Armature = armatures[0] if armatures else [obj for obj in bpy.data.objects if obj.type == 'ARMATURE'][0]
         hand_bones = [bone for bone in armature.pose.bones.values() if 'Hand' in bone.name]
         number_of_hand_bone_children = max([len(hand_bone.children) for hand_bone in hand_bones]) if hand_bones else 0
         is_player_hand = number_of_hand_bone_children >= 5
@@ -131,8 +132,26 @@ class GenshinImpactCharacterRigger(CharacterRigger):
                 meshes_joined=meshes_joined
             )
 
-        # head_tracker_constraint_influence = 1.0 if character_rigger_props.use_head_tracker else 0.0
-        # self.__set_head_tracker_constraint_influence(head_tracker_constraint_influence)
+        # Refresh Light Vectors modifiers since empties are renamed/appended during rigging
+        def refresh_light_vectors_modifiers():
+            char_name = armature.name.replace("Rig", "")
+            for obj in bpy.data.objects:
+                if obj.type == 'MESH' and obj.parent == armature:
+                    for modifier in obj.modifiers:
+                        if modifier.type == 'NODES' and modifier.node_group and 'Light Vectors' in modifier.node_group.name:
+                            def assign_empty(socket, empty_name):
+                                empty_obj = bpy.data.objects.get(f"{empty_name}_{char_name}")
+                                if empty_obj:
+                                    modifier[socket] = empty_obj
+
+                            assign_empty('Input_3', 'Light Direction')
+                            if not modifier.get('Input_3'):
+                                assign_empty('Input_3', 'Main Light Direction')
+                            assign_empty('Input_4', 'Head Origin')
+                            assign_empty('Input_5', 'Head Forward')
+                            assign_empty('Input_6', 'Head Up')
+
+        refresh_light_vectors_modifiers()
 
         self.blender_operator.report({'INFO'}, 'Successfully rigged character')
 
@@ -193,13 +212,14 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
         if not filepath:
             filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'RootShape.blend')
 
-        armature = [obj for obj in bpy.data.objects if obj.type == 'ARMATURE'][0]
+        armatures = [obj for obj in bpy.context.selected_objects if obj.type == 'ARMATURE']
+        armature = armatures[0] if armatures else [obj for obj in bpy.data.objects if obj.type == 'ARMATURE'][0]
         character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
         meshes_joined = not (bpy.data.objects.get('Body') and bpy.data.objects.get('Face'))
 
         # Important that the Armature is selected before performing rigging operations
         bpy.ops.object.select_all(action='DESELECT')
-        armature: Armature = [object for object in bpy.data.objects if object.type == 'ARMATURE'][0]  # expecting 1 armature
+        armature = armatures[0] if armatures else [obj for obj in bpy.data.objects if obj.type == 'ARMATURE'][0]
         bpy.context.view_layer.objects.active = armature
         armature.select_set(True)
 
@@ -213,6 +233,26 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
             character_rigger_props.use_head_tracker,
             meshes_joined=meshes_joined
         )
+
+        def refresh_light_vectors_modifiers():
+            char_name = armature.name.replace("Rig", "")
+            for obj in bpy.data.objects:
+                if obj.type == 'MESH' and obj.parent == armature:
+                    for modifier in obj.modifiers:
+                        if modifier.type == 'NODES' and modifier.node_group and 'Light Vectors' in modifier.node_group.name:
+                            def assign_empty(socket, empty_name):
+                                empty_obj = bpy.data.objects.get(f"{empty_name}_{char_name}")
+                                if empty_obj:
+                                    modifier[socket] = empty_obj
+
+                            assign_empty('Input_3', 'Light Direction')
+                            if not modifier.get('Input_3'):
+                                assign_empty('Input_3', 'Main Light Direction')
+                            assign_empty('Input_4', 'Head Origin')
+                            assign_empty('Input_5', 'Head Forward')
+                            assign_empty('Input_6', 'Head Up')
+
+        refresh_light_vectors_modifiers()
 
 
 class PunishingGrayRavenCharacterRigger(CharacterRigger):
