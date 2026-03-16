@@ -771,7 +771,8 @@ class StellarToonGeometryNodesSetup(HonkaiStarRailGeometryNodesSetup):
         self.clone_outlines(self.material_names)
 
         if self.light_vectors_node_group_names:
-            character_armature = [obj for obj in bpy.data.objects if obj.type == 'ARMATURE'][0]  # Expecting 1 armature in scene
+            armatures = [obj for obj in bpy.context.selected_objects if obj.type == 'ARMATURE']
+            character_armature = armatures[0] if armatures else [obj for obj in bpy.data.objects if obj.type == 'ARMATURE'][0]
             character_armature_mesh_names = [obj.name for obj in character_armature.children if obj.type == 'MESH']
             for mesh_name in character_armature_mesh_names:  # It is important that this is created and placed before Outlines!!
                 for object_name, object_data in bpy.context.scene.objects.items():
@@ -806,7 +807,8 @@ class PunishingGrayRavenGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
 
     def setup_geometry_nodes(self):
         self.clone_outlines(self.material_names)
-        character_armature = [obj for obj in bpy.data.objects if obj.type == 'ARMATURE'][0]  # Expecting 1 armature in scene
+        armatures = [obj for obj in bpy.context.selected_objects if obj.type == 'ARMATURE']
+        character_armature = armatures[0] if armatures else [obj for obj in bpy.data.objects if obj.type == 'ARMATURE'][0]
         character_armature_mesh_names = [obj.name for obj in character_armature.children if obj.type == 'MESH']
 
         for mesh_name in character_armature_mesh_names:  # It is important that this is created and placed before Outlines!!
@@ -895,7 +897,8 @@ class V2_PunishingGrayRavenGeometryNodesSetup(GameGeometryNodesSetup):
 
     def setup_geometry_nodes(self):
         self.clone_outlines(self.material_names)
-        character_armature = [obj for obj in bpy.data.objects if obj.type == 'ARMATURE'][0]  # Expecting 1 armature in scene
+        armatures = [obj for obj in bpy.context.selected_objects if obj.type == 'ARMATURE']
+        character_armature = armatures[0] if armatures else [obj for obj in bpy.data.objects if obj.type == 'ARMATURE'][0]
         character_armature_mesh_names = [obj.name for obj in character_armature.children if obj.type == 'MESH']
 
         for mesh_name in character_armature_mesh_names:  # It is important that this is created and placed before Outlines!!

@@ -25,9 +25,19 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
     bl_label = 'Genshin: Makes Character Upright and Fixes Scale'
 
     def execute(self, context):
+        armatures = [obj for obj in context.selected_objects if obj.type == 'ARMATURE']
+        if not armatures:
+            armatures = [obj for obj in bpy.data.objects if obj.type == 'ARMATURE']
+        
+        if not armatures:
+            self.report({'ERROR'}, "No armature found. Please import or select a character.")
+            return {'CANCELLED'}
+            
+        armature: Armature = armatures[0]
+
         bpy.ops.object.select_all(action='DESELECT')
-        armature: Armature = [object for object in bpy.data.objects if object.type == 'ARMATURE'][0]  # expecting 1 armature
         armature.select_set(True)
+        context.view_layer.objects.active = armature
 
         # I don't want to modify any characters unless absolutely necessary
         # So, as Dehya comes with keyframes and is not in an A-Pose by default, let's clean her character
