@@ -591,18 +591,18 @@ def rig_character(
     metapose = bpy.data.objects['metarig'].pose
     if kachina:
         for bone_name in ['f_index', 'f_middle', 'f_ring', 'f_pinky']:
-            metapose.bones[f"{bone_name}.01.L"].rigify_parameters.primary_rotation_axis = '-Z'
-            metapose.bones[f"{bone_name}.01.R"].rigify_parameters.primary_rotation_axis = 'Z'
+            metapose.bones[f"{bone_name}.01.L"].rigify_parameters.primary_rotation_axis = '-X'
+            metapose.bones[f"{bone_name}.01.R"].rigify_parameters.primary_rotation_axis = '-X'
 
         metapose.bones["thumb.01.L"].rigify_parameters.primary_rotation_axis = 'X'
         metapose.bones["thumb.01.R"].rigify_parameters.primary_rotation_axis = 'X'
     else:
         for bone_name in ['f_index', 'f_middle', 'f_ring', 'f_pinky']:
-            metapose.bones[f"{bone_name}.01.L"].rigify_parameters.primary_rotation_axis = 'Z'
-            metapose.bones[f"{bone_name}.01.R"].rigify_parameters.primary_rotation_axis = '-Z'
+            metapose.bones[f"{bone_name}.01.L"].rigify_parameters.primary_rotation_axis = 'X'
+            metapose.bones[f"{bone_name}.01.R"].rigify_parameters.primary_rotation_axis = 'X'
 
-        metapose.bones["thumb.01.L"].rigify_parameters.primary_rotation_axis = 'Z'
-        metapose.bones["thumb.01.R"].rigify_parameters.primary_rotation_axis = '-Z'
+        metapose.bones["thumb.01.L"].rigify_parameters.primary_rotation_axis = 'X'
+        metapose.bones["thumb.01.R"].rigify_parameters.primary_rotation_axis = 'X'
                                           
 
     ## This part corrects metarm finger rolls
