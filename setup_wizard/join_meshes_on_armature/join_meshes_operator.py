@@ -42,6 +42,25 @@ class GI_OT_JoinMeshesOnArmature(Operator, CustomOperatorProperties):
             except RuntimeError:
                 pass
 
+        # Collect explicit shape key drivers that will be lost when meshes are joined
+        drivers_to_copy = []
+        for mesh in [face_eye_mesh, brow_mesh]:
+            if mesh and mesh.data.shape_keys and mesh.data.shape_keys.animation_data:
+                for d in mesh.data.shape_keys.animation_data.drivers:
+                    if hasattr(d, 'data_path'):
+                        parts = d.data_path.split('"')
+                        if len(parts) >= 3:
+                            sk_name = parts[1]
+                            var = d.driver.variables[0] if d.driver.variables else None
+                            if var and var.type == 'TRANSFORMS':
+                                drivers_to_copy.append({
+                                    'shape_key': sk_name,
+                                    'bone_name': var.targets[0].bone_target,
+                                    'expression': d.driver.expression,
+                                    'transform': var.targets[0].transform_type,
+                                    'armature': var.targets[0].id
+                                })
+
         for obj in bpy.context.selected_objects:
             obj.select_set(False)
 
@@ -55,6 +74,23 @@ class GI_OT_JoinMeshesOnArmature(Operator, CustomOperatorProperties):
             print(f'Joining {face_eye_mesh}, {brow_mesh} to {face_mesh}')
             try:
                 bpy.ops.object.join()
+                
+                # Restore destroyed drivers from Face_Eye and Brow onto the main Face shape keys
+                if face_mesh and face_mesh.data.shape_keys:
+                    for d_info in drivers_to_copy:
+                        sk = face_mesh.data.shape_keys.key_blocks.get(d_info['shape_key'])
+                        if sk:
+                            driver = sk.driver_add("value").driver
+                            var = driver.variables.new()
+                            var.name = "bone"
+                            var.type = 'TRANSFORMS'
+                            var.targets[0].id = d_info['armature']
+                            var.targets[0].bone_target = d_info['bone_name']
+                            var.targets[0].transform_space = 'LOCAL_SPACE'
+                            var.targets[0].transform_type = d_info['transform']
+                            driver.type = 'SCRIPTED'
+                            driver.expression = d_info['expression']
+                            
             except Exception as e:
-                print(f"Failed to join meshes: {e}")
+                print(f"Failed to join meshes or transfer drivers: {e}")
 

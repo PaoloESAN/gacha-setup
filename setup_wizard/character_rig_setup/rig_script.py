@@ -1998,25 +1998,26 @@ def rig_character(
         depsgraph.update()
         
     # BROW SHAPE KEYS 
-    # Get the selected object with the shape key
-    try:
-        obj = bpy.data.objects.get("Face")
-        makeCon("Brow_Down_L","Brow-L-Control","bone * -4","LOC_Y")
-        makeCon("Brow_Down_R","Brow-R-Control","bone * -4","LOC_Y")
-        makeCon("Brow_Up_L","Brow-L-Control","bone * 4","LOC_Y")
-        makeCon("Brow_Up_R","Brow-R-Control","bone * 4","LOC_Y")
-        makeCon("Brow_Trouble_L", "Brow-Trouble-L-Control", "bone * 2", "LOC_X")   
-        makeCon("Brow_Trouble_R", "Brow-Trouble-R-Control", "bone * 2", "LOC_X")   
-        makeCon("Brow_Smily_R", "Brow-Smily-R-Control", "bone * 2", "LOC_X")   
-        makeCon("Brow_Smily_L", "Brow-Smily-L-Control", "bone * 2", "LOC_X")   
-        makeCon("Brow_Angry_L", "Brow-Angry-L-Control", "bone * 2", "LOC_X")   
-        makeCon("Brow_Angry_R", "Brow-Angry-R-Control", "bone * 2", "LOC_X")   
-        makeCon("Brow_Shy_L", "Brow-Shy-L-Control", "bone * 2", "LOC_X")   
-        makeCon("Brow_Shy_R", "Brow-Shy-R-Control", "bone * 2", "LOC_X")   
-        makeCon("Brow_Squeeze_R", "Brow-R-Control", "bone * 4", "LOC_X")   
-        makeCon("Brow_Squeeze_L", "Brow-L-Control", "bone * -4", "LOC_X")   
-    except: 
-        pass
+    obj = bpy.data.objects.get("Brow") or bpy.data.objects.get("Face") or (bpy.data.objects.get("Body") if meshes_joined else None)
+    if obj:
+        print(f"[RIG] Using object '{obj.name}' for brow shape key drivers")
+        try:
+            makeCon("Brow_Down_L","Brow-L-Control","bone * -4","LOC_Y")
+            makeCon("Brow_Down_R","Brow-R-Control","bone * -4","LOC_Y")
+            makeCon("Brow_Up_L","Brow-L-Control","bone * 4","LOC_Y")
+            makeCon("Brow_Up_R","Brow-R-Control","bone * 4","LOC_Y")
+            makeCon("Brow_Trouble_L", "Brow-Trouble-L-Control", "bone * 2", "LOC_X")   
+            makeCon("Brow_Trouble_R", "Brow-Trouble-R-Control", "bone * 2", "LOC_X")   
+            makeCon("Brow_Smily_R", "Brow-Smily-R-Control", "bone * 2", "LOC_X")   
+            makeCon("Brow_Smily_L", "Brow-Smily-L-Control", "bone * 2", "LOC_X")   
+            makeCon("Brow_Angry_L", "Brow-Angry-L-Control", "bone * 2", "LOC_X")   
+            makeCon("Brow_Angry_R", "Brow-Angry-R-Control", "bone * 2", "LOC_X")   
+            makeCon("Brow_Shy_L", "Brow-Shy-L-Control", "bone * 2", "LOC_X")   
+            makeCon("Brow_Shy_R", "Brow-Shy-R-Control", "bone * 2", "LOC_X")   
+            makeCon("Brow_Squeeze_R", "Brow-R-Control", "bone * 4", "LOC_X")   
+            makeCon("Brow_Squeeze_L", "Brow-L-Control", "bone * -4", "LOC_X")   
+        except Exception as e:
+            _rig_log.append(f"Brow driver failed: {e}")
 
     # EYE SHAPE KEYS
     # Eye shape keys may be on "Face_Eye", "Face", or "Body" depending on the character
