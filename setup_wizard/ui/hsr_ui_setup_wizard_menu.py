@@ -108,6 +108,12 @@ class HSR_PT_Basic_Setup_Wizard_UI_Layout(Panel, HonkaiStarRailUIRenderChecker):
         )
 
         OperatorFactory.create_rig_character_ui(sub_layout)
+        OperatorFactory.create(
+            sub_layout,
+            'genshin.fix_transformations',
+            'Fix Transformations',
+            'OBJECT_DATA'
+        )
 
 
 class HSR_PT_Advanced_Setup_Wizard_UI_Layout(Panel, HonkaiStarRailUIRenderChecker):
@@ -245,12 +251,6 @@ class HSR_PT_UI_Finish_Setup_Menu(Panel, HonkaiStarRailUIRenderChecker):
         layout = self.layout
         sub_layout = layout.column()
 
-        OperatorFactory.create(
-            sub_layout,
-            'genshin.fix_transformations',
-            'Fix Transformations',
-            'OBJECT_DATA'
-        )
         OperatorFactory.create(
             sub_layout,
             'genshin.setup_head_driver',

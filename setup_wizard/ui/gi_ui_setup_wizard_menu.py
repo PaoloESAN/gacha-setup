@@ -146,6 +146,12 @@ class GI_PT_Basic_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
             icon='NODE_COMPOSITING',
             game_type=GameType.GENSHIN_IMPACT.name,
         )
+        OperatorFactory.create(
+            sub_layout,
+            'genshin.fix_transformations',
+            'Fix Transformations',
+            'OBJECT_DATA'
+        )
 
 
 class GI_PT_Advanced_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
@@ -280,12 +286,6 @@ class GI_PT_UI_Finish_Setup_Menu(Panel, GenshinImpactUIRenderChecker):
         layout = self.layout
         sub_layout = layout.column()
 
-        OperatorFactory.create(
-            sub_layout,
-            'genshin.fix_transformations',
-            'Fix Transformations',
-            'OBJECT_DATA'
-        )
         OperatorFactory.create(
             sub_layout,
             'genshin.setup_head_driver',

@@ -117,6 +117,12 @@ class PGR_PT_Basic_Setup_Wizard_UI_Layout(Panel, PunishingGrayRavenUIRenderCheck
             icon='CHECKMARK',
             game_type=GameType.PUNISHING_GRAY_RAVEN.name,
         )
+        OperatorFactory.create(
+            sub_layout,
+            'genshin.fix_transformations',
+            'Fix Transformations',
+            'OBJECT_DATA'
+        )
 
         paint_helpers = sub_layout.box()
         paint_helpers.label(text='Vertex/Texture Paint Helpers')
@@ -292,12 +298,6 @@ class PGR_PT_UI_Finish_Setup_Menu(Panel, PunishingGrayRavenUIRenderChecker):
         layout = self.layout
         sub_layout = layout.column()
 
-        OperatorFactory.create(
-            sub_layout,
-            'genshin.fix_transformations',
-            'Fix Transformations',
-            'OBJECT_DATA'
-        )
         OperatorFactory.create(
             sub_layout,
             'genshin.setup_head_driver',

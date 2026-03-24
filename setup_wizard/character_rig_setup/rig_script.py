@@ -21,6 +21,9 @@ def rig_character(
         use_head_tracker,
         meshes_joined=False):
     
+    # Rig log: collects warnings to display in Blender's Text Editor as 'RIG_LOG'
+    _rig_log = []
+
     # Firstly, let's make a flag to identify the blender version.
     # Use bpy.app.version (tuple of ints) to properly detect Blender 4.0+
     # bone.layers was removed in Blender 4.0, so this applies to 4.x, 5.x, etc.
@@ -1720,6 +1723,28 @@ def rig_character(
 
     # Adding Shape Key Drivers
     ourRig = char_name+"Rig"
+    
+    # Initialize UI properties on plate-settings so drivers don't fail internally
+    try:
+        plate = bpy.data.objects[ourRig].pose.bones["plate-settings"]
+        if "EyeCorrection" not in plate:
+            plate["EyeCorrection"] = 1.00
+        if "Toggle Skirt Constraints" not in plate:
+            plate["Toggle Skirt Constraints"] = 1.00
+        if "Toggle Shoulder Constraints" not in plate:
+            plate["Toggle Shoulder Constraints"] = 1.00
+        if "Toggle Eyelid Constraints" not in plate:
+            plate["Toggle Eyelid Constraints"] = 1.00
+        if "Head Follow" not in plate:
+            plate["Head Follow"] = 1.00
+        if "Neck Follow" not in plate:
+            plate["Neck Follow"] = 1.00
+        if "Use Head Controller" not in plate:
+            plate["Use Head Controller"] = 0.00
+        if "Viewport Outlines" not in plate:
+            plate["Viewport Outlines"] = 1.00
+    except:
+        pass
 
     # Loop through skirt bones list. 
 
@@ -2019,7 +2044,7 @@ def rig_character(
         try:
             makeCon(sk_name, bone_name, expression, transform)
         except Exception as e:
-            print(f"[RIG WARNING] Eye driver failed: '{sk_name}' / '{bone_name}' -> {e}")
+            _rig_log.append(f"Eye driver failed: '{sk_name}' / '{bone_name}' -> {e}")
 
     # Pupils shape key drivers are set up below
     try:
@@ -2027,7 +2052,7 @@ def rig_character(
         makeCon("EyeStar","Eye-Star-Control","1+(bone*2.23)","LOC_Y")
         print(f"[RIG OK] EyeStar shape key driver created.")
     except Exception as e:
-        print(f"[RIG WARNING] Failed to set up EyeStar shape key driver -> {e}")
+        _rig_log.append(f"EyeStar driver failed: {e}")
 
     try:
         # MOUTH SHAPE KEYS
@@ -2271,8 +2296,9 @@ def rig_character(
             {"var_name": "var", "var_type":"TRANSFORMS", "target": "Wink-Control-R", "trans_space": "LOCAL_SPACE", "trans_type": "LOC_Y"},
             {"var_name": "var2", "var_type":"SINGLE_PROP", "data_path": "pose.bones[\"plate-settings\"][\"EyeCorrection\"]"}
         ],"(0.00273934 * var) * var2")
-    except:
-        pass
+        _rig_log.append("OK: Pupil driver RIGHT eye created successfully")
+    except Exception as e:
+        _rig_log.append(f"FAIL: Pupil driver RIGHT eye: {e}")
 
     # Both eyes separately to handle eyeless/eye patch chars
     try:
@@ -2285,8 +2311,9 @@ def rig_character(
             {"var_name": "var", "var_type":"TRANSFORMS", "target": "Wink-Control-L", "trans_space": "LOCAL_SPACE", "trans_type": "LOC_Y"},
             {"var_name": "var2", "var_type":"SINGLE_PROP", "data_path": "pose.bones[\"plate-settings\"][\"EyeCorrection\"]"}
         ],"(0.00273934 * var) * var2")
-    except:
-        pass
+        _rig_log.append("OK: Pupil driver LEFT eye created successfully")
+    except Exception as e:
+        _rig_log.append(f"FAIL: Pupil driver LEFT eye: {e}")
     
 
     # Disable IK Stretching & Turn on IK Poles. Toggle manually as needed.
@@ -3747,6 +3774,19 @@ def rig_character(
     loop_place_def()
 
     # MOVING OF BONES END -------------------------------    
+
+    # Write rig log to Blender Text block (ALWAYS, so user can verify code ran)
+    log_text = bpy.data.texts.get("RIG_LOG")
+    if log_text:
+        bpy.data.texts.remove(log_text)
+    log_text = bpy.data.texts.new("RIG_LOG")
+    log_text.write(f"=== RIG LOG ({len(_rig_log)} entries) ===\n\n")
+    if _rig_log:
+        for i, msg in enumerate(_rig_log, 1):
+            log_text.write(f"{i}. {msg}\n")
+    else:
+        log_text.write("No warnings or messages recorded.\n")
+    log_text.write("\n=== END ===")
     
 def setup_neck_and_head_follow(neck_follow_value, head_follow_value):
     bpy.context.object.pose.bones["torso"]["neck_follow"] = neck_follow_value
