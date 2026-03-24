@@ -132,25 +132,19 @@ class GI_PT_Basic_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
             layout.label(text='(Outlines Disabled < v3.3.0)')
         OperatorFactory.create(
             sub_layout,
+            'genshin.fix_transformations',
+            'Fix Transformations',
+            'OBJECT_DATA'
+        )
+
+        OperatorFactory.create_rig_character_ui(sub_layout)
+
+        OperatorFactory.create(
+            sub_layout,
             'genshin.finish_setup',
             'Finish Setup',
             icon='CHECKMARK',
             game_type=GameType.GENSHIN_IMPACT.name,
-        )
-
-        OperatorFactory.create_rig_character_ui(sub_layout)
-        OperatorFactory.create(
-            sub_layout,
-            'hoyoverse.post_processing_compositing_setup',
-            'Set Up Post-Processing',
-            icon='NODE_COMPOSITING',
-            game_type=GameType.GENSHIN_IMPACT.name,
-        )
-        OperatorFactory.create(
-            sub_layout,
-            'genshin.fix_transformations',
-            'Fix Transformations',
-            'OBJECT_DATA'
         )
 
 

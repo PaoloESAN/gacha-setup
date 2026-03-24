@@ -34,7 +34,17 @@ class GI_OT_JoinMeshesOnArmature(Operator, CustomOperatorProperties):
         face_eye_mesh = bpy.data.objects.get(MeshNames.FACE_EYE)
         brow_mesh = bpy.data.objects.get(MeshNames.Brow)
 
-        bpy.ops.object.select_all(action='DESELECT')
+        if face_mesh:
+            bpy.context.view_layer.objects.active = face_mesh
+            try:
+                if bpy.context.active_object and bpy.context.active_object.mode != 'OBJECT':
+                    bpy.ops.object.mode_set(mode='OBJECT')
+            except RuntimeError:
+                pass
+
+        for obj in bpy.context.selected_objects:
+            obj.select_set(False)
+
         if face_eye_mesh:
             face_eye_mesh.select_set(True)
         if brow_mesh:
@@ -43,5 +53,8 @@ class GI_OT_JoinMeshesOnArmature(Operator, CustomOperatorProperties):
             face_mesh.select_set(True)
             bpy.context.view_layer.objects.active = face_mesh
             print(f'Joining {face_eye_mesh}, {brow_mesh} to {face_mesh}')
-            bpy.ops.object.join()
+            try:
+                bpy.ops.object.join()
+            except Exception as e:
+                print(f"Failed to join meshes: {e}")
 

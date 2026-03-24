@@ -112,16 +112,16 @@ class PGR_PT_Basic_Setup_Wizard_UI_Layout(Panel, PunishingGrayRavenUIRenderCheck
             layout.label(text='(Outlines Disabled < v3.3.0)')
         OperatorFactory.create(
             sub_layout,
+            'genshin.fix_transformations',
+            'Fix Transformations',
+            'OBJECT_DATA'
+        )
+        OperatorFactory.create(
+            sub_layout,
             'genshin.finish_setup',
             'Finish Setup',
             icon='CHECKMARK',
             game_type=GameType.PUNISHING_GRAY_RAVEN.name,
-        )
-        OperatorFactory.create(
-            sub_layout,
-            'genshin.fix_transformations',
-            'Fix Transformations',
-            'OBJECT_DATA'
         )
 
         paint_helpers = sub_layout.box()

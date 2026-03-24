@@ -2,7 +2,7 @@
     "ui_order": {
         "GENSHIN_OT_setup_wizard_ui": [
             "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
-            "import_character_model", 
+            "import_character_model",
             "delete_empties",
             "import_materials",
             "replace_default_materials",
@@ -23,7 +23,7 @@
         ],
         "GENSHIN_OT_setup_wizard_ui_no_outlines": [
             "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
-            "import_character_model", 
+            "import_character_model",
             "delete_empties",
             "import_materials",
             "replace_default_materials",
@@ -40,7 +40,7 @@
         ],
         "GENSHIN_OT_set_up_character": [
             "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_character",
-            "import_character_model", 
+            "import_character_model",
             "delete_empties"
         ],
         "GENSHIN_OT_set_up_materials": [
@@ -58,12 +58,9 @@
         ],
         "GENSHIN_OT_finish_setup": [
             "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_final_steps",
-            "fix_transformations",
-            "setup_head_driver",
             "set_color_management_to_standard",
             "delete_specific_objects",
-            "rename_shader_materials",
-            "join_meshes_on_armature"
+            "rename_shader_materials"
         ],
         "HOYOVERSE_OT_set_up_character_rig": [
             "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_final_steps",
@@ -76,7 +73,7 @@
         ],
         "HONKAI_STAR_RAIL_OT_setup_wizard_ui": [
             "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
-            "import_character_model", 
+            "import_character_model",
             "delete_empties",
             "import_materials",
             "replace_default_materials",
@@ -98,7 +95,7 @@
         ],
         "HONKAI_STAR_RAIL_OT_setup_wizard_ui_no_outlines": [
             "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
-            "import_character_model", 
+            "import_character_model",
             "delete_empties",
             "import_materials",
             "replace_default_materials",
@@ -116,7 +113,7 @@
         ],
         "HONKAI_STAR_RAIL_OT_set_up_character": [
             "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_character",
-            "import_character_model", 
+            "import_character_model",
             "delete_empties"
         ],
         "HONKAI_STAR_RAIL_OT_set_up_materials": [
@@ -146,7 +143,7 @@
         ],
         "PUNISHING_GRAY_RAVEN_OT_setup_wizard_ui": [
             "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
-            "import_character_model", 
+            "import_character_model",
             "delete_empties",
             "import_materials",
             "replace_default_materials",

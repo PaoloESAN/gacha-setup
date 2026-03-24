@@ -101,18 +101,19 @@ class HSR_PT_Basic_Setup_Wizard_UI_Layout(Panel, HonkaiStarRailUIRenderChecker):
             layout.label(text='(Outlines Disabled < v3.3.0)')
         OperatorFactory.create(
             sub_layout,
+            'genshin.fix_transformations',
+            'Fix Transformations',
+            'OBJECT_DATA'
+        )
+
+        OperatorFactory.create_rig_character_ui(sub_layout)
+
+        OperatorFactory.create(
+            sub_layout,
             'honkai_star_rail.finish_setup',
             'Finish Setup',
             icon='CHECKMARK',
             game_type=GameType.HONKAI_STAR_RAIL.name,
-        )
-
-        OperatorFactory.create_rig_character_ui(sub_layout)
-        OperatorFactory.create(
-            sub_layout,
-            'genshin.fix_transformations',
-            'Fix Transformations',
-            'OBJECT_DATA'
         )
 
 
