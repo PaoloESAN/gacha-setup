@@ -25,6 +25,24 @@ def rig_character(
     is_version_4 = bpy.app.version[0] >= 4
         
     head_bone_arm_target = bpy.context.active_object
+
+    # Blender 5.0 compatibility: active_object can be None after certain operations
+    if head_bone_arm_target is None:
+        # Try to find the armature from selected objects first
+        armatures = [obj for obj in bpy.context.selected_objects if obj.type == 'ARMATURE']
+        if not armatures:
+            # Fallback: find any non-rigged armature in the scene
+            armatures = [obj for obj in bpy.data.objects if obj.type == 'ARMATURE' and 'Rig' not in obj.name and obj.name != 'metarig']
+        if not armatures:
+            # Last resort: any armature
+            armatures = [obj for obj in bpy.data.objects if obj.type == 'ARMATURE']
+        if armatures:
+            head_bone_arm_target = armatures[0]
+            bpy.context.view_layer.objects.active = head_bone_arm_target
+            head_bone_arm_target.select_set(True)
+        else:
+            raise RuntimeError("No armature found. Please select the character's armature and try again.")
+
     temp_armature = head_bone_arm_target.data
 
     bpy.ops.object.mode_set(mode='EDIT')

@@ -21,7 +21,7 @@ class UI_Properties:
 
         bpy.types.WindowManager.setup_wizard_betterfbx_enabled = bpy.props.BoolProperty(
             name = "BetterFBX Enabled",
-            default = True
+            default = False
         )
 
         bpy.types.WindowManager.post_processing_setup_enabled = bpy.props.BoolProperty(

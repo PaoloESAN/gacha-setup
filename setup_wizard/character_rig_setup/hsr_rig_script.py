@@ -14,6 +14,21 @@ def rig_character(
 
     context = bpy.context
     obj = context.object
+
+    # Blender 5.0 compatibility: context.object can be None after certain operations
+    if obj is None:
+        armatures = [o for o in bpy.context.selected_objects if o.type == 'ARMATURE']
+        if not armatures:
+            armatures = [o for o in bpy.data.objects if o.type == 'ARMATURE' and 'Rig' not in o.name and o.name != 'metarig']
+        if not armatures:
+            armatures = [o for o in bpy.data.objects if o.type == 'ARMATURE']
+        if armatures:
+            obj = armatures[0]
+            bpy.context.view_layer.objects.active = obj
+            obj.select_set(True)
+        else:
+            raise RuntimeError("No armature found. Please select the character's armature and try again.")
+
     if obj.name[-4:] == ".001":
         obj.name = obj.name[:-4]
     print("New Run\n\n")

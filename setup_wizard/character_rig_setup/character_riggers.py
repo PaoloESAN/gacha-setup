@@ -94,7 +94,13 @@ class GenshinImpactCharacterRigger(CharacterRigger):
                 LightingPanel(self.lighting_panel_file_names.LIGHTING_PANEL_FILEPATH).set_up_lighting_panel(modifier)
 
         # Important that the Armature is selected before performing rigging operations
+        # Ensure we are in OBJECT mode before manipulating selection (Blender 5.0 compatibility)
+        try:
+            bpy.ops.object.mode_set(mode='OBJECT')
+        except RuntimeError:
+            pass
         bpy.ops.object.select_all(action='DESELECT')
+        armature.hide_set(False)
         bpy.context.view_layer.objects.active = armature
         armature.select_set(True)
 

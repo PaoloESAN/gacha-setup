@@ -27,6 +27,24 @@ def rig_character(
     is_version_4 = bpy.app.version[0] >= 4
                
     head_bone_arm_target = bpy.context.active_object
+
+    # Blender 5.0 compatibility: active_object can be None after certain operations
+    if head_bone_arm_target is None:
+        # Try to find the armature from selected objects first
+        armatures = [obj for obj in bpy.context.selected_objects if obj.type == 'ARMATURE']
+        if not armatures:
+            # Fallback: find any non-rigged armature in the scene
+            armatures = [obj for obj in bpy.data.objects if obj.type == 'ARMATURE' and 'Rig' not in obj.name and obj.name != 'metarig']
+        if not armatures:
+            # Last resort: any armature
+            armatures = [obj for obj in bpy.data.objects if obj.type == 'ARMATURE']
+        if armatures:
+            head_bone_arm_target = armatures[0]
+            bpy.context.view_layer.objects.active = head_bone_arm_target
+            head_bone_arm_target.select_set(True)
+        else:
+            raise RuntimeError("No armature found. Please select the character's armature and try again.")
+
     temp_armature = head_bone_arm_target.data
 
     bpy.ops.object.mode_set(mode='EDIT')
@@ -1975,31 +1993,41 @@ def rig_character(
     except: 
         pass
 
+    # EYE SHAPE KEYS
+    # Eye shape keys may be on "Face_Eye", "Face", or "Body" depending on the character
+    obj = bpy.data.objects.get("Face_Eye") or bpy.data.objects.get("Face") or (bpy.data.objects.get("Body") if meshes_joined else None)
+    if obj:
+        print(f"[RIG] Using object '{obj.name}' for eye shape key drivers")
+
+    eye_shape_key_configs = [
+        ("Eye_WinkA_L","WinkA-L-Invis","bone * -.82","LOC_Y"),
+        ("Eye_WinkA_R","WinkA-R-Invis","bone * -.82","LOC_Y"),
+        ("Eye_WinkB_L","WinkB-L-Invis","bone * -.82","LOC_Y"),
+        ("Eye_WinkB_R","WinkB-R-Invis","bone * -.82","LOC_Y"),
+        ("Eye_WinkC_L","WinkC-L-Invis","bone * -.82","LOC_Y"),
+        ("Eye_WinkC_R","WinkC-R-Invis","bone * -.82","LOC_Y"),
+        ("Eye_Ha","Eye-Ha-Control","bone * -2.22","LOC_Y"),
+        ("Eye_Jito","Eye-Jito-Control","bone * -2.22","LOC_Y"),
+        ("Eye_Wail","Eye-Wail-Control","bone * -2.22","LOC_Y"),
+        ("Eye_Hostility","Eye-Hostility-Control","bone * -2.22","LOC_Y"),
+        ("Eye_Tired","Eye-Tired-Control","bone * -2.22","LOC_Y"),
+        ("Eye_WUp","Eye-Up-Control","bone * -2.22","LOC_Y"),
+        ("Eye_WDown","Eye-Down-Control","bone * -2.22","LOC_Y"),
+        ("Eye_Lowereyelid","Eye-LowerEyelid-Control","bone * -2.22","LOC_Y"),
+    ]
+    for sk_name, bone_name, expression, transform in eye_shape_key_configs:
+        try:
+            makeCon(sk_name, bone_name, expression, transform)
+        except Exception as e:
+            print(f"[RIG WARNING] Eye driver failed: '{sk_name}' / '{bone_name}' -> {e}")
+
+    # Pupils shape key drivers are set up below
     try:
-        # EYE SHAPE KEYS
-        obj = bpy.data.objects.get("Face")
-        makeCon("Eye_WinkA_L","WinkA-L-Invis","bone * -.82","LOC_Y")
-        makeCon("Eye_WinkA_R","WinkA-R-Invis","bone * -.82","LOC_Y")
-        makeCon("Eye_WinkB_L","WinkB-L-Invis","bone * -.82","LOC_Y")
-        makeCon("Eye_WinkB_R","WinkB-R-Invis","bone * -.82","LOC_Y")
-        makeCon("Eye_WinkC_L","WinkC-L-Invis","bone * -.82","LOC_Y")
-        makeCon("Eye_WinkC_R","WinkC-R-Invis","bone * -.82","LOC_Y")
-
-        makeCon("Eye_Ha","Eye-Ha-Control","bone * -2.22","LOC_Y")
-        makeCon("Eye_Jito","Eye-Jito-Control","bone * -2.22","LOC_Y")
-        makeCon("Eye_Wail","Eye-Wail-Control","bone * -2.22","LOC_Y")
-        makeCon("Eye_Hostility","Eye-Hostility-Control","bone * -2.22","LOC_Y")
-        makeCon("Eye_Tired","Eye-Tired-Control","bone * -2.22","LOC_Y")
-        makeCon("Eye_WUp","Eye-Up-Control","bone * -2.22","LOC_Y")
-        makeCon("Eye_WDown","Eye-Down-Control","bone * -2.22","LOC_Y")
-        makeCon("Eye_Lowereyelid","Eye-LowerEyelid-Control","bone * -2.22","LOC_Y")
-
-        # Pupils shape key drivers are set up below
         obj = bpy.data.objects.get("EyeStar")
         makeCon("EyeStar","Eye-Star-Control","1+(bone*2.23)","LOC_Y")
-        
-    except: 
-        pass
+        print(f"[RIG OK] EyeStar shape key driver created.")
+    except Exception as e:
+        print(f"[RIG WARNING] Failed to set up EyeStar shape key driver -> {e}")
 
     try:
         # MOUTH SHAPE KEYS
@@ -2706,10 +2734,12 @@ def rig_character(
         
     # Penultimate: Rename bones as needed
     for oldname, newname in rename_bones_list:
-        bone = bpy.context.object.pose.bones.get(oldname)
+        bone = this_obj.pose.bones.get(oldname)
         if bone is None:
+            print(f"[RIG WARNING] Rename skipped: bone '{oldname}' not found")
             continue
         bone.name = newname
+        print(f"[RIG OK] Renamed bone '{oldname}' -> '{newname}'")
         
         # We have to nuke the existing driver in the torso. 
     def nuke_old_torso_const():       
@@ -2728,9 +2758,14 @@ def rig_character(
         location_str = "pose.bones[\"torso\"][\"torso_parent\"]"
 
         driver = new.targets[0].driver_add("weight").driver
-        for variable in driver.variables:
-            if variable.type == 'SINGLE_PROP':
-                variable.targets[0].data_path = location_str
+        driver.type = 'SCRIPTED'
+        
+        # Create the 'var' variable (was missing, causing NameError)
+        var = driver.variables.new()
+        var.name = "var"
+        var.type = 'SINGLE_PROP'
+        var.targets[0].id = bpy.data.objects[char_name+"Rig"]
+        var.targets[0].data_path = location_str
 
         driver.expression = "var == 1"
 
@@ -2755,9 +2790,13 @@ def rig_character(
         
         driver = new.driver_add("influence").driver
         driver.type = 'SUM'
-        for variable in driver.variables:
-            if variable.type == 'SINGLE_PROP':
-                variable.targets[0].data_path = new_var
+        
+        # Create the variable (was missing - iterating empty driver.variables)
+        var = driver.variables.new()
+        var.name = "var"
+        var.type = 'SINGLE_PROP'
+        var.targets[0].id = bpy.data.objects[char_name+"Rig"]
+        var.targets[0].data_path = new_var
 
         depsgraph = bpy.context.evaluated_depsgraph_get()
         depsgraph.update()
@@ -2767,10 +2806,10 @@ def rig_character(
         
     # Delete all existing bone collections, and make new ones.   
     if is_version_4:
-        armature = bpy.context.object.data
+        armature = this_obj.data
         collections = armature.collections
 
-        del_collections = bpy.context.active_object.data.collections
+        del_collections = this_obj.data.collections
         while del_collections:
             del_collections.remove(del_collections[0])
 
@@ -2855,8 +2894,15 @@ def rig_character(
     this_obj.pose.bones["MCH-torso.parent"].constraints[0].enabled = True
     
     # Deselect everything, we're done.
-    for bone in bpy.context.active_object.pose.bones:
-        bone.bone.select = False
+    try:
+        for bone in bpy.context.active_object.pose.bones:
+            bone.bone.select = False
+    except AttributeError:
+        # Blender 5.1+: Bone.select was removed from the data API
+        try:
+            bpy.ops.pose.select_all(action='DESELECT')
+        except:
+            pass
         
     # EDITING ui.py TEXT FILE --------------------------------------------
     rig_file = bpy.data.texts[original_name+'_ui.py'] # Rig script for this char in question
