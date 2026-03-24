@@ -314,13 +314,15 @@ class V2_MaterialDataApplier(MaterialDataApplier):
             3: {},
         }
 
-        _MainTexAlphaUse_value = int(self.get_value_in_json_parser(self.material_data_parser, _MainTexAlphaUse_name))
-        _MainTexAlphaUse_material_node_dict = _MainTexAlphaUse_mapping.get(_MainTexAlphaUse_value)
-
-        if _MainTexAlphaUse_value is None:  # explicitly check for None
+        _MainTexAlphaUse_value_raw = self.get_value_in_json_parser(self.material_data_parser, _MainTexAlphaUse_name)
+        if _MainTexAlphaUse_value_raw is None:  # explicitly check for None before casting to int
             self.__handle_material_value_not_found(_MainTexAlphaUse_name)
             return
-        elif outlines_alpha_only and _MainTexAlphaUse_value != 1:
+
+        _MainTexAlphaUse_value = int(_MainTexAlphaUse_value_raw)
+        _MainTexAlphaUse_material_node_dict = _MainTexAlphaUse_mapping.get(_MainTexAlphaUse_value)
+
+        if outlines_alpha_only and _MainTexAlphaUse_value != 1:
             # For outlines ignore 0, 2
             # Only apply material data if it's 1
             return

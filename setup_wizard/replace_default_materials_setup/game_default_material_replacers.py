@@ -102,6 +102,7 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 genshin_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
 
                 if genshin_material:
+                    self.__transfer_diffuse_texture(material_slot.material, genshin_material)
                     material_slot.material = genshin_material
                 elif mesh_body_part_name and ('Dress' in mesh_body_part_name or 'Arm' in mesh_body_part_name or 'Cloak' in mesh_body_part_name):
                     # Xiao is the only character with an Arm material
@@ -214,6 +215,10 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         elif mesh_body_part_name and 'Others' in mesh_body_part_name:  # NPCs, Frem Penguins
             new_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
             material_name = new_material.name
+        elif mesh_body_part_name and mesh_body_part_name not in ['Face', 'Body', 'Hair', 'Eye', 'Dress', 'Arm', 'Cloak', 'VFX', 'StarCloak']:
+            # Fallback for completely unknown materials (like 'Stockings', 'Wings', etc)
+            new_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
+            material_name = new_material.name
         return material_name
 
     def __clone_material_and_rename(self, material_slot, mesh_body_part_name_template, mesh_body_part_name):
@@ -225,8 +230,33 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         new_material.name = f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}'
         new_material.use_fake_user = True
 
+        self.__transfer_diffuse_texture(material_slot.material, new_material)
         material_slot.material = new_material
         return new_material
+
+    def __transfer_diffuse_texture(self, old_material, new_material):
+        if not old_material or not old_material.use_nodes or not new_material or not new_material.use_nodes:
+            return
+            
+        old_image = None
+        for node in old_material.node_tree.nodes:
+            if node.type == 'TEX_IMAGE' and node.image:
+                old_image = node.image
+                break
+                
+        if not old_image:
+            return
+            
+        target_tree = new_material.node_tree
+        group = target_tree.nodes.get('Shader Textures')
+        if group and group.node_tree:
+            target_tree = group.node_tree
+            
+        for name in ['Main_Diffuse', 'Outline_Diffuse', 'Body_Diffuse_UV0']:
+            img_node = target_tree.nodes.get(name)
+            if img_node and img_node.type == 'TEX_IMAGE':
+                img_node.image = old_image
+                return
 
     def __set_glass_star_cloak_toggle(self, material, value):
         vfx_shader_node = material.node_tree.nodes.get(self.shader_node_names.VFX_SHADER)

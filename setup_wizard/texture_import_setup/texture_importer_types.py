@@ -493,8 +493,10 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
             self.files = files
             for file in files:
                 # load the file with the correct alpha mode
-                img_path = directory + "/" + file
-                img = bpy.data.images.load(filepath = img_path, check_existing=True)
+                img_path = os.path.normpath(os.path.join(directory, file))
+                img = bpy.data.images.get(file)
+                if not img:
+                    img = bpy.data.images.load(filepath=img_path, check_existing=True)
                 img.alpha_mode = 'CHANNEL_PACKED'
 
                 effect_hair_material = bpy.data.materials.get(f'{self.material_names.EFFECT_HAIR}') or \

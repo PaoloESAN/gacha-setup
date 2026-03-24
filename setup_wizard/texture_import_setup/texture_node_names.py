@@ -6,6 +6,8 @@ class TextureNodeNames:
     BODY_DIFFUSE_UV0 = ''
     MAIN_DIFFUSE = ''
     LIGHTMAP = ''
+    OUTLINE_DIFFUSE = ''
+    OUTLINE_LIGHTMAP = ''
     SHADER_TEXTURES_NODE_GROUP = ''
     NYX_COLOR_RAMP = ''
     NIGHT_SOUL_MASK = ''
@@ -63,6 +65,8 @@ class V1_GenshinImpactTextureNodeNames(GenshinImpactTextureNodeNames):
 class V2_GenshinImpactTextureNodeNames(V1_GenshinImpactTextureNodeNames):
     DIFFUSE = 'Outline_Diffuse'
     LIGHTMAP = 'Outline_Lightmap'
+    OUTLINE_DIFFUSE = 'Outline_Diffuse'
+    OUTLINE_LIGHTMAP = 'Outline_Lightmap'
     FACE_LIGHTMAP = 'Face_Lightmap'
     FACE_LIGHTMAP_NODE_GROUP = 'Face Lightmap'
     FACE_SHADOW_MAP = 'Face_Shadow'

@@ -535,7 +535,7 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
             create_outlines = [
                 material_slot.material for material_slot in mesh.material_slots if 
                 material_slot.material.name.startswith(self.material_names.MATERIAL_PREFIX_AFTER_RENAME) and
-                [keyword for keyword in material_keywords_to_not_create_outlines_on if keyword not in material_slot.material.name]
+                not any(keyword in material_slot.material.name for keyword in material_keywords_to_not_create_outlines_on)
             ]  # Only create Outlines on meshes with Shader materials and not in the ignore list (e.g. 'Eff' materials)
             if create_outlines:
                 self.create_geometry_nodes_modifier(mesh.name)
@@ -576,20 +576,20 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
         print(f'Geometry Node Default Values Set for {modifier.name}: {mesh.name}')
 
     def assign_materials_to_empty_modifier_slots(self, mesh, modifier):
-        for mesh_keyword in mesh_keywords_to_create_geometry_nodes_on + meshes_to_create_outlines_on:
-            if mesh_keyword in mesh.name:
-                for material_slot in mesh.material_slots:
-                    material = material_slot.material
-                    already_assigned = False
-                    for _, (mask_input, material_input) in self.outline_to_material_mapping.items():
-                        if modifier[mask_input] == material:
-                            already_assigned = True
-                    if not already_assigned:
-                        for available_mask_input, available_material_input in available_outline_mask_to_material_mapping.items():
-                            if not modifier[available_mask_input] and not modifier[available_material_input]:
-                                modifier[available_mask_input] = bpy.data.materials.get(material.name)
-                                modifier[available_material_input] = bpy.data.materials.get(material.name + ' Outlines')
-                                break
+        for material_slot in mesh.material_slots:
+            material = material_slot.material
+            if not material or not material.name.startswith(self.material_names.MATERIAL_PREFIX):
+                continue
+            already_assigned = False
+            for _, (mask_input, material_input) in self.outline_to_material_mapping.items():
+                if modifier.get(mask_input) == material:
+                    already_assigned = True
+            if not already_assigned:
+                for available_mask_input, available_material_input in available_outline_mask_to_material_mapping.items():
+                    if not modifier.get(available_mask_input) and not modifier.get(available_material_input):
+                        modifier[available_mask_input] = bpy.data.materials.get(material.name)
+                        modifier[available_material_input] = bpy.data.materials.get(material.name + ' Outlines')
+                        break
 
     def assign_night_soul_outlines_material(self, mesh, modifier):
         night_soul_outlines_material_using_mesh_name = [
