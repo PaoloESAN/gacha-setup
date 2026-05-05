@@ -2622,6 +2622,12 @@ def rig_character(
     complete_rig_text = complete_rig_text.replace("bl_label = \"Rig Layers\"", "bl_label = \"Rig Layers: \" + rig_name")
     complete_rig_text = complete_rig_text.replace("bl_label = \"Rig Main Properties\"", "bl_label = \"Rig Properties: \" + rig_name")
     
+    # Blender 5.1.1 compatibility: Rigify may generate calls to register_usetime_properties /
+    # unregister_usetime_properties which were removed in 5.1.1. Strip them out to prevent NameError.
+    import re as _re
+    complete_rig_text = _re.sub(r'^\s*register_usetime_properties\(\)\s*$', '', complete_rig_text, flags=_re.MULTILINE)
+    complete_rig_text = _re.sub(r'^\s*unregister_usetime_properties\(\)\s*$', '', complete_rig_text, flags=_re.MULTILINE)
+
     # Clear the text from the text block, reassemble it as needed with strings and modifications.
     rig_file.clear() 
     rig_file.write(complete_rig_text.replace("rig_id = ", "rig_name = \""+char_name.split("Costume")[0]+"\"\nrig_id = ")) # give it all the modified text and the variable holding the char's name
