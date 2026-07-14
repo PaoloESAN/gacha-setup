@@ -25,11 +25,7 @@ else:
     import importlib
     import os
 
-    import setup_wizard.addon_updater
-    import setup_wizard.addon_updater.addon_updater
     import setup_wizard.cache_operator
-
-    from setup_wizard.addon_updater import addon_updater_ops
     from setup_wizard.cache_operator import ClearCacheOperator
     from setup_wizard.genshin_import_materials import GI_OT_SetUpMaterials, HSR_OT_SetUpMaterials
     from setup_wizard.genshin_import_outlines import GI_OT_SetUpOutlines, HSR_OT_SetUpOutlines
@@ -86,7 +82,6 @@ else:
         setup_wizard.ui.gi_ui_setup_wizard_menu,
         setup_wizard.genshin_setup_wizard,
         setup_wizard.cache_operator,
-        setup_wizard.addon_updater.addon_updater
     ]
 
     classes = [
@@ -146,13 +141,7 @@ else:
     UI_Properties.create_custom_ui_properties()
 
 
-    def set_up_blender_addon_updater():
-        PACKAGE_PATH = os.path.dirname(__file__)
 
-        addon_updater_ops.updater._addon_root = PACKAGE_PATH
-        addon_updater_ops.register(bl_info)
-
-    set_up_blender_addon_updater()
 
 
     '''

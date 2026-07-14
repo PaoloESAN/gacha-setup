@@ -3,7 +3,6 @@ import bpy
 from bpy.props import EnumProperty
 from bpy.types import Panel
 
-from setup_wizard.addon_updater import addon_updater_ops
 from setup_wizard import bl_info
 from setup_wizard.domain.game_types import GameType
 
@@ -37,10 +36,6 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
 
         version_text = layout.row()
         version_text.label(text='v' + '.'.join([str(version_num) for version_num in bl_info.get('version')]))
-
-        col = layout.box().column()
-        col.label(text=('(Experimental) Add-on Update'), icon='ERROR')
-        addon_updater_ops.update_settings_ui_condensed(self, context, col)
 
         sub_layout = layout.box()
         sub_layout.prop(context.scene, 'game_type_dropdown')
