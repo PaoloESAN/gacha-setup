@@ -30,6 +30,42 @@ NAME_OF_HYV_PP_COMPOSITE_NODE_OUTPUT = 'Image'
 NAME_OF_HYV_PP_COMPOSITE_NODE_OUTPUT_V2 = 'Combined'
 
 
+def get_output_node_name():
+    if bpy.app.version >= (5, 0, 0):
+        return 'Group Output'
+    return 'Composite'
+
+
+def get_output_node_type():
+    if bpy.app.version >= (5, 0, 0):
+        return 'NodeGroupOutput'
+    return 'CompositorNodeComposite'
+
+
+def get_node_tree(scene):
+    if hasattr(scene, "compositing_node_group"):
+        if not scene.compositing_node_group:
+            tree = bpy.data.node_groups.new("Compositing Nodetree", "CompositorNodeTree")
+            scene.compositing_node_group = tree
+            # Create default Render Layers and Composite nodes if they don't exist
+            if not tree.nodes.get("Render Layers"):
+                node = tree.nodes.new(type="CompositorNodeRLayers")
+                node.name = "Render Layers"
+            
+            output_name = get_output_node_name()
+            output_type = get_output_node_type()
+            if not tree.nodes.get(output_name):
+                if hasattr(tree, "interface"):
+                    try:
+                        tree.interface.new_socket(name="Image", in_out='OUTPUT', socket_type='NodeSocketColor')
+                    except Exception:
+                        pass
+                node = tree.nodes.new(type=output_type)
+                node.name = output_name
+        return scene.compositing_node_group
+    return scene.node_tree
+
+
 class GI_OT_PostProcessingCompositingSetup(Operator, BasicSetupUIOperator):
     '''Sets Up Post Processing Compositing'''
     bl_idname = 'hoyoverse.post_processing_compositing_setup'
@@ -96,7 +132,10 @@ class GI_OT_CompositingNodeSetup(Operator, ImportHelper, CustomOperatorPropertie
         cache_enabled = context.window_manager.cache_enabled
         composite_blend_file_path = self.filepath or get_cache(cache_enabled).get(HOYOVERSE_COMPOSITING_NODE_FILE_PATH)
 
-        context.scene.use_nodes = True
+        if hasattr(context.scene, 'use_nodes'):
+            context.scene.use_nodes = True
+        
+        get_node_tree(context.scene)
 
         # Technically works if only running this Operator, but this cannot be chained because we need to be 
         # out of the script (or in another Operator) to update ctx before the import modal appears
@@ -125,21 +164,22 @@ class GI_OT_CompositingNodeSetup(Operator, ImportHelper, CustomOperatorPropertie
         else:
             self.logs += f'{composite_node_group.name} already appended, skipping.\n'
 
-        composite_node = bpy.data.scenes.get(NAME_OF_DEFAULT_SCENE).node_tree.nodes.get(NAME_OF_COMPOSITE_NODE)
+        scene = context.scene
+        composite_node = get_node_tree(scene).nodes.get(NAME_OF_COMPOSITE_NODE)
         if not composite_node or \
             (composite_node and (composite_node.node_tree.name not in self.names_of_node_groups)):
             self.create_compositor_node_group(composite_node_group.name)
         else:
             self.logs += f'{composite_node_group.name} node already created, skipping and not creating new node.\n'
 
-        viewer_node = bpy.data.scenes.get(NAME_OF_DEFAULT_SCENE).node_tree.nodes.get(NAME_OF_VIEWER_NODE)
+        viewer_node = get_node_tree(scene).nodes.get(NAME_OF_VIEWER_NODE)
         if not viewer_node:
             self.create_compositor_node(NAME_OF_VIEWER_NODE_TYPE)
         else:
             self.logs += f'Viewer node already exists, skipping.\n'
 
-        self.connect_starting_nodes()
-        self.set_node_locations()
+        self.connect_starting_nodes(scene)
+        self.set_node_locations(scene)
 
         if cache_enabled and composite_blend_file_path:
             cache_using_cache_key(
@@ -189,7 +229,7 @@ class GI_OT_CompositingNodeSetup(Operator, ImportHelper, CustomOperatorPropertie
 
     # Important to create using node_tree.nodes.new() instead of bpy.ops.node.add_node()
     def create_compositor_node_group(self, node_name):
-        node_tree = bpy.context.scene.node_tree
+        node_tree = get_node_tree(bpy.context.scene)
         node = node_tree.nodes.new(
             type='CompositorNodeGroup'
         )
@@ -198,19 +238,17 @@ class GI_OT_CompositingNodeSetup(Operator, ImportHelper, CustomOperatorPropertie
 
     # Important to create using node_tree.nodes.new() instead of bpy.ops.node.add_node()
     def create_compositor_node(self, node_type):
-        node_tree = bpy.context.scene.node_tree
+        node_tree = get_node_tree(bpy.context.scene)
         node_tree.nodes.new(
             type=node_type
         )
         self.logs += f'Created {node_type} node tree\n'
 
-    def connect_starting_nodes(self):
-        default_scene = bpy.data.scenes.get(NAME_OF_DEFAULT_SCENE)
-
-        render_layers_node = default_scene.node_tree.nodes.get(NAME_OF_COMPOSITOR_INPUT_NODE)
+    def connect_starting_nodes(self, scene):
+        render_layers_node = get_node_tree(scene).nodes.get(NAME_OF_COMPOSITOR_INPUT_NODE)
         render_layers_output = render_layers_node.outputs.get(NAME_OF_IMAGE_IO)
 
-        composite_wrapper_node = default_scene.node_tree.nodes.get(NAME_OF_COMPOSITE_NODE)
+        composite_wrapper_node = get_node_tree(scene).nodes.get(NAME_OF_COMPOSITE_NODE)
         composite_wrapper_node_input = composite_wrapper_node.inputs.get(NAME_OF_IMAGE_IO)
         composite_wrapper_node_output = None
 
@@ -219,22 +257,22 @@ class GI_OT_CompositingNodeSetup(Operator, ImportHelper, CustomOperatorPropertie
             if composite_wrapper_node_output:
                 break
 
-        composite_node = default_scene.node_tree.nodes.get(NAME_OF_COMPOSITOR_OUTPUT_NODE)
+        composite_node = get_node_tree(scene).nodes.get(get_output_node_name())
         composite_node_input = composite_node.inputs.get(NAME_OF_IMAGE_IO)
 
-        viewer_node = default_scene.node_tree.nodes.get(NAME_OF_VIEWER_NODE)
+        viewer_node = get_node_tree(scene).nodes.get(NAME_OF_VIEWER_NODE)
         viewer_node_input = viewer_node.inputs.get(NAME_OF_IMAGE_IO)
 
-        self.connect_nodes_in_scene(default_scene, render_layers_output, composite_wrapper_node_input)
-        self.connect_nodes_in_scene(default_scene, composite_wrapper_node_output, composite_node_input)
-        self.connect_nodes_in_scene(default_scene, composite_wrapper_node_output, viewer_node_input)
+        self.connect_nodes_in_scene(scene, render_layers_output, composite_wrapper_node_input)
+        self.connect_nodes_in_scene(scene, composite_wrapper_node_output, composite_node_input)
+        self.connect_nodes_in_scene(scene, composite_wrapper_node_output, viewer_node_input)
 
     def connect_nodes_in_scene(self, scene, input, output):
         # This is very important! The links are at the scene.node_tree level
         # It makes sense after you spend some time thinking about it because you're linking the nodes in the scene.
         # I spent way too much time troubleshooting at the scene.node_tree.nodes level
         # At that point you're trying to link things inside nodes, which is wrong!
-        scene_node_tree_links = scene.node_tree.links
+        scene_node_tree_links = get_node_tree(scene).links
         scene_node_tree_links.new(
             input, 
             output
@@ -245,12 +283,11 @@ class GI_OT_CompositingNodeSetup(Operator, ImportHelper, CustomOperatorPropertie
 
         self.logs += f"Connected '{input_node_name}' ({input.name}) to '{output_node_name}' ({output.name}) in scene: {scene.name}\n"
 
-    def set_node_locations(self):
-        default_scene = bpy.data.scenes.get(NAME_OF_DEFAULT_SCENE)
-        render_layers_node = default_scene.node_tree.nodes.get(NAME_OF_COMPOSITOR_INPUT_NODE)
-        composite_wrapper_node = default_scene.node_tree.nodes.get(NAME_OF_COMPOSITE_NODE)
-        composite_node = default_scene.node_tree.nodes.get(NAME_OF_COMPOSITOR_OUTPUT_NODE)
-        viewer_node = default_scene.node_tree.nodes.get(NAME_OF_VIEWER_NODE)
+    def set_node_locations(self, scene):
+        render_layers_node = get_node_tree(scene).nodes.get(NAME_OF_COMPOSITOR_INPUT_NODE)
+        composite_wrapper_node = get_node_tree(scene).nodes.get(NAME_OF_COMPOSITE_NODE)
+        composite_node = get_node_tree(scene).nodes.get(get_output_node_name())
+        viewer_node = get_node_tree(scene).nodes.get(NAME_OF_VIEWER_NODE)
 
         render_layers_node.location = (-200, 400)
         composite_wrapper_node.location = (250, 400)
@@ -279,9 +316,13 @@ class HYV_OT_HoyoversePostProcessingDefaultSettings(Operator, ImportHelper, Cust
             self.clear_custom_properties()
             return {'FINISHED'}
 
-        bpy.context.scene.node_tree.use_opencl = False
-        bpy.context.scene.node_tree.use_two_pass = True
-        bpy.context.scene.eevee.use_bloom = False
+        tree = get_node_tree(bpy.context.scene)
+        if hasattr(tree, "use_opencl"):
+            tree.use_opencl = False
+        if hasattr(tree, "use_two_pass"):
+            tree.use_two_pass = True
+        if hasattr(bpy.context.scene.eevee, "use_bloom"):
+            bpy.context.scene.eevee.use_bloom = False
         bpy.context.scene.render.film_transparent = False
 
         if self.next_step_idx:
@@ -291,6 +332,7 @@ class HYV_OT_HoyoversePostProcessingDefaultSettings(Operator, ImportHelper, Cust
                 high_level_step_name=self.high_level_step_name,
                 game_type=self.game_type,
             )
+        self.report({'INFO'}, 'Applied HoYoverse post-processing default settings')
         self.clear_custom_properties()
 
         return {'FINISHED'}

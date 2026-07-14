@@ -24,7 +24,7 @@ class UI_Properties:
         bpy.types.WindowManager.post_processing_setup_enabled = bpy.props.BoolProperty(
             name = "Post-Processing Setup Enabled",
             description = "Enables Post-Processing Compositing Setup",
-            default = False
+            default = True
         )
 
         bpy.types.WindowManager.enable_viewport_outlines = bpy.props.BoolProperty(
