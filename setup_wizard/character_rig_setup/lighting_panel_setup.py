@@ -3,6 +3,8 @@ import os
 
 from setup_wizard.domain.shader_identifier_service import GenshinImpactShaders, ShaderIdentifierServiceFactory
 from setup_wizard.geometry_nodes_setup.lighting_panel_names import LightingPanelNames
+from setup_wizard.utils.modifier_utils import has_modifier_property, get_modifier_property, set_modifier_property
+
 
 
 class LightingPanelFileNames:
@@ -36,7 +38,7 @@ class LightingPanel:
         self.lighting_panel_filepath = lighting_panel_filepath
 
     def set_up_lighting_panel(self, light_vectors_modifier):
-        lighting_panel_attributes_exist = LightingPanelNames.LIGHT_VECTORS_MODIFIER_INPUT_NAME_TO_OBJECT_NAME[0][0] in light_vectors_modifier
+        lighting_panel_attributes_exist = has_modifier_property(light_vectors_modifier, LightingPanelNames.LIGHT_VECTORS_MODIFIER_INPUT_NAME_TO_OBJECT_NAME[0][0])
         if lighting_panel_attributes_exist:
             if not bpy.data.objects.get(LightingPanelNames.Objects.LIGHTING_PANEL):
                 self.import_lighting_panel()
@@ -44,7 +46,8 @@ class LightingPanel:
 
             for modifier_input_name, object_name in LightingPanelNames.LIGHT_VECTORS_MODIFIER_INPUT_NAME_TO_OBJECT_NAME:
                 try:
-                    light_vectors_modifier[modifier_input_name] = light_vectors_modifier[modifier_input_name] or bpy.data.objects.get(object_name)
+                    val = get_modifier_property(light_vectors_modifier, modifier_input_name) or bpy.data.objects.get(object_name)
+                    set_modifier_property(light_vectors_modifier, modifier_input_name, val)
                 except KeyError:
                     pass  # Skip if modifier input name does not exist, must do try-except because it may not have a value yet
 

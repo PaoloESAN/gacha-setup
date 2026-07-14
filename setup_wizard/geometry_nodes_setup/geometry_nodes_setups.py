@@ -19,6 +19,8 @@ from setup_wizard.domain.game_types import GameType
 from setup_wizard.material_import_setup.empty_names import LightDirectionEmptyNames
 from setup_wizard.outline_import_setup.outline_node_groups import OutlineNodeGroupNames
 from setup_wizard.texture_import_setup.texture_node_names import V4_GenshinImpactTextureNodeNames
+from setup_wizard.utils.modifier_utils import get_modifier_property, set_modifier_property
+
 
 
 # Constants
@@ -214,7 +216,7 @@ class GameGeometryNodesSetup(ABC):
                     face_outlines_node_input.default_value = 1.0
 
     def set_up_modifier_default_values(self, modifier, mesh):
-        if modifier[f'{NAME_OF_VERTEX_COLORS_INPUT}_use_attribute'] == 0:
+        if get_modifier_property(modifier, f'{NAME_OF_VERTEX_COLORS_INPUT}_use_attribute') == 0:
             with bpy.context.temp_override(active_object=bpy.data.objects[mesh.name]):
                 bpy.context.view_layer.objects.active = bpy.context.active_object
 
@@ -229,20 +231,20 @@ class GameGeometryNodesSetup(ABC):
                         modifier_name=modifier.name
                     )
 
-        modifier[f'{NAME_OF_VERTEX_COLORS_INPUT}_attribute_name'] = 'Col'
-        modifier[OUTLINE_THICKNESS_INPUT] = self.DEFAULT_OUTLINE_THICKNESS
+        set_modifier_property(modifier, f'{NAME_OF_VERTEX_COLORS_INPUT}_attribute_name', 'Col')
+        set_modifier_property(modifier, OUTLINE_THICKNESS_INPUT, self.DEFAULT_OUTLINE_THICKNESS)
 
         for (mask_input, material_input), material in zip(outline_mask_to_material_mapping.items(), mesh.material_slots):
             if bpy.data.materials.get(material.name) and bpy.data.materials.get(f'{material.name} Outlines'):
                 if material.name not in self.GEOMETRY_NODES_MATERIAL_IGNORE_LIST:
-                    modifier[mask_input] = bpy.data.materials.get(material.name)
-                    modifier[material_input] = bpy.data.materials.get(f'{material.name} Outlines')
+                    set_modifier_property(modifier, mask_input, bpy.data.materials.get(material.name))
+                    set_modifier_property(modifier, material_input, bpy.data.materials.get(f'{material.name} Outlines'))
 
     def disable_face_eye_outlines(self, modifier):
         # Specifically do not try to get modifiers from context because context does not have newly
         # created geometry nodes yet during the setup_wizard!! (or it just doesn't work in general)
         # face_eye_outlines = bpy.context.object.modifiers.get('GeometryNodes Face_Eye')  # Bad!
-        modifier[OUTLINE_THICKNESS_INPUT] = 0.0
+        set_modifier_property(modifier, OUTLINE_THICKNESS_INPUT, 0.0)
 
     '''
         Necessary otherwise meshes/textures on character are visually messed up
@@ -300,13 +302,13 @@ class GameGeometryNodesSetup(ABC):
         def get_empty(name):
             return bpy.data.objects.get(f"{name}_{char_name}") or bpy.data.objects.get(name)
 
-        light_vectors_modifier[LIGHT_VECTORS_LIGHT_DIRECTION] = \
-            light_vectors_modifier[LIGHT_VECTORS_LIGHT_DIRECTION] or \
+        set_modifier_property(light_vectors_modifier, LIGHT_VECTORS_LIGHT_DIRECTION,
+            get_modifier_property(light_vectors_modifier, LIGHT_VECTORS_LIGHT_DIRECTION) or \
             get_empty(LightDirectionEmptyNames.LIGHT_DIRECTION) or \
-            get_empty(LightDirectionEmptyNames.MAIN_LIGHT_DIRECTION)
-        light_vectors_modifier[LIGHT_VECTORS_HEAD_ORIGIN] = light_vectors_modifier[LIGHT_VECTORS_HEAD_ORIGIN] or get_empty(LightDirectionEmptyNames.HEAD_ORIGIN)
-        light_vectors_modifier[LIGHT_VECTORS_HEAD_FORWARD] = light_vectors_modifier[LIGHT_VECTORS_HEAD_FORWARD] or get_empty(LightDirectionEmptyNames.HEAD_FORWARD)
-        light_vectors_modifier[LIGHT_VECTORS_HEAD_UP] = light_vectors_modifier[LIGHT_VECTORS_HEAD_UP] or get_empty(LightDirectionEmptyNames.HEAD_UP) 
+            get_empty(LightDirectionEmptyNames.MAIN_LIGHT_DIRECTION))
+        set_modifier_property(light_vectors_modifier, LIGHT_VECTORS_HEAD_ORIGIN, get_modifier_property(light_vectors_modifier, LIGHT_VECTORS_HEAD_ORIGIN) or get_empty(LightDirectionEmptyNames.HEAD_ORIGIN))
+        set_modifier_property(light_vectors_modifier, LIGHT_VECTORS_HEAD_FORWARD, get_modifier_property(light_vectors_modifier, LIGHT_VECTORS_HEAD_FORWARD) or get_empty(LightDirectionEmptyNames.HEAD_FORWARD))
+        set_modifier_property(light_vectors_modifier, LIGHT_VECTORS_HEAD_UP, get_modifier_property(light_vectors_modifier, LIGHT_VECTORS_HEAD_UP) or get_empty(LightDirectionEmptyNames.HEAD_UP)) 
 
 
 class GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
@@ -439,17 +441,17 @@ class V3_GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
         return geometry_nodes_modifier 
 
     def set_up_modifier_default_values(self, modifier, mesh):
-        modifier[self.BASE_GEOMETRY_INPUT] = True
-        modifier[self.USE_VERTEX_COLORS_INPUT] = True
-        modifier[self.OUTLINE_THICKNESS_INPUT] = 0.25
+        set_modifier_property(modifier, self.BASE_GEOMETRY_INPUT, True)
+        set_modifier_property(modifier, self.USE_VERTEX_COLORS_INPUT, True)
+        set_modifier_property(modifier, self.OUTLINE_THICKNESS_INPUT, 0.25)
 
         for input_name, (material_input_accessor, outline_material_input_accessor) in self.outline_to_material_mapping.items():
             material_name = f'{self.material_names.MATERIAL_PREFIX}{input_name}'
             outline_material_name = f'{self.material_names.MATERIAL_PREFIX}{input_name} Outlines'
 
             if bpy.data.materials.get(material_name) and bpy.data.materials.get(outline_material_name):
-                modifier[material_input_accessor] = bpy.data.materials.get(material_name)
-                modifier[outline_material_input_accessor] = bpy.data.materials.get(outline_material_name)
+                set_modifier_property(modifier, material_input_accessor, bpy.data.materials.get(material_name))
+                set_modifier_property(modifier, outline_material_input_accessor, bpy.data.materials.get(outline_material_name))
 
         is_npc = [material for material in bpy.data.materials if 'NPC' in material.name]
         if is_npc:
@@ -477,8 +479,8 @@ class V3_GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
                     ]
 
                 if shader_materials and outline_materials:
-                    modifier[material_input_accessor] = shader_materials[0]
-                    modifier[outline_material_input_accessor] = outline_materials[0]
+                    set_modifier_property(modifier, material_input_accessor, shader_materials[0])
+                    set_modifier_property(modifier, outline_material_input_accessor, outline_materials[0])
 
 
 class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
@@ -582,13 +584,13 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
                 continue
             already_assigned = False
             for _, (mask_input, material_input) in self.outline_to_material_mapping.items():
-                if modifier.get(mask_input) == material:
+                if get_modifier_property(modifier, mask_input) == material:
                     already_assigned = True
             if not already_assigned:
                 for available_mask_input, available_material_input in available_outline_mask_to_material_mapping.items():
-                    if not modifier.get(available_mask_input) and not modifier.get(available_material_input):
-                        modifier[available_mask_input] = bpy.data.materials.get(material.name)
-                        modifier[available_material_input] = bpy.data.materials.get(material.name + ' Outlines')
+                    if not get_modifier_property(modifier, available_mask_input) and not get_modifier_property(modifier, available_material_input):
+                        set_modifier_property(modifier, available_mask_input, bpy.data.materials.get(material.name))
+                        set_modifier_property(modifier, available_material_input, bpy.data.materials.get(material.name + ' Outlines'))
                         break
 
     def assign_night_soul_outlines_material(self, mesh, modifier):
@@ -607,12 +609,12 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
             night_soul_outlines_material_using_mesh_material_name
 
         if night_soul_outlines_material:
-            modifier[self.NIGHT_SOUL_OUTLINE_SOCKET] = night_soul_outlines_material[0]
+            set_modifier_property(modifier, self.NIGHT_SOUL_OUTLINE_SOCKET, night_soul_outlines_material[0])
 
     def assign_face_lightmap_texture(self, modifier):
         face_lightmap_node_group = bpy.data.node_groups.get(self.texture_node_names.FACE_LIGHTMAP_NODE_GROUP)
         if face_lightmap_node_group:
-            modifier[self.FACE_LIGHTMAP_SOCKET] = face_lightmap_node_group.nodes[self.texture_node_names.FACE_LIGHTMAP].image
+            set_modifier_property(modifier, self.FACE_LIGHTMAP_SOCKET, face_lightmap_node_group.nodes[self.texture_node_names.FACE_LIGHTMAP].image)
 
     def __separate_materials_into_unique_meshes(self, mesh):
         if len(mesh.material_slots) > 1:
@@ -690,7 +692,7 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
 
             for character_name in character_names:
                 if material.name == self.material_names.STAR_CLOAK and character_name in material.node_tree.nodes.get(self.texture_node_names.VFX_DIFFUSE).image.name:
-                    modifier[self.TOGGLE_OUTLINES_SOCKET] = False
+                    set_modifier_property(modifier, self.TOGGLE_OUTLINES_SOCKET, False)
 
     def __connect_shader_node_to_vfx_node(self, material, starcloak_types: List[StarCloakTypes]):
         MAIN_SHADER_NODE_NAME = f'{self.shader_node_names.BODY_SHADER}.001'
@@ -789,9 +791,9 @@ class StellarToonGeometryNodesSetup(HonkaiStarRailGeometryNodesSetup):
         self.fix_face_outlines_by_reordering_material_slots(face_meshes)
 
     def __set_light_vectors_default_output_attributes(self, light_vectors_modifier):
-        light_vectors_modifier[self.LIGHTDIR_OUTPUT_ATTRIBUTE] = 'lightDir'
-        light_vectors_modifier[self.HEADFORWARD_OUTPUT_ATTRIBUTE] = 'headForward'
-        light_vectors_modifier[self.HEADUP_OUTPUT_ATTRIBUTE] = 'headUp'
+        set_modifier_property(light_vectors_modifier, self.LIGHTDIR_OUTPUT_ATTRIBUTE, 'lightDir')
+        set_modifier_property(light_vectors_modifier, self.HEADFORWARD_OUTPUT_ATTRIBUTE, 'headForward')
+        set_modifier_property(light_vectors_modifier, self.HEADUP_OUTPUT_ATTRIBUTE, 'headUp')
 
 
 class PunishingGrayRavenGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
@@ -852,9 +854,9 @@ class PunishingGrayRavenGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
         return geometry_nodes_modifier
 
     def set_up_modifier_default_values(self, modifier, mesh):
-        modifier[self.BASE_GEOMETRY_INPUT] = True
-        modifier[self.USE_VERTEX_COLORS_INPUT] = True
-        modifier[self.OUTLINE_THICKNESS_INPUT] = 0.1
+        set_modifier_property(modifier, self.BASE_GEOMETRY_INPUT, True)
+        set_modifier_property(modifier, self.USE_VERTEX_COLORS_INPUT, True)
+        set_modifier_property(modifier, self.OUTLINE_THICKNESS_INPUT, 0.1)
 
         # V2
         self.DEFAULT_OUTLINE_THICKNESS = 0.1

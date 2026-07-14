@@ -479,8 +479,12 @@ def rig_character(
         face = bpy.data.objects["Face"]
         hair = bpy.data.objects["Hair"]
 
-        add_driver(face, bod, 'modifiers["Outlines Face"]["Input_7"]', 'modifiers["Outlines Body"]["Input_7"]')
-        add_driver(hair, bod, 'modifiers["Outlines Hair"]["Input_7"]', 'modifiers["Outlines Body"]["Input_7"]')
+        if bpy.app.version >= (5, 2, 0):
+            add_driver(face, bod, 'modifiers["Outlines Face"].properties.inputs["Input_7"].value', 'modifiers["Outlines Body"].properties.inputs["Input_7"].value')
+            add_driver(hair, bod, 'modifiers["Outlines Hair"].properties.inputs["Input_7"].value', 'modifiers["Outlines Body"].properties.inputs["Input_7"].value')
+        else:
+            add_driver(face, bod, 'modifiers["Outlines Face"]["Input_7"]', 'modifiers["Outlines Body"]["Input_7"]')
+            add_driver(hair, bod, 'modifiers["Outlines Hair"]["Input_7"]', 'modifiers["Outlines Body"]["Input_7"]')
     except:
         pass
         

@@ -20,7 +20,7 @@ from setup_wizard.import_order import GENSHIN_RIGIFY_BONE_SHAPES_FILE_PATH, Next
 
 from setup_wizard.character_rig_setup.character_rigger_props import CharacterRiggerPropertyGroup
 from setup_wizard.texture_import_setup.texture_node_names import TextureNodeNames, V1_GenshinImpactTextureNodeNames, V2_GenshinImpactTextureNodeNames, V3_GenshinImpactTextureNodeNames, V4_GenshinImpactTextureNodeNames
-
+from setup_wizard.utils.modifier_utils import get_modifier_property, set_modifier_property
 
 class CharacterRiggerFactory:
     def create(game_type: GameType, blender_operator: Operator, context: Context):
@@ -148,10 +148,10 @@ class GenshinImpactCharacterRigger(CharacterRigger):
                             def assign_empty(socket, empty_name):
                                 empty_obj = bpy.data.objects.get(f"{empty_name}_{char_name}")
                                 if empty_obj:
-                                    modifier[socket] = empty_obj
+                                    set_modifier_property(modifier, socket, empty_obj)
 
                             assign_empty('Input_3', 'Light Direction')
-                            if not modifier.get('Input_3'):
+                            if not get_modifier_property(modifier, 'Input_3'):
                                 assign_empty('Input_3', 'Main Light Direction')
                             assign_empty('Input_4', 'Head Origin')
                             assign_empty('Input_5', 'Head Forward')
@@ -249,10 +249,10 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
                             def assign_empty(socket, empty_name):
                                 empty_obj = bpy.data.objects.get(f"{empty_name}_{char_name}")
                                 if empty_obj:
-                                    modifier[socket] = empty_obj
+                                    set_modifier_property(modifier, socket, empty_obj)
 
                             assign_empty('Input_3', 'Light Direction')
-                            if not modifier.get('Input_3'):
+                            if not get_modifier_property(modifier, 'Input_3'):
                                 assign_empty('Input_3', 'Main Light Direction')
                             assign_empty('Input_4', 'Head Origin')
                             assign_empty('Input_5', 'Head Forward')

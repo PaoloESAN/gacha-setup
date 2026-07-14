@@ -13,6 +13,8 @@ from setup_wizard.domain.character_types import CharacterType
 from setup_wizard.domain.game_types import GameType
 from setup_wizard.domain.outline_material_data import OutlineMaterialGroup
 from setup_wizard.domain.shader_material_names import V3_BonnyFestivityGenshinImpactMaterialNames, V4_PrimoToonGenshinImpactMaterialNames
+from setup_wizard.utils.modifier_utils import set_modifier_property
+
 
 
 class MaterialDataAppliersFactory:
@@ -635,7 +637,7 @@ class V4_MaterialDataApplier(V3_MaterialDataApplier):
                                     material_json_value,
                                     socket
                                 )
-                                modifier[socket.identifier] = material_json_value
+                                set_modifier_property(modifier, socket.identifier, material_json_value)
                             except AttributeError as ex:
                                 print(f'Did not find {socket.name} in {self.material.name}/{self.outline_material.name} material using {self} \
                                     Falling back to next MaterialDataApplier version')

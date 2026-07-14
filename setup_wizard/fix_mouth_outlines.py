@@ -5,6 +5,8 @@ from bpy.types import Operator
 
 from setup_wizard.import_order import NextStepInvoker
 from setup_wizard.setup_wizard_operator_base_classes import CustomOperatorProperties
+from setup_wizard.utils.modifier_utils import set_modifier_property
+
 
 CAMERA_INPUT = 'Input_4'
 DEPTH_OFFSET_INPUT = 'Input_8'
@@ -48,8 +50,8 @@ class GI_OT_FixMouthOutlines(Operator, CustomOperatorProperties):
 
     def set_camera_and_depth_offset(self, outline_modifiers, camera):
         for outline_modifier in outline_modifiers:
-            outline_modifier[CAMERA_INPUT] = camera
-            outline_modifier[DEPTH_OFFSET_INPUT] = 3.0
+            set_modifier_property(outline_modifier, CAMERA_INPUT, camera)
+            set_modifier_property(outline_modifier, DEPTH_OFFSET_INPUT, 3.0)
             self.set_camera_in_front_of_armature(camera)
 
 
