@@ -53,7 +53,6 @@ class GI_OT_CharacterRiggerOperator(Operator, ImportHelper, CustomOperatorProper
             self.high_level_step_name != 'HONKAI_STAR_RAIL_OT_setup_wizard_ui_no_outlines'
         rigging_enabled = is_advanced_setup or \
             (bpy.context.window_manager.setup_wizard_full_run_rigging_enabled and self.game_type in self.GAME_TYPES_FULL_SETUP_RIGGING_ENABLED)
-        betterfbx_installed = bpy.context.preferences.addons.get('better_fbx')
         expy_kit_installed = bpy.context.preferences.addons.get('Expy-Kit-main')
         rigify_installed = bpy.context.preferences.addons.get('rigify')
 
@@ -64,11 +63,10 @@ class GI_OT_CharacterRiggerOperator(Operator, ImportHelper, CustomOperatorProper
             )
             self.invoke_next_step()
             return {'FINISHED'}
-        if not betterfbx_installed or not expy_kit_installed or not rigify_installed:
+        if not expy_kit_installed or not rigify_installed:
             self.report(
                 {'WARNING'},
-                'Rigging skipped. BetterFBX, ExpyKit and Rigify are required.\n'
-                f'BetterFBX: {"Installed" if betterfbx_installed else "Missing"}\n'
+                'Rigging skipped. ExpyKit and Rigify are required.\n'
                 f'ExpyKit: {"Installed" if expy_kit_installed else "Missing"}\n'
                 f'Rigify: {"Installed" if rigify_installed else "Missing"}'
             )

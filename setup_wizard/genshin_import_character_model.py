@@ -9,7 +9,7 @@ import pathlib
 # ImportHelper is a helper class, defines filename and
 # invoke() function which calls the file selector.
 from bpy_extras.io_utils import ImportHelper
-from bpy.props import BoolProperty, StringProperty
+from bpy.props import StringProperty
 from bpy.types import Operator
 import os
 
@@ -56,17 +56,7 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
         maxlen=255,  # Max internal buffer length, longer would be clamped.
     )
 
-    use_auto_bone_orientation: BoolProperty(
-        name="Automatic Bone Orientation",
-        description="Automatically sort bones orientations, if you want to preserve the original armature, please disable the option",
-        default=True,
-    )
 
-    def draw(self, context):
-        layout = self.layout
-        box = layout.box()
-        box.label(text="BetterFBX Bone Options:")
-        box.prop(self, 'use_auto_bone_orientation')
 
     def execute(self, context):
         is_character_model_file = not os.path.isdir(self.filepath) and self.filepath
@@ -112,25 +102,13 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
     def import_character_model(self, character_model_file_path_or_directory, is_character_model_file):
         character_model_file_path = character_model_file_path_or_directory if is_character_model_file else \
             self.__find_fbx_file(character_model_file_path_or_directory)
-        betterfbx_installed = bpy.context.preferences.addons.get('better_fbx')
-        # Honkai Star Rail requires BetterFBX. We should always use it for HSR Character Import
-        betterfbx_enabled = True if self.game_type == GameType.HONKAI_STAR_RAIL.name else \
-            bpy.context.window_manager.setup_wizard_betterfbx_enabled if betterfbx_installed else False
 
-        if betterfbx_installed and betterfbx_enabled:
-            bpy.ops.better_import.fbx(
-                'EXEC_DEFAULT',
-                filepath=character_model_file_path,
-                use_auto_bone_orientation=self.use_auto_bone_orientation,
-            )
-            self.report({'INFO'}, 'Imported character model using BetterFBX')
-        else:
-            bpy.ops.import_scene.fbx(
-                filepath=character_model_file_path,
-                force_connect_children=True,
-                automatic_bone_orientation=True
-            )
-            self.report({'INFO'}, 'Imported character model')
+        bpy.ops.import_scene.fbx(
+            filepath=character_model_file_path,
+            force_connect_children=True,
+            automatic_bone_orientation=True
+        )
+        self.report({'INFO'}, 'Imported character model')
 
         for object in bpy.data.objects:
             if object.type == 'MESH' and not object.data.uv_layers.get('UV1'):
@@ -153,7 +131,6 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
             self.report(
                 {'ERROR'}, 
                 'Attempted to import model, but no armature found after import. Likely failed to import from FBX file.\n'
-                '- Try again with BetterFBX disabled.\n'
                 "- Try renaming and removing any special characters (like star symbols) from any folders in the filepath"
             )
             raise err

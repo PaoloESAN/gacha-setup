@@ -194,7 +194,6 @@ You can disable the cache for any step by unchecking the `Cache Enabled` checkbo
     * Select the JSON files with the material data (Ctrl + Click or Shift + Click).
 10. ~~Fix Mouth Outlines~~ (Legacy, may be return in future releases) - **[Disabled by Default]**
     * This step "fixes" outlines on the mouth (Face) by assigning a Camera to the geometry node and setting Depth Offset. You will likely need to manually change the Depth Offset depending on your scene.
-    * This step may not be needed if you use BetterFBX to import your model (not confirmed)
 12. Make Character Upright
     * This step will reset the rotation and scale of the character armature and set the character armature to 90 degrees on the x-axis (standing upright).
     * No selection needed.
@@ -224,8 +223,7 @@ You can disable the cache for any step by unchecking the `Cache Enabled` checkbo
 - [X] ~~Scale up x100~~ Reset Scale (scaled to 1.0)
 - [X] Character Ramp Type Mapping (automatically plug correct Body Ramp Type from Global Material Properties)
     - Requires knowing all characters who have a different the Body Ramp Type than the default
-- [X] BetterFBX Support/Fix UV map imports (only one UV map is imported)
-    - BetterFBX supported! The option is enabled by default if the addon is installed 
+- [X] Fix UV map imports (only one UV map is imported)
     - Created UV1 UV map which allows for underskirt textures (Zhongli, Lumine, etc.) 
       - This provides a texture, but not the correct texture on things like underskirts or the opposite side of some clothing
 - [X] Color Management Filmic -> Standard

@@ -22,10 +22,7 @@ class UI_Properties:
             default = True
         )
 
-        bpy.types.WindowManager.setup_wizard_betterfbx_enabled = bpy.props.BoolProperty(
-            name = "BetterFBX Enabled",
-            default = False
-        )
+
 
 
 class PGR_PT_Setup_Wizard_UI_Layout(Panel, PunishingGrayRavenUIRenderChecker):
@@ -49,10 +46,9 @@ class PGR_PT_Setup_Wizard_UI_Layout(Panel, PunishingGrayRavenUIRenderChecker):
         )
 
         expy_kit_installed = bpy.context.preferences.addons.get('Expy-Kit-main')
-        betterfbx_installed = bpy.context.preferences.addons.get('better_fbx')
         rigify_installed = bpy.context.preferences.addons.get('rigify')
 
-        if (not expy_kit_installed or not betterfbx_installed or not rigify_installed) and rigging_global_settings_feature_flag:
+        if (not expy_kit_installed or not rigify_installed) and rigging_global_settings_feature_flag:
             sub_layout.label(text='Rigging Disabled', icon='ERROR')
 
         settings_box = layout.box()
@@ -68,9 +64,7 @@ class PGR_PT_Setup_Wizard_UI_Layout(Panel, PunishingGrayRavenUIRenderChecker):
             game_type=GameType.PUNISHING_GRAY_RAVEN.name,
         )
 
-        if betterfbx_installed:
-            row2 = settings_box.row()
-            row2.prop(window_manager, 'setup_wizard_betterfbx_enabled')
+
 
         if rigging_global_settings_feature_flag:
             settings_box.prop(window_manager, 'setup_wizard_full_run_rigging_enabled')

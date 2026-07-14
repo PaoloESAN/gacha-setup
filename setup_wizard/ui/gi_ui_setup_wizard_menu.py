@@ -19,10 +19,7 @@ class UI_Properties:
             default = True
         )
 
-        bpy.types.WindowManager.setup_wizard_betterfbx_enabled = bpy.props.BoolProperty(
-            name = "BetterFBX Enabled",
-            default = False
-        )
+
 
         bpy.types.WindowManager.post_processing_setup_enabled = bpy.props.BoolProperty(
             name = "Post-Processing Setup Enabled",
@@ -58,10 +55,9 @@ class GI_PT_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
         )
 
         expy_kit_installed = bpy.context.preferences.addons.get('Expy-Kit-main')
-        betterfbx_installed = bpy.context.preferences.addons.get('better_fbx')
         rigify_installed = bpy.context.preferences.addons.get('rigify')
 
-        if not expy_kit_installed or not betterfbx_installed or not rigify_installed:
+        if not expy_kit_installed or not rigify_installed:
             sub_layout.label(text='Rigging Disabled', icon='ERROR')
 
         settings_box = layout.box()
@@ -77,9 +73,7 @@ class GI_PT_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
             game_type=GameType.GENSHIN_IMPACT.name,
         )
 
-        if betterfbx_installed:
-            row2 = settings_box.row()
-            row2.prop(window_manager, 'setup_wizard_betterfbx_enabled')
+
 
         settings_box.prop(window_manager, 'enable_viewport_outlines')
         settings_box.prop(window_manager, 'setup_wizard_full_run_rigging_enabled')
@@ -435,11 +429,10 @@ class OperatorFactory:
         ui_object: UILayout,
     ):
         expy_kit_installed = bpy.context.preferences.addons.get('Expy-Kit-main')
-        betterfbx_installed = bpy.context.preferences.addons.get('better_fbx')
         rigify_installed = bpy.context.preferences.addons.get('rigify')
 
         column = ui_object.column()
-        column.enabled = True if expy_kit_installed and betterfbx_installed and rigify_installed else False
+        column.enabled = True if expy_kit_installed and rigify_installed else False
         OperatorFactory.create(
             column,
             'hoyoverse.set_up_character_rig',
@@ -449,8 +442,6 @@ class OperatorFactory:
         )
         if not column.enabled:
             column = ui_object.column()
-            if not betterfbx_installed:
-                column.label(text='BetterFBX required', icon='ERROR')
             if not expy_kit_installed:
                 column.label(text='ExpyKit required', icon='ERROR')
             if not rigify_installed:

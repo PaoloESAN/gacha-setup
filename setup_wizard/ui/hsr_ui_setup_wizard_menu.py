@@ -27,13 +27,10 @@ class HSR_PT_Setup_Wizard_UI_Layout(Panel, HonkaiStarRailUIRenderChecker):
             'PLAY',
             game_type=GameType.HONKAI_STAR_RAIL.name
         )
-        OperatorFactory.create_betterfbx_required_ui(run_entire_setup_column)
-
         expy_kit_installed = bpy.context.preferences.addons.get('Expy-Kit-main')
-        betterfbx_installed = bpy.context.preferences.addons.get('better_fbx')
         rigify_installed = bpy.context.preferences.addons.get('rigify')
 
-        if not expy_kit_installed or not betterfbx_installed or not rigify_installed:
+        if not expy_kit_installed or not rigify_installed:
             sub_layout.label(text='Rigging Disabled', icon='ERROR')
 
         settings_box = layout.box()
@@ -80,7 +77,7 @@ class HSR_PT_Basic_Setup_Wizard_UI_Layout(Panel, HonkaiStarRailUIRenderChecker):
             icon='OUTLINER_OB_ARMATURE',
             game_type=GameType.HONKAI_STAR_RAIL.name,
         )
-        OperatorFactory.create_betterfbx_required_ui(set_up_character_column)
+
 
         OperatorFactory.create(
             sub_layout,
@@ -147,7 +144,7 @@ class HSR_PT_UI_Character_Model_Menu(Panel, HonkaiStarRailUIRenderChecker):
             'Import Character Model',
             'OUTLINER_OB_ARMATURE',
         )
-        OperatorFactory.create_betterfbx_required_ui(import_character_model_column)
+
 
         OperatorFactory.create(
             sub_layout,
@@ -398,25 +395,14 @@ class OperatorFactory:
             setattr(ui_object, key, value)
 
     @staticmethod
-    def create_betterfbx_required_ui(
-        ui_object: UILayout,
-    ):
-        betterfbx_installed = bpy.context.preferences.addons.get('better_fbx')
-        if not betterfbx_installed:
-            ui_object.column()
-            ui_object.enabled = False
-            ui_object.label(text='BetterFBX required', icon='ERROR')
-
-    @staticmethod
     def create_rig_character_ui(
         ui_object: UILayout,
     ):
         expy_kit_installed = bpy.context.preferences.addons.get('Expy-Kit-main')
-        betterfbx_installed = bpy.context.preferences.addons.get('better_fbx')
         rigify_installed = bpy.context.preferences.addons.get('rigify')
 
         column = ui_object.column()
-        column.enabled = True if expy_kit_installed and betterfbx_installed and rigify_installed else False
+        column.enabled = True if expy_kit_installed and rigify_installed else False
         OperatorFactory.create(
             column,
             'hoyoverse.set_up_character_rig',
@@ -426,8 +412,6 @@ class OperatorFactory:
         )
         if not column.enabled:
             column = ui_object.column()
-            if not betterfbx_installed:
-                column.label(text='BetterFBX required', icon='ERROR')
             if not expy_kit_installed:
                 column.label(text='ExpyKit required', icon='ERROR')
             if not rigify_installed:
