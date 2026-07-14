@@ -59,15 +59,7 @@ class HSR_PT_Basic_Setup_Wizard_UI_Layout(Panel, HonkaiStarRailUIRenderChecker):
         layout = self.layout
         sub_layout = layout.box()
 
-        OperatorFactory.create(
-            sub_layout,
-            'hoyoverse.prepare_for_new_character',
-            'Prepare for New Character',
-            icon='FILE_NEW',
-            game_type=GameType.HONKAI_STAR_RAIL.name,
-        )
 
-        sub_layout.separator()
 
         set_up_character_column = sub_layout.column()
         OperatorFactory.create(

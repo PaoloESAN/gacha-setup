@@ -198,7 +198,7 @@ def setup_dependencies():
         setup_wizard.misc_operations.PGR_OT_PaintVertexColors,
         setup_wizard.misc_operations.PGR_OT_PaintFaceShadowTexture,
         setup_wizard.misc_operations.PGR_OT_PaintVertexEraseFaceAlpha,
-        setup_wizard.misc_operations.HYV_OT_PrepareForNewCharacter,
+
         setup_wizard.join_meshes_on_armature.join_meshes_operator.GI_OT_JoinMeshesOnArmature,
         setup_wizard.character_rig_setup.character_rigger_operator.GI_OT_CharacterRiggerOperator,
         setup_wizard.character_rig_setup.rootshape_filepath_setter_operator.GI_OT_RootShape_FilePath_Setter_Operator,

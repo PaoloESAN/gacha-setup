@@ -90,15 +90,7 @@ class GI_PT_Basic_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
         layout = self.layout
         sub_layout = layout.box()
 
-        OperatorFactory.create(
-            sub_layout,
-            'hoyoverse.prepare_for_new_character',
-            'Prepare for New Character',
-            icon='FILE_NEW',
-            game_type=GameType.GENSHIN_IMPACT.name,
-        )
 
-        sub_layout.separator()
 
         OperatorFactory.create(
             sub_layout,
