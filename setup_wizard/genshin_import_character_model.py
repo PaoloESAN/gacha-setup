@@ -86,12 +86,7 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
             return {'FINISHED'}
 
         existing_materials = bpy.data.materials.values()  # used to track materials before and after importing character model
-        original_language = bpy.context.preferences.view.language
         try:
-            # Blender's FBX import has some silent issue when importing in different languages. Unsure why.
-            # TODO: Confirm if this issue is due to the Color Attribute name being named differently in each language
-            # TODO: rename_mesh_color_attribute_name() should address this issue and not require us to set language
-            bpy.context.preferences.view.language = 'en_US'
             self.import_character_model(character_model_file_path_or_directory, is_character_model_file)
             self.reset_pose_location_and_rotation()
             self.rename_mesh_color_attribute_name(SHADER_COLOR_ATTRIBUTE_NAME)  # Blender 3.4 changed default name to 'Attribute', revert it
@@ -111,7 +106,6 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                 game_type=self.game_type,
             )
         finally:
-            bpy.context.preferences.view.language = original_language
             super().clear_custom_properties()
         return {'FINISHED'}
 
