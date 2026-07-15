@@ -371,17 +371,6 @@ class ZenlessZoneZeroMaterialImporterFacade(GameMaterialImporter):
             or get_cache(cache_enabled).get(self.game_shader_folder_path) \
             or os.path.dirname(self.blender_operator.filepath)
 
-        blend_file_path = user_selected_shader_blend_file_path or os.path.join(project_root_directory_file_path, 'ZZZ_Shader.blend')
-        if blend_file_path and not bpy.data.collections.get("Character"):
-            collection_path = os.path.join(blend_file_path, "Collection")
-            try:
-                bpy.ops.wm.append(
-                    directory=collection_path,
-                    files=[{"name": "Character"}],
-                )
-            except Exception as e:
-                self.blender_operator.report({'WARNING'}, f"Warning: Could not append 'Character' collection: {e}")
-
         NextStepInvoker().invoke(
             self.blender_operator.next_step_idx, 
             self.blender_operator.invoker_type, 
@@ -389,14 +378,3 @@ class ZenlessZoneZeroMaterialImporterFacade(GameMaterialImporter):
             high_level_step_name=self.blender_operator.high_level_step_name,
             game_type=self.blender_operator.game_type,
         )
-
-    def import_light_vectors_geometry_node(self, node_tree_filepath, object_file_path):
-        # Override to only import the Light Vector node groups.
-        # We do NOT import the light direction empty objects here because they are already inside the "Character" collection.
-        for outline_node_group_name in OutlineNodeGroupNames.V3_LIGHT_VECTORS_GEOMETRY_NODES:
-            if not bpy.data.node_groups.get(outline_node_group_name):
-                bpy.ops.wm.append(
-                    filepath=os.path.join(node_tree_filepath, outline_node_group_name),
-                    directory=os.path.join(node_tree_filepath),
-                    filename=outline_node_group_name
-                )

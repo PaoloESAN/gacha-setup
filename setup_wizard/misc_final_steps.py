@@ -56,7 +56,8 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
             bpy.ops.object.scale_clear()
             bpy.ops.object.rotation_clear()
             armature.rotation_euler[0] = 1.5708  # x-axis, 90 degrees
-            bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)  # needed if you rotate using the above
+
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
         # clean rotation
         # bpy.ops.transform.rotate(

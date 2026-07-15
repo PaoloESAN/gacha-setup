@@ -407,28 +407,47 @@ def rig_character(
             bone.select_head = True
 
     bpy.ops.armature.separate()
+    
+    # Ensure metarig is the active object before generating Rigify
+    bpy.ops.object.mode_set(mode='OBJECT')
+    metarig_obj = bpy.data.objects.get("metarig")
+    if metarig_obj:
+        bpy.ops.object.select_all(action='DESELECT')
+        metarig_obj.select_set(True)
+        bpy.context.view_layer.objects.active = metarig_obj
+        
     bpy.ops.pose.rigify_generate()
+    # Find the generated Rigify rig armature (starts as "rig" or similar)
+    rigify_obj = bpy.data.objects.get("rig")
+    if not rigify_obj:
+        for o in bpy.data.objects:
+            if o.type == 'ARMATURE' and o.name not in (obj.name, obj.name + ".001", "metarig", "rigify"):
+                rigify_obj = o
+                break
+
     bpy.data.objects[obj.name].name = "rigify"
-
+    original_armature_obj = bpy.data.objects.get("rigify")
     newrig_obj = bpy.data.objects.get(obj.name + ".001")
-    rigifyr = bpy.data.objects.get("rigify")
 
-    if newrig_obj and rigifyr:
-        bpy.context.view_layer.objects.active = newrig_obj
+    # Select and join the generated rig and separated physics bones into the original armature
+    obs = []
+    if rigify_obj:
+        obs.append(rigify_obj)
+    if newrig_obj:
+        obs.append(newrig_obj)
+
+    if original_armature_obj and obs:
         bpy.ops.object.mode_set(mode='OBJECT')
         bpy.ops.object.select_all(action='DESELECT')
-        newrig_obj.select_set(True)
-        rigifyr.select_set(True)
-        bpy.context.view_layer.objects.active = rigifyr
+        for o in obs:
+            o.select_set(True)
+        original_armature_obj.select_set(True)
+        bpy.context.view_layer.objects.active = original_armature_obj
 
-        obs = [rigifyr, newrig_obj]
-        with bpy.context.temp_override(active_object=rigifyr, selected_editable_objects=obs):
+        with bpy.context.temp_override(active_object=original_armature_obj, selected_editable_objects=obs + [original_armature_obj]):
             bpy.ops.object.join()
-    else:
-        if rigifyr:
-            bpy.context.view_layer.objects.active = rigifyr
-            bpy.ops.object.mode_set(mode='OBJECT')
 
+    rigifyr = original_armature_obj
     bpy.context.view_layer.objects.active = rigifyr
     bpy.ops.object.mode_set(mode='EDIT')
 
@@ -525,6 +544,140 @@ def rig_character(
             pass
 
     bpy.ops.object.mode_set(mode='OBJECT')
+ 
+    # Append Genshin widgets (Face Plate, Root, Eyes, Pelvis, Foot, Hand, Props)
+    path_to_file = file_path + "/Collection"
+    try:
+        bpy.ops.wm.append(filename='append_Face Plate', directory=path_to_file)
+        bpy.ops.wm.append(filename='append_Root', directory=path_to_file)
+        bpy.ops.wm.append(filename='append_Eyes', directory=path_to_file)
+        bpy.ops.wm.append(filename='append_Pelvis', directory=path_to_file)
+        bpy.ops.wm.append(filename='append_Foot', directory=path_to_file)
+        bpy.ops.wm.append(filename='append_Hand', directory=path_to_file)
+        bpy.ops.wm.append(filename='append_Props', directory=path_to_file)
+    except Exception as e:
+        print("Error appending Genshin widgets for ZZZ:", e)
+
+    # Rotate the appended custom rigs 90 degrees on the X axis to stand them upright, and scale them down to match ZZZ centimeter scale
+    appended_rig_names = ["facerig", "eyerig", "rootrig", "pelvisrig", "footrig-L", "footrig-R", "handrig-R", "handrig-L", "propsrig", "Lighting Panel"]
+    for rig_name in appended_rig_names:
+        o = bpy.data.objects.get(rig_name)
+        if o:
+            o.rotation_euler[0] += 1.5708  # rotate 90 degrees on X axis
+            o.scale = (0.01, 0.01, 0.01)   # scale down by 100x
+            bpy.ops.object.select_all(action='DESELECT')
+            o.select_set(True)
+            bpy.context.view_layer.objects.active = o
+            bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+
+    # Join the custom rigs into rigifyr
+    if rigifyr:
+        bpy.ops.object.select_all(action='DESELECT')
+        rigifyr.select_set(True)
+        for rig_name in appended_rig_names:
+            o = bpy.data.objects.get(rig_name)
+            if o:
+                o.select_set(True)
+        bpy.context.view_layer.objects.active = rigifyr
+        bpy.ops.object.join()
+
+    # Set custom shapes on Rigify bones
+    if rigifyr:
+        try:
+            rigifyr.pose.bones["root"].custom_shape = bpy.data.objects.get("root plate.002")
+            rigifyr.pose.bones["root"].use_custom_shape_bone_size = False
+            
+            rigifyr.pose.bones["head"].custom_shape_scale_xyz = (1.65, 1.65, 1.65)
+            rigifyr.pose.bones["head"].custom_shape = bpy.data.objects.get("neck")
+            rigifyr.pose.bones["head"].custom_shape_translation = (0.0, 0.255, 0.0)
+            rigifyr.pose.bones["head"].custom_shape_rotation_euler[0] = 1.5708
+            rigifyr.pose.bones["head"].use_custom_shape_bone_size = False
+            
+            rigifyr.pose.bones["neck"].use_custom_shape_bone_size = False
+            rigifyr.pose.bones["neck"].custom_shape = bpy.data.objects.get("neck")
+            rigifyr.pose.bones["neck"].custom_shape_scale_xyz = (1, 1, 1)
+            rigifyr.pose.bones["neck"].custom_shape_translation = (0.0, 0.035, 0.007)
+            rigifyr.pose.bones["neck"].custom_shape_rotation_euler[0] = 1.5708
+            
+            if "foot_ik.L" in rigifyr.pose.bones:
+                rigifyr.pose.bones["foot_ik.L"].use_custom_shape_bone_size = False
+                rigifyr.pose.bones["foot_ik.L"].custom_shape = bpy.data.objects.get("foot1")
+            if "foot_ik.R" in rigifyr.pose.bones:
+                rigifyr.pose.bones["foot_ik.R"].use_custom_shape_bone_size = False
+                rigifyr.pose.bones["foot_ik.R"].custom_shape = bpy.data.objects.get("foot1")
+
+            for ik_target in ["thigh_ik_target.L", "thigh_ik_target.R", "upper_arm_ik_target.L", "upper_arm_ik_target.R"]:
+                if ik_target in rigifyr.pose.bones:
+                    rigifyr.pose.bones[ik_target].custom_shape = bpy.data.objects.get("primo-joint")
+                    rigifyr.pose.bones[ik_target].custom_shape_scale_xyz = (0.75, 0.75, 0.75)
+
+            if "torso" in rigifyr.pose.bones:
+                rigifyr.pose.bones["torso"].custom_shape = bpy.data.objects.get("pelvis2")
+                rigifyr.pose.bones["torso"].use_custom_shape_bone_size = False
+          
+            if "hips" in rigifyr.pose.bones:
+                rigifyr.pose.bones["hips"].custom_shape = bpy.data.objects.get("hips")
+                rigifyr.pose.bones["hips"].use_custom_shape_bone_size = False
+        except Exception as e:
+            print("Error setting custom bone shapes for ZZZ:", e)
+
+    # Set up face drivers for ZZZ shape keys driven by Genshin face controller bones
+    obj_face = bpy.data.objects.get("Face") or (bpy.data.objects.get("Body") if meshes_joined else None)
+    if obj_face and obj_face.data.shape_keys and rigifyr:
+        def makeCon(shape_key, bone_name, expression, transform):
+            if shape_key not in obj_face.data.shape_keys.key_blocks:
+                return
+            if bone_name not in rigifyr.pose.bones:
+                return
+                
+            sk = obj_face.data.shape_keys.key_blocks[shape_key]
+            sk.driver_remove("value")
+            
+            driver = sk.driver_add("value").driver
+            var = driver.variables.new()
+            var.name = "bone"
+            var.type = 'TRANSFORMS'
+            var.targets[0].id = rigifyr
+            var.targets[0].bone_target = bone_name
+            var.targets[0].transform_space = 'LOCAL_SPACE'
+            var.targets[0].transform_type = transform
+
+            driver.type = 'SCRIPTED'
+            driver.expression = expression
+
+        # Connect drivers
+        # Brow
+        makeCon("Fac_Ebr_Down", "Brow-L-Control", "bone * -4", "LOC_Y")
+        makeCon("Fac_Ebr_Down", "Brow-R-Control", "bone * -4", "LOC_Y")
+        makeCon("Fac_Ebr_Up", "Brow-L-Control", "bone * 4", "LOC_Y")
+        makeCon("Fac_Ebr_Up", "Brow-R-Control", "bone * 4", "LOC_Y")
+        makeCon("Fac_Ebr_Angry", "Brow-Angry-L-Control", "bone * 2", "LOC_X")
+        makeCon("Fac_Ebr_Angry", "Brow-Angry-R-Control", "bone * 2", "LOC_X")
+        makeCon("Fac_Ebr_Sad", "Brow-Trouble-L-Control", "bone * 2", "LOC_X")
+        makeCon("Fac_Ebr_Sad", "Brow-Trouble-R-Control", "bone * 2", "LOC_X")
+
+        # Eye
+        makeCon("Fac_Eye_Close", "Eye-Ha-Control", "bone * -2.22", "LOC_Y")
+        makeCon("Fac_Eye_HalfClose", "Eye-Jito-Control", "bone * -2.22", "LOC_Y")
+        makeCon("Fac_Eye_Sad", "Eye-Wail-Control", "bone * -2.22", "LOC_Y")
+        makeCon("Fac_Eye_Angry", "Eye-Hostility-Control", "bone * -2.22", "LOC_Y")
+        makeCon("Fac_Eye_LowlidUp", "Eye-LowerEyelid-Control", "bone * -2.22", "LOC_Y")
+        makeCon("Fac_Eye_L_Open", "Eye-Up-Control", "bone * -2.22", "LOC_Y")
+        makeCon("Fac_Eye_R_Open", "Eye-Up-Control", "bone * -2.22", "LOC_Y")
+
+        makeCon("Fac_Eye_L_Wink", "WinkA-L-Invis", "bone * -.82", "LOC_Y")
+        makeCon("Fac_Eye_R_Wink", "WinkA-R-Invis", "bone * -.82", "LOC_Y")
+
+        # Mouth
+        makeCon("Fac_Mth_Aa1", "Mouth-Control", "bone * -1.33", "LOC_Y")
+        makeCon("Fac_Mth_AaTalk", "Mouth-Control", "bone * -1.33", "LOC_Y")
+        makeCon("Fac_Mth_AaShout", "Mouth-Control", "bone * 1.33", "LOC_Y")
+        makeCon("Fac_Mth_Laugh", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X")
+        makeCon("Fac_Mth_Laugh2", "Mouth-Smile2-Control", "bone * 1.67", "LOC_X")
+        makeCon("Fac_Mth_Tsundere", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X")
+        makeCon("Fac_Mth_Triangle", "Mouth-Angry1-Control", "bone * 1.67", "LOC_X")
+        makeCon("Fac_Mth_UuOo", "Mouth-Neko1-Control", "bone * 1.67", "LOC_X")
+
     x = original_name.split("_")
     bpy.data.objects["rigify"].name = x[-1] + "Rig"
     bpy.data.objects[x[-1] + "Rig"].show_in_front = True
