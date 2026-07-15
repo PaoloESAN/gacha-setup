@@ -109,22 +109,73 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
         character_model_file_path = character_model_file_path_or_directory if is_character_model_file else \
             self.__find_fbx_file(character_model_file_path_or_directory)
 
+        # Ensure clean context for import (no active/selected objects to interfere)
+        try:
+            if bpy.ops.object.mode_set.poll():
+                bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.select_all(action='DESELECT')
+            bpy.context.view_layer.objects.active = None
+        except Exception as e:
+            self.report({'WARNING'}, f"Failed to clear selection context: {e}")
+
+        # Keep track of existing objects to see if anything gets imported even if an exception is raised
+        existing_objects = set(bpy.data.objects.keys())
+
         if self.game_type == GameType.ZENLESS_ZONE_ZERO.name:
             try:
                 bpy.ops.import_scene.better_fbx(filepath=character_model_file_path)
+                self.report({'INFO'}, 'Imported character model using Better FBX Importer')
+                return
             except AttributeError:
-                bpy.ops.import_scene.fbx(
-                    filepath=character_model_file_path,
-                    force_connect_children=True,
-                    automatic_bone_orientation=True
-                )
-        else:
-            bpy.ops.import_scene.fbx(
-                filepath=character_model_file_path,
-                force_connect_children=True,
-                automatic_bone_orientation=True
+                pass
+            except Exception as e:
+                pass
+
+        # Fallback sequence for standard FBX importer
+        fallbacks = [
+            # 1. Recommended settings
+            {"force_connect_children": True, "automatic_bone_orientation": True},
+            # 2. Plain import (uses last used UI settings or defaults)
+            {},
+            # 3. No automatic bone orientation / connect children
+            {"force_connect_children": False, "automatic_bone_orientation": False},
+            # 4. Disable animations (very common cause of KeyError in rig mapping)
+            {"force_connect_children": False, "automatic_bone_orientation": False, "use_anim": False},
+            # 5. Ignore leaf bones
+            {"force_connect_children": False, "automatic_bone_orientation": False, "ignore_leaf_bones": True},
+        ]
+
+        import_success = False
+        last_error = None
+
+        for i, settings in enumerate(fallbacks):
+            try:
+                bpy.ops.import_scene.fbx(filepath=character_model_file_path, **settings)
+                import_success = True
+                self.report({'INFO'}, f"Imported character model successfully on attempt {i+1}")
+                break
+            except Exception as e:
+                last_error = e
+                # Check if objects were successfully imported to the scene despite the importer error
+                new_objects = [bpy.data.objects[name] for name in bpy.data.objects.keys() if name not in existing_objects]
+                has_imported_assets = any(ob.type in ['ARMATURE', 'MESH'] for ob in new_objects)
+                
+                if has_imported_assets:
+                    self.report({'WARNING'}, f"FBX importer reported an error ({e}) on attempt {i+1}, but the model was successfully loaded. Continuing...")
+                    import_success = True
+                    break
+                else:
+                    self.report({'WARNING'}, f"FBX import attempt {i+1} failed: {e}")
+
+        if not import_success:
+            error_message = (
+                "El importador FBX por defecto de Blender no pudo cargar este modelo debido a un error de jerarquía (KeyError: Bone_Root).\n"
+                "Para solucionar esto, puedes:\n"
+                "1. Instalar el addon comercial 'Better FBX Importer' en Blender.\n"
+                "2. O bien, abrir y volver a exportar el FBX usando una herramienta gratuita como 'Noesis' para limpiar la jerarquía."
             )
-        self.report({'INFO'}, 'Imported character model')
+            self.report({'ERROR'}, error_message)
+            raise RuntimeError(error_message)
 
         if self.game_type == GameType.ZENLESS_ZONE_ZERO.name:
             obj = None
@@ -143,11 +194,21 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                 bpy.ops.object.mode_set(mode='OBJECT')
                 bpy.ops.object.select_all(action='DESELECT')
                 obj.select_set(True)
+                
+                # Standard FBX importer imports ZZZ models lying down (0,0,0 rotation).
+                # Rotate 90 degrees in X to make it stand upright.
+                import math
+                obj.rotation_euler[0] = math.radians(90)
+                
+                # Select children to apply transform to mesh objects as well
+                for child in obj.children:
+                    child.select_set(True)
+                    
                 bpy.context.view_layer.objects.active = obj
                 try:
-                    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-                except:
-                    pass
+                    bpy.ops.object.transform_apply(location=False, rotation=True, scale=True)
+                except Exception as e:
+                    print("Failed to apply rotation/scale transforms:", e)
 
                 try:
                     for mesh_obj in bpy.data.objects:
@@ -160,7 +221,9 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
 
                 if obj.parent and obj.parent.type == 'EMPTY' and obj.parent.name == obj.name:
                     empty_parent = obj.parent
+                    matrix_world = obj.matrix_world.copy()
                     obj.parent = None
+                    obj.matrix_world = matrix_world
                     bpy.data.objects.remove(empty_parent)
 
                 for mesh_obj in bpy.data.objects:
@@ -289,6 +352,11 @@ class GI_OT_DeleteEmpties(Operator, CustomOperatorProperties):
                         should_delete = False
                         break
                 if should_delete:
+                    # Unparent any children of this empty, keeping their world transforms
+                    for child in object.children:
+                        matrix_world = child.matrix_world.copy()
+                        child.parent = None
+                        child.matrix_world = matrix_world
                     bpy.data.objects.remove(object)
 
         self.report({'INFO'}, 'Deleted Empties')

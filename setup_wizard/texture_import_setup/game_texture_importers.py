@@ -260,6 +260,33 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
     def import_textures_from_folder(self, folder):
         files = os.listdir(folder)
         
+        # Try to find a character name prefix to filter the files (prevents importing other characters' textures if in same folder)
+        main_prefix = ""
+        armatures = [ob for ob in bpy.data.objects if ob.type == 'ARMATURE']
+        if armatures:
+            active_arm = bpy.context.view_layer.objects.active
+            arm_obj = active_arm if (active_arm and active_arm.type == 'ARMATURE') else armatures[0]
+            char_prefix = arm_obj.name.split(".")[0]
+            
+            # Clean up common suffixes/prefixes
+            for affix in ["_Armature", "_armature", "_Rig", "_rig", "avatar_zzz_", "avatar_"]:
+                if char_prefix.endswith(affix):
+                    char_prefix = char_prefix[:-len(affix)]
+                if char_prefix.startswith(affix):
+                    char_prefix = char_prefix[len(affix):]
+            
+            # Use the main name prefix (e.g. "Zhenzhen" from "Zhenzhen_Dawnlight")
+            main_prefix = char_prefix.split("_")[0]
+
+        filtered_files = []
+        if main_prefix:
+            for filename in files:
+                if main_prefix.lower() in filename.lower():
+                    filtered_files.append(filename)
+        
+        if not filtered_files:
+            filtered_files = files
+        
         groups = {
             "Body_1": [],
             "Body_2": [],
@@ -272,7 +299,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
             "Tail": []
         }
 
-        for filename in files:
+        for filename in filtered_files:
             lower_name = filename.lower()
             if "weapon_2" in lower_name or "weapon2" in lower_name or "weapon_map2" in lower_name or "weaponmap2" in lower_name:
                 groups["Weapon_2"].append(filename)
@@ -324,24 +351,42 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                     suffix = node.name.split("_")[-1] if "_" in node.name else node.name[-1]
                     target_suffix = f"_{suffix}.png"
                     
-                    found_img = None
-                    for key in group_keys:
-                        for f in groups[key]:
-                            if f.lower().endswith(target_suffix.lower()):
-                                found_img = f
-                                break
-                        if found_img:
-                            break
-                    
-                    if not found_img:
-                        target_suffix_simple = f"{suffix}.png"
+                    def get_best_match(target_suf):
+                        candidates = []
                         for key in group_keys:
                             for f in groups[key]:
-                                if f.lower().endswith(target_suffix_simple.lower()):
-                                    found_img = f
-                                    break
-                            if found_img:
-                                break
+                                if f.lower().endswith(target_suf.lower()):
+                                    candidates.append(f)
+                        
+                        if len(candidates) > 1:
+                            sub_keywords = ["2", "3", "pro"]
+                            mat_has_sub = [sub for sub in sub_keywords if sub in matname]
+                            filtered_candidates = []
+                            for f in candidates:
+                                f_lower = f.lower()
+                                f_clean = f_lower
+                                if main_prefix and f_lower.startswith(main_prefix.lower()):
+                                    f_clean = f_lower[len(main_prefix):]
+                                
+                                match = True
+                                for sub in sub_keywords:
+                                    if sub in mat_has_sub:
+                                        if sub not in f_clean:
+                                            match = False
+                                            break
+                                    else:
+                                        if sub in f_clean:
+                                            match = False
+                                            break
+                                if match:
+                                    filtered_candidates.append(f)
+                            if filtered_candidates:
+                                return filtered_candidates[0]
+                        return candidates[0] if candidates else None
+
+                    found_img = get_best_match(target_suffix)
+                    if not found_img:
+                        found_img = get_best_match(f"{suffix}.png")
 
                     if found_img:
                         img_path = os.path.join(folder, found_img)
