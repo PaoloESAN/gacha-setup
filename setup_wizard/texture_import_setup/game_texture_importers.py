@@ -306,14 +306,14 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
             elif "eye" in matname:
                 group_keys = ["Face"]
             elif "body" in matname or "leg" in matname or "tail" in matname:
-                if "body 2" in matname or "body2" in matname:
+                if "body 2" in matname or "body2" in matname or "body_2" in matname:
                     group_keys = ["Body_2"]
-                elif "body3" in matname or "body3/leg" in matname or "leg" in matname or "tail" in matname:
+                elif "body3" in matname or "body3/leg" in matname or "body_3" in matname or "body 3" in matname or "leg" in matname or "tail" in matname:
                     group_keys = ["Body_3", "Leg", "Tail"]
                 else:
                     group_keys = ["Body_1"]
             elif "weapon" in matname:
-                if "weapon 2" in matname or "weapon2" in matname:
+                if "weapon 2" in matname or "weapon2" in matname or "weapon_2" in matname:
                     group_keys = ["Weapon_2"]
                 else:
                     group_keys = ["Weapon"]

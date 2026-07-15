@@ -643,14 +643,14 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 elif "face" in matname:
                     target_mat_name = "ZZZ Shader Face"
                 elif "body" in matname or "leg" in matname or "tail" in matname:
-                    if "body 2" in matname or "body2" in matname:
+                    if "body 2" in matname or "body2" in matname or "body_2" in matname:
                         target_mat_name = "ZZZ Shader Body 2"
-                    elif "body3" in matname or "body3/leg" in matname or "leg" in matname or "tail" in matname:
+                    elif "body3" in matname or "body3/leg" in matname or "body_3" in matname or "body 3" in matname or "leg" in matname or "tail" in matname:
                         target_mat_name = "ZZZ Shader Body3/Leg"
                     else:
                         target_mat_name = "ZZZ Shader Body"
                 elif "weapon" in matname:
-                    if "weapon 2" in matname or "weapon2" in matname:
+                    if "weapon 2" in matname or "weapon2" in matname or "weapon_2" in matname:
                         target_mat_name = "ZZZ Shader Weapon 2"
                     else:
                         target_mat_name = "ZZZ Shader Weapon"
