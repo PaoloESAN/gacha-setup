@@ -5,7 +5,7 @@ bl_info = {
     "author": "Mken, OctavoPE, Enthralpy",
     "version": (2, 7, 1),
     "blender": (3, 3, 0),
-    "location": "3D View > Sidebar > Genshin Impact / Honkai Star Rail / Punishing Gray Raven",
+    "location": "3D View > Sidebar > Genshin Impact / Honkai Star Rail / Zenless Zone Zero",
     "description": "An addon to streamline the character model setup process when using Festivity, Nya222's or JaredNyts' Shaders",
     "warning": "",
     "doc_url": "",
@@ -61,14 +61,7 @@ else:
         HSR_PT_UI_Finish_Setup_Menu, \
         HSR_PT_UI_Character_Rig_Setup_Menu
         # HSR_PT_UI_Compositing_Panel_Post_Processing_UI_Layout
-    from setup_wizard.ui.pgr_ui_setup_wizard_menu import \
-        PGR_PT_Setup_Wizard_UI_Layout, \
-        PGR_PT_Basic_Setup_Wizard_UI_Layout, \
-        PGR_PT_Advanced_Setup_Wizard_UI_Layout, \
-        PGR_PT_UI_Character_Model_Menu, \
-        PGR_PT_UI_Materials_Menu, \
-        PGR_PT_UI_Outlines_Menu, \
-        PGR_PT_UI_Finish_Setup_Menu
+
     from setup_wizard.ui.zzz_ui_setup_wizard_menu import \
         ZZZ_PT_Setup_Wizard_UI_Layout, \
         ZZZ_PT_Basic_Setup_Wizard_UI_Layout, \
@@ -82,7 +75,7 @@ else:
     from setup_wizard.genshin_import_character_model import GI_OT_SetUpCharacter, HSR_OT_SetUpCharacter, ZZZ_OT_SetUpCharacter
 
     import setup_wizard.genshin_setup_wizard
-    from setup_wizard.genshin_setup_wizard import GI_OT_GenshinSetupWizardUI, HSR_OT_HonkaiStarRailSetupWizardUI, PGR_OT_SetupWizardUI, ZZZ_OT_SetupWizardUI, register as register_genshin_setup_wizard, setup_dependencies
+    from setup_wizard.genshin_setup_wizard import GI_OT_GenshinSetupWizardUI, HSR_OT_HonkaiStarRailSetupWizardUI, ZZZ_OT_SetupWizardUI, register as register_genshin_setup_wizard, setup_dependencies
 
     register_genshin_setup_wizard()
     setup_dependencies()
@@ -130,14 +123,7 @@ else:
         HSR_OT_SetUpMaterials,
         HSR_OT_SetUpOutlines,
         HSR_OT_FinishSetup,
-        PGR_OT_SetupWizardUI,
-        PGR_PT_Setup_Wizard_UI_Layout,
-        PGR_PT_Basic_Setup_Wizard_UI_Layout,
-        PGR_PT_Advanced_Setup_Wizard_UI_Layout,
-        PGR_PT_UI_Character_Model_Menu,
-        PGR_PT_UI_Materials_Menu,
-        PGR_PT_UI_Outlines_Menu,
-        PGR_PT_UI_Finish_Setup_Menu,
+
         ZZZ_PT_Setup_Wizard_UI_Layout,
         ZZZ_PT_Basic_Setup_Wizard_UI_Layout,
         ZZZ_PT_Advanced_Setup_Wizard_UI_Layout,

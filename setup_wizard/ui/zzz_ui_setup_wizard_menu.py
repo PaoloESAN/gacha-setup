@@ -94,13 +94,6 @@ class ZZZ_PT_Basic_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker)
         )
 
         OperatorFactory.create_rig_character_ui(sub_layout)
-        
-        OperatorFactory.create(
-            sub_layout,
-            'zenless_zone_zero.fix_bone_chains',
-            'Fix Selected Bone Chains (Tails)',
-            icon='BONE_DATA',
-        )
 
 
 class ZZZ_PT_Advanced_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
@@ -109,6 +102,7 @@ class ZZZ_PT_Advanced_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderCheck
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = "Character Setup Wizard"
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -119,10 +113,11 @@ class ZZZ_PT_UI_Character_Model_Menu(Panel, ZenlessZoneZeroUIRenderChecker):
     bl_parent_id = "ZZZ_PT_UI_Advanced_Setup_Layout"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
-        sub_layout = layout.box()
+        sub_layout = layout.column(align=True)
 
         OperatorFactory.create(
             sub_layout,
@@ -146,10 +141,11 @@ class ZZZ_PT_UI_Materials_Menu(Panel, ZenlessZoneZeroUIRenderChecker):
     bl_parent_id = "ZZZ_PT_UI_Advanced_Setup_Layout"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
-        sub_layout = layout.box()
+        sub_layout = layout.column(align=True)
 
         OperatorFactory.create(
             sub_layout,
@@ -180,10 +176,11 @@ class ZZZ_PT_UI_Outlines_Menu(Panel, ZenlessZoneZeroUIRenderChecker):
     bl_parent_id = "ZZZ_PT_UI_Advanced_Setup_Layout"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
-        sub_layout = layout.box()
+        sub_layout = layout.column(align=True)
 
         if bpy.app.version >= (3, 3, 0):
             OperatorFactory.create(
@@ -207,6 +204,7 @@ class ZZZ_PT_UI_Outlines_Menu(Panel, ZenlessZoneZeroUIRenderChecker):
                 'Import Outline Lightmaps',
                 'IMAGE_DATA',
                 game_type=GameType.ZENLESS_ZONE_ZERO.name,
+                setup_mode='ADVANCED',
             )
             OperatorFactory.create(
                 sub_layout,
@@ -225,10 +223,11 @@ class ZZZ_PT_UI_Finish_Setup_Menu(Panel, ZenlessZoneZeroUIRenderChecker):
     bl_parent_id = "ZZZ_PT_UI_Advanced_Setup_Layout"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
-        sub_layout = layout.box()
+        sub_layout = layout.column(align=True)
 
         OperatorFactory.create(
             sub_layout,
@@ -279,17 +278,12 @@ class ZZZ_PT_UI_Character_Rig_Setup_Menu(Panel, ZenlessZoneZeroUIRenderChecker):
     bl_parent_id = "ZZZ_PT_UI_Advanced_Setup_Layout"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
-        sub_layout = layout.box()
+        sub_layout = layout.column(align=True)
         OperatorFactory.create_rig_character_ui(sub_layout)
-        OperatorFactory.create(
-            sub_layout,
-            'zenless_zone_zero.fix_bone_chains',
-            'Fix Selected Bone Chains (Tails)',
-            icon='BONE_DATA',
-        )
 
 
 class OperatorFactory:
