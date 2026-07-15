@@ -7,10 +7,11 @@ from bpy.types import Operator, Context
 from setup_wizard.domain.game_types import GameType
 from setup_wizard.domain.shader_material_names import StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, \
     V2_FestivityGenshinImpactMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, \
-    JaredNytsPunishingGrayRavenShaderMaterialNames, V4_PrimoToonGenshinImpactMaterialNames
+    JaredNytsPunishingGrayRavenShaderMaterialNames, V4_PrimoToonGenshinImpactMaterialNames, ZenlessZoneZeroShaderMaterialNames
 from setup_wizard.import_order import GENSHIN_IMPACT_OUTLINES_FILE_PATH, NextStepInvoker, cache_using_cache_key, get_cache, \
     GENSHIN_IMPACT_ROOT_FOLDER_FILE_PATH, GENSHIN_IMPACT_SHADER_FILE_PATH, HONKAI_STAR_RAIL_ROOT_FOLDER_FILE_PATH, \
-    HONKAI_STAR_RAIL_SHADER_FILE_PATH, PUNISHING_GRAY_RAVEN_ROOT_FOLDER_FILE_PATH, PUNISHING_GRAY_RAVEN_SHADER_FILE_PATH
+    HONKAI_STAR_RAIL_SHADER_FILE_PATH, PUNISHING_GRAY_RAVEN_ROOT_FOLDER_FILE_PATH, PUNISHING_GRAY_RAVEN_SHADER_FILE_PATH, \
+    ZENLESS_ZONE_ZERO_ROOT_FOLDER_FILE_PATH, ZENLESS_ZONE_ZERO_SHADER_FILE_PATH, ZENLESS_ZONE_ZERO_OUTLINES_FILE_PATH
 from setup_wizard.material_import_setup.empty_names import LightDirectionEmptyNames
 from setup_wizard.outline_import_setup.outline_node_groups import OutlineNodeGroupNames
 from setup_wizard.texture_import_setup.material_default_value_setters import MaterialDefaultValueSetter, MaterialDefaultValueSetterFactory
@@ -24,6 +25,8 @@ class GameMaterialImporterFactory:
             return HonkaiStarRailMaterialImporterFacade(blender_operator, context)
         elif game_type == GameType.PUNISHING_GRAY_RAVEN.name:
             return PunishingGrayRavenMaterialImporterFacade(blender_operator, context)
+        elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
+            return ZenlessZoneZeroMaterialImporterFacade(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -327,3 +330,73 @@ class PunishingGrayRavenMaterialImporterFacade(GameMaterialImporter):
             high_level_step_name=self.blender_operator.high_level_step_name,
             game_type=self.blender_operator.game_type,
         )
+
+
+class ZenlessZoneZeroMaterialImporterFacade(GameMaterialImporter):
+    def __init__(self, blender_operator, context):
+        super().__init__(
+            blender_operator=blender_operator,
+            context=context,
+            game_shader_cache_file_path=ZENLESS_ZONE_ZERO_SHADER_FILE_PATH,
+            game_shader_cache_folder_path=ZENLESS_ZONE_ZERO_ROOT_FOLDER_FILE_PATH,
+            game_default_blend_file_with_materials='ZZZ_Shader.blend',
+            names_of_game_materials=[
+                {'name': ZenlessZoneZeroShaderMaterialNames.BODY},
+                {'name': ZenlessZoneZeroShaderMaterialNames.BODY2},
+                {'name': ZenlessZoneZeroShaderMaterialNames.BODY3},
+                {'name': ZenlessZoneZeroShaderMaterialNames.FACE},
+                {'name': ZenlessZoneZeroShaderMaterialNames.HAIR},
+                {'name': ZenlessZoneZeroShaderMaterialNames.WEAPON},
+                {'name': ZenlessZoneZeroShaderMaterialNames.WEAPON2},
+                {'name': ZenlessZoneZeroShaderMaterialNames.EYE},
+                {'name': ZenlessZoneZeroShaderMaterialNames.EYE_HIGHLIGHTS},
+            ]
+        )
+
+    def import_materials(self):
+        status = super().import_materials()
+
+        if status == {'FINISHED'}:
+            return status
+
+        cache_enabled = self.context.window_manager.cache_enabled
+        user_selected_shader_blend_file_path = self.blender_operator.filepath if \
+            self.blender_operator.filepath and not os.path.isdir(self.blender_operator.filepath) else \
+            get_cache(cache_enabled).get(self.game_shader_file_path)
+
+        if user_selected_shader_blend_file_path and cache_enabled:
+            cache_using_cache_key(get_cache(cache_enabled), ZENLESS_ZONE_ZERO_OUTLINES_FILE_PATH, user_selected_shader_blend_file_path)
+
+        project_root_directory_file_path = self.blender_operator.file_directory \
+            or get_cache(cache_enabled).get(self.game_shader_folder_path) \
+            or os.path.dirname(self.blender_operator.filepath)
+
+        blend_file_path = user_selected_shader_blend_file_path or os.path.join(project_root_directory_file_path, 'ZZZ_Shader.blend')
+        if blend_file_path and not bpy.data.collections.get("Character"):
+            collection_path = os.path.join(blend_file_path, "Collection")
+            try:
+                bpy.ops.wm.append(
+                    directory=collection_path,
+                    files=[{"name": "Character"}],
+                )
+            except Exception as e:
+                self.blender_operator.report({'WARNING'}, f"Warning: Could not append 'Character' collection: {e}")
+
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx, 
+            self.blender_operator.invoker_type, 
+            file_path_to_cache=project_root_directory_file_path,
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=self.blender_operator.game_type,
+        )
+
+    def import_light_vectors_geometry_node(self, node_tree_filepath, object_file_path):
+        # Override to only import the Light Vector node groups.
+        # We do NOT import the light direction empty objects here because they are already inside the "Character" collection.
+        for outline_node_group_name in OutlineNodeGroupNames.V3_LIGHT_VECTORS_GEOMETRY_NODES:
+            if not bpy.data.node_groups.get(outline_node_group_name):
+                bpy.ops.wm.append(
+                    filepath=os.path.join(node_tree_filepath, outline_node_group_name),
+                    directory=os.path.join(node_tree_filepath),
+                    filename=outline_node_group_name
+                )

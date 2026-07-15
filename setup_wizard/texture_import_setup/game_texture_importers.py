@@ -27,6 +27,8 @@ class GameTextureImporterFactory:
             return HonkaiStarRailTextureImporterFacade(blender_operator, context)
         elif game_type == GameType.PUNISHING_GRAY_RAVEN.name:
             return PunishingGrayRavenTextureImporterFacade(blender_operator, context)
+        elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
+            return ZenlessZoneZeroTextureImporterFacade(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -209,3 +211,160 @@ class PunishingGrayRavenTextureImporterFacade(GameTextureImporter):
             high_level_step_name=self.blender_operator.high_level_step_name,
             game_type=GameType.PUNISHING_GRAY_RAVEN.name
         )
+
+
+class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+
+    def import_textures(self):
+        cache_enabled = self.context.window_manager.cache_enabled
+        directory = self.blender_operator.file_directory \
+            or get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH) \
+            or os.path.dirname(self.blender_operator.filepath)
+
+        if directory:
+            textures_subdir = os.path.join(directory, "Textures")
+            if os.path.isdir(textures_subdir):
+                directory = textures_subdir
+            elif not os.path.isdir(directory):
+                directory = None
+
+        if not directory:
+            bpy.ops.genshin.import_textures(
+                'INVOKE_DEFAULT',
+                next_step_idx=self.blender_operator.next_step_idx, 
+                file_directory=self.blender_operator.file_directory,
+                invoker_type=self.blender_operator.invoker_type,
+                high_level_step_name=self.blender_operator.high_level_step_name,
+                game_type=GameType.ZENLESS_ZONE_ZERO.name,
+            )
+            return {'FINISHED'}
+
+        self.import_textures_from_folder(directory)
+
+        self.blender_operator.report({'INFO'}, 'Imported textures')
+        if cache_enabled and directory:
+            cache_using_cache_key(get_cache(cache_enabled), CHARACTER_MODEL_FOLDER_FILE_PATH, directory)
+
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx,
+            self.blender_operator.invoker_type,
+            file_path_to_cache=directory,
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=GameType.ZENLESS_ZONE_ZERO.name
+        )
+        return {'FINISHED'}
+
+    def import_textures_from_folder(self, folder):
+        files = os.listdir(folder)
+        
+        groups = {
+            "Body_1": [],
+            "Body_2": [],
+            "Body_3": [],
+            "Face": [],
+            "Hair": [],
+            "Weapon": [],
+            "Weapon_2": [],
+            "Leg": [],
+            "Tail": []
+        }
+
+        for filename in files:
+            lower_name = filename.lower()
+            if "weapon_2" in lower_name or "weapon2" in lower_name or "weapon_map2" in lower_name or "weaponmap2" in lower_name:
+                groups["Weapon_2"].append(filename)
+            elif "weapon" in lower_name:
+                groups["Weapon"].append(filename)
+            elif "face" in lower_name:
+                groups["Face"].append(filename)
+            elif "hair" in lower_name:
+                groups["Hair"].append(filename)
+            elif "leg" in lower_name:
+                groups["Leg"].append(filename)
+            elif "tail" in lower_name:
+                groups["Tail"].append(filename)
+            elif "body_3" in lower_name or "body3" in lower_name or "body_map3" in lower_name or "bodymap3" in lower_name:
+                groups["Body_3"].append(filename)
+            elif "body_2" in lower_name or "body2" in lower_name or "body_map2" in lower_name or "bodymap2" in lower_name:
+                groups["Body_2"].append(filename)
+            elif "body" in lower_name:
+                groups["Body_1"].append(filename)
+
+        for mat in bpy.data.materials:
+            if not mat.name.startswith("ZZZ Shader") or not mat.node_tree:
+                continue
+            
+            matname = mat.name.lower()
+            group_keys = []
+            if "hair" in matname:
+                group_keys = ["Hair"]
+            elif "face" in matname:
+                group_keys = ["Face"]
+            elif "eye" in matname:
+                group_keys = ["Face"]
+            elif "body" in matname or "leg" in matname or "tail" in matname:
+                if "body 2" in matname or "body2" in matname:
+                    group_keys = ["Body_2"]
+                elif "body3" in matname or "body3/leg" in matname or "leg" in matname or "tail" in matname:
+                    group_keys = ["Body_3", "Leg", "Tail"]
+                else:
+                    group_keys = ["Body_1"]
+            elif "weapon" in matname:
+                if "weapon 2" in matname or "weapon2" in matname:
+                    group_keys = ["Weapon_2"]
+                else:
+                    group_keys = ["Weapon"]
+
+            nodes = mat.node_tree.nodes
+            for node in nodes:
+                if node.type == 'TEX_IMAGE':
+                    suffix = node.name.split("_")[-1] if "_" in node.name else node.name[-1]
+                    target_suffix = f"_{suffix}.png"
+                    
+                    found_img = None
+                    for key in group_keys:
+                        for f in groups[key]:
+                            if f.lower().endswith(target_suffix.lower()):
+                                found_img = f
+                                break
+                        if found_img:
+                            break
+                    
+                    if not found_img:
+                        target_suffix_simple = f"{suffix}.png"
+                        for key in group_keys:
+                            for f in groups[key]:
+                                if f.lower().endswith(target_suffix_simple.lower()):
+                                    found_img = f
+                                    break
+                            if found_img:
+                                break
+
+                    if found_img:
+                        img_path = os.path.join(folder, found_img)
+                        img = bpy.data.images.load(img_path, check_existing=True)
+                        node.image = img
+                        
+                        if suffix.upper() in ["D", "DIFFUSE"]:
+                            img.colorspace_settings.name = 'sRGB'
+                        else:
+                            img.colorspace_settings.name = 'Non-Color'
+                        img.alpha_mode = 'CHANNEL_PACKED'
+
+                elif node.type == 'GROUP' and node.node_tree and node.node_tree.name == "Face Lightmap":
+                    face_lightmap_node = node.node_tree.nodes.get("Face_Lightmap")
+                    if face_lightmap_node:
+                        found_lightmap = None
+                        for f in groups["Face"]:
+                            if "lightmap" in f.lower():
+                                found_lightmap = f
+                                break
+                        if found_lightmap:
+                            img_path = os.path.join(folder, found_lightmap)
+                            img = bpy.data.images.load(img_path, check_existing=True)
+                            face_lightmap_node.image = img
+                            img.colorspace_settings.name = 'Non-Color'
+                            img.alpha_mode = 'CHANNEL_PACKED'

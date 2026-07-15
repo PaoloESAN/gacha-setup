@@ -30,17 +30,21 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
 
         head_driver_object = bpy.data.objects.get(f"{HEAD_DRIVER_OBJECT_NAME}_{char_name}") or \
                              bpy.data.objects.get(f"{HEAD_ORIGIN_OBJECT_NAME}_{char_name}") or \
+                             bpy.data.objects.get(f"Head Direction_{char_name}") or \
+                             bpy.data.objects.get(f"{char_name}Head Direction") or \
+                             bpy.data.objects.get(f"{char_name} Head Direction") or \
                              bpy.data.objects.get(HEAD_DRIVER_OBJECT_NAME) or \
-                             bpy.data.objects.get(HEAD_ORIGIN_OBJECT_NAME)
+                             bpy.data.objects.get(HEAD_ORIGIN_OBJECT_NAME) or \
+                             bpy.data.objects.get("Head Direction")
 
         if not head_driver_object:
-            self.report({'ERROR'}, "Head Driver not found")
+            self.report({'ERROR'}, "Head Driver / Head Direction not found")
             return {'CANCELLED'}
             
         child_of_constraint = head_driver_object.constraints[0]  # expecting 1 constraint head driver
 
         armature_bones = armature.data.bones
-        head_bone_names = [bone_name for bone_name in armature_bones.keys() if 'Head' in bone_name]
+        head_bone_names = [bone_name for bone_name in armature_bones.keys() if 'Head' in bone_name or bone_name == 'DEF-spine.006']
         if head_bone_names:
             head_bone_name = head_bone_names[0]  # expecting 1 Head bone
             self.set_contraint_target_and_bone(child_of_constraint, armature, head_bone_name)

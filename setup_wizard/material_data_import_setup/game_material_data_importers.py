@@ -152,20 +152,32 @@ class GameMaterialDataImporter(ABC):
         character_directory = self.blender_operator.file_directory \
             or get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH) \
             or os.path.dirname(self.blender_operator.filepath)
-        character_material_data_directory = os.path.join(character_directory, 'Material')
-        character_materials_data_directory = os.path.join(character_directory, 'Materials')
-        material_data_directory_exists = os.path.isdir(character_material_data_directory) or \
-            os.path.isdir(character_materials_data_directory)
-        material_data_directory = character_material_data_directory if os.path.isdir(character_material_data_directory) else \
-            character_materials_data_directory if os.path.isdir(character_materials_data_directory) else None
+        character_material_data_directory = os.path.join(character_directory, 'Material') if character_directory else ''
+        character_materials_data_directory = os.path.join(character_directory, 'Materials') if character_directory else ''
+        
+        material_data_directory_exists = False
+        material_data_directory = None
+
+        if character_material_data_directory and os.path.isdir(character_material_data_directory):
+            material_data_directory_exists = True
+            material_data_directory = character_material_data_directory
+        elif character_materials_data_directory and os.path.isdir(character_materials_data_directory):
+            material_data_directory_exists = True
+            material_data_directory = character_materials_data_directory
+        elif character_directory and os.path.isdir(character_directory):
+            # Check if there are any json files directly in the character directory root
+            if any(f.endswith('.json') for f in os.listdir(character_directory)):
+                material_data_directory_exists = True
+                material_data_directory = character_directory
 
         directory_file_path = os.path.dirname(self.blender_operator.filepath) or material_data_directory
 
         material_data_files = []
         if material_data_directory:
             for filename in os.listdir(material_data_directory):
-                material_data_file = MaterialDataFile(filename)
-                material_data_files.append(material_data_file)
+                if filename.endswith('.json'):
+                    material_data_file = MaterialDataFile(filename)
+                    material_data_files.append(material_data_file)
 
         is_targeted_material_data_import = self.material and self.outlines_material
         material_data_files = self.blender_operator.files or (material_data_files if not is_targeted_material_data_import else None)
@@ -203,6 +215,8 @@ class GameMaterialDataImporterFactory:
             return HonkaiStarRailMaterialDataImporter(blender_operator, context, outline_material_group, material_names, shader_node_names)
         elif game_type == GameType.PUNISHING_GRAY_RAVEN.name:
             return PunishingGrayRavenMaterialDataImporter(blender_operator, context, outline_material_group, material_names, shader_node_names)
+        elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
+            return ZenlessZoneZeroMaterialDataImporter(blender_operator, context, outline_material_group, material_names, shader_node_names)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -431,6 +445,24 @@ class HonkaiStarRailMaterialDataImporter(GameMaterialDataImporter):
 
 # Unused.
 class PunishingGrayRavenMaterialDataImporter(GameMaterialDataImporter):
+    def __init__(self, blender_operator, context, outline_material_group: OutlineMaterialGroup, material_names, shader_node_names: ShaderNodeNames):
+        self.blender_operator: Operator = blender_operator
+        self.context: Context = context
+        self.parsers = [
+            HoyoStudioMaterialDataJsonParser,
+            UnknownHoyoStudioMaterialDataJsonParser,
+            UABEMaterialDataJsonParser,
+        ]
+        self.material = outline_material_group.material
+        self.outlines_material = outline_material_group.outlines_material
+        self.material_names = material_names
+        self.shader_node_names = shader_node_names
+
+    def import_material_data(self):
+        return {'FINISHED'}
+
+
+class ZenlessZoneZeroMaterialDataImporter(GameMaterialDataImporter):
     def __init__(self, blender_operator, context, outline_material_group: OutlineMaterialGroup, material_names, shader_node_names: ShaderNodeNames):
         self.blender_operator: Operator = blender_operator
         self.context: Context = context

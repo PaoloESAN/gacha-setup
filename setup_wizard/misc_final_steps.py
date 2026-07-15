@@ -5,6 +5,7 @@ from bpy.types import Armature, Operator
 
 from setup_wizard.import_order import NextStepInvoker
 from setup_wizard.setup_wizard_operator_base_classes import BasicSetupUIOperator, CustomOperatorProperties
+from setup_wizard.domain.game_types import GameType
 
 
 class GI_OT_FinishSetup(Operator, BasicSetupUIOperator):
@@ -17,6 +18,12 @@ class HSR_OT_FinishSetup(Operator, BasicSetupUIOperator):
     '''Finish Setup'''
     bl_idname = 'honkai_star_rail.finish_setup'
     bl_label = 'Honkai Star Rail: Finish Setup (UI)'
+
+
+class ZZZ_OT_FinishSetup(Operator, BasicSetupUIOperator):
+    '''Finish Setup'''
+    bl_idname = 'zenless_zone_zero.finish_setup'
+    bl_label = 'Zenless Zone Zero: Finish Setup (UI)'
 
 
 class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
@@ -45,10 +52,11 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
         if 'Dehya' in armature.name and armature.animation_data:
             self.clean_character(armature)
 
-        bpy.ops.object.scale_clear()
-        bpy.ops.object.rotation_clear()
-        armature.rotation_euler[0] = 1.5708  # x-axis, 90 degrees
-        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)  # needed if you rotate using the above
+        if self.game_type != GameType.ZENLESS_ZONE_ZERO.name:
+            bpy.ops.object.scale_clear()
+            bpy.ops.object.rotation_clear()
+            armature.rotation_euler[0] = 1.5708  # x-axis, 90 degrees
+            bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)  # needed if you rotate using the above
 
         # clean rotation
         # bpy.ops.transform.rotate(

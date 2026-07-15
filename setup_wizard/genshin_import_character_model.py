@@ -35,6 +35,12 @@ class HSR_OT_SetUpCharacter(Operator, BasicSetupUIOperator):
     bl_label = 'Honkai Star Rail: Set Up Character (UI)'
 
 
+class ZZZ_OT_SetUpCharacter(Operator, BasicSetupUIOperator):
+    '''Sets Up Character'''
+    bl_idname = 'zenless_zone_zero.set_up_character'
+    bl_label = 'Zenless Zone Zero: Set Up Character (UI)'
+
+
 class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties):
     """Select the folder with the desired model to import"""
     bl_idname = "genshin.import_model"  # important since its how we chain file dialogs
@@ -103,12 +109,66 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
         character_model_file_path = character_model_file_path_or_directory if is_character_model_file else \
             self.__find_fbx_file(character_model_file_path_or_directory)
 
-        bpy.ops.import_scene.fbx(
-            filepath=character_model_file_path,
-            force_connect_children=True,
-            automatic_bone_orientation=True
-        )
+        if self.game_type == GameType.ZENLESS_ZONE_ZERO.name:
+            try:
+                bpy.ops.import_scene.better_fbx(filepath=character_model_file_path)
+            except AttributeError:
+                bpy.ops.import_scene.fbx(
+                    filepath=character_model_file_path,
+                    force_connect_children=True,
+                    automatic_bone_orientation=True
+                )
+        else:
+            bpy.ops.import_scene.fbx(
+                filepath=character_model_file_path,
+                force_connect_children=True,
+                automatic_bone_orientation=True
+            )
         self.report({'INFO'}, 'Imported character model')
+
+        if self.game_type == GameType.ZENLESS_ZONE_ZERO.name:
+            obj = None
+            for ob in bpy.data.objects:
+                if ob.type == 'ARMATURE' and ("avatar" in ob.name.lower() or "npc" in ob.name.lower()):
+                    obj = ob
+                    break
+            if not obj:
+                armatures = [o for o in bpy.data.objects if o.type == 'ARMATURE']
+                if armatures:
+                    obj = armatures[0]
+            if not obj:
+                obj = bpy.data.objects.get('Armature')
+
+            if obj:
+                bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.ops.object.select_all(action='DESELECT')
+                obj.select_set(True)
+                bpy.context.view_layer.objects.active = obj
+                try:
+                    bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+                except:
+                    pass
+
+                try:
+                    for mesh_obj in bpy.data.objects:
+                        if mesh_obj.type == 'MESH' and ("eyebrow" in mesh_obj.name.lower() or "brow" in mesh_obj.name.lower()):
+                            mesh_obj.parent = obj
+                            mesh_obj.parent_type = 'BONE'
+                            mesh_obj.parent_bone = "Bone_Root"
+                except:
+                    pass
+
+                if obj.parent and obj.parent.type == 'EMPTY' and obj.parent.name == obj.name:
+                    empty_parent = obj.parent
+                    obj.parent = None
+                    bpy.data.objects.remove(empty_parent)
+
+                for mesh_obj in bpy.data.objects:
+                    if mesh_obj.type == 'MESH' and ("hairshadow" in mesh_obj.name.lower() or "fx" in mesh_obj.name.lower()):
+                        mesh_obj.hide_viewport = True
+                        mesh_obj.hide_render = True
+
+                self.fix_zzz_eye_shadow()
 
         for object in bpy.data.objects:
             if object.type == 'MESH' and not object.data.uv_layers.get('UV1'):
@@ -123,6 +183,44 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                     # Object is not in the active View Layer, use hide_viewport instead
                     bpy.data.objects[object.name].hide_viewport = True
                 bpy.data.objects[object.name].hide_render = True
+
+    def fix_zzz_eye_shadow(self):
+        faceobj = None
+        for obj in bpy.data.objects:
+            if obj.type == 'MESH' and "face" in obj.name.lower():
+                faceobj = obj
+                break
+        if faceobj:
+            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.select_all(action='DESELECT')
+            faceobj.select_set(True)
+            bpy.context.view_layer.objects.active = faceobj
+            try:
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_all(action='DESELECT')
+                if 'Eye Transparent' in faceobj.vertex_groups:
+                    faceobj.vertex_groups.active = faceobj.vertex_groups['Eye Transparent']
+                    bpy.ops.object.vertex_group_select()
+                    for group in faceobj.vertex_groups:
+                        if "highlight" in group.name.lower():
+                            faceobj.vertex_groups.active = group
+                            bpy.ops.object.vertex_group_deselect()
+                    bpy.ops.mesh.separate(type='SELECTED')
+                bpy.ops.object.mode_set(mode='OBJECT')
+                
+                eye_obj = None
+                for ob in bpy.context.selected_objects:
+                    if ob != faceobj and ob.type == 'MESH':
+                        eye_obj = ob
+                        break
+                if eye_obj:
+                    eye_obj.name = "EyeTransparent"
+            except Exception as e:
+                print("fixeyeshadow error:", e)
+                try:
+                    bpy.ops.object.mode_set(mode='OBJECT')
+                except:
+                    pass
 
     def reset_pose_location_and_rotation(self):
         try:
@@ -207,4 +305,7 @@ class GI_OT_DeleteEmpties(Operator, CustomOperatorProperties):
 register, unregister = bpy.utils.register_classes_factory([
     GI_OT_GenshinImportModel,
     GI_OT_DeleteEmpties,
+    GI_OT_SetUpCharacter,
+    HSR_OT_SetUpCharacter,
+    ZZZ_OT_SetUpCharacter,
 ])

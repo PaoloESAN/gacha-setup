@@ -10,3 +10,4 @@ class OutlineNodeGroupNames:
     STELLARTOON_LIGHT_VECTORS_GEOMETRY_NODES = ['Light Vectors']
     V2_JAREDNYTS_PGR_OUTLINES = ['Genshin - Outlines GN']  # Uses Genshin V2 Outlines
     V3_JAREDNYTS_PGR_OUTLINES = ['HoYoverse - Genshin Impact Outlines']  # Uses Genshin V3 Outlines
+    ZENLESS_ZONE_ZERO_OUTLINES = ['ZZZ Outlines', 'Extra FX Geonode', 'Light Vectors']

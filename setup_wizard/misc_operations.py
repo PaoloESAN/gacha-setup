@@ -182,7 +182,7 @@ class GI_OT_RenameShaderMaterials(Operator, CustomOperatorProperties):
 
         body_diffuse_node_name = self.__get_body_diffuse_node_name(body_material, texture_node_names)
 
-        if body_material:
+        if body_material and body_diffuse_node_name:
             body_diffuse_texture = body_material.node_tree.nodes.get(body_diffuse_node_name).image
             if body_diffuse_texture:
                 materials_to_check = [material for material in bpy.data.materials if \

@@ -93,4 +93,61 @@ class GI_OT_CharacterRiggerOperator(Operator, ImportHelper, CustomOperatorProper
                 game_type=self.game_type,
             )
 
-register, unregister = bpy.utils.register_classes_factory(GI_OT_CharacterRiggerOperator)
+class ZZZ_OT_FixBoneChains(Operator):
+    '''Fix selected bone chains (tails) parenting and lengths'''
+    bl_idname = 'zenless_zone_zero.fix_bone_chains'
+    bl_label = 'ZZZ: Fix Selected Bone Chains (Tails)'
+    bl_description = "Fix parenting and lengths for selected bone chains (e.g. tails)"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        obj = context.active_object
+        if not obj or obj.type != 'ARMATURE':
+            self.report({'ERROR'}, "Active object is not an Armature")
+            return {'CANCELLED'}
+
+        original_mode = obj.mode
+        bpy.ops.object.mode_set(mode='EDIT')
+
+        selected_bones = [bone.name for bone in context.selected_bones]
+        if not selected_bones:
+            self.report({'WARNING'}, "No bones selected")
+            bpy.ops.object.mode_set(mode=original_mode)
+            return {'CANCELLED'}
+
+        sb = sorted(selected_bones)
+        armature = obj.data
+        eb = armature.edit_bones
+
+        def attach(foot, toe):
+            eb[foot].tail.x = eb[toe].head.x
+            eb[foot].tail.y = eb[toe].head.y
+            eb[foot].tail.z = eb[toe].head.z
+
+        groups = {}
+        for name in sb:
+            key = name[:-2]
+            groups.setdefault(key, []).append(name)
+
+        for key, group_bones in groups.items():
+            if len(group_bones) < 2:
+                continue
+            for b in range(1, len(group_bones) + 1):
+                if b == len(group_bones):
+                    if len(group_bones) >= 2:
+                        eb[group_bones[b-1]].length = eb[group_bones[b-2]].length + 0.1
+                else:
+                    bone_name = group_bones[b]
+                    parent_name = group_bones[b-1]
+                    eb[bone_name].parent = eb[parent_name]
+                    attach(parent_name, bone_name)
+
+        bpy.ops.object.mode_set(mode=original_mode)
+        self.report({'INFO'}, "Successfully fixed selected bone chains")
+        return {'FINISHED'}
+
+
+register, unregister = bpy.utils.register_classes_factory([
+    GI_OT_CharacterRiggerOperator,
+    ZZZ_OT_FixBoneChains,
+])

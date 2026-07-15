@@ -25,6 +25,12 @@ class HSR_OT_SetUpMaterials(Operator, BasicSetupUIOperator):
     bl_label = 'Honkai Star Rail: Set Up Materials (UI)'
 
 
+class ZZZ_OT_SetUpMaterials(Operator, BasicSetupUIOperator):
+    '''Sets Up Materials'''
+    bl_idname = 'zenless_zone_zero.set_up_materials'
+    bl_label = 'Zenless Zone Zero: Set Up Materials (UI)'
+
+
 class GI_OT_GenshinImportMaterials(Operator, ImportHelper, CustomOperatorProperties):
     """Select the .blend file with Shader materials to import"""
     bl_idname = "genshin.import_materials"  # important since its how we chain file dialogs
@@ -59,4 +65,9 @@ class GI_OT_GenshinImportMaterials(Operator, ImportHelper, CustomOperatorPropert
         return {'FINISHED'}
 
 
-register, unregister = bpy.utils.register_classes_factory(GI_OT_GenshinImportMaterials)
+register, unregister = bpy.utils.register_classes_factory([
+    GI_OT_GenshinImportMaterials,
+    GI_OT_SetUpMaterials,
+    HSR_OT_SetUpMaterials,
+    ZZZ_OT_SetUpMaterials,
+])

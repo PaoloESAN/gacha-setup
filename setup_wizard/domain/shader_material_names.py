@@ -182,3 +182,26 @@ class JaredNytsPunishingGrayRavenShaderMaterialNames(ShaderMaterialNames):
     BODY1 = f'{MATERIAL_PREFIX}Body01'
     XDEFAULTMATERIAL = f'{MATERIAL_PREFIX}XDefaultMaterial'  # Chibi Body
     CHIBIFACE = 'ChibiFace'  # Chibi Face
+
+
+class ZenlessZoneZeroShaderMaterialNames(ShaderMaterialNames):
+    MATERIAL_PREFIX = 'ZZZ Shader '
+    MATERIAL_PREFIX_AFTER_RENAME = 'ZZZ Shader '
+    BODY = f'{MATERIAL_PREFIX}Body'
+    BODY2 = f'{MATERIAL_PREFIX}Body 2'
+    BODY3 = f'{MATERIAL_PREFIX}Body3/Leg'
+    FACE = f'{MATERIAL_PREFIX}Face'
+    HAIR = f'{MATERIAL_PREFIX}Hair'
+    WEAPON = f'{MATERIAL_PREFIX}Weapon'
+    WEAPON2 = f'{MATERIAL_PREFIX}Weapon 2'
+    EYE = f'{MATERIAL_PREFIX}Eye'
+    EYE_HIGHLIGHTS = f'{MATERIAL_PREFIX}EyeHighlights'
+    
+    # Custom outline properties
+    BODY_OUTLINE = 'ZZZ Body Outlines'
+    BODY2_OUTLINE = 'ZZZ Body 2 Outlines'
+    BODY3_OUTLINE = 'ZZZ Body3/Leg Outlines'
+    FACE_OUTLINE = 'ZZZ Face Outline'
+    FACE_OUTLINES = 'ZZZ Face Outlines'
+    HAIR_OUTLINE = 'ZZZ Hair Outlines'
+    WEAPON_OUTLINE = 'ZZZ Weapon Outlines'

@@ -13,7 +13,8 @@ from setup_wizard.domain.game_types import GameType
 from setup_wizard.domain.shader_identifier_service import GenshinImpactShaders, HonkaiStarRailShaders, ShaderIdentifierService, \
     ShaderIdentifierServiceFactory
 from setup_wizard.domain.shader_material_names import StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, V2_FestivityGenshinImpactMaterialNames, \
-    ShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, JaredNytsPunishingGrayRavenShaderMaterialNames, V4_PrimoToonGenshinImpactMaterialNames
+    ShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, JaredNytsPunishingGrayRavenShaderMaterialNames, V4_PrimoToonGenshinImpactMaterialNames, \
+    ZenlessZoneZeroShaderMaterialNames
 from setup_wizard.texture_import_setup.texture_importer_types import TextureImporterType
 from setup_wizard.domain.shader_material_name_keywords import ShaderMaterialNameKeywords
 from setup_wizard.utils.genshin_body_part_deducer import get_monster_body_part_name, \
@@ -49,6 +50,8 @@ class GameDefaultMaterialReplacerFactory:
                 return StellarToonDefaultMaterialReplacer(blender_operator, context, StellarToonShaderMaterialNames)
         elif game_type == GameType.PUNISHING_GRAY_RAVEN.name:
             return PunishingGrayRavenDefaultMaterialReplacer(blender_operator, context)
+        elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
+            return ZenlessZoneZeroDefaultMaterialReplacer(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -609,3 +612,56 @@ class PunishingGrayRavenDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             body_material.name = material_name
             body_material.use_fake_user = True
         return body_material
+
+
+class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+
+    def replace_default_materials(self):
+        meshes = [mesh for mesh in bpy.context.scene.objects if mesh.type == 'MESH']
+
+        for mesh in meshes:
+            if len(mesh.material_slots) == 0:
+                mesh.data.materials.append(None)
+
+            for slot in mesh.material_slots:
+                mat = slot.material
+                matname = mat.name.lower() if mat else mesh.name.lower()
+
+                if mat and mat.name.startswith("ZZZ Shader"):
+                    continue
+
+                target_mat_name = None
+                if "hair" in matname:
+                    target_mat_name = "ZZZ Shader Hair"
+                elif "eyehighlight" in matname or "highlight" in matname:
+                    target_mat_name = "ZZZ Shader EyeHighlights" if bpy.data.materials.get("ZZZ Shader EyeHighlights") else "ZZZ Shader Face"
+                elif "eye" in matname and matname != "eye transparent":
+                    target_mat_name = "ZZZ Shader Eye" if bpy.data.materials.get("ZZZ Shader Eye") else "ZZZ Shader Face"
+                elif "face" in matname:
+                    target_mat_name = "ZZZ Shader Face"
+                elif "body" in matname or "leg" in matname or "tail" in matname:
+                    if "body 2" in matname or "body2" in matname:
+                        target_mat_name = "ZZZ Shader Body 2"
+                    elif "body3" in matname or "body3/leg" in matname or "leg" in matname or "tail" in matname:
+                        target_mat_name = "ZZZ Shader Body3/Leg"
+                    else:
+                        target_mat_name = "ZZZ Shader Body"
+                elif "weapon" in matname:
+                    if "weapon 2" in matname or "weapon2" in matname:
+                        target_mat_name = "ZZZ Shader Weapon 2"
+                    else:
+                        target_mat_name = "ZZZ Shader Weapon"
+
+                if target_mat_name:
+                    template_mat = bpy.data.materials.get(target_mat_name)
+                    if template_mat:
+                        new_mat = template_mat.copy()
+                        name_base = mat.name if mat else mesh.name
+                        new_mat.name = f"ZZZ Shader {name_base}"
+                        new_mat.use_fake_user = True
+                        slot.material = new_mat
+        self.blender_operator.report({'INFO'}, 'Replaced default materials with ZZZ shader materials...')
+

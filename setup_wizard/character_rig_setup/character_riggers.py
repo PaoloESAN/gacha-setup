@@ -10,6 +10,7 @@ from setup_wizard.character_rig_setup.lighting_panel_setup import LightingPanel,
 from setup_wizard.character_rig_setup.rig_script import rig_character
 from setup_wizard.character_rig_setup.npc_rig_script import rig_character as rig_npc
 from setup_wizard.character_rig_setup.hsr_rig_script import rig_character as hsr_rig_character
+from setup_wizard.character_rig_setup.zzz_rig_script import rig_character as zzz_rig_character
 
 from abc import ABC, abstractmethod
 from bpy.types import Armature, Operator, Context
@@ -44,6 +45,8 @@ class CharacterRiggerFactory:
             return HonkaiStarRailCharacterRigger(blender_operator, context)
         elif game_type == GameType.PUNISHING_GRAY_RAVEN.name:
             return PunishingGrayRavenCharacterRigger(blender_operator, context)
+        elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
+            return ZenlessZoneZeroCharacterRigger(blender_operator, context)
         else:
             raise Exception(f'Unexpected input GameType "{game_type}" for CharacterRiggerFactory')
 
@@ -269,3 +272,67 @@ class PunishingGrayRavenCharacterRigger(CharacterRigger):
 
     def rig_character(self):
         return
+
+
+class ZenlessZoneZeroCharacterRigger(CharacterRigger):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+        self.rigify_bone_shapes_file_path = GENSHIN_RIGIFY_BONE_SHAPES_FILE_PATH
+
+    def rig_character(self):
+        cache_enabled = self.context.window_manager.cache_enabled
+        filepath = get_cache(cache_enabled).get(self.rigify_bone_shapes_file_path) or self.blender_operator.filepath
+
+        if not filepath:
+            filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'RootShape.blend')
+
+        armatures = [obj for obj in bpy.context.selected_objects if obj.type == 'ARMATURE']
+        armature = armatures[0] if armatures else [obj for obj in bpy.data.objects if obj.type == 'ARMATURE'][0]
+        character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
+        meshes_joined = not (bpy.data.objects.get('Body') and bpy.data.objects.get('Face'))
+
+        bpy.ops.object.select_all(action='DESELECT')
+        bpy.context.view_layer.objects.active = armature
+        armature.select_set(True)
+
+        zzz_rig_character(
+            filepath,
+            not character_rigger_props.allow_arm_ik_stretch,
+            not character_rigger_props.allow_leg_ik_stretch,
+            character_rigger_props.use_arm_ik_poles,
+            character_rigger_props.use_leg_ik_poles,
+            character_rigger_props.add_children_of_constraints,
+            character_rigger_props.use_head_tracker,
+            meshes_joined=meshes_joined
+        )
+
+        def refresh_light_vectors_modifiers():
+            char_name = armature.name.replace("Rig", "")
+            for obj in bpy.data.objects:
+                if obj.type == 'MESH' and obj.parent == armature:
+                    for modifier in obj.modifiers:
+                        if modifier.type == 'NODES' and modifier.node_group and 'Light Vectors' in modifier.node_group.name:
+                            def assign_empty(socket, empty_name):
+                                empty_obj = bpy.data.objects.get(f"{empty_name}_{char_name}")
+                                if empty_obj:
+                                    set_modifier_property(modifier, socket, empty_obj)
+
+                            assign_empty('Input_3', 'Light Direction')
+                            if not get_modifier_property(modifier, 'Input_3'):
+                                assign_empty('Input_3', 'Main Light Direction')
+                            assign_empty('Input_4', 'Head Origin')
+                            assign_empty('Input_5', 'Head Forward')
+                            assign_empty('Input_6', 'Head Up')
+
+        refresh_light_vectors_modifiers()
+
+        self.blender_operator.report({'INFO'}, 'Successfully rigged ZZZ character')
+
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx,
+            self.blender_operator.invoker_type,
+            file_path_to_cache=filepath,
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=GameType.ZENLESS_ZONE_ZERO.name
+        )

@@ -195,6 +195,8 @@ class OutlineTextureImporterFactory:
                 return HonkaiStarRailOutlineTextureImporter(blender_operator, context, StellarToonShaderMaterialNames, shader_node_names)
         elif game_type == GameType.PUNISHING_GRAY_RAVEN.name:
             return PunishingGrayRavenOutlineTextureImporter(blender_operator, context, shader_node_names)
+        elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
+            return ZenlessZoneZeroOutlineTextureImporter(blender_operator, context, shader_node_names)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -403,6 +405,14 @@ class HonkaiStarRailOutlineTextureImporter(OutlineTextureImporter):
 class PunishingGrayRavenOutlineTextureImporter(OutlineTextureImporter):
     def __init__(self, blender_operator, context, shader_node_names: ShaderNodeNames):
         super().__init__(blender_operator, context, JaredNytsPunishingGrayRavenShaderMaterialNames, shader_node_names)
+
+    def import_textures(self):
+        return
+
+
+class ZenlessZoneZeroOutlineTextureImporter(OutlineTextureImporter):
+    def __init__(self, blender_operator, context, shader_node_names: ShaderNodeNames):
+        super().__init__(blender_operator, context, None, shader_node_names)
 
     def import_textures(self):
         return

@@ -166,3 +166,7 @@ class JaredNytsPunishingGrayRavenTextureNodeNames(TextureNodeNames):
     # Metallic Matcap
     METALLIC_MATCAP_NODE_GROUP = 'Metallic Matcap'
     METALLIC_MATCAP = 'MetalMap'
+
+
+class ZenlessZoneZeroTextureNodeNames(TextureNodeNames):
+    DIFFUSE = 'Body_D'

@@ -27,6 +27,12 @@ class HSR_OT_SetUpOutlines(Operator, BasicSetupUIOperator):
     bl_label = 'Honkai Star Rail: Set Up Outlines (UI)'
 
 
+class ZZZ_OT_SetUpOutlines(Operator, BasicSetupUIOperator):
+    '''Sets Up Outlines'''
+    bl_idname = 'zenless_zone_zero.set_up_outlines'
+    bl_label = 'Zenless Zone Zero: Set Up Outlines (UI)'
+
+
 class GI_OT_GenshinImportOutlines(Operator, ImportHelper, CustomOperatorProperties):
     """Select the .blend file with the outlines node group to import"""
     bl_idname = "genshin.import_outlines"  # important since its how we chain file dialogs
@@ -62,4 +68,9 @@ class GI_OT_GenshinImportOutlines(Operator, ImportHelper, CustomOperatorProperti
         return {'FINISHED'}
 
 
-register, unregister = bpy.utils.register_classes_factory(GI_OT_GenshinImportOutlines)
+register, unregister = bpy.utils.register_classes_factory([
+    GI_OT_GenshinImportOutlines,
+    GI_OT_SetUpOutlines,
+    HSR_OT_SetUpOutlines,
+    ZZZ_OT_SetUpOutlines,
+])

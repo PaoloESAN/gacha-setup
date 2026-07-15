@@ -19,6 +19,7 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
             (GameType.GENSHIN_IMPACT.name, 'Genshin Impact', 'Genshin Impact Setup'),
             (GameType.HONKAI_STAR_RAIL.name, 'Honkai Star Rail', 'Honkai Star Rail Setup'),
             (GameType.PUNISHING_GRAY_RAVEN.name, 'Punishing Gray Raven', 'Punishing Gray Raven Setup'),
+            (GameType.ZENLESS_ZONE_ZERO.name, 'Zenless Zone Zero', 'Zenless Zone Zero Setup'),
         ],
         name='Game',
         description='Setup for the selected game',

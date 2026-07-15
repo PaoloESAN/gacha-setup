@@ -27,10 +27,10 @@ else:
 
     import setup_wizard.cache_operator
     from setup_wizard.cache_operator import ClearCacheOperator
-    from setup_wizard.genshin_import_materials import GI_OT_SetUpMaterials, HSR_OT_SetUpMaterials
-    from setup_wizard.genshin_import_outlines import GI_OT_SetUpOutlines, HSR_OT_SetUpOutlines
-    from setup_wizard.misc_final_steps import GI_OT_FinishSetup, HSR_OT_FinishSetup
-    from setup_wizard.character_rig_setup.character_rigger_operator import GI_OT_RigCharacter
+    from setup_wizard.genshin_import_materials import GI_OT_SetUpMaterials, HSR_OT_SetUpMaterials, ZZZ_OT_SetUpMaterials
+    from setup_wizard.genshin_import_outlines import GI_OT_SetUpOutlines, HSR_OT_SetUpOutlines, ZZZ_OT_SetUpOutlines
+    from setup_wizard.misc_final_steps import GI_OT_FinishSetup, HSR_OT_FinishSetup, ZZZ_OT_FinishSetup
+    from setup_wizard.character_rig_setup.character_rigger_operator import GI_OT_RigCharacter, ZZZ_OT_FixBoneChains
     from setup_wizard.character_rig_setup.character_rigger_props import CharacterRiggerPropertyGroup, \
         CharacterRiggerPropertyManager
     from setup_wizard.genshin_compositing_node_setup import GI_OT_PostProcessingCompositingSetup
@@ -69,17 +69,27 @@ else:
         PGR_PT_UI_Materials_Menu, \
         PGR_PT_UI_Outlines_Menu, \
         PGR_PT_UI_Finish_Setup_Menu
+    from setup_wizard.ui.zzz_ui_setup_wizard_menu import \
+        ZZZ_PT_Setup_Wizard_UI_Layout, \
+        ZZZ_PT_Basic_Setup_Wizard_UI_Layout, \
+        ZZZ_PT_Advanced_Setup_Wizard_UI_Layout, \
+        ZZZ_PT_UI_Character_Model_Menu, \
+        ZZZ_PT_UI_Materials_Menu, \
+        ZZZ_PT_UI_Outlines_Menu, \
+        ZZZ_PT_UI_Finish_Setup_Menu, \
+        ZZZ_PT_UI_Character_Rig_Setup_Menu
 
-    from setup_wizard.genshin_import_character_model import GI_OT_SetUpCharacter, HSR_OT_SetUpCharacter
+    from setup_wizard.genshin_import_character_model import GI_OT_SetUpCharacter, HSR_OT_SetUpCharacter, ZZZ_OT_SetUpCharacter
 
     import setup_wizard.genshin_setup_wizard
-    from setup_wizard.genshin_setup_wizard import GI_OT_GenshinSetupWizardUI, HSR_OT_HonkaiStarRailSetupWizardUI, PGR_OT_SetupWizardUI, register as register_genshin_setup_wizard, setup_dependencies
+    from setup_wizard.genshin_setup_wizard import GI_OT_GenshinSetupWizardUI, HSR_OT_HonkaiStarRailSetupWizardUI, PGR_OT_SetupWizardUI, ZZZ_OT_SetupWizardUI, register as register_genshin_setup_wizard, setup_dependencies
 
     register_genshin_setup_wizard()
     setup_dependencies()
 
     modules = [
         setup_wizard.ui.gi_ui_setup_wizard_menu,
+        setup_wizard.ui.zzz_ui_setup_wizard_menu,
         setup_wizard.genshin_setup_wizard,
         setup_wizard.cache_operator,
     ]
@@ -128,6 +138,20 @@ else:
         PGR_PT_UI_Materials_Menu,
         PGR_PT_UI_Outlines_Menu,
         PGR_PT_UI_Finish_Setup_Menu,
+        ZZZ_PT_Setup_Wizard_UI_Layout,
+        ZZZ_PT_Basic_Setup_Wizard_UI_Layout,
+        ZZZ_PT_Advanced_Setup_Wizard_UI_Layout,
+        ZZZ_PT_UI_Character_Model_Menu,
+        ZZZ_PT_UI_Materials_Menu,
+        ZZZ_PT_UI_Outlines_Menu,
+        ZZZ_PT_UI_Finish_Setup_Menu,
+        ZZZ_PT_UI_Character_Rig_Setup_Menu,
+        ZZZ_OT_SetupWizardUI,
+        ZZZ_OT_SetUpCharacter,
+        ZZZ_OT_SetUpMaterials,
+        ZZZ_OT_SetUpOutlines,
+        ZZZ_OT_FinishSetup,
+        ZZZ_OT_FixBoneChains,
         ClearCacheOperator,
     ]
 

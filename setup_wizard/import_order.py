@@ -34,6 +34,10 @@ PUNISHING_GRAY_RAVEN_SHADER_FILE_PATH = 'punishing_gray_raven_shader_file_path'
 PUNISHING_GRAY_RAVEN_OUTLINES_FILE_PATH = 'punishing_gray_raven_outlines_file_path'
 PUNISHING_GRAY_RAVEN_CHIBI_MESH_FILE_PATH = 'punishing_gray_raven_chibi_mesh_file_path'
 
+ZENLESS_ZONE_ZERO_ROOT_FOLDER_FILE_PATH = 'zenless_zone_zero_folder_file_path'
+ZENLESS_ZONE_ZERO_SHADER_FILE_PATH = 'zenless_zone_zero_shader_file_path'
+ZENLESS_ZONE_ZERO_OUTLINES_FILE_PATH = 'zenless_zone_zero_outlines_file_path'
+
 
 class NextStepInvoker:
     def invoke(self, 
@@ -184,6 +188,13 @@ def clear_cache(game_type: str):
             PUNISHING_GRAY_RAVEN_SHADER_FILE_PATH,
             PUNISHING_GRAY_RAVEN_OUTLINES_FILE_PATH,
             PUNISHING_GRAY_RAVEN_CHIBI_MESH_FILE_PATH,
+        ]
+    elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
+        keys_to_delete = [
+            CHARACTER_MODEL_FOLDER_FILE_PATH,
+            ZENLESS_ZONE_ZERO_ROOT_FOLDER_FILE_PATH,
+            ZENLESS_ZONE_ZERO_SHADER_FILE_PATH,
+            ZENLESS_ZONE_ZERO_OUTLINES_FILE_PATH,
         ]
 
     for key in keys_to_delete:

@@ -6,8 +6,8 @@ from enum import Enum, auto
 
 from setup_wizard.domain.shader_node_names import JaredNyts_PunishingGrayRavenNodeNames, ShaderNodeNames, StellarToonShaderNodeNames, V2_GenshinShaderNodeNames, V3_GenshinShaderNodeNames, V4_PrimoToonShaderNodeNames
 from setup_wizard.domain.game_types import GameType
-from setup_wizard.domain.shader_material_names import JaredNytsPunishingGrayRavenShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, V2_FestivityGenshinImpactMaterialNames, V4_PrimoToonGenshinImpactMaterialNames
-from setup_wizard.texture_import_setup.texture_node_names import GenshinImpactTextureNodeNames, JaredNytsPunishingGrayRavenTextureNodeNames, Nya222HonkaiStarRailTextureNodeNames, StellarToonTextureNodeNames, V1_GenshinImpactTextureNodeNames, V2_GenshinImpactTextureNodeNames, V3_GenshinImpactTextureNodeNames, V4_GenshinImpactTextureNodeNames
+from setup_wizard.domain.shader_material_names import JaredNytsPunishingGrayRavenShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, V2_FestivityGenshinImpactMaterialNames, V4_PrimoToonGenshinImpactMaterialNames, ZenlessZoneZeroShaderMaterialNames
+from setup_wizard.texture_import_setup.texture_node_names import GenshinImpactTextureNodeNames, JaredNytsPunishingGrayRavenTextureNodeNames, Nya222HonkaiStarRailTextureNodeNames, StellarToonTextureNodeNames, V1_GenshinImpactTextureNodeNames, V2_GenshinImpactTextureNodeNames, V3_GenshinImpactTextureNodeNames, V4_GenshinImpactTextureNodeNames, ZenlessZoneZeroTextureNodeNames
 
 
 class GenshinImpactShaders(Enum):
@@ -24,6 +24,10 @@ class HonkaiStarRailShaders(Enum):
 
 class PunishingGrayRavenShaders(Enum):
     V1_JAREDNYTS_PUNISHING_GRAY_RAVEN_SHADER = auto()
+
+
+class ZenlessZoneZeroShaders(Enum):
+    V1_ZENLESS_ZONE_ZERO_SHADER = auto()
 
 
 class ShaderIdentifier:
@@ -43,6 +47,8 @@ class ShaderIdentifierServiceFactory:
             return HonkaiStarRailShaderIdentifierService()
         elif game_type == GameType.PUNISHING_GRAY_RAVEN.name:
             return PunishingGrayRavenShaderIdentifierService()
+        elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
+            return ZenlessZoneZeroShaderIdentifierService()
         else:
             raise Exception(f'Unexpected input GameType "{game_type}" for ShaderIdentifierServiceFactory')
 
@@ -106,6 +112,8 @@ class ShaderIdentifierService:
                 return StellarToonShaderMaterialNames
         elif game_type == GameType.PUNISHING_GRAY_RAVEN.name:
             return JaredNytsPunishingGrayRavenShaderMaterialNames
+        elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
+            return ZenlessZoneZeroShaderMaterialNames
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -123,6 +131,8 @@ class ShaderIdentifierService:
             return StellarToonShaderMaterialNames
         elif shader is PunishingGrayRavenShaders.V1_JAREDNYTS_PUNISHING_GRAY_RAVEN_SHADER:
             return JaredNytsPunishingGrayRavenShaderMaterialNames
+        elif shader is ZenlessZoneZeroShaders.V1_ZENLESS_ZONE_ZERO_SHADER:
+            return ZenlessZoneZeroShaderMaterialNames
         else:
             raise Exception(f'Unknown Shader: {shader}')
 
@@ -141,6 +151,8 @@ class ShaderIdentifierService:
             return StellarToonTextureNodeNames
         elif shader is PunishingGrayRavenShaders.V1_JAREDNYTS_PUNISHING_GRAY_RAVEN_SHADER:
             return JaredNytsPunishingGrayRavenTextureNodeNames
+        elif shader is ZenlessZoneZeroShaders.V1_ZENLESS_ZONE_ZERO_SHADER:
+            return ZenlessZoneZeroTextureNodeNames
         else:
             raise Exception(f'Unknown Shader: {shader}')
 
@@ -158,6 +170,8 @@ class ShaderIdentifierService:
             return ShaderNodeNames  # Unused, no ShaderNodeName available
         elif shader is PunishingGrayRavenShaders.V1_JAREDNYTS_PUNISHING_GRAY_RAVEN_SHADER:
             return JaredNyts_PunishingGrayRavenNodeNames  # Unused
+        elif shader is ZenlessZoneZeroShaders.V1_ZENLESS_ZONE_ZERO_SHADER:
+            return ShaderNodeNames  # Unused
         else:
             raise Exception(f'Unknown Shader: {shader}')
 
@@ -216,6 +230,18 @@ class PunishingGrayRavenShaderIdentifierService(ShaderIdentifierService):
     ]
     material_lists_to_search_through = {
         PunishingGrayRavenShaders.V1_JAREDNYTS_PUNISHING_GRAY_RAVEN_SHADER: V1_NAMES_OF_PGR_MATERIALS
+    }
+
+    def __init__(self):
+        super().__init__()
+
+
+class ZenlessZoneZeroShaderIdentifierService(ShaderIdentifierService):
+    V1_NAMES_OF_ZZZ_MATERIALS = [
+        ZenlessZoneZeroShaderMaterialNames.MATERIAL_PREFIX_AFTER_RENAME,
+    ]
+    material_lists_to_search_through = {
+        ZenlessZoneZeroShaders.V1_ZENLESS_ZONE_ZERO_SHADER: V1_NAMES_OF_ZZZ_MATERIALS
     }
 
     def __init__(self):

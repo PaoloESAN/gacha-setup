@@ -20,6 +20,7 @@ from setup_wizard.material_import_setup.empty_names import LightDirectionEmptyNa
 from setup_wizard.outline_import_setup.outline_node_groups import OutlineNodeGroupNames
 from setup_wizard.texture_import_setup.texture_node_names import V4_GenshinImpactTextureNodeNames
 from setup_wizard.utils.modifier_utils import get_modifier_property, set_modifier_property
+from setup_wizard.import_order import NextStepInvoker
 
 
 
@@ -168,6 +169,8 @@ class GameGeometryNodesSetupFactory:
                 if bpy.data.node_groups.get(outline_node_group_name):
                     return V2_PunishingGrayRavenGeometryNodesSetup(blender_operator, context)
             return PunishingGrayRavenGeometryNodesSetup(blender_operator, context)
+        elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
+            return ZenlessZoneZeroGeometryNodesSetup(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -942,3 +945,292 @@ class V2_PunishingGrayRavenGeometryNodesSetup(GameGeometryNodesSetup):
                 geometry_nodes_modifier.node_group = outlines_node_group
                 self.set_up_modifier_default_values(geometry_nodes_modifier, mesh)
         return geometry_nodes_modifier
+
+
+class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
+    def __init__(self, blender_operator, context):
+        super().__init__(blender_operator, context)
+
+    def setup_geometry_nodes(self):
+        light_vectors_gn = bpy.data.node_groups.get("Light Vectors")
+        extra_fx_gn = bpy.data.node_groups.get("Extra FX Geonode")
+        zzz_outlines_gn = bpy.data.node_groups.get("ZZZ Outlines")
+
+        char_name = ""
+        for ob in bpy.data.objects:
+            if ob.type == 'ARMATURE' and "Rig" in ob.name:
+                char_name = ob.name.replace("Rig", "")
+                break
+
+        # Find the main body object for drivers (bod)
+        bod = None
+        for obj in bpy.data.objects:
+            if obj.type == 'MESH' and ("body_1" in obj.name.lower() or obj.name[-5:].lower() == "_body" or obj.name.endswith("Body1")):
+                bod = obj
+                break
+
+        for obj in bpy.data.objects:
+            if obj.type == 'MESH':
+                # Light Vectors
+                if light_vectors_gn:
+                    mod = obj.modifiers.get("Light Vectors")
+                    if not mod:
+                        mod = obj.modifiers.new(name="Light Vectors", type='NODES')
+                        mod.node_group = light_vectors_gn
+                    
+                    socket_mapping = {
+                        "Input_3": "Light Direction",
+                        "Input_7": "Head Direction",
+                        "Input_4": "Head Origin",
+                        "Input_5": "Head Forward",
+                        "Input_6": "Head Up"
+                    }
+                    for socket_name, target_name in socket_mapping.items():
+                        target_obj = None
+                        if char_name:
+                            target_obj = bpy.data.objects.get(f"{target_name}_{char_name}")
+                        if not target_obj:
+                            target_obj = bpy.data.objects.get(target_name)
+                        if target_obj:
+                            set_modifier_property(mod, socket_name, target_obj)
+
+                    # Connect pickers and wheels
+                    obs = bpy.data.objects
+                    sockets = {
+                        "Socket_0": "ColorWheel-Ambient",
+                        "Socket_1": "ColorPicker-Ambient",
+                        "Socket_2": "ColorWheel-Lit",
+                        "Socket_3": "ColorPicker-Lit",
+                        "Socket_4": "ColorWheel-Shadow",
+                        "Socket_5": "ColorPicker-Shadow",
+                        "Socket_6": "ColorWheel-RimLit",
+                        "Socket_7": "ColorPicker-RimLit",
+                        "Socket_8": "ColorWheel-RimShadow",
+                        "Socket_9": "ColorPicker-RimShadow",
+                        "Socket_26": "Origin-RimX",
+                        "Socket_27": "Slider-RimX",
+                        "Socket_28": "Origin-RimY",
+                        "Socket_29": "Slider-RimY",
+                    }
+                    for sock, target in sockets.items():
+                        target_obj = obs.get(target)
+                        if target_obj:
+                            try:
+                                mod[sock] = target_obj
+                            except:
+                                pass
+
+                # Extra FX
+                if extra_fx_gn:
+                    mod = obj.modifiers.get("Extra FX")
+                    if not mod:
+                        mod = obj.modifiers.new(name="Extra FX", type='NODES')
+                        mod.node_group = extra_fx_gn
+                    obj.modifiers.move(len(obj.modifiers) - 1, 1)
+
+                    try:
+                        mod["Socket_0_attribute_name"] = "cast shadow"
+                        mod["Socket_11_attribute_name"] = "shadowsharpness"
+                    except:
+                        pass
+
+                    if "face" in obj.name.lower():
+                        try:
+                            mod["Output_3_attribute_name"] = "depth"
+                            mod["Output_2_attribute_name"] = "blend"
+                            mod["Socket_5_attribute_name"] = "face shadow"
+                            mod["Socket_6_attribute_name"] = "faceshadX"
+                            mod["Socket_7_attribute_name"] = "faceshadY"
+                            mod["Socket_9_attribute_name"] = "faceshadadjust"
+                        except:
+                            pass
+
+                # Outlines
+                if zzz_outlines_gn and "face" not in obj.name.lower():
+                    mod = obj.modifiers.get("Outlines")
+                    if not mod:
+                        mod = obj.modifiers.new(name="Outlines", type='NODES')
+                        mod.node_group = zzz_outlines_gn
+                    
+                    try:
+                        mod['Input_3_use_attribute'] = 0
+                    except:
+                        pass
+                    try:
+                        mod["Input_12"] = True
+                        mod["Input_13"] = True
+                    except:
+                        pass
+
+                    mat_mappings = {
+                        "Input_10": "ZZZ Shader Hair",
+                        "Input_5": "ZZZ Hair Outlines",
+                        "Input_11": "ZZZ Shader Body",
+                        "Input_9": "ZZZ Body Outlines",
+                        "Input_14": "ZZZ Shader Body 2",
+                        "Input_15": "ZZZ Body 2 Outlines",
+                        "Input_18": "ZZZ Shader Body",
+                        "Input_19": "ZZZ Body Outlines",
+                        "Input_24": "ZZZ Shader Weapon",
+                        "Input_25": "ZZZ Weapon Outlines",
+                        "Input_26": "ZZZ Shader Weapon",
+                        "Input_27": "ZZZ Weapon Outlines",
+                        "Socket_0": "ZZZ Shader Body3/Leg",
+                        "Socket_1": "ZZZ Body3/Leg Outlines",
+                    }
+                    for sock, mat_name in mat_mappings.items():
+                        m = bpy.data.materials.get(mat_name)
+                        if m:
+                            try:
+                                mod[sock] = m
+                            except:
+                                pass
+
+                    if bod and obj != bod:
+                        try:
+                            mod.driver_remove('["Input_7"]')
+                        except:
+                            pass
+                        try:
+                            d = mod.driver_add('["Input_7"]').driver
+                            d.type = "AVERAGE"
+                            v = d.variables.new()
+                            v.name = "Input_7"
+                            v.targets[0].id = bod
+                            v.targets[0].data_path = 'modifiers["Outlines"]["Input_7"]'
+                        except Exception as e:
+                            print("Error adding outline driver:", e)
+
+        # Cast shadow drivers
+        faceobj = None
+        for obj in bpy.data.objects:
+            if obj.type == 'MESH' and "face" in obj.name.lower():
+                faceobj = obj
+                break
+
+        if faceobj:
+            for ob in bpy.data.objects:
+                if ob.type == 'MESH' and ob != faceobj:
+                    extra_fx_mod = ob.modifiers.get("Extra FX")
+                    if extra_fx_mod:
+                        for sock_name in ["Socket_1", "Socket_10"]:
+                            try:
+                                extra_fx_mod.driver_remove(sock_name)
+                            except:
+                                pass
+                            try:
+                                d = extra_fx_mod.driver_add(sock_name).driver
+                                d.type = "AVERAGE"
+                                v = d.variables.new()
+                                v.name = sock_name
+                                v.targets[0].id = faceobj
+                                v.targets[0].data_path = f'modifiers["Extra FX"]["{sock_name}"]'
+                            except Exception as e:
+                                print(f"Error adding extra fx driver for {sock_name}:", e)
+
+        self.outlineshader_sync()
+
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx, 
+            self.blender_operator.invoker_type,
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=self.blender_operator.game_type,
+        )
+
+    def outlineshader_sync(self):
+        def findimg(name):
+            for img in bpy.data.images:
+                if img.name.endswith(name):
+                    return img
+            return None
+
+        for mat in bpy.data.materials:
+            if "Outlines" in mat.name or "Outline" in mat.name:
+                nodes = mat.node_tree.nodes if mat.node_tree else None
+                if not nodes:
+                    continue
+                
+                diffuse_node = nodes.get("Outline_Diffuse")
+                lightmap_node = nodes.get("Outline_Lightmap")
+                
+                if "Body 2 Outlines" in mat.name:
+                    sh_body2 = bpy.data.materials.get("ZZZ Shader Body 2")
+                    if sh_body2 and sh_body2.node_tree:
+                        body_d_img = sh_body2.node_tree.nodes.get("Body_D")
+                        if body_d_img and body_d_img.image:
+                            if diffuse_node:
+                                diffuse_node.image = findimg("Body_Map2_D.png") or findimg("Body_2_D.png")
+                                if diffuse_node.image:
+                                    diffuse_node.image.alpha_mode = 'CHANNEL_PACKED'
+                            if lightmap_node:
+                                lightmap_node.image = findimg("Body_Map2_M.png") or findimg("Body_2_M.png")
+                                if lightmap_node.image:
+                                    lightmap_node.image.colorspace_settings.name = 'Non-Color'
+                                    lightmap_node.image.alpha_mode = 'CHANNEL_PACKED'
+                                    
+                elif "Body3/Leg Outlines" in mat.name:
+                    sh_body3 = bpy.data.materials.get("ZZZ Shader Body3/Leg")
+                    if sh_body3 and sh_body3.node_tree:
+                        body_d_img = sh_body3.node_tree.nodes.get("Body_D")
+                        if body_d_img and body_d_img.image:
+                            if diffuse_node:
+                                diffuse_node.image = findimg("Body_Map3_D.png") or findimg("Body_3_D.png") or findimg("Leg_D.png") or findimg("Tail_Map1_D.png")
+                                if diffuse_node.image:
+                                    diffuse_node.image.alpha_mode = 'CHANNEL_PACKED'
+                            if lightmap_node:
+                                lightmap_node.image = findimg("Body_Map3_M.png") or findimg("Body_3_M.png") or findimg("Leg_M.png") or findimg("Tail_Map1_M.png")
+                                if lightmap_node.image:
+                                    lightmap_node.image.colorspace_settings.name = 'Non-Color'
+                                    lightmap_node.image.alpha_mode = 'CHANNEL_PACKED'
+                                    
+                elif "Body Outlines" in mat.name:
+                    if diffuse_node:
+                        for name in ["Body_Map1_D.png", "Body_D.png", "Body_1_D.png", "Weapon_Map2_D.png"]:
+                            diffuse_node.image = findimg(name)
+                            if diffuse_node.image:
+                                break
+                        if diffuse_node.image:
+                            diffuse_node.image.alpha_mode = 'CHANNEL_PACKED'
+                    if lightmap_node:
+                        for name in ["Body_Map1_M.png", "Body_M.png", "Body_1_M.png", "Weapon_Map2_M.png"]:
+                            lightmap_node.image = findimg(name)
+                            if lightmap_node.image:
+                                break
+                        if lightmap_node.image:
+                            lightmap_node.image.colorspace_settings.name = 'Non-Color'
+                            lightmap_node.image.alpha_mode = 'CHANNEL_PACKED'
+                    
+                elif "Hair Outlines" in mat.name:
+                    if diffuse_node:
+                        diffuse_node.image = findimg("Hair_D.png")
+                        if diffuse_node.image:
+                            diffuse_node.image.alpha_mode = 'CHANNEL_PACKED'
+                    if lightmap_node:
+                        lightmap_node.image = findimg("Hair_M.png")
+                        if lightmap_node.image:
+                            lightmap_node.image.colorspace_settings.name = 'Non-Color'
+                            lightmap_node.image.alpha_mode = 'CHANNEL_PACKED'
+                    
+                elif "Weapon Outlines" in mat.name:
+                    if diffuse_node:
+                        for name in ["Weapon_D.png", "Weapon_01_D.png", "Weapon_Map1_D.png", "Weapon_Map2_D.png", "weapon_Map_D.png"]:
+                            diffuse_node.image = findimg(name)
+                            if diffuse_node.image:
+                                break
+                        if diffuse_node.image:
+                            diffuse_node.image.alpha_mode = 'CHANNEL_PACKED'
+                    if lightmap_node:
+                        for name in ["Weapon_M.png", "Weapon_01_M.png", "Weapon_Map1_M.png", "Weapon_Map2_M.png", "weapon_Map_M.png"]:
+                            lightmap_node.image = findimg(name)
+                            if lightmap_node.image:
+                                break
+                        if lightmap_node.image:
+                            lightmap_node.image.colorspace_settings.name = 'Non-Color'
+                            lightmap_node.image.alpha_mode = 'CHANNEL_PACKED'
+                elif "Face Outline" in mat.name:
+                    sh_face = bpy.data.materials.get("ZZZ Shader Face")
+                    if sh_face and sh_face.node_tree:
+                        face_d_img = sh_face.node_tree.nodes.get("Face_D")
+                        face_outline_d = nodes.get("Face_D")
+                        if face_d_img and face_outline_d:
+                            face_outline_d.image = face_d_img.image

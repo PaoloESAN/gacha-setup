@@ -17,3 +17,7 @@ class HonkaiStarRailUIRenderChecker(UIRenderChecker):
 
 class PunishingGrayRavenUIRenderChecker(UIRenderChecker):
     GAME_TYPE = GameType.PUNISHING_GRAY_RAVEN.name
+
+
+class ZenlessZoneZeroUIRenderChecker(UIRenderChecker):
+    GAME_TYPE = GameType.ZENLESS_ZONE_ZERO.name
