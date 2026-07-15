@@ -296,7 +296,7 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
         bpy.context.view_layer.objects.active = armature
         armature.select_set(True)
 
-        rig_character(
+        zzz_rig_character(
             filepath,
             0, # lighting_panel_version
             not character_rigger_props.allow_arm_ik_stretch,
