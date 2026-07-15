@@ -122,62 +122,35 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
         existing_objects = set(bpy.data.objects.keys())
 
         if self.game_type == GameType.ZENLESS_ZONE_ZERO.name:
+            better_fbx_success = False
             try:
                 bpy.ops.import_scene.better_fbx(filepath=character_model_file_path)
                 self.report({'INFO'}, 'Imported character model using Better FBX Importer')
-                return
+                better_fbx_success = True
             except AttributeError:
                 pass
             except Exception as e:
                 pass
 
-        # Fallback sequence for standard FBX importer
-        fallbacks = [
-            # 1. Recommended settings
-            {"force_connect_children": True, "automatic_bone_orientation": True},
-            # 2. Plain import (uses last used UI settings or defaults)
-            {},
-            # 3. No automatic bone orientation / connect children
-            {"force_connect_children": False, "automatic_bone_orientation": False},
-            # 4. Disable animations (very common cause of KeyError in rig mapping)
-            {"force_connect_children": False, "automatic_bone_orientation": False, "use_anim": False},
-            # 5. Ignore leaf bones
-            {"force_connect_children": False, "automatic_bone_orientation": False, "ignore_leaf_bones": True},
-        ]
+            if not better_fbx_success:
+                try:
+                    bpy.ops.import_scene.fbx(filepath=character_model_file_path)
+                except Exception as e:
+                    # Clean up newly created objects
+                    new_objects = [bpy.data.objects[name] for name in bpy.data.objects.keys() if name not in existing_objects]
+                    for ob in new_objects:
+                        try:
+                            bpy.data.objects.remove(ob)
+                        except Exception:
+                            pass
+                    
+                    error_message = (
+                        "No se pudo importar el modelo automáticamente para Zenless Zone Zero.\n"
+                        "Por favor, importa el modelo FBX manualmente en la escena y continúa con el setup."
+                    )
+                    self.report({'ERROR'}, error_message)
+                    raise RuntimeError(error_message)
 
-        import_success = False
-        last_error = None
-
-        for i, settings in enumerate(fallbacks):
-            try:
-                bpy.ops.import_scene.fbx(filepath=character_model_file_path, **settings)
-                import_success = True
-                self.report({'INFO'}, f"Imported character model successfully on attempt {i+1}")
-                break
-            except Exception as e:
-                last_error = e
-                # Check if objects were successfully imported to the scene despite the importer error
-                new_objects = [bpy.data.objects[name] for name in bpy.data.objects.keys() if name not in existing_objects]
-                has_imported_assets = any(ob.type in ['ARMATURE', 'MESH'] for ob in new_objects)
-                
-                if has_imported_assets:
-                    self.report({'WARNING'}, f"FBX importer reported an error ({e}) on attempt {i+1}, but the model was successfully loaded. Continuing...")
-                    import_success = True
-                    break
-                else:
-                    self.report({'WARNING'}, f"FBX import attempt {i+1} failed: {e}")
-
-        if not import_success:
-            error_message = (
-                "El importador FBX por defecto de Blender no pudo cargar este modelo debido a un error de jerarquía (KeyError: Bone_Root).\n"
-                "Para solucionar esto, puedes:\n"
-                "1. Instalar el addon comercial 'Better FBX Importer' en Blender.\n"
-                "2. O bien, abrir y volver a exportar el FBX usando una herramienta gratuita como 'Noesis' para limpiar la jerarquía."
-            )
-            self.report({'ERROR'}, error_message)
-            raise RuntimeError(error_message)
-
-        if self.game_type == GameType.ZENLESS_ZONE_ZERO.name:
             obj = None
             for ob in bpy.data.objects:
                 if ob.type == 'ARMATURE' and ("avatar" in ob.name.lower() or "npc" in ob.name.lower()):
@@ -232,6 +205,66 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                         mesh_obj.hide_render = True
 
                 self.fix_zzz_eye_shadow()
+
+            for object in bpy.data.objects:
+                if object.type == 'MESH' and not object.data.uv_layers.get('UV1'):
+                    object.data.uv_layers.new(name='UV1')
+            
+            for object in bpy.data.objects:
+                if 'EffectMesh' in object.name or 'EyeStar' in object.name:
+                    try:
+                        bpy.data.objects[object.name].hide_set(True)
+                    except RuntimeError:
+                        bpy.data.objects[object.name].hide_viewport = True
+                    bpy.data.objects[object.name].hide_render = True
+
+            return
+
+        # Fallback sequence for standard FBX importer
+        fallbacks = [
+            # 1. Recommended settings
+            {"force_connect_children": True, "automatic_bone_orientation": True},
+            # 2. Plain import (uses last used UI settings or defaults)
+            {},
+            # 3. No automatic bone orientation / connect children
+            {"force_connect_children": False, "automatic_bone_orientation": False},
+            # 4. Disable animations (very common cause of KeyError in rig mapping)
+            {"force_connect_children": False, "automatic_bone_orientation": False, "use_anim": False},
+            # 5. Ignore leaf bones
+            {"force_connect_children": False, "automatic_bone_orientation": False, "ignore_leaf_bones": True},
+        ]
+
+        import_success = False
+        last_error = None
+
+        for i, settings in enumerate(fallbacks):
+            try:
+                bpy.ops.import_scene.fbx(filepath=character_model_file_path, **settings)
+                import_success = True
+                self.report({'INFO'}, f"Imported character model successfully on attempt {i+1}")
+                break
+            except Exception as e:
+                last_error = e
+                # Check if objects were successfully imported to the scene despite the importer error
+                new_objects = [bpy.data.objects[name] for name in bpy.data.objects.keys() if name not in existing_objects]
+                has_imported_assets = any(ob.type in ['ARMATURE', 'MESH'] for ob in new_objects)
+                
+                if has_imported_assets:
+                    self.report({'WARNING'}, f"FBX importer reported an error ({e}) on attempt {i+1}, but the model was successfully loaded. Continuing...")
+                    import_success = True
+                    break
+                else:
+                    self.report({'WARNING'}, f"FBX import attempt {i+1} failed: {e}")
+
+        if not import_success:
+            error_message = (
+                "El importador FBX por defecto de Blender no pudo cargar este modelo debido a un error de jerarquía (KeyError: Bone_Root).\n"
+                "Para solucionar esto, puedes:\n"
+                "1. Instalar el addon comercial 'Better FBX Importer' en Blender.\n"
+                "2. O bien, abrir y volver a exportar el FBX usando una herramienta gratuita como 'Noesis' para limpiar la jerarquía."
+            )
+            self.report({'ERROR'}, error_message)
+            raise RuntimeError(error_message)
 
         for object in bpy.data.objects:
             if object.type == 'MESH' and not object.data.uv_layers.get('UV1'):
@@ -334,6 +367,42 @@ class GI_OT_DeleteEmpties(Operator, CustomOperatorProperties):
     bl_label = "Genshin: Delete empties (except Head Driver's empties)"
 
     def execute(self, context):
+        if self.game_type == GameType.ZENLESS_ZONE_ZERO.name:
+            obj = None
+            for ob in bpy.data.objects:
+                if ob.type == 'ARMATURE' and ("avatar" in ob.name.lower() or "npc" in ob.name.lower()):
+                    obj = ob
+                    break
+            if not obj:
+                armatures = [o for o in bpy.data.objects if o.type == 'ARMATURE']
+                if armatures:
+                    obj = armatures[0]
+            if not obj:
+                obj = bpy.data.objects.get('Armature')
+
+            if obj:
+                try:
+                    for mesh_obj in bpy.data.objects:
+                        if mesh_obj.type == 'MESH' and ("eyebrow" in mesh_obj.name.lower() or "brow" in mesh_obj.name.lower()):
+                            if mesh_obj.parent != obj or mesh_obj.parent_type != 'BONE' or mesh_obj.parent_bone != "Bone_Root":
+                                mesh_obj.parent = obj
+                                mesh_obj.parent_type = 'BONE'
+                                mesh_obj.parent_bone = "Bone_Root"
+                except Exception as e:
+                    print("Failed to parent eyebrows:", e)
+
+                for object in bpy.data.objects:
+                    if object.type == 'MESH' and not object.data.uv_layers.get('UV1'):
+                        object.data.uv_layers.new(name='UV1')
+
+                for object in bpy.data.objects:
+                    if object.type == 'MESH' and ('EffectMesh' in object.name or 'EyeStar' in object.name or "hairshadow" in object.name.lower() or "fx" in object.name.lower()):
+                        try:
+                            bpy.data.objects[object.name].hide_set(True)
+                        except:
+                            bpy.data.objects[object.name].hide_viewport = True
+                        bpy.data.objects[object.name].hide_render = True
+
         scene = bpy.context.scene
         empties_to_not_delete = [
             'Head Forward',

@@ -69,6 +69,14 @@ class ZZZ_PT_Basic_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker)
 
         OperatorFactory.create(
             sub_layout,
+            'genshin.delete_empties',
+            'Delete Empties',
+            icon='TRASH',
+            game_type=GameType.ZENLESS_ZONE_ZERO.name,
+        )
+
+        OperatorFactory.create(
+            sub_layout,
             'zenless_zone_zero.set_up_materials',
             'Set Up Materials',
             icon='MATERIAL',

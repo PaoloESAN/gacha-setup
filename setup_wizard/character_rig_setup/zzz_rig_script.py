@@ -2120,7 +2120,7 @@ def rig_character(
     # MOUTH SHAPE KEYS
     obj = obj_face_dynamic or bpy.data.objects.get("Face") or (bpy.data.objects.get("Body") if meshes_joined else None)
     if obj and obj.data.shape_keys:
-        if "Fac_Mth_Aa1" in obj.data.shape_keys.key_blocks:
+        if "Fac_Mth_Aa1" in obj.data.shape_keys.key_blocks or "Fac_Mth_AaTalk" in obj.data.shape_keys.key_blocks:
             zzz_mouth_configs = [
                 ("Fac_Mth_Aa1", "Mouth-Control", "bone * -1.33", "LOC_Y"),
                 ("Fac_Mth_Aa2", "Mouth-Control", "bone * -1.33", "LOC_Y"),
