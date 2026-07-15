@@ -1997,85 +1997,157 @@ def rig_character(
         depsgraph = bpy.context.evaluated_depsgraph_get()
         depsgraph.update()
         
+    # Dynamic face object resolution for ZZZ / general characters
+    obj_face_dynamic = None
+    for o in bpy.data.objects:
+        if o.type == 'MESH' and "_face" in o.name.lower() and "weapon_" not in o.name.lower() and "gun_" not in o.name.lower():
+            obj_face_dynamic = o
+            break
+
     # BROW SHAPE KEYS 
-    obj = bpy.data.objects.get("Brow") or bpy.data.objects.get("Face") or (bpy.data.objects.get("Body") if meshes_joined else None)
-    if obj:
+    obj = obj_face_dynamic or bpy.data.objects.get("Brow") or bpy.data.objects.get("Face") or (bpy.data.objects.get("Body") if meshes_joined else None)
+    if obj and obj.data.shape_keys:
         print(f"[RIG] Using object '{obj.name}' for brow shape key drivers")
-        try:
-            makeCon("Brow_Down_L","Brow-L-Control","bone * -4","LOC_Y")
-            makeCon("Brow_Down_R","Brow-R-Control","bone * -4","LOC_Y")
-            makeCon("Brow_Up_L","Brow-L-Control","bone * 4","LOC_Y")
-            makeCon("Brow_Up_R","Brow-R-Control","bone * 4","LOC_Y")
-            makeCon("Brow_Trouble_L", "Brow-Trouble-L-Control", "bone * 2", "LOC_X")   
-            makeCon("Brow_Trouble_R", "Brow-Trouble-R-Control", "bone * 2", "LOC_X")   
-            makeCon("Brow_Smily_R", "Brow-Smily-R-Control", "bone * 2", "LOC_X")   
-            makeCon("Brow_Smily_L", "Brow-Smily-L-Control", "bone * 2", "LOC_X")   
-            makeCon("Brow_Angry_L", "Brow-Angry-L-Control", "bone * 2", "LOC_X")   
-            makeCon("Brow_Angry_R", "Brow-Angry-R-Control", "bone * 2", "LOC_X")   
-            makeCon("Brow_Shy_L", "Brow-Shy-L-Control", "bone * 2", "LOC_X")   
-            makeCon("Brow_Shy_R", "Brow-Shy-R-Control", "bone * 2", "LOC_X")   
-            makeCon("Brow_Squeeze_R", "Brow-R-Control", "bone * 4", "LOC_X")   
-            makeCon("Brow_Squeeze_L", "Brow-L-Control", "bone * -4", "LOC_X")   
-        except Exception as e:
-            _rig_log.append(f"Brow driver failed: {e}")
+        if "Fac_Ebr_Down" in obj.data.shape_keys.key_blocks:
+            try:
+                makeCon("Fac_Ebr_Down", "Brow-L-Control", "bone * -4", "LOC_Y")
+                makeCon("Fac_Ebr_Down", "Brow-R-Control", "bone * -4", "LOC_Y")
+                makeCon("Fac_Ebr_Up", "Brow-L-Control", "bone * 4", "LOC_Y")
+                makeCon("Fac_Ebr_Up", "Brow-R-Control", "bone * 4", "LOC_Y")
+                makeCon("Fac_Ebr_Angry", "Brow-Angry-L-Control", "bone * 2", "LOC_X")
+                makeCon("Fac_Ebr_Angry", "Brow-Angry-R-Control", "bone * 2", "LOC_X")
+                makeCon("Fac_Ebr_Sad", "Brow-Trouble-L-Control", "bone * 2", "LOC_X")
+                makeCon("Fac_Ebr_Sad", "Brow-Trouble-R-Control", "bone * 2", "LOC_X")
+            except Exception as e:
+                _rig_log.append(f"ZZZ Brow driver failed: {e}")
+        else:
+            try:
+                makeCon("Brow_Down_L","Brow-L-Control","bone * -4","LOC_Y")
+                makeCon("Brow_Down_R","Brow-R-Control","bone * -4","LOC_Y")
+                makeCon("Brow_Up_L","Brow-L-Control","bone * 4","LOC_Y")
+                makeCon("Brow_Up_R","Brow-R-Control","bone * 4","LOC_Y")
+                makeCon("Brow_Trouble_L", "Brow-Trouble-L-Control", "bone * 2", "LOC_X")   
+                makeCon("Brow_Trouble_R", "Brow-Trouble-R-Control", "bone * 2", "LOC_X")   
+                makeCon("Brow_Smily_R", "Brow-Smily-R-Control", "bone * 2", "LOC_X")   
+                makeCon("Brow_Smily_L", "Brow-Smily-L-Control", "bone * 2", "LOC_X")   
+                makeCon("Brow_Angry_L", "Brow-Angry-L-Control", "bone * 2", "LOC_X")   
+                makeCon("Brow_Angry_R", "Brow-Angry-R-Control", "bone * 2", "LOC_X")   
+                makeCon("Brow_Shy_L", "Brow-Shy-L-Control", "bone * 2", "LOC_X")   
+                makeCon("Brow_Shy_R", "Brow-Shy-R-Control", "bone * 2", "LOC_X")   
+                makeCon("Brow_Squeeze_R", "Brow-R-Control", "bone * 4", "LOC_X")   
+                makeCon("Brow_Squeeze_L", "Brow-L-Control", "bone * -4", "LOC_X")   
+            except Exception as e:
+                _rig_log.append(f"Brow driver failed: {e}")
 
     # EYE SHAPE KEYS
-    # Eye shape keys may be on "Face_Eye", "Face", or "Body" depending on the character
-    obj = bpy.data.objects.get("Face_Eye") or bpy.data.objects.get("Face") or (bpy.data.objects.get("Body") if meshes_joined else None)
-    if obj:
+    obj = obj_face_dynamic or bpy.data.objects.get("Face_Eye") or bpy.data.objects.get("Face") or (bpy.data.objects.get("Body") if meshes_joined else None)
+    if obj and obj.data.shape_keys:
         print(f"[RIG] Using object '{obj.name}' for eye shape key drivers")
+        if "Fac_Eye_Close" in obj.data.shape_keys.key_blocks:
+            zzz_eye_configs = [
+                ("Fac_Eye_Close", "Eye-Ha-Control", "bone * -2.22", "LOC_Y"),
+                ("Fac_Eye_HalfClose", "Eye-Jito-Control", "bone * -2.22", "LOC_Y"),
+                ("Fac_Eye_Sad", "Eye-Wail-Control", "bone * -2.22", "LOC_Y"),
+                ("Fac_Eye_Angry", "Eye-Hostility-Control", "bone * -2.22", "LOC_Y"),
+                ("Fac_Eye_LowlidUp", "Eye-LowerEyelid-Control", "bone * -2.22", "LOC_Y"),
+                ("Fac_Eye_L_Open", "Eye-Up-Control", "bone * -2.22", "LOC_Y"),
+                ("Fac_Eye_R_Open", "Eye-Up-Control", "bone * -2.22", "LOC_Y"),
+                ("Fac_Eye_L_Wink", "WinkA-L-Invis", "bone * -.82", "LOC_Y"),
+                ("Fac_Eye_R_Wink", "WinkA-R-Invis", "bone * -.82", "LOC_Y"),
+            ]
+            for sk_name, bone_name, expression, transform in zzz_eye_configs:
+                try:
+                    makeCon(sk_name, bone_name, expression, transform)
+                except Exception as e:
+                    _rig_log.append(f"ZZZ Eye driver failed: {sk_name} -> {e}")
+        else:
+            eye_shape_key_configs = [
+                ("Eye_WinkA_L","WinkA-L-Invis","bone * -.82","LOC_Y"),
+                ("Eye_WinkA_R","WinkA-R-Invis","bone * -.82","LOC_Y"),
+                ("Eye_WinkB_L","WinkB-L-Invis","bone * -.82","LOC_Y"),
+                ("Eye_WinkB_R","WinkB-R-Invis","bone * -.82","LOC_Y"),
+                ("Eye_WinkC_L","WinkC-L-Invis","bone * -.82","LOC_Y"),
+                ("Eye_WinkC_R","WinkC-R-Invis","bone * -.82","LOC_Y"),
+                ("Eye_Ha","Eye-Ha-Control","bone * -2.22","LOC_Y"),
+                ("Eye_Jito","Eye-Jito-Control","bone * -2.22","LOC_Y"),
+                ("Eye_Wail","Eye-Wail-Control","bone * -2.22","LOC_Y"),
+                ("Eye_Hostility","Eye-Hostility-Control","bone * -2.22","LOC_Y"),
+                ("Eye_Tired","Eye-Tired-Control","bone * -2.22","LOC_Y"),
+                ("Eye_WUp","Eye-Up-Control","bone * -2.22","LOC_Y"),
+                ("Eye_WDown","Eye-Down-Control","bone * -2.22","LOC_Y"),
+                ("Eye_Lowereyelid","Eye-LowerEyelid-Control","bone * -2.22","LOC_Y"),
+            ]
+            for sk_name, bone_name, expression, transform in eye_shape_key_configs:
+                try:
+                    makeCon(sk_name, bone_name, expression, transform)
+                except Exception as e:
+                    _rig_log.append(f"Eye driver failed: '{sk_name}' / '{bone_name}' -> {e}")
 
-    eye_shape_key_configs = [
-        ("Eye_WinkA_L","WinkA-L-Invis","bone * -.82","LOC_Y"),
-        ("Eye_WinkA_R","WinkA-R-Invis","bone * -.82","LOC_Y"),
-        ("Eye_WinkB_L","WinkB-L-Invis","bone * -.82","LOC_Y"),
-        ("Eye_WinkB_R","WinkB-R-Invis","bone * -.82","LOC_Y"),
-        ("Eye_WinkC_L","WinkC-L-Invis","bone * -.82","LOC_Y"),
-        ("Eye_WinkC_R","WinkC-R-Invis","bone * -.82","LOC_Y"),
-        ("Eye_Ha","Eye-Ha-Control","bone * -2.22","LOC_Y"),
-        ("Eye_Jito","Eye-Jito-Control","bone * -2.22","LOC_Y"),
-        ("Eye_Wail","Eye-Wail-Control","bone * -2.22","LOC_Y"),
-        ("Eye_Hostility","Eye-Hostility-Control","bone * -2.22","LOC_Y"),
-        ("Eye_Tired","Eye-Tired-Control","bone * -2.22","LOC_Y"),
-        ("Eye_WUp","Eye-Up-Control","bone * -2.22","LOC_Y"),
-        ("Eye_WDown","Eye-Down-Control","bone * -2.22","LOC_Y"),
-        ("Eye_Lowereyelid","Eye-LowerEyelid-Control","bone * -2.22","LOC_Y"),
-    ]
-    for sk_name, bone_name, expression, transform in eye_shape_key_configs:
-        try:
-            makeCon(sk_name, bone_name, expression, transform)
-        except Exception as e:
-            _rig_log.append(f"Eye driver failed: '{sk_name}' / '{bone_name}' -> {e}")
-
-    # Pupils shape key drivers are set up below
+    # Pupils shape key drivers
     try:
         obj = bpy.data.objects.get("EyeStar")
-        makeCon("EyeStar","Eye-Star-Control","1+(bone*2.23)","LOC_Y")
-        print(f"[RIG OK] EyeStar shape key driver created.")
+        if obj and obj.data.shape_keys and "EyeStar" in obj.data.shape_keys.key_blocks:
+            makeCon("EyeStar","Eye-Star-Control","1+(bone*2.23)","LOC_Y")
+            print(f"[RIG OK] EyeStar shape key driver created.")
     except Exception as e:
         _rig_log.append(f"EyeStar driver failed: {e}")
 
-    try:
-        # MOUTH SHAPE KEYS
-        obj = bpy.data.objects.get("Face") or (bpy.data.objects.get("Body") if meshes_joined else None)
-        makeCon("Mouth_Default","Mouth-Default-Control","bone * 1.67","LOC_X")
-        makeCon("Mouth_A01","Mouth-Control","bone * -1.33","LOC_Y")
-        makeCon("Mouth_Open01","Mouth-Control","bone * 1.33","LOC_Y")
-        makeCon("Mouth_Smile01","Mouth-Smile1-Control","bone * 1.67","LOC_X")
-        makeCon("Mouth_Smile02","Mouth-Smile2-Control","bone * 1.67","LOC_X")
-        makeCon("Mouth_Angry01","Mouth-Angry1-Control","bone * 1.67","LOC_X")
-        makeCon("Mouth_Angry02","Mouth-Angry2-Control","bone * 1.67","LOC_X")
-        makeCon("Mouth_Angry03","Mouth-Angry3-Control","bone * 1.67","LOC_X")
-        makeCon("Mouth_Fury01","Mouth-Fury1-Control","bone * 1.67","LOC_X")
-        makeCon("Mouth_Doya01","Mouth-Doya1-Control","bone * 1.67","LOC_X")
-        makeCon("Mouth_Doya02","Mouth-Doya2-Control","bone * 1.67","LOC_X")
-        makeCon("Mouth_Pero01","Mouth-Pero1-Control","bone * 1.67","LOC_X")
-        makeCon("Mouth_Pero02","Mouth-Pero2-Control","bone * 1.67","LOC_X")
-        makeCon("Mouth_Line01","Mouth-Control","bone * 1.33","LOC_X")
-        makeCon("Mouth_Line02","Mouth-Control","bone * -1.33","LOC_X")
-        makeCon("Mouth_Neko01","Mouth-Neko1-Control","bone * 1.67","LOC_X")
-    except:
-        pass
+    # MOUTH SHAPE KEYS
+    obj = obj_face_dynamic or bpy.data.objects.get("Face") or (bpy.data.objects.get("Body") if meshes_joined else None)
+    if obj and obj.data.shape_keys:
+        if "Fac_Mth_Aa1" in obj.data.shape_keys.key_blocks:
+            zzz_mouth_configs = [
+                ("Fac_Mth_Aa1", "Mouth-Control", "bone * -1.33", "LOC_Y"),
+                ("Fac_Mth_Aa2", "Mouth-Control", "bone * -1.33", "LOC_Y"),
+                ("Fac_Mth_AaTalk", "Mouth-Control", "bone * -1.33", "LOC_Y"),
+                ("Fac_Mth_AaShout", "Mouth-Control", "bone * 1.33", "LOC_Y"),
+                ("Fac_Mth_Ii", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X"),
+                ("Fac_Mth_Uu", "Mouth-Neko1-Control", "bone * 1.67", "LOC_X"),
+                ("Fac_Mth_Ee", "Mouth-Smile2-Control", "bone * 1.67", "LOC_X"),
+                ("Fac_Mth_Oo", "Mouth-Control", "bone * 1.33", "LOC_Y"),
+                ("Fac_Mth_Laugh1", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X"),
+                ("Fac_Mth_Laugh2", "Mouth-Smile2-Control", "bone * 1.67", "LOC_X"),
+                ("Fac_Mth_Tsundere", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X"),
+                ("Fac_Mth_Triangle", "Mouth-Angry1-Control", "bone * 1.67", "LOC_X"),
+                ("Fac_Mth_UuOo", "Mouth-Neko1-Control", "bone * 1.67", "LOC_X"),
+                ("Fac_Mth_Right", "Mouth-Control", "bone * 1.33", "LOC_X"),
+                ("Fac_Mth_Left", "Mouth-Control", "bone * -1.33", "LOC_X"),
+                ("Fac_Mth_Up", "Mouth-Control", "bone * 1.33", "LOC_Y"),
+                ("Fac_Mth_Down", "Mouth-Control", "bone * -1.33", "LOC_Y"),
+                ("Fac_Mth_R_Out", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X"),
+                ("Fac_Mth_L_Out", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X"),
+                ("Fac_Mth_R_In", "Mouth-Angry1-Control", "bone * 1.67", "LOC_X"),
+                ("Fac_Mth_L_In", "Mouth-Angry1-Control", "bone * 1.67", "LOC_X"),
+                ("Fac_Mth_R_Up", "Mouth-Smile2-Control", "bone * 1.67", "LOC_X"),
+                ("Fac_Mth_L_Up", "Mouth-Smile2-Control", "bone * 1.67", "LOC_X"),
+                ("Fac_Mth_R_Down", "Mouth-Angry2-Control", "bone * 1.67", "LOC_X"),
+                ("Fac_Mth_L_Down", "Mouth-Angry2-Control", "bone * 1.67", "LOC_X"),
+            ]
+            for sk_name, bone_name, expression, transform in zzz_mouth_configs:
+                try:
+                    makeCon(sk_name, bone_name, expression, transform)
+                except Exception as e:
+                    _rig_log.append(f"ZZZ Mouth driver failed: {sk_name} -> {e}")
+        else:
+            try:
+                makeCon("Mouth_Default","Mouth-Default-Control","bone * 1.67","LOC_X")
+                makeCon("Mouth_A01","Mouth-Control","bone * -1.33","LOC_Y")
+                makeCon("Mouth_Open01","Mouth-Control","bone * 1.33","LOC_Y")
+                makeCon("Mouth_Smile01","Mouth-Smile1-Control","bone * 1.67","LOC_X")
+                makeCon("Mouth_Smile02","Mouth-Smile2-Control","bone * 1.67","LOC_X")
+                makeCon("Mouth_Angry01","Mouth-Angry1-Control","bone * 1.67","LOC_X")
+                makeCon("Mouth_Angry02","Mouth-Angry2-Control","bone * 1.67","LOC_X")
+                makeCon("Mouth_Angry03","Mouth-Angry3-Control","bone * 1.67","LOC_X")
+                makeCon("Mouth_Fury01","Mouth-Fury1-Control","bone * 1.67","LOC_X")
+                makeCon("Mouth_Doya01","Mouth-Doya1-Control","bone * 1.67","LOC_X")
+                makeCon("Mouth_Doya02","Mouth-Doya2-Control","bone * 1.67","LOC_X")
+                makeCon("Mouth_Pero01","Mouth-Pero1-Control","bone * 1.67","LOC_X")
+                makeCon("Mouth_Pero02","Mouth-Pero2-Control","bone * 1.67","LOC_X")
+                makeCon("Mouth_Line01","Mouth-Control","bone * 1.33","LOC_X")
+                makeCon("Mouth_Line02","Mouth-Control","bone * -1.33","LOC_X")
+                makeCon("Mouth_Neko01","Mouth-Neko1-Control","bone * 1.67","LOC_X")
+            except Exception as e:
+                _rig_log.append(f"Mouth driver failed: {e}")
 
     # Since we're still in object mode, here we can add the head pole object in the neck to track head movement
     bpy.ops.object.empty_add(type='PLAIN_AXES', align='WORLD', location=(0, 0, 0), scale=(1, 1, 1))
@@ -2616,9 +2688,20 @@ def rig_character(
     assign_bone_to_group("Brow-L-Control", "Face")
     
     try:
-        this_obj.pose.bones["eyetrack_L"].custom_shape_scale_xyz = (2,2,2)
-        this_obj.pose.bones["eyetrack_R"].custom_shape_scale_xyz = (2,2,2)
-        this_obj.pose.bones["eyetrack"].custom_shape_scale_xyz = (6.5,5,1)
+        is_zzz = False
+        for o in bpy.data.objects:
+            if o.type == 'MESH' and o.data.shape_keys and "Fac_Mth_Aa1" in o.data.shape_keys.key_blocks:
+                is_zzz = True
+                break
+
+        if is_zzz:
+            this_obj.pose.bones["eyetrack_L"].custom_shape_scale_xyz = (0.2, 0.2, 0.2)
+            this_obj.pose.bones["eyetrack_R"].custom_shape_scale_xyz = (0.2, 0.2, 0.2)
+            this_obj.pose.bones["eyetrack"].custom_shape_scale_xyz = (0.65, 0.5, 0.1)
+        else:
+            this_obj.pose.bones["eyetrack_L"].custom_shape_scale_xyz = (2,2,2)
+            this_obj.pose.bones["eyetrack_R"].custom_shape_scale_xyz = (2,2,2)
+            this_obj.pose.bones["eyetrack"].custom_shape_scale_xyz = (6.5,5,1)
     except:
         pass
 
