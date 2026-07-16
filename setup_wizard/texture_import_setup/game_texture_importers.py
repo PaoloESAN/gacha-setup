@@ -381,7 +381,29 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                                 if match:
                                     filtered_candidates.append(f)
                             if filtered_candidates:
-                                return filtered_candidates[0]
+                                list_to_score = filtered_candidates
+                            else:
+                                list_to_score = candidates
+
+                            clean_mat_name = matname.replace("zzz shader", "").strip()
+                            mat_words = [w for w in clean_mat_name.split("_") if w]
+
+                            best_candidate = list_to_score[0]
+                            best_score = -99999
+                            for f in list_to_score:
+                                f_clean = f.lower().rsplit(".", 1)[0]
+                                for suffix_part in ["_d", "_m", "_a", "_n", "_map1", "_map2", "_map3", "_diffuse", "_normal", "_lightmap"]:
+                                    if f_clean.endswith(suffix_part):
+                                        f_clean = f_clean[:-len(suffix_part)]
+                                f_words = [w for w in f_clean.split("_") if w]
+
+                                matched_words = sum(1 for w in f_words if w in mat_words)
+                                extra_words = sum(1 for w in f_words if w not in mat_words)
+                                score = matched_words * 2 - extra_words
+                                if score > best_score:
+                                    best_score = score
+                                    best_candidate = f
+                            return best_candidate
                         return candidates[0] if candidates else None
 
                     found_img = get_best_match(target_suffix)
