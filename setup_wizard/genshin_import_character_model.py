@@ -22,6 +22,9 @@ from setup_wizard.utils import material_utils
 
 SHADER_COLOR_ATTRIBUTE_NAME = 'Col'
 
+# Session variable to track if character was imported via the automatic wizard flow in this session
+IMPORTED_VIA_WIZARD = False
+
 
 class GI_OT_SetUpCharacter(Operator, BasicSetupUIOperator):
     '''Sets Up Character'''
@@ -89,6 +92,9 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
 
             if context.window_manager.cache_enabled and character_model_directory:
                 cache_using_cache_key(get_cache(), CHARACTER_MODEL_FOLDER_FILE_PATH, character_model_directory)
+
+            global IMPORTED_VIA_WIZARD
+            IMPORTED_VIA_WIZARD = True
 
             # Add fake user to all materials that were added when importing character model (to prevent unused materials from being cleaned up)
             materials_imported_from_character_model = [material for material in bpy.data.materials.values() if material not in existing_materials]
@@ -343,6 +349,18 @@ class GI_OT_DeleteEmpties(Operator, CustomOperatorProperties):
 
     def execute(self, context):
         if self.game_type == GameType.ZENLESS_ZONE_ZERO.name:
+            global IMPORTED_VIA_WIZARD
+            if not IMPORTED_VIA_WIZARD:
+                # Clear character model folder file path from cache to force manual folder selection for textures/outlines
+                cache = get_cache()
+                if CHARACTER_MODEL_FOLDER_FILE_PATH in cache:
+                    cache.pop(CHARACTER_MODEL_FOLDER_FILE_PATH, None)
+                    from setup_wizard.import_order import write_to_blender_cache
+                    write_to_blender_cache(cache)
+            else:
+                # Reset the session variable
+                IMPORTED_VIA_WIZARD = False
+
             obj = None
             for ob in bpy.data.objects:
                 if ob.type == 'ARMATURE' and ("avatar" in ob.name.lower() or "npc" in ob.name.lower()):
