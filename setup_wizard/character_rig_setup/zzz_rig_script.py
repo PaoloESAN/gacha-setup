@@ -470,8 +470,10 @@ def rig_character(
             else:
                 armature.edit_bones[bone.name].roll = -armature.edit_bones[whee].roll
 
-    armature.edit_bones["shoulder.L"].roll += 3.14
-    armature.edit_bones["shoulder.R"].roll -= 3.14  
+    # Set shoulder rolls to point local Z-axis forward (Rigify default)
+    armature.edit_bones["shoulder.L"].align_roll(Vector((0, -1, 0)))
+    armature.edit_bones["shoulder.R"].align_roll(Vector((0, -1, 0)))
+
 
     
     
@@ -526,6 +528,8 @@ def rig_character(
     attachfeets('thigh.R', 'shin.R') 
     attachfeets('forearm.L', 'hand.L')
     attachfeets('forearm.R', 'hand.R')
+    attachfeets('shoulder.L', 'upper_arm.L')
+    attachfeets('shoulder.R', 'upper_arm.R')
     attachfeets('spine', 'spine.001')
     attachfeets('spine.001', 'spine.002')
     attachfeets('spine.002', 'spine.003')
