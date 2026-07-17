@@ -40,8 +40,15 @@ class HYV_OT_SetUpScreenSpaceReflections(Operator, CustomOperatorProperties):
         shader = shader_identifier_service.identify_shader(bpy.data.materials, bpy.data.node_groups)
 
         if shader is HonkaiStarRailShaders.STELLARTOON_HONKAI_STAR_RAIL_SHADER:
-            bpy.context.scene.eevee.use_ssr = True
-            bpy.context.scene.eevee.use_ssr_refraction = True
+            try:
+                bpy.context.scene.eevee.use_ssr = True
+                bpy.context.scene.eevee.use_ssr_refraction = True
+            except AttributeError:
+                # Blender 4.2+ (EEVEE Next) compatibility
+                try:
+                    bpy.context.scene.eevee.use_raytracing = True
+                except AttributeError:
+                    pass
 
         if self.next_step_idx:
             NextStepInvoker().invoke(

@@ -1,6 +1,7 @@
 ### IMPORTANT: YOU NEED THE ADDON EXPYKIT AND YOU ALSO NEED TO IMPORT WITH 'Automatic Bone Orientation' TURNED ON UNDER 'Armature' WHEN YOU IMPORT THE FBX.
 
 import bpy
+import os
 
 def rig_character(
     file_path, 
@@ -539,6 +540,149 @@ def rig_character(
         pass
     bpy.data.objects["rigify"].users_collection[0].name = x[-2]
     bpy.data.objects["rigify"].name = x[-2] + "Rig"
+
+    # ── Custom bone shapes (mirrors what the GI rig does) ──────────────────
+    # RootShape.blend is bundled with the addon in the same folder as this script.
+    root_shape_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'RootShape.blend')
+    char_rig_name = x[-2] + "Rig"
+    this_obj = bpy.data.objects.get(char_rig_name)
+    
+    if this_obj and os.path.isfile(root_shape_path):
+        path_to_file = root_shape_path + "/Collection"
+        try:
+            bpy.ops.wm.append(filename='append_Root',      directory=path_to_file)
+        except: pass
+        try:
+            bpy.ops.wm.append(filename='append_Pelvis',    directory=path_to_file)
+        except: pass
+        try:
+            bpy.ops.wm.append(filename='append_Foot',      directory=path_to_file)
+        except: pass
+        try:
+            bpy.ops.wm.append(filename='append_Hand',      directory=path_to_file)
+        except: pass
+        try:
+            bpy.ops.wm.append(filename='append_Props',     directory=path_to_file)
+        except: pass
+        try:
+            bpy.ops.wm.append(filename='append_Face Plate',directory=path_to_file)
+        except: pass
+        try:
+            bpy.ops.wm.append(filename='append_Eyes',      directory=path_to_file)
+        except: pass
+        # After append the active object may have changed — restore our char rig as active
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.select_all(action='DESELECT')
+        this_obj.select_set(True)
+        bpy.context.view_layer.objects.active = this_obj
+
+        # Custom shapes can be assigned while in OBJECT mode via pose.bones directly
+        # (no mode switch needed, but POSE mode gives us access if required)
+
+        def safe_set_shape(bone_name, shape_obj_name, scale=None, translation=None, rotation_x=None, use_bone_size=True):
+            pb = this_obj.pose.bones.get(bone_name)
+            wgt = bpy.data.objects.get(shape_obj_name)
+            if pb and wgt:
+                pb.custom_shape = wgt
+                if not use_bone_size:
+                    pb.use_custom_shape_bone_size = False
+                if scale:
+                    pb.custom_shape_scale_xyz = scale
+                if translation:
+                    pb.custom_shape_translation = translation
+                if rotation_x is not None:
+                    pb.custom_shape_rotation_euler[0] = rotation_x
+
+        try:
+            safe_set_shape("root",    "root plate.002",  scale=(1,1,1),       use_bone_size=False)
+            safe_set_shape("head",    "neck",             scale=(1.65,1.65,1.65), translation=(0,0.255,0), rotation_x=1.5708, use_bone_size=False)
+            safe_set_shape("neck",    "neck",             scale=(1,1,1),       translation=(0,0.035,0.007), rotation_x=1.5708, use_bone_size=False)
+            safe_set_shape("torso",   "pelvis2",          use_bone_size=False)
+            safe_set_shape("hips",    "hips",             scale=(1,1,1),       translation=(0,-0.04,0.044), rotation_x=1.309, use_bone_size=False)
+            safe_set_shape("chest",   "chest",            scale=(0.6,0.6,0.6), translation=(0,0.18,0), rotation_x=1.5708, use_bone_size=False)
+            safe_set_shape("foot_ik.L", "foot1",         use_bone_size=False)
+            safe_set_shape("foot_ik.R", "foot1",         use_bone_size=False)
+            safe_set_shape("hand_ik.L", "wrist",         use_bone_size=False)
+            safe_set_shape("hand_ik.R", "wrist",         use_bone_size=False)
+            safe_set_shape("thigh_ik_target.L",     "primo-joint", scale=(0.75,0.75,0.75))
+            safe_set_shape("thigh_ik_target.R",     "primo-joint", scale=(0.75,0.75,0.75))
+            safe_set_shape("upper_arm_ik_target.L", "primo-joint", scale=(0.75,0.75,0.75))
+            safe_set_shape("upper_arm_ik_target.R", "primo-joint", scale=(0.75,0.75,0.75))
+            safe_set_shape("shoulder.L", None, scale=(1.6,1.6,1.6))
+            safe_set_shape("shoulder.R", None, scale=(1.6,1.6,1.6))
+        except Exception as e:
+            print(f"WARN: Could not assign all HSR bone shapes: {e}")
+
+        # Join face/eye/root sub-rigs into the main rig
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.select_all(action='DESELECT')
+        for sub_rig_name in ["facerig", "eyerig", "rootrig", "pelvisrig", "footrig-L", "footrig-R", "handrig-L", "handrig-R", "prop-rig"]:
+            sub = bpy.data.objects.get(sub_rig_name)
+            if sub:
+                sub.select_set(True)
+        if this_obj:
+            this_obj.select_set(True)
+            bpy.context.view_layer.objects.active = this_obj
+        try:
+            bpy.ops.object.join()
+        except Exception as e:
+            print(f"WARN: Could not join sub-rigs for HSR: {e}")
+
+        # Connect face plate and head controller bones if they exist
+        # Re-activate the char rig after the join (context may have drifted)
+        bpy.ops.object.select_all(action='DESELECT')
+        this_obj.select_set(True)
+        bpy.context.view_layer.objects.active = this_obj
+        bpy.ops.object.mode_set(mode='EDIT')
+        arm = this_obj.data
+        try:
+            arm.edit_bones['plate-border'].parent  = arm.edit_bones['head']
+            arm.edit_bones['plate-settings'].parent = arm.edit_bones['head']
+        except: pass
+        try:
+            arm.edit_bones['eyetrack'].parent = arm.edit_bones['head']
+        except: pass
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+    # ── Organize into a named collection (mirrors GI rig) ─────────────────
+    bpy.ops.object.mode_set(mode='OBJECT')
+    def move_into_collection_hsr(object_name, collection_name):
+        obj_ = bpy.context.scene.objects.get(object_name)
+        if not obj_:
+            return
+        coll = bpy.data.collections.get(collection_name) or bpy.data.collections.new(collection_name)
+        if not bpy.context.scene.collection.children.get(collection_name):
+            bpy.context.scene.collection.children.link(coll)
+        for c in obj_.users_collection:
+            c.objects.unlink(obj_)
+        coll.objects.link(obj_)
+
+    char_name_hsr = x[-2]
+    move_into_collection_hsr(char_name_hsr + "Rig", char_name_hsr)
+
+    # Move WGT-* objects into a wgt collection inside char collection
+    char_coll = bpy.data.collections.get(char_name_hsr)
+    if char_coll:
+        wgt_coll = bpy.data.collections.get("wgt") or bpy.data.collections.new("wgt")
+        if char_coll.children.get("wgt") is None:
+            try: char_coll.children.link(wgt_coll)
+            except: pass
+        for wgt_obj in bpy.data.objects:
+            if wgt_obj.name.startswith("WGT"):
+                for c in wgt_obj.users_collection:
+                    c.objects.unlink(wgt_obj)
+                wgt_coll.objects.link(wgt_obj)
+        wgt_coll.hide_viewport = True
+        wgt_coll.hide_render   = True
+        wgt_coll.hide_select   = True
+
+    # Show rig in front, use STICK display
+    rig_obj = bpy.data.objects.get(char_name_hsr + "Rig")
+    if rig_obj:
+        rig_obj.show_in_front = True
+        if rig_obj.data:
+            rig_obj.data.display_type = 'STICK'
+
 
 try:
     armatures = [obj for obj in bpy.context.selected_objects if obj.type == 'ARMATURE']

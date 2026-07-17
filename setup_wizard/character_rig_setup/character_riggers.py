@@ -263,6 +263,16 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
 
         refresh_light_vectors_modifiers()
 
+        self.blender_operator.report({'INFO'}, 'Successfully rigged HSR character')
+
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx,
+            self.blender_operator.invoker_type,
+            file_path_to_cache=filepath,
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=GameType.HONKAI_STAR_RAIL.name
+        )
+
 
 class PunishingGrayRavenCharacterRigger(CharacterRigger):
     def __init__(self, blender_operator, context):

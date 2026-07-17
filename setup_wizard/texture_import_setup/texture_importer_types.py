@@ -866,32 +866,99 @@ class HonkaiStarRailTextureImporter(GenshinTextureImporter):
         self.texture_node_names: TextureNodeNames = texture_node_names
 
     '''
+    Helper: find Image Texture nodes in a material by searching named candidates first,
+    then falling back to matching node names/labels containing keywords.
+    '''
+    def _find_image_nodes(self, material, named_nodes, type_key):
+        if not material or not material.node_tree:
+            return []
+        found = [n for n in named_nodes if n]
+        if not found:
+            for node in material.node_tree.nodes:
+                if node.type == 'TEX_IMAGE':
+                    name_lower = node.name.lower()
+                    label_lower = node.label.lower()
+                    
+                    if type_key == 'diffuse':
+                        # Look for diffuse / color / sRGB keywords
+                        if ('diffuse' in name_lower or 'diffuse' in label_lower or \
+                            'color' in name_lower or 'color' in label_lower or \
+                            'srgb' in name_lower or 'srgb' in label_lower or \
+                            'image texture.001' in name_lower) and not \
+                           ('ramp' in name_lower or 'ramp' in label_lower or \
+                            'lightmap' in name_lower or 'lightmap' in label_lower or \
+                            'non-color' in name_lower or 'non-color' in label_lower or \
+                            'non_color' in name_lower or 'non_color' in label_lower or \
+                            'mask' in name_lower or 'mask' in label_lower or \
+                            'expression' in name_lower or 'expression' in label_lower):
+                            found.append(node)
+                    elif type_key == 'lightmap':
+                        # Look for lightmap / non-color keywords
+                        if ('lightmap' in name_lower or 'lightmap' in label_lower or \
+                            'non-color' in name_lower or 'non-color' in label_lower or \
+                            'non_color' in name_lower or 'non_color' in label_lower or \
+                            'image texture.002' in name_lower) and not \
+                           ('ramp' in name_lower or 'ramp' in label_lower or \
+                            'diffuse' in name_lower or 'diffuse' in label_lower or \
+                            'srgb' in name_lower or 'srgb' in label_lower or \
+                            'color' in name_lower or 'color' in label_lower or \
+                            'mask' in name_lower or 'mask' in label_lower or \
+                            'expression' in name_lower or 'expression' in label_lower):
+                            found.append(node)
+        return found
+
+    '''
     Lazy attempt at setting all known diffuses across Nya222 HSR Shader and StellarToon
     If the material has the texture node, set it.
+    When the texture type is FACE and a face-specific color node exists, skip the generic
+    nya222/outline diffuse node to avoid overwriting the body diffuse slot in face materials.
     '''
     def set_diffuse_texture(self, type: TextureType, material, img):
+        if not material or not material.node_tree:
+            return
         nya222_or_outline_diffuse_node = material.node_tree.nodes.get(self.texture_node_names.DIFFUSE)
+        # Support alternative node naming (e.g. 'Diffuse (sRGB) (Channel Packed)')
+        diffuse_alt_node = material.node_tree.nodes.get(getattr(self.texture_node_names, 'DIFFUSE_ALT', ''))
         diffuse_uv0_node = material.node_tree.nodes.get(f'{type.value}{self.texture_node_names.DIFFUSE_UV0_SUFFIX}')
         diffuse_uv1_node = material.node_tree.nodes.get(f'{type.value}{self.texture_node_names.DIFFUSE_UV1_SUFFIX}')
         face_color_node = material.node_tree.nodes.get(f'{type.value}{self.texture_node_names.FACE_COLOR_SUFFIX}')
-        
-        for diffuse_node in [nya222_or_outline_diffuse_node, diffuse_uv0_node, diffuse_uv1_node, face_color_node]:
-            if diffuse_node:
-                diffuse_node.image = img
+
+        # If a face-specific color node exists (StellarToon), do NOT also write to the
+        # generic diffuse node – that node is shared with body-type materials and would
+        # end up holding the wrong texture.
+        skip_generic_diffuse = (type is TextureType.FACE and face_color_node is not None)
+
+        named_candidates = [
+            None if skip_generic_diffuse else nya222_or_outline_diffuse_node,
+            None if skip_generic_diffuse else diffuse_alt_node,
+            diffuse_uv0_node,
+            diffuse_uv1_node,
+            face_color_node,
+        ]
+
+        for diffuse_node in self._find_image_nodes(material, named_candidates, 'diffuse'):
+            diffuse_node.image = img
 
     '''
     Lazy attempt at setting all known lightmaps across Nya222 HSR Shader and StellarToon.
     If the material has the texture node, set it.
     '''
     def set_lightmap_texture(self, type: TextureType, material, img):
+        if not material or not material.node_tree:
+            return
         img.colorspace_settings.name='Non-Color'
         lightmap_nya222_node = material.node_tree.nodes.get(self.texture_node_names.LIGHTMAP)
+        # Support alternative node naming (e.g. 'Lightmap (Non-Color) (Channel Packed)')
+        lightmap_alt_node = material.node_tree.nodes.get(getattr(self.texture_node_names, 'LIGHTMAP_ALT', ''))
         lightmap_uv0_node = material.node_tree.nodes.get(f'{type.value}{self.texture_node_names.LIGHTMAP_UV0_SUFFIX}')
         lightmap_uv1_node = material.node_tree.nodes.get(f'{type.value}{self.texture_node_names.LIGHTMAP_UV1_SUFFIX}')
 
-        for lightmap_node in [lightmap_nya222_node, lightmap_uv0_node, lightmap_uv1_node]:
-            if lightmap_node:
-                lightmap_node.image = img
+        for lightmap_node in self._find_image_nodes(
+            material,
+            [lightmap_nya222_node, lightmap_alt_node, lightmap_uv0_node, lightmap_uv1_node],
+            'lightmap'
+        ):
+            lightmap_node.image = img
 
     def set_warm_shadow_ramp_texture(self, type: TextureType, img):
         ramp_node_name = \
@@ -990,7 +1057,7 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
         for name, folder, files in os.walk(directory):
             for file in files:
                 # load the file with the correct alpha mode
-                img_path = directory + "/" + file
+                img_path = os.path.join(name, file)
                 img = bpy.data.images.load(filepath = img_path, check_existing=True)
                 img.alpha_mode = 'CHANNEL_PACKED'
 
@@ -1182,7 +1249,7 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
 
                 else:
                     print(f'WARN: Ignoring texture {file}')
-            break  # IMPORTANT: We os.walk which also traverses through folders...we just want the files
+
 
 
 class PunishingGrayRavenTextureImporter(GenshinTextureImporter):

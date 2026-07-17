@@ -111,8 +111,12 @@ class Nya222HonkaiStarRailTextureNodeNames(TextureNodeNames):
 All "NODE_GROUP"s below are from bpy.data.node_groups and not the node name in material
 '''
 class StellarToonTextureNodeNames(TextureNodeNames):
+    # Standard StellarToon node names
     DIFFUSE = 'Image Texture.001'
     LIGHTMAP = 'Image Texture.002'
+    # Alternative node names used by some StellarToon shader versions
+    DIFFUSE_ALT = 'Diffuse (sRGB) (Channel Packed)'
+    LIGHTMAP_ALT = 'Lightmap (Non-Color) (Channel Packed)'
     DIFFUSE_UV0_SUFFIX = '_Color_UV0'  # For getting body shader name when renaming shader material names
     DIFFUSE_UV1_SUFFIX = '_Color_UV1'
     LIGHTMAP_UV0_SUFFIX = '_Lightmap_UV0'

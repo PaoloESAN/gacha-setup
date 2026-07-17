@@ -134,6 +134,13 @@ class HonkaiStarRailTextureImporterFacade(GameTextureImporter):
             or get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH) \
             or os.path.dirname(self.blender_operator.filepath)
 
+        if directory:
+            textures_subdir = os.path.join(directory, "Textures")
+            if os.path.isdir(textures_subdir):
+                directory = textures_subdir
+            elif not os.path.isdir(directory):
+                directory = None
+
         if not directory:
             bpy.ops.genshin.import_textures(
                 'INVOKE_DEFAULT',

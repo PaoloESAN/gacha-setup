@@ -9,6 +9,7 @@ from bpy.types import Operator, Context
 from setup_wizard.domain.shader_identifier_service import GenshinImpactShaders, HonkaiStarRailShaders, ShaderIdentifierService, ShaderIdentifierServiceFactory
 from setup_wizard.outline_import_setup.outline_node_groups import OutlineNodeGroupNames
 from setup_wizard.import_order import GENSHIN_IMPACT_OUTLINES_FILE_PATH, PUNISHING_GRAY_RAVEN_OUTLINES_FILE_PATH, HONKAI_STAR_RAIL_OUTLINES_FILE_PATH, \
+    HONKAI_STAR_RAIL_SHADER_FILE_PATH, \
     ZENLESS_ZONE_ZERO_OUTLINES_FILE_PATH, NextStepInvoker, cache_using_cache_key, get_cache
 from setup_wizard.domain.game_types import GameType
 
@@ -95,7 +96,13 @@ class HonkaiStarRailOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
 
     def import_outline_node_group(self):
         cache_enabled = self.context.window_manager.cache_enabled
-        filepath = get_cache(cache_enabled).get(self.outlines_file_path) or self.blender_operator.filepath
+        # Try outlines cache first, then fall back to the shader/materials .blend so
+        # the user is not asked to pick a file again if they already chose one for materials.
+        filepath = (
+            get_cache(cache_enabled).get(self.outlines_file_path) or
+            get_cache(cache_enabled).get(HONKAI_STAR_RAIL_SHADER_FILE_PATH) or
+            self.blender_operator.filepath
+        )
 
         if not filepath:
             bpy.ops.genshin.import_outlines(
