@@ -133,9 +133,10 @@ def rig_character(
         if bone.name in hsr_to_genshin:
             bone.name = hsr_to_genshin[bone.name]
 
-    # 2. Crear +EyeBone L A01 y R A01 de soporte detrás de +EyeBone L A02 / R A02 para simular el rig ocular de Genshin.
-    # CRITICAL: In Blender's coordinate space, +Y goes BACKWARDS (inside the head).
-    # Placing the bone's head at Y + 0.05 puts the origin/pivot BEHIND the eye, which correctly aligns the eye rig.
+    # 2. Crear +EyeBone L A01 y R A01 de soporte.
+    # CRITICAL: Both deform bones must share the EXACT head position (the eyeball center).
+    # Setting +EyeBone L/R A01's head to the eyeball center and pointing it forward (-Y in Blender)
+    # aligns the pivot perfectly, reducing the orbit/rotation offset to zero.
     for side in ['L', 'R']:
         bone_a02_name = f'+EyeBone {side} A02'
         bone_a01_name = f'+EyeBone {side} A01'
@@ -143,10 +144,11 @@ def rig_character(
             bone_a02 = edit_bones[bone_a02_name]
             bone_a01 = edit_bones.new(bone_a01_name)
             
-            # Posicionarlo justo detrás del ojo (en el eje Y positivo en Blender)
+            # Cabeza (pivote) en el centro exacto del ojo
             bone_a01.head = bone_a02.head.copy()
-            bone_a01.head.y += 0.05  # 5 cm hacia atrás (dentro de la cabeza)
+            # Cola desplazada 3cm hacia adelante (eje Y negativo en Blender)
             bone_a01.tail = bone_a02.head.copy()
+            bone_a01.tail.y -= 0.03  # 3 cm hacia adelante
             
             # Estructura jerárquica
             if 'Bip001 Head' in edit_bones:
