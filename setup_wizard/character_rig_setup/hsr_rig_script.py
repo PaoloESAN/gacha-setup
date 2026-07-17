@@ -1,9 +1,11 @@
 ### IMPORTANT: Reuses the Genshin Impact rigging script (rig_script.py) in its entirety.
 ### It maps Honkai Star Rail bone names to Genshin Impact's 'Bip001' style and delegates to rig_script.
 ### Includes a critical hotfix for Blender 5.x / Animation 2.0 compatibility with Expy-Kit.
+### Resolves HSR Eye Bone alignment by keeping deform bones inside the sockets and linking them via constraints.
 
 import bpy
 import os
+import re
 from setup_wizard.character_rig_setup import rig_script
 
 def rig_character(
@@ -36,10 +38,29 @@ def rig_character(
     if obj.name.endswith(".001"):
         obj.name = obj.name[:-4]
 
+    # --- SHAPE KEY RENAMING HOTFIX ---
+    print("HSR Rig: Renaming face shape keys to standard Genshin format...")
+    for obj_item in bpy.data.objects:
+        if obj_item.type == 'MESH' and 'face' in obj_item.name.lower() and obj_item.data.shape_keys:
+            print(f"  Processing mesh: {obj_item.name}")
+            for key in obj_item.data.shape_keys.key_blocks:
+                old_name = key.name
+                new_name = old_name
+                
+                # Replace Mouth_01_ / Mouth_00_ with Mouth_
+                new_name = re.sub(r'Mouth_\d+_', 'Mouth_', new_name)
+                new_name = re.sub(r'Brow_\d+_', 'Brow_', new_name)
+                new_name = re.sub(r'Eye_\d+_', 'Eye_', new_name)
+                
+                # Special mapping: Mouth_A -> Mouth_A01
+                if new_name == 'Mouth_A':
+                    new_name = 'Mouth_A01'
+                
+                if new_name != old_name:
+                    print(f"    - Renaming shape key: '{old_name}' -> '{new_name}'")
+                    key.name = new_name
+
     # --- BLENDER 5.x COMPATIBILITY HOTFIX FOR EXPY-KIT ---
-    # Expy-Kit loops through all actions in bpy.data.actions and checks act.fcurves.
-    # In Blender 5.0+ (Animation 2.0), new Actions do not have fcurves directly, causing Expy-Kit to crash.
-    # We remove any action that lacks fcurves to prevent this crash.
     print("HSR Rig: Cleaning incompatible Blender 5.x Action objects to prevent Expy-Kit crashes...")
     for act in list(bpy.data.actions):
         try:
@@ -52,6 +73,8 @@ def rig_character(
     print("HSR Rig: Starting Bone Translation to Genshin (Bip001) naming...")
 
     # Mapeo de HSR a Genshin (Bip001)
+    # NOTE: Deform eye bones must be named with spaces (+EyeBone L A02) to match Genshin's original layout.
+    # This prevents collisions with template bones (+EyeBoneA02.L) and keeps eyeballs in the head.
     hsr_to_genshin = {
         'Root_M': 'Bip001 Pelvis',
         'Hip_L': 'Bip001 L Thigh',
@@ -110,7 +133,9 @@ def rig_character(
         if bone.name in hsr_to_genshin:
             bone.name = hsr_to_genshin[bone.name]
 
-    # 2. Crear +EyeBone L A01 y R A01 de soporte detrás de A02 para simular el rig ocular de Genshin
+    # 2. Crear +EyeBone L A01 y R A01 de soporte detrás de +EyeBone L A02 / R A02 para simular el rig ocular de Genshin.
+    # CRITICAL: In Blender's coordinate space, +Y goes BACKWARDS (inside the head).
+    # Placing the bone's head at Y + 0.05 puts the origin/pivot BEHIND the eye, which correctly aligns the eye rig.
     for side in ['L', 'R']:
         bone_a02_name = f'+EyeBone {side} A02'
         bone_a01_name = f'+EyeBone {side} A01'
@@ -118,9 +143,9 @@ def rig_character(
             bone_a02 = edit_bones[bone_a02_name]
             bone_a01 = edit_bones.new(bone_a01_name)
             
-            # Posicionarlo justo detrás del ojo (eje Y en Blender va hacia adelante/atrás)
+            # Posicionarlo justo detrás del ojo (en el eje Y positivo en Blender)
             bone_a01.head = bone_a02.head.copy()
-            bone_a01.head.y -= 0.05  # 5 cm hacia atrás
+            bone_a01.head.y += 0.05  # 5 cm hacia atrás (dentro de la cabeza)
             bone_a01.tail = bone_a02.head.copy()
             
             # Estructura jerárquica
@@ -147,4 +172,42 @@ def rig_character(
         meshes_joined=meshes_joined
     )
 
-    print("HSR Rig: Genshin master rig execution complete.")
+    print("HSR Rig: Genshin master rig execution complete. Linking eye deform bones to controller drivers...")
+
+    # --- POSE MODE CONSTRAINTS TO KEEP EYES IN PLACE AND ROTATING/SCALING PERFECTLY ---
+    rig_obj = bpy.context.active_object
+    if rig_obj and rig_obj.type == 'ARMATURE':
+        bpy.ops.object.mode_set(mode='POSE')
+        
+        for side in ['L', 'R']:
+            deform_bone_name = f'+EyeBone {side} A02'
+            control_bone_name = f'+EyeBoneA02.{side}'
+            
+            if deform_bone_name in rig_obj.pose.bones and control_bone_name in rig_obj.pose.bones:
+                deform_bone = rig_obj.pose.bones[deform_bone_name]
+                print(f"  Linking HSR deform bone '{deform_bone_name}' to controller '{control_bone_name}'")
+                
+                # Clean up existing constraints to avoid duplicates if re-running
+                for const in list(deform_bone.constraints):
+                    if const.name in ['HSR_Eye_Rot', 'HSR_Eye_Scale']:
+                        deform_bone.constraints.remove(const)
+                
+                # Copy Rotation from controller (+EyeBoneA02.L/R)
+                rot_const = deform_bone.constraints.new('COPY_ROTATION')
+                rot_const.name = 'HSR_Eye_Rot'
+                rot_const.target = rig_obj
+                rot_const.subtarget = control_bone_name
+                rot_const.target_space = 'LOCAL'
+                rot_const.owner_space = 'LOCAL'
+                
+                # Copy Scale from controller (+EyeBoneA02.L/R) to pass dilation drivers
+                scale_const = deform_bone.constraints.new('COPY_SCALE')
+                scale_const.name = 'HSR_Eye_Scale'
+                scale_const.target = rig_obj
+                scale_const.subtarget = control_bone_name
+                scale_const.target_space = 'LOCAL'
+                scale_const.owner_space = 'LOCAL'
+                
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+    print("HSR Rig: Eye bone linking complete.")
