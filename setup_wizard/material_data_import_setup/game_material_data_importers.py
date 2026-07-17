@@ -152,6 +152,8 @@ class GameMaterialDataImporter(ABC):
         character_directory = self.blender_operator.file_directory \
             or get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH) \
             or os.path.dirname(self.blender_operator.filepath)
+        if character_directory and os.path.basename(character_directory).lower() == 'textures':
+            character_directory = os.path.dirname(character_directory)
         character_material_data_directory = os.path.join(character_directory, 'Material') if character_directory else ''
         character_materials_data_directory = os.path.join(character_directory, 'Materials') if character_directory else ''
         
