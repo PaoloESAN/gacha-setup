@@ -1,10 +1,17 @@
 # Author: michael-gh1
 
+import os
+import re
+
 import bpy
 from bpy.types import Armature, Operator
 
 from setup_wizard.domain.game_types import GameType
-from setup_wizard.import_order import NextStepInvoker
+from setup_wizard.import_order import (
+    CHARACTER_MODEL_FOLDER_FILE_PATH,
+    NextStepInvoker,
+    get_cache,
+)
 from setup_wizard.setup_wizard_operator_base_classes import (
     BasicSetupUIOperator,
     CustomOperatorProperties,
@@ -23,6 +30,124 @@ class HSR_OT_FinishSetup(Operator, BasicSetupUIOperator):
 
     bl_idname = "honkai_star_rail.finish_setup"
     bl_label = "Honkai Star Rail: Finish Setup (UI)"
+
+    def execute(self, context):
+        result = BasicSetupUIOperator.execute(self, context)
+        try:
+            self._rename_hsr_character_collection_and_rig(context)
+        except Exception as err:
+            self.report({"WARNING"}, f"HSR rename pass skipped: {err}")
+        return result
+
+    def _rename_hsr_character_collection_and_rig(self, context):
+        armature = self._find_target_armature(context)
+        if not armature:
+            return
+
+        model_name = self._derive_model_name(context, armature)
+        if not model_name:
+            return
+
+        new_rig_name = f"{model_name}Rig"
+        if armature.name != new_rig_name:
+            armature.name = self._unique_object_name(new_rig_name)
+
+        if armature.data:
+            armature.data.name = armature.name
+
+        parent_collection = self._find_parent_collection_for_object(armature)
+        if parent_collection and parent_collection.name != model_name:
+            parent_collection.name = self._unique_collection_name(model_name)
+
+    def _find_target_armature(self, context):
+        armatures = [obj for obj in context.selected_objects if obj.type == "ARMATURE"]
+        if armatures:
+            return armatures[0]
+
+        for obj in bpy.data.objects:
+            if obj.type == "ARMATURE" and obj.name.endswith("Rig"):
+                return obj
+
+        for obj in bpy.data.objects:
+            if obj.type == "ARMATURE":
+                return obj
+        return None
+
+    def _derive_model_name(self, context, armature):
+        # 1) Prefer the exact FBX directory captured at model import time.
+        model_dir = ""
+        scene = context.scene
+        fbx_dir = scene.get("setup_wizard_imported_model_dir") or ""
+        if fbx_dir:
+            model_dir = fbx_dir
+        else:
+            # 2) Fallback to cache value (may sometimes point to Textures in some flows).
+            cache = get_cache(context.window_manager.cache_enabled)
+            model_dir = cache.get(CHARACTER_MODEL_FOLDER_FILE_PATH, "")
+
+        raw_name = os.path.basename(os.path.normpath(model_dir)) if model_dir else ""
+
+        # If we landed on a generic asset folder, step one directory up.
+        generic_dirs = {
+            "textures",
+            "texture",
+            "materials",
+            "material",
+            "maps",
+            "images",
+        }
+        if raw_name.lower() in generic_dirs and model_dir:
+            parent_dir = os.path.dirname(os.path.normpath(model_dir))
+            if parent_dir:
+                raw_name = os.path.basename(parent_dir)
+
+        if not raw_name:
+            raw_name = armature.name.replace("Rig", "")
+
+        # Normalize names such as Art_Sparxie_01 -> Sparxie
+        normalized = raw_name.replace("-", "_").replace(" ", "_")
+        normalized = re.sub(
+            r"^(Avatar|Art|Player)_", "", normalized, flags=re.IGNORECASE
+        )
+        normalized = re.sub(r"_?\d+$", "", normalized)
+        normalized = re.sub(r"^[^A-Za-z]+", "", normalized)
+
+        if "_" in normalized:
+            parts = [p for p in normalized.split("_") if p and not p.isdigit()]
+            if parts:
+                normalized = parts[0]
+
+        normalized = normalized.strip("_")
+        return normalized or "Character"
+
+    def _find_parent_collection_for_object(self, obj):
+        scene_root = bpy.context.scene.collection
+        for coll in bpy.data.collections:
+            if obj.name in coll.objects:
+                if coll.name == "wgt":
+                    continue
+                if coll.name in scene_root.children:
+                    return coll
+        for coll in bpy.data.collections:
+            if obj.name in coll.objects and coll.name != "wgt":
+                return coll
+        return None
+
+    def _unique_object_name(self, desired_name):
+        if not bpy.data.objects.get(desired_name):
+            return desired_name
+        idx = 1
+        while bpy.data.objects.get(f"{desired_name}.{idx:03d}"):
+            idx += 1
+        return f"{desired_name}.{idx:03d}"
+
+    def _unique_collection_name(self, desired_name):
+        if not bpy.data.collections.get(desired_name):
+            return desired_name
+        idx = 1
+        while bpy.data.collections.get(f"{desired_name}.{idx:03d}"):
+            idx += 1
+        return f"{desired_name}.{idx:03d}"
 
 
 class ZZZ_OT_FinishSetup(Operator, BasicSetupUIOperator):
