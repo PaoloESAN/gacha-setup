@@ -383,4 +383,26 @@ def rig_character(
 
         bpy.ops.object.mode_set(mode="OBJECT")
 
+    # HSR: Do NOT drive modifier Realtime (show_viewport) for outlines.
+    # Remove any driver linked to outlines show_viewport and leave it manually controllable.
+    try:
+        if rig_obj and rig_obj.type == "ARMATURE":
+            removed_outline_drivers = 0
+            for obj_item in bpy.data.objects:
+                if obj_item.type == "MESH" and obj_item.parent == rig_obj:
+                    for mod in obj_item.modifiers:
+                        if "outlines" in mod.name.lower():
+                            try:
+                                mod.driver_remove("show_viewport")
+                                removed_outline_drivers += 1
+                            except Exception:
+                                pass
+                            mod.show_viewport = True
+
+            print(
+                f"HSR Rig: Removed {removed_outline_drivers} outline show_viewport driver(s)."
+            )
+    except Exception as e:
+        print(f"HSR Rig: Outline driver cleanup skipped: {e}")
+
     print("HSR Rig: Eye bone linking complete.")
