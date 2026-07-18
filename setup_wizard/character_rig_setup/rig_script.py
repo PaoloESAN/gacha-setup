@@ -1,26 +1,29 @@
 # Authors: enthralpy, Llama.jpg
 # Setup Wizard Integration by michael-gh1
 
-import bpy
 import os
-from mathutils import Color, Vector
+import re
 from math import pi
-import addon_utils   
-import re             
+
+import addon_utils
+import bpy
+from mathutils import Color, Vector
 
 from setup_wizard.geometry_nodes_setup.lighting_panel_names import LightingPanelNames
 
+
 def rig_character(
-        file_path,
-        lighting_panel_version, 
-        disallow_arm_ik_stretch, 
-        disallow_leg_ik_stretch,
-        use_arm_ik_poles,
-        use_leg_ik_poles,
-        add_child_of_constraints,
-        use_head_tracker,
-        meshes_joined=False):
-    
+    file_path,
+    lighting_panel_version,
+    disallow_arm_ik_stretch,
+    disallow_leg_ik_stretch,
+    use_arm_ik_poles,
+    use_leg_ik_poles,
+    add_child_of_constraints,
+    use_head_tracker,
+    meshes_joined=False,
+):
+
     # Rig log: collects warnings to display in Blender's Text Editor as 'RIG_LOG'
     _rig_log = []
 
@@ -28,29 +31,39 @@ def rig_character(
     # Use bpy.app.version (tuple of ints) to properly detect Blender 4.0+
     # bone.layers was removed in Blender 4.0, so this applies to 4.x, 5.x, etc.
     is_version_4 = bpy.app.version[0] >= 4
-               
+
     head_bone_arm_target = bpy.context.active_object
 
     # Blender 5.0 compatibility: active_object can be None after certain operations
     if head_bone_arm_target is None:
         # Try to find the armature from selected objects first
-        armatures = [obj for obj in bpy.context.selected_objects if obj.type == 'ARMATURE']
+        armatures = [
+            obj for obj in bpy.context.selected_objects if obj.type == "ARMATURE"
+        ]
         if not armatures:
             # Fallback: find any non-rigged armature in the scene
-            armatures = [obj for obj in bpy.data.objects if obj.type == 'ARMATURE' and 'Rig' not in obj.name and obj.name != 'metarig']
+            armatures = [
+                obj
+                for obj in bpy.data.objects
+                if obj.type == "ARMATURE"
+                and "Rig" not in obj.name
+                and obj.name != "metarig"
+            ]
         if not armatures:
             # Last resort: any armature
-            armatures = [obj for obj in bpy.data.objects if obj.type == 'ARMATURE']
+            armatures = [obj for obj in bpy.data.objects if obj.type == "ARMATURE"]
         if armatures:
             head_bone_arm_target = armatures[0]
             bpy.context.view_layer.objects.active = head_bone_arm_target
             head_bone_arm_target.select_set(True)
         else:
-            raise RuntimeError("No armature found. Please select the character's armature and try again.")
+            raise RuntimeError(
+                "No armature found. Please select the character's armature and try again."
+            )
 
     temp_armature = head_bone_arm_target.data
 
-    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.object.mode_set(mode="EDIT")
 
     # Check if toe bones exist
     toe_bones_exist = True
@@ -66,196 +79,403 @@ def rig_character(
     if "+EyeBone R A02" not in temp_armature.edit_bones:
         right_eye_exists = False
 
-    no_eyes = False    
+    no_eyes = False
     if not left_eye_exists and not right_eye_exists:
-          no_eyes = True
-        
+        no_eyes = True
+
     # Hoyo models have inconsistent head bone shapes. I'm correcting them to my standard. (This stabilizes the head track bone)
-    # My logic: Line up the head bone's tail's X & Y to the head bone's head (so that it's straight up), and use the eye bone's head's Z as the height. - Llama    
+    # My logic: Line up the head bone's tail's X & Y to the head bone's head (so that it's straight up), and use the eye bone's head's Z as the height. - Llama
     if not no_eyes:
         if left_eye_exists:
-            eye_bone_head = temp_armature.edit_bones['+EyeBone L A02']
+            eye_bone_head = temp_armature.edit_bones["+EyeBone L A02"]
         elif right_eye_exists:
-            eye_bone_head = temp_armature.edit_bones['+EyeBone R A02']
+            eye_bone_head = temp_armature.edit_bones["+EyeBone R A02"]
         eye_bone_head_z = eye_bone_head.head[2]
 
-        head_bone_temp = temp_armature.edit_bones['Bip001 Head']
+        head_bone_temp = temp_armature.edit_bones["Bip001 Head"]
         head_bone_head_x = head_bone_temp.head[0]
         head_bone_head_y = head_bone_temp.head[1]
 
         head_bone_temp.tail[0] = head_bone_head_x
         head_bone_temp.tail[1] = head_bone_head_y
         head_bone_temp.tail[2] = eye_bone_head_z
-        
+
     # If they dont have eye bones (Dottore), we can hardcode a reasonable value to use to repair the head.
     else:
-        head_bone_temp = temp_armature.edit_bones['Bip001 Head']
+        head_bone_temp = temp_armature.edit_bones["Bip001 Head"]
         head_bone_head_x = head_bone_temp.head[0]
         head_bone_head_y = head_bone_temp.head[1]
 
         head_bone_temp.tail[0] = head_bone_head_x
         head_bone_temp.tail[1] = head_bone_head_y
         head_bone_temp.tail[2] = head_bone_temp.head[2] + 0.0538
-        
+
     left_eye_2 = []
     left_eye_1 = []
     right_eye_2 = []
     right_eye_1 = []
 
     if left_eye_exists:
-        left_eye_2.append(temp_armature.edit_bones['+EyeBone L A02'].head[0])       
-        left_eye_2.append(temp_armature.edit_bones['+EyeBone L A02'].head[1])       
-        left_eye_2.append(temp_armature.edit_bones['+EyeBone L A02'].head[2])
-        
-        left_eye_1.append(temp_armature.edit_bones['+EyeBone L A01'].head[0])       
-        left_eye_1.append(temp_armature.edit_bones['+EyeBone L A01'].head[1])       
-        left_eye_1.append(temp_armature.edit_bones['+EyeBone L A01'].head[2])       
+        left_eye_2.append(temp_armature.edit_bones["+EyeBone L A02"].head[0])
+        left_eye_2.append(temp_armature.edit_bones["+EyeBone L A02"].head[1])
+        left_eye_2.append(temp_armature.edit_bones["+EyeBone L A02"].head[2])
+
+        left_eye_1.append(temp_armature.edit_bones["+EyeBone L A01"].head[0])
+        left_eye_1.append(temp_armature.edit_bones["+EyeBone L A01"].head[1])
+        left_eye_1.append(temp_armature.edit_bones["+EyeBone L A01"].head[2])
     if right_eye_exists:
-        right_eye_2.append(temp_armature.edit_bones['+EyeBone R A02'].head[0])       
-        right_eye_2.append(temp_armature.edit_bones['+EyeBone R A02'].head[1])       
-        right_eye_2.append(temp_armature.edit_bones['+EyeBone R A02'].head[2])
-        
-        right_eye_1.append(temp_armature.edit_bones['+EyeBone R A01'].head[0])       
-        right_eye_1.append(temp_armature.edit_bones['+EyeBone R A01'].head[1])       
-        right_eye_1.append(temp_armature.edit_bones['+EyeBone R A01'].head[2])  
-            
-    bpy.ops.object.mode_set(mode='OBJECT')
-    
+        right_eye_2.append(temp_armature.edit_bones["+EyeBone R A02"].head[0])
+        right_eye_2.append(temp_armature.edit_bones["+EyeBone R A02"].head[1])
+        right_eye_2.append(temp_armature.edit_bones["+EyeBone R A02"].head[2])
+
+        right_eye_1.append(temp_armature.edit_bones["+EyeBone R A01"].head[0])
+        right_eye_1.append(temp_armature.edit_bones["+EyeBone R A01"].head[1])
+        right_eye_1.append(temp_armature.edit_bones["+EyeBone R A01"].head[2])
+
+    bpy.ops.object.mode_set(mode="OBJECT")
+
     # THANK YOU: https://blenderartists.org/t/how-to-bpy-ops-transform-resize-in-edit-mode-using-pivot/560381/2
     def get_override(area_type, region_type):
-        for area in bpy.context.screen.areas: 
-            if area.type == area_type:             
-                for region in area.regions:                 
-                    if region.type == region_type:                    
-                        override = {'area': area, 'region': region} 
+        for area in bpy.context.screen.areas:
+            if area.type == area_type:
+                for region in area.regions:
+                    if region.type == region_type:
+                        override = {"area": area, "region": region}
                         return override
-        #error message if the area or region wasn't found
-        raise RuntimeError("Wasn't able to find", region_type," in area ", area_type, " Make sure it's open while executing script.")
+        # error message if the area or region wasn't found
+        raise RuntimeError(
+            "Wasn't able to find",
+            region_type,
+            " in area ",
+            area_type,
+            " Make sure it's open while executing script.",
+        )
 
-    #we need to override the context of our operator    
-    override = get_override( 'VIEW_3D', 'WINDOW' )
-      
-    # Function to create shape keys that works with 2 elementsa        
-    def create_shape_key2(obj_get, is_basis, shape_name, transform_pivot, vertex_groups_to_parse, transform_type, transformation_1, transformation_2=0, use_eye_1=False):
+    # we need to override the context of our operator
+    override = get_override("VIEW_3D", "WINDOW")
+
+    # Function to create shape keys that works with 2 elementsa
+    def create_shape_key2(
+        obj_get,
+        is_basis,
+        shape_name,
+        transform_pivot,
+        vertex_groups_to_parse,
+        transform_type,
+        transformation_1,
+        transformation_2=0,
+        use_eye_1=False,
+    ):
         bpy.context.view_layer.objects.active = head_bone_arm_target
-        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.object.mode_set(mode="EDIT")
         if use_eye_1:
             if " R " in vertex_groups_to_parse[0]:
                 if right_eye_exists:
-                    bpy.context.scene.cursor.location = (right_eye_1[0],right_eye_1[1],right_eye_1[2])
+                    bpy.context.scene.cursor.location = (
+                        right_eye_1[0],
+                        right_eye_1[1],
+                        right_eye_1[2],
+                    )
             elif " L " in vertex_groups_to_parse[0]:
                 if left_eye_exists:
-                    bpy.context.scene.cursor.location = (left_eye_1[0],left_eye_1[1],left_eye_1[2])
+                    bpy.context.scene.cursor.location = (
+                        left_eye_1[0],
+                        left_eye_1[1],
+                        left_eye_1[2],
+                    )
         else:
             if " R " in vertex_groups_to_parse[0]:
                 if right_eye_exists:
-                    bpy.context.scene.cursor.location = (right_eye_2[0],right_eye_2[1],right_eye_2[2])
+                    bpy.context.scene.cursor.location = (
+                        right_eye_2[0],
+                        right_eye_2[1],
+                        right_eye_2[2],
+                    )
             elif " L " in vertex_groups_to_parse[0]:
                 if left_eye_exists:
-                    bpy.context.scene.cursor.location = (left_eye_2[0],left_eye_2[1],left_eye_2[2])
-                        
+                    bpy.context.scene.cursor.location = (
+                        left_eye_2[0],
+                        left_eye_2[1],
+                        left_eye_2[2],
+                    )
+
         # AFTER MOVING 3D CURSOR
         this_obj = bpy.data.objects.get(obj_get)
         bpy.context.view_layer.objects.active = this_obj
-        
+
         if is_basis:
-            this_obj.shape_key_add(name='Basis')
-            
-        this_obj.shape_key_add(from_mix=False)   
+            this_obj.shape_key_add(name="Basis")
+
+        this_obj.shape_key_add(from_mix=False)
         sk = this_obj.data.shape_keys.key_blocks[-1]
         sk.name = shape_name
         sk.value = 1
         shape_index = this_obj.data.shape_keys.key_blocks.keys().index(shape_name)
         bpy.context.object.active_shape_key_index = shape_index
-        
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='DESELECT')
-        bpy.context.tool_settings.transform_pivot_point = "CURSOR" 
-        
+
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="DESELECT")
+        bpy.context.tool_settings.transform_pivot_point = "CURSOR"
+
         try:
             bpy.ops.object.vertex_group_set_active(group=vertex_groups_to_parse[0])
             bpy.ops.object.vertex_group_select()
-            
+
             if transform_type == "RESIZE":
                 if not is_version_4:
-                    bpy.ops.transform.resize(override, value=(transformation_1), orient_type='LOCAL', orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='LOCAL', mirror=False, use_proportional_edit=False, proportional_edit_falloff='SMOOTH', proportional_size=1, use_proportional_connected=False, use_proportional_projected=False, snap=False, snap_elements={'INCREMENT'}, use_snap_project=False, snap_target='CLOSEST', use_snap_self=True, use_snap_edit=True, use_snap_nonedit=True, use_snap_selectable=False)
+                    bpy.ops.transform.resize(
+                        override,
+                        value=(transformation_1),
+                        orient_type="LOCAL",
+                        orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)),
+                        orient_matrix_type="LOCAL",
+                        mirror=False,
+                        use_proportional_edit=False,
+                        proportional_edit_falloff="SMOOTH",
+                        proportional_size=1,
+                        use_proportional_connected=False,
+                        use_proportional_projected=False,
+                        snap=False,
+                        snap_elements={"INCREMENT"},
+                        use_snap_project=False,
+                        snap_target="CLOSEST",
+                        use_snap_self=True,
+                        use_snap_edit=True,
+                        use_snap_nonedit=True,
+                        use_snap_selectable=False,
+                    )
                     bpy.ops.object.vertex_group_deselect()
                 else:
-                    bpy.ops.transform.resize(value=(transformation_1), orient_type='LOCAL', orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='LOCAL', mirror=False, use_proportional_edit=False, proportional_edit_falloff='SMOOTH', proportional_size=1, use_proportional_connected=False, use_proportional_projected=False, snap=False, snap_elements={'INCREMENT'}, use_snap_project=False, snap_target='CLOSEST', use_snap_self=True, use_snap_edit=True, use_snap_nonedit=True, use_snap_selectable=False)
+                    bpy.ops.transform.resize(
+                        value=(transformation_1),
+                        orient_type="LOCAL",
+                        orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)),
+                        orient_matrix_type="LOCAL",
+                        mirror=False,
+                        use_proportional_edit=False,
+                        proportional_edit_falloff="SMOOTH",
+                        proportional_size=1,
+                        use_proportional_connected=False,
+                        use_proportional_projected=False,
+                        snap=False,
+                        snap_elements={"INCREMENT"},
+                        use_snap_project=False,
+                        snap_target="CLOSEST",
+                        use_snap_self=True,
+                        use_snap_edit=True,
+                        use_snap_nonedit=True,
+                        use_snap_selectable=False,
+                    )
                     bpy.ops.object.vertex_group_deselect()
             elif transform_type == "TRANSLATE":
                 if not is_version_4:
-                    bpy.ops.transform.translate(override, value=transformation_1, orient_type='LOCAL', orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='LOCAL', constraint_axis=(False, True, False), mirror=True, use_proportional_edit=False, proportional_edit_falloff='SMOOTH', proportional_size=1, use_proportional_connected=False, use_proportional_projected=False, snap=False, snap_elements={'INCREMENT'}, use_snap_project=False, snap_target='CLOSEST', use_snap_self=True, use_snap_edit=True, use_snap_nonedit=True, use_snap_selectable=False)
+                    bpy.ops.transform.translate(
+                        override,
+                        value=transformation_1,
+                        orient_type="LOCAL",
+                        orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)),
+                        orient_matrix_type="LOCAL",
+                        constraint_axis=(False, True, False),
+                        mirror=True,
+                        use_proportional_edit=False,
+                        proportional_edit_falloff="SMOOTH",
+                        proportional_size=1,
+                        use_proportional_connected=False,
+                        use_proportional_projected=False,
+                        snap=False,
+                        snap_elements={"INCREMENT"},
+                        use_snap_project=False,
+                        snap_target="CLOSEST",
+                        use_snap_self=True,
+                        use_snap_edit=True,
+                        use_snap_nonedit=True,
+                        use_snap_selectable=False,
+                    )
                     bpy.ops.transform.resize(override, value=transformation_2)
                     bpy.ops.object.vertex_group_deselect()
                 else:
-                    bpy.ops.transform.translate(value=transformation_1, orient_type='LOCAL', orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='LOCAL', constraint_axis=(False, True, False), mirror=True, use_proportional_edit=False, proportional_edit_falloff='SMOOTH', proportional_size=1, use_proportional_connected=False, use_proportional_projected=False, snap=False, snap_elements={'INCREMENT'}, use_snap_project=False, snap_target='CLOSEST', use_snap_self=True, use_snap_edit=True, use_snap_nonedit=True, use_snap_selectable=False)
+                    bpy.ops.transform.translate(
+                        value=transformation_1,
+                        orient_type="LOCAL",
+                        orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)),
+                        orient_matrix_type="LOCAL",
+                        constraint_axis=(False, True, False),
+                        mirror=True,
+                        use_proportional_edit=False,
+                        proportional_edit_falloff="SMOOTH",
+                        proportional_size=1,
+                        use_proportional_connected=False,
+                        use_proportional_projected=False,
+                        snap=False,
+                        snap_elements={"INCREMENT"},
+                        use_snap_project=False,
+                        snap_target="CLOSEST",
+                        use_snap_self=True,
+                        use_snap_edit=True,
+                        use_snap_nonedit=True,
+                        use_snap_selectable=False,
+                    )
                     bpy.ops.transform.resize(override, value=transformation_2)
-                    bpy.ops.object.vertex_group_deselect()                
+                    bpy.ops.object.vertex_group_deselect()
 
         except:
             pass
-        
-        bpy.ops.mesh.select_all(action='DESELECT')
-        bpy.ops.object.mode_set(mode='OBJECT')
-        
+
+        bpy.ops.mesh.select_all(action="DESELECT")
+        bpy.ops.object.mode_set(mode="OBJECT")
+
         # REPEAT FOR SECOND BONE!
-        
+
         bpy.context.view_layer.objects.active = head_bone_arm_target
-        bpy.ops.object.mode_set(mode='EDIT')
+        bpy.ops.object.mode_set(mode="EDIT")
         if use_eye_1:
             if " R " in vertex_groups_to_parse[1]:
                 if right_eye_exists:
-                    bpy.context.scene.cursor.location = (right_eye_1[0],right_eye_1[1],right_eye_1[2])
+                    bpy.context.scene.cursor.location = (
+                        right_eye_1[0],
+                        right_eye_1[1],
+                        right_eye_1[2],
+                    )
             elif " L " in vertex_groups_to_parse[1]:
                 if left_eye_exists:
-                    bpy.context.scene.cursor.location = (left_eye_1[0],left_eye_1[1],left_eye_1[2])
+                    bpy.context.scene.cursor.location = (
+                        left_eye_1[0],
+                        left_eye_1[1],
+                        left_eye_1[2],
+                    )
         else:
             if " R " in vertex_groups_to_parse[1]:
                 if right_eye_exists:
-                    bpy.context.scene.cursor.location = (right_eye_2[0],right_eye_2[1],right_eye_2[2])
+                    bpy.context.scene.cursor.location = (
+                        right_eye_2[0],
+                        right_eye_2[1],
+                        right_eye_2[2],
+                    )
             elif " L " in vertex_groups_to_parse[1]:
                 if left_eye_exists:
-                    bpy.context.scene.cursor.location = (left_eye_2[0],left_eye_2[1],left_eye_2[2])
-                        
+                    bpy.context.scene.cursor.location = (
+                        left_eye_2[0],
+                        left_eye_2[1],
+                        left_eye_2[2],
+                    )
+
         # AFTER MOVING 3D CURSOR
         this_obj = bpy.data.objects.get(obj_get)
         bpy.context.view_layer.objects.active = this_obj
-        
-        bpy.ops.object.mode_set(mode='EDIT')
-        bpy.ops.mesh.select_all(action='DESELECT') 
-        
+
+        bpy.ops.object.mode_set(mode="EDIT")
+        bpy.ops.mesh.select_all(action="DESELECT")
+
         try:
             bpy.ops.object.vertex_group_set_active(group=vertex_groups_to_parse[1])
             bpy.ops.object.vertex_group_select()
-            
+
             if transform_type == "RESIZE":
                 if not is_version_4:
-                    bpy.ops.transform.resize(override, value=(transformation_1), orient_type='LOCAL', orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='LOCAL', mirror=False, use_proportional_edit=False, proportional_edit_falloff='SMOOTH', proportional_size=1, use_proportional_connected=False, use_proportional_projected=False, snap=False, snap_elements={'INCREMENT'}, use_snap_project=False, snap_target='CLOSEST', use_snap_self=True, use_snap_edit=True, use_snap_nonedit=True, use_snap_selectable=False)
+                    bpy.ops.transform.resize(
+                        override,
+                        value=(transformation_1),
+                        orient_type="LOCAL",
+                        orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)),
+                        orient_matrix_type="LOCAL",
+                        mirror=False,
+                        use_proportional_edit=False,
+                        proportional_edit_falloff="SMOOTH",
+                        proportional_size=1,
+                        use_proportional_connected=False,
+                        use_proportional_projected=False,
+                        snap=False,
+                        snap_elements={"INCREMENT"},
+                        use_snap_project=False,
+                        snap_target="CLOSEST",
+                        use_snap_self=True,
+                        use_snap_edit=True,
+                        use_snap_nonedit=True,
+                        use_snap_selectable=False,
+                    )
                     bpy.ops.object.vertex_group_deselect()
                 else:
-                    bpy.ops.transform.resize(value=(transformation_1), orient_type='LOCAL', orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='LOCAL', mirror=False, use_proportional_edit=False, proportional_edit_falloff='SMOOTH', proportional_size=1, use_proportional_connected=False, use_proportional_projected=False, snap=False, snap_elements={'INCREMENT'}, use_snap_project=False, snap_target='CLOSEST', use_snap_self=True, use_snap_edit=True, use_snap_nonedit=True, use_snap_selectable=False)
-                    bpy.ops.object.vertex_group_deselect()                
+                    bpy.ops.transform.resize(
+                        value=(transformation_1),
+                        orient_type="LOCAL",
+                        orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)),
+                        orient_matrix_type="LOCAL",
+                        mirror=False,
+                        use_proportional_edit=False,
+                        proportional_edit_falloff="SMOOTH",
+                        proportional_size=1,
+                        use_proportional_connected=False,
+                        use_proportional_projected=False,
+                        snap=False,
+                        snap_elements={"INCREMENT"},
+                        use_snap_project=False,
+                        snap_target="CLOSEST",
+                        use_snap_self=True,
+                        use_snap_edit=True,
+                        use_snap_nonedit=True,
+                        use_snap_selectable=False,
+                    )
+                    bpy.ops.object.vertex_group_deselect()
             elif transform_type == "TRANSLATE":
                 if not is_version_4:
-                    bpy.ops.transform.translate(override, value=transformation_1, orient_type='LOCAL', orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='LOCAL', constraint_axis=(False, True, False), mirror=True, use_proportional_edit=False, proportional_edit_falloff='SMOOTH', proportional_size=1, use_proportional_connected=False, use_proportional_projected=False, snap=False, snap_elements={'INCREMENT'}, use_snap_project=False, snap_target='CLOSEST', use_snap_self=True, use_snap_edit=True, use_snap_nonedit=True, use_snap_selectable=False)
+                    bpy.ops.transform.translate(
+                        override,
+                        value=transformation_1,
+                        orient_type="LOCAL",
+                        orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)),
+                        orient_matrix_type="LOCAL",
+                        constraint_axis=(False, True, False),
+                        mirror=True,
+                        use_proportional_edit=False,
+                        proportional_edit_falloff="SMOOTH",
+                        proportional_size=1,
+                        use_proportional_connected=False,
+                        use_proportional_projected=False,
+                        snap=False,
+                        snap_elements={"INCREMENT"},
+                        use_snap_project=False,
+                        snap_target="CLOSEST",
+                        use_snap_self=True,
+                        use_snap_edit=True,
+                        use_snap_nonedit=True,
+                        use_snap_selectable=False,
+                    )
                     bpy.ops.transform.resize(override, value=transformation_2)
                     bpy.ops.object.vertex_group_deselect()
                 else:
-                    bpy.ops.transform.translate(value=transformation_1, orient_type='LOCAL', orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='LOCAL', constraint_axis=(False, True, False), mirror=True, use_proportional_edit=False, proportional_edit_falloff='SMOOTH', proportional_size=1, use_proportional_connected=False, use_proportional_projected=False, snap=False, snap_elements={'INCREMENT'}, use_snap_project=False, snap_target='CLOSEST', use_snap_self=True, use_snap_edit=True, use_snap_nonedit=True, use_snap_selectable=False)
+                    bpy.ops.transform.translate(
+                        value=transformation_1,
+                        orient_type="LOCAL",
+                        orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)),
+                        orient_matrix_type="LOCAL",
+                        constraint_axis=(False, True, False),
+                        mirror=True,
+                        use_proportional_edit=False,
+                        proportional_edit_falloff="SMOOTH",
+                        proportional_size=1,
+                        use_proportional_connected=False,
+                        use_proportional_projected=False,
+                        snap=False,
+                        snap_elements={"INCREMENT"},
+                        use_snap_project=False,
+                        snap_target="CLOSEST",
+                        use_snap_self=True,
+                        use_snap_edit=True,
+                        use_snap_nonedit=True,
+                        use_snap_selectable=False,
+                    )
                     bpy.ops.transform.resize(override, value=transformation_2)
-                    bpy.ops.object.vertex_group_deselect()                
+                    bpy.ops.object.vertex_group_deselect()
         except:
             pass
-        
-        bpy.ops.mesh.select_all(action='DESELECT')
-        bpy.ops.object.mode_set(mode='OBJECT')
-        
+
+        bpy.ops.mesh.select_all(action="DESELECT")
+        bpy.ops.object.mode_set(mode="OBJECT")
+
         # DONE
         sk.value = 0.0
-        bpy.context.scene.cursor.location = (0.0,0.0,0.0)
- 
-    
+        bpy.context.scene.cursor.location = (0.0, 0.0, 0.0)
+
     try:
         # Bring back EyeStar
         bpy.data.objects["EyeStar"].hide_set(False)
@@ -263,25 +483,33 @@ def rig_character(
         bpy.data.objects["EyeStar"].hide_render = False
 
         # Shape key to enable EyeStar growth/shrinkage
-        create_shape_key2("EyeStar", True, "EyeStar", "CURSOR", ["+EyeBone R A02","+EyeBone L A02"], "RESIZE", (0,0,0))
+        create_shape_key2(
+            "EyeStar",
+            True,
+            "EyeStar",
+            "CURSOR",
+            ["+EyeBone R A02", "+EyeBone L A02"],
+            "RESIZE",
+            (0, 0, 0),
+        )
     except:
         pass
 
     bpy.context.tool_settings.transform_pivot_point = "MEDIAN_POINT"
 
     bpy.context.view_layer.objects.active = head_bone_arm_target
-    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.object.mode_set(mode="EDIT")
 
     if not toe_bones_exist:
         r_foot_bone = temp_armature.edit_bones["Bip001 R Foot"]
-        r_foot_bone.tail = (-0.040187,-0.078244,0.005803) # X, Y, Z
+        r_foot_bone.tail = (-0.040187, -0.078244, 0.005803)  # X, Y, Z
         r_foot_bone.roll = 1.5708
-        
-        l_foot_bone = temp_armature.edit_bones["Bip001 L Foot"]
-        l_foot_bone.tail = (0.040187,-0.078244,0.005803)
-        l_foot_bone.roll =  1.5708
 
-    bpy.ops.object.mode_set(mode='OBJECT')
+        l_foot_bone = temp_armature.edit_bones["Bip001 L Foot"]
+        l_foot_bone.tail = (0.040187, -0.078244, 0.005803)
+        l_foot_bone.roll = 1.5708
+
+    bpy.ops.object.mode_set(mode="OBJECT")
     bpy.context.view_layer.objects.active = head_bone_arm_target
 
     # Let's let the RigUI script that poke made execute.
@@ -289,97 +517,99 @@ def rig_character(
     context = bpy.context
     obj = context.object
     if obj.name[-4:] == ".001":
-         obj.name = obj.name[:-4]
+        obj.name = obj.name[:-4]
     print("New Run\n\n")
     ## Rename all bones in selected armature to ORG
     original_name = obj.name
 
-    kachina = False  # maybe change to 'mittens' if more mitten-wielding chars are created lol
+    kachina = (
+        False  # maybe change to 'mittens' if more mitten-wielding chars are created lol
+    )
     if "kachina" in obj.name.lower():
         kachina = True
     abadidea = {
-        'Bip001 Pelvis': 'spine',
-        'Bip001 L Thigh': 'thigh.L',
-        'Bip001 L Calf': 'shin.L',
-        'Bip001 L Foot': 'foot.L',
-        'Bip001 L Toe0': 'toe.L',
-        'Bip001 R Thigh': 'thigh.R',
-        'Bip001 R Calf': 'shin.R',
-        'Bip001 R Foot': 'foot.R',
-        'Bip001 R Toe0': 'toe.R',
-        'Bip001 Spine': 'spine.001',
-        'Bip001 Spine1': 'spine.002',
-        'Bip001 Spine2': 'spine.003',
-        'Bip001 L Clavicle': 'shoulder.L',
-        'Bip001 L UpperArm': 'upper_arm.L',
-        'Bip001 L Forearm': 'forearm.L',
-        'Bip001 L Hand': 'hand.L',
-        'Bip001 L Finger0': 'thumb.01.L',
-        'DMZ L 01': 'thumb.01.L',  ##WHERE DO THESE SIX COME FROM LMAO
-        'DMZ L 02': 'thumb.02.L',
-        'DMZ L 03': 'thumb.03.L',
-        'DMZ R 01': 'thumb.01.R',
-        'DMZ R 02': 'thumb.02.R',
-        'DMZ R 03': 'thumb.03.R',    
-        'Bip001 L Finger01': 'thumb.02.L',
-        'Bip001 L Finger02': 'thumb.03.L',
-        'Bip001 L Finger1': 'f_index.01.L',
-        'Bip001 L Finger11': 'f_index.02.L',
-        'Bip001 L Finger12': 'f_index.03.L',
-        'Bip001 L Finger2': 'f_middle.01.L',
-        'Bip001 L Finger21': 'f_middle.02.L',
-        'Bip001 L Finger22': 'f_middle.03.L',
-        'Bip001 L Finger3': 'f_ring.01.L',
-        'Bip001 L Finger31': 'f_ring.02.L',
-        'Bip001 L Finger32': 'f_ring.03.L',
-        'Bip001 L Finger4': 'f_pinky.01.L',
-        'Bip001 L Finger41': 'f_pinky.02.L',
-        'Bip001 L Finger42': 'f_pinky.03.L',
-        'Bip001 Neck': 'spine.004', #YO
-        'Bip001 Head': 'spine.006', #RUHROH
-        'Bip001 R Clavicle': 'shoulder.R',
-        'Bip001 R UpperArm': 'upper_arm.R',
-        'Bip001 R Forearm': 'forearm.R',
-        'Bip001 R Hand': 'hand.R',
-        'Bip001 R Finger0': 'thumb.01.R',
-        'Bip001 R Finger01': 'thumb.02.R',
-        'Bip001 R Finger02': 'thumb.03.R',
-        'Bip001 R Finger1': 'f_index.01.R',
-        'Bip001 R Finger11': 'f_index.02.R',
-        'Bip001 R Finger12': 'f_index.03.R',
-        'Bip001 R Finger2': 'f_middle.01.R',
-        'Bip001 R Finger21': 'f_middle.02.R',
-        'Bip001 R Finger22': 'f_middle.03.R',
-        'Bip001 R Finger3': 'f_ring.01.R',
-        'Bip001 R Finger31': 'f_ring.02.R',
-        'Bip001 R Finger32': 'f_ring.03.R',
-        'Bip001 R Finger4': 'f_pinky.01.R',
-        'Bip001 R Finger41': 'f_pinky.02.R',
-        'Bip001 R Finger42': 'f_pinky.03.R',
-        '+EyeBone R A01': 'eye.R',
-        '+EyeBone L A01': 'eye.L', 
-        '+Breast L A01': 'breast.L',
-        '+Breast R A01': 'breast.R', 
+        "Bip001 Pelvis": "spine",
+        "Bip001 L Thigh": "thigh.L",
+        "Bip001 L Calf": "shin.L",
+        "Bip001 L Foot": "foot.L",
+        "Bip001 L Toe0": "toe.L",
+        "Bip001 R Thigh": "thigh.R",
+        "Bip001 R Calf": "shin.R",
+        "Bip001 R Foot": "foot.R",
+        "Bip001 R Toe0": "toe.R",
+        "Bip001 Spine": "spine.001",
+        "Bip001 Spine1": "spine.002",
+        "Bip001 Spine2": "spine.003",
+        "Bip001 L Clavicle": "shoulder.L",
+        "Bip001 L UpperArm": "upper_arm.L",
+        "Bip001 L Forearm": "forearm.L",
+        "Bip001 L Hand": "hand.L",
+        "Bip001 L Finger0": "thumb.01.L",
+        "DMZ L 01": "thumb.01.L",  ##WHERE DO THESE SIX COME FROM LMAO
+        "DMZ L 02": "thumb.02.L",
+        "DMZ L 03": "thumb.03.L",
+        "DMZ R 01": "thumb.01.R",
+        "DMZ R 02": "thumb.02.R",
+        "DMZ R 03": "thumb.03.R",
+        "Bip001 L Finger01": "thumb.02.L",
+        "Bip001 L Finger02": "thumb.03.L",
+        "Bip001 L Finger1": "f_index.01.L",
+        "Bip001 L Finger11": "f_index.02.L",
+        "Bip001 L Finger12": "f_index.03.L",
+        "Bip001 L Finger2": "f_middle.01.L",
+        "Bip001 L Finger21": "f_middle.02.L",
+        "Bip001 L Finger22": "f_middle.03.L",
+        "Bip001 L Finger3": "f_ring.01.L",
+        "Bip001 L Finger31": "f_ring.02.L",
+        "Bip001 L Finger32": "f_ring.03.L",
+        "Bip001 L Finger4": "f_pinky.01.L",
+        "Bip001 L Finger41": "f_pinky.02.L",
+        "Bip001 L Finger42": "f_pinky.03.L",
+        "Bip001 Neck": "spine.004",  # YO
+        "Bip001 Head": "spine.006",  # RUHROH
+        "Bip001 R Clavicle": "shoulder.R",
+        "Bip001 R UpperArm": "upper_arm.R",
+        "Bip001 R Forearm": "forearm.R",
+        "Bip001 R Hand": "hand.R",
+        "Bip001 R Finger0": "thumb.01.R",
+        "Bip001 R Finger01": "thumb.02.R",
+        "Bip001 R Finger02": "thumb.03.R",
+        "Bip001 R Finger1": "f_index.01.R",
+        "Bip001 R Finger11": "f_index.02.R",
+        "Bip001 R Finger12": "f_index.03.R",
+        "Bip001 R Finger2": "f_middle.01.R",
+        "Bip001 R Finger21": "f_middle.02.R",
+        "Bip001 R Finger22": "f_middle.03.R",
+        "Bip001 R Finger3": "f_ring.01.R",
+        "Bip001 R Finger31": "f_ring.02.R",
+        "Bip001 R Finger32": "f_ring.03.R",
+        "Bip001 R Finger4": "f_pinky.01.R",
+        "Bip001 R Finger41": "f_pinky.02.R",
+        "Bip001 R Finger42": "f_pinky.03.R",
+        "+EyeBone R A01": "eye.R",
+        "+EyeBone L A01": "eye.L",
+        "+Breast L A01": "breast.L",
+        "+Breast R A01": "breast.R",
     }
     if kachina:
         # Only add Kachina thumb/fingers if it's Kachina
         # There is the potential to clash and have duplicate bone names with other characters (like Wriotheseley)
         abadidea = abadidea | {
-            '+ThumbS L A01': 'thumb.01.L',
-            '+ThumbS L A02': 'thumb.02.L',
-            '+ThumbS R A01': 'thumb.01.R',
-            '+ThumbS R A02': 'thumb.02.R',
-            '+GlovesS L A01': 'f_middle.01.L',
-            '+GlovesS L A02': 'f_middle.02.L',
-            '+GlovesS R A01': 'f_middle.01.R',
-            '+GlovesS R A02': 'f_middle.02.R',
+            "+ThumbS L A01": "thumb.01.L",
+            "+ThumbS L A02": "thumb.02.L",
+            "+ThumbS R A01": "thumb.01.R",
+            "+ThumbS R A02": "thumb.02.R",
+            "+GlovesS L A01": "f_middle.01.L",
+            "+GlovesS L A02": "f_middle.02.L",
+            "+GlovesS R A01": "f_middle.01.R",
+            "+GlovesS R A02": "f_middle.02.R",
         }
 
     if not toe_bones_exist:
-        del abadidea['Bip001 L Toe0']
-        del abadidea['Bip001 R Toe0']
+        del abadidea["Bip001 L Toe0"]
+        del abadidea["Bip001 R Toe0"]
 
-    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.object.mode_set(mode="EDIT")
     armature = bpy.context.selected_objects[0].data
 
     if kachina:
@@ -388,12 +618,13 @@ def rig_character(
         obj.data.edit_bones.remove(obj.data.edit_bones["Bip001 R Finger2"])
         obj.data.edit_bones.remove(obj.data.edit_bones["Bip001 R Finger0"])
 
-    bpy.ops.armature.select_all(action='DESELECT')
+    bpy.ops.armature.select_all(action="DESELECT")
+
     def select_bone(bone):
         bone.select = True
         bone.select_head = True
         bone.select_tail = True
-        
+
     # Disconnect the eyes because it'll throw an error if I don't, disconnect the spines so the hip wiggle bone in the rigify rig works properly
     try:
         select_bone(armature.edit_bones["+EyeBone L A02"])
@@ -403,14 +634,14 @@ def rig_character(
     select_bone(armature.edit_bones["Bip001 Spine"])
     select_bone(armature.edit_bones["Bip001 Spine1"])
     select_bone(armature.edit_bones["Bip001 Spine2"])
-    bpy.ops.armature.parent_clear(type='DISCONNECT')
-    bpy.ops.armature.select_all(action='DESELECT')
+    bpy.ops.armature.parent_clear(type="DISCONNECT")
+    bpy.ops.armature.select_all(action="DESELECT")
 
     try:
         select_bone(armature.edit_bones["+Breast R A02"])
         select_bone(armature.edit_bones["+Breast L A02"])
-        bpy.ops.armature.parent_clear(type='DISCONNECT')
-        bpy.ops.armature.select_all(action='DESELECT')
+        bpy.ops.armature.parent_clear(type="DISCONNECT")
+        bpy.ops.armature.select_all(action="DESELECT")
     except:
         pass
 
@@ -418,29 +649,29 @@ def rig_character(
     for bone in bones_list:
         if bone.name in abadidea:
             bone.name = abadidea[bone.name]
-    
+
     # Fix finger rolls - Thanks Poke!
     if not kachina:
-        how_not = ['f_index.01.L', 'f_index.02.L', 'f_index.03.L']
-        hahaha = ['f_middle.01.L', 'f_middle.02.L', 'f_middle.03.L']
-        to_name = ['f_ring.01.L', 'f_ring.02.L', 'f_ring.03.L']
-        things_efficiently = ['f_pinky.01.L', 'f_pinky.02.L', 'f_pinky.03.L']
+        how_not = ["f_index.01.L", "f_index.02.L", "f_index.03.L"]
+        hahaha = ["f_middle.01.L", "f_middle.02.L", "f_middle.03.L"]
+        to_name = ["f_ring.01.L", "f_ring.02.L", "f_ring.03.L"]
+        things_efficiently = ["f_pinky.01.L", "f_pinky.02.L", "f_pinky.03.L"]
 
         for bone in how_not:
-            armature.edit_bones[bone].roll -= .1197
-            
+            armature.edit_bones[bone].roll -= 0.1197
+
         for bone in hahaha:
-            armature.edit_bones[bone].roll -= .04
-            
+            armature.edit_bones[bone].roll -= 0.04
+
         for bone in to_name:
-            armature.edit_bones[bone].roll += .1297
-            
+            armature.edit_bones[bone].roll += 0.1297
+
         for bone in things_efficiently:
-            armature.edit_bones[bone].roll += .338
-    
-    #Aw shit here we go again.  This second loop is for making it possible to symmetrize pose bones properly.
+            armature.edit_bones[bone].roll += 0.338
+
+    # Aw shit here we go again.  This second loop is for making it possible to symmetrize pose bones properly.
     for bone in bones_list:
-        if ".L" in bone.name: 
+        if ".L" in bone.name:
             whee = bone.name[:-2] + ".R"
             if "f_" in bone.name or "thumb" in bone.name:
                 armature.edit_bones[whee].roll = -armature.edit_bones[bone.name].roll
@@ -451,43 +682,45 @@ def rig_character(
     armature.edit_bones["shoulder.L"].align_roll(Vector((0, -1, 0)))
     armature.edit_bones["shoulder.R"].align_roll(Vector((0, -1, 0)))
 
-
-    
-    
     # Fixes the thumb scale rotating inward on x instead of z
     if not kachina:
         armature.edit_bones["thumb.01.L"].roll += 3.14 / 4
         armature.edit_bones["thumb.02.L"].roll += 3.14 / 4
-        armature.edit_bones["thumb.03.L"].roll += 3.14 / 4     
+        armature.edit_bones["thumb.03.L"].roll += 3.14 / 4
         armature.edit_bones["thumb.01.R"].roll -= 3.14 / 4
         armature.edit_bones["thumb.02.R"].roll -= 3.14 / 4
-        armature.edit_bones["thumb.03.R"].roll -= 3.14 / 4 
+        armature.edit_bones["thumb.03.R"].roll -= 3.14 / 4
 
-                                    
-                                                                                                                                
     for bone in armature.edit_bones:
-        if "thumb" in bone.name or "index" in bone.name or "middle" in bone.name or "ring" in bone.name or "pinky" in bone.name:
+        if (
+            "thumb" in bone.name
+            or "index" in bone.name
+            or "middle" in bone.name
+            or "ring" in bone.name
+            or "pinky" in bone.name
+        ):
             if ".L" in bone.name:
-                armature.edit_bones[bone.name].roll -= 1.571 
+                armature.edit_bones[bone.name].roll -= 1.571
             else:
-                armature.edit_bones[bone.name].roll += 1.571 
-        ## Not sure why this bone exist but it's gotta go lmao                                                      
-        if bone.name == "Bip001": 
+                armature.edit_bones[bone.name].roll += 1.571
+        ## Not sure why this bone exist but it's gotta go lmao
+        if bone.name == "Bip001":
             for childbone in bone.children:
                 if childbone.name != "spine":
-                    armature.edit_bones[childbone.name].parent = armature.edit_bones['spine'] 
+                    armature.edit_bones[childbone.name].parent = armature.edit_bones[
+                        "spine"
+                    ]
             armature.edit_bones.remove(bone)
         elif ".L" not in bone.name and ".R" not in bone.name:
             armature.edit_bones[bone.name].roll = 0
 
-            
-    ## Fixes the weirdass pelvis/spine bone.  Sets the spine's head and tail X to 0.  
+    ## Fixes the weirdass pelvis/spine bone.  Sets the spine's head and tail X to 0.
     def realign(bone):
         bone.head.x = 0
         bone.tail.x = 0
-    realign(armature.edit_bones['spine'])
-    realign(armature.edit_bones['spine.006'])
 
+    realign(armature.edit_bones["spine"])
+    realign(armature.edit_bones["spine.006"])
 
     ## Attaches the feet to the toes and the upperarms to lowerarms
     def attachfeets(foot, toe):
@@ -496,36 +729,36 @@ def rig_character(
         armature.edit_bones[foot].tail.z = armature.edit_bones[toe].head.z
 
     if toe_bones_exist:
-        attachfeets('foot.L', 'toe.L')
-        attachfeets('foot.R', 'toe.R')
-        
-    attachfeets('upper_arm.L', 'forearm.L')
-    attachfeets('upper_arm.R', 'forearm.R')
-    attachfeets('thigh.L', 'shin.L')
-    attachfeets('thigh.R', 'shin.R') 
-    attachfeets('forearm.L', 'hand.L')
-    attachfeets('forearm.R', 'hand.R')
-    attachfeets('shoulder.L', 'upper_arm.L')
-    attachfeets('shoulder.R', 'upper_arm.R')
-    attachfeets('spine', 'spine.001')
-    attachfeets('spine.001', 'spine.002')
-    attachfeets('spine.002', 'spine.003')
-    attachfeets('spine.003', 'spine.004')
-    attachfeets('spine.004', 'spine.006')
+        attachfeets("foot.L", "toe.L")
+        attachfeets("foot.R", "toe.R")
+
+    attachfeets("upper_arm.L", "forearm.L")
+    attachfeets("upper_arm.R", "forearm.R")
+    attachfeets("thigh.L", "shin.L")
+    attachfeets("thigh.R", "shin.R")
+    attachfeets("forearm.L", "hand.L")
+    attachfeets("forearm.R", "hand.R")
+    attachfeets("shoulder.L", "upper_arm.L")
+    attachfeets("shoulder.R", "upper_arm.R")
+    attachfeets("spine", "spine.001")
+    attachfeets("spine.001", "spine.002")
+    attachfeets("spine.002", "spine.003")
+    attachfeets("spine.003", "spine.004")
+    attachfeets("spine.004", "spine.006")
 
     ## Points toe bones in correct direction
     if toe_bones_exist:
-        armature.edit_bones['toe.L'].tail.z = 0
-        armature.edit_bones['toe.L'].tail.y -= 0.05
+        armature.edit_bones["toe.L"].tail.z = 0
+        armature.edit_bones["toe.L"].tail.y -= 0.05
 
-        armature.edit_bones['toe.R'].tail.z = 0
-        armature.edit_bones['toe.R'].tail.y -= 0.05
-            
-    bpy.ops.armature.select_all(action='DESELECT')
+        armature.edit_bones["toe.R"].tail.z = 0
+        armature.edit_bones["toe.R"].tail.y -= 0.05
+
+    bpy.ops.armature.select_all(action="DESELECT")
     try:
         select_bone(armature.edit_bones["breast.L"])
         bpy.ops.armature.symmetrize()
-        bpy.ops.armature.select_all(action='DESELECT')
+        bpy.ops.armature.select_all(action="DESELECT")
 
     except Exception:
         pass
@@ -536,32 +769,45 @@ def rig_character(
     except:
         pass
 
-    bpy.ops.object.mode_set(mode='POSE')
+    bpy.ops.object.mode_set(mode="POSE")
 
-    bpy.ops.object.expykit_convert_bone_names(src_preset='Rigify_Metarig.py', trg_preset='Rigify_Deform.py')
-    bpy.ops.object.expykit_extract_metarig(rig_preset='Rigify_Metarig.py', assign_metarig=True)
+    bpy.ops.object.expykit_convert_bone_names(
+        src_preset="Rigify_Metarig.py", trg_preset="Rigify_Deform.py"
+    )
+    bpy.ops.object.expykit_extract_metarig(
+        rig_preset="Rigify_Metarig.py", assign_metarig=True
+    )
 
     # Poke's code to turn on the finger's IK.
     if not kachina:
         fuckyou = ["thumb.01", "f_index.01", "f_middle.01", "f_ring.01", "f_pinky.01"]
         for side in [".L", ".R"]:
             for fucks in fuckyou:
-                bpy.context.object.pose.bones[fucks + side].rigify_parameters.make_extra_ik_control = True
+                bpy.context.object.pose.bones[
+                    fucks + side
+                ].rigify_parameters.make_extra_ik_control = True
 
     ## Fixes the tiddy bones.  Expykit, why did you neglect them
 
     metarm = bpy.data.objects["metarig"].data
-    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.object.mode_set(mode="EDIT")
     armature = bpy.data.objects[obj.name].data
 
     ## Left side first, right side's xyz is same as left, but x is negative
     def getboob(bone, tip):
         if tip == "head":
-            return armature.edit_bones[bone].head.x, armature.edit_bones[bone].head.y, armature.edit_bones[bone].head.z
+            return (
+                armature.edit_bones[bone].head.x,
+                armature.edit_bones[bone].head.y,
+                armature.edit_bones[bone].head.z,
+            )
         else:
-            return armature.edit_bones[bone].tail.x, armature.edit_bones[bone].tail.y, armature.edit_bones[bone].tail.z
-            
-        
+            return (
+                armature.edit_bones[bone].tail.x,
+                armature.edit_bones[bone].tail.y,
+                armature.edit_bones[bone].tail.z,
+            )
+
     try:
         xh, yh, zh = getboob("breast.L", "head")
         xt, yt, zt = getboob("breast.L", "tail")
@@ -587,31 +833,36 @@ def rig_character(
         # If breast bones dont exist in the orig rig, then delete from the meta rig
         metarm.edit_bones.remove(metarm.edit_bones["breast.L"])
         metarm.edit_bones.remove(metarm.edit_bones["breast.R"])
-        
-
 
     # Fixes the finger rolls
-    bpy.ops.object.mode_set(mode='OBJECT')
-    metapose = bpy.data.objects['metarig'].pose
+    bpy.ops.object.mode_set(mode="OBJECT")
+    metapose = bpy.data.objects["metarig"].pose
     if kachina:
-        for bone_name in ['f_index', 'f_middle', 'f_ring', 'f_pinky']:
-            metapose.bones[f"{bone_name}.01.L"].rigify_parameters.primary_rotation_axis = '-X'
-            metapose.bones[f"{bone_name}.01.R"].rigify_parameters.primary_rotation_axis = '-X'
+        for bone_name in ["f_index", "f_middle", "f_ring", "f_pinky"]:
+            metapose.bones[
+                f"{bone_name}.01.L"
+            ].rigify_parameters.primary_rotation_axis = "-X"
+            metapose.bones[
+                f"{bone_name}.01.R"
+            ].rigify_parameters.primary_rotation_axis = "-X"
 
-        metapose.bones["thumb.01.L"].rigify_parameters.primary_rotation_axis = 'X'
-        metapose.bones["thumb.01.R"].rigify_parameters.primary_rotation_axis = 'X'
+        metapose.bones["thumb.01.L"].rigify_parameters.primary_rotation_axis = "X"
+        metapose.bones["thumb.01.R"].rigify_parameters.primary_rotation_axis = "X"
     else:
-        for bone_name in ['f_index', 'f_middle', 'f_ring', 'f_pinky']:
-            metapose.bones[f"{bone_name}.01.L"].rigify_parameters.primary_rotation_axis = 'X'
-            metapose.bones[f"{bone_name}.01.R"].rigify_parameters.primary_rotation_axis = 'X'
+        for bone_name in ["f_index", "f_middle", "f_ring", "f_pinky"]:
+            metapose.bones[
+                f"{bone_name}.01.L"
+            ].rigify_parameters.primary_rotation_axis = "X"
+            metapose.bones[
+                f"{bone_name}.01.R"
+            ].rigify_parameters.primary_rotation_axis = "X"
 
-        metapose.bones["thumb.01.L"].rigify_parameters.primary_rotation_axis = 'X'
-        metapose.bones["thumb.01.R"].rigify_parameters.primary_rotation_axis = 'X'
-                                          
+        metapose.bones["thumb.01.L"].rigify_parameters.primary_rotation_axis = "X"
+        metapose.bones["thumb.01.R"].rigify_parameters.primary_rotation_axis = "X"
 
     ## This part corrects metarm finger rolls
-    bpy.ops.object.mode_set(mode='OBJECT')
-    bpy.ops.object.select_all(action='DESELECT')
+    bpy.ops.object.mode_set(mode="OBJECT")
+    bpy.ops.object.select_all(action="DESELECT")
 
     armature = obj.data
 
@@ -620,55 +871,108 @@ def rig_character(
         if o.name in ("metarig", armature.name):
             o.select_set(True)
 
-
-    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.object.mode_set(mode="EDIT")
     for bone in metarm.edit_bones:
         if "f_" in bone.name or "thumb" in bone.name:
             try:
-                bone.roll =  armature.edit_bones["DEF-"+bone.name].roll
+                bone.roll = armature.edit_bones["DEF-" + bone.name].roll
             except:
                 pass
 
     # Fix hand bones being rotated 90 degrees sideways and arm deformation bones being wonky
     if "Loli" in obj.name:
-        metarm.edit_bones["upper_arm.L"].tail.y += .003
-        metarm.edit_bones["upper_arm.R"].tail.y += .003
+        metarm.edit_bones["upper_arm.L"].tail.y += 0.003
+        metarm.edit_bones["upper_arm.R"].tail.y += 0.003
 
-    ##########  DETACH PHYSICS BONES,  
+    ##########  DETACH PHYSICS BONES,
 
-    metanames = ['eye.L', 'eye.R', 'spine', 'thigh.L', 'shin.L', 'foot.L', 'toe.L', 'thigh.R', 'shin.R', 'foot.R', 'toe.R', 'spine.001', 'spine.002', 'spine.003', 'breast.L', 'breast.R', 'shoulder.L', 'upper_arm.L', 'forearm.L', 'hand.L', 'thumb.01.L', 'thumb.02.L', 'thumb.03.L', 'f_index.01.L', 'f_index.02.L', 'f_index.03.L', 'f_middle.01.L', 'f_middle.02.L', 'f_middle.03.L', 'f_ring.01.L', 'f_ring.02.L', 'f_ring.03.L', 'f_pinky.01.L', 'f_pinky.02.L', 'f_pinky.03.L', 'spine.004', 'spine.006', 'shoulder.R', 'upper_arm.R', 'forearm.R', 'hand.R', 'thumb.01.R', 'thumb.02.R', 'thumb.03.R', 'f_index.01.R', 'f_index.02.R', 'f_index.03.R', 'f_middle.01.R', 'f_middle.02.R', 'f_middle.03.R', 'f_ring.01.R', 'f_ring.02.R', 'f_ring.03.R', 'f_pinky.01.R', 'f_pinky.02.R', 'f_pinky.03.R']
+    metanames = [
+        "eye.L",
+        "eye.R",
+        "spine",
+        "thigh.L",
+        "shin.L",
+        "foot.L",
+        "toe.L",
+        "thigh.R",
+        "shin.R",
+        "foot.R",
+        "toe.R",
+        "spine.001",
+        "spine.002",
+        "spine.003",
+        "breast.L",
+        "breast.R",
+        "shoulder.L",
+        "upper_arm.L",
+        "forearm.L",
+        "hand.L",
+        "thumb.01.L",
+        "thumb.02.L",
+        "thumb.03.L",
+        "f_index.01.L",
+        "f_index.02.L",
+        "f_index.03.L",
+        "f_middle.01.L",
+        "f_middle.02.L",
+        "f_middle.03.L",
+        "f_ring.01.L",
+        "f_ring.02.L",
+        "f_ring.03.L",
+        "f_pinky.01.L",
+        "f_pinky.02.L",
+        "f_pinky.03.L",
+        "spine.004",
+        "spine.006",
+        "shoulder.R",
+        "upper_arm.R",
+        "forearm.R",
+        "hand.R",
+        "thumb.01.R",
+        "thumb.02.R",
+        "thumb.03.R",
+        "f_index.01.R",
+        "f_index.02.R",
+        "f_index.03.R",
+        "f_middle.01.R",
+        "f_middle.02.R",
+        "f_middle.03.R",
+        "f_ring.01.R",
+        "f_ring.02.R",
+        "f_ring.03.R",
+        "f_pinky.01.R",
+        "f_pinky.02.R",
+        "f_pinky.03.R",
+    ]
     if not toe_bones_exist:
         metanames.remove("toe.L")
         metanames.remove("toe.R")
 
-
     pre_res = ["DEF-" + bonename for bonename in metanames]
-    armature = obj.data ## Original char rig
-
+    armature = obj.data  ## Original char rig
 
     ## Make a dictionary.  Key is a main body bone that exists in the Rigify (arm, leg, spine, etc), and the value is a list of all the children bones that aren't other main body bones (usually hair, clothes, deform, etc.)
-    savethechildren = {
-        
-    }
-    bpy.ops.object.mode_set(mode='EDIT')
+    savethechildren = {}
+    bpy.ops.object.mode_set(mode="EDIT")
     for bone in armature.edit_bones:
         if bone.name in pre_res:
             childlist = []
             for childbone in armature.edit_bones[bone.name].children:
-                if childbone.name not in pre_res: # Adds only non-main body bones, avoids like forearm or knee etc
+                if (
+                    childbone.name not in pre_res
+                ):  # Adds only non-main body bones, avoids like forearm or knee etc
                     childlist.append(childbone.name)
-            if childlist: # If list isn't empty, add it to dict
+            if childlist:  # If list isn't empty, add it to dict
                 wtf = bone.name
                 savethechildren[wtf] = childlist
 
-        
     ## Duplicates the physics bones
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.armature.select_all(action='DESELECT')
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.armature.select_all(action="DESELECT")
     bones = armature.edit_bones[:]
     for bone in bones:
         if bone.name not in pre_res:
-            #this is a physics bone, so duplicate it.
+            # this is a physics bone, so duplicate it.
             bone.select = True
             bone.select_tail = True
             bone.select_head = True
@@ -679,17 +983,18 @@ def rig_character(
     bpy.data.objects[obj.name].name = "rigify"
     bpy.context.view_layer.objects.active = bpy.data.objects[armature.name + ".001"]
 
-
     for o in bpy.data.objects:
         # Check for given object names
         if o.name in ("rigify", armature.name):
             o.select_set(True)
-            
+
     # THEN REATTACH PHYSICS
 
-    bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.ops.object.mode_set(mode="OBJECT")
     ### BLENDER ARE U GOOD LMAO WTF IS THIS (this joins two objects together)
-    newrig = armature.name + ".001" ## New temporary armature with the physics bones. Hopefully you didnt touch any names lmao
+    newrig = (
+        armature.name + ".001"
+    )  ## New temporary armature with the physics bones. Hopefully you didnt touch any names lmao
 
     ## Why's the list for selected objects ordered alphabetically instead of by selection order
     objList = bpy.context.selected_objects
@@ -697,49 +1002,56 @@ def rig_character(
     rigifyr = unselected[0]  ## Rigified Rig
 
     obs = [bpy.data.objects.get("rigify"), bpy.data.objects.get(newrig)]
-    c={}
+    c = {}
     c["object"] = c["active_object"] = bpy.data.objects.get("rigify")
     c["selected_objects"] = c["selected_editable_objects"] = obs
-    bpy.ops.object.mode_set(mode='OBJECT')
-    bpy.ops.object.select_all(action='DESELECT')
-    
-    with bpy.context.temp_override(active_object=bpy.data.objects.get("rigify"), selected_editable_objects=obs):
-        bpy.ops.object.join()
+    bpy.ops.object.mode_set(mode="OBJECT")
+    bpy.ops.object.select_all(action="DESELECT")
 
+    with bpy.context.temp_override(
+        active_object=bpy.data.objects.get("rigify"), selected_editable_objects=obs
+    ):
+        bpy.ops.object.join()
 
     bpy.context.view_layer.objects.active = bpy.data.objects["rigify"]
 
     setup_neck_and_head_follow(neck_follow_value=1.0, head_follow_value=1.0)
     setup_finger_scale_controls_on_x_axis_to_curl_just_the_fingertips(rigifyr)
 
-    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.object.mode_set(mode="EDIT")
 
     #### whats this for???
-    #oh i think it's useless now bc there's only one rig LMAOLMAO
-    #for bone in bones_list:
+    # oh i think it's useless now bc there's only one rig LMAOLMAO
+    # for bone in bones_list:
     #    armature.edit_bones[bone.name].roll = rigifyr.data.edit_bones[bone.name].roll
     ####
 
     ## Reattach the physics bones to their parents
-    #Go back into rigify, find the main body bones, and reattach every bone in the corresponding dict list
-    for mainbone in savethechildren:    
+    # Go back into rigify, find the main body bones, and reattach every bone in the corresponding dict list
+    for mainbone in savethechildren:
         for childbone in savethechildren[mainbone]:
-            rigifyr.data.edit_bones[childbone].parent = rigifyr.data.edit_bones[mainbone]
+            rigifyr.data.edit_bones[childbone].parent = rigifyr.data.edit_bones[
+                mainbone
+            ]
 
     print("donelol\n")
-    bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.ops.object.mode_set(mode="OBJECT")
     bpy.data.objects["rigify"].show_in_front = True
 
     # Symmetrize clothes/hair bones
-    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.object.mode_set(mode="EDIT")
     for bone in rigifyr.data.edit_bones:
         if " L " in bone.name:  # Finds clothes/hair bones with symmetrical bones
-            y = bone.name.find(' L ')  # Finds index of "Hair L 1"
+            y = bone.name.find(" L ")  # Finds index of "Hair L 1"
             orgname = bone.name
             try:
-                oppbone = orgname[:y] + " R " + orgname[y+3:] # oppbone = "Hair R 1"
-                bone.name = orgname[:y] + orgname[y+3:] + ".L"  #Rename bones to "Hair 1.L/R" so Blender 
-                rigifyr.data.edit_bones[oppbone].name = orgname[:y] + orgname[y+3:] + ".R" # goes ":o symmetry"
+                oppbone = orgname[:y] + " R " + orgname[y + 3 :]  # oppbone = "Hair R 1"
+                bone.name = (
+                    orgname[:y] + orgname[y + 3 :] + ".L"
+                )  # Rename bones to "Hair 1.L/R" so Blender
+                rigifyr.data.edit_bones[oppbone].name = (
+                    orgname[:y] + orgname[y + 3 :] + ".R"
+                )  # goes ":o symmetry"
             except:
                 pass
 
@@ -748,24 +1060,51 @@ def rig_character(
     rigifyr.pose.bones["thigh_parent.L"]["pole_parent"] = 2
     rigifyr.pose.bones["thigh_parent.R"]["pole_parent"] = 2
 
-    bpy.ops.object.mode_set(mode='OBJECT')
-    #change active object to rigifyr
+    bpy.ops.object.mode_set(mode="OBJECT")
+    # change active object to rigifyr
 
     bpy.context.view_layer.objects.active = bpy.data.objects["rigify"]
 
-    bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.ops.object.mode_set(mode="OBJECT")
 
     # This part puts all the main bones I use into the secoond bone layer
-    listofbones = ["root", "foot_heel_ik.R", "foot_heel_ik.L", "toe_ik.R", "toe_ik.L", "foot_ik.R", "foot_ik.L", "thigh_ik_target.R", "thigh_ik_target.L", "hips", "torso", "chest", "neck", "head", "shoulder.L", "shoulder.R", "upper_arm_fk.L", "upper_arm_fk.R", "forearm_fk.L", "forearm_fk.R", "hand_fk.L", "hand_fk.R", "upper_arm_ik_target.L", "upper_arm_ik_target.R", "hand_ik.R", "hand_ik.L", ]
+    listofbones = [
+        "root",
+        "foot_heel_ik.R",
+        "foot_heel_ik.L",
+        "toe_ik.R",
+        "toe_ik.L",
+        "foot_ik.R",
+        "foot_ik.L",
+        "thigh_ik_target.R",
+        "thigh_ik_target.L",
+        "hips",
+        "torso",
+        "chest",
+        "neck",
+        "head",
+        "shoulder.L",
+        "shoulder.R",
+        "upper_arm_fk.L",
+        "upper_arm_fk.R",
+        "forearm_fk.L",
+        "forearm_fk.R",
+        "hand_fk.L",
+        "hand_fk.R",
+        "upper_arm_ik_target.L",
+        "upper_arm_ik_target.R",
+        "hand_ik.R",
+        "hand_ik.L",
+    ]
 
     if not toe_bones_exist:
         listofbones.remove("toe_ik.R")
         listofbones.remove("toe_ik.L")
-        
+
     if not is_version_4:
         for bone in listofbones:
             bpy.context.active_object.pose.bones[bone].bone.layers[1] = True
-        
+
     try:
         bpy.data.objects["EyeStar"].hide_viewport = False
     except:
@@ -774,24 +1113,24 @@ def rig_character(
     x = original_name.split("_")
     char_name = x[-1]
     bpy.data.objects["rigify"].name = char_name + "Rig"
-                
-    bpy.ops.object.mode_set(mode='POSE')   
-    bpy.ops.pose.select_all(action='DESELECT')
+
+    bpy.ops.object.mode_set(mode="POSE")
+    bpy.ops.pose.select_all(action="DESELECT")
     bones_list = obj.pose.bones
 
     # Creates selection sets for FK arms + shoulders, hair bones, and clothes bones.  Selection Sets is an addon that comes with Blender.
     try:
-        bpy.ops.object.mode_set(mode='POSE')
+        bpy.ops.object.mode_set(mode="POSE")
 
-        arms = ['upper_arm_fk', 'forearm_fk', 'hand_fk', 'shoulder']
-        bpy.ops.pose.select_all(action='DESELECT')
-        for side in ['.L', '.R']:
+        arms = ["upper_arm_fk", "forearm_fk", "hand_fk", "shoulder"]
+        bpy.ops.pose.select_all(action="DESELECT")
+        for side in [".L", ".R"]:
             for bone in arms:
                 bonename = bone + side
-                rigifyr.pose.bones[bonename].bone.select= True
+                rigifyr.pose.bones[bonename].bone.select = True
         bpy.ops.pose.selection_set_add()
         bpy.ops.pose.selection_set_assign()
-        bpy.ops.pose.select_all(action='DESELECT')
+        bpy.ops.pose.select_all(action="DESELECT")
 
         ## Hair
         for bone in bones_list:
@@ -799,49 +1138,155 @@ def rig_character(
                 rigifyr.pose.bones[bone.name].bone.select = True
         bpy.ops.pose.selection_set_add()
         bpy.ops.pose.selection_set_assign()
-        bpy.ops.pose.select_all(action='DESELECT')
+        bpy.ops.pose.select_all(action="DESELECT")
 
         ## Clothes
         for bone in bones_list:
-            if "Amice" in bone.name or ("fk" not in bone.name and "tweak" not in bone.name and "Twist" not in bone.name and "Hair" not in bone.name and (bone.name[-1].isdigit() or bone.name[-3].isdigit())):
+            if "Amice" in bone.name or (
+                "fk" not in bone.name
+                and "tweak" not in bone.name
+                and "Twist" not in bone.name
+                and "Hair" not in bone.name
+                and (bone.name[-1].isdigit() or bone.name[-3].isdigit())
+            ):
                 rigifyr.pose.bones[bone.name].bone.select = True
         bpy.ops.pose.selection_set_add()
         bpy.ops.pose.selection_set_assign()
-        bpy.ops.pose.select_all(action='DESELECT')
+        bpy.ops.pose.select_all(action="DESELECT")
         bpy.context.object.selection_sets[0].name = "FK Arms"
         bpy.context.object.selection_sets[1].name = "Hair"
         bpy.context.object.selection_sets[2].name = "Clothes...and teeth and eyes lmao"
     except:
         pass
-    
-    bpy.ops.object.mode_set(mode='EDIT') 
+
+    bpy.ops.object.mode_set(mode="EDIT")
 
     rig = bpy.context.object
     if kachina:
         # Deletes the extra useless finger bones
-        eatthis = ['f_index.03.L', 'f_index.01.L.001', 'f_index.01_master.L', 'thumb.03.L', 'thumb.01.L.001', 'f_middle.03.L', 'f_middle.01.L.001', 'f_ring.01_master.L', 'f_ring.01.L', 'f_ring.02.L', 'f_ring.03.L', 'f_ring.01.L.001', 'f_pinky.01_master.L', 'f_pinky.01.L', 'f_pinky.02.L', 'f_pinky.03.L', 'f_pinky.01.L.001', 'f_index.03.R', 'f_index.01.R.001', 'f_index.01_master.R', 'thumb.03.R', 'thumb.01.R.001', 'f_middle.03.R', 'f_middle.01.R.001', 'f_ring.01_master.R', 'f_ring.01.R', 'f_ring.02.R', 'f_ring.03.R', 'f_ring.01.R.001', 'f_pinky.01_master.R', 'f_pinky.01.R', 'f_pinky.02.R', 'f_pinky.03.R', 'f_pinky.01.R.001', 'ORG-palm.01.L', 'ORG-f_index.01.L', 'ORG-f_index.02.L', 'ORG-f_index.03.L', 'ORG-thumb.03.L', 'DEF-f_index.01.L', 'DEF-f_index.02.L', 'DEF-f_index.03.L', 'DEF-thumb.03.L', 'DEF-palm.01.L', 'MCH-f_index.01_drv.L', 'MCH-f_index.02_drv.L', 'MCH-f_index.03_drv.L', 'MCH-f_index.03.L', 'MCH-f_index.02.L', 'MCH-f_index.01.L', 'MCH-thumb.03_drv.L', 'MCH-thumb.03.L', 'ORG-f_middle.03.L', 'DEF-f_middle.03.L', 'MCH-f_middle.03_drv.L', 'MCH-f_middle.03.L', 'ORG-palm.03.L', 'DEF-palm.03.L', 'ORG-palm.04.L', 'DEF-palm.04.L', 'ORG-palm.01.R', 'ORG-f_index.01.R', 'ORG-f_index.02.R', 'ORG-f_index.03.R', 'ORG-thumb.03.R', 'DEF-f_index.01.R', 'DEF-f_index.02.R', 'DEF-f_index.03.R', 'DEF-thumb.03.R', 'DEF-palm.01.R', 'MCH-f_index.01_drv.R', 'MCH-f_index.02_drv.R', 'MCH-f_index.03_drv.R', 'MCH-f_index.03.R', 'MCH-f_index.02.R', 'MCH-f_index.01.R', 'MCH-thumb.03_drv.R', 'MCH-thumb.03.R', 'ORG-f_middle.03.R', 'DEF-f_middle.03.R', 'MCH-f_middle.03_drv.R', 'MCH-f_middle.03.R', 'ORG-palm.03.R', 'DEF-palm.03.R', 'ORG-palm.04.R', 'DEF-palm.04.R']
+        eatthis = [
+            "f_index.03.L",
+            "f_index.01.L.001",
+            "f_index.01_master.L",
+            "thumb.03.L",
+            "thumb.01.L.001",
+            "f_middle.03.L",
+            "f_middle.01.L.001",
+            "f_ring.01_master.L",
+            "f_ring.01.L",
+            "f_ring.02.L",
+            "f_ring.03.L",
+            "f_ring.01.L.001",
+            "f_pinky.01_master.L",
+            "f_pinky.01.L",
+            "f_pinky.02.L",
+            "f_pinky.03.L",
+            "f_pinky.01.L.001",
+            "f_index.03.R",
+            "f_index.01.R.001",
+            "f_index.01_master.R",
+            "thumb.03.R",
+            "thumb.01.R.001",
+            "f_middle.03.R",
+            "f_middle.01.R.001",
+            "f_ring.01_master.R",
+            "f_ring.01.R",
+            "f_ring.02.R",
+            "f_ring.03.R",
+            "f_ring.01.R.001",
+            "f_pinky.01_master.R",
+            "f_pinky.01.R",
+            "f_pinky.02.R",
+            "f_pinky.03.R",
+            "f_pinky.01.R.001",
+            "ORG-palm.01.L",
+            "ORG-f_index.01.L",
+            "ORG-f_index.02.L",
+            "ORG-f_index.03.L",
+            "ORG-thumb.03.L",
+            "DEF-f_index.01.L",
+            "DEF-f_index.02.L",
+            "DEF-f_index.03.L",
+            "DEF-thumb.03.L",
+            "DEF-palm.01.L",
+            "MCH-f_index.01_drv.L",
+            "MCH-f_index.02_drv.L",
+            "MCH-f_index.03_drv.L",
+            "MCH-f_index.03.L",
+            "MCH-f_index.02.L",
+            "MCH-f_index.01.L",
+            "MCH-thumb.03_drv.L",
+            "MCH-thumb.03.L",
+            "ORG-f_middle.03.L",
+            "DEF-f_middle.03.L",
+            "MCH-f_middle.03_drv.L",
+            "MCH-f_middle.03.L",
+            "ORG-palm.03.L",
+            "DEF-palm.03.L",
+            "ORG-palm.04.L",
+            "DEF-palm.04.L",
+            "ORG-palm.01.R",
+            "ORG-f_index.01.R",
+            "ORG-f_index.02.R",
+            "ORG-f_index.03.R",
+            "ORG-thumb.03.R",
+            "DEF-f_index.01.R",
+            "DEF-f_index.02.R",
+            "DEF-f_index.03.R",
+            "DEF-thumb.03.R",
+            "DEF-palm.01.R",
+            "MCH-f_index.01_drv.R",
+            "MCH-f_index.02_drv.R",
+            "MCH-f_index.03_drv.R",
+            "MCH-f_index.03.R",
+            "MCH-f_index.02.R",
+            "MCH-f_index.01.R",
+            "MCH-thumb.03_drv.R",
+            "MCH-thumb.03.R",
+            "ORG-f_middle.03.R",
+            "DEF-f_middle.03.R",
+            "MCH-f_middle.03_drv.R",
+            "MCH-f_middle.03.R",
+            "ORG-palm.03.R",
+            "DEF-palm.03.R",
+            "ORG-palm.04.R",
+            "DEF-palm.04.R",
+        ]
         for this in eatthis:
             ugh = rigifyr.data.edit_bones[this]
             rigifyr.data.edit_bones.remove(ugh)
 
         # This workaround is for an issue so stupid i dont even want to explain this lmao
-        bpy.ops.object.mode_set(mode='POSE') 
-        wtf = [ 'MCH-thumb.02.L', 'MCH-f_middle.02.L', 'MCH-thumb.02.R', 'MCH-f_middle.02.R']
+        bpy.ops.object.mode_set(mode="POSE")
+        wtf = [
+            "MCH-thumb.02.L",
+            "MCH-f_middle.02.L",
+            "MCH-thumb.02.R",
+            "MCH-f_middle.02.R",
+        ]
         for this in wtf:
             rigifyr.pose.bones[this].constraints[0].enabled = False
 
-        bpy.ops.object.mode_set(mode='EDIT') 
+        bpy.ops.object.mode_set(mode="EDIT")
         # The scale controls for the fingers are big as hell lmao what.
-        sizethis = ['thumb.01_master.L', 'f_middle.01_master.L', 'thumb.01_master.R', 'f_middle.01_master.R']
+        sizethis = [
+            "thumb.01_master.L",
+            "f_middle.01_master.L",
+            "thumb.01_master.R",
+            "f_middle.01_master.R",
+        ]
         for this in sizethis:
-            rigifyr.data.edit_bones[this].length *= .08
+            rigifyr.data.edit_bones[this].length *= 0.08
 
         # This corrects the drivers on the superscale control. Without this fix, the scales operate opposite to how they should.
-        bpy.ops.object.mode_set(mode='POSE')
+        bpy.ops.object.mode_set(mode="POSE")
         for oDrv in rigifyr.animation_data.drivers:
             for variable in oDrv.driver.variables:
                 for target in variable.targets:
-                    if "MCH-f_middle.02_drv" in oDrv.data_path or "MCH-f_index.02_drv" in oDrv.data_path:
+                    if (
+                        "MCH-f_middle.02_drv" in oDrv.data_path
+                        or "MCH-f_index.02_drv" in oDrv.data_path
+                    ):
                         oDrv.driver.expression += "* -1"
     else:
         # Fix scaling for finger tips.
@@ -851,7 +1296,13 @@ def rig_character(
                     if ".03" in oDrv.data_path and target.data_path[-7:] == "scale.y":
                         target.data_path = target.data_path[:-1] + "x"
 
-    fingerlist = ["thumb.01_master", "f_index.01_master", "f_middle.01_master", "f_ring.01_master", "f_pinky.01_master"]
+    fingerlist = [
+        "thumb.01_master",
+        "f_index.01_master",
+        "f_middle.01_master",
+        "f_ring.01_master",
+        "f_pinky.01_master",
+    ]
 
     for side in [".L", ".R"]:
         for bone in fingerlist:
@@ -861,22 +1312,24 @@ def rig_character(
                 pass
 
     # Fix face shading being offset 90 degrees
-    bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.ops.object.mode_set(mode="OBJECT")
     try:
-        head_driver_obj = bpy.data.objects.get("Head Driver") or bpy.data.objects.get("Head Origin")
+        head_driver_obj = bpy.data.objects.get("Head Driver") or bpy.data.objects.get(
+            "Head Origin"
+        )
         bpy.context.view_layer.objects.active = head_driver_obj
-        bpy.ops.constraint.childof_set_inverse(constraint="Child Of", owner='OBJECT')
+        bpy.ops.constraint.childof_set_inverse(constraint="Child Of", owner="OBJECT")
     except:
         pass
 
     # POST RIGIFY SCRIPT EXECUTION ----------------->
 
     # Delete metarig
-    bpy.data.objects.remove(bpy.data.objects['metarig'])
+    bpy.data.objects.remove(bpy.data.objects["metarig"])
 
     # Moves specified param and it's children into the collection
-    def move_into_collection(object,collection,include_children=True):
-        
+    def move_into_collection(object, collection, include_children=True):
+
         # Get object
         this_obj = bpy.context.scene.objects.get(object)
         # Get existing collection or make new one
@@ -884,16 +1337,16 @@ def rig_character(
         if not this_coll:
             this_coll = bpy.data.collections.new(collection)
             bpy.context.scene.collection.children.link(this_coll)
-            
+
         # Move object into collection
         if this_obj:
             # Unlink it from all previous collections before moving it to new one
             for coll in this_obj.users_collection:
                 coll.objects.unlink(this_obj)
-                
+
             # Move it to our specified collection (This only does the parent obj)
             this_coll.objects.link(this_obj)
-            
+
             if include_children:
                 # Now we move the children of this object
                 for child_obj in this_obj.children:
@@ -904,7 +1357,9 @@ def rig_character(
 
     # Automatic code to just loop through and delete excess collections on append - thanks cgpt for regeex
     def merge_duplicate_collections(base_name):
-        pattern = re.compile(rf"{re.escape(base_name)}\.\d{{3}}$")  # Matches "base_name.001", "base_name.002", etc.
+        pattern = re.compile(
+            rf"{re.escape(base_name)}\.\d{{3}}$"
+        )  # Matches "base_name.001", "base_name.002", etc.
 
         # Iterate through collections and find matching ones
         for coll in list(bpy.data.collections):
@@ -914,9 +1369,9 @@ def rig_character(
 
                 # Remove the now-empty collection
                 bpy.data.collections.remove(coll)
-                
-    # Move the rig into the char name's collection                        
-    move_into_collection(char_name+"Rig",char_name)
+
+    # Move the rig into the char name's collection
+    move_into_collection(char_name + "Rig", char_name)
 
     # Let's make a new wgt collection inside the char coll.
     char_coll = bpy.data.collections.get(char_name)
@@ -928,18 +1383,17 @@ def rig_character(
         if coll.name.startswith("WGTS"):
             coll.name = "WG"
 
-    move_into_collection("metarig","wgt")
-
+    move_into_collection("metarig", "wgt")
 
     # Unlink all inner objects from the old WGT collection. We want them inside the new one.
     for obj in bpy.data.objects:
         if obj.name.startswith("WGT"):
             for coll in obj.users_collection:
                 coll.objects.unlink(obj)
-            
+
             wgt_coll.objects.link(obj)
-            
-    # Remove old unused wgt collection                
+
+    # Remove old unused wgt collection
     bpy.data.collections.remove(bpy.data.collections.get("WG"))
 
     def get_and_rename_empty(empty_name):
@@ -949,39 +1403,49 @@ def rig_character(
             return obj.name
         return None
 
-    # Obfuscate light driving stuff not needed, keep the main light.        
+    # Obfuscate light driving stuff not needed, keep the main light.
     new_name = get_and_rename_empty("Face Light Direction")
-    if new_name: move_into_collection(new_name,"wgt")
-    
+    if new_name:
+        move_into_collection(new_name, "wgt")
+
     new_name = get_and_rename_empty("Head Driver")
-    if new_name: move_into_collection(new_name,"wgt")
-    
+    if new_name:
+        move_into_collection(new_name, "wgt")
+
     new_name = get_and_rename_empty("Main Light Direction")
-    if new_name: move_into_collection(new_name,char_name)
+    if new_name:
+        move_into_collection(new_name, char_name)
 
     # V3 Shader Support - New empty names
     new_name = get_and_rename_empty("Head Origin")
-    if new_name: move_into_collection(new_name,"wgt")
-    
+    if new_name:
+        move_into_collection(new_name, "wgt")
+
     new_name = get_and_rename_empty("Light Direction")
-    if new_name: move_into_collection(new_name,char_name)
+    if new_name:
+        move_into_collection(new_name, char_name)
 
     bpy.data.collections["wgt"].hide_select = True
     bpy.data.collections["wgt"].hide_viewport = True
     bpy.data.collections["wgt"].hide_render = True
 
     new_name = get_and_rename_empty("Head Forward")
-    if new_name: move_into_collection(new_name, "wgt")
-    
-    new_name = get_and_rename_empty("Head Up")
-    if new_name: move_into_collection(new_name, "wgt")
+    if new_name:
+        move_into_collection(new_name, "wgt")
 
+    new_name = get_and_rename_empty("Head Up")
+    if new_name:
+        move_into_collection(new_name, "wgt")
 
     # IMPORTANT: This must be done before deleting the "Collection" collection in case Lighting Panel gets appended in there
     # remove lighting colls - also move the RGB wheels into the rig obj
-    lighting_panel_rig_obj = bpy.data.objects.get(LightingPanelNames.Objects.LIGHTING_PANEL)
+    lighting_panel_rig_obj = bpy.data.objects.get(
+        LightingPanelNames.Objects.LIGHTING_PANEL
+    )
     if lighting_panel_rig_obj:
-        to_del_coll = bpy.data.collections.get(LightingPanelNames.Collections.WIDGET_COLLECTION)
+        to_del_coll = bpy.data.collections.get(
+            LightingPanelNames.Collections.WIDGET_COLLECTION
+        )
         for obj in to_del_coll.objects:
             move_into_collection(obj.name, "wgt")
         to_del_coll = bpy.data.collections.get(LightingPanelNames.Collections.PICKER)
@@ -991,13 +1455,18 @@ def rig_character(
         for obj in to_del_coll.objects:
             move_into_collection(obj.name, char_name)
         # DO NOT INCLUDE CHILDREN. This will cause ColorPickers to be moved into the rig object.
-        move_into_collection(LightingPanelNames.Objects.LIGHTING_PANEL, char_name, include_children=False)
-        bpy.data.collections.remove(bpy.data.collections.get(LightingPanelNames.Collections.LIGHTING_PANEL), do_unlink=True)
+        move_into_collection(
+            LightingPanelNames.Objects.LIGHTING_PANEL, char_name, include_children=False
+        )
+        bpy.data.collections.remove(
+            bpy.data.collections.get(LightingPanelNames.Collections.LIGHTING_PANEL),
+            do_unlink=True,
+        )
 
     # If it exists, gets rid of the default collection.
     camera_coll = bpy.data.collections.get("Collection")
     if camera_coll:
-        bpy.data.collections.remove(camera_coll,do_unlink=True)
+        bpy.data.collections.remove(camera_coll, do_unlink=True)
 
     layer_collection = bpy.context.view_layer.layer_collection
     layerColl = searchForLayerCollection(layer_collection, "wgt")
@@ -1005,61 +1474,59 @@ def rig_character(
 
     layerColl.exclude = True
 
-    # Make our lives easier, display the bones as sticks and make sure we can view from front.    
-    bpy.data.armatures[original_name].display_type = 'STICK'
-    bpy.data.objects[char_name+"Rig"].show_in_front = True
+    # Make our lives easier, display the bones as sticks and make sure we can view from front.
+    bpy.data.armatures[original_name].display_type = "STICK"
+    bpy.data.objects[char_name + "Rig"].show_in_front = True
 
     # Going into pose mode with our character selected.
-    bpy.ops.object.select_all(action='DESELECT')
-    our_char =  bpy.data.objects.get(char_name+"Rig")
+    bpy.ops.object.select_all(action="DESELECT")
+    our_char = bpy.data.objects.get(char_name + "Rig")
     if our_char:
         our_char.select_set(True)
         bpy.context.view_layer.objects.active = our_char
-        
-        bpy.ops.object.mode_set(mode='POSE')
 
-    # Function to automatically move a bone (if it exists) to the specified bone layer. pass in num+1 than layer desired.        
-    def move_bone(bone_name,to_layers):
-        armature =  bpy.context.active_object
+        bpy.ops.object.mode_set(mode="POSE")
+
+    # Function to automatically move a bone (if it exists) to the specified bone layer. pass in num+1 than layer desired.
+    def move_bone(bone_name, to_layers):
+        armature = bpy.context.active_object
         armature_data = armature.data
-        
+
         if bone_name in armature_data.bones:
             bone = armature_data.bones[bone_name]
-            
+
             for i in range(32):
                 bone.layers[i] = False
-            
+
             to_layers = [to_layers] if isinstance(to_layers, int) else to_layers
-            
+
             for layer in to_layers:
                 bone.layers[layer] = True
                 print("enabling layer: " + str(layer) + " for " + bone_name)
-            
-
 
     if not is_version_4:
         # Put away every other bone to the physics layer (22)
         for bone in bpy.context.active_object.data.bones:
             if bone.layers[0]:  # Check if the bone is on layer face
                 move_bone(bone.name, 25)  # Move the bone to layer 23
-            
+
     # Let's append our root_shape custom bones
     path_to_file = file_path + "/Collection"
 
     # Bring in our collections: root shapes, face rig, and the eye rig
-    bpy.ops.wm.append(filename='append_Face Plate', directory=path_to_file)
+    bpy.ops.wm.append(filename="append_Face Plate", directory=path_to_file)
 
-    bpy.ops.wm.append(filename='append_Root', directory=path_to_file)
+    bpy.ops.wm.append(filename="append_Root", directory=path_to_file)
 
-    bpy.ops.wm.append(filename='append_Eyes', directory=path_to_file)
-    
-    bpy.ops.wm.append(filename='append_Pelvis', directory=path_to_file)
-    
-    bpy.ops.wm.append(filename='append_Foot', directory=path_to_file)
-    
-    bpy.ops.wm.append(filename='append_Hand', directory=path_to_file)
-    
-    bpy.ops.wm.append(filename='append_Props', directory=path_to_file)
+    bpy.ops.wm.append(filename="append_Eyes", directory=path_to_file)
+
+    bpy.ops.wm.append(filename="append_Pelvis", directory=path_to_file)
+
+    bpy.ops.wm.append(filename="append_Foot", directory=path_to_file)
+
+    bpy.ops.wm.append(filename="append_Hand", directory=path_to_file)
+
+    bpy.ops.wm.append(filename="append_Props", directory=path_to_file)
 
     this_obj = None
     for obj in bpy.data.objects:
@@ -1068,28 +1535,36 @@ def rig_character(
 
     this_obj.pose.bones["root"].custom_shape = bpy.data.objects["root plate.002"]
     this_obj.pose.bones["root"].use_custom_shape_bone_size = False
-    
-    this_obj.pose.bones["head"].custom_shape_scale_xyz = (1.65,1.65,1.65)
+
+    this_obj.pose.bones["head"].custom_shape_scale_xyz = (1.65, 1.65, 1.65)
     this_obj.pose.bones["head"].custom_shape = bpy.data.objects["neck"]
-    this_obj.pose.bones["head"].custom_shape_translation = (0.0,0.255,0.0)
+    this_obj.pose.bones["head"].custom_shape_translation = (0.0, 0.255, 0.0)
     this_obj.pose.bones["head"].custom_shape_rotation_euler[0] = 1.5708
     this_obj.pose.bones["head"].use_custom_shape_bone_size = False
-    
+
     this_obj.pose.bones["neck"].use_custom_shape_bone_size = False
     this_obj.pose.bones["neck"].custom_shape = bpy.data.objects["neck"]
-    this_obj.pose.bones["neck"].custom_shape_scale_xyz = (1,1,1)
-    this_obj.pose.bones["neck"].custom_shape_translation = (0.0,0.035,0.007)
+    this_obj.pose.bones["neck"].custom_shape_scale_xyz = (1, 1, 1)
+    this_obj.pose.bones["neck"].custom_shape_translation = (0.0, 0.035, 0.007)
     this_obj.pose.bones["neck"].custom_shape_rotation_euler[0] = 1.5708
-    
+
     this_obj.pose.bones["foot_ik.L"].use_custom_shape_bone_size = False
     this_obj.pose.bones["foot_ik.R"].use_custom_shape_bone_size = False
     this_obj.pose.bones["foot_ik.L"].custom_shape = bpy.data.objects["foot1"]
     this_obj.pose.bones["foot_ik.R"].custom_shape = bpy.data.objects["foot1"]
 
-    this_obj.pose.bones["thigh_ik_target.L"].custom_shape = bpy.data.objects["primo-joint"]
-    this_obj.pose.bones["thigh_ik_target.R"].custom_shape = bpy.data.objects["primo-joint"]
-    this_obj.pose.bones["upper_arm_ik_target.R"].custom_shape = bpy.data.objects["primo-joint"]
-    this_obj.pose.bones["upper_arm_ik_target.L"].custom_shape = bpy.data.objects["primo-joint"]
+    this_obj.pose.bones["thigh_ik_target.L"].custom_shape = bpy.data.objects[
+        "primo-joint"
+    ]
+    this_obj.pose.bones["thigh_ik_target.R"].custom_shape = bpy.data.objects[
+        "primo-joint"
+    ]
+    this_obj.pose.bones["upper_arm_ik_target.R"].custom_shape = bpy.data.objects[
+        "primo-joint"
+    ]
+    this_obj.pose.bones["upper_arm_ik_target.L"].custom_shape = bpy.data.objects[
+        "primo-joint"
+    ]
 
     this_obj.pose.bones["thigh_ik_target.L"].custom_shape_scale_xyz[0] = 0.75
     this_obj.pose.bones["thigh_ik_target.L"].custom_shape_scale_xyz[1] = 0.75
@@ -1100,46 +1575,45 @@ def rig_character(
 
     this_obj.pose.bones["torso"].custom_shape = bpy.data.objects["pelvis2"]
     this_obj.pose.bones["torso"].use_custom_shape_bone_size = False
-  
+
     this_obj.pose.bones["hips"].custom_shape = bpy.data.objects["hips"]
-    this_obj.pose.bones["hips"].custom_shape_scale_xyz = (1,1,1)
-    this_obj.pose.bones["hips"].custom_shape_translation = (0.0,-0.04,0.044)
+    this_obj.pose.bones["hips"].custom_shape_scale_xyz = (1, 1, 1)
+    this_obj.pose.bones["hips"].custom_shape_translation = (0.0, -0.04, 0.044)
     this_obj.pose.bones["hips"].custom_shape_rotation_euler[0] = 1.309
     this_obj.pose.bones["hips"].use_custom_shape_bone_size = False
-    
+
     this_obj.pose.bones["chest"].custom_shape = bpy.data.objects["chest"]
-    this_obj.pose.bones["chest"].custom_shape_scale_xyz = (0.6,0.6,0.6)
-    this_obj.pose.bones["chest"].custom_shape_translation = (0.0,0.18,0.0)
+    this_obj.pose.bones["chest"].custom_shape_scale_xyz = (0.6, 0.6, 0.6)
+    this_obj.pose.bones["chest"].custom_shape_translation = (0.0, 0.18, 0.0)
     this_obj.pose.bones["chest"].custom_shape_rotation_euler[0] = 1.5708
     this_obj.pose.bones["chest"].use_custom_shape_bone_size = False
-    
-    this_obj.pose.bones["shoulder.L"].custom_shape_scale_xyz = (1.6,1.6,1.6)
-    this_obj.pose.bones["shoulder.R"].custom_shape_scale_xyz = (1.6,1.6,1.6)
 
-    this_obj.pose.bones["foot_heel_ik.L"].custom_shape_translation = (0.0,0.06,0.0)
-    this_obj.pose.bones["foot_heel_ik.R"].custom_shape_translation = (0.0,0.06,0.0)
+    this_obj.pose.bones["shoulder.L"].custom_shape_scale_xyz = (1.6, 1.6, 1.6)
+    this_obj.pose.bones["shoulder.R"].custom_shape_scale_xyz = (1.6, 1.6, 1.6)
 
-    this_obj.pose.bones["foot_spin_ik.R"].custom_shape_translation = (0.0,-0.05,0.02)
-    this_obj.pose.bones["foot_spin_ik.L"].custom_shape_translation = (0.0,-0.05,0.02)
+    this_obj.pose.bones["foot_heel_ik.L"].custom_shape_translation = (0.0, 0.06, 0.0)
+    this_obj.pose.bones["foot_heel_ik.R"].custom_shape_translation = (0.0, 0.06, 0.0)
 
-    this_obj.pose.bones["toe_ik.L"].custom_shape_translation = (0.0,0.06,0.00)
-    this_obj.pose.bones["toe_ik.R"].custom_shape_translation = (0.0,0.06,0.00)
-    this_obj.pose.bones["toe_ik.L"].custom_shape_scale_xyz = (0.781,0.781,0.350)
-    this_obj.pose.bones["toe_ik.R"].custom_shape_scale_xyz = (0.781,0.781,0.350)
+    this_obj.pose.bones["foot_spin_ik.R"].custom_shape_translation = (0.0, -0.05, 0.02)
+    this_obj.pose.bones["foot_spin_ik.L"].custom_shape_translation = (0.0, -0.05, 0.02)
+
+    this_obj.pose.bones["toe_ik.L"].custom_shape_translation = (0.0, 0.06, 0.00)
+    this_obj.pose.bones["toe_ik.R"].custom_shape_translation = (0.0, 0.06, 0.00)
+    this_obj.pose.bones["toe_ik.L"].custom_shape_scale_xyz = (0.781, 0.781, 0.350)
+    this_obj.pose.bones["toe_ik.R"].custom_shape_scale_xyz = (0.781, 0.781, 0.350)
 
     this_obj.pose.bones["hand_ik.R"].use_custom_shape_bone_size = False
     this_obj.pose.bones["hand_ik.R"].custom_shape = bpy.data.objects["wrist"]
-    
+
     this_obj.pose.bones["hand_ik.L"].use_custom_shape_bone_size = False
     this_obj.pose.bones["hand_ik.L"].custom_shape = bpy.data.objects["wrist"]
 
-    this_obj.pose.bones["palm.L"].custom_shape_scale_xyz = (1.2,1.2,1.2)
-    this_obj.pose.bones["palm.R"].custom_shape_scale_xyz = (1.2,1.2,1.2)
-    
+    this_obj.pose.bones["palm.L"].custom_shape_scale_xyz = (1.2, 1.2, 1.2)
+    this_obj.pose.bones["palm.R"].custom_shape_scale_xyz = (1.2, 1.2, 1.2)
 
     # Merge the armatures; go into object mode and make sure nothing is selected
-    bpy.ops.object.mode_set(mode='OBJECT')
-    bpy.ops.object.select_all(action='DESELECT')
+    bpy.ops.object.mode_set(mode="OBJECT")
+    bpy.ops.object.select_all(action="DESELECT")
 
     # Select custom face armature
     face_rig_obj = bpy.data.objects.get("facerig")
@@ -1147,65 +1621,67 @@ def rig_character(
         face_rig_obj.select_set(True)
 
     # Select lighting panel armature
-    lighting_panel_rig_obj = bpy.data.objects.get(LightingPanelNames.Objects.LIGHTING_PANEL)
+    lighting_panel_rig_obj = bpy.data.objects.get(
+        LightingPanelNames.Objects.LIGHTING_PANEL
+    )
     if lighting_panel_rig_obj:
         lighting_panel_rig_obj.select_set(True)
 
-    # Select eye rig    
+    # Select eye rig
     eye_rig_obj = bpy.data.objects.get("eyerig")
     if eye_rig_obj:
         eye_rig_obj.select_set(True)
-    
-    # Select root rig    
+
+    # Select root rig
     root_rig_obj = bpy.data.objects.get("rootrig")
     if root_rig_obj:
         root_rig_obj.select_set(True)
-        
-    # Select pelvis rig    
+
+    # Select pelvis rig
     pelvis_rig_obj = bpy.data.objects.get("pelvisrig")
     if pelvis_rig_obj:
         pelvis_rig_obj.select_set(True)
-        
-    # Select foot L rig    
+
+    # Select foot L rig
     foot_l_rig_obj = bpy.data.objects.get("footrig-L")
     if foot_l_rig_obj:
         foot_l_rig_obj.select_set(True)
-        
-    # Select foot R rig    
+
+    # Select foot R rig
     foot_r_rig_obj = bpy.data.objects.get("footrig-R")
     if foot_r_rig_obj:
         foot_r_rig_obj.select_set(True)
-        
-    # Select hand R rig    
+
+    # Select hand R rig
     hand_r_rig_obj = bpy.data.objects.get("handrig-R")
     if hand_r_rig_obj:
         hand_r_rig_obj.select_set(True)
-        
-    # Select hand L rig    
+
+    # Select hand L rig
     hand_l_rig_obj = bpy.data.objects.get("handrig-L")
     if hand_l_rig_obj:
         hand_l_rig_obj.select_set(True)
-        
-    # Select prop rig   
+
+    # Select prop rig
     prop_rig_obj = bpy.data.objects.get("prop-rig")
     if prop_rig_obj:
         prop_rig_obj.select_set(True)
-            
+
     # Select char armature
     if our_char:
         our_char.select_set(True)
 
     # Join them
     bpy.ops.object.join()
-     
-    # We want to save all the VG names here, perhaps we can use them to identify weighted def bones.  
-    bpy.context.view_layer.objects.active = bpy.data.objects.get("Body")    
+
+    # We want to save all the VG names here, perhaps we can use them to identify weighted def bones.
+    bpy.context.view_layer.objects.active = bpy.data.objects.get("Body")
     try:
         vertex_groups_list = [vg.name for vg in bpy.context.object.vertex_groups]
     except:
         vertex_groups_list = []
     bpy.context.view_layer.objects.active = head_bone_arm_target
-    
+
     # Get the intersection point of a line with a perpendicular plane
     def project_line_in_space(points1, points2, axis):
         x1, y1, z1 = points1
@@ -1226,331 +1702,513 @@ def rig_character(
         return intersection_point
 
     # Select the object then access it's rig (its obj data)
-    ob = bpy.data.objects[char_name+"Rig"]
+    ob = bpy.data.objects[char_name + "Rig"]
     armature = ob.data
 
     # In edit mode, select platebone and head controller and set their parent bones.
-    bpy.ops.object.mode_set(mode='EDIT')
-    armature.edit_bones['plate-border'].parent = armature.edit_bones['head']
-    armature.edit_bones['plate-settings'].parent = armature.edit_bones['head']
+    bpy.ops.object.mode_set(mode="EDIT")
+    armature.edit_bones["plate-border"].parent = armature.edit_bones["head"]
+    armature.edit_bones["plate-settings"].parent = armature.edit_bones["head"]
     if armature.edit_bones.get(LightingPanelNames.Bones.LIGHTING_PANEL):
-        armature.edit_bones[LightingPanelNames.Bones.LIGHTING_PANEL].parent = armature.edit_bones['head']
-    
-    armature.edit_bones['plate-border'].head = armature.edit_bones['neck'].head.copy()
-    armature.edit_bones['plate-border'].tail = armature.edit_bones['neck'].tail.copy()
-    armature.edit_bones['plate-border'].head.x = 0.33
-    armature.edit_bones['plate-border'].head.y = 0
-    armature.edit_bones['plate-border'].tail.y = 0
-    armature.edit_bones['plate-border'].tail.x = 0.33
-    
-    armature.edit_bones['plate-settings'].head = armature.edit_bones['head'].head.copy()
-    armature.edit_bones['plate-settings'].tail = armature.edit_bones['head'].head.copy()
-    armature.edit_bones['plate-settings'].head.y = 0
-    armature.edit_bones['plate-settings'].tail.y = 0
-    armature.edit_bones['plate-settings'].head.z += 0.5
-    armature.edit_bones['plate-settings'].tail.z += 0.6
-    
+        armature.edit_bones[
+            LightingPanelNames.Bones.LIGHTING_PANEL
+        ].parent = armature.edit_bones["head"]
+
+    armature.edit_bones["plate-border"].head = armature.edit_bones["neck"].head.copy()
+    armature.edit_bones["plate-border"].tail = armature.edit_bones["neck"].tail.copy()
+    armature.edit_bones["plate-border"].head.x = 0.33
+    armature.edit_bones["plate-border"].head.y = 0
+    armature.edit_bones["plate-border"].tail.y = 0
+    armature.edit_bones["plate-border"].tail.x = 0.33
+
+    armature.edit_bones["plate-settings"].head = armature.edit_bones["head"].head.copy()
+    armature.edit_bones["plate-settings"].tail = armature.edit_bones["head"].head.copy()
+    armature.edit_bones["plate-settings"].head.y = 0
+    armature.edit_bones["plate-settings"].tail.y = 0
+    armature.edit_bones["plate-settings"].head.z += 0.5
+    armature.edit_bones["plate-settings"].tail.z += 0.6
+
     # While here, set inherit scales as needed.
-    armature.edit_bones['upper_arm_parent.L'].inherit_scale="NONE"
-    armature.edit_bones['upper_arm_parent.R'].inherit_scale="NONE"
-    armature.edit_bones['thigh_parent.L'].inherit_scale="NONE"
-    armature.edit_bones['thigh_parent.R'].inherit_scale="NONE"
-    armature.edit_bones['torso-outer'].inherit_scale="AVERAGE"
-    armature.edit_bones['torso-inner'].inherit_scale="FULL"
-    armature.edit_bones['torso'].inherit_scale="FULL"
+    armature.edit_bones["upper_arm_parent.L"].inherit_scale = "NONE"
+    armature.edit_bones["upper_arm_parent.R"].inherit_scale = "NONE"
+    armature.edit_bones["thigh_parent.L"].inherit_scale = "NONE"
+    armature.edit_bones["thigh_parent.R"].inherit_scale = "NONE"
+    armature.edit_bones["torso-outer"].inherit_scale = "AVERAGE"
+    armature.edit_bones["torso-inner"].inherit_scale = "FULL"
+    armature.edit_bones["torso"].inherit_scale = "FULL"
     # fix the bad rolls of the torso bone
-    armature.edit_bones['torso'].roll = 0
-    armature.edit_bones['torso-inner'].roll = 0
-    armature.edit_bones['torso-outer'].roll = 0
-    
-    armature.edit_bones['forearm_tweak-pin.R'].inherit_scale="AVERAGE"
-    armature.edit_bones['forearm_tweak-pin.L'].inherit_scale="AVERAGE"
-    armature.edit_bones['shin_tweak-pin.L'].inherit_scale="AVERAGE"
-    armature.edit_bones['shin_tweak-pin.R'].inherit_scale="AVERAGE"
-    armature.edit_bones['hand-ik-L'].inherit_scale="AVERAGE"
-    armature.edit_bones['hand-ik-R'].inherit_scale="AVERAGE"
-    armature.edit_bones['hand_ik.L'].inherit_scale="FULL"
-    armature.edit_bones['hand_ik.R'].inherit_scale="FULL"
-           
+    armature.edit_bones["torso"].roll = 0
+    armature.edit_bones["torso-inner"].roll = 0
+    armature.edit_bones["torso-outer"].roll = 0
+
+    armature.edit_bones["forearm_tweak-pin.R"].inherit_scale = "AVERAGE"
+    armature.edit_bones["forearm_tweak-pin.L"].inherit_scale = "AVERAGE"
+    armature.edit_bones["shin_tweak-pin.L"].inherit_scale = "AVERAGE"
+    armature.edit_bones["shin_tweak-pin.R"].inherit_scale = "AVERAGE"
+    armature.edit_bones["hand-ik-L"].inherit_scale = "AVERAGE"
+    armature.edit_bones["hand-ik-R"].inherit_scale = "AVERAGE"
+    armature.edit_bones["hand_ik.L"].inherit_scale = "FULL"
+    armature.edit_bones["hand_ik.R"].inherit_scale = "FULL"
+
     # Fixing Foot spin bone pos for chars with generated feet bones.
     if not toe_bones_exist:
-        armature.edit_bones['foot_spin_ik.L'].head.z = 0
-        armature.edit_bones['foot_spin_ik.L'].tail.z = 0
-        
-        armature.edit_bones['foot_spin_ik.R'].head.z = 0
-        armature.edit_bones['foot_spin_ik.R'].tail.z = 0
-    
-    # SET RELATIONSHIPS as needed after bringing in new bones  
-    armature.edit_bones['root'].parent = armature.edit_bones['root-inner']
-    
-    armature.edit_bones['torso-outer'].parent = armature.edit_bones['MCH-torso.parent']
-    armature.edit_bones['torso'].parent = armature.edit_bones['torso-inner']
-    armature.edit_bones['torso_pivot.002'].parent = armature.edit_bones['torso']
-    armature.edit_bones['hips'].parent = armature.edit_bones['MCH-torso_pivot.002']
-    armature.edit_bones['chest'].parent = armature.edit_bones['MCH-torso_pivot.002']
-    armature.edit_bones['MCH-spine.001'].parent = armature.edit_bones['MCH-torso_pivot.002']
-    armature.edit_bones['MCH-spine.002'].parent = armature.edit_bones['MCH-torso_pivot.002']
-    
-    armature.edit_bones['ik-pivot-L'].parent = armature.edit_bones['foot_ik.L']    
-    armature.edit_bones['ik-pivot-R'].parent = armature.edit_bones['foot_ik.R']    
-    armature.edit_bones['foot_spin_ik.L'].parent = armature.edit_bones['ik-target-L']    
-    armature.edit_bones['foot_spin_ik.R'].parent = armature.edit_bones['ik-target-R']   
+        armature.edit_bones["foot_spin_ik.L"].head.z = 0
+        armature.edit_bones["foot_spin_ik.L"].tail.z = 0
 
-    armature.edit_bones['hand-ik-L'].parent = armature.edit_bones['MCH-hand_ik.parent.L']    
-    armature.edit_bones['hand-ik-R'].parent = armature.edit_bones['MCH-hand_ik.parent.R']    
-    armature.edit_bones['hand_ik.L'].parent = armature.edit_bones['mch-hand-ik-pivot-L']
-    armature.edit_bones['hand_ik.R'].parent = armature.edit_bones['mch-hand-ik-pivot-R']    
-    armature.edit_bones['mch-hand-ik-wrist-L'].parent = armature.edit_bones['hand_ik.L']    
-    armature.edit_bones['mch-hand-ik-wrist-R'].parent = armature.edit_bones['hand_ik.R']    
-    armature.edit_bones['MCH-upper_arm_ik_target.L'].parent = armature.edit_bones['mch-hand-ik-wrist-L']    
-    armature.edit_bones['MCH-upper_arm_ik_target.R'].parent = armature.edit_bones['mch-hand-ik-wrist-R']
-    
-    armature.edit_bones['shoulder_driver.L'].parent = armature.edit_bones['ORG-spine.003']
-    armature.edit_bones['shoulder_driver.R'].parent = armature.edit_bones['ORG-spine.003']
-    armature.edit_bones['MCH-shoulder_follow.L'].parent = armature.edit_bones['ORG-spine.003']
-    armature.edit_bones['MCH-shoulder_follow.R'].parent = armature.edit_bones['ORG-spine.003']
-    armature.edit_bones['shoulder.L'].parent = armature.edit_bones['MCH-shoulder_follow.L']
-    armature.edit_bones['shoulder.R'].parent = armature.edit_bones['MCH-shoulder_follow.R']
-   
+        armature.edit_bones["foot_spin_ik.R"].head.z = 0
+        armature.edit_bones["foot_spin_ik.R"].tail.z = 0
+
+    # SET RELATIONSHIPS as needed after bringing in new bones
+    armature.edit_bones["root"].parent = armature.edit_bones["root-inner"]
+
+    armature.edit_bones["torso-outer"].parent = armature.edit_bones["MCH-torso.parent"]
+    armature.edit_bones["torso"].parent = armature.edit_bones["torso-inner"]
+    armature.edit_bones["torso_pivot.002"].parent = armature.edit_bones["torso"]
+    armature.edit_bones["hips"].parent = armature.edit_bones["MCH-torso_pivot.002"]
+    armature.edit_bones["chest"].parent = armature.edit_bones["MCH-torso_pivot.002"]
+    armature.edit_bones["MCH-spine.001"].parent = armature.edit_bones[
+        "MCH-torso_pivot.002"
+    ]
+    armature.edit_bones["MCH-spine.002"].parent = armature.edit_bones[
+        "MCH-torso_pivot.002"
+    ]
+
+    armature.edit_bones["ik-pivot-L"].parent = armature.edit_bones["foot_ik.L"]
+    armature.edit_bones["ik-pivot-R"].parent = armature.edit_bones["foot_ik.R"]
+    armature.edit_bones["foot_spin_ik.L"].parent = armature.edit_bones["ik-target-L"]
+    armature.edit_bones["foot_spin_ik.R"].parent = armature.edit_bones["ik-target-R"]
+
+    armature.edit_bones["hand-ik-L"].parent = armature.edit_bones[
+        "MCH-hand_ik.parent.L"
+    ]
+    armature.edit_bones["hand-ik-R"].parent = armature.edit_bones[
+        "MCH-hand_ik.parent.R"
+    ]
+    armature.edit_bones["hand_ik.L"].parent = armature.edit_bones["mch-hand-ik-pivot-L"]
+    armature.edit_bones["hand_ik.R"].parent = armature.edit_bones["mch-hand-ik-pivot-R"]
+    armature.edit_bones["mch-hand-ik-wrist-L"].parent = armature.edit_bones["hand_ik.L"]
+    armature.edit_bones["mch-hand-ik-wrist-R"].parent = armature.edit_bones["hand_ik.R"]
+    armature.edit_bones["MCH-upper_arm_ik_target.L"].parent = armature.edit_bones[
+        "mch-hand-ik-wrist-L"
+    ]
+    armature.edit_bones["MCH-upper_arm_ik_target.R"].parent = armature.edit_bones[
+        "mch-hand-ik-wrist-R"
+    ]
+
+    armature.edit_bones["shoulder_driver.L"].parent = armature.edit_bones[
+        "ORG-spine.003"
+    ]
+    armature.edit_bones["shoulder_driver.R"].parent = armature.edit_bones[
+        "ORG-spine.003"
+    ]
+    armature.edit_bones["MCH-shoulder_follow.L"].parent = armature.edit_bones[
+        "ORG-spine.003"
+    ]
+    armature.edit_bones["MCH-shoulder_follow.R"].parent = armature.edit_bones[
+        "ORG-spine.003"
+    ]
+    armature.edit_bones["shoulder.L"].parent = armature.edit_bones[
+        "MCH-shoulder_follow.L"
+    ]
+    armature.edit_bones["shoulder.R"].parent = armature.edit_bones[
+        "MCH-shoulder_follow.R"
+    ]
+
     # RENAME imported bones
     rename_bones_list = [("root", "root.002")]
     rename_bones_list.append(("root-inner", "root.001"))
     rename_bones_list.append(("root-outer", "root"))
-    
+
     rename_bones_list.append(("torso", "torso.002"))
     rename_bones_list.append(("torso-inner", "torso.001"))
     rename_bones_list.append(("torso-outer", "torso"))
-    
+
     rename_bones_list.append(("ik-pivot-L", "foot_ik_pivot.L"))
     rename_bones_list.append(("mch-ik-pivot-L", "MCH-foot_ik_pivot.L"))
     rename_bones_list.append(("ik-sub-pivot-L", "foot_ik_sub.L"))
     rename_bones_list.append(("ik-target-L", "MCH-thigh_ik_target_sub.L"))
-    
+
     rename_bones_list.append(("ik-pivot-R", "foot_ik_pivot.R"))
     rename_bones_list.append(("mch-ik-pivot-R", "MCH-foot_ik_pivot.R"))
     rename_bones_list.append(("ik-sub-pivot-R", "foot_ik_sub.R"))
     rename_bones_list.append(("ik-target-R", "MCH-thigh_ik_target_sub.R"))
-    
+
     rename_bones_list.append(("hand_ik.L", "hand_ik_wrist.L"))
     rename_bones_list.append(("hand-ik-L", "hand_ik.L"))
     rename_bones_list.append(("hand-ik-pivot-L", "hand_ik_pivot.L"))
     rename_bones_list.append(("mch-hand-ik-pivot-L", "MCH-hand_ik_pivot.L"))
     rename_bones_list.append(("mch-hand-ik-wrist-L", "MCH-hand_ik_wrist.L"))
-    
+
     rename_bones_list.append(("hand_ik.R", "hand_ik_wrist.R"))
     rename_bones_list.append(("hand-ik-R", "hand_ik.R"))
     rename_bones_list.append(("hand-ik-pivot-R", "hand_ik_pivot.R"))
     rename_bones_list.append(("mch-hand-ik-pivot-R", "MCH-hand_ik_pivot.R"))
     rename_bones_list.append(("mch-hand-ik-wrist-R", "MCH-hand_ik_wrist.R"))
 
-    
     # TORSO POS fixing
     # armature.edit_bones['torso'].roll = -1.5708
-    torso_head_pos = armature.edit_bones['torso'].head.copy()
-    torso_tail_pos = armature.edit_bones['torso'].tail.copy()
-    
-    armature.edit_bones['torso-inner'].head = torso_head_pos
-    armature.edit_bones['torso-inner'].tail = torso_tail_pos
-    armature.edit_bones['torso-inner'].tail.y += 0.05
-    
-    armature.edit_bones['torso-outer'].head = torso_head_pos
-    armature.edit_bones['torso-outer'].tail = torso_tail_pos
-    armature.edit_bones['torso-outer'].tail.y += 0.1
-    
-    armature.edit_bones['torso_pivot.002'].head = torso_head_pos
-    armature.edit_bones['torso_pivot.002'].tail = torso_tail_pos
-    
-    armature.edit_bones['MCH-torso_pivot.002'].head = torso_head_pos
-    armature.edit_bones['MCH-torso_pivot.002'].tail = torso_tail_pos
-    armature.edit_bones['MCH-torso_pivot.002'].length -= 0.09
-    
-    # FOOT POS fixing: Remember to use old bone names pre renaming
-    foot_L_z_diff = armature.edit_bones['foot_ik.L'].tail.z - armature.edit_bones['foot_spin_ik.L'].tail.z
-    foot_R_z_diff = armature.edit_bones['foot_ik.R'].tail.z - armature.edit_bones['foot_spin_ik.R'].tail.z
-       
-    armature.edit_bones['ik-sub-pivot-L'].head = armature.edit_bones['foot_ik.L'].head.copy()
-    armature.edit_bones['ik-sub-pivot-L'].tail = armature.edit_bones['foot_ik.L'].tail.copy()
-    
-    armature.edit_bones['ik-sub-pivot-R'].head = armature.edit_bones['foot_ik.R'].head.copy()
-    armature.edit_bones['ik-sub-pivot-R'].tail = armature.edit_bones['foot_ik.R'].tail.copy()
-    
-    armature.edit_bones['ik-pivot-L'].head = armature.edit_bones['MCH-heel.02_roll2.L'].head.copy()
-    armature.edit_bones['ik-pivot-L'].tail = armature.edit_bones['MCH-heel.02_roll2.L'].tail.copy()
-    armature.edit_bones['ik-pivot-L'].tail.y += 0.05
-    
-    armature.edit_bones['ik-pivot-R'].head = armature.edit_bones['MCH-heel.02_roll2.R'].head.copy()
-    armature.edit_bones['ik-pivot-R'].tail = armature.edit_bones['MCH-heel.02_roll2.R'].tail.copy()
-    armature.edit_bones['ik-pivot-R'].tail.y += 0.05
-    
-    armature.edit_bones['mch-ik-pivot-L'].head = armature.edit_bones['MCH-heel.02_roll2.L'].head.copy()
-    armature.edit_bones['mch-ik-pivot-L'].tail = armature.edit_bones['MCH-heel.02_roll2.L'].tail.copy()
-    
-    armature.edit_bones['mch-ik-pivot-R'].head = armature.edit_bones['MCH-heel.02_roll2.R'].head.copy()
-    armature.edit_bones['mch-ik-pivot-R'].tail = armature.edit_bones['MCH-heel.02_roll2.R'].tail.copy()
-    
-    armature.edit_bones['ik-target-L'].head = armature.edit_bones['foot_tweak.L'].head.copy()
-    armature.edit_bones['ik-target-L'].tail = armature.edit_bones['foot_tweak.L'].tail.copy()
-    
-    armature.edit_bones['ik-target-R'].head = armature.edit_bones['foot_tweak.R'].head.copy()
-    armature.edit_bones['ik-target-R'].tail = armature.edit_bones['foot_tweak.R'].tail.copy()
-    
-    foot_L_x_diff = armature.edit_bones['ik-sub-pivot-L'].tail.x - armature.edit_bones['foot_spin_ik.L'].tail.x
-    foot_R_x_diff = armature.edit_bones['ik-sub-pivot-R'].tail.x - armature.edit_bones['foot_spin_ik.R'].tail.x
-    
-    armature.edit_bones['MCH-shin_tweak-pin.parent.R'].head = armature.edit_bones['MCH-shin_ik.L'].head.copy()
-    armature.edit_bones['MCH-shin_tweak-pin.parent.R'].tail.z = armature.edit_bones['MCH-shin_ik.L'].tail.z
-    armature.edit_bones['MCH-shin_tweak-pin.parent.R'].tail.x = armature.edit_bones['MCH-shin_ik.L'].tail.x
-    armature.edit_bones['MCH-shin_tweak-pin.parent.R'].roll = 0
-    armature.edit_bones['MCH-shin_tweak-pin.parent.R'].length = .02
-    
-    armature.edit_bones['shin_tweak-pin.L'].head = armature.edit_bones['MCH-shin_ik.L'].head.copy()
-    armature.edit_bones['shin_tweak-pin.L'].tail = armature.edit_bones['MCH-shin_ik.L'].tail.copy()
-    armature.edit_bones['shin_tweak-pin.L'].roll = armature.edit_bones['MCH-shin_ik.L'].roll
-    armature.edit_bones['shin_tweak-pin.L'].length -= 0.15
-    
-    armature.edit_bones['MCH-shin_tweak-pin.parent.R'].head = armature.edit_bones['MCH-shin_ik.R'].head.copy()
-    armature.edit_bones['MCH-shin_tweak-pin.parent.R'].tail.z = armature.edit_bones['MCH-shin_ik.R'].tail.z
-    armature.edit_bones['MCH-shin_tweak-pin.parent.R'].tail.x = armature.edit_bones['MCH-shin_ik.R'].tail.x
-    armature.edit_bones['MCH-shin_tweak-pin.parent.R'].roll = 0
-    armature.edit_bones['MCH-shin_tweak-pin.parent.R'].length = .02
-    
-    armature.edit_bones['shin_tweak-pin.R'].head = armature.edit_bones['MCH-shin_ik.R'].head.copy()
-    armature.edit_bones['shin_tweak-pin.R'].tail = armature.edit_bones['MCH-shin_ik.R'].tail.copy()
-    armature.edit_bones['shin_tweak-pin.R'].roll = armature.edit_bones['MCH-shin_ik.R'].roll
-    armature.edit_bones['shin_tweak-pin.R'].length -= 0.15
-    
-    # HAND POS Fixing
-    armature.edit_bones['hand-ik-L'].head = armature.edit_bones['hand_ik.L'].head.copy()
-    armature.edit_bones['hand-ik-L'].tail = armature.edit_bones['hand_ik.L'].tail.copy()
-    armature.edit_bones['hand-ik-L'].roll = armature.edit_bones['hand_ik.L'].roll
-    
-    armature.edit_bones['hand-ik-pivot-L'].head = armature.edit_bones['hand_ik.L'].head.copy()
-    armature.edit_bones['hand-ik-pivot-L'].tail = armature.edit_bones['hand_ik.L'].tail.copy()
-    armature.edit_bones['hand-ik-pivot-L'].roll = armature.edit_bones['hand_ik.L'].roll
-    
-    armature.edit_bones['mch-hand-ik-pivot-L'].head = armature.edit_bones['hand_ik.L'].head.copy()
-    armature.edit_bones['mch-hand-ik-pivot-L'].tail = armature.edit_bones['hand_ik.L'].tail.copy()
-    armature.edit_bones['mch-hand-ik-pivot-L'].roll = armature.edit_bones['hand_ik.L'].roll
-    armature.edit_bones['mch-hand-ik-pivot-L'].length -= 0.03
-    
-    armature.edit_bones['mch-hand-ik-wrist-L'].head = armature.edit_bones['hand_ik.L'].head.copy()
-    armature.edit_bones['mch-hand-ik-wrist-L'].tail = armature.edit_bones['hand_ik.L'].tail.copy()
-    armature.edit_bones['mch-hand-ik-wrist-L'].roll = armature.edit_bones['hand_ik.L'].roll
-    armature.edit_bones['mch-hand-ik-wrist-L'].length -= 0.04
-    
-    armature.edit_bones['hand-ik-R'].head = armature.edit_bones['hand_ik.R'].head.copy()
-    armature.edit_bones['hand-ik-R'].tail = armature.edit_bones['hand_ik.R'].tail.copy()
-    armature.edit_bones['hand-ik-R'].roll = armature.edit_bones['hand_ik.R'].roll
-    
-    armature.edit_bones['hand-ik-pivot-R'].head = armature.edit_bones['hand_ik.R'].head.copy()
-    armature.edit_bones['hand-ik-pivot-R'].tail = armature.edit_bones['hand_ik.R'].tail.copy()
-    armature.edit_bones['hand-ik-pivot-R'].roll = armature.edit_bones['hand_ik.R'].roll
-    
-    armature.edit_bones['mch-hand-ik-pivot-R'].head = armature.edit_bones['hand_ik.R'].head.copy()
-    armature.edit_bones['mch-hand-ik-pivot-R'].tail = armature.edit_bones['hand_ik.R'].tail.copy()
-    armature.edit_bones['mch-hand-ik-pivot-R'].roll = armature.edit_bones['hand_ik.R'].roll
-    armature.edit_bones['mch-hand-ik-pivot-R'].length -= 0.03
-    
-    armature.edit_bones['mch-hand-ik-wrist-R'].head = armature.edit_bones['hand_ik.R'].head.copy()
-    armature.edit_bones['mch-hand-ik-wrist-R'].tail = armature.edit_bones['hand_ik.R'].tail.copy()
-    armature.edit_bones['mch-hand-ik-wrist-R'].roll = armature.edit_bones['hand_ik.R'].roll
-    armature.edit_bones['mch-hand-ik-wrist-R'].length -= 0.04
-    
-    armature.edit_bones['MCH-forearm_tweak-pin.parent.L'].head = armature.edit_bones['MCH-forearm_ik.L'].head.copy()
-    armature.edit_bones['MCH-forearm_tweak-pin.parent.L'].tail.z = armature.edit_bones['MCH-forearm_ik.L'].tail.z
-    armature.edit_bones['MCH-forearm_tweak-pin.parent.L'].tail.x = armature.edit_bones['MCH-forearm_ik.L'].tail.x
-    armature.edit_bones['MCH-forearm_tweak-pin.parent.L'].roll = 0
-    armature.edit_bones['MCH-forearm_tweak-pin.parent.L'].length = .02
-    
-    armature.edit_bones['forearm_tweak-pin.L'].head = armature.edit_bones['MCH-forearm_ik.L'].head.copy()
-    armature.edit_bones['forearm_tweak-pin.L'].tail = armature.edit_bones['MCH-forearm_ik.L'].tail.copy()
-    armature.edit_bones['forearm_tweak-pin.L'].roll = armature.edit_bones['MCH-forearm_ik.L'].roll
-    armature.edit_bones['forearm_tweak-pin.L'].length -= 0.15
-    
-    armature.edit_bones['MCH-forearm_tweak-pin.parent.R'].head = armature.edit_bones['MCH-forearm_ik.R'].head.copy()
-    armature.edit_bones['MCH-forearm_tweak-pin.parent.R'].tail.z = armature.edit_bones['MCH-forearm_ik.R'].tail.z
-    armature.edit_bones['MCH-forearm_tweak-pin.parent.R'].tail.x = armature.edit_bones['MCH-forearm_ik.R'].tail.x
-    armature.edit_bones['MCH-forearm_tweak-pin.parent.R'].roll = 0
-    armature.edit_bones['MCH-forearm_tweak-pin.parent.R'].length = .02
-    
-    armature.edit_bones['forearm_tweak-pin.R'].head = armature.edit_bones['MCH-forearm_ik.R'].head.copy()
-    armature.edit_bones['forearm_tweak-pin.R'].tail = armature.edit_bones['MCH-forearm_ik.R'].tail.copy()
-    armature.edit_bones['forearm_tweak-pin.R'].roll = armature.edit_bones['MCH-forearm_ik.R'].roll
-    armature.edit_bones['forearm_tweak-pin.R'].length -= 0.15
-    
-    armature.edit_bones['shoulder_driver.L'].head = project_line_in_space(armature.edit_bones['shoulder.L'].head.copy(),armature.edit_bones['shoulder.L'].tail.copy(), armature.edit_bones['hand_ik.L'].head.x)
-    armature.edit_bones['shoulder_driver.L'].tail = project_line_in_space(armature.edit_bones['shoulder.L'].head.copy(),armature.edit_bones['shoulder.L'].tail.copy(), armature.edit_bones['hand_ik.L'].head.x)
-    armature.edit_bones['shoulder_driver.L'].tail.y += 0.1
-    
-    armature.edit_bones['shoulder_driver.R'].head = project_line_in_space(armature.edit_bones['shoulder.R'].head.copy(),armature.edit_bones['shoulder.R'].tail.copy(), armature.edit_bones['hand_ik.R'].head.x)
-    armature.edit_bones['shoulder_driver.R'].tail = project_line_in_space(armature.edit_bones['shoulder.R'].head.copy(),armature.edit_bones['shoulder.R'].tail.copy(), armature.edit_bones['hand_ik.R'].head.x)
-    armature.edit_bones['shoulder_driver.R'].tail.y += 0.1
-    
-    armature.edit_bones['MCH-shoulder_follow.L'].head = armature.edit_bones['shoulder.L'].head.copy()
-    armature.edit_bones['MCH-shoulder_follow.L'].tail = armature.edit_bones['shoulder.L'].tail.copy()
-    
-    armature.edit_bones['MCH-shoulder_follow.R'].head = armature.edit_bones['shoulder.R'].head.copy()
-    armature.edit_bones['MCH-shoulder_follow.R'].tail = armature.edit_bones['shoulder.R'].tail.copy()
+    torso_head_pos = armature.edit_bones["torso"].head.copy()
+    torso_tail_pos = armature.edit_bones["torso"].tail.copy()
 
-   
+    armature.edit_bones["torso-inner"].head = torso_head_pos
+    armature.edit_bones["torso-inner"].tail = torso_tail_pos
+    armature.edit_bones["torso-inner"].tail.y += 0.05
+
+    armature.edit_bones["torso-outer"].head = torso_head_pos
+    armature.edit_bones["torso-outer"].tail = torso_tail_pos
+    armature.edit_bones["torso-outer"].tail.y += 0.1
+
+    armature.edit_bones["torso_pivot.002"].head = torso_head_pos
+    armature.edit_bones["torso_pivot.002"].tail = torso_tail_pos
+
+    armature.edit_bones["MCH-torso_pivot.002"].head = torso_head_pos
+    armature.edit_bones["MCH-torso_pivot.002"].tail = torso_tail_pos
+    armature.edit_bones["MCH-torso_pivot.002"].length -= 0.09
+
+    # FOOT POS fixing: Remember to use old bone names pre renaming
+    foot_L_z_diff = (
+        armature.edit_bones["foot_ik.L"].tail.z
+        - armature.edit_bones["foot_spin_ik.L"].tail.z
+    )
+    foot_R_z_diff = (
+        armature.edit_bones["foot_ik.R"].tail.z
+        - armature.edit_bones["foot_spin_ik.R"].tail.z
+    )
+
+    armature.edit_bones["ik-sub-pivot-L"].head = armature.edit_bones[
+        "foot_ik.L"
+    ].head.copy()
+    armature.edit_bones["ik-sub-pivot-L"].tail = armature.edit_bones[
+        "foot_ik.L"
+    ].tail.copy()
+
+    armature.edit_bones["ik-sub-pivot-R"].head = armature.edit_bones[
+        "foot_ik.R"
+    ].head.copy()
+    armature.edit_bones["ik-sub-pivot-R"].tail = armature.edit_bones[
+        "foot_ik.R"
+    ].tail.copy()
+
+    armature.edit_bones["ik-pivot-L"].head = armature.edit_bones[
+        "MCH-heel.02_roll2.L"
+    ].head.copy()
+    armature.edit_bones["ik-pivot-L"].tail = armature.edit_bones[
+        "MCH-heel.02_roll2.L"
+    ].tail.copy()
+    armature.edit_bones["ik-pivot-L"].tail.y += 0.05
+
+    armature.edit_bones["ik-pivot-R"].head = armature.edit_bones[
+        "MCH-heel.02_roll2.R"
+    ].head.copy()
+    armature.edit_bones["ik-pivot-R"].tail = armature.edit_bones[
+        "MCH-heel.02_roll2.R"
+    ].tail.copy()
+    armature.edit_bones["ik-pivot-R"].tail.y += 0.05
+
+    armature.edit_bones["mch-ik-pivot-L"].head = armature.edit_bones[
+        "MCH-heel.02_roll2.L"
+    ].head.copy()
+    armature.edit_bones["mch-ik-pivot-L"].tail = armature.edit_bones[
+        "MCH-heel.02_roll2.L"
+    ].tail.copy()
+
+    armature.edit_bones["mch-ik-pivot-R"].head = armature.edit_bones[
+        "MCH-heel.02_roll2.R"
+    ].head.copy()
+    armature.edit_bones["mch-ik-pivot-R"].tail = armature.edit_bones[
+        "MCH-heel.02_roll2.R"
+    ].tail.copy()
+
+    armature.edit_bones["ik-target-L"].head = armature.edit_bones[
+        "foot_tweak.L"
+    ].head.copy()
+    armature.edit_bones["ik-target-L"].tail = armature.edit_bones[
+        "foot_tweak.L"
+    ].tail.copy()
+
+    armature.edit_bones["ik-target-R"].head = armature.edit_bones[
+        "foot_tweak.R"
+    ].head.copy()
+    armature.edit_bones["ik-target-R"].tail = armature.edit_bones[
+        "foot_tweak.R"
+    ].tail.copy()
+
+    foot_L_x_diff = (
+        armature.edit_bones["ik-sub-pivot-L"].tail.x
+        - armature.edit_bones["foot_spin_ik.L"].tail.x
+    )
+    foot_R_x_diff = (
+        armature.edit_bones["ik-sub-pivot-R"].tail.x
+        - armature.edit_bones["foot_spin_ik.R"].tail.x
+    )
+
+    armature.edit_bones["MCH-shin_tweak-pin.parent.R"].head = armature.edit_bones[
+        "MCH-shin_ik.L"
+    ].head.copy()
+    armature.edit_bones["MCH-shin_tweak-pin.parent.R"].tail.z = armature.edit_bones[
+        "MCH-shin_ik.L"
+    ].tail.z
+    armature.edit_bones["MCH-shin_tweak-pin.parent.R"].tail.x = armature.edit_bones[
+        "MCH-shin_ik.L"
+    ].tail.x
+    armature.edit_bones["MCH-shin_tweak-pin.parent.R"].roll = 0
+    armature.edit_bones["MCH-shin_tweak-pin.parent.R"].length = 0.02
+
+    armature.edit_bones["shin_tweak-pin.L"].head = armature.edit_bones[
+        "MCH-shin_ik.L"
+    ].head.copy()
+    armature.edit_bones["shin_tweak-pin.L"].tail = armature.edit_bones[
+        "MCH-shin_ik.L"
+    ].tail.copy()
+    armature.edit_bones["shin_tweak-pin.L"].roll = armature.edit_bones[
+        "MCH-shin_ik.L"
+    ].roll
+    armature.edit_bones["shin_tweak-pin.L"].length -= 0.15
+
+    armature.edit_bones["MCH-shin_tweak-pin.parent.R"].head = armature.edit_bones[
+        "MCH-shin_ik.R"
+    ].head.copy()
+    armature.edit_bones["MCH-shin_tweak-pin.parent.R"].tail.z = armature.edit_bones[
+        "MCH-shin_ik.R"
+    ].tail.z
+    armature.edit_bones["MCH-shin_tweak-pin.parent.R"].tail.x = armature.edit_bones[
+        "MCH-shin_ik.R"
+    ].tail.x
+    armature.edit_bones["MCH-shin_tweak-pin.parent.R"].roll = 0
+    armature.edit_bones["MCH-shin_tweak-pin.parent.R"].length = 0.02
+
+    armature.edit_bones["shin_tweak-pin.R"].head = armature.edit_bones[
+        "MCH-shin_ik.R"
+    ].head.copy()
+    armature.edit_bones["shin_tweak-pin.R"].tail = armature.edit_bones[
+        "MCH-shin_ik.R"
+    ].tail.copy()
+    armature.edit_bones["shin_tweak-pin.R"].roll = armature.edit_bones[
+        "MCH-shin_ik.R"
+    ].roll
+    armature.edit_bones["shin_tweak-pin.R"].length -= 0.15
+
+    # HAND POS Fixing
+    armature.edit_bones["hand-ik-L"].head = armature.edit_bones["hand_ik.L"].head.copy()
+    armature.edit_bones["hand-ik-L"].tail = armature.edit_bones["hand_ik.L"].tail.copy()
+    armature.edit_bones["hand-ik-L"].roll = armature.edit_bones["hand_ik.L"].roll
+
+    armature.edit_bones["hand-ik-pivot-L"].head = armature.edit_bones[
+        "hand_ik.L"
+    ].head.copy()
+    armature.edit_bones["hand-ik-pivot-L"].tail = armature.edit_bones[
+        "hand_ik.L"
+    ].tail.copy()
+    armature.edit_bones["hand-ik-pivot-L"].roll = armature.edit_bones["hand_ik.L"].roll
+
+    armature.edit_bones["mch-hand-ik-pivot-L"].head = armature.edit_bones[
+        "hand_ik.L"
+    ].head.copy()
+    armature.edit_bones["mch-hand-ik-pivot-L"].tail = armature.edit_bones[
+        "hand_ik.L"
+    ].tail.copy()
+    armature.edit_bones["mch-hand-ik-pivot-L"].roll = armature.edit_bones[
+        "hand_ik.L"
+    ].roll
+    armature.edit_bones["mch-hand-ik-pivot-L"].length -= 0.03
+
+    armature.edit_bones["mch-hand-ik-wrist-L"].head = armature.edit_bones[
+        "hand_ik.L"
+    ].head.copy()
+    armature.edit_bones["mch-hand-ik-wrist-L"].tail = armature.edit_bones[
+        "hand_ik.L"
+    ].tail.copy()
+    armature.edit_bones["mch-hand-ik-wrist-L"].roll = armature.edit_bones[
+        "hand_ik.L"
+    ].roll
+    armature.edit_bones["mch-hand-ik-wrist-L"].length -= 0.04
+
+    armature.edit_bones["hand-ik-R"].head = armature.edit_bones["hand_ik.R"].head.copy()
+    armature.edit_bones["hand-ik-R"].tail = armature.edit_bones["hand_ik.R"].tail.copy()
+    armature.edit_bones["hand-ik-R"].roll = armature.edit_bones["hand_ik.R"].roll
+
+    armature.edit_bones["hand-ik-pivot-R"].head = armature.edit_bones[
+        "hand_ik.R"
+    ].head.copy()
+    armature.edit_bones["hand-ik-pivot-R"].tail = armature.edit_bones[
+        "hand_ik.R"
+    ].tail.copy()
+    armature.edit_bones["hand-ik-pivot-R"].roll = armature.edit_bones["hand_ik.R"].roll
+
+    armature.edit_bones["mch-hand-ik-pivot-R"].head = armature.edit_bones[
+        "hand_ik.R"
+    ].head.copy()
+    armature.edit_bones["mch-hand-ik-pivot-R"].tail = armature.edit_bones[
+        "hand_ik.R"
+    ].tail.copy()
+    armature.edit_bones["mch-hand-ik-pivot-R"].roll = armature.edit_bones[
+        "hand_ik.R"
+    ].roll
+    armature.edit_bones["mch-hand-ik-pivot-R"].length -= 0.03
+
+    armature.edit_bones["mch-hand-ik-wrist-R"].head = armature.edit_bones[
+        "hand_ik.R"
+    ].head.copy()
+    armature.edit_bones["mch-hand-ik-wrist-R"].tail = armature.edit_bones[
+        "hand_ik.R"
+    ].tail.copy()
+    armature.edit_bones["mch-hand-ik-wrist-R"].roll = armature.edit_bones[
+        "hand_ik.R"
+    ].roll
+    armature.edit_bones["mch-hand-ik-wrist-R"].length -= 0.04
+
+    armature.edit_bones["MCH-forearm_tweak-pin.parent.L"].head = armature.edit_bones[
+        "MCH-forearm_ik.L"
+    ].head.copy()
+    armature.edit_bones["MCH-forearm_tweak-pin.parent.L"].tail.z = armature.edit_bones[
+        "MCH-forearm_ik.L"
+    ].tail.z
+    armature.edit_bones["MCH-forearm_tweak-pin.parent.L"].tail.x = armature.edit_bones[
+        "MCH-forearm_ik.L"
+    ].tail.x
+    armature.edit_bones["MCH-forearm_tweak-pin.parent.L"].roll = 0
+    armature.edit_bones["MCH-forearm_tweak-pin.parent.L"].length = 0.02
+
+    armature.edit_bones["forearm_tweak-pin.L"].head = armature.edit_bones[
+        "MCH-forearm_ik.L"
+    ].head.copy()
+    armature.edit_bones["forearm_tweak-pin.L"].tail = armature.edit_bones[
+        "MCH-forearm_ik.L"
+    ].tail.copy()
+    armature.edit_bones["forearm_tweak-pin.L"].roll = armature.edit_bones[
+        "MCH-forearm_ik.L"
+    ].roll
+    armature.edit_bones["forearm_tweak-pin.L"].length -= 0.15
+
+    armature.edit_bones["MCH-forearm_tweak-pin.parent.R"].head = armature.edit_bones[
+        "MCH-forearm_ik.R"
+    ].head.copy()
+    armature.edit_bones["MCH-forearm_tweak-pin.parent.R"].tail.z = armature.edit_bones[
+        "MCH-forearm_ik.R"
+    ].tail.z
+    armature.edit_bones["MCH-forearm_tweak-pin.parent.R"].tail.x = armature.edit_bones[
+        "MCH-forearm_ik.R"
+    ].tail.x
+    armature.edit_bones["MCH-forearm_tweak-pin.parent.R"].roll = 0
+    armature.edit_bones["MCH-forearm_tweak-pin.parent.R"].length = 0.02
+
+    armature.edit_bones["forearm_tweak-pin.R"].head = armature.edit_bones[
+        "MCH-forearm_ik.R"
+    ].head.copy()
+    armature.edit_bones["forearm_tweak-pin.R"].tail = armature.edit_bones[
+        "MCH-forearm_ik.R"
+    ].tail.copy()
+    armature.edit_bones["forearm_tweak-pin.R"].roll = armature.edit_bones[
+        "MCH-forearm_ik.R"
+    ].roll
+    armature.edit_bones["forearm_tweak-pin.R"].length -= 0.15
+
+    armature.edit_bones["shoulder_driver.L"].head = project_line_in_space(
+        armature.edit_bones["shoulder.L"].head.copy(),
+        armature.edit_bones["shoulder.L"].tail.copy(),
+        armature.edit_bones["hand_ik.L"].head.x,
+    )
+    armature.edit_bones["shoulder_driver.L"].tail = project_line_in_space(
+        armature.edit_bones["shoulder.L"].head.copy(),
+        armature.edit_bones["shoulder.L"].tail.copy(),
+        armature.edit_bones["hand_ik.L"].head.x,
+    )
+    armature.edit_bones["shoulder_driver.L"].tail.y += 0.1
+
+    armature.edit_bones["shoulder_driver.R"].head = project_line_in_space(
+        armature.edit_bones["shoulder.R"].head.copy(),
+        armature.edit_bones["shoulder.R"].tail.copy(),
+        armature.edit_bones["hand_ik.R"].head.x,
+    )
+    armature.edit_bones["shoulder_driver.R"].tail = project_line_in_space(
+        armature.edit_bones["shoulder.R"].head.copy(),
+        armature.edit_bones["shoulder.R"].tail.copy(),
+        armature.edit_bones["hand_ik.R"].head.x,
+    )
+    armature.edit_bones["shoulder_driver.R"].tail.y += 0.1
+
+    armature.edit_bones["MCH-shoulder_follow.L"].head = armature.edit_bones[
+        "shoulder.L"
+    ].head.copy()
+    armature.edit_bones["MCH-shoulder_follow.L"].tail = armature.edit_bones[
+        "shoulder.L"
+    ].tail.copy()
+
+    armature.edit_bones["MCH-shoulder_follow.R"].head = armature.edit_bones[
+        "shoulder.R"
+    ].head.copy()
+    armature.edit_bones["MCH-shoulder_follow.R"].tail = armature.edit_bones[
+        "shoulder.R"
+    ].tail.copy()
+
     try:
         armature.edit_bones["DEF-eye.L"].name = "+EyeBone L A01"
         armature.edit_bones["DEF-eye.R"].name = "+EyeBone R A01"
 
         # Properly finish the parenting of the eye rig we imported!
-        armature.edit_bones['eyetrack'].parent = armature.edit_bones['head']
-        armature.edit_bones['+EyeBone R A01.001'].parent = armature.edit_bones['head']
-        armature.edit_bones['+EyeBone L A01.001'].parent = armature.edit_bones['head']
+        armature.edit_bones["eyetrack"].parent = armature.edit_bones["head"]
+        armature.edit_bones["+EyeBone R A01.001"].parent = armature.edit_bones["head"]
+        armature.edit_bones["+EyeBone L A01.001"].parent = armature.edit_bones["head"]
 
         # Now we need to position them to the existing bones.
-        eye_R_head_pos = armature.edit_bones['+EyeBone R A01'].head
-        eye_L_head_pos = armature.edit_bones['+EyeBone L A01'].head
+        eye_R_head_pos = armature.edit_bones["+EyeBone R A01"].head
+        eye_L_head_pos = armature.edit_bones["+EyeBone L A01"].head
 
+        armature.edit_bones["+EyeBone R A01.001"].head = eye_R_head_pos
+        armature.edit_bones["+EyeBone R A01.001"].tail.x = eye_R_head_pos[0]
+        armature.edit_bones["+EyeBone R A01.001"].tail.y = armature.edit_bones[
+            "+EyeBone R A01"
+        ].tail.y
+        armature.edit_bones["+EyeBone R A01.001"].tail.z = eye_R_head_pos[2]
 
-        armature.edit_bones['+EyeBone R A01.001'].head = eye_R_head_pos
-        armature.edit_bones['+EyeBone R A01.001'].tail.x = eye_R_head_pos[0]
-        armature.edit_bones['+EyeBone R A01.001'].tail.y = armature.edit_bones['+EyeBone R A01'].tail.y
-        armature.edit_bones['+EyeBone R A01.001'].tail.z = eye_R_head_pos[2]
+        armature.edit_bones["+EyeBone L A01.001"].head = eye_L_head_pos
+        armature.edit_bones["+EyeBone L A01.001"].tail.x = eye_L_head_pos[0]
+        armature.edit_bones["+EyeBone L A01.001"].tail.y = armature.edit_bones[
+            "+EyeBone L A01"
+        ].tail.y
+        armature.edit_bones["+EyeBone L A01.001"].tail.z = eye_L_head_pos[2]
 
-        armature.edit_bones['+EyeBone L A01.001'].head = eye_L_head_pos
-        armature.edit_bones['+EyeBone L A01.001'].tail.x = eye_L_head_pos[0]
-        armature.edit_bones['+EyeBone L A01.001'].tail.y = armature.edit_bones['+EyeBone L A01'].tail.y
-        armature.edit_bones['+EyeBone L A01.001'].tail.z = eye_L_head_pos[2]
+        armature.edit_bones["eyetrack_R"].head.x = eye_R_head_pos[0]
+        armature.edit_bones["eyetrack_R"].head.z = eye_R_head_pos[2]
 
-        armature.edit_bones['eyetrack_R'].head.x = eye_R_head_pos[0]
-        armature.edit_bones['eyetrack_R'].head.z = eye_R_head_pos[2]
+        armature.edit_bones["eyetrack_R"].tail.x = eye_R_head_pos[0]
+        armature.edit_bones["eyetrack_R"].tail.z = eye_R_head_pos[2] + 0.01
 
-        armature.edit_bones['eyetrack_R'].tail.x = eye_R_head_pos[0]
-        armature.edit_bones['eyetrack_R'].tail.z = eye_R_head_pos[2] + 0.01
+        armature.edit_bones["eyetrack_L"].head.x = eye_L_head_pos[0]
+        armature.edit_bones["eyetrack_L"].head.z = eye_L_head_pos[2]
 
-        armature.edit_bones['eyetrack_L'].head.x = eye_L_head_pos[0]
-        armature.edit_bones['eyetrack_L'].head.z = eye_L_head_pos[2]
+        armature.edit_bones["eyetrack_L"].tail.x = eye_L_head_pos[0]
+        armature.edit_bones["eyetrack_L"].tail.z = eye_L_head_pos[2] + 0.01
 
-        armature.edit_bones['eyetrack_L'].tail.x = eye_L_head_pos[0]
-        armature.edit_bones['eyetrack_L'].tail.z = eye_L_head_pos[2] + 0.01
+        armature.edit_bones["eyetrack"].head.x = (
+            eye_R_head_pos[0] + eye_L_head_pos[0]
+        ) / 2
+        armature.edit_bones["eyetrack"].head.z = (
+            eye_R_head_pos[2] + eye_L_head_pos[2]
+        ) / 2
 
-        armature.edit_bones['eyetrack'].head.x = (eye_R_head_pos[0]+eye_L_head_pos[0])/2
-        armature.edit_bones['eyetrack'].head.z = (eye_R_head_pos[2]+eye_L_head_pos[2])/2
-
-        armature.edit_bones['eyetrack'].tail.x = (eye_R_head_pos[0]+eye_L_head_pos[0])/2
-        armature.edit_bones['eyetrack'].tail.z = armature.edit_bones['eyetrack_L'].tail.z
+        armature.edit_bones["eyetrack"].tail.x = (
+            eye_R_head_pos[0] + eye_L_head_pos[0]
+        ) / 2
+        armature.edit_bones["eyetrack"].tail.z = armature.edit_bones[
+            "eyetrack_L"
+        ].tail.z
     except:
         pass
 
-
-    # Still in edit mode, select Neck/Head bone and extract the Z loc 
-    neck_bone = armature.edit_bones['neck']
+    # Still in edit mode, select Neck/Head bone and extract the Z loc
+    neck_bone = armature.edit_bones["neck"]
     neck_pos = neck_bone.head[2]
 
     # Let's position our head controller bone here. We need it to match our head bone's position
-    head_bone = armature.edit_bones['head']
+    head_bone = armature.edit_bones["head"]
     head_pos_head2 = head_bone.head[2]
     head_pos_tail2 = head_bone.tail[2]
     head_pos_head1 = head_bone.head[1]
     head_pos_tail1 = head_bone.tail[1]
 
     # Select the head controller bone and position w/ head bone's location.
-    head_cont_bone =  armature.edit_bones['head-controller']
+    head_cont_bone = armature.edit_bones["head-controller"]
     head_cont_bone.head[0] = 0
     head_cont_bone.head[1] = -0.3
     head_cont_bone.head[2] = head_pos_head2
@@ -1562,12 +2220,12 @@ def rig_character(
     def del_bone(bone_name):
         to_del = armature.edit_bones.get(bone_name)
         armature.edit_bones.remove(to_del)
-        
+
     del_bone("VIS_upper_arm_ik_pole.L")
     del_bone("VIS_upper_arm_ik_pole.R")
     del_bone("VIS_thigh_ik_pole.L")
     del_bone("VIS_thigh_ik_pole.R")
-    
+
     del_bone("palm.L")
     del_bone("palm.R")
 
@@ -1582,36 +2240,39 @@ def rig_character(
             temp_name = bone_name[9:]
         elif bone_name.startswith("+VisionPelvis"):
             temp_name = bone_name[13:]
-        else: return False
-                  
+        else:
+            return False
+
         if area == "FRONT":
             if temp_name[0] == "F":
                 return True
-            
+
         elif area == "SIDE":
             if temp_name[0] == "S":
                 return True
-            
+
         elif area == "BACK":
             if temp_name[0] == "B":
                 return True
-            
-        else: return False
-    # Certain bones with skirt naming exist with pelvis spine as parent, but theyre NOT skirt bones we want. remove them.    
+
+        else:
+            return False
+
+    # Certain bones with skirt naming exist with pelvis spine as parent, but theyre NOT skirt bones we want. remove them.
     def trunc_bad_bones(pb, current=None):
         bad = []
         if current is None:
             current = pb
-        
+
         current_bone = armature.edit_bones[current]
-        
+
         for bone in armature.edit_bones:
             if bone.parent == current_bone:
                 bad.append(bone.name)
                 bad.extend(trunc_bad_bones(pb, bone.name))
-                
+
         return bad
-    
+
     list_of_bad_bones = trunc_bad_bones("DEF-spine.003")
 
     # Functions that loop through skirt bones (Front, Sides, Back) each return a list
@@ -1619,29 +2280,31 @@ def rig_character(
         child_bones = []
         if current is None:
             current = pb
-        
+
         current_bone = armature.edit_bones[current]
-        
+
         for bone in armature.edit_bones:
             if bone.parent == excluded_parent:
                 continue
             elif bone.parent == current_bone:
                 child_bones.append(bone)
-                child_bones.extend(identify_children_for_skirt(pb, bone.name, excluded_parent))
-                
+                child_bones.extend(
+                    identify_children_for_skirt(pb, bone.name, excluded_parent)
+                )
+
         return child_bones
-    
+
     parent_bone_name = "DEF-spine.001"
     weird_skeletons = ["Clorinde"]
     for s in weird_skeletons:
         if s in char_name:
             parent_bone_name = "+PelvisTwist CF A01"
-            
+
     skirt_children = identify_children_for_skirt(parent_bone_name)
-    
+
     def scan_skirt(area):
         skirt_bones = []
-             
+
         for edit_bone in skirt_children:
             if edit_bone.name not in list_of_bad_bones:
                 if validate_skirt(edit_bone.name, area):
@@ -1656,78 +2319,83 @@ def rig_character(
 
     def zero_roll(bone_name):
         this_bone = armature.edit_bones[bone_name].roll = 0
+
     for bone in front_skirt_bones:
         zero_roll(bone)
-        
+
     for bone in side_skirt_bones:
         zero_roll(bone)
-        
+
     for bone in back_skirt_bones:
-        zero_roll(bone)                                                            
+        zero_roll(bone)
     # In pose mode select the rig, then select the bone
-    bpy.ops.object.mode_set(mode='POSE')
-    faceplate_arm =  bpy.context.scene.objects[char_name+"Rig"]
+    bpy.ops.object.mode_set(mode="POSE")
+    faceplate_arm = bpy.context.scene.objects[char_name + "Rig"]
     selected_bone = faceplate_arm.pose.bones["Plate"]
 
     # Change the values to what we want, use neckpos to base the height off the ground.
-    selected_bone.location[0] = .33
-    #selected_bone.location[1] = 0.9
+    selected_bone.location[0] = 0.33
+    # selected_bone.location[1] = 0.9
     selected_bone.location[2] = neck_pos
     selected_bone.rotation_quaternion[1] = 1
     selected_bone.scale[0] = 0.1
     selected_bone.scale[1] = 0.1
     selected_bone.scale[2] = 0.1
 
-
-
     # Begin moving extra wgt bones to the wgt collection while discarding old collections
     # 1 Root and Eye Bones
-    move_into_collection("eye circle","wgt")
-    move_into_collection("eye controller","wgt")
-    move_into_collection("root plate","wgt")
-    move_into_collection("head-control-shape","wgt")
+    move_into_collection("eye circle", "wgt")
+    move_into_collection("eye controller", "wgt")
+    move_into_collection("root plate", "wgt")
+    move_into_collection("head-control-shape", "wgt")
 
     # 1 Face Bones
     to_del_coll = bpy.data.collections.get("wgt.001")
     for obj in to_del_coll.objects:
-        move_into_collection(obj.name,"wgt")
-    
+        move_into_collection(obj.name, "wgt")
+
     # 2 Pelvis Bones
     to_del_coll = bpy.data.collections.get("wgt.002")
     for obj in to_del_coll.objects:
-        move_into_collection(obj.name,"wgt")
-    
+        move_into_collection(obj.name, "wgt")
+
     # 3 feet Bones
     to_del_coll = bpy.data.collections.get("wgt.003")
     for obj in to_del_coll.objects:
-        move_into_collection(obj.name,"wgt")
-        
+        move_into_collection(obj.name, "wgt")
+
     # 4 hand Bones
     to_del_coll = bpy.data.collections.get("wgt.004")
     for obj in to_del_coll.objects:
-        move_into_collection(obj.name,"wgt")
-        
+        move_into_collection(obj.name, "wgt")
+
     # idk bro math is wrong delete whatever this is too
     to_del_coll = bpy.data.collections.get("wgt.005")
     for obj in to_del_coll.objects:
-        move_into_collection(obj.name,"wgt")
-        
+        move_into_collection(obj.name, "wgt")
+
     to_del_coll = bpy.data.collections.get("wgt.006")
     for obj in to_del_coll.objects:
-        move_into_collection(obj.name,"wgt")
+        move_into_collection(obj.name, "wgt")
 
     # After moving into collection, delete the old empty ones.
-    bpy.data.collections.remove(bpy.data.collections.get("append_Root"),do_unlink=True)
-    bpy.data.collections.remove(bpy.data.collections.get("append_Face Plate"),do_unlink=True)
-    bpy.data.collections.remove(bpy.data.collections.get("append_Eyes"),do_unlink=True)
-    bpy.data.collections.remove(bpy.data.collections.get("append_Pelvis"),do_unlink=True)
-    bpy.data.collections.remove(bpy.data.collections.get("append_Foot"),do_unlink=True)
-    bpy.data.collections.remove(bpy.data.collections.get("append_Hand"),do_unlink=True)
-    bpy.data.collections.remove(bpy.data.collections.get("append_Props"),do_unlink=True)
+    bpy.data.collections.remove(bpy.data.collections.get("append_Root"), do_unlink=True)
+    bpy.data.collections.remove(
+        bpy.data.collections.get("append_Face Plate"), do_unlink=True
+    )
+    bpy.data.collections.remove(bpy.data.collections.get("append_Eyes"), do_unlink=True)
+    bpy.data.collections.remove(
+        bpy.data.collections.get("append_Pelvis"), do_unlink=True
+    )
+    bpy.data.collections.remove(bpy.data.collections.get("append_Foot"), do_unlink=True)
+    bpy.data.collections.remove(bpy.data.collections.get("append_Hand"), do_unlink=True)
+    bpy.data.collections.remove(
+        bpy.data.collections.get("append_Props"), do_unlink=True
+    )
 
     # Adding Shape Key Drivers
-    ourRig = char_name+"Rig"
-    
+    ourRig = char_name + "Rig"
+
     # Initialize UI properties on plate-settings so drivers don't fail internally
     try:
         plate = bpy.data.objects[ourRig].pose.bones["plate-settings"]
@@ -1750,25 +2418,48 @@ def rig_character(
     except:
         pass
 
-    # Loop through skirt bones list. 
+    # Loop through skirt bones list.
 
     # converts deg to calc
     def rad(num):
-        return num * (pi/180) 
+        return num * (pi / 180)
 
     # Perform more operations on number if needed.
     def calc(num, cut=False):
         percent = 0.8
         if cut:
-            return rad(num*percent)
-        else: return rad(num)
+            return rad(num * percent)
+        else:
+            return rad(num)
 
     # For front bones adjust number by depth
-    def add_const(skirt_bone, name, bone, expression, driver=True, trans_rot="ROT_X", f_min_x=calc(-1), f_max_x = calc(1), f_min_y = 0, f_max_y = 0, f_min_z = 0, f_max_z = 0, map_x='X', map_y='Y', map_z='Z', t_min_x=0, t_max_x=0, t_min_y=0, t_max_y=0, t_min_z=0, t_max_z=0):
+    def add_const(
+        skirt_bone,
+        name,
+        bone,
+        expression,
+        driver=True,
+        trans_rot="ROT_X",
+        f_min_x=calc(-1),
+        f_max_x=calc(1),
+        f_min_y=0,
+        f_max_y=0,
+        f_min_z=0,
+        f_max_z=0,
+        map_x="X",
+        map_y="Y",
+        map_z="Z",
+        t_min_x=0,
+        t_max_x=0,
+        t_min_y=0,
+        t_max_y=0,
+        t_min_z=0,
+        t_max_z=0,
+    ):
         armature = bpy.context.scene.objects[ourRig]
 
-        this_bone = bpy.context.scene.objects[char_name+"Rig"].pose.bones[skirt_bone]
-        co = this_bone.constraints.new('TRANSFORM')
+        this_bone = bpy.context.scene.objects[char_name + "Rig"].pose.bones[skirt_bone]
+        co = this_bone.constraints.new("TRANSFORM")
         co.name = name
         co.target = our_char
         co.subtarget = bone
@@ -1779,186 +2470,786 @@ def rig_character(
             # DRIVER STUFF
             var = influence_driver.variables.new()
             var.name = "bone"
-            var.type = 'TRANSFORMS'
-            
+            var.type = "TRANSFORMS"
+
             var.targets[0].id = armature
             var.targets[0].bone_target = bone
-            var.targets[0].transform_space = 'LOCAL_SPACE'
+            var.targets[0].transform_space = "LOCAL_SPACE"
             var.targets[0].transform_type = trans_rot
-            
+
             var2 = influence_driver.variables.new()
             var2.name = "toggle"
             var2.type = "SINGLE_PROP"
-            
-            var2.targets[0].id = armature
-            var2.targets[0].data_path = "pose.bones[\"plate-settings\"][\"Toggle Skirt Constraints\"]"
 
-            influence_driver.type = 'SCRIPTED'
-            influence_driver.expression = "(" + expression + ")*toggle" 
+            var2.targets[0].id = armature
+            var2.targets[
+                0
+            ].data_path = 'pose.bones["plate-settings"]["Toggle Skirt Constraints"]'
+
+            influence_driver.type = "SCRIPTED"
+            influence_driver.expression = "(" + expression + ")*toggle"
 
             depsgraph = bpy.context.evaluated_depsgraph_get()
             depsgraph.update()
             # END DRIVER STUFF
-            
-        # drivers for just the sides    
+
+        # drivers for just the sides
         elif driver and name == "X":
             influence_driver = co.driver_add("influence").driver
             # DRIVER STUFF
             var2 = influence_driver.variables.new()
             var2.name = "toggle"
             var2.type = "SINGLE_PROP"
-            
-            var2.targets[0].id = armature
-            var2.targets[0].data_path = "pose.bones[\"plate-settings\"][\"Toggle Skirt Constraints\"]"
 
-            influence_driver.type = 'SCRIPTED'
-            influence_driver.expression = "toggle" 
+            var2.targets[0].id = armature
+            var2.targets[
+                0
+            ].data_path = 'pose.bones["plate-settings"]["Toggle Skirt Constraints"]'
+
+            influence_driver.type = "SCRIPTED"
+            influence_driver.expression = "toggle"
 
             depsgraph = bpy.context.evaluated_depsgraph_get()
             depsgraph.update()
-            
+
         co.target_space = "LOCAL"
         co.owner_space = "LOCAL"
         co.map_from = "ROTATION"
         co.map_to = "ROTATION"
-        
+
         # Do transform constraint math
         # MAP FROM (put in t/e block?)
         co.from_min_x_rot = f_min_x
         co.from_max_x_rot = f_max_x
-        
+
         co.from_min_y_rot = f_min_y
         co.from_max_y_rot = f_max_y
-        
+
         co.from_min_z_rot = f_min_z
         co.from_max_z_rot = f_max_z
-        
+
         # MAP TO
         co.map_to_x_from = map_x
         co.to_min_x_rot = t_min_x
         co.to_max_x_rot = t_max_x
-        
+
         co.map_to_y_from = map_y
         co.to_min_y_rot = t_min_y
         co.to_max_y_rot = t_max_y
-        
+
         co.map_to_z_from = map_z
         co.to_min_z_rot = t_min_z
         co.to_max_z_rot = t_max_z
-        
-       
+
     def add_leg_follow_const(bone_name, area):
-    # skirt_bone, name, bone, f_min_x=calc(-1), f_max_x=calc(1), f_min_y=0, f_max_y=0, f_min_z=0, f_max_z=0, map_x='X', map_y='Y', map_z='Z', t_min_x=0, t_max_x=0, t_min_y=0, t_max_y=0, t_min_z=0, t_max_y=0
+        # skirt_bone, name, bone, f_min_x=calc(-1), f_max_x=calc(1), f_min_y=0, f_max_y=0, f_min_z=0, f_max_z=0, map_x='X', map_y='Y', map_z='Z', t_min_x=0, t_max_x=0, t_min_y=0, t_max_y=0, t_min_z=0, t_max_y=0
 
         # FRONT
         if area == "FRONT":
             # Front Center
             if " CF " in bone_name:
-                if bone_name[-1] == "1":    
-                    add_const(bone_name, "Left Leg", "DEF-thigh.L", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="X", map_z="X", t_min_x=calc(-0.125), t_max_x=calc(0.125), t_min_y=calc(0.5), t_max_y=calc(-0.5), t_min_z=calc(0), t_max_z=calc(0))
-                    add_const(bone_name, "Right Leg", "DEF-thigh.R", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="X", map_z="Z", t_min_x=calc(-0.125), t_max_x=calc(0.125), t_min_y=calc(-0.5), t_max_y=calc(0.5), t_min_z=calc(0), t_max_z=calc(0))
-                
-                elif bone_name[-1] == "2": 
-                    add_const(bone_name, "Left Leg", "DEF-thigh.L", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="X", map_z="X", t_min_x=calc(0.125,True), t_max_x=calc(-0.125,True), t_min_y=calc(0.5,True), t_max_y=calc(-0.5,True), t_min_z=calc(-0.125,True), t_max_z=calc(0.125,True))
-                    add_const(bone_name, "Right Leg", "DEF-thigh.R", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="X", map_z="X", t_min_x=calc(0.125), t_max_x=calc(-0.125), t_min_y=calc(-0.5), t_max_y=calc(0.5), t_min_z=calc(0.125), t_max_z=calc(-0.125))
-              
-                elif bone_name[-1] == "3":                 
-                    add_const(bone_name, "Left Leg", "DEF-thigh.L", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="X", map_z="X", t_min_x=calc(0), t_max_x=calc(0), t_min_y=calc(0.5,True), t_max_y=calc(-0.5,True), t_min_z=calc(0.125,True), t_max_z=calc(-0.125,True))
-                    add_const(bone_name, "Right Leg", "DEF-thigh.R", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="X", map_z="Z", t_min_x=calc(0), t_max_x=calc(0), t_min_y=calc(-0.5,True), t_max_y=calc(0.5,True), t_min_z=calc(0), t_max_z=calc(0))
-             # Front Left
-            elif ".L" in bone_name:
-                if bone_name[-3] == "1":
-                    add_const(bone_name, "X+", "DEF-thigh.L", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="Y", map_z="Z", t_min_x=calc(-0.75,True), t_max_x=calc(0.75,True), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(0), t_max_z=calc(0))
-                    add_const(bone_name, "X-", "DEF-thigh.L", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="Y", map_z="Z", t_min_x=calc(-0.3,True), t_max_x=calc(0.3,True), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(0), t_max_z=calc(0))
-                    add_const(bone_name, "Z+", "DEF-thigh.L", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", f_min_x=0, f_max_x=0, f_min_z=calc(-1), f_max_z=calc(1), map_x="X", map_y="Y", map_z="Z", t_min_x=calc(0), t_max_x=calc(0), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(-0.1,True), t_max_z=calc(0.1,True))
-
-                elif bone_name[-3] == "2":
-                    add_const(bone_name, "Transformation", "DEF-thigh.L", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="Y", map_z="X", t_min_x=calc(0.25,True), t_max_x=calc(-0.25,True), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(0.125,True), t_max_z=calc(0.0))
-                elif bone_name[-3] == "3":   
-                    add_const(bone_name, "Transformation", "DEF-thigh.L", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="Y", map_z="Z", t_min_x=calc(0.25,True), t_max_x=calc(-0.25,True), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(0), t_max_z=calc(0))
-            elif " L " in bone_name:
                 if bone_name[-1] == "1":
-                    add_const(bone_name, "X+", "DEF-thigh.L", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="Y", map_z="Z", t_min_x=calc(-0.75,True), t_max_x=calc(0.75,True), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(0), t_max_z=calc(0))
-                    add_const(bone_name, "X-", "DEF-thigh.L", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="Y", map_z="Z", t_min_x=calc(-0.3,True), t_max_x=calc(0.3,True), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(0), t_max_z=calc(0))
-                    add_const(bone_name, "Z+", "DEF-thigh.L", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", f_min_x=0, f_max_x=0, f_min_z=calc(-1), f_max_z=calc(1), map_x="X", map_y="Y", map_z="Z", t_min_x=calc(0), t_max_x=calc(0), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(-0.1,True), t_max_z=calc(0.1,True))
+                    add_const(
+                        bone_name,
+                        "Left Leg",
+                        "DEF-thigh.L",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="X",
+                        map_z="X",
+                        t_min_x=calc(-0.125),
+                        t_max_x=calc(0.125),
+                        t_min_y=calc(0.5),
+                        t_max_y=calc(-0.5),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
+                    add_const(
+                        bone_name,
+                        "Right Leg",
+                        "DEF-thigh.R",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="X",
+                        map_z="Z",
+                        t_min_x=calc(-0.125),
+                        t_max_x=calc(0.125),
+                        t_min_y=calc(-0.5),
+                        t_max_y=calc(0.5),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
 
                 elif bone_name[-1] == "2":
-                    add_const(bone_name, "Transformation", "DEF-thigh.L", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="Y", map_z="X", t_min_x=calc(0.25,True), t_max_x=calc(-0.25,True), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(0.125,True), t_max_z=calc(0.0))
-                elif bone_name[-1] == "3":   
-                    add_const(bone_name, "Transformation", "DEF-thigh.L", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="Y", map_z="Z", t_min_x=calc(0.25,True), t_max_x=calc(-0.25,True), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(0), t_max_z=calc(0))
+                    add_const(
+                        bone_name,
+                        "Left Leg",
+                        "DEF-thigh.L",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="X",
+                        map_z="X",
+                        t_min_x=calc(0.125, True),
+                        t_max_x=calc(-0.125, True),
+                        t_min_y=calc(0.5, True),
+                        t_max_y=calc(-0.5, True),
+                        t_min_z=calc(-0.125, True),
+                        t_max_z=calc(0.125, True),
+                    )
+                    add_const(
+                        bone_name,
+                        "Right Leg",
+                        "DEF-thigh.R",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="X",
+                        map_z="X",
+                        t_min_x=calc(0.125),
+                        t_max_x=calc(-0.125),
+                        t_min_y=calc(-0.5),
+                        t_max_y=calc(0.5),
+                        t_min_z=calc(0.125),
+                        t_max_z=calc(-0.125),
+                    )
+
+                elif bone_name[-1] == "3":
+                    add_const(
+                        bone_name,
+                        "Left Leg",
+                        "DEF-thigh.L",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="X",
+                        map_z="X",
+                        t_min_x=calc(0),
+                        t_max_x=calc(0),
+                        t_min_y=calc(0.5, True),
+                        t_max_y=calc(-0.5, True),
+                        t_min_z=calc(0.125, True),
+                        t_max_z=calc(-0.125, True),
+                    )
+                    add_const(
+                        bone_name,
+                        "Right Leg",
+                        "DEF-thigh.R",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="X",
+                        map_z="Z",
+                        t_min_x=calc(0),
+                        t_max_x=calc(0),
+                        t_min_y=calc(-0.5, True),
+                        t_max_y=calc(0.5, True),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
+            # Front Left
+            elif ".L" in bone_name:
+                if bone_name[-3] == "1":
+                    add_const(
+                        bone_name,
+                        "X+",
+                        "DEF-thigh.L",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(-0.75, True),
+                        t_max_x=calc(0.75, True),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
+                    add_const(
+                        bone_name,
+                        "X-",
+                        "DEF-thigh.L",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(-0.3, True),
+                        t_max_x=calc(0.3, True),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
+                    add_const(
+                        bone_name,
+                        "Z+",
+                        "DEF-thigh.L",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        f_min_x=0,
+                        f_max_x=0,
+                        f_min_z=calc(-1),
+                        f_max_z=calc(1),
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(0),
+                        t_max_x=calc(0),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(-0.1, True),
+                        t_max_z=calc(0.1, True),
+                    )
+
+                elif bone_name[-3] == "2":
+                    add_const(
+                        bone_name,
+                        "Transformation",
+                        "DEF-thigh.L",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="X",
+                        t_min_x=calc(0.25, True),
+                        t_max_x=calc(-0.25, True),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(0.125, True),
+                        t_max_z=calc(0.0),
+                    )
+                elif bone_name[-3] == "3":
+                    add_const(
+                        bone_name,
+                        "Transformation",
+                        "DEF-thigh.L",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(0.25, True),
+                        t_max_x=calc(-0.25, True),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
+            elif " L " in bone_name:
+                if bone_name[-1] == "1":
+                    add_const(
+                        bone_name,
+                        "X+",
+                        "DEF-thigh.L",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(-0.75, True),
+                        t_max_x=calc(0.75, True),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
+                    add_const(
+                        bone_name,
+                        "X-",
+                        "DEF-thigh.L",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(-0.3, True),
+                        t_max_x=calc(0.3, True),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
+                    add_const(
+                        bone_name,
+                        "Z+",
+                        "DEF-thigh.L",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        f_min_x=0,
+                        f_max_x=0,
+                        f_min_z=calc(-1),
+                        f_max_z=calc(1),
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(0),
+                        t_max_x=calc(0),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(-0.1, True),
+                        t_max_z=calc(0.1, True),
+                    )
+
+                elif bone_name[-1] == "2":
+                    add_const(
+                        bone_name,
+                        "Transformation",
+                        "DEF-thigh.L",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="X",
+                        t_min_x=calc(0.25, True),
+                        t_max_x=calc(-0.25, True),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(0.125, True),
+                        t_max_z=calc(0.0),
+                    )
+                elif bone_name[-1] == "3":
+                    add_const(
+                        bone_name,
+                        "Transformation",
+                        "DEF-thigh.L",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(0.25, True),
+                        t_max_x=calc(-0.25, True),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
 
             # Front Right
             elif ".R" in bone_name:
-                if bone_name[-3] == "1":       
-                    add_const(bone_name, "X+", "DEF-thigh.R", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="Y", map_z="Z", t_min_x=calc(-0.75,True), t_max_x=calc(0.75,True), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(0), t_max_z=calc(0))
-                    add_const(bone_name, "X-", "DEF-thigh.R", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="Y", map_z="Z", t_min_x=calc(-0.3,True), t_max_x=calc(0.3,True), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(0), t_max_z=calc(0))
-                    add_const(bone_name, "Z+", "DEF-thigh.R", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", trans_rot="ROT_Z", f_min_x=0, f_max_x=0, f_min_z=calc(-1), f_max_z=calc(1), map_x="X", map_y="Y", map_z="Z", t_min_x=calc(0), t_max_x=calc(0), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(-0.1), t_max_z=calc(0.1,True))
-                elif bone_name[-3] == "2":       
-                    add_const(bone_name, "Transformation", "DEF-thigh.R", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="Y", map_z="X", t_min_x=calc(0.25,True), t_max_x=calc(-0.25,True), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(-0.125,True), t_max_z=calc(0))
-                elif bone_name[-3] == "3":    
-                    add_const(bone_name, "Transformation", "DEF-thigh.R", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="Y", map_z="Z", t_min_x=calc(0.25,True), t_max_x=calc(-0.25,True), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(0), t_max_z=calc(0))
+                if bone_name[-3] == "1":
+                    add_const(
+                        bone_name,
+                        "X+",
+                        "DEF-thigh.R",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(-0.75, True),
+                        t_max_x=calc(0.75, True),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
+                    add_const(
+                        bone_name,
+                        "X-",
+                        "DEF-thigh.R",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(-0.3, True),
+                        t_max_x=calc(0.3, True),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
+                    add_const(
+                        bone_name,
+                        "Z+",
+                        "DEF-thigh.R",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        trans_rot="ROT_Z",
+                        f_min_x=0,
+                        f_max_x=0,
+                        f_min_z=calc(-1),
+                        f_max_z=calc(1),
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(0),
+                        t_max_x=calc(0),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(-0.1),
+                        t_max_z=calc(0.1, True),
+                    )
+                elif bone_name[-3] == "2":
+                    add_const(
+                        bone_name,
+                        "Transformation",
+                        "DEF-thigh.R",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="X",
+                        t_min_x=calc(0.25, True),
+                        t_max_x=calc(-0.25, True),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(-0.125, True),
+                        t_max_z=calc(0),
+                    )
+                elif bone_name[-3] == "3":
+                    add_const(
+                        bone_name,
+                        "Transformation",
+                        "DEF-thigh.R",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(0.25, True),
+                        t_max_x=calc(-0.25, True),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
             elif " R " in bone_name:
-                if bone_name[-1] == "1":       
-                    add_const(bone_name, "X+", "DEF-thigh.R", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="Y", map_z="Z", t_min_x=calc(-0.75,True), t_max_x=calc(0.75,True), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(0), t_max_z=calc(0))
-                    add_const(bone_name, "X-", "DEF-thigh.R", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="Y", map_z="Z", t_min_x=calc(-0.3,True), t_max_x=calc(0.3,True), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(0), t_max_z=calc(0))
-                    add_const(bone_name, "Z+", "DEF-thigh.R", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", trans_rot="ROT_Z", f_min_x=0, f_max_x=0, f_min_z=calc(-1), f_max_z=calc(1), map_x="X", map_y="Y", map_z="Z", t_min_x=calc(0), t_max_x=calc(0), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(-0.1), t_max_z=calc(0.1,True))
-                elif bone_name[-1] == "2":       
-                    add_const(bone_name, "Transformation", "DEF-thigh.R", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="Y", map_z="X", t_min_x=calc(0.25,True), t_max_x=calc(-0.25,True), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(-0.125,True), t_max_z=calc(0))
-                elif bone_name[-1] == "3":    
-                    add_const(bone_name, "Transformation", "DEF-thigh.R", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="Y", map_z="Z", t_min_x=calc(0.25,True), t_max_x=calc(-0.25,True), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(0), t_max_z=calc(0))
-        
-         # SIDE
-        elif area == "SIDE": 
+                if bone_name[-1] == "1":
+                    add_const(
+                        bone_name,
+                        "X+",
+                        "DEF-thigh.R",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(-0.75, True),
+                        t_max_x=calc(0.75, True),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
+                    add_const(
+                        bone_name,
+                        "X-",
+                        "DEF-thigh.R",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(-0.3, True),
+                        t_max_x=calc(0.3, True),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
+                    add_const(
+                        bone_name,
+                        "Z+",
+                        "DEF-thigh.R",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        trans_rot="ROT_Z",
+                        f_min_x=0,
+                        f_max_x=0,
+                        f_min_z=calc(-1),
+                        f_max_z=calc(1),
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(0),
+                        t_max_x=calc(0),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(-0.1),
+                        t_max_z=calc(0.1, True),
+                    )
+                elif bone_name[-1] == "2":
+                    add_const(
+                        bone_name,
+                        "Transformation",
+                        "DEF-thigh.R",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="X",
+                        t_min_x=calc(0.25, True),
+                        t_max_x=calc(-0.25, True),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(-0.125, True),
+                        t_max_z=calc(0),
+                    )
+                elif bone_name[-1] == "3":
+                    add_const(
+                        bone_name,
+                        "Transformation",
+                        "DEF-thigh.R",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(0.25, True),
+                        t_max_x=calc(-0.25, True),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
+
+        # SIDE
+        elif area == "SIDE":
             # Side Left
             if ".L" in bone_name:
                 if bone_name[-3] == "1":
-                    add_const(bone_name, "X", "DEF-thigh.L", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="Y", map_z="Z", t_min_x=calc(-0.15), t_max_x=calc(0.15), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(0), t_max_z=calc(0))
-                    add_const(bone_name, "Z+", "DEF-thigh.L", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", trans_rot="ROT_Z",f_min_x=0,f_max_x=0,f_min_z=calc(-1),f_max_z=calc(1),map_x="X", map_y="Y", map_z="Z", t_min_x=calc(0), t_max_x=calc(0), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(-0.2), t_max_z=calc(0.2))
-            
+                    add_const(
+                        bone_name,
+                        "X",
+                        "DEF-thigh.L",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(-0.15),
+                        t_max_x=calc(0.15),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
+                    add_const(
+                        bone_name,
+                        "Z+",
+                        "DEF-thigh.L",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        trans_rot="ROT_Z",
+                        f_min_x=0,
+                        f_max_x=0,
+                        f_min_z=calc(-1),
+                        f_max_z=calc(1),
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(0),
+                        t_max_x=calc(0),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(-0.2),
+                        t_max_z=calc(0.2),
+                    )
+
             # Side Right
             elif ".R" in bone_name:
                 if bone_name[-3] == "1":
-                    add_const(bone_name, "X", "DEF-thigh.R", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="Y", map_z="Z", t_min_x=calc(-0.15), t_max_x=calc(0.15), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(0), t_max_z=calc(0))
-                    add_const(bone_name, "Z+", "DEF-thigh.R", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", trans_rot="ROT_Z",f_min_x=0,f_max_x=0,f_min_z=calc(-1),f_max_z=calc(1),map_x="X", map_y="Y", map_z="Z", t_min_x=calc(0), t_max_x=calc(0), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(-0.2), t_max_z=calc(0.2))
+                    add_const(
+                        bone_name,
+                        "X",
+                        "DEF-thigh.R",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(-0.15),
+                        t_max_x=calc(0.15),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
+                    add_const(
+                        bone_name,
+                        "Z+",
+                        "DEF-thigh.R",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        trans_rot="ROT_Z",
+                        f_min_x=0,
+                        f_max_x=0,
+                        f_min_z=calc(-1),
+                        f_max_z=calc(1),
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(0),
+                        t_max_x=calc(0),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(-0.2),
+                        t_max_z=calc(0.2),
+                    )
             elif " L " in bone_name:
                 if bone_name[-1] == "1":
-                    add_const(bone_name, "X", "DEF-thigh.L", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="Y", map_z="Z", t_min_x=calc(-0.15), t_max_x=calc(0.15), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(0), t_max_z=calc(0))
-                    add_const(bone_name, "Z+", "DEF-thigh.L", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", trans_rot="ROT_Z",f_min_x=0,f_max_x=0,f_min_z=calc(-1),f_max_z=calc(1),map_x="X", map_y="Y", map_z="Z", t_min_x=calc(0), t_max_x=calc(0), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(-0.2), t_max_z=calc(0.2))
-            
+                    add_const(
+                        bone_name,
+                        "X",
+                        "DEF-thigh.L",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(-0.15),
+                        t_max_x=calc(0.15),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
+                    add_const(
+                        bone_name,
+                        "Z+",
+                        "DEF-thigh.L",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        trans_rot="ROT_Z",
+                        f_min_x=0,
+                        f_max_x=0,
+                        f_min_z=calc(-1),
+                        f_max_z=calc(1),
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(0),
+                        t_max_x=calc(0),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(-0.2),
+                        t_max_z=calc(0.2),
+                    )
+
             # Side Right
             elif " R " in bone_name:
                 if bone_name[-1] == "1":
-                    add_const(bone_name, "X", "DEF-thigh.R", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", map_x="X", map_y="Y", map_z="Z", t_min_x=calc(-0.15), t_max_x=calc(0.15), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(0), t_max_z=calc(0))
-                    add_const(bone_name, "Z+", "DEF-thigh.R", "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))", trans_rot="ROT_Z",f_min_x=0,f_max_x=0,f_min_z=calc(-1),f_max_z=calc(1),map_x="X", map_y="Y", map_z="Z", t_min_x=calc(0), t_max_x=calc(0), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(-0.2), t_max_z=calc(0.2))
-        
+                    add_const(
+                        bone_name,
+                        "X",
+                        "DEF-thigh.R",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(-0.15),
+                        t_max_x=calc(0.15),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
+                    add_const(
+                        bone_name,
+                        "Z+",
+                        "DEF-thigh.R",
+                        "0.35 + 0.65 * max(0, min(1, (bone*-1)*3))",
+                        trans_rot="ROT_Z",
+                        f_min_x=0,
+                        f_max_x=0,
+                        f_min_z=calc(-1),
+                        f_max_z=calc(1),
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(0),
+                        t_max_x=calc(0),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(-0.2),
+                        t_max_z=calc(0.2),
+                    )
+
         # BACK
         elif area == "BACK":
             # Back Left
             if ".L" in bone_name:
                 if bone_name[-3] == "1":
-                    add_const(bone_name, "Transformation", "DEF-thigh.L", "0.5 + 0.5 * max(0, min(1, (bone)*3))", map_x="X", map_y="Y", map_z="Z", t_min_x=calc(-0.3), t_max_x=calc(0.3), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(0), t_max_z=calc(0))
-            
+                    add_const(
+                        bone_name,
+                        "Transformation",
+                        "DEF-thigh.L",
+                        "0.5 + 0.5 * max(0, min(1, (bone)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(-0.3),
+                        t_max_x=calc(0.3),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
+
             # Back Right
             if ".R" in bone_name:
                 if bone_name[-3] == "1":
-                    add_const(bone_name, "Transformation", "DEF-thigh.R", "0.5 + 0.5 * max(0, min(1, (bone)*3))", map_x="X", map_y="Y", map_z="Z", t_min_x=calc(-0.3), t_max_x=calc(0.3), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(0), t_max_z=calc(0))
+                    add_const(
+                        bone_name,
+                        "Transformation",
+                        "DEF-thigh.R",
+                        "0.5 + 0.5 * max(0, min(1, (bone)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(-0.3),
+                        t_max_x=calc(0.3),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
                     # Back Left
             elif " L " in bone_name:
                 if bone_name[-1] == "1":
-                    add_const(bone_name, "Transformation", "DEF-thigh.L", "0.5 + 0.5 * max(0, min(1, (bone)*3))", map_x="X", map_y="Y", map_z="Z", t_min_x=calc(-0.3), t_max_x=calc(0.3), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(0), t_max_z=calc(0))
-            
+                    add_const(
+                        bone_name,
+                        "Transformation",
+                        "DEF-thigh.L",
+                        "0.5 + 0.5 * max(0, min(1, (bone)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(-0.3),
+                        t_max_x=calc(0.3),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
+
             # Back Right
             elif " R " in bone_name:
                 if bone_name[-1] == "1":
-                    add_const(bone_name, "Transformation", "DEF-thigh.R", "0.5 + 0.5 * max(0, min(1, (bone)*3))", map_x="X", map_y="Y", map_z="Z", t_min_x=calc(-0.3), t_max_x=calc(0.3), t_min_y=calc(0), t_max_y=calc(0), t_min_z=calc(0), t_max_z=calc(0))
-                        
+                    add_const(
+                        bone_name,
+                        "Transformation",
+                        "DEF-thigh.R",
+                        "0.5 + 0.5 * max(0, min(1, (bone)*3))",
+                        map_x="X",
+                        map_y="Y",
+                        map_z="Z",
+                        t_min_x=calc(-0.3),
+                        t_max_x=calc(0.3),
+                        t_min_y=calc(0),
+                        t_max_y=calc(0),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
+
             # Back Center
             if " CB " in bone_name:
                 if bone_name[-1] == "1":
-                    add_const(bone_name, "Left Leg", "DEF-thigh.L", "0.5 + 0.5 * max(0, min(1, (bone)*3))", map_x="X", map_y="X", map_z="X", t_min_x=calc(-0.125), t_max_x=calc(0.125), t_min_y=calc(0.5), t_max_y=calc(-0.5), t_min_z=calc(0), t_max_z=calc(0))
-                    add_const(bone_name, "Right Leg", "DEF-thigh.R", "0.5 + 0.5 * max(0, min(1, (bone)*3))", map_x="X", map_y="X", map_z="Z", t_min_x=calc(-0.125), t_max_x=calc(0.125), t_min_y=calc(-0.5), t_max_y=calc(0.5), t_min_z=calc(0), t_max_z=calc(0))
-        
-        
+                    add_const(
+                        bone_name,
+                        "Left Leg",
+                        "DEF-thigh.L",
+                        "0.5 + 0.5 * max(0, min(1, (bone)*3))",
+                        map_x="X",
+                        map_y="X",
+                        map_z="X",
+                        t_min_x=calc(-0.125),
+                        t_max_x=calc(0.125),
+                        t_min_y=calc(0.5),
+                        t_max_y=calc(-0.5),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
+                    add_const(
+                        bone_name,
+                        "Right Leg",
+                        "DEF-thigh.R",
+                        "0.5 + 0.5 * max(0, min(1, (bone)*3))",
+                        map_x="X",
+                        map_y="X",
+                        map_z="Z",
+                        t_min_x=calc(-0.125),
+                        t_max_x=calc(0.125),
+                        t_min_y=calc(-0.5),
+                        t_max_y=calc(0.5),
+                        t_min_z=calc(0),
+                        t_max_z=calc(0),
+                    )
+
     for bone in front_skirt_bones:
         add_leg_follow_const(bone, "FRONT")
 
@@ -1969,47 +3260,56 @@ def rig_character(
         add_leg_follow_const(bone, "BACK")
 
     # Let's go into object mode and select the three face parts to begin adding shape key drivers
-    bpy.ops.object.mode_set(mode='OBJECT')
-    bpy.ops.object.select_all(action='DESELECT')
+    bpy.ops.object.mode_set(mode="OBJECT")
+    bpy.ops.object.select_all(action="DESELECT")
 
-    bpy.ops.object.select_all(action='DESELECT')
+    bpy.ops.object.select_all(action="DESELECT")
 
-
-    def makeCon(shape_key,bone_name,expression,transform):
+    def makeCon(shape_key, bone_name, expression, transform):
         # Get the bone object by name
-        armature = bpy.context.scene.objects[ourRig]  
+        armature = bpy.context.scene.objects[ourRig]
         bone = armature.pose.bones[bone_name]
 
         # Create a driver for the shape key
-        shape_key = obj.data.shape_keys.key_blocks[shape_key]  
+        shape_key = obj.data.shape_keys.key_blocks[shape_key]
         driver = shape_key.driver_add("value").driver
 
         # Create variables for the driver
         var = driver.variables.new()
         var.name = "bone"
-        var.type = 'TRANSFORMS'
+        var.type = "TRANSFORMS"
         var.targets[0].id = armature
         var.targets[0].bone_target = bone_name
-        var.targets[0].transform_space = 'LOCAL_SPACE'
+        var.targets[0].transform_space = "LOCAL_SPACE"
         var.targets[0].transform_type = transform
 
         # Create the scripted expression driver
-        driver.type = 'SCRIPTED'
-        driver.expression = expression  
+        driver.type = "SCRIPTED"
+        driver.expression = expression
 
         # Update the dependencies
         depsgraph = bpy.context.evaluated_depsgraph_get()
         depsgraph.update()
-        
+
     # Dynamic face object resolution for ZZZ / general characters
     obj_face_dynamic = None
     for o in bpy.data.objects:
-        if o.type == 'MESH' and "_face" in o.name.lower() and "weapon_" not in o.name.lower() and "gun_" not in o.name.lower():
+        if (
+            o.type == "MESH"
+            and "_face" in o.name.lower()
+            and "weapon_" not in o.name.lower()
+            and "gun_" not in o.name.lower()
+        ):
             obj_face_dynamic = o
             break
 
-    # BROW SHAPE KEYS 
-    obj = obj_face_dynamic or bpy.data.objects.get("Brow") or bpy.data.objects.get("Face") or (bpy.data.objects.get("Body") if meshes_joined else None)
+    # BROW SHAPE KEYS
+    obj = (
+        obj_face_dynamic
+        or bpy.data.objects.get("Brow")
+        or bpy.data.objects.get("Face")
+        or (bpy.data.objects.get("Body") if meshes_joined else None)
+    )
     if obj and obj.data.shape_keys:
         print(f"[RIG] Using object '{obj.name}' for brow shape key drivers")
         if "Fac_Ebr_Down" in obj.data.shape_keys.key_blocks:
@@ -2026,25 +3326,37 @@ def rig_character(
                 _rig_log.append(f"ZZZ Brow driver failed: {e}")
         else:
             try:
-                makeCon("Brow_Down_L","Brow-L-Control","bone * -4","LOC_Y")
-                makeCon("Brow_Down_R","Brow-R-Control","bone * -4","LOC_Y")
-                makeCon("Brow_Up_L","Brow-L-Control","bone * 4","LOC_Y")
-                makeCon("Brow_Up_R","Brow-R-Control","bone * 4","LOC_Y")
-                makeCon("Brow_Trouble_L", "Brow-Trouble-L-Control", "bone * 2", "LOC_X")   
-                makeCon("Brow_Trouble_R", "Brow-Trouble-R-Control", "bone * 2", "LOC_X")   
-                makeCon("Brow_Smily_R", "Brow-Smily-R-Control", "bone * 2", "LOC_X")   
-                makeCon("Brow_Smily_L", "Brow-Smily-L-Control", "bone * 2", "LOC_X")   
-                makeCon("Brow_Angry_L", "Brow-Angry-L-Control", "bone * 2", "LOC_X")   
-                makeCon("Brow_Angry_R", "Brow-Angry-R-Control", "bone * 2", "LOC_X")   
-                makeCon("Brow_Shy_L", "Brow-Shy-L-Control", "bone * 2", "LOC_X")   
-                makeCon("Brow_Shy_R", "Brow-Shy-R-Control", "bone * 2", "LOC_X")   
-                makeCon("Brow_Squeeze_R", "Brow-R-Control", "bone * 4", "LOC_X")   
-                makeCon("Brow_Squeeze_L", "Brow-L-Control", "bone * -4", "LOC_X")   
+                makeCon("Brow_Down_L", "Brow-L-Control", "bone * -4", "LOC_Y")
+                makeCon("Brow_Down_R", "Brow-R-Control", "bone * -4", "LOC_Y")
+                makeCon("Brow_Up_L", "Brow-L-Control", "bone * 4", "LOC_Y")
+                makeCon("Brow_Up_R", "Brow-R-Control", "bone * 4", "LOC_Y")
+                makeCon("Brow_Trouble_L", "Brow-Trouble-L-Control", "bone * 2", "LOC_X")
+                makeCon("Brow_Trouble_R", "Brow-Trouble-R-Control", "bone * 2", "LOC_X")
+                makeCon("Brow_Smily_R", "Brow-Smily-R-Control", "bone * 2", "LOC_X")
+                makeCon("Brow_Smily_L", "Brow-Smily-L-Control", "bone * 2", "LOC_X")
+                makeCon("Brow_Angry_L", "Brow-Angry-L-Control", "bone * 2", "LOC_X")
+                makeCon("Brow_Angry_R", "Brow-Angry-R-Control", "bone * 2", "LOC_X")
+                makeCon("Brow_Shy_L", "Brow-Shy-L-Control", "bone * 2", "LOC_X")
+                makeCon("Brow_Shy_R", "Brow-Shy-R-Control", "bone * 2", "LOC_X")
+                makeCon("Brow_Squeeze_R", "Brow-R-Control", "bone * 4", "LOC_X")
+                makeCon("Brow_Squeeze_L", "Brow-L-Control", "bone * -4", "LOC_X")
             except Exception as e:
                 _rig_log.append(f"Brow driver failed: {e}")
 
+        # HSR brow variants
+        try:
+            makeCon("00_Default_Brow", "Brow-L-Control", "bone * 2", "LOC_X")
+            makeCon("00_Default_Brow", "Brow-R-Control", "bone * 2", "LOC_X")
+        except Exception as e:
+            _rig_log.append(f"HSR Brow driver failed: {e}")
+
     # EYE SHAPE KEYS
-    obj = obj_face_dynamic or bpy.data.objects.get("Face_Eye") or bpy.data.objects.get("Face") or (bpy.data.objects.get("Body") if meshes_joined else None)
+    obj = (
+        obj_face_dynamic
+        or bpy.data.objects.get("Face_Eye")
+        or bpy.data.objects.get("Face")
+        or (bpy.data.objects.get("Body") if meshes_joined else None)
+    )
     if obj and obj.data.shape_keys:
         print(f"[RIG] Using object '{obj.name}' for eye shape key drivers")
         if "Fac_Eye_Close" in obj.data.shape_keys.key_blocks:
@@ -2053,7 +3365,12 @@ def rig_character(
                 ("Fac_Eye_HalfClose", "Eye-Jito-Control", "bone * -2.22", "LOC_Y"),
                 ("Fac_Eye_Sad", "Eye-Wail-Control", "bone * -2.22", "LOC_Y"),
                 ("Fac_Eye_Angry", "Eye-Hostility-Control", "bone * -2.22", "LOC_Y"),
-                ("Fac_Eye_LowlidUp", "Eye-LowerEyelid-Control", "bone * -2.22", "LOC_Y"),
+                (
+                    "Fac_Eye_LowlidUp",
+                    "Eye-LowerEyelid-Control",
+                    "bone * -2.22",
+                    "LOC_Y",
+                ),
                 ("Fac_Eye_L_Open", "Eye-Up-Control", "bone * -2.22", "LOC_Y"),
                 ("Fac_Eye_R_Open", "Eye-Up-Control", "bone * -2.22", "LOC_Y"),
                 ("Fac_Eye_L_Wink", "WinkA-L-Invis", "bone * -.82", "LOC_Y"),
@@ -2066,38 +3383,57 @@ def rig_character(
                     _rig_log.append(f"ZZZ Eye driver failed: {sk_name} -> {e}")
         else:
             eye_shape_key_configs = [
-                ("Eye_WinkA_L","WinkA-L-Invis","bone * -.82","LOC_Y"),
-                ("Eye_WinkA_R","WinkA-R-Invis","bone * -.82","LOC_Y"),
-                ("Eye_WinkB_L","WinkB-L-Invis","bone * -.82","LOC_Y"),
-                ("Eye_WinkB_R","WinkB-R-Invis","bone * -.82","LOC_Y"),
-                ("Eye_WinkC_L","WinkC-L-Invis","bone * -.82","LOC_Y"),
-                ("Eye_WinkC_R","WinkC-R-Invis","bone * -.82","LOC_Y"),
-                ("Eye_Ha","Eye-Ha-Control","bone * -2.22","LOC_Y"),
-                ("Eye_Jito","Eye-Jito-Control","bone * -2.22","LOC_Y"),
-                ("Eye_Wail","Eye-Wail-Control","bone * -2.22","LOC_Y"),
-                ("Eye_Hostility","Eye-Hostility-Control","bone * -2.22","LOC_Y"),
-                ("Eye_Tired","Eye-Tired-Control","bone * -2.22","LOC_Y"),
-                ("Eye_WUp","Eye-Up-Control","bone * -2.22","LOC_Y"),
-                ("Eye_WDown","Eye-Down-Control","bone * -2.22","LOC_Y"),
-                ("Eye_Lowereyelid","Eye-LowerEyelid-Control","bone * -2.22","LOC_Y"),
+                ("Eye_WinkA_L", "WinkA-L-Invis", "bone * -.82", "LOC_Y"),
+                ("Eye_WinkA_R", "WinkA-R-Invis", "bone * -.82", "LOC_Y"),
+                ("Eye_WinkB_L", "WinkB-L-Invis", "bone * -.82", "LOC_Y"),
+                ("Eye_WinkB_R", "WinkB-R-Invis", "bone * -.82", "LOC_Y"),
+                ("Eye_WinkC_L", "WinkC-L-Invis", "bone * -.82", "LOC_Y"),
+                ("Eye_WinkC_R", "WinkC-R-Invis", "bone * -.82", "LOC_Y"),
+                ("Eye_Ha", "Eye-Ha-Control", "bone * -2.22", "LOC_Y"),
+                ("Eye_Jito", "Eye-Jito-Control", "bone * -2.22", "LOC_Y"),
+                ("Eye_Wail", "Eye-Wail-Control", "bone * -2.22", "LOC_Y"),
+                ("Eye_Hostility", "Eye-Hostility-Control", "bone * -2.22", "LOC_Y"),
+                ("Eye_Tired", "Eye-Tired-Control", "bone * -2.22", "LOC_Y"),
+                ("Eye_WUp", "Eye-Up-Control", "bone * -2.22", "LOC_Y"),
+                ("Eye_WDown", "Eye-Down-Control", "bone * -2.22", "LOC_Y"),
+                ("Eye_Lowereyelid", "Eye-LowerEyelid-Control", "bone * -2.22", "LOC_Y"),
             ]
             for sk_name, bone_name, expression, transform in eye_shape_key_configs:
                 try:
                     makeCon(sk_name, bone_name, expression, transform)
                 except Exception as e:
-                    _rig_log.append(f"Eye driver failed: '{sk_name}' / '{bone_name}' -> {e}")
+                    _rig_log.append(
+                        f"Eye driver failed: '{sk_name}' / '{bone_name}' -> {e}"
+                    )
+
+        # HSR eye shape keys (Face object variants like 00_Close01_Eye)
+        hsr_eye_configs = [
+            ("00_Close01_Eye", "Eye-Ha-Control", "bone * -2.22", "LOC_Y"),
+            ("00_Default_Eye", "Eye-Up-Control", "bone * -2.22", "LOC_Y"),
+        ]
+        for sk_name, bone_name, expression, transform in hsr_eye_configs:
+            try:
+                makeCon(sk_name, bone_name, expression, transform)
+            except Exception as e:
+                _rig_log.append(
+                    f"HSR Eye driver failed: '{sk_name}' / '{bone_name}' -> {e}"
+                )
 
     # Pupils shape key drivers
     try:
         obj = bpy.data.objects.get("EyeStar")
         if obj and obj.data.shape_keys and "EyeStar" in obj.data.shape_keys.key_blocks:
-            makeCon("EyeStar","Eye-Star-Control","1+(bone*2.23)","LOC_Y")
+            makeCon("EyeStar", "Eye-Star-Control", "1+(bone*2.23)", "LOC_Y")
             print(f"[RIG OK] EyeStar shape key driver created.")
     except Exception as e:
         _rig_log.append(f"EyeStar driver failed: {e}")
 
     # MOUTH SHAPE KEYS
-    obj = obj_face_dynamic or bpy.data.objects.get("Face") or (bpy.data.objects.get("Body") if meshes_joined else None)
+    obj = (
+        obj_face_dynamic
+        or bpy.data.objects.get("Face")
+        or (bpy.data.objects.get("Body") if meshes_joined else None)
+    )
     if obj and obj.data.shape_keys:
         if "Fac_Mth_Aa1" in obj.data.shape_keys.key_blocks:
             zzz_mouth_configs = [
@@ -2134,50 +3470,126 @@ def rig_character(
                     _rig_log.append(f"ZZZ Mouth driver failed: {sk_name} -> {e}")
         else:
             try:
-                makeCon("Mouth_Default","Mouth-Default-Control","bone * 1.67","LOC_X")
-                makeCon("Mouth_A01","Mouth-Control","bone * -1.33","LOC_Y")
-                makeCon("Mouth_Open01","Mouth-Control","bone * 1.33","LOC_Y")
-                makeCon("Mouth_Smile01","Mouth-Smile1-Control","bone * 1.67","LOC_X")
-                makeCon("Mouth_Smile02","Mouth-Smile2-Control","bone * 1.67","LOC_X")
-                makeCon("Mouth_Angry01","Mouth-Angry1-Control","bone * 1.67","LOC_X")
-                makeCon("Mouth_Angry02","Mouth-Angry2-Control","bone * 1.67","LOC_X")
-                makeCon("Mouth_Angry03","Mouth-Angry3-Control","bone * 1.67","LOC_X")
-                makeCon("Mouth_Fury01","Mouth-Fury1-Control","bone * 1.67","LOC_X")
-                makeCon("Mouth_Doya01","Mouth-Doya1-Control","bone * 1.67","LOC_X")
-                makeCon("Mouth_Doya02","Mouth-Doya2-Control","bone * 1.67","LOC_X")
-                makeCon("Mouth_Pero01","Mouth-Pero1-Control","bone * 1.67","LOC_X")
-                makeCon("Mouth_Pero02","Mouth-Pero2-Control","bone * 1.67","LOC_X")
-                makeCon("Mouth_Line01","Mouth-Control","bone * 1.33","LOC_X")
-                makeCon("Mouth_Line02","Mouth-Control","bone * -1.33","LOC_X")
-                makeCon("Mouth_Neko01","Mouth-Neko1-Control","bone * 1.67","LOC_X")
+                makeCon(
+                    "Mouth_Default", "Mouth-Default-Control", "bone * 1.67", "LOC_X"
+                )
+                makeCon("Mouth_A01", "Mouth-Control", "bone * -1.33", "LOC_Y")
+                makeCon("Mouth_Open01", "Mouth-Control", "bone * 1.33", "LOC_Y")
+                makeCon("Mouth_Smile01", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X")
+                makeCon("Mouth_Smile02", "Mouth-Smile2-Control", "bone * 1.67", "LOC_X")
+                makeCon("Mouth_Angry01", "Mouth-Angry1-Control", "bone * 1.67", "LOC_X")
+                makeCon("Mouth_Angry02", "Mouth-Angry2-Control", "bone * 1.67", "LOC_X")
+                makeCon("Mouth_Angry03", "Mouth-Angry3-Control", "bone * 1.67", "LOC_X")
+                makeCon("Mouth_Fury01", "Mouth-Fury1-Control", "bone * 1.67", "LOC_X")
+                makeCon("Mouth_Doya01", "Mouth-Doya1-Control", "bone * 1.67", "LOC_X")
+                makeCon("Mouth_Doya02", "Mouth-Doya2-Control", "bone * 1.67", "LOC_X")
+                makeCon("Mouth_Pero01", "Mouth-Pero1-Control", "bone * 1.67", "LOC_X")
+                makeCon("Mouth_Pero02", "Mouth-Pero2-Control", "bone * 1.67", "LOC_X")
+                makeCon("Mouth_Line01", "Mouth-Control", "bone * 1.33", "LOC_X")
+                makeCon("Mouth_Line02", "Mouth-Control", "bone * -1.33", "LOC_X")
+                makeCon("Mouth_Neko01", "Mouth-Neko1-Control", "bone * 1.67", "LOC_X")
             except Exception as e:
                 _rig_log.append(f"Mouth driver failed: {e}")
 
+        # HSR mouth shape keys
+        hsr_mouth_configs = [
+            ("00_Default_Mouth", "Mouth-Default-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_A01", "Mouth-Control", "bone * -1.33", "LOC_Y"),
+            ("Mouth_Angry01", "Mouth-Angry1-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Angry02", "Mouth-Angry2-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Angry03", "Mouth-Angry3-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Angry04", "Mouth-Fury1-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Smile01", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Smile02", "Mouth-Smile2-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Smile03", "Mouth-Doya1-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Smile04", "Mouth-Doya2-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Proud01", "Mouth-Doya1-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Proud02", "Mouth-Doya2-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Pain01", "Mouth-Angry1-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Pain02", "Mouth-Angry2-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Pain03", "Mouth-Angry3-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Pain04", "Mouth-Fury1-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Worry01", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Worry02", "Mouth-Smile2-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Worry03", "Mouth-Angry1-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Worry04", "Mouth-Angry2-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Twisted01", "Mouth-Control", "bone * 1.33", "LOC_X"),
+            ("Mouth_Twisted02", "Mouth-Control", "bone * -1.33", "LOC_X"),
+            ("Mouth_Delta01", "Mouth-Control", "bone * 1.33", "LOC_X"),
+            ("Mouth_Delta02", "Mouth-Control", "bone * -1.33", "LOC_X"),
+            ("Mouth_Delta03", "Mouth-Control", "bone * 1.33", "LOC_Y"),
+            ("Mouth_Up", "Mouth-Control", "bone * 1.33", "LOC_Y"),
+            ("Mouth_Down", "Mouth-Control", "bone * -1.33", "LOC_Y"),
+            ("Mouth_Max", "Mouth-Control", "bone * 1.33", "LOC_Y"),
+            ("Mouth_Minimum", "Mouth-Control", "bone * -1.33", "LOC_Y"),
+            ("Mouth_Wide", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Narrow", "Mouth-Neko1-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Pout", "Mouth-Neko1-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_A", "Mouth-Control", "bone * -1.33", "LOC_Y"),
+            ("Mouth_E", "Mouth-Smile2-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_I", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_O", "Mouth-Control", "bone * 1.33", "LOC_Y"),
+            ("Mouth_U", "Mouth-Neko1-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_N", "Mouth-Default-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Phoneme_cn_a", "Mouth-Control", "bone * -1.33", "LOC_Y"),
+            ("Mouth_Phoneme_cn_ai", "Mouth-Control", "bone * -1.33", "LOC_Y"),
+            ("Mouth_Phoneme_cn_an", "Mouth-Control", "bone * -1.33", "LOC_Y"),
+            ("Mouth_Phoneme_cn_ao", "Mouth-Control", "bone * 1.33", "LOC_Y"),
+            ("Mouth_Phoneme_cn_e", "Mouth-Smile2-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Phoneme_cn_ei", "Mouth-Smile2-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Phoneme_cn_en", "Mouth-Smile2-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Phoneme_cn_i", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Phoneme_cn_o", "Mouth-Control", "bone * 1.33", "LOC_Y"),
+            ("Mouth_Phoneme_cn_ou", "Mouth-Control", "bone * 1.33", "LOC_Y"),
+            ("Mouth_Phoneme_cn_u", "Mouth-Neko1-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Phoneme_cn_w", "Mouth-Neko1-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Phoneme_cn_y", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Phoneme_cn_b", "Mouth-Default-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Phoneme_cn_d", "Mouth-Default-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Phoneme_cn_f", "Mouth-Default-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Phoneme_cn_g", "Mouth-Default-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Phoneme_cn_j", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Phoneme_cn_l", "Mouth-Default-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Phoneme_cn_n", "Mouth-Default-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Phoneme_cn_q", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Phoneme_cn_r", "Mouth-Default-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Phoneme_cn_stop", "Mouth-Default-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Phoneme_cn_z", "Mouth-Default-Control", "bone * 1.67", "LOC_X"),
+            ("Mouth_Phoneme_cn_zh", "Mouth-Default-Control", "bone * 1.67", "LOC_X"),
+        ]
+        for sk_name, bone_name, expression, transform in hsr_mouth_configs:
+            try:
+                makeCon(sk_name, bone_name, expression, transform)
+            except Exception as e:
+                _rig_log.append(
+                    f"HSR Mouth driver failed: '{sk_name}' / '{bone_name}' -> {e}"
+                )
+
     # Since we're still in object mode, here we can add the head pole object in the neck to track head movement
-    bpy.ops.object.empty_add(type='PLAIN_AXES', align='WORLD', location=(0, 0, 0), scale=(1, 1, 1))
+    bpy.ops.object.empty_add(
+        type="PLAIN_AXES", align="WORLD", location=(0, 0, 0), scale=(1, 1, 1)
+    )
     bpy.data.objects["Empty"].name = "Head_Pole"
     bpy.data.objects["Head_Pole"].empty_display_size = 0.01
-    bpy.data.objects["Head_Pole"].parent = bpy.data.objects[char_name+"Rig"]
+    bpy.data.objects["Head_Pole"].parent = bpy.data.objects[char_name + "Rig"]
     bpy.data.objects["Head_Pole"].parent_type = "BONE"
     bpy.data.objects["Head_Pole"].parent_bone = "neck"
-
 
     # In object mode, let's take the time to add drivers for viewport outlines (Based on a toggle, optionally to see them before rendering)
     def setup_viewport_outlines(prop):
         driver = prop.driver_add("show_viewport").driver
-        driver.type = 'SCRIPTED'
-        driver.expression = 'var'
+        driver.type = "SCRIPTED"
+        driver.expression = "var"
 
         var = driver.variables.new()
         var.name = "var"
-        var.type = 'SINGLE_PROP'
+        var.type = "SINGLE_PROP"
         var.targets[0].id = bpy.data.objects.get(ourRig)
-        var.targets[0].data_path = "pose.bones[\"plate-settings\"][\"Viewport Outlines\"]"
-        
+        var.targets[0].data_path = 'pose.bones["plate-settings"]["Viewport Outlines"]'
+
         # Update the dependencies
         depsgraph = bpy.context.evaluated_depsgraph_get()
         depsgraph.update()
-
 
     try:
         setup_viewport_outlines(bpy.data.objects["Body"].modifiers["Outlines Body"])
@@ -2188,7 +3600,9 @@ def rig_character(
     except:
         pass
     try:
-        setup_viewport_outlines(bpy.data.objects["Hair.001"].modifiers["Outlines Hair.001"]) # Escoffier? Who else  
+        setup_viewport_outlines(
+            bpy.data.objects["Hair.001"].modifiers["Outlines Hair.001"]
+        )  # Escoffier? Who else
     except:
         pass
     try:
@@ -2201,18 +3615,130 @@ def rig_character(
         pass
 
     # handled list of face SK
-    handled_sks = ['Basis', 'Mouth_Default', 'Mouth_A01', 'Mouth_Open01', 'Mouth_Smile01', 'Mouth_Smile02', 'Mouth_Angry01', 'Mouth_Angry02',
-    'Mouth_Angry03', 'Mouth_Fury01', 'Mouth_Doya01', 'Mouth_Doya02', 'Mouth_Neko01', 'Mouth_Pero01', 'Mouth_Pero02', 'Mouth_Line01', 'Mouth_Line02',
-    'Mouth_BigTongue01', 'Brow_Default', 'Brow_Trouble_L', 'Brow_Trouble_R', 'Brow_Smily_L', 'Brow_Smily_R',
-    'Brow_Angry_L', 'Brow_Angry_R', 'Brow_Shy_L', 'Brow_Shy_R', 'Brow_Up_L', 'Brow_Up_R', 'Brow_Down_L', 'Brow_Down_R', 'Brow_Squeeze_L', 'Brow_Squeeze_R', 
-    'Eye_Default', 'Eye_WinkA_L', 'Eye_WinkA_R', 'Eye_WinkB_L', 'Eye_WinkB_R', 'Eye_WinkC_L', 'Eye_WinkC_R', 'Eye_Ha', 'Eye_Jito', 'Eye_Wail', 
-    'Eye_Hostility', 'Eye_Tired', 'Eye_WUp', 'Eye_WDown', 'Eye_Lowereyelid']
-
+    handled_sks = [
+        "Basis",
+        "Mouth_Default",
+        "Mouth_A01",
+        "Mouth_Open01",
+        "Mouth_Smile01",
+        "Mouth_Smile02",
+        "Mouth_Angry01",
+        "Mouth_Angry02",
+        "Mouth_Angry03",
+        "Mouth_Fury01",
+        "Mouth_Doya01",
+        "Mouth_Doya02",
+        "Mouth_Neko01",
+        "Mouth_Pero01",
+        "Mouth_Pero02",
+        "Mouth_Line01",
+        "Mouth_Line02",
+        "Mouth_BigTongue01",
+        "Brow_Default",
+        "Brow_Trouble_L",
+        "Brow_Trouble_R",
+        "Brow_Smily_L",
+        "Brow_Smily_R",
+        "Brow_Angry_L",
+        "Brow_Angry_R",
+        "Brow_Shy_L",
+        "Brow_Shy_R",
+        "Brow_Up_L",
+        "Brow_Up_R",
+        "Brow_Down_L",
+        "Brow_Down_R",
+        "Brow_Squeeze_L",
+        "Brow_Squeeze_R",
+        "Eye_Default",
+        "Eye_WinkA_L",
+        "Eye_WinkA_R",
+        "Eye_WinkB_L",
+        "Eye_WinkB_R",
+        "Eye_WinkC_L",
+        "Eye_WinkC_R",
+        "Eye_Ha",
+        "Eye_Jito",
+        "Eye_Wail",
+        "Eye_Hostility",
+        "Eye_Tired",
+        "Eye_WUp",
+        "Eye_WDown",
+        "Eye_Lowereyelid",
+        # HSR / Face-key variants
+        "00_Close01_Eye",
+        "00_Default_Brow",
+        "00_Default_Eye",
+        "00_Default_Mouth",
+        "Mouth_A",
+        "Mouth_E",
+        "Mouth_I",
+        "Mouth_O",
+        "Mouth_U",
+        "Mouth_N",
+        "Mouth_Up",
+        "Mouth_Down",
+        "Mouth_Wide",
+        "Mouth_Narrow",
+        "Mouth_Pout",
+        "Mouth_Max",
+        "Mouth_Minimum",
+        "Mouth_Delta01",
+        "Mouth_Delta02",
+        "Mouth_Delta03",
+        "Mouth_Twisted01",
+        "Mouth_Twisted02",
+        "Mouth_Angry04",
+        "Mouth_Smile03",
+        "Mouth_Smile04",
+        "Mouth_Proud01",
+        "Mouth_Proud02",
+        "Mouth_Pain01",
+        "Mouth_Pain02",
+        "Mouth_Pain03",
+        "Mouth_Pain04",
+        "Mouth_Worry01",
+        "Mouth_Worry02",
+        "Mouth_Worry03",
+        "Mouth_Worry04",
+        "Mouth_Phoneme_cn_a",
+        "Mouth_Phoneme_cn_ai",
+        "Mouth_Phoneme_cn_an",
+        "Mouth_Phoneme_cn_ao",
+        "Mouth_Phoneme_cn_b",
+        "Mouth_Phoneme_cn_d",
+        "Mouth_Phoneme_cn_e",
+        "Mouth_Phoneme_cn_ei",
+        "Mouth_Phoneme_cn_en",
+        "Mouth_Phoneme_cn_f",
+        "Mouth_Phoneme_cn_g",
+        "Mouth_Phoneme_cn_i",
+        "Mouth_Phoneme_cn_j",
+        "Mouth_Phoneme_cn_l",
+        "Mouth_Phoneme_cn_n",
+        "Mouth_Phoneme_cn_o",
+        "Mouth_Phoneme_cn_ou",
+        "Mouth_Phoneme_cn_q",
+        "Mouth_Phoneme_cn_r",
+        "Mouth_Phoneme_cn_stop",
+        "Mouth_Phoneme_cn_u",
+        "Mouth_Phoneme_cn_w",
+        "Mouth_Phoneme_cn_y",
+        "Mouth_Phoneme_cn_z",
+        "Mouth_Phoneme_cn_zh",
+    ]
 
     def get_shape_keys(obj_name, handled_sks):
         obj = bpy.data.objects.get(obj_name)
         if obj and obj.data.shape_keys:
-            return [shape_key.name for shape_key in obj.data.shape_keys.key_blocks if shape_key.name not in handled_sks]
+            return [
+                shape_key.name
+                for shape_key in obj.data.shape_keys.key_blocks
+                if shape_key.name not in handled_sks
+                and not shape_key.name.startswith("Eye_")
+                and not shape_key.name.startswith("Brow_")
+                and not shape_key.name.startswith("Mouth_")
+                and not shape_key.name.startswith("00_")
+            ]
         return []
 
     # Get shape keys for the face. We can dynamically make SK sliders for shapekeys we do not handle in the face panel
@@ -2220,31 +3746,43 @@ def rig_character(
 
     # We have existing SK's we need to support, bring in the 'extras' header and do the work
     if lighting_panel_version >= 4 and len(face_shape_keys) > 0:
-        bpy.ops.wm.append(filename='append_extras', directory=path_to_file)
+        bpy.ops.wm.append(filename="append_extras", directory=path_to_file)
 
         # Select the rigs in question
-        bpy.ops.object.select_all(action='DESELECT')
-        bpy.data.objects["extras"].select_set(True) # select the extras
-        bpy.data.objects[char_name+"Rig"].select_set(True) # select the char rig
-        bpy.context.view_layer.objects.active = bpy.data.objects[char_name+"Rig"] # ensure the rig is the active object
-        bpy.ops.object.join() # join them
-        bpy.ops.object.mode_set(mode='EDIT')
-        armature.edit_bones['extras-panel'].parent = armature.edit_bones['plate-border']
-        armature.edit_bones['extras-panel'].head = armature.edit_bones['plate-settings'].head
-        armature.edit_bones['extras-panel'].head.x += 0.723336
-        armature.edit_bones['extras-panel'].tail.x = armature.edit_bones['extras-panel'].head.x
-        armature.edit_bones['extras-panel'].head.z -= 0.01397
-        armature.edit_bones['extras-panel'].tail.z = armature.edit_bones['extras-panel'].head.z + 1
+        bpy.ops.object.select_all(action="DESELECT")
+        bpy.data.objects["extras"].select_set(True)  # select the extras
+        bpy.data.objects[char_name + "Rig"].select_set(True)  # select the char rig
+        bpy.context.view_layer.objects.active = bpy.data.objects[
+            char_name + "Rig"
+        ]  # ensure the rig is the active object
+        bpy.ops.object.join()  # join them
+        bpy.ops.object.mode_set(mode="EDIT")
+        armature.edit_bones["extras-panel"].parent = armature.edit_bones["plate-border"]
+        armature.edit_bones["extras-panel"].head = armature.edit_bones[
+            "plate-settings"
+        ].head
+        armature.edit_bones["extras-panel"].head.x += 0.723336
+        armature.edit_bones["extras-panel"].tail.x = armature.edit_bones[
+            "extras-panel"
+        ].head.x
+        armature.edit_bones["extras-panel"].head.z -= 0.01397
+        armature.edit_bones["extras-panel"].tail.z = (
+            armature.edit_bones["extras-panel"].head.z + 1
+        )
 
-        extras_position = armature.edit_bones['extras-panel'].head
+        extras_position = armature.edit_bones["extras-panel"].head
 
-        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode="OBJECT")
 
-        to_del_coll = bpy.data.collections.get("wgt.008") # note to future self, at some point, we can switch to a single mechanism that identifies wgt.00X and moves into wgt
+        to_del_coll = bpy.data.collections.get(
+            "wgt.008"
+        )  # note to future self, at some point, we can switch to a single mechanism that identifies wgt.00X and moves into wgt
         for obj in to_del_coll.objects:
-            move_into_collection(obj.name,"wgt")
+            move_into_collection(obj.name, "wgt")
 
-        bpy.data.collections.remove(bpy.data.collections.get("append_extras"),do_unlink=True)
+        bpy.data.collections.remove(
+            bpy.data.collections.get("append_extras"), do_unlink=True
+        )
 
         # From extra header's position, we can setup the first position to use
         slider_starting_position = extras_position.copy()
@@ -2256,93 +3794,105 @@ def rig_character(
 
         # For each shapekey, we can append a copy of the slider needed to support it.
         for sk in face_shape_keys:
-            bpy.ops.wm.append(filename='append_slider', directory=path_to_file)
+            bpy.ops.wm.append(filename="append_slider", directory=path_to_file)
 
-            bpy.ops.object.mode_set(mode='OBJECT')
-            bpy.ops.object.select_all(action='DESELECT')
+            bpy.ops.object.mode_set(mode="OBJECT")
+            bpy.ops.object.select_all(action="DESELECT")
 
             # Select custom face armature
             bpy.data.objects["slider_rig"].select_set(True)
 
-            bpy.data.objects[char_name+"Rig"].select_set(True)
-            
-            bpy.context.view_layer.objects.active = bpy.data.objects[char_name+"Rig"]
+            bpy.data.objects[char_name + "Rig"].select_set(True)
+
+            bpy.context.view_layer.objects.active = bpy.data.objects[char_name + "Rig"]
 
             bpy.ops.object.join()
 
-            bpy.ops.object.mode_set(mode='EDIT')
+            bpy.ops.object.mode_set(mode="EDIT")
             # Position the Slider Frame
-            armature.edit_bones['slider-frame'].parent = armature.edit_bones['extras-panel']
-            armature.edit_bones['slider-frame'].head = armature.edit_bones['extras-panel'].head
-            armature.edit_bones['slider-frame'].head.x -= 0.058479
-            armature.edit_bones['slider-frame'].tail.x = armature.edit_bones['slider-frame'].head.x
-            armature.edit_bones['slider-frame'].head.z -= (0.0466 + (count*0.03042)) 
-            armature.edit_bones['slider-frame'].tail.z = armature.edit_bones['slider-frame'].head.z + 1
+            armature.edit_bones["slider-frame"].parent = armature.edit_bones[
+                "extras-panel"
+            ]
+            armature.edit_bones["slider-frame"].head = armature.edit_bones[
+                "extras-panel"
+            ].head
+            armature.edit_bones["slider-frame"].head.x -= 0.058479
+            armature.edit_bones["slider-frame"].tail.x = armature.edit_bones[
+                "slider-frame"
+            ].head.x
+            armature.edit_bones["slider-frame"].head.z -= 0.0466 + (count * 0.03042)
+            armature.edit_bones["slider-frame"].tail.z = (
+                armature.edit_bones["slider-frame"].head.z + 1
+            )
 
             # Position the slider itself
-            armature.edit_bones['slider'].head = armature.edit_bones['slider-frame'].head
-            armature.edit_bones['slider'].tail = armature.edit_bones['slider-frame'].tail
-            armature.edit_bones['slider'].head.x -= 0.030134
-            armature.edit_bones['slider'].tail.x = armature.edit_bones['slider'].head.x
+            armature.edit_bones["slider"].head = armature.edit_bones[
+                "slider-frame"
+            ].head
+            armature.edit_bones["slider"].tail = armature.edit_bones[
+                "slider-frame"
+            ].tail
+            armature.edit_bones["slider"].head.x -= 0.030134
+            armature.edit_bones["slider"].tail.x = armature.edit_bones["slider"].head.x
 
             count += 1
-            
-            bpy.ops.object.mode_set(mode='POSE')
 
-            bpy.context.object.pose.bones.get('slider-frame').name = f'slider-frame-{sk}'
-            bpy.context.object.pose.bones.get('slider').name = f'slider-{sk}'
+            bpy.ops.object.mode_set(mode="POSE")
+
+            bpy.context.object.pose.bones.get(
+                "slider-frame"
+            ).name = f"slider-frame-{sk}"
+            bpy.context.object.pose.bones.get("slider").name = f"slider-{sk}"
 
             this_obj.pose.bones[f"slider-frame-{sk}"].bone.hide_select = True
 
-            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.mode_set(mode="OBJECT")
 
             bpy.data.objects.get("Face")
 
             obj = bpy.data.objects.get("Face")
-            makeCon(sk,f"slider-{sk}","bone * 16.7","LOC_X")
+            makeCon(sk, f"slider-{sk}", "bone * 16.7", "LOC_X")
             merge_duplicate_collections("wgt")
             merge_duplicate_collections("append_slider")
-            bpy.data.collections.remove(bpy.data.collections.get("append_slider"),do_unlink=True)
-
+            bpy.data.collections.remove(
+                bpy.data.collections.get("append_slider"), do_unlink=True
+            )
 
     # Let's go into object mode and select the body for the pupil shape keys, and to control our glow sliders.
-    bpy.ops.object.select_all(action='DESELECT')
-    obj = bpy.data.objects.get("Body")  
-    bpy.ops.object.select_all(action='DESELECT')
-
+    bpy.ops.object.select_all(action="DESELECT")
+    obj = bpy.data.objects.get("Body")
+    bpy.ops.object.select_all(action="DESELECT")
 
     # Going into pose mode with our character selected.
-    bpy.ops.object.select_all(action='DESELECT')
-    our_char =  bpy.data.objects.get(char_name+"Rig")
+    bpy.ops.object.select_all(action="DESELECT")
+    our_char = bpy.data.objects.get(char_name + "Rig")
     if our_char:
         our_char.select_set(True)
         bpy.context.view_layer.objects.active = our_char
-        
-        bpy.ops.object.mode_set(mode='POSE')
-        
-        
+
+        bpy.ops.object.mode_set(mode="POSE")
+
     def add_driver_to_bone_transform(bone, transform, channel, variables, expr):
-        this_bone = bpy.context.scene.objects[char_name+"Rig"].pose.bones[bone]
+        this_bone = bpy.context.scene.objects[char_name + "Rig"].pose.bones[bone]
         driver = this_bone.driver_add(transform, channel).driver
-        
+
         # Iterate through the list of variables and create each one
         for var_info in variables:
             var = driver.variables.new()
-            var.name = var_info['var_name']
-            if var_info['var_type'] == 'TRANSFORMS':
-                var.type = 'TRANSFORMS'
+            var.name = var_info["var_name"]
+            if var_info["var_type"] == "TRANSFORMS":
+                var.type = "TRANSFORMS"
                 var.targets[0].id = bpy.data.objects.get(ourRig)
-                var.targets[0].bone_target = var_info['target']
-                var.targets[0].transform_space = var_info['trans_space']
-                var.targets[0].transform_type = var_info['trans_type']
-            elif var_info['var_type'] == 'SINGLE_PROP':
-                var.type = 'SINGLE_PROP'
+                var.targets[0].bone_target = var_info["target"]
+                var.targets[0].transform_space = var_info["trans_space"]
+                var.targets[0].transform_type = var_info["trans_type"]
+            elif var_info["var_type"] == "SINGLE_PROP":
+                var.type = "SINGLE_PROP"
                 var.targets[0].id = bpy.data.objects.get(ourRig)
                 var.targets[0].data_path = var_info["data_path"]
-            
-        
+
         # Create the scripted expression driver
-        driver.type = 'SCRIPTED'
+        driver.type = "SCRIPTED"
         driver.expression = expr
 
         # Update the dependencies
@@ -2350,108 +3900,193 @@ def rig_character(
         depsgraph.update()
 
     try:
-        add_driver_to_bone_transform("eyelid-invis-control", 
-        "location", 1, [
-            {"var_name":"var", "var_type":"TRANSFORMS", "target":"eyetrack", "trans_space":"LOCAL_SPACE", "trans_type":"LOC_Y"}
-        ], "var * 5")
-    except: 
+        add_driver_to_bone_transform(
+            "eyelid-invis-control",
+            "location",
+            1,
+            [
+                {
+                    "var_name": "var",
+                    "var_type": "TRANSFORMS",
+                    "target": "eyetrack",
+                    "trans_space": "LOCAL_SPACE",
+                    "trans_type": "LOC_Y",
+                }
+            ],
+            "var * 5",
+        )
+    except:
         pass
-        
+
     # Let's now add the pupil resizer drivers
     try:
         variablesScale = [
-            {"var_name": "var", "var_type":"TRANSFORMS", "target": "Eye-Pupil-Control", "trans_space": "LOCAL_SPACE", "trans_type": "LOC_Y"},
-            {"var_name": "var2", "var_type":"SINGLE_PROP", "data_path": "pose.bones[\"plate-settings\"][\"EyeCorrection\"]"}
+            {
+                "var_name": "var",
+                "var_type": "TRANSFORMS",
+                "target": "Eye-Pupil-Control",
+                "trans_space": "LOCAL_SPACE",
+                "trans_type": "LOC_Y",
+            },
+            {
+                "var_name": "var2",
+                "var_type": "SINGLE_PROP",
+                "data_path": 'pose.bones["plate-settings"]["EyeCorrection"]',
+            },
         ]
 
-        add_driver_to_bone_transform("+EyeBoneA02.R", "scale", 0, variablesScale, "1.5556 * var + 1")
-        add_driver_to_bone_transform("+EyeBoneA02.R", "scale", 1, variablesScale, "1.5556 * var + 1")
-        add_driver_to_bone_transform("+EyeBoneA02.R", "scale", 2, variablesScale, "1.5556 * var + 1")
-        
+        add_driver_to_bone_transform(
+            "+EyeBoneA02.R", "scale", 0, variablesScale, "1.5556 * var + 1"
+        )
+        add_driver_to_bone_transform(
+            "+EyeBoneA02.R", "scale", 1, variablesScale, "1.5556 * var + 1"
+        )
+        add_driver_to_bone_transform(
+            "+EyeBoneA02.R", "scale", 2, variablesScale, "1.5556 * var + 1"
+        )
+
         # push back driver
-        add_driver_to_bone_transform("+EyeBoneA02.R", "location", 1, [
-            {"var_name": "var", "var_type":"TRANSFORMS", "target": "Wink-Control-R", "trans_space": "LOCAL_SPACE", "trans_type": "LOC_Y"},
-            {"var_name": "var2", "var_type":"SINGLE_PROP", "data_path": "pose.bones[\"plate-settings\"][\"EyeCorrection\"]"}
-        ],"(0.00273934 * var) * var2")
+        add_driver_to_bone_transform(
+            "+EyeBoneA02.R",
+            "location",
+            1,
+            [
+                {
+                    "var_name": "var",
+                    "var_type": "TRANSFORMS",
+                    "target": "Wink-Control-R",
+                    "trans_space": "LOCAL_SPACE",
+                    "trans_type": "LOC_Y",
+                },
+                {
+                    "var_name": "var2",
+                    "var_type": "SINGLE_PROP",
+                    "data_path": 'pose.bones["plate-settings"]["EyeCorrection"]',
+                },
+            ],
+            "(0.00273934 * var) * var2",
+        )
         _rig_log.append("OK: Pupil driver RIGHT eye created successfully")
     except Exception as e:
         _rig_log.append(f"FAIL: Pupil driver RIGHT eye: {e}")
 
     # Both eyes separately to handle eyeless/eye patch chars
     try:
-        add_driver_to_bone_transform("+EyeBoneA02.L", "scale", 0, variablesScale, "1.5556 * var + 1")
-        add_driver_to_bone_transform("+EyeBoneA02.L", "scale", 1, variablesScale, "1.5556 * var + 1")
-        add_driver_to_bone_transform("+EyeBoneA02.L", "scale", 2, variablesScale, "1.5556 * var + 1")
-        
+        add_driver_to_bone_transform(
+            "+EyeBoneA02.L", "scale", 0, variablesScale, "1.5556 * var + 1"
+        )
+        add_driver_to_bone_transform(
+            "+EyeBoneA02.L", "scale", 1, variablesScale, "1.5556 * var + 1"
+        )
+        add_driver_to_bone_transform(
+            "+EyeBoneA02.L", "scale", 2, variablesScale, "1.5556 * var + 1"
+        )
+
         # push back driver
-        add_driver_to_bone_transform("+EyeBoneA02.L", "location", 1, [
-            {"var_name": "var", "var_type":"TRANSFORMS", "target": "Wink-Control-L", "trans_space": "LOCAL_SPACE", "trans_type": "LOC_Y"},
-            {"var_name": "var2", "var_type":"SINGLE_PROP", "data_path": "pose.bones[\"plate-settings\"][\"EyeCorrection\"]"}
-        ],"(0.00273934 * var) * var2")
+        add_driver_to_bone_transform(
+            "+EyeBoneA02.L",
+            "location",
+            1,
+            [
+                {
+                    "var_name": "var",
+                    "var_type": "TRANSFORMS",
+                    "target": "Wink-Control-L",
+                    "trans_space": "LOCAL_SPACE",
+                    "trans_type": "LOC_Y",
+                },
+                {
+                    "var_name": "var2",
+                    "var_type": "SINGLE_PROP",
+                    "data_path": 'pose.bones["plate-settings"]["EyeCorrection"]',
+                },
+            ],
+            "(0.00273934 * var) * var2",
+        )
         _rig_log.append("OK: Pupil driver LEFT eye created successfully")
     except Exception as e:
         _rig_log.append(f"FAIL: Pupil driver LEFT eye: {e}")
-    
 
     # Disable IK Stretching & Turn on IK Poles. Toggle manually as needed.
     if disallow_leg_ik_stretch:
-        bpy.data.objects[char_name+"Rig"].pose.bones["thigh_parent.L"]["IK_Stretch"] = 0.0
-        bpy.data.objects[char_name+"Rig"].pose.bones["thigh_parent.R"]["IK_Stretch"] = 0.0
+        bpy.data.objects[char_name + "Rig"].pose.bones["thigh_parent.L"][
+            "IK_Stretch"
+        ] = 0.0
+        bpy.data.objects[char_name + "Rig"].pose.bones["thigh_parent.R"][
+            "IK_Stretch"
+        ] = 0.0
 
     if disallow_arm_ik_stretch:
-        bpy.data.objects[char_name+"Rig"].pose.bones["upper_arm_parent.L"]["IK_Stretch"] = 0.0
-        bpy.data.objects[char_name+"Rig"].pose.bones["upper_arm_parent.R"]["IK_Stretch"] = 0.0
-        
-    if use_arm_ik_poles:
-        bpy.data.objects[char_name+"Rig"].pose.bones["upper_arm_parent.L"]["pole_vector"] = 1
-        bpy.data.objects[char_name+"Rig"].pose.bones["upper_arm_parent.R"]["pole_vector"] = 1
-        
-    if use_leg_ik_poles:
-        bpy.data.objects[char_name+"Rig"].pose.bones["thigh_parent.L"]["pole_vector"] = 1
-        bpy.data.objects[char_name+"Rig"].pose.bones["thigh_parent.R"]["pole_vector"] = 1
+        bpy.data.objects[char_name + "Rig"].pose.bones["upper_arm_parent.L"][
+            "IK_Stretch"
+        ] = 0.0
+        bpy.data.objects[char_name + "Rig"].pose.bones["upper_arm_parent.R"][
+            "IK_Stretch"
+        ] = 0.0
 
-    bpy.data.objects[char_name+"Rig"].pose.bones["torso"]["head_follow"] = 1.0
-    bpy.data.objects[char_name+"Rig"].pose.bones["upper_arm_parent.L"]["IK_parent"] = 4
-    bpy.data.objects[char_name+"Rig"].pose.bones["upper_arm_parent.R"]["IK_parent"] = 4
+    if use_arm_ik_poles:
+        bpy.data.objects[char_name + "Rig"].pose.bones["upper_arm_parent.L"][
+            "pole_vector"
+        ] = 1
+        bpy.data.objects[char_name + "Rig"].pose.bones["upper_arm_parent.R"][
+            "pole_vector"
+        ] = 1
+
+    if use_leg_ik_poles:
+        bpy.data.objects[char_name + "Rig"].pose.bones["thigh_parent.L"][
+            "pole_vector"
+        ] = 1
+        bpy.data.objects[char_name + "Rig"].pose.bones["thigh_parent.R"][
+            "pole_vector"
+        ] = 1
+
+    bpy.data.objects[char_name + "Rig"].pose.bones["torso"]["head_follow"] = 1.0
+    bpy.data.objects[char_name + "Rig"].pose.bones["upper_arm_parent.L"][
+        "IK_parent"
+    ] = 4
+    bpy.data.objects[char_name + "Rig"].pose.bones["upper_arm_parent.R"][
+        "IK_parent"
+    ] = 4
 
     def add_shoulder_const(follow, driver, hand):
         armature = bpy.context.scene.objects[ourRig]
-        
+
         # make shoulder follow driver bone
-        this_bone = bpy.context.scene.objects[char_name+"Rig"].pose.bones[follow]
-        co = this_bone.constraints.new('DAMPED_TRACK')
+        this_bone = bpy.context.scene.objects[char_name + "Rig"].pose.bones[follow]
+        co = this_bone.constraints.new("DAMPED_TRACK")
         co.target = our_char
         co.subtarget = driver
-        
+
         # make driver bone follow hand
-        drive = bpy.context.scene.objects[char_name+"Rig"].pose.bones[driver]
-        co2 = drive.constraints.new('COPY_LOCATION')
+        drive = bpy.context.scene.objects[char_name + "Rig"].pose.bones[driver]
+        co2 = drive.constraints.new("COPY_LOCATION")
         co2.target = our_char
         co2.subtarget = hand
         co2.target_space = "LOCAL_OWNER_ORIENT"
         co2.owner_space = "LOCAL"
-        
+
         # make driver to control influence
         driver = co.driver_add("influence").driver
         var = driver.variables.new()
         var.name = "bone"
-        var.type = 'SINGLE_PROP'
-        
+        var.type = "SINGLE_PROP"
+
         var.targets[0].id = armature
-        var.targets[0].data_path = "pose.bones[\"plate-settings\"][\"Toggle Shoulder Constraints\"]"
-        driver.type = 'SCRIPTED'
+        var.targets[
+            0
+        ].data_path = 'pose.bones["plate-settings"]["Toggle Shoulder Constraints"]'
+        driver.type = "SCRIPTED"
         driver.expression = "(bone * 0.4)"
-        
+
         depsgraph = bpy.context.evaluated_depsgraph_get()
         depsgraph.update()
 
-    
-    add_shoulder_const("MCH-shoulder_follow.L","shoulder_driver.L","hand-ik-L")
-    add_shoulder_const("MCH-shoulder_follow.R","shoulder_driver.R","hand-ik-R")
-    
+    add_shoulder_const("MCH-shoulder_follow.L", "shoulder_driver.L", "hand-ik-L")
+    add_shoulder_const("MCH-shoulder_follow.R", "shoulder_driver.R", "hand-ik-R")
+
     def add_eye_bone_const(bone_name, to_bone):
-        this_bone = bpy.context.scene.objects[char_name+"Rig"].pose.bones[bone_name]
-        co = this_bone.constraints.new('COPY_ROTATION')
+        this_bone = bpy.context.scene.objects[char_name + "Rig"].pose.bones[bone_name]
+        co = this_bone.constraints.new("COPY_ROTATION")
         co.target = our_char
         co.subtarget = to_bone
         co.target_space = "LOCAL_OWNER_ORIENT"
@@ -2465,56 +4100,69 @@ def rig_character(
 
     # Let's add empty 'child of' constraints to limbs, torso and root. Ready to use in case char holds obj/stands on obj
     def add_child_of(bone_name):
-        this_bone = bpy.context.scene.objects[char_name+"Rig"].pose.bones[bone_name]
-        co = this_bone.constraints.new('CHILD_OF')
+        this_bone = bpy.context.scene.objects[char_name + "Rig"].pose.bones[bone_name]
+        co = this_bone.constraints.new("CHILD_OF")
 
-    if add_child_of_constraints: 
+    if add_child_of_constraints:
         add_child_of("hand-ik-L")
         add_child_of("hand-ik-R")
         add_child_of("foot_ik.R")
         add_child_of("foot_ik.L")
         add_child_of("torso-outer")
         add_child_of("root")
-        
-        
+
     # Here we can set up the two damped track constraints to make the head follow the controller bone.
     # This makes the head bone follow the controller
-    head_controller = bpy.context.scene.objects[char_name+"Rig"].pose.bones["head"]
-    co = head_controller.constraints.new('DAMPED_TRACK')
-    head_track_const = bpy.data.objects[char_name+"Rig"].pose.bones["head"].constraints["Damped Track"]
-    head_track_const.target = our_char 
+    head_controller = bpy.context.scene.objects[char_name + "Rig"].pose.bones["head"]
+    co = head_controller.constraints.new("DAMPED_TRACK")
+    head_track_const = (
+        bpy.data.objects[char_name + "Rig"]
+        .pose.bones["head"]
+        .constraints["Damped Track"]
+    )
+    head_track_const.target = our_char
     head_track_const.subtarget = "head-controller"
     head_track_const.track_axis = "TRACK_Z"
     # driver
     head_track_driver = head_track_const.driver_add("influence").driver
-    head_track_driver.type = 'SCRIPTED'
-    head_track_driver.expression = 'bone'
+    head_track_driver.type = "SCRIPTED"
+    head_track_driver.expression = "bone"
     head_var = head_track_driver.variables.new()
     head_var.name = "bone"
-    head_var.type = 'SINGLE_PROP'
+    head_var.type = "SINGLE_PROP"
     head_var.targets[0].id = bpy.context.scene.objects[ourRig]
-    head_var.targets[0].data_path = "pose.bones[\"plate-settings\"][\"Use Head Controller\"]"
+    head_var.targets[
+        0
+    ].data_path = 'pose.bones["plate-settings"]["Use Head Controller"]'
     depsgraph = bpy.context.evaluated_depsgraph_get()
     depsgraph.update()
 
     if not use_head_tracker:
         this_obj.pose.bones["plate-settings"]["Use Head Controller"] = 0.00
- 
+
     # This makes the controller follow the obj in the neck to keep it 'on' the head.
-    head_pole_cont = bpy.context.scene.objects[char_name+"Rig"].pose.bones["head-controller"]
-    co2 = head_pole_cont.constraints.new('DAMPED_TRACK')
-    head_pole_const = bpy.data.objects[char_name+"Rig"].pose.bones["head-controller"].constraints["Damped Track"]
-    head_pole_const.target = bpy.data.objects.get("Head_Pole") 
+    head_pole_cont = bpy.context.scene.objects[char_name + "Rig"].pose.bones[
+        "head-controller"
+    ]
+    co2 = head_pole_cont.constraints.new("DAMPED_TRACK")
+    head_pole_const = (
+        bpy.data.objects[char_name + "Rig"]
+        .pose.bones["head-controller"]
+        .constraints["Damped Track"]
+    )
+    head_pole_const.target = bpy.data.objects.get("Head_Pole")
     head_pole_const.track_axis = "TRACK_NEGATIVE_Z"
     # driver
     head_pole_driver = head_pole_const.driver_add("influence").driver
-    head_pole_driver.type = 'SCRIPTED'
-    head_pole_driver.expression = 'bone'
+    head_pole_driver.type = "SCRIPTED"
+    head_pole_driver.expression = "bone"
     head_pole_var = head_pole_driver.variables.new()
     head_pole_var.name = "bone"
-    head_pole_var.type = 'SINGLE_PROP'
+    head_pole_var.type = "SINGLE_PROP"
     head_pole_var.targets[0].id = bpy.context.scene.objects[ourRig]
-    head_pole_var.targets[0].data_path = "pose.bones[\"plate-settings\"][\"Use Head Controller\"]"
+    head_pole_var.targets[
+        0
+    ].data_path = 'pose.bones["plate-settings"]["Use Head Controller"]'
     depsgraph = bpy.context.evaluated_depsgraph_get()
     depsgraph.update()
 
@@ -2523,16 +4171,16 @@ def rig_character(
         # Perform old functionality to make BGs to then color.
         if not is_version_4:
             # Switch to object mode
-            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.mode_set(mode="OBJECT")
 
             # Get the armature object
             armature_obj = our_char
-            if not armature_obj or armature_obj.type != 'ARMATURE':
+            if not armature_obj or armature_obj.type != "ARMATURE":
                 return
 
             # Switch to pose mode
             bpy.context.view_layer.objects.active = armature_obj
-            bpy.ops.object.mode_set(mode='POSE')
+            bpy.ops.object.mode_set(mode="POSE")
 
             # Get the pose bone
             pose_bone = armature_obj.pose.bones.get(bone_name)
@@ -2547,43 +4195,43 @@ def rig_character(
 
             # Assign the bone to the bone group
             pose_bone.bone_group = bone_group
-        
+
         # New 4.0 functionality: change the bone itself to the color of the group it was originally assigned to.
         else:
             # 4.0: Armature bones or Pose bones?
             bone = bpy.context.object.pose.bones[bone_name]
-            
+
             if group_name == "Root":
-                bone.color.palette = 'CUSTOM'
-                bone.color.custom.normal = (0,1,0.169)
-                bone.color.custom.select = (0.596,0.898,1.00)
-                bone.color.custom.active = (0.769,1.00,1.00)
+                bone.color.palette = "CUSTOM"
+                bone.color.custom.normal = (0, 1, 0.169)
+                bone.color.custom.select = (0.596, 0.898, 1.00)
+                bone.color.custom.active = (0.769, 1.00, 1.00)
             elif group_name == "Torso":
-                bone.color.palette = 'CUSTOM'
-                bone.color.custom.normal = (1,0.867,0)
-                bone.color.custom.select = (0.596,0.898,1.00)
-                bone.color.custom.active = (0.769,1.00,1.00)
+                bone.color.palette = "CUSTOM"
+                bone.color.custom.normal = (1, 0.867, 0)
+                bone.color.custom.select = (0.596, 0.898, 1.00)
+                bone.color.custom.active = (0.769, 1.00, 1.00)
             elif group_name == "Limbs L":
-                bone.color.palette = 'CUSTOM'
-                bone.color.custom.normal = (1,0,1)
-                bone.color.custom.select = (0.596,0.898,1.00)
-                bone.color.custom.active = (0.769,1.00,1.00)
+                bone.color.palette = "CUSTOM"
+                bone.color.custom.normal = (1, 0, 1)
+                bone.color.custom.select = (0.596, 0.898, 1.00)
+                bone.color.custom.active = (0.769, 1.00, 1.00)
             elif group_name == "Limbs R":
-                bone.color.palette = 'CUSTOM'
-                bone.color.custom.normal = (0,0.839,1)
-                bone.color.custom.select = (0.596,0.898,1.00)
-                bone.color.custom.active = (0.769,1.00,1.00)
+                bone.color.palette = "CUSTOM"
+                bone.color.custom.normal = (0, 0.839, 1)
+                bone.color.custom.select = (0.596, 0.898, 1.00)
+                bone.color.custom.active = (0.769, 1.00, 1.00)
             elif group_name == "Face":
-                bone.color.palette = 'CUSTOM'
-                bone.color.custom.normal = (1,0,0)
-                bone.color.custom.select = (0.596,0.898,1.00)
-                bone.color.custom.active = (0.769,1.00,1.00)         
+                bone.color.palette = "CUSTOM"
+                bone.color.custom.normal = (1, 0, 0)
+                bone.color.custom.select = (0.596, 0.898, 1.00)
+                bone.color.custom.active = (0.769, 1.00, 1.00)
 
     # Root BG
     assign_bone_to_group("root", "Root")
     assign_bone_to_group("root-outer", "Root")
     assign_bone_to_group("root-inner", "Root")
-    
+
     # Torso BG
     assign_bone_to_group("torso", "Torso")
     assign_bone_to_group("torso-inner", "Torso")
@@ -2690,11 +4338,15 @@ def rig_character(
     assign_bone_to_group("Brow-Smily-L-Control", "Face")
     assign_bone_to_group("Brow-R-Control", "Face")
     assign_bone_to_group("Brow-L-Control", "Face")
-    
+
     try:
         is_zzz = False
         for o in bpy.data.objects:
-            if o.type == 'MESH' and o.data.shape_keys and "Fac_Mth_Aa1" in o.data.shape_keys.key_blocks:
+            if (
+                o.type == "MESH"
+                and o.data.shape_keys
+                and "Fac_Mth_Aa1" in o.data.shape_keys.key_blocks
+            ):
                 is_zzz = True
                 break
 
@@ -2703,9 +4355,9 @@ def rig_character(
             this_obj.pose.bones["eyetrack_R"].custom_shape_scale_xyz = (0.2, 0.2, 0.2)
             this_obj.pose.bones["eyetrack"].custom_shape_scale_xyz = (0.65, 0.5, 0.1)
         else:
-            this_obj.pose.bones["eyetrack_L"].custom_shape_scale_xyz = (2,2,2)
-            this_obj.pose.bones["eyetrack_R"].custom_shape_scale_xyz = (2,2,2)
-            this_obj.pose.bones["eyetrack"].custom_shape_scale_xyz = (6.5,5,1)
+            this_obj.pose.bones["eyetrack_L"].custom_shape_scale_xyz = (2, 2, 2)
+            this_obj.pose.bones["eyetrack_R"].custom_shape_scale_xyz = (2, 2, 2)
+            this_obj.pose.bones["eyetrack"].custom_shape_scale_xyz = (6.5, 5, 1)
     except:
         pass
 
@@ -2716,64 +4368,79 @@ def rig_character(
         active_bg.colors.normal = Color((color1))
         active_bg.colors.select = Color((color2))
         active_bg.colors.active = Color((color3))
-    
-    if not is_version_4:    
-        change_bone_group_colors('Root',(0,1,0.169),(0.596,0.898,1.00),(0.769,1.00,1.00))
-        change_bone_group_colors('Torso',(1,0.867,0),(0.596,0.898,1.00),(0.769,1.00,1.00))
-        change_bone_group_colors('Limbs L',(1,0,1),(0.596,0.898,1.00),(0.769,1.00,1.00))
-        change_bone_group_colors('Limbs R',(0,0.839,1),(0.596,0.898,1.00),(0.769,1.00,1.00))
-        change_bone_group_colors('Face',(1,0,0),(0.596,0.898,1.00),(0.769,1.00,1.00))
 
-
+    if not is_version_4:
+        change_bone_group_colors(
+            "Root", (0, 1, 0.169), (0.596, 0.898, 1.00), (0.769, 1.00, 1.00)
+        )
+        change_bone_group_colors(
+            "Torso", (1, 0.867, 0), (0.596, 0.898, 1.00), (0.769, 1.00, 1.00)
+        )
+        change_bone_group_colors(
+            "Limbs L", (1, 0, 1), (0.596, 0.898, 1.00), (0.769, 1.00, 1.00)
+        )
+        change_bone_group_colors(
+            "Limbs R", (0, 0.839, 1), (0.596, 0.898, 1.00), (0.769, 1.00, 1.00)
+        )
+        change_bone_group_colors(
+            "Face", (1, 0, 0), (0.596, 0.898, 1.00), (0.769, 1.00, 1.00)
+        )
 
     # Automatically builds the constraint stuff for SWITCH PARENT. DO NOT FORGET TO REENABLE THE CONSTRAINTS BELOW!!!!!!
     def generate_switch_parent_constraints(toggle_parent, location_of_switcher):
         const = this_obj.pose.bones[toggle_parent].constraints["SWITCH PARENT"]
-        const.targets[0].target = bpy.data.objects[char_name+"Rig"]
+        const.targets[0].target = bpy.data.objects[char_name + "Rig"]
         const.targets[0].subtarget = "root"
 
-        const.targets[1].target = bpy.data.objects[char_name+"Rig"]
+        const.targets[1].target = bpy.data.objects[char_name + "Rig"]
         const.targets[1].subtarget = "root.001"
 
-        const.targets[2].target = bpy.data.objects[char_name+"Rig"]
+        const.targets[2].target = bpy.data.objects[char_name + "Rig"]
         const.targets[2].subtarget = "root.002"
 
-        const.targets[3].target = bpy.data.objects[char_name+"Rig"]
+        const.targets[3].target = bpy.data.objects[char_name + "Rig"]
         const.targets[3].subtarget = "torso.002"
 
-        const.targets[4].target = bpy.data.objects[char_name+"Rig"]
+        const.targets[4].target = bpy.data.objects[char_name + "Rig"]
         const.targets[4].subtarget = "chest"
-        
-        location_str = "pose.bones[\"" + location_of_switcher + "\"][\"parent_switch\"]"
-        
+
+        location_str = 'pose.bones["' + location_of_switcher + '"]["parent_switch"]'
+
         for x in range(5):
             driver = const.targets[x].driver_add("weight").driver
             var = driver.variables.new()
             var.name = "toggle"
-            var.type = 'SINGLE_PROP'
+            var.type = "SINGLE_PROP"
             var.targets[0].id = bpy.context.scene.objects[ourRig]
             var.targets[0].data_path = location_str
 
-            driver.type = 'SCRIPTED'
-            driver.expression = "toggle == " + str(x+1) 
+            driver.type = "SCRIPTED"
+            driver.expression = "toggle == " + str(x + 1)
 
             depsgraph = bpy.context.evaluated_depsgraph_get()
             depsgraph.update()
-        
+
         # Toggle the constraint off, we HAVE to reenable it later to work!!
         const.enabled = False
-    
-    
+
     # REENABLE CONSTRAINTS BELOW
 
-    generate_switch_parent_constraints("MCH-head-controller-parent","head-controller")
-    
+    generate_switch_parent_constraints("MCH-head-controller-parent", "head-controller")
+
     # REENABLE THE CONSTRAINT BELOW.
-    generate_switch_parent_constraints("MCH-forearm_tweak-pin.parent.L","forearm_tweak-pin.L")
-    generate_switch_parent_constraints("MCH-forearm_tweak-pin.parent.R","forearm_tweak-pin.R")
-    generate_switch_parent_constraints("MCH-shin_tweak-pin.parent.L","shin_tweak-pin.L")
-    generate_switch_parent_constraints("MCH-shin_tweak-pin.parent.R","shin_tweak-pin.R")
-            
+    generate_switch_parent_constraints(
+        "MCH-forearm_tweak-pin.parent.L", "forearm_tweak-pin.L"
+    )
+    generate_switch_parent_constraints(
+        "MCH-forearm_tweak-pin.parent.R", "forearm_tweak-pin.R"
+    )
+    generate_switch_parent_constraints(
+        "MCH-shin_tweak-pin.parent.L", "shin_tweak-pin.L"
+    )
+    generate_switch_parent_constraints(
+        "MCH-shin_tweak-pin.parent.R", "shin_tweak-pin.R"
+    )
+
     # For each tweak bone, we make the custom property, the constraint and driver.
     def prepare_tweak_bone(tweak_bone, pin_bone):
         # Make Custom Property
@@ -2781,72 +4448,98 @@ def rig_character(
         cust_bone["tweak_pin"] = 0.00
         # Setting the min/max ranges: https://blender.stackexchange.com/a/258099
         id_prop = cust_bone.id_properties_ui("tweak_pin")
-        id_prop.update(min=0.0,max=1.0)    
-        cust_bone.property_overridable_library_set('["tweak_pin"]', True)    
+        id_prop.update(min=0.0, max=1.0)
+        cust_bone.property_overridable_library_set('["tweak_pin"]', True)
 
         # Make Constraint
-        con = this_obj.pose.bones[tweak_bone].constraints.new('COPY_LOCATION')
+        con = this_obj.pose.bones[tweak_bone].constraints.new("COPY_LOCATION")
         con.target = our_char
         con.subtarget = pin_bone
-        
-        path_str = "pose.bones[\"" + tweak_bone+"\"][\"tweak_pin\"]"
-        
+
+        path_str = 'pose.bones["' + tweak_bone + '"]["tweak_pin"]'
+
         driver = con.driver_add("influence").driver
-        driver.type = 'SUM'
+        driver.type = "SUM"
         var = driver.variables.new()
         var.name = "bone"
-        var.type = 'SINGLE_PROP'
+        var.type = "SINGLE_PROP"
         var.targets[0].id = bpy.context.scene.objects[ourRig]
         var.targets[0].data_path = path_str
         depsgraph = bpy.context.evaluated_depsgraph_get()
         depsgraph.update()
-    
+
     prepare_tweak_bone("forearm_tweak.L", "forearm_tweak-pin.L")
     prepare_tweak_bone("forearm_tweak.R", "forearm_tweak-pin.R")
     prepare_tweak_bone("shin_tweak.L", "shin_tweak-pin.L")
     prepare_tweak_bone("shin_tweak.R", "shin_tweak-pin.R")
-    
+
     # To repair the now missing custom property, let's remake it.
     def make_torso_custom():
         cust_bone = this_obj.pose.bones["torso-outer"]
         cust_bone["torso_parent"] = 1
         id_prop = cust_bone.id_properties_ui("torso_parent")
-        id_prop.update(min=0,max=2)  
-        cust_bone.property_overridable_library_set('["torso_parent"]', True) # allow library override of this bone
-    
+        id_prop.update(min=0, max=2)
+        cust_bone.property_overridable_library_set(
+            '["torso_parent"]', True
+        )  # allow library override of this bone
+
     make_torso_custom()
-    
+
     # rig_id also needs to be library overridable.
-    bpy.data.armatures[original_name].property_overridable_library_set('["rig_id"]', True)
-        
+    bpy.data.armatures[original_name].property_overridable_library_set(
+        '["rig_id"]', True
+    )
+
     # Adjustments to positioning
-    this_obj.pose.bones["foot_ik.L"].custom_shape_transform = bpy.data.objects[char_name+"Rig"].pose.bones["mch-ik-pivot-L"]
-    this_obj.pose.bones["foot_ik.R"].custom_shape_transform = bpy.data.objects[char_name+"Rig"].pose.bones["mch-ik-pivot-R"]
-    this_obj.pose.bones["hand-ik-L"].custom_shape_transform = bpy.data.objects[char_name+"Rig"].pose.bones["mch-hand-ik-pivot-L"]
-    this_obj.pose.bones["hand-ik-R"].custom_shape_transform = bpy.data.objects[char_name+"Rig"].pose.bones["mch-hand-ik-pivot-R"]
-    
-    this_obj.pose.bones["ik-sub-pivot-L"].custom_shape_translation = (foot_L_x_diff*-1.0, 0.0, foot_L_z_diff*-1.0)
-    this_obj.pose.bones["ik-sub-pivot-R"].custom_shape_translation = (foot_R_x_diff*-1.0, 0.0, foot_R_z_diff*-1.0)
-   
+    this_obj.pose.bones["foot_ik.L"].custom_shape_transform = bpy.data.objects[
+        char_name + "Rig"
+    ].pose.bones["mch-ik-pivot-L"]
+    this_obj.pose.bones["foot_ik.R"].custom_shape_transform = bpy.data.objects[
+        char_name + "Rig"
+    ].pose.bones["mch-ik-pivot-R"]
+    this_obj.pose.bones["hand-ik-L"].custom_shape_transform = bpy.data.objects[
+        char_name + "Rig"
+    ].pose.bones["mch-hand-ik-pivot-L"]
+    this_obj.pose.bones["hand-ik-R"].custom_shape_transform = bpy.data.objects[
+        char_name + "Rig"
+    ].pose.bones["mch-hand-ik-pivot-R"]
+
+    this_obj.pose.bones["ik-sub-pivot-L"].custom_shape_translation = (
+        foot_L_x_diff * -1.0,
+        0.0,
+        foot_L_z_diff * -1.0,
+    )
+    this_obj.pose.bones["ik-sub-pivot-R"].custom_shape_translation = (
+        foot_R_x_diff * -1.0,
+        0.0,
+        foot_R_z_diff * -1.0,
+    )
+
     # thanks enthralpy for the code to delete the palm constraints that i fuckin forgot to do
-    blist = ['ORG-palm.04.R', 'ORG-palm.03.R', 'ORG-palm.02.R', 'ORG-palm.04.L', 'ORG-palm.03.L', 'ORG-palm.02.L']
+    blist = [
+        "ORG-palm.04.R",
+        "ORG-palm.03.R",
+        "ORG-palm.02.R",
+        "ORG-palm.04.L",
+        "ORG-palm.03.L",
+        "ORG-palm.02.L",
+    ]
 
     for name in blist:
         try:
             bone = this_obj.pose.bones[name]
             # Create a list of all the constraints to be deleted on this bone
-            get = [ c for c in bone.constraints if c.type == 'COPY_TRANSFORMS' ]
-            fucked = [ c for c in bone.constraints if c.type == 'COPY_ROTATION' ]
+            get = [c for c in bone.constraints if c.type == "COPY_TRANSFORMS"]
+            fucked = [c for c in bone.constraints if c.type == "COPY_ROTATION"]
 
             # Iterate over and delete them all
             for c in get:
-                bone.constraints.remove( c ) 
+                bone.constraints.remove(c)
             for c in fucked:
-                bone.constraints.remove( c )
+                bone.constraints.remove(c)
         except:
             pass
-           
-        
+
     # Penultimate: Rename bones as needed
     for oldname, newname in rename_bones_list:
         bone = this_obj.pose.bones.get(oldname)
@@ -2855,71 +4548,76 @@ def rig_character(
             continue
         bone.name = newname
         print(f"[RIG OK] Renamed bone '{oldname}' -> '{newname}'")
-        
-        # We have to nuke the existing driver in the torso. 
-    def nuke_old_torso_const():       
+
+        # We have to nuke the existing driver in the torso.
+
+    def nuke_old_torso_const():
         const = this_obj.pose.bones["MCH-torso.parent"].constraints
         to_del = [c for c in const]
         for c in to_del:
             const.remove(c)
-            
-        new = const.new('ARMATURE')
-        new.name = 'SWITCH_PARENT'
+
+        new = const.new("ARMATURE")
+        new.name = "SWITCH_PARENT"
         # add target
         new.targets.new()
-        new.targets[0].target = bpy.data.objects[char_name+"Rig"]
+        new.targets[0].target = bpy.data.objects[char_name + "Rig"]
         new.targets[0].subtarget = "root.002"
-        
-        location_str = "pose.bones[\"torso\"][\"torso_parent\"]"
+
+        location_str = 'pose.bones["torso"]["torso_parent"]'
 
         driver = new.targets[0].driver_add("weight").driver
-        driver.type = 'SCRIPTED'
-        
+        driver.type = "SCRIPTED"
+
         # Create the 'var' variable (was missing, causing NameError)
         var = driver.variables.new()
         var.name = "var"
-        var.type = 'SINGLE_PROP'
-        var.targets[0].id = bpy.data.objects[char_name+"Rig"]
+        var.type = "SINGLE_PROP"
+        var.targets[0].id = bpy.data.objects[char_name + "Rig"]
         var.targets[0].data_path = location_str
 
         driver.expression = "var == 1"
 
         depsgraph = bpy.context.evaluated_depsgraph_get()
         depsgraph.update()
-        
+
         # Toggle the constraint off, we HAVE to reenable it later to work!!
         new.enabled = False
-   
+
     nuke_old_torso_const()
-    
+
     # Use this to swap a variable in a constraint
     def swap_const_follow_in_const(bone, constraint_type, new_var):
-        const = this_obj.pose.bones[bone].constraints     
+        const = this_obj.pose.bones[bone].constraints
         for c in const:
             if c.type == constraint_type:
-                const.remove(c)   
-        
+                const.remove(c)
+
         new = const.new(constraint_type)
-        new.target = bpy.data.objects[char_name+"Rig"]
-        new.subtarget = "torso.002"       
-        
+        new.target = bpy.data.objects[char_name + "Rig"]
+        new.subtarget = "torso.002"
+
         driver = new.driver_add("influence").driver
-        driver.type = 'SUM'
-        
+        driver.type = "SUM"
+
         # Create the variable (was missing - iterating empty driver.variables)
         var = driver.variables.new()
         var.name = "var"
-        var.type = 'SINGLE_PROP'
-        var.targets[0].id = bpy.data.objects[char_name+"Rig"]
+        var.type = "SINGLE_PROP"
+        var.targets[0].id = bpy.data.objects[char_name + "Rig"]
         var.targets[0].data_path = new_var
 
         depsgraph = bpy.context.evaluated_depsgraph_get()
         depsgraph.update()
-    
-    swap_const_follow_in_const("MCH-ROT-head","COPY_ROTATION","pose.bones[\"plate-settings\"][\"Head Follow\"]")
-    swap_const_follow_in_const("MCH-ROT-neck","COPY_ROTATION","pose.bones[\"plate-settings\"][\"Neck Follow\"]")
-        
-    # Delete all existing bone collections, and make new ones.   
+
+    swap_const_follow_in_const(
+        "MCH-ROT-head", "COPY_ROTATION", 'pose.bones["plate-settings"]["Head Follow"]'
+    )
+    swap_const_follow_in_const(
+        "MCH-ROT-neck", "COPY_ROTATION", 'pose.bones["plate-settings"]["Neck Follow"]'
+    )
+
+    # Delete all existing bone collections, and make new ones.
     if is_version_4:
         armature = this_obj.data
         collections = armature.collections
@@ -2928,7 +4626,6 @@ def rig_character(
         while del_collections:
             del_collections.remove(del_collections[0])
 
-        
         collections.new("Tweaks")
         collections.new("Pivots & Pins")
         collections.new("Offsets")
@@ -2953,17 +4650,22 @@ def rig_character(
         if lighting_panel_rig_obj:
             collections.new("Lighting")
         collections.new("Other")
-        
+
         for bone in armature.bones:
-            if 'slider-' in bone.name:
+            if "slider-" in bone.name:
                 collections["Face"].assign(bone)
-                if 'frame-' not in bone.name:
+                if "frame-" not in bone.name:
                     assign_bone_to_group(bone.name, "Face")
-            else:    
+            else:
                 collections["Other"].assign(bone)
-          
-    #Thanks Enthralpy for the code to ensure that the arm/leg "gears" are moveable.
-    for bone in ['thigh_parent.L', 'thigh_parent.R', 'upper_arm_parent.L', 'upper_arm_parent.R']:
+
+    # Thanks Enthralpy for the code to ensure that the arm/leg "gears" are moveable.
+    for bone in [
+        "thigh_parent.L",
+        "thigh_parent.R",
+        "upper_arm_parent.L",
+        "upper_arm_parent.R",
+    ]:
         this_obj.pose.bones[bone].custom_shape_transform = None
         this_obj.pose.bones[bone].lock_location[0] = False
         this_obj.pose.bones[bone].lock_location[1] = False
@@ -2975,31 +4677,47 @@ def rig_character(
         this_obj.pose.bones[bone].lock_scale[0] = False
         this_obj.pose.bones[bone].lock_scale[1] = False
         this_obj.pose.bones[bone].lock_scale[2] = False
-               
+
         # Customize bones
         this_obj.pose.bones[bone].custom_shape = bpy.data.objects["setting-circle"]
-        this_obj.pose.bones[bone].custom_shape_scale_xyz=(0.5,0.5,0.5)
+        this_obj.pose.bones[bone].custom_shape_scale_xyz = (0.5, 0.5, 0.5)
         this_obj.pose.bones[bone].use_custom_shape_bone_size = False
-        
+
         if "upper_arm" in bone:
             if ".L" in bone:
-                this_obj.pose.bones[bone].custom_shape_translation=(-0.05,0.0,0.0)
-                this_obj.pose.bones[bone].custom_shape_rotation_euler=(0,-1.5708,0)
-                this_obj.pose.bones[bone].custom_shape_transform = this_obj.pose.bones["MCH-upper_arm_parent_widget.L"]
+                this_obj.pose.bones[bone].custom_shape_translation = (-0.05, 0.0, 0.0)
+                this_obj.pose.bones[bone].custom_shape_rotation_euler = (0, -1.5708, 0)
+                this_obj.pose.bones[bone].custom_shape_transform = this_obj.pose.bones[
+                    "MCH-upper_arm_parent_widget.L"
+                ]
             else:
-                this_obj.pose.bones[bone].custom_shape_translation=(0.05,0.0,0.0)
-                this_obj.pose.bones[bone].custom_shape_rotation_euler=(0,-1.5708,0)
-                this_obj.pose.bones[bone].custom_shape_transform = this_obj.pose.bones["MCH-upper_arm_parent_widget.R"]
+                this_obj.pose.bones[bone].custom_shape_translation = (0.05, 0.0, 0.0)
+                this_obj.pose.bones[bone].custom_shape_rotation_euler = (0, -1.5708, 0)
+                this_obj.pose.bones[bone].custom_shape_transform = this_obj.pose.bones[
+                    "MCH-upper_arm_parent_widget.R"
+                ]
         else:
             if ".L" in bone:
-                this_obj.pose.bones[bone].custom_shape_translation=(0.1,0,0)
-                this_obj.pose.bones[bone].custom_shape_rotation_euler=(-0.0820305, -1.5708, 0)
-                this_obj.pose.bones[bone].custom_shape_transform = this_obj.pose.bones["MCH-thigh_parent_widget.L"]
+                this_obj.pose.bones[bone].custom_shape_translation = (0.1, 0, 0)
+                this_obj.pose.bones[bone].custom_shape_rotation_euler = (
+                    -0.0820305,
+                    -1.5708,
+                    0,
+                )
+                this_obj.pose.bones[bone].custom_shape_transform = this_obj.pose.bones[
+                    "MCH-thigh_parent_widget.L"
+                ]
             else:
-                this_obj.pose.bones[bone].custom_shape_translation=(-0.1,0,0)
-                this_obj.pose.bones[bone].custom_shape_rotation_euler=(-0.0820305, 1.5708, 0)
-                this_obj.pose.bones[bone].custom_shape_transform = this_obj.pose.bones["MCH-thigh_parent_widget.R"]
-        
+                this_obj.pose.bones[bone].custom_shape_translation = (-0.1, 0, 0)
+                this_obj.pose.bones[bone].custom_shape_rotation_euler = (
+                    -0.0820305,
+                    1.5708,
+                    0,
+                )
+                this_obj.pose.bones[bone].custom_shape_transform = this_obj.pose.bones[
+                    "MCH-thigh_parent_widget.R"
+                ]
+
     # ENABLE CONSTRAINTS AGAIN HERE
     this_obj.pose.bones["MCH-head-controller-parent"].constraints[0].enabled = True
     this_obj.pose.bones["MCH-forearm_tweak-pin.parent.L"].constraints[0].enabled = True
@@ -3007,7 +4725,7 @@ def rig_character(
     this_obj.pose.bones["MCH-shin_tweak-pin.parent.L"].constraints[0].enabled = True
     this_obj.pose.bones["MCH-shin_tweak-pin.parent.R"].constraints[0].enabled = True
     this_obj.pose.bones["MCH-torso.parent"].constraints[0].enabled = True
-    
+
     # Deselect everything, we're done.
     try:
         for bone in bpy.context.active_object.pose.bones:
@@ -3015,13 +4733,15 @@ def rig_character(
     except AttributeError:
         # Blender 5.1+: Bone.select was removed from the data API
         try:
-            bpy.ops.pose.select_all(action='DESELECT')
+            bpy.ops.pose.select_all(action="DESELECT")
         except:
             pass
-        
+
     # EDITING ui.py TEXT FILE --------------------------------------------
-    rig_file = bpy.data.texts[original_name+'_ui.py'] # Rig script for this char in question
-    
+    rig_file = bpy.data.texts[
+        original_name + "_ui.py"
+    ]  # Rig script for this char in question
+
     # Convert it to text
     rig_text = rig_file.as_string()
     complete_rig_text = rig_text
@@ -3035,393 +4755,661 @@ def rig_character(
 # Note: This rig is designed to work only in the specific Blender version it was created in. Rigs made for Blender 3.6.X will NOT function correctly in Blender 4.X or higher, and rigs for Blender 4.X will not work in earlier versions.
 """
 
-    
     # MODIFICATIONS to the text file are made here:
     # Get the ID of this char's rig ui script.
-    rig_char_id = rig_text.split("rig_id = \"")[1].split("\"")[0]
-    
-    # for debugging & helping purposes, we can display the version of the setup addon used to generate this character.
-    setup_version_tuple = [mod.bl_info for mod in addon_utils.modules() if mod.bl_info.get('name') == 'HoYoverse Setup Wizard'][0].get('version')
-    setup_version = "v" + str(setup_version_tuple[0]) + "." + str(setup_version_tuple[1]) + "." + str(setup_version_tuple[2])
+    rig_char_id = rig_text.split('rig_id = "')[1].split('"')[0]
 
-                                                                                                                                                                                                                                                    
+    # for debugging & helping purposes, we can display the version of the setup addon used to generate this character.
+    setup_version_tuple = [
+        mod.bl_info
+        for mod in addon_utils.modules()
+        if mod.bl_info.get("name") == "HoYoverse Setup Wizard"
+    ][0].get("version")
+    setup_version = (
+        "v"
+        + str(setup_version_tuple[0])
+        + "."
+        + str(setup_version_tuple[1])
+        + "."
+        + str(setup_version_tuple[2])
+    )
+
     def make_layer_str(text, layer, version, title=""):
-        string3 = "row.prop(context.active_object.data, 'layers', index=" + str(layer) + ", toggle=True, text='" + text + "')"
-        string4 = "row.prop(collection[\"" + text + "\"], 'is_visible', toggle=True, text='" + text + "')"
-        
+        string3 = (
+            "row.prop(context.active_object.data, 'layers', index="
+            + str(layer)
+            + ", toggle=True, text='"
+            + text
+            + "')"
+        )
+        string4 = (
+            'row.prop(collection["'
+            + text
+            + "\"], 'is_visible', toggle=True, text='"
+            + text
+            + "')"
+        )
+
         if version == 4:
-            return string4 if title == "" else string4.replace("row.","row_"+title+".")
+            return (
+                string4
+                if title == ""
+                else string4.replace("row.", "row_" + title + ".")
+            )
         else:
-            return string3 if title == "" else string3.replace("row.","row_"+title+".")
+            return (
+                string3
+                if title == ""
+                else string3.replace("row.", "row_" + title + ".")
+            )
 
     def make_solo_str(text, title=""):
-        solo_str = "row.prop(collection[\"" + text + "\"], 'is_solo', toggle=True, text='★')"
-        return solo_str if title == "" else solo_str.replace("row.","row_"+title+".")
+        solo_str = (
+            'row.prop(collection["' + text + "\"], 'is_solo', toggle=True, text='★')"
+        )
+        return (
+            solo_str if title == "" else solo_str.replace("row.", "row_" + title + ".")
+        )
 
     # String object of the actual layers
     def layers_to_generate(vers):
         if vers == 3:
             str = (
-                "\n            row=col.row()\n            " + make_layer_str("Tweaks", 2, vers) +
-                "\n            row=col.row()\n            " + make_layer_str("Pivots & Pins", 19, vers) +
-                "\n            row = col.row()\n            " + make_layer_str("Offsets", 26, vers) +
-                "\n            row = col.row()\n            " + make_layer_str("Props", 21, vers) +
-                "\n            row = col.row()\n            row.separator()" +
-                "\n            row = col.row()\n            row.separator()" +
-                "\n            row = col.row()\n            " + make_layer_str("Face", 0, vers) +
-                "\n            row = col.row()\n            " + make_layer_str("Torso (IK)", 3, vers) +
-                "\n            row = col.row()\n            " + make_layer_str("Torso (FK)", 4, vers) +
-                "\n            row = col.row()\n            " + make_layer_str("Fingers", 5, vers) +
-                "\n            row = col.row()\n            " + make_layer_str("Fingers (Detail)", 6, vers) +
-                "\n            row = col.row()\n            " + make_layer_str("Arm.L (IK)", 7, vers) +
-                "\n            " + make_layer_str("Arm.R (IK)", 10, vers) +
-                "\n            row = col.row()\n            " + make_layer_str("Arm.L (FK)", 8, vers) +
-                "\n            " + make_layer_str("Arm.R (FK)", 11, vers) +
-                "\n            row = col.row()\n            " + make_layer_str("Leg.L (IK)", 13, vers) +
-                "\n            " + make_layer_str("Leg.R (IK)", 16, vers) +
-                "\n            row = col.row()\n            " + make_layer_str("Leg.L (FK)", 14, vers) +
-                "\n            " + make_layer_str("Leg.R (FK)", 17, vers) +
-                "\n            row = col.row()\n            row.separator()" +
-                "\n            row = col.row()\n            row.separator()" +
-                "\n            row = col.row()\n            " + make_layer_str("Root", 28, vers) +
-                "\n            row = col.row()\n            " + make_layer_str("Lighting", 1, vers) +
-                "\n            " + make_layer_str("Hair", 20, vers) +
-                "\n            " + make_layer_str("Clothes", 22, vers) +
-                "\n            " + make_layer_str("Cage", 24, vers) +
-                "\n            " + make_layer_str("Other", 25, vers)
+                "\n            row=col.row()\n            "
+                + make_layer_str("Tweaks", 2, vers)
+                + "\n            row=col.row()\n            "
+                + make_layer_str("Pivots & Pins", 19, vers)
+                + "\n            row = col.row()\n            "
+                + make_layer_str("Offsets", 26, vers)
+                + "\n            row = col.row()\n            "
+                + make_layer_str("Props", 21, vers)
+                + "\n            row = col.row()\n            row.separator()"
+                + "\n            row = col.row()\n            row.separator()"
+                + "\n            row = col.row()\n            "
+                + make_layer_str("Face", 0, vers)
+                + "\n            row = col.row()\n            "
+                + make_layer_str("Torso (IK)", 3, vers)
+                + "\n            row = col.row()\n            "
+                + make_layer_str("Torso (FK)", 4, vers)
+                + "\n            row = col.row()\n            "
+                + make_layer_str("Fingers", 5, vers)
+                + "\n            row = col.row()\n            "
+                + make_layer_str("Fingers (Detail)", 6, vers)
+                + "\n            row = col.row()\n            "
+                + make_layer_str("Arm.L (IK)", 7, vers)
+                + "\n            "
+                + make_layer_str("Arm.R (IK)", 10, vers)
+                + "\n            row = col.row()\n            "
+                + make_layer_str("Arm.L (FK)", 8, vers)
+                + "\n            "
+                + make_layer_str("Arm.R (FK)", 11, vers)
+                + "\n            row = col.row()\n            "
+                + make_layer_str("Leg.L (IK)", 13, vers)
+                + "\n            "
+                + make_layer_str("Leg.R (IK)", 16, vers)
+                + "\n            row = col.row()\n            "
+                + make_layer_str("Leg.L (FK)", 14, vers)
+                + "\n            "
+                + make_layer_str("Leg.R (FK)", 17, vers)
+                + "\n            row = col.row()\n            row.separator()"
+                + "\n            row = col.row()\n            row.separator()"
+                + "\n            row = col.row()\n            "
+                + make_layer_str("Root", 28, vers)
+                + "\n            row = col.row()\n            "
+                + make_layer_str("Lighting", 1, vers)
+                + "\n            "
+                + make_layer_str("Hair", 20, vers)
+                + "\n            "
+                + make_layer_str("Clothes", 22, vers)
+                + "\n            "
+                + make_layer_str("Cage", 24, vers)
+                + "\n            "
+                + make_layer_str("Other", 25, vers)
             )
             return str
         elif vers == 4:
             str = (
                 # Initial setup for split layout
-                "\n            layout = self.layout" +
-                "\n            split_size = 0.9" +
-                "\n            split = row.split(align=True, factor=split_size)" +
-                "\n            split_small = 0.8" +
-                "\n            split_tri = 0.78" +
+                "\n            layout = self.layout"
+                + "\n            split_size = 0.9"
+                + "\n            split = row.split(align=True, factor=split_size)"
+                + "\n            split_small = 0.8"
+                + "\n            split_tri = 0.78"
+                +
                 # Lighting (single row with solo)
-                "\n            row = col.row()" +
-                "\n            split = row.split(align=True, factor=split_size)" +
-                "\n            row = split.row(align=True)" +
-                "\n            " + make_layer_str("Lighting", 1, vers) +
-                "\n            row = split.row(align=True)" +
-                "\n            " + make_solo_str("Lighting") +
+                "\n            row = col.row()"
+                + "\n            split = row.split(align=True, factor=split_size)"
+                + "\n            row = split.row(align=True)"
+                + "\n            "
+                + make_layer_str("Lighting", 1, vers)
+                + "\n            row = split.row(align=True)"
+                + "\n            "
+                + make_solo_str("Lighting")
+                +
                 # Spacer rows
-                "\n            row = col.row()" +
-                "\n            row = col.row()" +
-                "\n            row = col.row()" +
+                "\n            row = col.row()"
+                + "\n            row = col.row()"
+                + "\n            row = col.row()"
+                +
                 # Tweaks and Pivots & Pins
-                "\n            split = row.split(factor=split_small, align=True)" +
-                "\n            row_tweaks = split.row(align=True)" +
-                "\n            " + make_layer_str("Tweaks", 2, vers, "tweaks") +
-                "\n            row_tweaks = split.row(align=True)" +
-                "\n            " + make_solo_str("Tweaks", "tweaks") +
-                "\n            split = row.split(factor=split_small, align=True)" +
-                "\n            row_pivots = split.row(align=True)" +
-                "\n            " + make_layer_str("Pivots & Pins", 19, vers, "pivots") +
-                "\n            row_pivots = split.row(align=True)" +
-                "\n            " + make_solo_str("Pivots & Pins", "pivots") +
-                "\n            row = col.row()" +
+                "\n            split = row.split(factor=split_small, align=True)"
+                + "\n            row_tweaks = split.row(align=True)"
+                + "\n            "
+                + make_layer_str("Tweaks", 2, vers, "tweaks")
+                + "\n            row_tweaks = split.row(align=True)"
+                + "\n            "
+                + make_solo_str("Tweaks", "tweaks")
+                + "\n            split = row.split(factor=split_small, align=True)"
+                + "\n            row_pivots = split.row(align=True)"
+                + "\n            "
+                + make_layer_str("Pivots & Pins", 19, vers, "pivots")
+                + "\n            row_pivots = split.row(align=True)"
+                + "\n            "
+                + make_solo_str("Pivots & Pins", "pivots")
+                + "\n            row = col.row()"
+                +
                 # Offsets and Props
-                "\n            split = row.split(factor=split_small, align=True)" +
-                "\n            row_tweaks = split.row(align=True)" +
-                "\n            " + make_layer_str("Offsets", 26, vers, "tweaks") +
-                "\n            row_tweaks = split.row(align=True)" +
-                "\n            " + make_solo_str("Offsets", "tweaks") +
-                "\n            split = row.split(factor=split_small, align=True)" +
-                "\n            row_pivots = split.row(align=True)" +
-                "\n            " + make_layer_str("Props", 21, vers, "pivots") +
-                "\n            row_pivots = split.row(align=True)" +
-                "\n            " + make_solo_str("Props", "pivots") +
+                "\n            split = row.split(factor=split_small, align=True)"
+                + "\n            row_tweaks = split.row(align=True)"
+                + "\n            "
+                + make_layer_str("Offsets", 26, vers, "tweaks")
+                + "\n            row_tweaks = split.row(align=True)"
+                + "\n            "
+                + make_solo_str("Offsets", "tweaks")
+                + "\n            split = row.split(factor=split_small, align=True)"
+                + "\n            row_pivots = split.row(align=True)"
+                + "\n            "
+                + make_layer_str("Props", 21, vers, "pivots")
+                + "\n            row_pivots = split.row(align=True)"
+                + "\n            "
+                + make_solo_str("Props", "pivots")
+                +
                 # Spacer rows
-                "\n            row = col.row()" +
-                "\n            row = col.row()" +
-                "\n            row = col.row()" +
+                "\n            row = col.row()"
+                + "\n            row = col.row()"
+                + "\n            row = col.row()"
+                +
                 # Face
-                "\n            row = col.row()" +
-                "\n            split = row.split(align=True, factor=split_size)" +
-                "\n            row = split.row(align=True)" +
-                "\n            " + make_layer_str("Face", 0, vers) +
-                "\n            row = split.row(align=True)" +
-                "\n            " + make_solo_str("Face") +
+                "\n            row = col.row()"
+                + "\n            split = row.split(align=True, factor=split_size)"
+                + "\n            row = split.row(align=True)"
+                + "\n            "
+                + make_layer_str("Face", 0, vers)
+                + "\n            row = split.row(align=True)"
+                + "\n            "
+                + make_solo_str("Face")
+                +
                 # Spacer rows
-                "\n            row = col.row()" +
-                "\n            row = col.row()" +
-                "\n            row = col.row()" +
+                "\n            row = col.row()"
+                + "\n            row = col.row()"
+                + "\n            row = col.row()"
+                +
                 # Torso
-                "\n            row = col.row()" +
-                "\n            split = row.split(align=True, factor=split_size)" +
-                "\n            row = split.row(align=True)" +
-                "\n            " + make_layer_str("Torso (IK)", 3, vers) +
-                "\n            row = split.row(align=True)" +
-                "\n            " + make_solo_str("Torso (IK)") +
-                "\n            row = col.row()" +
-                "\n            split = row.split(align=True, factor=split_size)" +
-                "\n            row = split.row(align=True)" +
-                "\n            " + make_layer_str("Torso (FK)", 4, vers) +
-                "\n            row = split.row(align=True)" +
-                "\n            " + make_solo_str("Torso (FK)") +
+                "\n            row = col.row()"
+                + "\n            split = row.split(align=True, factor=split_size)"
+                + "\n            row = split.row(align=True)"
+                + "\n            "
+                + make_layer_str("Torso (IK)", 3, vers)
+                + "\n            row = split.row(align=True)"
+                + "\n            "
+                + make_solo_str("Torso (IK)")
+                + "\n            row = col.row()"
+                + "\n            split = row.split(align=True, factor=split_size)"
+                + "\n            row = split.row(align=True)"
+                + "\n            "
+                + make_layer_str("Torso (FK)", 4, vers)
+                + "\n            row = split.row(align=True)"
+                + "\n            "
+                + make_solo_str("Torso (FK)")
+                +
                 # Spacer rows
-                "\n            row = col.row()" +
-                "\n            row = col.row()" +
-                "\n            row = col.row()" +
+                "\n            row = col.row()"
+                + "\n            row = col.row()"
+                + "\n            row = col.row()"
+                +
                 # Fingers
-                "\n            row = col.row()" +
-                "\n            split = row.split(align=True, factor=split_size)" +
-                "\n            row = split.row(align=True)" +
-                "\n            " + make_layer_str("Fingers", 5, vers) +
-                "\n            row = split.row(align=True)" +
-                "\n            " + make_solo_str("Fingers") +
-                "\n            row = col.row()" +
-                "\n            split = row.split(align=True, factor=split_size)" +
-                "\n            row = split.row(align=True)" +
-                "\n            " + make_layer_str("Fingers (Detail)", 6, vers) +
-                "\n            row = split.row(align=True)" +
-                "\n            " + make_solo_str("Fingers (Detail)") +
+                "\n            row = col.row()"
+                + "\n            split = row.split(align=True, factor=split_size)"
+                + "\n            row = split.row(align=True)"
+                + "\n            "
+                + make_layer_str("Fingers", 5, vers)
+                + "\n            row = split.row(align=True)"
+                + "\n            "
+                + make_solo_str("Fingers")
+                + "\n            row = col.row()"
+                + "\n            split = row.split(align=True, factor=split_size)"
+                + "\n            row = split.row(align=True)"
+                + "\n            "
+                + make_layer_str("Fingers (Detail)", 6, vers)
+                + "\n            row = split.row(align=True)"
+                + "\n            "
+                + make_solo_str("Fingers (Detail)")
+                +
                 # Spacer rows
-                "\n            row = col.row()" +
-                "\n            row = col.row()" +
-                "\n            row = col.row()" +
+                "\n            row = col.row()"
+                + "\n            row = col.row()"
+                + "\n            row = col.row()"
+                +
                 # Arms IK
-                "\n            split = row.split(factor=split_small, align=True)" +
-                "\n            row_tweaks = split.row(align=True)" +
-                "\n            " + make_layer_str("Arm.L (IK)", 7, vers, "tweaks") +
-                "\n            row_tweaks = split.row(align=True)" +
-                "\n            " + make_solo_str("Arm.L (IK)", "tweaks") +
-                "\n            split = row.split(factor=split_small, align=True)" +
-                "\n            row_pivots = split.row(align=True)" +
-                "\n            " + make_layer_str("Arm.R (IK)", 10, vers, "pivots") +
-                "\n            row_pivots = split.row(align=True)" +
-                "\n            " + make_solo_str("Arm.R (IK)", "pivots") +
-                "\n            row = col.row()" +
+                "\n            split = row.split(factor=split_small, align=True)"
+                + "\n            row_tweaks = split.row(align=True)"
+                + "\n            "
+                + make_layer_str("Arm.L (IK)", 7, vers, "tweaks")
+                + "\n            row_tweaks = split.row(align=True)"
+                + "\n            "
+                + make_solo_str("Arm.L (IK)", "tweaks")
+                + "\n            split = row.split(factor=split_small, align=True)"
+                + "\n            row_pivots = split.row(align=True)"
+                + "\n            "
+                + make_layer_str("Arm.R (IK)", 10, vers, "pivots")
+                + "\n            row_pivots = split.row(align=True)"
+                + "\n            "
+                + make_solo_str("Arm.R (IK)", "pivots")
+                + "\n            row = col.row()"
+                +
                 # Arms FK
-                "\n            split = row.split(factor=split_small, align=True)" +
-                "\n            row_tweaks = split.row(align=True)" +
-                "\n            " + make_layer_str("Arm.L (FK)", 8, vers, "tweaks") +
-                "\n            row_tweaks = split.row(align=True)" +
-                "\n            " + make_solo_str("Arm.L (FK)", "tweaks") +
-                "\n            split = row.split(factor=split_small, align=True)" +
-                "\n            row_pivots = split.row(align=True)" +
-                "\n            " + make_layer_str("Arm.R (FK)", 11, vers, "pivots") +
-                "\n            row_pivots = split.row(align=True)" +
-                "\n            " + make_solo_str("Arm.R (FK)", "pivots") +
+                "\n            split = row.split(factor=split_small, align=True)"
+                + "\n            row_tweaks = split.row(align=True)"
+                + "\n            "
+                + make_layer_str("Arm.L (FK)", 8, vers, "tweaks")
+                + "\n            row_tweaks = split.row(align=True)"
+                + "\n            "
+                + make_solo_str("Arm.L (FK)", "tweaks")
+                + "\n            split = row.split(factor=split_small, align=True)"
+                + "\n            row_pivots = split.row(align=True)"
+                + "\n            "
+                + make_layer_str("Arm.R (FK)", 11, vers, "pivots")
+                + "\n            row_pivots = split.row(align=True)"
+                + "\n            "
+                + make_solo_str("Arm.R (FK)", "pivots")
+                +
                 # Spacer rows
-                "\n            row = col.row()" +
-                "\n            row = col.row()" +
-                "\n            row = col.row()" +
+                "\n            row = col.row()"
+                + "\n            row = col.row()"
+                + "\n            row = col.row()"
+                +
                 # Legs IK
-                "\n            split = row.split(factor=split_small, align=True)" +
-                "\n            row_tweaks = split.row(align=True)" +
-                "\n            " + make_layer_str("Leg.L (IK)", 13, vers, "tweaks") +
-                "\n            row_tweaks = split.row(align=True)" +
-                "\n            " + make_solo_str("Leg.L (IK)", "tweaks") +
-                "\n            split = row.split(factor=split_small, align=True)" +
-                "\n            row_pivots = split.row(align=True)" +
-                "\n            " + make_layer_str("Leg.R (IK)", 16, vers, "pivots") +
-                "\n            row_pivots = split.row(align=True)" +
-                "\n            " + make_solo_str("Leg.R (IK)", "pivots") +
-                "\n            row = col.row()" +
+                "\n            split = row.split(factor=split_small, align=True)"
+                + "\n            row_tweaks = split.row(align=True)"
+                + "\n            "
+                + make_layer_str("Leg.L (IK)", 13, vers, "tweaks")
+                + "\n            row_tweaks = split.row(align=True)"
+                + "\n            "
+                + make_solo_str("Leg.L (IK)", "tweaks")
+                + "\n            split = row.split(factor=split_small, align=True)"
+                + "\n            row_pivots = split.row(align=True)"
+                + "\n            "
+                + make_layer_str("Leg.R (IK)", 16, vers, "pivots")
+                + "\n            row_pivots = split.row(align=True)"
+                + "\n            "
+                + make_solo_str("Leg.R (IK)", "pivots")
+                + "\n            row = col.row()"
+                +
                 # Legs FK
-                "\n            split = row.split(factor=split_small, align=True)" +
-                "\n            row_tweaks = split.row(align=True)" +
-                "\n            " + make_layer_str("Leg.L (FK)", 14, vers, "tweaks") +
-                "\n            row_tweaks = split.row(align=True)" +
-                "\n            " + make_solo_str("Leg.L (FK)", "tweaks") +
-                "\n            split = row.split(factor=split_small, align=True)" +
-                "\n            row_pivots = split.row(align=True)" +
-                "\n            " + make_layer_str("Leg.R (FK)", 17, vers, "pivots") +
-                "\n            row_pivots = split.row(align=True)" +
-                "\n            " + make_solo_str("Leg.R (FK)", "pivots") +
+                "\n            split = row.split(factor=split_small, align=True)"
+                + "\n            row_tweaks = split.row(align=True)"
+                + "\n            "
+                + make_layer_str("Leg.L (FK)", 14, vers, "tweaks")
+                + "\n            row_tweaks = split.row(align=True)"
+                + "\n            "
+                + make_solo_str("Leg.L (FK)", "tweaks")
+                + "\n            split = row.split(factor=split_small, align=True)"
+                + "\n            row_pivots = split.row(align=True)"
+                + "\n            "
+                + make_layer_str("Leg.R (FK)", 17, vers, "pivots")
+                + "\n            row_pivots = split.row(align=True)"
+                + "\n            "
+                + make_solo_str("Leg.R (FK)", "pivots")
+                +
                 # Spacer rows
-                "\n            row = col.row()" +
-                "\n            row = col.row()" +
-                "\n            row = col.row()" +
+                "\n            row = col.row()"
+                + "\n            row = col.row()"
+                + "\n            row = col.row()"
+                +
                 # Root
-                "\n            row = col.row()" +
-                "\n            split = row.split(align=True, factor=split_size)" +
-                "\n            row = split.row(align=True)" +
-                "\n            " + make_layer_str("Root", 28, vers) +
-                "\n            row = split.row(align=True)" +
-                "\n            " + make_solo_str("Root") +
+                "\n            row = col.row()"
+                + "\n            split = row.split(align=True, factor=split_size)"
+                + "\n            row = split.row(align=True)"
+                + "\n            "
+                + make_layer_str("Root", 28, vers)
+                + "\n            row = split.row(align=True)"
+                + "\n            "
+                + make_solo_str("Root")
+                +
                 # Spacer rows
-                "\n            row = col.row()" +
-                "\n            row = col.row()" +
-                "\n            row = col.row()" +
+                "\n            row = col.row()"
+                + "\n            row = col.row()"
+                + "\n            row = col.row()"
+                +
                 # Hair and Clothes
-                "\n            split = row.split(factor=split_small, align=True)" +
-                "\n            row_tweaks = split.row(align=True)" +
-                "\n            " + make_layer_str("Hair", 20, vers, "tweaks") + 
-                "\n            row_tweaks = split.row(align=True)" +
-                "\n            " + make_solo_str("Hair", "tweaks") +
-                "\n            split = row.split(factor=split_small, align=True)" +
-                "\n            row_pivots = split.row(align=True)" +
-                "\n            " + make_layer_str("Clothes", 21, vers, "pivots") + 
-                "\n            row_pivots = split.row(align=True)" +
-                "\n            " + make_solo_str("Clothes", "pivots") +
-                "\n            row = col.row()" +
+                "\n            split = row.split(factor=split_small, align=True)"
+                + "\n            row_tweaks = split.row(align=True)"
+                + "\n            "
+                + make_layer_str("Hair", 20, vers, "tweaks")
+                + "\n            row_tweaks = split.row(align=True)"
+                + "\n            "
+                + make_solo_str("Hair", "tweaks")
+                + "\n            split = row.split(factor=split_small, align=True)"
+                + "\n            row_pivots = split.row(align=True)"
+                + "\n            "
+                + make_layer_str("Clothes", 21, vers, "pivots")
+                + "\n            row_pivots = split.row(align=True)"
+                + "\n            "
+                + make_solo_str("Clothes", "pivots")
+                + "\n            row = col.row()"
+                +
                 # Cage and Other
-                "\n            split = row.split(factor=split_small, align=True)" +
-                "\n            row_tweaks = split.row(align=True)" +
-                "\n            " + make_layer_str("Cage", 24, vers, "tweaks") +
-                "\n            row_tweaks = split.row(align=True)" +
-                "\n            " + make_solo_str("Cage", "tweaks") +
-                "\n            split = row.split(factor=split_small, align=True)" +
-                "\n            row_pivots = split.row(align=True)" +
-                "\n            " + make_layer_str("Other", 25, vers, "pivots") +
-                "\n            row_pivots = split.row(align=True)" +
-                "\n            " + make_solo_str("Other", "pivots")
+                "\n            split = row.split(factor=split_small, align=True)"
+                + "\n            row_tweaks = split.row(align=True)"
+                + "\n            "
+                + make_layer_str("Cage", 24, vers, "tweaks")
+                + "\n            row_tweaks = split.row(align=True)"
+                + "\n            "
+                + make_solo_str("Cage", "tweaks")
+                + "\n            split = row.split(factor=split_small, align=True)"
+                + "\n            row_pivots = split.row(align=True)"
+                + "\n            "
+                + make_layer_str("Other", 25, vers, "pivots")
+                + "\n            row_pivots = split.row(align=True)"
+                + "\n            "
+                + make_solo_str("Other", "pivots")
             )
             return str
 
     # Function to add layer to rigUI
     def generate_rig_layers():
         rig_add_layer_code = (
-            "\n        layout = self.layout" +
-            "\n        col = layout.column()" +
-            "\n        row = col.row()" +
-            "\n        setup_vers=\"" + setup_version + "\"" +
-            "\n        v_str = \"" + bpy.app.version_string + "\"" +
-            "\n        if bpy.app.version[0] <= 3:" +
-            layers_to_generate(3) +
-            "\n            row = col.row()" +
-            "\n            row.label(text=\"Rig: \" + setup_vers + \" | \" + v_str)" +
-            "\n        elif bpy.app.version[0] >= 4:" +
-            "\n            # If you want to use duplicated armatures for the same character, you'd have to change the rig_id for each so that they all have their own rig layers. " +
-            "\n            collection = bpy.data.armatures[\"" + original_name + "\"].collections" +
-            layers_to_generate(4) +
-            "\n            row = col.row()" +
-            "\n            row.label(text=\"Rig: \" + setup_vers + \" | \" + v_str)" +
-            "\n        else:" +
-            "\n            row.label(text=\"ERROR: Version mismatch!\")" +
-            "\n            row = col.row()" +
-            "\n            row.label(text=\"Your rig was made in a version of Blender/Goo Engine that is not compatible!\")" +
-            "\n            row = col.row()" +
-            "\n            row.label(text=\"Please remake your rig for this version!\")"
+            "\n        layout = self.layout"
+            + "\n        col = layout.column()"
+            + "\n        row = col.row()"
+            + '\n        setup_vers="'
+            + setup_version
+            + '"'
+            + '\n        v_str = "'
+            + bpy.app.version_string
+            + '"'
+            + "\n        if bpy.app.version[0] <= 3:"
+            + layers_to_generate(3)
+            + "\n            row = col.row()"
+            + '\n            row.label(text="Rig: " + setup_vers + " | " + v_str)'
+            + "\n        elif bpy.app.version[0] >= 4:"
+            + "\n            # If you want to use duplicated armatures for the same character, you'd have to change the rig_id for each so that they all have their own rig layers. "
+            + '\n            collection = bpy.data.armatures["'
+            + original_name
+            + '"].collections'
+            + layers_to_generate(4)
+            + "\n            row = col.row()"
+            + '\n            row.label(text="Rig: " + setup_vers + " | " + v_str)'
+            + "\n        else:"
+            + '\n            row.label(text="ERROR: Version mismatch!")'
+            + "\n            row = col.row()"
+            + '\n            row.label(text="Your rig was made in a version of Blender/Goo Engine that is not compatible!")'
+            + "\n            row = col.row()"
+            + '\n            row.label(text="Please remake your rig for this version!")'
         )
         cut_rig_layer = rig_text.split("class RigLayers(bpy.types.Panel):")
         separate_draw_func = cut_rig_layer[1].split("def draw(self, context):")
         separate_draw_end = separate_draw_func[1].split("def register():")
-        
+
         merged_layer_code = (
-            cut_rig_layer[0] +
-            "class RigLayers(bpy.types.Panel):" +
-            separate_draw_func[0] +
-            "def draw(self, context):" +
-            rig_add_layer_code +
-            "\ndef register():" +
-            separate_draw_end[1]
+            cut_rig_layer[0]
+            + "class RigLayers(bpy.types.Panel):"
+            + separate_draw_func[0]
+            + "def draw(self, context):"
+            + rig_add_layer_code
+            + "\ndef register():"
+            + separate_draw_end[1]
         )
-        
+
         return merged_layer_code
 
     complete_rig_text = generate_rig_layers()
 
     # These functions make it easy to quickly write to the text file. Use as needed.
     def generate_string_for_limb_pin(pin_bone, gear_bone, tweak_bone, text):
-        str = "\n        if is_selected({'"+pin_bone+"'}):\n            layout.prop(pose_bones['"+tweak_bone+"'], '[\"tweak_pin\"]', text='"+text+"', slider=True)\n        if is_selected({'"+gear_bone+"'}):\n            layout.prop(pose_bones['"+tweak_bone+"'], '[\"tweak_pin\"]', text='"+text+"', slider=True)"
+        str = (
+            "\n        if is_selected({'"
+            + pin_bone
+            + "'}):\n            layout.prop(pose_bones['"
+            + tweak_bone
+            + "'], '[\"tweak_pin\"]', text='"
+            + text
+            + "', slider=True)\n        if is_selected({'"
+            + gear_bone
+            + "'}):\n            layout.prop(pose_bones['"
+            + tweak_bone
+            + "'], '[\"tweak_pin\"]', text='"
+            + text
+            + "', slider=True)"
+        )
         return str
-    
+
     def generate_string_for_parent_switch(bone):
-        str = "\n        if is_selected({'"+bone+"'}):\n            group1 = layout.row(align=True)\n            group2 = group1.split(factor=0.75, align=True)\n            props = group2.operator('pose.rigify_switch_parent_"+rig_char_id+"\', text=\'Parent Switch\', icon=\'DOWNARROW_HLT\')\n            props.bone = \'"+bone+"\'\n            props.prop_bone = \'"+bone+"\'\n            props.prop_id=\'parent_switch\'\n            props.parent_names = '[\"None\", \"root\", \"root.001\", \"root.002\", \"torso\", \"chest\"]'\n            props.locks = (False, False, False)\n            group2.prop(pose_bones['"+bone+"'], '[\"parent_switch\"]', text='')\n            props = group1.operator('pose.rigify_switch_parent_bake_"+rig_char_id+"', text='', icon='ACTION_TWEAK')\n            props.bone = '"+bone+"'\n            props.prop_bone='"+bone+"'\n            props.prop_id='parent_switch'\n            props.parent_names='[\"None\", \"root\", \"root.001\", \"root.002\", \"torso\", \"chest\"]'\n            props.locks = (False, False, False)"
+        str = (
+            "\n        if is_selected({'"
+            + bone
+            + "'}):\n            group1 = layout.row(align=True)\n            group2 = group1.split(factor=0.75, align=True)\n            props = group2.operator('pose.rigify_switch_parent_"
+            + rig_char_id
+            + "', text='Parent Switch', icon='DOWNARROW_HLT')\n            props.bone = '"
+            + bone
+            + "'\n            props.prop_bone = '"
+            + bone
+            + '\'\n            props.prop_id=\'parent_switch\'\n            props.parent_names = \'["None", "root", "root.001", "root.002", "torso", "chest"]\'\n            props.locks = (False, False, False)\n            group2.prop(pose_bones[\''
+            + bone
+            + "'], '[\"parent_switch\"]', text='')\n            props = group1.operator('pose.rigify_switch_parent_bake_"
+            + rig_char_id
+            + "', text='', icon='ACTION_TWEAK')\n            props.bone = '"
+            + bone
+            + "'\n            props.prop_bone='"
+            + bone
+            + '\'\n            props.prop_id=\'parent_switch\'\n            props.parent_names=\'["None", "root", "root.001", "root.002", "torso", "chest"]\'\n            props.locks = (False, False, False)'
+        )
         return str
+
     # Used for already existing bones (torso and limbs)
     def generate_string_for_ik_switch(bone, prop1, prop2):
-        str = "\n        if is_selected({'"+bone+"'}):\n            group1 = layout.row(align=True)\n            group2 = group1.split(factor=0.75, align=True)\n            props = group2.operator('pose.rigify_switch_parent_"+rig_char_id+"\', text=\'Parent Switch\', icon=\'DOWNARROW_HLT\')\n            props.bone = \'"+prop1+"\'\n            props.prop_bone = \'"+prop2+"\'\n            props.prop_id=\'IK_parent\'\n            props.parent_names = '[\"None\", \"root\", \"root.001\", \"root.002\", \"torso\", \"chest\"]'\n            props.locks = (False, False, False)\n            group2.prop(pose_bones['"+prop2+"'], '[\"IK_parent\"]', text='')\n            props = group1.operator('pose.rigify_switch_parent_bake_"+rig_char_id+"', text='', icon='ACTION_TWEAK')\n            props.bone = '"+prop1+"'\n            props.prop_bone='"+prop2+"'\n            props.prop_id='IK_parent'\n            props.parent_names='[\"None\", \"root\", \"root.001\", \"root.002\", \"torso\", \"chest\"]'\n            props.locks = (False, False, False)"
+        str = (
+            "\n        if is_selected({'"
+            + bone
+            + "'}):\n            group1 = layout.row(align=True)\n            group2 = group1.split(factor=0.75, align=True)\n            props = group2.operator('pose.rigify_switch_parent_"
+            + rig_char_id
+            + "', text='Parent Switch', icon='DOWNARROW_HLT')\n            props.bone = '"
+            + prop1
+            + "'\n            props.prop_bone = '"
+            + prop2
+            + '\'\n            props.prop_id=\'IK_parent\'\n            props.parent_names = \'["None", "root", "root.001", "root.002", "torso", "chest"]\'\n            props.locks = (False, False, False)\n            group2.prop(pose_bones[\''
+            + prop2
+            + "'], '[\"IK_parent\"]', text='')\n            props = group1.operator('pose.rigify_switch_parent_bake_"
+            + rig_char_id
+            + "', text='', icon='ACTION_TWEAK')\n            props.bone = '"
+            + prop1
+            + "'\n            props.prop_bone='"
+            + prop2
+            + '\'\n            props.prop_id=\'IK_parent\'\n            props.parent_names=\'["None", "root", "root.001", "root.002", "torso", "chest"]\'\n            props.locks = (False, False, False)'
+        )
         return str
-        
+
     def generate_string_for_settings_slider():
         str = '\n        if is_selected({"plate-settings"}):\n            layout.prop(pose_bones["plate-settings"], \'["Viewport Outlines"]\', text="Show Viewport Outlines", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Tracker Controller", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Head Follow"]\', text="Head Follow", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Neck Follow"]\', text="Neck Follow", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Toggle Eyelid Constraints"]\', text="Auto Eyelid Constraints", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Toggle Shoulder Constraints"]\', text="Auto Shoulder Constraints", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Toggle Skirt Constraints"]\', text="Auto Skirt Constraints", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["EyeCorrection"]\', text="Adjust Pupil Wink Distance", slider=True)'
         return str
 
     def generate_string_for_head_controller_slider():
         str = '\n        if is_selected({"head-controller"}):\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Tracker Controller", slider=True)'
-        str = str + '\n        if is_selected({"head"}):\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Tracker Controller", slider=True)'
+        str = (
+            str
+            + '\n        if is_selected({"head"}):\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Tracker Controller", slider=True)'
+        )
         return str
-    
+
     # because rigify makes the rig ui before i get to it, we have to change this stuff for the torso sliders below.
     def torso_str():
-        torso="\n                props.bone = 'torso.002'\n                props.prop_bone = 'torso.002'\n                props.prop_id = 'torso_parent'\n                props.parent_names = '[\"None\", \"Root\"]'\n                props.locks = (False, False, False)\n                group2.prop(pose_bones['torso.002'], '[\"torso_parent\"]', text='')\n                props = group1.operator('pose.rigify_switch_parent_bake_"+rig_char_id+"', text='', icon='ACTION_TWEAK')\n                props.bone = 'torso.002'\n                props.prop_bone = 'torso.002'\n                props.prop_id = 'torso_parent'\n                props.parent_names = '[\"None\", \"Root\"]'\n                props.locks = (False, False, False)"
+        torso = (
+            "\n                props.bone = 'torso.002'\n                props.prop_bone = 'torso.002'\n                props.prop_id = 'torso_parent'\n                props.parent_names = '[\"None\", \"Root\"]'\n                props.locks = (False, False, False)\n                group2.prop(pose_bones['torso.002'], '[\"torso_parent\"]', text='')\n                props = group1.operator('pose.rigify_switch_parent_bake_"
+            + rig_char_id
+            + "', text='', icon='ACTION_TWEAK')\n                props.bone = 'torso.002'\n                props.prop_bone = 'torso.002'\n                props.prop_id = 'torso_parent'\n                props.parent_names = '[\"None\", \"Root\"]'\n                props.locks = (False, False, False)"
+        )
         return torso
-        
+
     def torso_repair():
-        cut = complete_rig_text.split("props = group2.operator('pose.rigify_switch_parent_"+rig_char_id+"', text='Torso Parent', icon='DOWNARROW_HLT')")
+        cut = complete_rig_text.split(
+            "props = group2.operator('pose.rigify_switch_parent_"
+            + rig_char_id
+            + "', text='Torso Parent', icon='DOWNARROW_HLT')"
+        )
         second_str = "if is_selected({'foot_fk.L', 'foot_ik.L', 'thigh_ik_target.L', 'foot_tweak.L', 'shin_tweak.L', 'foot_heel_ik.L', 'thigh_ik.L', 'VIS_thigh_ik_pole.L', 'toe_fk.L', 'shin_fk.L', 'thigh_parent.L', 'foot_spin_ik.L', 'thigh_fk.L', 'toe_ik.L', 'thigh_tweak.L', 'thigh_tweak.L.001', 'shin_tweak.L.001'}):"
         second_half = cut[1]
         new_cut = second_half.split(second_str)
         final = new_cut[1]
-        
-        merged_text = cut[0]+"props = group2.operator('pose.rigify_switch_parent_"+rig_char_id+"', text='Torso Parent', icon='DOWNARROW_HLT')"+torso_str()+second_str+final
-        
+
+        merged_text = (
+            cut[0]
+            + "props = group2.operator('pose.rigify_switch_parent_"
+            + rig_char_id
+            + "', text='Torso Parent', icon='DOWNARROW_HLT')"
+            + torso_str()
+            + second_str
+            + final
+        )
+
         return merged_text
-    
+
     # give this a position in the text file (a string to look for), after that position it'll add the text passed in
     def splice_into_text(divider, text):
         split = complete_rig_text.split(divider)
-        return split[0]+divider+text+split[1]
-    
+        return split[0] + divider + text + split[1]
 
-    
-    # Make the limb edits   
+    # Make the limb edits
     # Below is the emergency cut for the torso repair. (WHY rigify?!?!?)
 
-    #complete_rig_text = complete_rig_text.replace("props.bone = 'torso'","props.bone = 'torso.002'").replace("props.prop_bone = 'torso'","props.prop_bone = 'torso.002'").replace("group2.prop(pose_bones['torso'], '[\"torso_parent\"]', text='')","group2.prop(pose_bones['torso.002'], '[\"torso_parent\"]', text='')")
-    
+    # complete_rig_text = complete_rig_text.replace("props.bone = 'torso'","props.bone = 'torso.002'").replace("props.prop_bone = 'torso'","props.prop_bone = 'torso.002'").replace("group2.prop(pose_bones['torso'], '[\"torso_parent\"]', text='')","group2.prop(pose_bones['torso.002'], '[\"torso_parent\"]', text='')")
 
-    complete_rig_text = splice_into_text("num_rig_separators[0] += 1", generate_string_for_parent_switch("forearm_tweak-pin.L"))
-    complete_rig_text = splice_into_text("num_rig_separators[0] += 1", generate_string_for_limb_pin("forearm_tweak-pin.L","upper_arm_parent.L","forearm_tweak.L","Elbow Pin"))
-    complete_rig_text = splice_into_text("num_rig_separators[0] += 1", generate_string_for_parent_switch("forearm_tweak-pin.R"))
-    complete_rig_text = splice_into_text("num_rig_separators[0] += 1", generate_string_for_limb_pin("forearm_tweak-pin.R","upper_arm_parent.R","forearm_tweak.R","Elbow Pin"))
-    
-    complete_rig_text = splice_into_text("num_rig_separators[0] += 1", generate_string_for_ik_switch("hand_ik_pivot.L","hand_ik.L","upper_arm_parent.L"))
-    complete_rig_text = splice_into_text("num_rig_separators[0] += 1", generate_string_for_ik_switch("hand_ik_pivot.R","hand_ik.R","upper_arm_parent.R"))
-    complete_rig_text = splice_into_text("num_rig_separators[0] += 1", generate_string_for_ik_switch("foot_ik_pivot.L","foot_ik.L","thigh_parent.L"))
-    complete_rig_text = splice_into_text("num_rig_separators[0] += 1", generate_string_for_ik_switch("foot_ik_pivot.R","foot_ik.R","thigh_parent.R"))
+    complete_rig_text = splice_into_text(
+        "num_rig_separators[0] += 1",
+        generate_string_for_parent_switch("forearm_tweak-pin.L"),
+    )
+    complete_rig_text = splice_into_text(
+        "num_rig_separators[0] += 1",
+        generate_string_for_limb_pin(
+            "forearm_tweak-pin.L", "upper_arm_parent.L", "forearm_tweak.L", "Elbow Pin"
+        ),
+    )
+    complete_rig_text = splice_into_text(
+        "num_rig_separators[0] += 1",
+        generate_string_for_parent_switch("forearm_tweak-pin.R"),
+    )
+    complete_rig_text = splice_into_text(
+        "num_rig_separators[0] += 1",
+        generate_string_for_limb_pin(
+            "forearm_tweak-pin.R", "upper_arm_parent.R", "forearm_tweak.R", "Elbow Pin"
+        ),
+    )
 
-    
-    complete_rig_text = splice_into_text("num_rig_separators[0] += 1", generate_string_for_parent_switch("shin_tweak-pin.L"))
-    complete_rig_text = splice_into_text("num_rig_separators[0] += 1", generate_string_for_limb_pin("shin_tweak-pin.L","thigh_parent.L","shin_tweak.L","Knee Pin"))
-    complete_rig_text = splice_into_text("num_rig_separators[0] += 1", generate_string_for_parent_switch("shin_tweak-pin.R"))
-    complete_rig_text = splice_into_text("num_rig_separators[0] += 1", generate_string_for_limb_pin("shin_tweak-pin.R","thigh_parent.R","shin_tweak.R","Knee Pin"))
-    
-    complete_rig_text = splice_into_text("num_rig_separators[0] += 1", generate_string_for_settings_slider())
-    complete_rig_text = splice_into_text("num_rig_separators[0] += 1", generate_string_for_head_controller_slider())
+    complete_rig_text = splice_into_text(
+        "num_rig_separators[0] += 1",
+        generate_string_for_ik_switch(
+            "hand_ik_pivot.L", "hand_ik.L", "upper_arm_parent.L"
+        ),
+    )
+    complete_rig_text = splice_into_text(
+        "num_rig_separators[0] += 1",
+        generate_string_for_ik_switch(
+            "hand_ik_pivot.R", "hand_ik.R", "upper_arm_parent.R"
+        ),
+    )
+    complete_rig_text = splice_into_text(
+        "num_rig_separators[0] += 1",
+        generate_string_for_ik_switch("foot_ik_pivot.L", "foot_ik.L", "thigh_parent.L"),
+    )
+    complete_rig_text = splice_into_text(
+        "num_rig_separators[0] += 1",
+        generate_string_for_ik_switch("foot_ik_pivot.R", "foot_ik.R", "thigh_parent.R"),
+    )
 
-        # If head controller, add the rig main controls for it.
-    complete_rig_text = splice_into_text("num_rig_separators[0] += 1", generate_string_for_parent_switch("head-controller"))
-    
-    complete_rig_text = complete_rig_text.replace("bl_label = \"Rig Layers\"", "bl_label = \"Rig Layers: \" + rig_name")
-    complete_rig_text = complete_rig_text.replace("bl_label = \"Rig Main Properties\"", "bl_label = \"Rig Properties: \" + rig_name")
+    complete_rig_text = splice_into_text(
+        "num_rig_separators[0] += 1",
+        generate_string_for_parent_switch("shin_tweak-pin.L"),
+    )
+    complete_rig_text = splice_into_text(
+        "num_rig_separators[0] += 1",
+        generate_string_for_limb_pin(
+            "shin_tweak-pin.L", "thigh_parent.L", "shin_tweak.L", "Knee Pin"
+        ),
+    )
+    complete_rig_text = splice_into_text(
+        "num_rig_separators[0] += 1",
+        generate_string_for_parent_switch("shin_tweak-pin.R"),
+    )
+    complete_rig_text = splice_into_text(
+        "num_rig_separators[0] += 1",
+        generate_string_for_limb_pin(
+            "shin_tweak-pin.R", "thigh_parent.R", "shin_tweak.R", "Knee Pin"
+        ),
+    )
+
+    complete_rig_text = splice_into_text(
+        "num_rig_separators[0] += 1", generate_string_for_settings_slider()
+    )
+    complete_rig_text = splice_into_text(
+        "num_rig_separators[0] += 1", generate_string_for_head_controller_slider()
+    )
+
+    # If head controller, add the rig main controls for it.
+    complete_rig_text = splice_into_text(
+        "num_rig_separators[0] += 1",
+        generate_string_for_parent_switch("head-controller"),
+    )
+
+    complete_rig_text = complete_rig_text.replace(
+        'bl_label = "Rig Layers"', 'bl_label = "Rig Layers: " + rig_name'
+    )
+    complete_rig_text = complete_rig_text.replace(
+        'bl_label = "Rig Main Properties"', 'bl_label = "Rig Properties: " + rig_name'
+    )
 
     # Blender 5.1.1 compatibility: Rigify may generate calls to register_usetime_properties /
     # unregister_usetime_properties which were removed in 5.1.1. Strip them out to prevent NameError.
     import re as _re
-    complete_rig_text = _re.sub(r'^\s*register_usetime_properties\(\)\s*$', '', complete_rig_text, flags=_re.MULTILINE)
-    complete_rig_text = _re.sub(r'^\s*unregister_usetime_properties\(\)\s*$', '', complete_rig_text, flags=_re.MULTILINE)
+
+    complete_rig_text = _re.sub(
+        r"^\s*register_usetime_properties\(\)\s*$",
+        "",
+        complete_rig_text,
+        flags=_re.MULTILINE,
+    )
+    complete_rig_text = _re.sub(
+        r"^\s*unregister_usetime_properties\(\)\s*$",
+        "",
+        complete_rig_text,
+        flags=_re.MULTILINE,
+    )
 
     # Clear the text from the text block, reassemble it as needed with strings and modifications.
-    rig_file.clear() 
-    rig_file.write(complete_rig_text.replace("rig_id = ", "rig_name = \""+char_name.split("Costume")[0]+"\"\nrig_id = ")) # give it all the modified text and the variable holding the char's name
+    rig_file.clear()
+    rig_file.write(
+        complete_rig_text.replace(
+            "rig_id = ", 'rig_name = "' + char_name.split("Costume")[0] + '"\nrig_id = '
+        )
+    )  # give it all the modified text and the variable holding the char's name
     rig_file.write(rig_text_disclaimer)
-      
-       
+
     # After all text block modifications, run the new edited script.
     ctx = bpy.context.copy()
-    ctx['edit_text'] = rig_file
+    ctx["edit_text"] = rig_file
     with bpy.context.temp_override(edit_text=rig_file):
         bpy.ops.text.run_script()
-    
+
     # DONE MODIFYING ui.py FILE --------------------------------------------
-    
-    
+
     # if using lighting panel, tie the visiblity of the RGB circle meshes to the visibility of the lighting layer.
     if lighting_panel_rig_obj:
+
         def drive_visibility_with_prop(obj, path):
             driver_obj = bpy.context.scene.objects[obj]
             driver = driver_obj.driver_add("hide_viewport").driver
-            
-            driver.type = 'SCRIPTED'
-            driver.expression = 'not is_visible'
-            
+
+            driver.type = "SCRIPTED"
+            driver.expression = "not is_visible"
+
             var = driver.variables.new()
             var.name = "is_visible"
             var.type = "SINGLE_PROP"
@@ -3431,26 +5419,43 @@ def rig_character(
                 var.targets[0].data_path = path
             else:
                 var.targets[0].data_path = "layers[1]"
-            
-        drive_visibility_with_prop("ColorWheel-Ambient","collections[\"Lighting\"].is_visible")
-        drive_visibility_with_prop("ColorWheel-Fresnel","collections[\"Lighting\"].is_visible")
-        drive_visibility_with_prop("ColorWheel-Lit","collections[\"Lighting\"].is_visible")
-        drive_visibility_with_prop("ColorWheel-RimLit","collections[\"Lighting\"].is_visible")
-        drive_visibility_with_prop("ColorWheel-RimShadow","collections[\"Lighting\"].is_visible")
-        drive_visibility_with_prop("ColorWheel-Shadow","collections[\"Lighting\"].is_visible")
-        drive_visibility_with_prop("ColorWheel-SoftLit","collections[\"Lighting\"].is_visible")
-        drive_visibility_with_prop("ColorWheel-SoftShadow","collections[\"Lighting\"].is_visible")
-  
-    
+
+        drive_visibility_with_prop(
+            "ColorWheel-Ambient", 'collections["Lighting"].is_visible'
+        )
+        drive_visibility_with_prop(
+            "ColorWheel-Fresnel", 'collections["Lighting"].is_visible'
+        )
+        drive_visibility_with_prop(
+            "ColorWheel-Lit", 'collections["Lighting"].is_visible'
+        )
+        drive_visibility_with_prop(
+            "ColorWheel-RimLit", 'collections["Lighting"].is_visible'
+        )
+        drive_visibility_with_prop(
+            "ColorWheel-RimShadow", 'collections["Lighting"].is_visible'
+        )
+        drive_visibility_with_prop(
+            "ColorWheel-Shadow", 'collections["Lighting"].is_visible'
+        )
+        drive_visibility_with_prop(
+            "ColorWheel-SoftLit", 'collections["Lighting"].is_visible'
+        )
+        drive_visibility_with_prop(
+            "ColorWheel-SoftShadow", 'collections["Lighting"].is_visible'
+        )
+
     # Post modification, Adjustment of bone layers/collections.
     if not is_version_4:
         for x in range(29):
-            if x>0:
+            if x > 0:
                 bpy.context.object.data.layers[x] = False
-                
+
         # Disable/Enable Rig UI layers we care about
         bpy.context.object.data.layers[0] = True
-        bpy.context.object.data.layers[1] = True if lighting_panel_rig_obj else False  # Lighting
+        bpy.context.object.data.layers[1] = (
+            True if lighting_panel_rig_obj else False
+        )  # Lighting
         bpy.context.object.data.layers[3] = True
         bpy.context.object.data.layers[4] = False
         bpy.context.object.data.layers[5] = True
@@ -3468,7 +5473,7 @@ def rig_character(
         bpy.context.object.data.layers[22] = False
         bpy.context.object.data.layers[28] = True
         bpy.context.object.data.layers[26] = False
-    else:            
+    else:
         bpy.context.object.data.collections["Tweaks"].is_visible = False
         bpy.context.object.data.collections["Props"].is_visible = False
         bpy.context.object.data.collections["Pivots & Pins"].is_visible = False
@@ -3483,7 +5488,7 @@ def rig_character(
         bpy.context.object.data.collections["Clothes"].is_visible = False
         bpy.context.object.data.collections["Cage"].is_visible = False
         bpy.context.object.data.collections["Other"].is_visible = False
-    
+
     # Send the given bone to its new location for either version. Adjusted for actual layer num.
     # MOVING OF BONES BELOW -------------------------------
     def bone_to_layer(bone, layer, collection, second_coll="None"):
@@ -3491,177 +5496,185 @@ def rig_character(
         if bone in arm.data.bones:
             if is_version_4:
                 if collection == "Other":
-                    bpy.context.object.data.collections[collection].assign(bpy.context.object.data.bones[bone])
+                    bpy.context.object.data.collections[collection].assign(
+                        bpy.context.object.data.bones[bone]
+                    )
                 else:
-                    bpy.context.object.data.collections[collection].assign(bpy.context.object.data.bones[bone])
-                    bpy.context.object.data.collections["Other"].unassign(bpy.context.object.data.bones[bone])
+                    bpy.context.object.data.collections[collection].assign(
+                        bpy.context.object.data.bones[bone]
+                    )
+                    bpy.context.object.data.collections["Other"].unassign(
+                        bpy.context.object.data.bones[bone]
+                    )
                     if second_coll != "None":
-                        bpy.context.object.data.collections[second_coll].assign(bpy.context.object.data.bones[bone])                                                                                                
+                        bpy.context.object.data.collections[second_coll].assign(
+                            bpy.context.object.data.bones[bone]
+                        )
             else:
-                move_bone(bone,layer)
-                
+                move_bone(bone, layer)
+
     # Since we've looped through ever 4.0 bone to place in 'other' above, we'll have to do so as well for 3.6
     if not is_version_4:
         for bone in bpy.context.active_object.pose.bones:
-            bone_to_layer(bone.name, 25, "Other")            
-    
+            bone_to_layer(bone.name, 25, "Other")
+
     loop_arm = bpy.context.object.data
     for bone in loop_arm.bones:
         if "tweak" in bone.name and "MCH" not in bone.name and "pin" not in bone.name:
-            bone_to_layer(bone.name, 2, "Tweaks")  
-    
+            bone_to_layer(bone.name, 2, "Tweaks")
+
     # Moving to Tweaks (werent catched in loop)
-    bone_to_layer("tweak_spine", 2, "Tweaks") 
-    bone_to_layer("tweak_spine.001", 2, "Tweaks") 
-    bone_to_layer("tweak_spine.002", 2, "Tweaks") 
-    bone_to_layer("tweak_spine.003", 2, "Tweaks") 
-    bone_to_layer("tweak_spine.004", 2, "Tweaks") 
-    bone_to_layer("tweak_spine.005", 2, "Tweaks") 
+    bone_to_layer("tweak_spine", 2, "Tweaks")
+    bone_to_layer("tweak_spine.001", 2, "Tweaks")
+    bone_to_layer("tweak_spine.002", 2, "Tweaks")
+    bone_to_layer("tweak_spine.003", 2, "Tweaks")
+    bone_to_layer("tweak_spine.004", 2, "Tweaks")
+    bone_to_layer("tweak_spine.005", 2, "Tweaks")
     # MOVING PIVOTS AND PINS
-    bone_to_layer("torso_pivot.002", 19, "Pivots & Pins") 
-    bone_to_layer("forearm_tweak-pin.L", 19, "Pivots & Pins") 
-    bone_to_layer("hand_ik_pivot.L", 19, "Pivots & Pins") 
-    bone_to_layer("hand_ik_pivot.R", 19, "Pivots & Pins") 
-    bone_to_layer("forearm_tweak-pin.R", 19, "Pivots & Pins") 
-    bone_to_layer("shin_tweak-pin.L", 19, "Pivots & Pins") 
-    bone_to_layer("shin_tweak-pin.R", 19, "Pivots & Pins") 
-    bone_to_layer("foot_ik_pivot.L", 19, "Pivots & Pins") 
-    bone_to_layer("foot_ik_pivot.R", 19, "Pivots & Pins") 
-    
+    bone_to_layer("torso_pivot.002", 19, "Pivots & Pins")
+    bone_to_layer("forearm_tweak-pin.L", 19, "Pivots & Pins")
+    bone_to_layer("hand_ik_pivot.L", 19, "Pivots & Pins")
+    bone_to_layer("hand_ik_pivot.R", 19, "Pivots & Pins")
+    bone_to_layer("forearm_tweak-pin.R", 19, "Pivots & Pins")
+    bone_to_layer("shin_tweak-pin.L", 19, "Pivots & Pins")
+    bone_to_layer("shin_tweak-pin.R", 19, "Pivots & Pins")
+    bone_to_layer("foot_ik_pivot.L", 19, "Pivots & Pins")
+    bone_to_layer("foot_ik_pivot.R", 19, "Pivots & Pins")
+
     # MOVING FACE
-    bone_to_layer("plate-settings", 0, "Face")        
-    bone_to_layer("plate-border", 0, "Face")        
-    bone_to_layer("Plate", 0, "Face")        
+    bone_to_layer("plate-settings", 0, "Face")
+    bone_to_layer("plate-border", 0, "Face")
+    bone_to_layer("Plate", 0, "Face")
     bone_to_layer("eyetrack", 0, "Face")
-    bone_to_layer("head-controller", 0, "Face")  
-    bone_to_layer("eyetrack_L", 0, "Face")        
-    bone_to_layer("eyetrack_R", 0, "Face")  
-    
+    bone_to_layer("head-controller", 0, "Face")
+    bone_to_layer("eyetrack_L", 0, "Face")
+    bone_to_layer("eyetrack_R", 0, "Face")
+
     # Disable selection of face bone
     selected_bone = faceplate_arm.pose.bones["Plate"]
-    selected_bone.bone.hide_select = True    
-    
-    bone_to_layer("Brow-Trouble-R-Control", 0, "Face")        
-    bone_to_layer("Brow-Trouble-L-Control", 0, "Face")        
-    bone_to_layer("Brow-Shy-R-Control", 0, "Face")        
-    bone_to_layer("Brow-Shy-L-Control", 0, "Face")        
-    bone_to_layer("Brow-Angry-R-Control", 0, "Face")        
-    bone_to_layer("Brow-Angry-L-Control", 0, "Face")        
-    bone_to_layer("Brow-Smily-R-Control", 0, "Face")        
-    bone_to_layer("Brow-Smily-L-Control", 0, "Face")        
-    bone_to_layer("Brow-R-Control", 0, "Face")        
-    bone_to_layer("Brow-L-Control", 0, "Face")  
-    bone_to_layer("extras-panel", 0, "Face")      
-    
-    bone_to_layer("Eye-Up-Control", 0, "Face")        
-    bone_to_layer("Eye-Tired-Control", 0, "Face")        
-    bone_to_layer("Eye-Wail-Control", 0, "Face")        
-    bone_to_layer("Eye-Ha-Control", 0, "Face")        
-    bone_to_layer("Wink-Control-R", 0, "Face")        
-    bone_to_layer("Eye-WinkA-Control", 0, "Face")        
-    bone_to_layer("Eye-WinkB-Control", 0, "Face")        
-    bone_to_layer("Eye-WinkC-Control", 0, "Face")        
-    bone_to_layer("Wink-Control-L", 0, "Face")        
-    bone_to_layer("Eye-Down-Control", 0, "Face")        
-    bone_to_layer("Eye-Jito-Control", 0, "Face")        
-    bone_to_layer("Eye-Hostility-Control", 0, "Face")        
-    bone_to_layer("Eye-LowerEyelid-Control", 0, "Face")        
-    bone_to_layer("Eye-Star-Control", 0, "Face")        
-    bone_to_layer("Eye-Pupil-Control", 0, "Face")        
-    
-    bone_to_layer("Mouth-Control", 0, "Face")        
-    bone_to_layer("Mouth-Smile1-Control", 0, "Face")        
-    bone_to_layer("Mouth-Smile2-Control", 0, "Face")        
-    bone_to_layer("Mouth-Angry1-Control", 0, "Face")        
-    bone_to_layer("Mouth-Angry2-Control", 0, "Face")        
-    bone_to_layer("Mouth-Angry3-Control", 0, "Face")        
-    bone_to_layer("Mouth-Fury1-Control", 0, "Face")        
-    bone_to_layer("Mouth-Doya1-Control", 0, "Face")        
-    bone_to_layer("Mouth-Doya2-Control", 0, "Face")        
-    bone_to_layer("Mouth-Pero1-Control", 0, "Face")        
-    bone_to_layer("Mouth-Pero2-Control", 0, "Face")        
-    bone_to_layer("Mouth-Neko1-Control", 0, "Face")        
-    bone_to_layer("Mouth-Default-Control", 0, "Face")  
-    
+    selected_bone.bone.hide_select = True
+
+    bone_to_layer("Brow-Trouble-R-Control", 0, "Face")
+    bone_to_layer("Brow-Trouble-L-Control", 0, "Face")
+    bone_to_layer("Brow-Shy-R-Control", 0, "Face")
+    bone_to_layer("Brow-Shy-L-Control", 0, "Face")
+    bone_to_layer("Brow-Angry-R-Control", 0, "Face")
+    bone_to_layer("Brow-Angry-L-Control", 0, "Face")
+    bone_to_layer("Brow-Smily-R-Control", 0, "Face")
+    bone_to_layer("Brow-Smily-L-Control", 0, "Face")
+    bone_to_layer("Brow-R-Control", 0, "Face")
+    bone_to_layer("Brow-L-Control", 0, "Face")
+    bone_to_layer("extras-panel", 0, "Face")
+
+    bone_to_layer("Eye-Up-Control", 0, "Face")
+    bone_to_layer("Eye-Tired-Control", 0, "Face")
+    bone_to_layer("Eye-Wail-Control", 0, "Face")
+    bone_to_layer("Eye-Ha-Control", 0, "Face")
+    bone_to_layer("Wink-Control-R", 0, "Face")
+    bone_to_layer("Eye-WinkA-Control", 0, "Face")
+    bone_to_layer("Eye-WinkB-Control", 0, "Face")
+    bone_to_layer("Eye-WinkC-Control", 0, "Face")
+    bone_to_layer("Wink-Control-L", 0, "Face")
+    bone_to_layer("Eye-Down-Control", 0, "Face")
+    bone_to_layer("Eye-Jito-Control", 0, "Face")
+    bone_to_layer("Eye-Hostility-Control", 0, "Face")
+    bone_to_layer("Eye-LowerEyelid-Control", 0, "Face")
+    bone_to_layer("Eye-Star-Control", 0, "Face")
+    bone_to_layer("Eye-Pupil-Control", 0, "Face")
+
+    bone_to_layer("Mouth-Control", 0, "Face")
+    bone_to_layer("Mouth-Smile1-Control", 0, "Face")
+    bone_to_layer("Mouth-Smile2-Control", 0, "Face")
+    bone_to_layer("Mouth-Angry1-Control", 0, "Face")
+    bone_to_layer("Mouth-Angry2-Control", 0, "Face")
+    bone_to_layer("Mouth-Angry3-Control", 0, "Face")
+    bone_to_layer("Mouth-Fury1-Control", 0, "Face")
+    bone_to_layer("Mouth-Doya1-Control", 0, "Face")
+    bone_to_layer("Mouth-Doya2-Control", 0, "Face")
+    bone_to_layer("Mouth-Pero1-Control", 0, "Face")
+    bone_to_layer("Mouth-Pero2-Control", 0, "Face")
+    bone_to_layer("Mouth-Neko1-Control", 0, "Face")
+    bone_to_layer("Mouth-Default-Control", 0, "Face")
+
     # Moving Torso
-    bone_to_layer("head", 3, "Torso (IK)")  
-    bone_to_layer("neck", 3, "Torso (IK)")  
-    bone_to_layer("chest", 3, "Torso (IK)")  
-    bone_to_layer("torso", 3, "Torso (IK)")  
-    bone_to_layer("torso.001", 26, "Offsets")  
-    bone_to_layer("torso.002", 26, "Offsets")  
-    bone_to_layer("hips", 3, "Torso (IK)")  
-    
-    bone_to_layer("spine_fk.003", 4, "Torso (FK)")  
-    bone_to_layer("spine_fk.002", 4, "Torso (FK)")  
-    bone_to_layer("spine_fk.001", 4, "Torso (FK)")  
-    bone_to_layer("spine_fk", 4, "Torso (FK)")  
-    
+    bone_to_layer("head", 3, "Torso (IK)")
+    bone_to_layer("neck", 3, "Torso (IK)")
+    bone_to_layer("chest", 3, "Torso (IK)")
+    bone_to_layer("torso", 3, "Torso (IK)")
+    bone_to_layer("torso.001", 26, "Offsets")
+    bone_to_layer("torso.002", 26, "Offsets")
+    bone_to_layer("hips", 3, "Torso (IK)")
+
+    bone_to_layer("spine_fk.003", 4, "Torso (FK)")
+    bone_to_layer("spine_fk.002", 4, "Torso (FK)")
+    bone_to_layer("spine_fk.001", 4, "Torso (FK)")
+    bone_to_layer("spine_fk", 4, "Torso (FK)")
+
     # Moving Fingers
-    bone_to_layer("thumb.01_master.L", 5, "Fingers")  
-    bone_to_layer("thumb.01_master.R", 5, "Fingers")  
-    bone_to_layer("f_index.01_master.L", 5, "Fingers")  
-    bone_to_layer("f_index.01_master.R", 5, "Fingers")  
-    bone_to_layer("f_middle.01_master.L", 5, "Fingers")  
-    bone_to_layer("f_middle.01_master.R", 5, "Fingers")  
-    bone_to_layer("f_ring.01_master.L", 5, "Fingers")  
-    bone_to_layer("f_ring.01_master.R", 5, "Fingers")  
-    bone_to_layer("f_pinky.01_master.L", 5, "Fingers")  
-    bone_to_layer("f_pinky.01_master.R", 5, "Fingers")  
-    
-    bone_to_layer("thumb.01.L", 6, "Fingers (Detail)")  
-    bone_to_layer("thumb.01.R", 6, "Fingers (Detail)")  
-    bone_to_layer("thumb.02.L", 6, "Fingers (Detail)")  
-    bone_to_layer("thumb.02.R", 6, "Fingers (Detail)")  
-    bone_to_layer("thumb.03.L", 6, "Fingers (Detail)")  
-    bone_to_layer("thumb.03.R", 6, "Fingers (Detail)")  
-    bone_to_layer("thumb.01.L.001", 6, "Fingers (Detail)")  
-    bone_to_layer("thumb.01.R.001", 6, "Fingers (Detail)")  
-    bone_to_layer("f_index.01.L", 6, "Fingers (Detail)")  
-    bone_to_layer("f_index.01.R", 6, "Fingers (Detail)")  
-    bone_to_layer("f_index.02.L", 6, "Fingers (Detail)")  
-    bone_to_layer("f_index.02.R", 6, "Fingers (Detail)")  
-    bone_to_layer("f_index.03.L", 6, "Fingers (Detail)")  
-    bone_to_layer("f_index.03.R", 6, "Fingers (Detail)")  
-    bone_to_layer("f_index.01.L.001", 6, "Fingers (Detail)")  
-    bone_to_layer("f_index.01.R.001", 6, "Fingers (Detail)")  
-    bone_to_layer("f_middle.01.L", 6, "Fingers (Detail)")  
-    bone_to_layer("f_middle.01.R", 6, "Fingers (Detail)")  
-    bone_to_layer("f_middle.02.L", 6, "Fingers (Detail)")  
-    bone_to_layer("f_middle.02.R", 6, "Fingers (Detail)")  
-    bone_to_layer("f_middle.03.L", 6, "Fingers (Detail)")  
-    bone_to_layer("f_middle.03.R", 6, "Fingers (Detail)")  
-    bone_to_layer("f_middle.01.L.001", 6, "Fingers (Detail)")  
-    bone_to_layer("f_middle.01.R.001", 6, "Fingers (Detail)")  
-    bone_to_layer("f_ring.01.L", 6, "Fingers (Detail)")  
-    bone_to_layer("f_ring.01.R", 6, "Fingers (Detail)")  
-    bone_to_layer("f_ring.02.L", 6, "Fingers (Detail)")  
-    bone_to_layer("f_ring.02.R", 6, "Fingers (Detail)")  
-    bone_to_layer("f_ring.03.L", 6, "Fingers (Detail)")  
-    bone_to_layer("f_ring.03.R", 6, "Fingers (Detail)")  
-    bone_to_layer("f_ring.01.L.001", 6, "Fingers (Detail)")  
-    bone_to_layer("f_ring.01.R.001", 6, "Fingers (Detail)")  
-    bone_to_layer("f_pinky.01.L", 6, "Fingers (Detail)")  
-    bone_to_layer("f_pinky.01.R", 6, "Fingers (Detail)")  
-    bone_to_layer("f_pinky.02.L", 6, "Fingers (Detail)")  
-    bone_to_layer("f_pinky.02.R", 6, "Fingers (Detail)")  
-    bone_to_layer("f_pinky.03.L", 6, "Fingers (Detail)")  
-    bone_to_layer("f_pinky.03.R", 6, "Fingers (Detail)")  
-    bone_to_layer("f_pinky.01.L.001", 6, "Fingers (Detail)")  
-    bone_to_layer("f_pinky.01.R.001", 6, "Fingers (Detail)") 
+    bone_to_layer("thumb.01_master.L", 5, "Fingers")
+    bone_to_layer("thumb.01_master.R", 5, "Fingers")
+    bone_to_layer("f_index.01_master.L", 5, "Fingers")
+    bone_to_layer("f_index.01_master.R", 5, "Fingers")
+    bone_to_layer("f_middle.01_master.L", 5, "Fingers")
+    bone_to_layer("f_middle.01_master.R", 5, "Fingers")
+    bone_to_layer("f_ring.01_master.L", 5, "Fingers")
+    bone_to_layer("f_ring.01_master.R", 5, "Fingers")
+    bone_to_layer("f_pinky.01_master.L", 5, "Fingers")
+    bone_to_layer("f_pinky.01_master.R", 5, "Fingers")
+
+    bone_to_layer("thumb.01.L", 6, "Fingers (Detail)")
+    bone_to_layer("thumb.01.R", 6, "Fingers (Detail)")
+    bone_to_layer("thumb.02.L", 6, "Fingers (Detail)")
+    bone_to_layer("thumb.02.R", 6, "Fingers (Detail)")
+    bone_to_layer("thumb.03.L", 6, "Fingers (Detail)")
+    bone_to_layer("thumb.03.R", 6, "Fingers (Detail)")
+    bone_to_layer("thumb.01.L.001", 6, "Fingers (Detail)")
+    bone_to_layer("thumb.01.R.001", 6, "Fingers (Detail)")
+    bone_to_layer("f_index.01.L", 6, "Fingers (Detail)")
+    bone_to_layer("f_index.01.R", 6, "Fingers (Detail)")
+    bone_to_layer("f_index.02.L", 6, "Fingers (Detail)")
+    bone_to_layer("f_index.02.R", 6, "Fingers (Detail)")
+    bone_to_layer("f_index.03.L", 6, "Fingers (Detail)")
+    bone_to_layer("f_index.03.R", 6, "Fingers (Detail)")
+    bone_to_layer("f_index.01.L.001", 6, "Fingers (Detail)")
+    bone_to_layer("f_index.01.R.001", 6, "Fingers (Detail)")
+    bone_to_layer("f_middle.01.L", 6, "Fingers (Detail)")
+    bone_to_layer("f_middle.01.R", 6, "Fingers (Detail)")
+    bone_to_layer("f_middle.02.L", 6, "Fingers (Detail)")
+    bone_to_layer("f_middle.02.R", 6, "Fingers (Detail)")
+    bone_to_layer("f_middle.03.L", 6, "Fingers (Detail)")
+    bone_to_layer("f_middle.03.R", 6, "Fingers (Detail)")
+    bone_to_layer("f_middle.01.L.001", 6, "Fingers (Detail)")
+    bone_to_layer("f_middle.01.R.001", 6, "Fingers (Detail)")
+    bone_to_layer("f_ring.01.L", 6, "Fingers (Detail)")
+    bone_to_layer("f_ring.01.R", 6, "Fingers (Detail)")
+    bone_to_layer("f_ring.02.L", 6, "Fingers (Detail)")
+    bone_to_layer("f_ring.02.R", 6, "Fingers (Detail)")
+    bone_to_layer("f_ring.03.L", 6, "Fingers (Detail)")
+    bone_to_layer("f_ring.03.R", 6, "Fingers (Detail)")
+    bone_to_layer("f_ring.01.L.001", 6, "Fingers (Detail)")
+    bone_to_layer("f_ring.01.R.001", 6, "Fingers (Detail)")
+    bone_to_layer("f_pinky.01.L", 6, "Fingers (Detail)")
+    bone_to_layer("f_pinky.01.R", 6, "Fingers (Detail)")
+    bone_to_layer("f_pinky.02.L", 6, "Fingers (Detail)")
+    bone_to_layer("f_pinky.02.R", 6, "Fingers (Detail)")
+    bone_to_layer("f_pinky.03.L", 6, "Fingers (Detail)")
+    bone_to_layer("f_pinky.03.R", 6, "Fingers (Detail)")
+    bone_to_layer("f_pinky.01.L.001", 6, "Fingers (Detail)")
+    bone_to_layer("f_pinky.01.R.001", 6, "Fingers (Detail)")
 
     # IK Fingers
     try:
-        bone_to_layer("thumb.01_ik.L", 6, "Fingers (Detail)") 
-        bone_to_layer("thumb.01_ik.R", 6, "Fingers (Detail)") 
-        bone_to_layer("f_index.01_ik.L", 6, "Fingers (Detail)") 
-        bone_to_layer("f_index.01_ik.R", 6, "Fingers (Detail)") 
-        bone_to_layer("f_middle.01_ik.L", 6, "Fingers (Detail)") 
-        bone_to_layer("f_middle.01_ik.R", 6, "Fingers (Detail)") 
-        bone_to_layer("f_ring.01_ik.L", 6, "Fingers (Detail)") 
-        bone_to_layer("f_ring.01_ik.R", 6, "Fingers (Detail)") 
-        bone_to_layer("f_pinky.01_ik.L", 6, "Fingers (Detail)") 
-        bone_to_layer("f_pinky.01_ik.R", 6, "Fingers (Detail)") 
+        bone_to_layer("thumb.01_ik.L", 6, "Fingers (Detail)")
+        bone_to_layer("thumb.01_ik.R", 6, "Fingers (Detail)")
+        bone_to_layer("f_index.01_ik.L", 6, "Fingers (Detail)")
+        bone_to_layer("f_index.01_ik.R", 6, "Fingers (Detail)")
+        bone_to_layer("f_middle.01_ik.L", 6, "Fingers (Detail)")
+        bone_to_layer("f_middle.01_ik.R", 6, "Fingers (Detail)")
+        bone_to_layer("f_ring.01_ik.L", 6, "Fingers (Detail)")
+        bone_to_layer("f_ring.01_ik.R", 6, "Fingers (Detail)")
+        bone_to_layer("f_pinky.01_ik.L", 6, "Fingers (Detail)")
+        bone_to_layer("f_pinky.01_ik.R", 6, "Fingers (Detail)")
     except:
         pass
 
@@ -3693,111 +5706,145 @@ def rig_character(
     def fast_bone_move(bone_list, layer, collection):
         for bone in bone_list:
             bone_to_layer(bone, layer, collection)
-    
+
     # Refactoring old bone move functionalities
-    list_move_to_other = ["+UpperArmTwistA02.L","+UpperArmTwistA01.L","+UpperArmTwistA01.R","+UpperArmTwistA02.R","eye.R","eye.L","+ToothBone D A01","+ToothBone U A01","+ToothBone A A01"]
+    list_move_to_other = [
+        "+UpperArmTwistA02.L",
+        "+UpperArmTwistA01.L",
+        "+UpperArmTwistA01.R",
+        "+UpperArmTwistA02.R",
+        "eye.R",
+        "eye.L",
+        "+ToothBone D A01",
+        "+ToothBone U A01",
+        "+ToothBone A A01",
+    ]
     fast_bone_move(list_move_to_other, 25, "Other")
-    
+
     if toe_bones_exist:
         bone_to_layer("toe_ik.L", 13, "Leg.L (IK)")
         bone_to_layer("toe_ik.R", 16, "Leg.R (IK)")
     else:
         bone_to_layer("toe_ik.L", 25, "Other")
         bone_to_layer("toe_ik.R", 25, "Other")
-    
+
     if use_arm_ik_poles:
         bone_to_layer("upper_arm_ik.L", 25, "Other")
         bone_to_layer("upper_arm_ik.R", 25, "Other")
     else:
         bone_to_layer("upper_arm_ik.L", 7, "Arm.L (IK)")
         bone_to_layer("upper_arm_ik.R", 10, "Arm.R (IK)")
-    
+
     if use_leg_ik_poles:
         bone_to_layer("thigh_ik.L", 25, "Other")
         bone_to_layer("thigh_ik.R", 25, "Other")
     else:
         bone_to_layer("thigh_ik.L", 13, "Leg.L (IK)")
         bone_to_layer("thigh_ik.R", 16, "Leg.R (IK)")
-        
+
     try:
         bone_to_layer("+EyeBone L A01.001", 25, "Other")
         bone_to_layer("+EyeBone R A01.001", 25, "Other")
     except:
         pass
-               
+
     if no_eyes:
-        bone_to_layer("eyetrack",25,"Other")
-        bone_to_layer("eyetrack_L",25,"Other")
-        bone_to_layer("eyetrack_R",25,"Other")
-           
-    # New bones, post append 
-    list_to_send_other = ["MCH-thigh_ik_target_sub.L","MCH-thigh_ik_target_sub.R","MCH-foot_ik_pivot.L","MCH-foot_ik_pivot.R","MCH-hand_ik_pivot.L","MCH-hand_ik_pivot.R","MCH-hand_ik_wrist.L","MCH-hand_ik_wrist.R","MCH-torso_pivot.002","shoulder_driver.R","shoulder_driver.L","MCH-shoulder_follow.R","MCH-shoulder_follow.L"]
-    
-    fast_bone_move(list_to_send_other,25,"Other")
-    
-    send_to_pivots = ["foot_ik_pivot.L","foot_ik_pivot.R","hand_ik_pivot.L","hand_ik_pivot.R","torso_pivot.002","forearm_tweak-pin.L","forearm_tweak-pin.R","shin_tweak-pin.L","shin_tweak-pin.R"]
+        bone_to_layer("eyetrack", 25, "Other")
+        bone_to_layer("eyetrack_L", 25, "Other")
+        bone_to_layer("eyetrack_R", 25, "Other")
+
+    # New bones, post append
+    list_to_send_other = [
+        "MCH-thigh_ik_target_sub.L",
+        "MCH-thigh_ik_target_sub.R",
+        "MCH-foot_ik_pivot.L",
+        "MCH-foot_ik_pivot.R",
+        "MCH-hand_ik_pivot.L",
+        "MCH-hand_ik_pivot.R",
+        "MCH-hand_ik_wrist.L",
+        "MCH-hand_ik_wrist.R",
+        "MCH-torso_pivot.002",
+        "shoulder_driver.R",
+        "shoulder_driver.L",
+        "MCH-shoulder_follow.R",
+        "MCH-shoulder_follow.L",
+    ]
+
+    fast_bone_move(list_to_send_other, 25, "Other")
+
+    send_to_pivots = [
+        "foot_ik_pivot.L",
+        "foot_ik_pivot.R",
+        "hand_ik_pivot.L",
+        "hand_ik_pivot.R",
+        "torso_pivot.002",
+        "forearm_tweak-pin.L",
+        "forearm_tweak-pin.R",
+        "shin_tweak-pin.L",
+        "shin_tweak-pin.R",
+    ]
     fast_bone_move(send_to_pivots, 19, "Pivots & Pins")
-    
+
     bone_to_layer("root.002", 28, "Root")
     bone_to_layer("root.001", 26, "Offsets")
     bone_to_layer("root", 26, "Offsets")
-    
-    bone_to_layer("hand_ik.L",7,"Arm.L (IK)")
-    bone_to_layer("hand_ik_wrist.L",26,"Offsets")
-    bone_to_layer("upper_arm_parent.L",[7,8],"Arm.L (IK)","Arm.L (FK)")
-    bone_to_layer("upper_arm_ik_target.L",7,"Arm.L (IK)")
-    bone_to_layer("shoulder.L",[7,8],"Arm.L (IK)","Arm.L (FK)")
-    
-    bone_to_layer("hand_ik.R",10,"Arm.R (IK)")
-    bone_to_layer("upper_arm_parent.R",[10,11],"Arm.R (IK)","Arm.R (FK)")
-    bone_to_layer("hand_ik_wrist.R",26,"Offsets")
-    bone_to_layer("upper_arm_ik_target.R",10,"Arm.R (IK)")
-    bone_to_layer("shoulder.R",[10,11],"Arm.R (IK)","Arm.R (FK)")
-    
-    bone_to_layer("upper_arm_fk.L",8,"Arm.L (FK)")
-    bone_to_layer("forearm_fk.L",8,"Arm.L (FK)")
-    bone_to_layer("hand_fk.L",8,"Arm.L (FK)")
-    
-    bone_to_layer("upper_arm_fk.R",11,"Arm.R (FK)")
-    bone_to_layer("forearm_fk.R",11,"Arm.R (FK)")
-    bone_to_layer("hand_fk.R",11,"Arm.R (FK)")
-    
-    bone_to_layer("foot_ik.L",13,"Leg.L (IK)")
-    bone_to_layer("thigh_parent.L",[13,14],"Leg.L (IK)","Leg.L (FK)")
-    bone_to_layer("thigh_ik_target.L",13,"Leg.L (IK)")
-    bone_to_layer("foot_ik_sub.L",26,"Offsets")
-    bone_to_layer("foot_spin_ik.L",13,"Leg.L (IK)")
-    bone_to_layer("foot_heel_ik.L",13,"Leg.L (IK)")
-    
-    bone_to_layer("thigh_fk.L",14,"Leg.L (FK)")
-    bone_to_layer("shin_fk.L",14,"Leg.L (FK)")
-    bone_to_layer("foot_fk.L",14,"Leg.L (FK)")
-    bone_to_layer("toe_fk.L",14,"Leg.L (FK)")
-    
-    bone_to_layer("foot_ik.R",16,"Leg.R (IK)")
-    bone_to_layer("thigh_parent.R",[16,17],"Leg.R (IK)","Leg.R (FK)")    
-    bone_to_layer("thigh_ik_target.R",16,"Leg.R (IK)")
-    bone_to_layer("foot_ik_sub.R",26,"Offsets")
-    bone_to_layer("foot_spin_ik.R",16,"Leg.R (IK)")
-    bone_to_layer("foot_heel_ik.R",16,"Leg.R (IK)")
-    
-    bone_to_layer("thigh_fk.R",17,"Leg.R (FK)")
-    bone_to_layer("shin_fk.R",17,"Leg.R (FK)")
-    bone_to_layer("foot_fk.R",17,"Leg.R (FK)")
-    bone_to_layer("toe_fk.R",17,"Leg.R (FK)")
-    
-    bone_to_layer("breast.L",22,"Clothes")
-    bone_to_layer("breast.R",22,"Clothes")
-    
-    bone_to_layer("prop.L",21,"Props")
-    bone_to_layer("prop.R",21,"Props")
+
+    bone_to_layer("hand_ik.L", 7, "Arm.L (IK)")
+    bone_to_layer("hand_ik_wrist.L", 26, "Offsets")
+    bone_to_layer("upper_arm_parent.L", [7, 8], "Arm.L (IK)", "Arm.L (FK)")
+    bone_to_layer("upper_arm_ik_target.L", 7, "Arm.L (IK)")
+    bone_to_layer("shoulder.L", [7, 8], "Arm.L (IK)", "Arm.L (FK)")
+
+    bone_to_layer("hand_ik.R", 10, "Arm.R (IK)")
+    bone_to_layer("upper_arm_parent.R", [10, 11], "Arm.R (IK)", "Arm.R (FK)")
+    bone_to_layer("hand_ik_wrist.R", 26, "Offsets")
+    bone_to_layer("upper_arm_ik_target.R", 10, "Arm.R (IK)")
+    bone_to_layer("shoulder.R", [10, 11], "Arm.R (IK)", "Arm.R (FK)")
+
+    bone_to_layer("upper_arm_fk.L", 8, "Arm.L (FK)")
+    bone_to_layer("forearm_fk.L", 8, "Arm.L (FK)")
+    bone_to_layer("hand_fk.L", 8, "Arm.L (FK)")
+
+    bone_to_layer("upper_arm_fk.R", 11, "Arm.R (FK)")
+    bone_to_layer("forearm_fk.R", 11, "Arm.R (FK)")
+    bone_to_layer("hand_fk.R", 11, "Arm.R (FK)")
+
+    bone_to_layer("foot_ik.L", 13, "Leg.L (IK)")
+    bone_to_layer("thigh_parent.L", [13, 14], "Leg.L (IK)", "Leg.L (FK)")
+    bone_to_layer("thigh_ik_target.L", 13, "Leg.L (IK)")
+    bone_to_layer("foot_ik_sub.L", 26, "Offsets")
+    bone_to_layer("foot_spin_ik.L", 13, "Leg.L (IK)")
+    bone_to_layer("foot_heel_ik.L", 13, "Leg.L (IK)")
+
+    bone_to_layer("thigh_fk.L", 14, "Leg.L (FK)")
+    bone_to_layer("shin_fk.L", 14, "Leg.L (FK)")
+    bone_to_layer("foot_fk.L", 14, "Leg.L (FK)")
+    bone_to_layer("toe_fk.L", 14, "Leg.L (FK)")
+
+    bone_to_layer("foot_ik.R", 16, "Leg.R (IK)")
+    bone_to_layer("thigh_parent.R", [16, 17], "Leg.R (IK)", "Leg.R (FK)")
+    bone_to_layer("thigh_ik_target.R", 16, "Leg.R (IK)")
+    bone_to_layer("foot_ik_sub.R", 26, "Offsets")
+    bone_to_layer("foot_spin_ik.R", 16, "Leg.R (IK)")
+    bone_to_layer("foot_heel_ik.R", 16, "Leg.R (IK)")
+
+    bone_to_layer("thigh_fk.R", 17, "Leg.R (FK)")
+    bone_to_layer("shin_fk.R", 17, "Leg.R (FK)")
+    bone_to_layer("foot_fk.R", 17, "Leg.R (FK)")
+    bone_to_layer("toe_fk.R", 17, "Leg.R (FK)")
+
+    bone_to_layer("breast.L", 22, "Clothes")
+    bone_to_layer("breast.R", 22, "Clothes")
+
+    bone_to_layer("prop.L", 21, "Props")
+    bone_to_layer("prop.R", 21, "Props")
 
     print("Done.")
-    
+
     def loop_place_physics():
 
         # This list contains every bone that we should simply not handle as part of physics.
-        ignore_list = [ 
+        ignore_list = [
             "+UpperArmTwistA02.L",
             "+UpperArmTwistA01.L",
             "+UpperArmTwistA01.R",
@@ -3826,48 +5873,67 @@ def rig_character(
             "+ForearmTwistSA01.R",
             "+ForearmTwistSA01.L",
             "+ThighTwistSA01.R",
-            "+ThighTwistSA01.L"
+            "+ThighTwistSA01.L",
         ]
 
         if is_version_4:
             armature = bpy.context.object.data
-            collections = armature.collections        
-            
+            collections = armature.collections
+
             for bone in armature.bones:
                 # The gods of the universe have blessed us with every physics bone starting with "+". We just do some extra filtering and we got what we need.
                 if "+Hair" in bone.name:
-                    bone_to_layer(bone.name,20,"Hair")
+                    bone_to_layer(bone.name, 20, "Hair")
                 elif bone.name[0] == "+" and bone.name not in ignore_list:
-                    bone_to_layer(bone.name,22,"Clothes")
+                    bone_to_layer(bone.name, 22, "Clothes")
                 elif bone.name in ignore_list:
-                    bone_to_layer(bone.name,25,"Other")
+                    bone_to_layer(bone.name, 25, "Other")
         else:
             for bone in bpy.context.active_object.pose.bones:
                 if "+Hair" in bone.name:
-                    bone_to_layer(bone.name,20,"Hair")
+                    bone_to_layer(bone.name, 20, "Hair")
                 elif bone.name[0] == "+" and bone.name not in ignore_list:
-                    bone_to_layer(bone.name,22,"Clothes")
+                    bone_to_layer(bone.name, 22, "Clothes")
                 elif bone.name in ignore_list:
-                    bone_to_layer(bone.name,25,"Other")
+                    bone_to_layer(bone.name, 25, "Other")
 
     loop_place_physics()
-    
+
     def loop_place_def():
         # Handpicked bones to serve as the def layer.
-        list_custom_skel = ["DEF-thigh.L", "DEF-thigh.R","DEF-shin.L","DEF-shin.R","DEF-foot.L","DEF-foot.R","DEF-spine.001","DEF-spine.002","DEF-spine.003","DEF-spine.004","DEF-spine.006","+UpperArmTwistA02.L","+UpperArmTwistA02.R","DEF-forearm.L","DEF-forearm.R","DEF-hand.R","DEF-hand.L","DEF-shoulder.R","DEF-shoulder.L"]
-        
+        list_custom_skel = [
+            "DEF-thigh.L",
+            "DEF-thigh.R",
+            "DEF-shin.L",
+            "DEF-shin.R",
+            "DEF-foot.L",
+            "DEF-foot.R",
+            "DEF-spine.001",
+            "DEF-spine.002",
+            "DEF-spine.003",
+            "DEF-spine.004",
+            "DEF-spine.006",
+            "+UpperArmTwistA02.L",
+            "+UpperArmTwistA02.R",
+            "DEF-forearm.L",
+            "DEF-forearm.R",
+            "DEF-hand.R",
+            "DEF-hand.L",
+            "DEF-shoulder.R",
+            "DEF-shoulder.L",
+        ]
+
         for bone in list_custom_skel:
-            bone_to_layer(bone,24,"Cage")
-        
+            bone_to_layer(bone, 24, "Cage")
+
         # Otherwise, anything picked up by VG scan, enable below and disable above.
-        #for bone in armature.bones:
+        # for bone in armature.bones:
         #    if bone.name in vertex_groups_list:
         #        bone_to_layer(bone.name,24,"Cage")
 
-        
     loop_place_def()
 
-    # MOVING OF BONES END -------------------------------    
+    # MOVING OF BONES END -------------------------------
 
     # Write rig log to Blender Text block (ALWAYS, so user can verify code ran)
     log_text = bpy.data.texts.get("RIG_LOG")
@@ -3881,7 +5947,8 @@ def rig_character(
     else:
         log_text.write("No warnings or messages recorded.\n")
     log_text.write("\n=== END ===")
-    
+
+
 def setup_neck_and_head_follow(neck_follow_value, head_follow_value):
     bpy.context.object.pose.bones["torso"]["neck_follow"] = neck_follow_value
     bpy.context.object.pose.bones["torso"]["head_follow"] = head_follow_value
@@ -3889,7 +5956,7 @@ def setup_neck_and_head_follow(neck_follow_value, head_follow_value):
 
 # Make it so that the finger scale controls can be scaled on the X axis to curl in just the fingertips instead of the entire finger.
 def setup_finger_scale_controls_on_x_axis_to_curl_just_the_fingertips(rigified_rig):
-    bpy.ops.object.mode_set(mode='POSE')
+    bpy.ops.object.mode_set(mode="POSE")
 
     for oDrv in rigified_rig.animation_data.drivers:
         for variable in oDrv.driver.variables:
@@ -3897,8 +5964,13 @@ def setup_finger_scale_controls_on_x_axis_to_curl_just_the_fingertips(rigified_r
                 if ".03" in oDrv.data_path and target.data_path[-7:] == "scale.y":
                     target.data_path = target.data_path[:-1] + "x"
 
-
-    fingerlist = ["thumb.01_master", "f_index.01_master", "f_middle.01_master", "f_ring.01_master", "f_pinky.01_master"]
+    fingerlist = [
+        "thumb.01_master",
+        "f_index.01_master",
+        "f_middle.01_master",
+        "f_ring.01_master",
+        "f_pinky.01_master",
+    ]
     for side in [".L", ".R"]:
         for bone in fingerlist:
             rigified_rig.pose.bones[bone + side].lock_scale[0] = False
@@ -3907,7 +5979,7 @@ def setup_finger_scale_controls_on_x_axis_to_curl_just_the_fingertips(rigified_r
 # Let's 'exclude' that wgt collection: https://blenderartists.org/t/disable-exlude-from-view-layer-in-collection/1324744
 def searchForLayerCollection(layerColl, coll_name):
     found = None
-    if (layerColl.name == coll_name):
+    if layerColl.name == coll_name:
         return layerColl
     for layer in layerColl.children:
         found = searchForLayerCollection(layer, coll_name)
@@ -3918,7 +5990,7 @@ def searchForLayerCollection(layerColl, coll_name):
 def searchForParentLayerCollection(layerColl, coll_name):
     found = None
     for layer in layerColl.children:
-        if (layer.name == coll_name):
+        if layer.name == coll_name:
             return layerColl
         found = searchForParentLayerCollection(layer, coll_name)
         if found:
@@ -3928,13 +6000,15 @@ def searchForParentLayerCollection(layerColl, coll_name):
 def disable_collection(collection_name):
     view_layer_collection = bpy.context.view_layer.layer_collection
 
-    layer_collection_to_disable = searchForLayerCollection(view_layer_collection, collection_name)
+    layer_collection_to_disable = searchForLayerCollection(
+        view_layer_collection, collection_name
+    )
     if layer_collection_to_disable:
         layer_collection_to_disable.exclude = True
         return True
     return False
 
 
-def move_collection_into_collection(source, destination, collection):  
+def move_collection_into_collection(source, destination, collection):
     destination.children.link(collection)
     source.children.unlink(collection)
