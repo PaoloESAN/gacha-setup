@@ -196,38 +196,11 @@ def rig_character(
         "HSR Rig: Genshin master rig execution complete. Applying HSR-specific control fixes..."
     )
 
-    # --- HSR FIX: Rotate finger master controls 90° so finger curl axis is correct ---
+    # --- HSR finger control fixes (without altering master control roll/orientation) ---
     rig_obj = bpy.context.active_object
     if rig_obj and rig_obj.type == "ARMATURE":
         try:
-            if not rig_obj.get("_hsr_finger_ctrl_rot_fix_v1"):
-                bpy.context.view_layer.objects.active = rig_obj
-                bpy.ops.object.mode_set(mode="EDIT")
-
-                finger_master_prefixes = [
-                    "thumb.01_master",
-                    "f_index.01_master",
-                    "f_middle.01_master",
-                    "f_ring.01_master",
-                    "f_pinky.01_master",
-                ]
-
-                # Mirror-safe roll offset
-                roll_offsets = {
-                    ".L": 1.5708,
-                    ".R": -1.5708,
-                }
-
-                for side, roll_offset in roll_offsets.items():
-                    for prefix in finger_master_prefixes:
-                        bone_name = f"{prefix}{side}"
-                        eb = rig_obj.data.edit_bones.get(bone_name)
-                        if eb:
-                            eb.roll += roll_offset
-
-                rig_obj["_hsr_finger_ctrl_rot_fix_v1"] = 1
-                print("HSR Rig: Finger master controls rotated 90° (HSR fix applied).")
-
+            bpy.context.view_layer.objects.active = rig_obj
             bpy.ops.object.mode_set(mode="POSE")
 
             # HSR fix: force finger curl to use Y scale axis (vertical drag behavior)
