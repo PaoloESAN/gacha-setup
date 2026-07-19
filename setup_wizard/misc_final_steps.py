@@ -24,6 +24,24 @@ class GI_OT_FinishSetup(Operator, BasicSetupUIOperator):
     bl_idname = "genshin.finish_setup"
     bl_label = "Genshin: Finish Setup (UI)"
 
+    def execute(self, context):
+        result = BasicSetupUIOperator.execute(self, context)
+
+        # Genshin-only: optionally run Advanced post-processing steps from Finish Setup.
+        should_run_post_processing = (
+            self.game_type == GameType.GENSHIN_IMPACT.name
+            and context.window_manager.post_processing_setup_enabled
+        )
+        if should_run_post_processing:
+            NextStepInvoker().invoke(
+                0,
+                "invoke_next_step_ui",
+                high_level_step_name="HOYOVERSE_OT_post_processing_compositing_setup",
+                game_type=self.game_type,
+            )
+
+        return result
+
 
 class HSR_OT_FinishSetup(Operator, BasicSetupUIOperator):
     """Finish Setup"""
