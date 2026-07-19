@@ -203,7 +203,7 @@ def rig_character(
             bpy.context.view_layer.objects.active = rig_obj
             bpy.ops.object.mode_set(mode="POSE")
 
-            # HSR fix: force finger curl to use Y scale axis (vertical drag behavior)
+            # HSR fix: force finger curl to use Y scale axis (same logic for all fingers, including thumb)
             finger_tokens = ["thumb", "f_index", "f_middle", "f_ring", "f_pinky"]
 
             def _remap_scale_datapath_to_y(path):
@@ -264,7 +264,29 @@ def rig_character(
                     f"(targets={changed_targets}, transforms={changed_transforms}, ->Y)."
                 )
 
-            # Keep only Y scale enabled on finger masters (prevents sideways scaling)
+                # HSR fix: normalize finger curl direction between sides.
+                # Keep L as reference; invert R so both hands respond in the same direction.
+                side_inversions = 0
+                for drv in rig_obj.animation_data.drivers:
+                    dpath = drv.data_path or ""
+                    if (
+                        "rotation_euler" in dpath
+                        and "_drv." in dpath
+                        and "MCH-" in dpath
+                        and any(tok in dpath for tok in finger_tokens)
+                        and '.R"]' in dpath
+                    ):
+                        expr = (drv.driver.expression or "").strip()
+                        normalized_expr = expr.replace(" ", "")
+                        if expr and not normalized_expr.endswith("*-1"):
+                            drv.driver.expression = f"({expr}) * -1"
+                            side_inversions += 1
+
+                print(
+                    f"HSR Rig: Finger side-direction normalization applied on {side_inversions} right-side driver(s)."
+                )
+
+            # Keep only Y scale enabled on finger masters (same logic for thumb and all fingers)
             for pb in rig_obj.pose.bones:
                 if ".01_master" in pb.name and any(
                     tok in pb.name for tok in finger_tokens
@@ -273,12 +295,9 @@ def rig_character(
                     pb.lock_scale[1] = False
                     pb.lock_scale[2] = True
 
-            rig_obj["_hsr_finger_scale_axis_fix_v3"] = 1
-
             # HSR fix: fingertip curl drivers rotate on wrong euler channel (sideways bend)
-            if rig_obj.animation_data and not rig_obj.get(
-                "_hsr_finger_drv_rot_axis_fix_v1"
-            ):
+            # Use same logic for all fingers, including thumb (X -> Z).
+            if rig_obj.animation_data:
                 drv_channel_changes = 0
                 for fcu in rig_obj.animation_data.drivers:
                     dpath = fcu.data_path or ""
@@ -293,7 +312,6 @@ def rig_character(
                         fcu.array_index = 2
                         drv_channel_changes += 1
 
-                rig_obj["_hsr_finger_drv_rot_axis_fix_v1"] = 1
                 print(
                     f"HSR Rig: Finger driver rotation channel remap applied (X->Z) on {drv_channel_changes} driver(s)."
                 )
