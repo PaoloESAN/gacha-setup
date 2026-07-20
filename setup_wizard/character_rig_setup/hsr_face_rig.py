@@ -520,11 +520,13 @@ def setup_hsr_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_si
                 terms.append(f"max(0.0, {sign}{vn} / {e['lim']!r})")
         drv.expression = terms[0] if len(terms) == 1 else "max(" + ", ".join(terms) + ")"
 
-    # Hide stick facial bones, extra bones, tweak collections, and Face-Root
+    # Hide stick facial bones, extra bones, tweak collections, FK collections, Fingers (Detail), and Face-Root
     hidden_colls = [
         "DEF", "ORG", "MCH", "Face", "Face (Secondary)", "Face (Primary)", "Face (Tweaks)", "Face Bones", "Face_Bones",
         "Extra Bones", "Extra_Bones", "Extra",
-        "Torso (Tweak)", "Arm.L (Tweak)", "Arm.R (Tweak)", "Leg.L (Tweak)", "Leg.R (Tweak)"
+        "Torso (Tweak)", "Arm.L (Tweak)", "Arm.R (Tweak)", "Leg.L (Tweak)", "Leg.R (Tweak)",
+        "Arm.L (FK)", "Arm.R (FK)", "Leg.L (FK)", "Leg.R (FK)",
+        "Fingers (Detail)"
     ]
     for cn in hidden_colls:
         c = armature.data.collections.get(cn)
@@ -533,6 +535,10 @@ def setup_hsr_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_si
                 c.is_visible = False
             except Exception:
                 pass
+
+    palms_coll = armature.data.collections.get("Palms")
+    if palms_coll:
+        palms_coll.is_visible = True
 
     face_bones_coll = armature.data.collections.get("Face Bones") or armature.data.collections.new("Face Bones")
     face_bones_coll.is_visible = False

@@ -3,8 +3,8 @@
 import bpy
 
 def rig_character(
-    file_path, 
-    disallow_arm_ik_stretch, 
+    file_path,
+    disallow_arm_ik_stretch,
     disallow_leg_ik_stretch,
     use_arm_ik_poles,
     use_leg_ik_poles,
@@ -70,10 +70,10 @@ def rig_character(
         'PinkyFinger2_R': 'DEF-f_pinky.02.R',
         'PinkyFinger3_R': 'DEF-f_pinky.03.R',
         'eye_R': 'DEF-eye.R',
-        'eye_L': 'DEF-eye.L',   
+        'eye_L': 'DEF-eye.L',
         'breast_L': 'DEF-breast.L',
-        'breast_R': 'DEF-breast.R', 
-        
+        'breast_R': 'DEF-breast.R',
+
         'HipPart1_R': 'DEF-thigh.R.001',
         'HipPart1_L': 'DEF-thigh.L.001',
         'ElbowPart1_L': 'DEF-forearm.L.001',
@@ -109,7 +109,7 @@ def rig_character(
         bone.select = True
         bone.select_head = True
         bone.select_tail = True
-        
+
     bones_list = obj.pose.bones
     for bone in bones_list:
         if bone.name in abadidea:
@@ -117,12 +117,12 @@ def rig_character(
 
     # For making it possible to symmetrically pose bones properly.
     for bone in bones_list:
-        if ".L" in bone.name and bone.name not in ['DEF-spine.002','DEF-spine.001','DEF-spine.003','DEF-thigh.R.001','DEF-thigh.L.001','DEF-forearm.L.001','DEF-forearm.R.001','DEF-upperarm.R.001','DEF-upperarm.L.001','DEF-spine.006']: 
+        if ".L" in bone.name and bone.name not in ['DEF-spine.002','DEF-spine.001','DEF-spine.003','DEF-thigh.R.001','DEF-thigh.L.001','DEF-forearm.L.001','DEF-forearm.R.001','DEF-upperarm.R.001','DEF-upperarm.L.001','DEF-spine.006']:
             whee = bone.name[:-2] + ".R"
             if whee in armature.edit_bones and bone.name in armature.edit_bones:
                 armature.edit_bones[whee].roll = -armature.edit_bones[bone.name].roll # R to L because rolls suck less
-        
-    ## Fixes the weirdass head bone alignment.   
+
+    ## Fixes the weirdass head bone alignment.
     def realign(bone):
         bone.head.x = 0
         bone.tail.x = 0
@@ -131,7 +131,7 @@ def rig_character(
             bone.tail.z = bone.head.z + .1
         else:
             bone.tail.z += .1
-            
+
         bone.roll = 0
     if 'DEF-spine.006' in armature.edit_bones:
         realign(armature.edit_bones['DEF-spine.006'])
@@ -168,8 +168,8 @@ def rig_character(
         armature.edit_bones[toe + x].tail.z = armature.edit_bones[toe + x].head.z
         armature.edit_bones[toe + x].tail.y -= 0.05
         armature.edit_bones[toe + x].roll = 0
-        
-            
+
+
     bpy.ops.armature.select_all(action='DESELECT')
     try:
         select_bone(armature.edit_bones["breast.R"])
@@ -193,7 +193,7 @@ def rig_character(
     #armature.edit_bones["joint_skin_GRP"].tail.z += 0.1
     armature.edit_bones["Main"].tail.z = 0.1
     armature.edit_bones["Main"].tail.y = 0
-    # DELETE MAIN BONE?? 
+    # DELETE MAIN BONE??
     #armature.edit_bones.remove(armature.edit_bones["Main"])
 
     try:  # If tall woman, fix their pinky finger
@@ -241,8 +241,8 @@ def rig_character(
             return armature.edit_bones[bone].head.x, armature.edit_bones[bone].head.y, armature.edit_bones[bone].head.z
         else:
             return armature.edit_bones[bone].tail.x, armature.edit_bones[bone].tail.y, armature.edit_bones[bone].tail.z
-            
-        
+
+
     try:
         xh, yh, zh = getboob("DEF-breast.L", "head")
         xt, yt, zt = getboob("DEF-breast.L", "tail")
@@ -268,10 +268,10 @@ def rig_character(
         # If breast bones dont exist in the orig rig, then delete from the meta rig
         metarm.edit_bones.remove(metarm.edit_bones["breast.L"])
         metarm.edit_bones.remove(metarm.edit_bones["breast.R"])
-        
 
 
-    ##########  DETACH PHYSICS BONES,  
+
+    ##########  DETACH PHYSICS BONES,
 
     metanames = ['eye.L', 'eye.R', 'spine', 'thigh.L', 'shin.L', 'foot.L', 'toe.L', 'thigh.R', 'shin.R', 'foot.R', 'toe.R', 'spine.001', 'spine.002', 'spine.003', 'breast.L', 'breast.R', 'shoulder.L', 'upper_arm.L', 'forearm.L', 'hand.L', 'thumb.01.L', 'thumb.02.L', 'thumb.03.L', 'f_index.01.L', 'f_index.02.L', 'f_index.03.L', 'f_middle.01.L', 'f_middle.02.L', 'f_middle.03.L', 'f_ring.01.L', 'f_ring.02.L', 'f_ring.03.L', 'f_pinky.01.L', 'f_pinky.02.L', 'f_pinky.03.L', 'spine.004', 'spine.006', 'shoulder.R', 'upper_arm.R', 'forearm.R', 'hand.R', 'thumb.01.R', 'thumb.02.R', 'thumb.03.R', 'f_index.01.R', 'f_index.02.R', 'f_index.03.R', 'f_middle.01.R', 'f_middle.02.R', 'f_middle.03.R', 'f_ring.01.R', 'f_ring.02.R', 'f_ring.03.R', 'f_pinky.01.R', 'f_pinky.02.R', 'f_pinky.03.R']
 
@@ -281,7 +281,7 @@ def rig_character(
 
     ## Make a dictionary.  Key is a main body bone that exists in the Rigify (arm, leg, spine, etc), and the value is a list of all the children bones that aren't other main body bones (usually hair, clothes, deform, etc.)
     savethechildren = {
-        
+
     }
     bpy.ops.object.mode_set(mode='EDIT')
     for bone in armature.edit_bones:
@@ -294,7 +294,7 @@ def rig_character(
                 wtf = bone.name
                 savethechildren[wtf] = childlist
 
-        
+
     ## Selects and separates the physics bones
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.armature.select_all(action='DESELECT')
@@ -317,7 +317,7 @@ def rig_character(
         # Check for given object names
         if o.name in ("rigify", armature.name):
             o.select_set(True)
-            
+
     # THEN REATTACH PHYSICS
 
     bpy.ops.object.mode_set(mode='OBJECT')
@@ -345,7 +345,7 @@ def rig_character(
 
     ## Reattach the physics bones to their parents
     #Go back into rigify, find the main body bones, and reattach every bone in the corresponding dict list
-    for mainbone in savethechildren:    
+    for mainbone in savethechildren:
         for childbone in savethechildren[mainbone]:
             rigifyr.data.edit_bones[childbone].parent = rigifyr.data.edit_bones[mainbone]
 
@@ -414,8 +414,8 @@ def rig_character(
     safe_set_custom_shape("toe_ik.L", None, scale=(0.781, 0.781, 0.350), translation=(0.0, 0.06, 0.00), disable_bone_size=False)
     safe_set_custom_shape("toe_ik.R", None, scale=(0.781, 0.781, 0.350), translation=(0.0, 0.06, 0.00), disable_bone_size=False)
 
-    safe_set_custom_shape("hand_ik.L", "wrist")
-    safe_set_custom_shape("hand_ik.R", "wrist")
+    safe_set_custom_shape("hand_ik.L", "hand", scale=(1.0, 1.0, 1.0), disable_bone_size=True)
+    safe_set_custom_shape("hand_ik.R", "hand", scale=(1.0, 1.0, 1.0), disable_bone_size=True)
 
     safe_set_custom_shape("palm.L", None, scale=(1.2, 1.2, 1.2), disable_bone_size=False)
     safe_set_custom_shape("palm.R", None, scale=(1.2, 1.2, 1.2), disable_bone_size=False)
@@ -443,7 +443,6 @@ def rig_character(
                     eb[newname+".R"].roll = -bone.roll   # Symmetrizes rolls
             except:
                 pass
-
 
     # This part puts all the main bones I use into the second bone layer/collection
     bpy.ops.object.mode_set(mode='OBJECT')
@@ -476,7 +475,7 @@ def rig_character(
         if bone.parent:
             if bone.name not in pre_res and bone.parent.name in ["DEF-shoulder.L", "DEF-shoulder.R"]:
                 print(bone)
-                
+
                 bone.parent = rigifyr.data.edit_bones["DEF-spine.003"]
 
     # makes a root #2 bone
@@ -489,7 +488,7 @@ def rig_character(
     newroot.tail.y += 0.5
     root.parent = newroot
 
-    bpy.ops.object.mode_set(mode='POSE')   
+    bpy.ops.object.mode_set(mode='POSE')
     bpy.ops.pose.select_all(action='DESELECT')
     bones_list = rigifyr.pose.bones
     try:
@@ -531,7 +530,7 @@ def rig_character(
         for bone in fingerlist:
             if bone + side in rig.pose.bones:
                 rig.pose.bones[bone + side].lock_scale[0] = False
-        
+
     # Change the body outline and the hair and face outline values match.
     def add_driver(source, target, path, dataPath):
         d = source.driver_add( path).driver
@@ -540,7 +539,7 @@ def rig_character(
         v.name                 = "Input_7"
         v.targets[0].id        = target
         v.targets[0].data_path = dataPath
-        
+
     try:
         bod = bpy.data.objects["Body"]
         face = bpy.data.objects["Face"]
@@ -550,7 +549,7 @@ def rig_character(
         add_driver(hair, bod, 'modifiers["Outlines Hair"]["Input_7"]', 'modifiers["Outlines Body"]["Input_7"]')
     except:
         pass
-        
+
     # Puts these into a selection set (you need the addon (well no u dont bc i put this in a try block lmao))
     try:
         bpy.ops.pose.select_all(action='DESELECT')
@@ -562,7 +561,7 @@ def rig_character(
                 rigifyr.pose.bones[bonename].bone.select= True
         bpy.ops.pose.selection_set_add()
         bpy.ops.pose.selection_set_assign()
-        bpy.ops.pose.select_all(action='DESELECT')    
+        bpy.ops.pose.select_all(action='DESELECT')
         bpy.context.object.selection_sets[0].name = "FK Arms"
     except:
         pass
@@ -581,19 +580,25 @@ def rig_character(
     except:
         pass
 
-    # Hide base/DEF/ORG/MCH, Tweak, Face, and Extra bone collections
+    # Hide base/DEF/ORG/MCH, Tweak, FK, Face, Extra, and Fingers (Detail) bone collections (keep Palms visible)
     if use_bone_collections():
         hidden_collections = [
-            "DEF", "ORG", "MCH", "Deformation", "Original", "Mechanism", 
-            "Clothes", "Hair", "Palms", "Tweaks", "Props", 
+            "DEF", "ORG", "MCH", "Deformation", "Original", "Mechanism",
+            "Clothes", "Hair", "Tweaks", "Props",
             "Face", "Face (Secondary)", "Face (Primary)", "Face (Tweaks)", "Face Bones", "Face_Bones",
             "Extra Bones", "Extra_Bones", "Extra",
-            "Torso (Tweak)", "Arm.L (Tweak)", "Arm.R (Tweak)", "Leg.L (Tweak)", "Leg.R (Tweak)"
+            "Torso (Tweak)", "Arm.L (Tweak)", "Arm.R (Tweak)", "Leg.L (Tweak)", "Leg.R (Tweak)",
+            "Arm.L (FK)", "Arm.R (FK)", "Leg.L (FK)", "Leg.R (FK)",
+            "Fingers (Detail)"
         ]
         for coll_name in hidden_collections:
             coll = rigifyr.data.collections.get(coll_name)
             if coll:
                 coll.is_visible = False
+
+        palms_coll = rigifyr.data.collections.get("Palms")
+        if palms_coll:
+            palms_coll.is_visible = True
 
         # Create hidden "Face Bones" and "Extra Bones" collections
         face_bones_coll = rigifyr.data.collections.get("Face Bones") or rigifyr.data.collections.new("Face Bones")
@@ -603,7 +608,7 @@ def rig_character(
         extra_bones_coll.is_visible = False
 
         face_keywords = [
-            "joint_", "brow", "eye", "eyelid", "cheek", "nose", 
+            "joint_", "brow", "eye", "eyelid", "cheek", "nose",
             "mouth", "lip", "jaw", "teeth", "tongue", "skn", "face-root"
         ]
 
@@ -662,7 +667,7 @@ def rig_character(
 
     # Move widget objects (head-control-shape, root plate, Head Origin, Head Forward, Head Up, WGT-*) to hidden "wgt" collection
     widget_keywords = [
-        "head-control-shape", "root plate", "eye circle", "eye controller", 
+        "head-control-shape", "root plate", "eye circle", "eye controller",
         "WGT-", "Head Origin", "Head Forward", "Head Up", "Head Driver"
     ]
     for obj in list(bpy.data.objects):
@@ -717,7 +722,7 @@ lis = ["Body", "Face", "Hair"]
 for obj in lis:
     try:
         mod = bpy.context.scene.objects[obj].modifiers[2]
-        mod.show_viewport = False 
+        mod.show_viewport = False
     except:
         pass
 
@@ -771,4 +776,3 @@ def assign_root_bone_to_bone_collection(armature, bone, collection_name, collect
         for x in range(0, 28):
             bone.layers[x] = False
         bone.layers[collection_idx] = True
-
