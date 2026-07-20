@@ -581,13 +581,56 @@ def rig_character(
     except:
         pass
 
-    # Hide base/DEF/ORG/MCH and secondary bone collections
+    # Hide base/DEF/ORG/MCH, Tweak, Face, and Extra bone collections
     if use_bone_collections():
-        hidden_collections = ["DEF", "ORG", "MCH", "Deformation", "Original", "Mechanism", "Clothes", "Hair", "Palms", "Tweaks", "Props"]
+        hidden_collections = [
+            "DEF", "ORG", "MCH", "Deformation", "Original", "Mechanism", 
+            "Clothes", "Hair", "Palms", "Tweaks", "Props", 
+            "Face", "Face (Secondary)", "Face (Primary)", "Face (Tweaks)", "Face Bones", "Face_Bones",
+            "Extra Bones", "Extra_Bones", "Extra",
+            "Torso (Tweak)", "Arm.L (Tweak)", "Arm.R (Tweak)", "Leg.L (Tweak)", "Leg.R (Tweak)"
+        ]
         for coll_name in hidden_collections:
             coll = rigifyr.data.collections.get(coll_name)
             if coll:
                 coll.is_visible = False
+
+        # Create hidden "Face Bones" and "Extra Bones" collections
+        face_bones_coll = rigifyr.data.collections.get("Face Bones") or rigifyr.data.collections.new("Face Bones")
+        face_bones_coll.is_visible = False
+
+        extra_bones_coll = rigifyr.data.collections.get("Extra Bones") or rigifyr.data.collections.new("Extra Bones")
+        extra_bones_coll.is_visible = False
+
+        face_keywords = [
+            "joint_", "brow", "eye", "eyelid", "cheek", "nose", 
+            "mouth", "lip", "jaw", "teeth", "tongue", "skn", "face-root"
+        ]
+
+        main_ctrls = ["root", "torso", "hips", "chest", "neck", "head"]
+
+        for bone in rigifyr.data.bones:
+            b_name = bone.name
+            b_low = b_name.lower()
+
+            if b_name.startswith("CTRL-") or b_name in main_ctrls:
+                continue
+
+            is_face_bone = any(kw in b_low for kw in face_keywords)
+            target_coll = face_bones_coll if is_face_bone else extra_bones_coll
+
+            if is_face_bone or b_low.startswith("def-") or b_low.startswith("org-") or b_low.startswith("mch-") or len(bone.collections) == 0:
+                try:
+                    target_coll.assign(bone)
+                except Exception:
+                    pass
+                for c in list(bone.collections):
+                    if c != target_coll and c.name not in hidden_collections:
+                        try:
+                            c.unassign(bone)
+                        except Exception:
+                            pass
+                bone.hide = True
     else:
         for i in range(1, 32):
             if i not in [0, 1]:
@@ -596,19 +639,34 @@ def rig_character(
                 except:
                     pass
 
-    # Clean up appended shape collections
+    # Clean up appended shape collections and orphaned armatures like eyerig
     for coll_name in ["append_Root", "append_Eyes", "append_Pelvis", "append_Foot", "append_Hand", "append_Props", "append_Face Plate"]:
         coll = bpy.data.collections.get(coll_name)
         if coll:
+            for obj in list(coll.objects):
+                if obj.type == "ARMATURE" and obj.name != rigifyr.name:
+                    bpy.data.objects.remove(obj, do_unlink=True)
             try:
                 bpy.data.collections.remove(coll, do_unlink=True)
             except:
                 pass
 
-    # Move widget objects (head-control-shape, root plate, metarig, WGT-*) to hidden "wgt" collection
+    if bpy.data.objects.get("eyerig"):
+        bpy.data.objects.remove(bpy.data.objects["eyerig"], do_unlink=True)
+
+    # Move widget objects (head-control-shape, root plate, metarig, Head Origin, Head Forward, Head Up, WGT-*) to hidden "wgt" collection
+    widget_keywords = [
+        "head-control-shape", "root plate", "eye circle", "eye controller", 
+        "WGT-", "metarig", "Head Origin", "Head Forward", "Head Up", "Head Driver"
+    ]
     for obj in list(bpy.data.objects):
-        if any(keyword in obj.name for keyword in ["head-control-shape", "root plate", "eye circle", "eye controller", "WGT-", "metarig"]):
+        if any(keyword in obj.name for keyword in widget_keywords):
             move_into_collection(obj.name, "wgt")
+            try:
+                obj.hide_viewport = True
+                obj.hide_render = True
+            except:
+                pass
 
     wgt_coll = bpy.data.collections.get("wgt")
     if wgt_coll:
@@ -647,12 +705,6 @@ def rig_character(
     except:
         pass
     bpy.data.objects["rigify"].name = x[-2] + "Rig"
-
-try:
-    bpy.context.scene.objects["Head Forward"].hide_viewport = True
-    bpy.context.scene.objects["Head Up"].hide_viewport = True
-except:
-    pass
 
 lis = ["Body", "Face", "Hair"]
 

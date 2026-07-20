@@ -189,12 +189,30 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
     bl_idname = "genshin.fix_transformations"
     bl_label = "Genshin: Makes Character Upright and Fixes Scale"
 
+    def _find_target_armature(self, context):
+        view_layer_objs = getattr(context.view_layer, "objects", context.scene.objects)
+
+        armatures = [obj for obj in context.selected_objects if obj.type == "ARMATURE"]
+        if armatures:
+            return armatures[0]
+
+        for obj in view_layer_objs:
+            if obj.type == "ARMATURE" and obj.name.endswith("Rig") and not any(ign in obj.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig"]):
+                return obj
+
+        for obj in view_layer_objs:
+            if obj.type == "ARMATURE" and not any(ign in obj.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig"]):
+                return obj
+
+        for obj in bpy.data.objects:
+            if obj.type == "ARMATURE" and obj.name.endswith("Rig") and not any(ign in obj.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig"]):
+                if obj.name in view_layer_objs:
+                    return obj
+
+        return None
+
     def execute(self, context):
         armature = self._find_target_armature(context)
-        if not armature:
-            view_layer_objs = getattr(context.view_layer, "objects", context.scene.objects)
-            armatures = [obj for obj in view_layer_objs if obj.type == "ARMATURE" and not any(ign in obj.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig"])]
-            armature = armatures[0] if armatures else None
 
         if not armature:
             self.report(

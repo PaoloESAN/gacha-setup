@@ -267,6 +267,12 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
             meshes_joined=meshes_joined
         )
 
+        try:
+            from setup_wizard.character_rig_setup.hsr_face_rig import hsr_face_rig_main
+            hsr_face_rig_main()
+        except Exception as e:
+            print(f"HSR face rig skipped: {e}")
+
         def refresh_light_vectors_modifiers():
             char_name = armature.name.replace("Rig", "")
             for obj in bpy.data.objects:
