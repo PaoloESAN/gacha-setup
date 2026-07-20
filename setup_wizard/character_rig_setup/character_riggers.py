@@ -11,6 +11,7 @@ from setup_wizard.character_rig_setup.rig_script import rig_character
 from setup_wizard.character_rig_setup.npc_rig_script import rig_character as rig_npc
 from setup_wizard.character_rig_setup.hsr_rig_script import rig_character as hsr_rig_character
 from setup_wizard.character_rig_setup.zzz_rig_script import rig_character as zzz_rig_character
+from setup_wizard.character_rig_setup.zzz_face_rig import zzz_face_rig_main
 
 from abc import ABC, abstractmethod
 from bpy.types import Armature, Operator, Context
@@ -317,6 +318,11 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
             character_rigger_props.use_head_tracker,
             meshes_joined=meshes_joined
         )
+
+        try:
+            zzz_face_rig_main()
+        except Exception as e:
+            print(f"Face rig skipped: {e}")
 
         def refresh_light_vectors_modifiers():
             char_name = armature.name.replace("Rig", "")

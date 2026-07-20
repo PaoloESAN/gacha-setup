@@ -9,6 +9,7 @@ This is a modified version of the original **Setup Wizard** add-on, specifically
 ## Credits
 
 - **Original Creator**: [michael-gh1](https://github.com/michael-gh1/Addons-And-Tools-For-Blender-miHoYo-Shaders)
+- **ZZZ Face Rig**: jideeh (on Discord) — Facial rig for Zenless Zone Zero characters
 
 ## Installation
 1. In Blender, go to `Edit` > `Preferences` > `Add-ons`.
