@@ -651,13 +651,19 @@ def rig_character(
             except:
                 pass
 
-    if bpy.data.objects.get("eyerig"):
-        bpy.data.objects.remove(bpy.data.objects["eyerig"], do_unlink=True)
+    # Delete unnecessary utility armatures (metarig, eyerig) so they don't block Finish Setup
+    for extra_arm in ["metarig", "eyerig"]:
+        m_obj = bpy.data.objects.get(extra_arm)
+        if m_obj:
+            try:
+                bpy.data.objects.remove(m_obj, do_unlink=True)
+            except:
+                pass
 
-    # Move widget objects (head-control-shape, root plate, metarig, Head Origin, Head Forward, Head Up, WGT-*) to hidden "wgt" collection
+    # Move widget objects (head-control-shape, root plate, Head Origin, Head Forward, Head Up, WGT-*) to hidden "wgt" collection
     widget_keywords = [
         "head-control-shape", "root plate", "eye circle", "eye controller", 
-        "WGT-", "metarig", "Head Origin", "Head Forward", "Head Up", "Head Driver"
+        "WGT-", "Head Origin", "Head Forward", "Head Up", "Head Driver"
     ]
     for obj in list(bpy.data.objects):
         if any(keyword in obj.name for keyword in widget_keywords):
