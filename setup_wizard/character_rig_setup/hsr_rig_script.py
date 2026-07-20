@@ -1,399 +1,716 @@
-### IMPORTANT: Reuses the Genshin Impact rigging script (rig_script.py) in its entirety.
-### It maps Honkai Star Rail bone names to Genshin Impact's 'Bip001' style and delegates to rig_script.
-### Includes a critical hotfix for Blender 5.x / Animation 2.0 compatibility with Expy-Kit.
-### Resolves HSR Eye Bone alignment by keeping deform bones inside the sockets and linking them via constraints.
-
-import os
-import re
+### IMPORTANT: YOU NEED THE ADDON EXPYKIT AND YOU ALSO NEED TO IMPORT WITH 'Automatic Bone Orientation' TURNED ON UNDER 'Armature' WHEN YOU IMPORT THE FBX.
 
 import bpy
 
-from setup_wizard.character_rig_setup import rig_script
-
-
 def rig_character(
-    file_path,
-    disallow_arm_ik_stretch,
+    file_path, 
+    disallow_arm_ik_stretch, 
     disallow_leg_ik_stretch,
     use_arm_ik_poles,
     use_leg_ik_poles,
     add_child_of_constraints,
     use_head_tracker,
-    meshes_joined=False,
-):
+    meshes_joined=False):
 
     context = bpy.context
     obj = context.object
-
-    # Find the active armature object
-    if obj is None or obj.type != "ARMATURE":
-        armatures = [o for o in bpy.context.selected_objects if o.type == "ARMATURE"]
-        if not armatures:
-            armatures = [
-                o
-                for o in bpy.data.objects
-                if o.type == "ARMATURE" and "Rig" not in o.name and o.name != "metarig"
-            ]
-        if not armatures:
-            armatures = [o for o in bpy.data.objects if o.type == "ARMATURE"]
-        if armatures:
-            obj = armatures[0]
-            bpy.context.view_layer.objects.active = obj
-            obj.select_set(True)
-        else:
-            raise RuntimeError(
-                "No armature found. Please select the character's armature and try again."
-            )
-
-    if obj.name.endswith(".001"):
+    if obj.name[-4:] == ".001":
         obj.name = obj.name[:-4]
+    print("New Run\n\n")
+    ## Rename all bones in selected armature to ORG
 
-    # --- SHAPE KEY RENAMING HOTFIX ---
-    print("HSR Rig: Renaming face shape keys to standard Genshin format...")
-    for obj_item in bpy.data.objects:
-        if (
-            obj_item.type == "MESH"
-            and "face" in obj_item.name.lower()
-            and obj_item.data.shape_keys
-        ):
-            print(f"  Processing mesh: {obj_item.name}")
-            for key in obj_item.data.shape_keys.key_blocks:
-                old_name = key.name
-                new_name = old_name
-
-                # Replace Mouth_01_ / Mouth_00_ with Mouth_
-                new_name = re.sub(r"Mouth_\d+_", "Mouth_", new_name)
-                new_name = re.sub(r"Brow_\d+_", "Brow_", new_name)
-                new_name = re.sub(r"Eye_\d+_", "Eye_", new_name)
-
-                # Special mapping: Mouth_A -> Mouth_A01
-                if new_name == "Mouth_A":
-                    new_name = "Mouth_A01"
-
-                if new_name != old_name:
-                    print(f"    - Renaming shape key: '{old_name}' -> '{new_name}'")
-                    key.name = new_name
-
-    # --- BLENDER 5.x COMPATIBILITY HOTFIX FOR EXPY-KIT ---
-    print(
-        "HSR Rig: Cleaning incompatible Blender 5.x Action objects to prevent Expy-Kit crashes..."
-    )
-    for act in list(bpy.data.actions):
-        try:
-            if not hasattr(act, "fcurves"):
-                print(f"Removing incompatible action: {act.name}")
-                bpy.data.actions.remove(act)
-        except Exception as e:
-            print(f"Warning cleaning action {act}: {e}")
-
-    print("HSR Rig: Starting Bone Translation to Genshin (Bip001) naming...")
-
-    # Mapeo de HSR a Genshin (Bip001)
-    # NOTE: Deform eye bones must be named with spaces (+EyeBone L A02) to match Genshin's original layout.
-    # This prevents collisions with template bones (+EyeBoneA02.L) and keeps eyeballs in the head.
-    hsr_to_genshin = {
-        "Root_M": "Bip001 Pelvis",
-        "Hip_L": "Bip001 L Thigh",
-        "Knee_L": "Bip001 L Calf",
-        "Ankle_L": "Bip001 L Foot",
-        "Toes_L": "Bip001 L Toe0",
-        "Hip_R": "Bip001 R Thigh",
-        "Knee_R": "Bip001 R Calf",
-        "Ankle_R": "Bip001 R Foot",
-        "Toes_R": "Bip001 R Toe0",
-        "Spine1_M": "Bip001 Spine",
-        "Spine2_M": "Bip001 Spine1",
-        "Chest_M": "Bip001 Spine2",
-        "Scapula_L": "Bip001 L Clavicle",
-        "Shoulder_L": "Bip001 L UpperArm",
-        "Elbow_L": "Bip001 L Forearm",
-        "Wrist_L": "Bip001 L Hand",
-        "Scapula_R": "Bip001 R Clavicle",
-        "Shoulder_R": "Bip001 R UpperArm",
-        "Elbow_R": "Bip001 R Forearm",
-        "Wrist_R": "Bip001 R Hand",
-        "Neck_M": "Bip001 Neck",
-        "Head_M": "Bip001 Head",
-        "breast_L": "breast.L",
-        "breast_R": "breast.R",
-        "eye_L": "+EyeBone L A02",
-        "eye_R": "+EyeBone R A02",
-        "joint_eye_L": "+EyeBone L A02",
-        "joint_eye_R": "+EyeBone R A02",
+    original_name = obj.name
+    abadidea = {
+        'Hip_L': 'DEF-thigh.L',
+        'Knee_L': 'DEF-shin.L',
+        'Ankle_L': 'DEF-foot.L',
+        'Toes_L': 'DEF-toe.L',
+        'Hip_R': 'DEF-thigh.R',
+        'Knee_R': 'DEF-shin.R',
+        'Ankle_R': 'DEF-foot.R',
+        'Toes_R': 'DEF-toe.R',
+        'Scapula_L': 'DEF-shoulder.L',
+        'Shoulder_L': 'DEF-upper_arm.L',
+        'Elbow_L': 'DEF-forearm.L',
+        'Wrist_L': 'DEF-hand.L',
+        'ThumbFinger1_L': 'DEF-thumb.01.L',
+        'ThumbFinger2_L': 'DEF-thumb.02.L',
+        'ThumbFinger3_L': 'DEF-thumb.03.L',
+        'IndexFinger1_L': 'DEF-f_index.01.L',
+        'IndexFinger2_L': 'DEF-f_index.02.L',
+        'IndexFinger3_L': 'DEF-f_index.03.L',
+        'MiddleFinger1_L': 'DEF-f_middle.01.L',
+        'MiddleFinger2_L': 'DEF-f_middle.02.L',
+        'MiddleFinger3_L': 'DEF-f_middle.03.L',
+        'RingFinger1_L': 'DEF-f_ring.01.L',
+        'RingFinger2_L': 'DEF-f_ring.02.L',
+        'RingFinger3_L': 'DEF-f_ring.03.L',
+        'PinkyFinger1_L': 'DEF-f_pinky.01.L',
+        'PinkyFinger2_L': 'DEF-f_pinky.02.L',
+        'PinkyFinger3_L': 'DEF-f_pinky.03.L',
+        'Neck_M': 'DEF-spine.004', #YO
+        'Head_M': 'DEF-spine.006', #RUHROH
+        'Scapula_R': 'DEF-shoulder.R',
+        'Shoulder_R': 'DEF-upper_arm.R',
+        'Elbow_R': 'DEF-forearm.R',
+        'Wrist_R': 'DEF-hand.R',
+        'ThumbFinger1_R': 'DEF-thumb.01.R',
+        'ThumbFinger2_R': 'DEF-thumb.02.R',
+        'ThumbFinger3_R': 'DEF-thumb.03.R',
+        'IndexFinger1_R': 'DEF-f_index.01.R',
+        'IndexFinger2_R': 'DEF-f_index.02.R',
+        'IndexFinger3_R': 'DEF-f_index.03.R',
+        'MiddleFinger1_R': 'DEF-f_middle.01.R',
+        'MiddleFinger2_R': 'DEF-f_middle.02.R',
+        'MiddleFinger3_R': 'DEF-f_middle.03.R',
+        'RingFinger1_R': 'DEF-f_ring.01.R',
+        'RingFinger2_R': 'DEF-f_ring.02.R',
+        'RingFinger3_R': 'DEF-f_ring.03.R',
+        'PinkyFinger1_R': 'DEF-f_pinky.01.R',
+        'PinkyFinger2_R': 'DEF-f_pinky.02.R',
+        'PinkyFinger3_R': 'DEF-f_pinky.03.R',
+        'eye_R': 'DEF-eye.R',
+        'eye_L': 'DEF-eye.L',   
+        'breast_L': 'DEF-breast.L',
+        'breast_R': 'DEF-breast.R', 
+        
+        'HipPart1_R': 'DEF-thigh.R.001',
+        'HipPart1_L': 'DEF-thigh.L.001',
+        'ElbowPart1_L': 'DEF-forearm.L.001',
+        'ElbowPart1_R': 'DEF-forearm.R.001',
+        'ShoulderPart1_R': 'DEF-upperarm.R.001',
+        'ShoulderPart1_L': 'DEF-upperarm.L.001',
+        'head_m': 'DEF-spine.006',
     }
 
-    # Dedos de la mano
-    for side in ["L", "R"]:
-        hsr_to_genshin[f"ThumbFinger1_{side}"] = f"Bip001 {side} Finger0"
-        hsr_to_genshin[f"ThumbFinger2_{side}"] = f"Bip001 {side} Finger01"
-        hsr_to_genshin[f"ThumbFinger3_{side}"] = f"Bip001 {side} Finger02"
-        hsr_to_genshin[f"IndexFinger1_{side}"] = f"Bip001 {side} Finger1"
-        hsr_to_genshin[f"IndexFinger2_{side}"] = f"Bip001 {side} Finger11"
-        hsr_to_genshin[f"IndexFinger3_{side}"] = f"Bip001 {side} Finger12"
-        hsr_to_genshin[f"MiddleFinger1_{side}"] = f"Bip001 {side} Finger2"
-        hsr_to_genshin[f"MiddleFinger2_{side}"] = f"Bip001 {side} Finger21"
-        hsr_to_genshin[f"MiddleFinger3_{side}"] = f"Bip001 {side} Finger22"
-        hsr_to_genshin[f"RingFinger1_{side}"] = f"Bip001 {side} Finger3"
-        hsr_to_genshin[f"RingFinger2_{side}"] = f"Bip001 {side} Finger31"
-        hsr_to_genshin[f"RingFinger3_{side}"] = f"Bip001 {side} Finger32"
-        hsr_to_genshin[f"PinkyFinger1_{side}"] = f"Bip001 {side} Finger4"
-        hsr_to_genshin[f"PinkyFinger2_{side}"] = f"Bip001 {side} Finger41"
-        hsr_to_genshin[f"PinkyFinger3_{side}"] = f"Bip001 {side} Finger42"
+    # Dynamically map spine bones (do NOT map ground root Root_M to DEF-spine)
+    pose_bone_names = [b.name for b in obj.pose.bones]
+    if 'Pelvis_M' in pose_bone_names:
+        abadidea['Pelvis_M'] = 'DEF-spine'
+        abadidea['Spine1_M'] = 'DEF-spine.001'
+        abadidea['Spine2_M'] = 'DEF-spine.002'
+        abadidea['Chest_M'] = 'DEF-spine.003'
+    elif 'Spine1_M' in pose_bone_names:
+        abadidea['Spine1_M'] = 'DEF-spine'
+        abadidea['Spine2_M'] = 'DEF-spine.001'
+        abadidea['Chest_M'] = 'DEF-spine.002'
+        if 'Chest_M' in pose_bone_names:
+            abadidea['Chest_M'] = 'DEF-spine.003'
+        abadidea['Spine1_scale'] = 'DEF-spine'
+        abadidea['Spine2_scale'] = 'DEF-spine.001'
+        abadidea['Chest_scale'] = 'DEF-spine.003'
 
-    # Entrar a modo EDIT para renombrar y crear los huesos de ojos faltantes
-    bpy.ops.object.mode_set(mode="EDIT")
-    edit_bones = obj.data.edit_bones
 
-    # 1. Renombrar huesos existentes en base al mapeo
-    for bone in edit_bones:
-        if bone.name in hsr_to_genshin:
-            bone.name = hsr_to_genshin[bone.name]
+    bpy.ops.object.mode_set(mode='EDIT')
+    armature = bpy.context.selected_objects[0].data
 
-    # 2. Crear +EyeBone L A01 y R A01 de soporte.
-    # CRITICAL: Both deform bones must share the EXACT head position (the eyeball center).
-    # Setting +EyeBone L/R A01's head to the eyeball center and pointing it forward (-Y in Blender)
-    # aligns the pivot perfectly, reducing the orbit/rotation offset to zero.
-    for side in ["L", "R"]:
-        bone_a02_name = f"+EyeBone {side} A02"
-        bone_a01_name = f"+EyeBone {side} A01"
-        if bone_a02_name in edit_bones and bone_a01_name not in edit_bones:
-            bone_a02 = edit_bones[bone_a02_name]
-            bone_a01 = edit_bones.new(bone_a01_name)
+    bpy.ops.armature.select_all(action='DESELECT')
+    def select_bone(bone):
+        bone.select = True
+        bone.select_head = True
+        bone.select_tail = True
+        
+    bones_list = obj.pose.bones
+    for bone in bones_list:
+        if bone.name in abadidea:
+            bone.name = abadidea[bone.name]
 
-            # Cabeza (pivote) en el centro exacto del ojo
-            bone_a01.head = bone_a02.head.copy()
-            # Cola desplazada 3cm hacia adelante (eje Y negativo en Blender)
-            bone_a01.tail = bone_a02.head.copy()
-            bone_a01.tail.y -= 0.03  # 3 cm hacia adelante
+    # For making it possible to symmetrically pose bones properly.
+    for bone in bones_list:
+        if ".L" in bone.name and bone.name not in ['DEF-spine.002','DEF-spine.001','DEF-spine.003','DEF-thigh.R.001','DEF-thigh.L.001','DEF-forearm.L.001','DEF-forearm.R.001','DEF-upperarm.R.001','DEF-upperarm.L.001','DEF-spine.006']: 
+            whee = bone.name[:-2] + ".R"
+            if whee in armature.edit_bones and bone.name in armature.edit_bones:
+                armature.edit_bones[whee].roll = -armature.edit_bones[bone.name].roll # R to L because rolls suck less
+        
+    ## Fixes the weirdass head bone alignment.   
+    def realign(bone):
+        bone.head.x = 0
+        bone.tail.x = 0
+        bone.tail.y = bone.head.y
+        if bone.tail.z < bone.head.z:
+            bone.tail.z = bone.head.z + .1
+        else:
+            bone.tail.z += .1
+            
+        bone.roll = 0
+    if 'DEF-spine.006' in armature.edit_bones:
+        realign(armature.edit_bones['DEF-spine.006'])
 
-            # Estructura jerárquica
-            if "Bip001 Head" in edit_bones:
-                bone_a01.parent = edit_bones["Bip001 Head"]
-            bone_a02.parent = bone_a01
+    ## Attaches the feet to the toes and the upperarms to lowerarms
+    def attachfeets(foot, toe):
+        if foot in armature.edit_bones and toe in armature.edit_bones:
+            armature.edit_bones[foot].tail.x = armature.edit_bones[toe].head.x
+            armature.edit_bones[foot].tail.y = armature.edit_bones[toe].head.y
+            armature.edit_bones[foot].tail.z = armature.edit_bones[toe].head.z
+            armature.edit_bones[foot].roll = 0
 
-    # Regresar a modo OBJECT
-    bpy.ops.object.mode_set(mode="OBJECT")
+    attachfeets('DEF-foot.L', 'DEF-toe.L')
+    attachfeets('DEF-foot.R', 'DEF-toe.R')
+    attachfeets('DEF-upper_arm.L', 'DEF-forearm.L')
+    attachfeets('DEF-upper_arm.R', 'DEF-forearm.R')
+    attachfeets('DEF-thigh.L', 'DEF-shin.L')
+    attachfeets('DEF-thigh.R', 'DEF-shin.R')
+    attachfeets('DEF-forearm.L', 'DEF-hand.L')
+    attachfeets('DEF-forearm.R', 'DEF-hand.R')
 
-    print(
-        "HSR Rig: Bone translation complete. Delegating to Genshin Impact's master rig_script..."
-    )
+    attachfeets('DEF-shoulder.R', 'DEF-upper_arm.R')
+    attachfeets('DEF-shoulder.L', 'DEF-upper_arm.L')
 
-    # Invocar al rig_character de Genshin directamente pasándole los parámetros esperados
-    # Nota: El segundo parámetro es la versión del panel de luces, por defecto 4.
-    rig_script.rig_character(
-        file_path=file_path,
-        lighting_panel_version=4,
-        disallow_arm_ik_stretch=disallow_arm_ik_stretch,
-        disallow_leg_ik_stretch=disallow_leg_ik_stretch,
-        use_arm_ik_poles=use_arm_ik_poles,
-        use_leg_ik_poles=use_leg_ik_poles,
-        add_child_of_constraints=add_child_of_constraints,
-        use_head_tracker=use_head_tracker,
-        meshes_joined=meshes_joined,
-    )
+    attachfeets('DEF-spine', 'DEF-spine.001')
+    attachfeets('DEF-spine.001', 'DEF-spine.002')
+    attachfeets('DEF-spine.002', 'DEF-spine.003')
+    attachfeets('DEF-spine.003', 'DEF-spine.004')
+    attachfeets('DEF-spine.004', 'DEF-spine.006')
 
-    print(
-        "HSR Rig: Genshin master rig execution complete. Applying HSR-specific control fixes..."
-    )
+    ## Points toe bones in correct direction
+    for x in ['.L', '.R']:
+        toe = 'DEF-toe'
+        armature.edit_bones[toe + x].tail.z = armature.edit_bones[toe + x].head.z
+        armature.edit_bones[toe + x].tail.y -= 0.05
+        armature.edit_bones[toe + x].roll = 0
+        
+            
+    bpy.ops.armature.select_all(action='DESELECT')
+    try:
+        select_bone(armature.edit_bones["breast.R"])
+        bpy.ops.armature.symmetrize()
+        bpy.ops.armature.select_all(action='DESELECT')
 
-    # --- HSR finger control fixes (without altering master control roll/orientation) ---
-    rig_obj = bpy.context.active_object
-    if rig_obj and rig_obj.type == "ARMATURE":
-        try:
-            bpy.context.view_layer.objects.active = rig_obj
-            bpy.ops.object.mode_set(mode="POSE")
+    except Exception:
+        pass
 
-            # HSR fix: force finger curl to use Y scale axis (same logic for all fingers, including thumb)
-            finger_tokens = ["thumb", "f_index", "f_middle", "f_ring", "f_pinky"]
+    # Delete joint_skin_GRP if it exists (may not exist on models without face, like Sam)
+    joint_skin_grp_bone = armature.edit_bones.get("joint_skin_GRP")
+    if joint_skin_grp_bone is not None:
+        armature.edit_bones.remove(joint_skin_grp_bone)
 
-            def _remap_scale_datapath_to_y(path):
-                if not path:
-                    return path, False
+    # Replace joint_face parent with DEF-spine.006 if joint_face exists
+    joint_face_bone = armature.edit_bones.get("joint_face")
+    if joint_face_bone is not None:
+      armature.edit_bones["joint_face"].parent = armature.edit_bones["DEF-spine.006"]
 
-                original = path
-                replacements = {
-                    ".scale.x": ".scale.y",
-                    ".scale.z": ".scale.y",
-                    ".scale[0]": ".scale[1]",
-                    ".scale[2]": ".scale[1]",
-                }
-                for src, dst in replacements.items():
-                    if path.endswith(src):
-                        path = path[: -len(src)] + dst
-                        break
+    #armature.edit_bones["joint_skin_GRP"].head.z = armature.edit_bones["joint_skin_GRP"].tail.z
+    #armature.edit_bones["joint_skin_GRP"].tail.z += 0.1
+    armature.edit_bones["Main"].tail.z = 0.1
+    armature.edit_bones["Main"].tail.y = 0
+    # DELETE MAIN BONE?? 
+    #armature.edit_bones.remove(armature.edit_bones["Main"])
 
-                return path, (path != original)
+    try:  # If tall woman, fix their pinky finger
+        if armature.edit_bones["DEF-breast.R"] and armature.edit_bones["DEF-spine.003"].tail.z > 1.3 and armature.edit_bones["DEF-spine.003"].tail.z < 1.4:
+            bpy.context.object.data.use_mirror_x = True
+            armature.edit_bones["DEF-f_pinky.01.L"].tail.x += 0.00164
+            armature.edit_bones["DEF-f_pinky.02.L"].tail.x += 0.00164
+            armature.edit_bones["DEF-f_pinky.02.L"].head.x += 0.00164
+            armature.edit_bones["DEF-f_pinky.03.L"].head.x += 0.00164
+            bpy.context.object.data.use_mirror_x = False
 
-            if rig_obj.animation_data:
-                changed_targets = 0
-                changed_transforms = 0
+    except:
+        pass
 
-                for drv in rig_obj.animation_data.drivers:
-                    drv_path = drv.data_path or ""
-                    is_finger_driver = any(tok in drv_path for tok in finger_tokens)
+    bpy.ops.object.mode_set(mode='POSE')
+    bpy.ops.object.expykit_extract_metarig(rig_preset='Rigify_Metarig.py', assign_metarig=True)
 
-                    for var in drv.driver.variables:
-                        for target in var.targets:
-                            bone_target = target.bone_target or ""
-                            data_path = target.data_path or ""
-                            is_finger_target = (
-                                any(tok in bone_target for tok in finger_tokens)
-                                or any(tok in data_path for tok in finger_tokens)
-                                or is_finger_driver
-                            )
+    ## Part 2
 
-                            if not is_finger_target:
-                                continue
+    # Deselect all objects
+    bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.ops.object.select_all(action='DESELECT')
 
-                            # Handle SINGLE_PROP-style target data paths (scale.x / scale[0], etc.)
-                            new_path, changed = _remap_scale_datapath_to_y(data_path)
-                            if changed:
-                                target.data_path = new_path
-                                changed_targets += 1
+    armature = obj.data
 
-                            # Handle TRANSFORMS-style variables (SCALE_X/SCALE_Z -> SCALE_Y)
-                            if var.type == "TRANSFORMS" and target.transform_type in [
-                                "SCALE_X",
-                                "SCALE_Z",
-                            ]:
-                                target.transform_type = "SCALE_Y"
-                                changed_transforms += 1
+    for o in bpy.data.objects:
+        # Check for given object names
+        if o.name in ("metarig", armature.name):
+            o.select_set(True)
 
-                print(
-                    "HSR Rig: Finger driver axis remap applied "
-                    f"(targets={changed_targets}, transforms={changed_transforms}, ->Y)."
-                )
+    metarm = bpy.data.objects["metarig"].data
 
-                # HSR fix: normalize finger curl direction between sides.
-                # Keep L as reference; invert R so both hands respond in the same direction.
-                side_inversions = 0
-                for drv in rig_obj.animation_data.drivers:
-                    dpath = drv.data_path or ""
-                    if (
-                        "rotation_euler" in dpath
-                        and "_drv." in dpath
-                        and "MCH-" in dpath
-                        and any(tok in dpath for tok in finger_tokens)
-                        and '.R"]' in dpath
-                    ):
-                        expr = (drv.driver.expression or "").strip()
-                        normalized_expr = expr.replace(" ", "")
-                        if expr and not normalized_expr.endswith("*-1"):
-                            drv.driver.expression = f"({expr}) * -1"
-                            side_inversions += 1
+    bpy.ops.object.mode_set(mode='EDIT')
+    for bone in metarm.edit_bones:
+        if "f_" in bone.name or "thumb" in bone.name:
+            bone.roll =  armature.edit_bones["DEF-"+bone.name].roll
 
-                print(
-                    f"HSR Rig: Finger side-direction normalization applied on {side_inversions} right-side driver(s)."
-                )
+    ## Fixes the tiddy bones.  Expykit, why did you neglect them
+    bpy.ops.object.mode_set(mode='EDIT')
+    armature = bpy.data.objects[obj.name].data
 
-            # Keep only Y scale enabled on finger masters (same logic for thumb and all fingers)
-            for pb in rig_obj.pose.bones:
-                if ".01_master" in pb.name and any(
-                    tok in pb.name for tok in finger_tokens
-                ):
-                    pb.lock_scale[0] = True
-                    pb.lock_scale[1] = False
-                    pb.lock_scale[2] = True
+    ## Left side first, right side's xyz is same as left, but x is negative
+    def getboob(bone, tip):
+        if tip == "head":
+            return armature.edit_bones[bone].head.x, armature.edit_bones[bone].head.y, armature.edit_bones[bone].head.z
+        else:
+            return armature.edit_bones[bone].tail.x, armature.edit_bones[bone].tail.y, armature.edit_bones[bone].tail.z
+            
+        
+    try:
+        xh, yh, zh = getboob("DEF-breast.L", "head")
+        xt, yt, zt = getboob("DEF-breast.L", "tail")
 
-            # HSR fix: fingertip curl drivers rotate on wrong euler channel (sideways bend)
-            # Use same logic for all fingers, including thumb (X -> Z).
-            if rig_obj.animation_data:
-                drv_channel_changes = 0
-                for fcu in rig_obj.animation_data.drivers:
-                    dpath = fcu.data_path or ""
-                    if (
-                        "rotation_euler" in dpath
-                        and "_drv." in dpath
-                        and any(tok in dpath for tok in finger_tokens)
-                        and "MCH-" in dpath
-                        and fcu.array_index == 0
-                    ):
-                        # Move from X rot channel to Z rot channel for proper curl plane in HSR
-                        fcu.array_index = 2
-                        drv_channel_changes += 1
+        ## Change the meta arm's boob positions
 
-                print(
-                    f"HSR Rig: Finger driver rotation channel remap applied (X->Z) on {drv_channel_changes} driver(s)."
-                )
-        except Exception as e:
-            print(f"HSR Rig: Finger control rotation fix skipped due to error: {e}")
+        def fixboob(bone, xh, yh, zh, xt, yt, zt):
+            bone.head.x = xh
+            bone.head.y = yh
+            bone.head.z = zh
+            bone.tail.x = xt
+            bone.tail.y = yt
+            bone.tail.z = zt
+
+        boobL = metarm.edit_bones["breast.L"]
+        fixboob(boobL, xh, yh, zh, xt, yt, zt)
+        boobR = metarm.edit_bones["breast.R"]
+        fixboob(boobR, -xh, yh, zh, -xt, yt, zt)
+
+        boobL.roll = armature.edit_bones["DEF-breast.L"].roll
+        boobR.roll = -boobL.roll
+    except Exception:
+        # If breast bones dont exist in the orig rig, then delete from the meta rig
+        metarm.edit_bones.remove(metarm.edit_bones["breast.L"])
+        metarm.edit_bones.remove(metarm.edit_bones["breast.R"])
+        
+
+
+    ##########  DETACH PHYSICS BONES,  
+
+    metanames = ['eye.L', 'eye.R', 'spine', 'thigh.L', 'shin.L', 'foot.L', 'toe.L', 'thigh.R', 'shin.R', 'foot.R', 'toe.R', 'spine.001', 'spine.002', 'spine.003', 'breast.L', 'breast.R', 'shoulder.L', 'upper_arm.L', 'forearm.L', 'hand.L', 'thumb.01.L', 'thumb.02.L', 'thumb.03.L', 'f_index.01.L', 'f_index.02.L', 'f_index.03.L', 'f_middle.01.L', 'f_middle.02.L', 'f_middle.03.L', 'f_ring.01.L', 'f_ring.02.L', 'f_ring.03.L', 'f_pinky.01.L', 'f_pinky.02.L', 'f_pinky.03.L', 'spine.004', 'spine.006', 'shoulder.R', 'upper_arm.R', 'forearm.R', 'hand.R', 'thumb.01.R', 'thumb.02.R', 'thumb.03.R', 'f_index.01.R', 'f_index.02.R', 'f_index.03.R', 'f_middle.01.R', 'f_middle.02.R', 'f_middle.03.R', 'f_ring.01.R', 'f_ring.02.R', 'f_ring.03.R', 'f_pinky.01.R', 'f_pinky.02.R', 'f_pinky.03.R']
+
+    pre_res = ["DEF-" + bonename for bonename in metanames]
+    armature = obj.data ## Original char rig
+
+
+    ## Make a dictionary.  Key is a main body bone that exists in the Rigify (arm, leg, spine, etc), and the value is a list of all the children bones that aren't other main body bones (usually hair, clothes, deform, etc.)
+    savethechildren = {
+        
+    }
+    bpy.ops.object.mode_set(mode='EDIT')
+    for bone in armature.edit_bones:
+        if bone.name in pre_res:
+            childlist = []
+            for childbone in armature.edit_bones[bone.name].children:
+                if childbone.name not in pre_res: # Adds only non-main body bones, avoids like forearm or knee etc
+                    childlist.append(childbone.name)
+            if childlist: # If list isn't empty, add it to dict
+                wtf = bone.name
+                savethechildren[wtf] = childlist
+
+        
+    ## Selects and separates the physics bones
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.armature.select_all(action='DESELECT')
+    bones = armature.edit_bones[:]
+    for bone in bones:
+        if bone.name not in pre_res:
+            #this is a physics bone, so select it.
+            bone.select = True
+            bone.select_tail = True
+            bone.select_head = True
+
+    bpy.ops.armature.separate()
+    # Generates rigify rig and renames it to 'rigify'
+    bpy.ops.pose.rigify_generate()
+    bpy.data.objects[obj.name].name = "rigify"
+    bpy.context.view_layer.objects.active = bpy.data.objects[armature.name + ".001"]
+
+
+    for o in bpy.data.objects:
+        # Check for given object names
+        if o.name in ("rigify", armature.name):
+            o.select_set(True)
+            
+    # THEN REATTACH PHYSICS
+
+    bpy.ops.object.mode_set(mode='OBJECT')
+    ### BLENDER ARE U GOOD LMAO WTF IS THIS (this joins two objects together)
+    newrig = armature.name + ".001" ## New temporary armature with the physics bones. Hopefully you didnt touch any names lmao
+
+    ## Why's the list for selected objects ordered alphabetically instead of by selection order
+    objList = bpy.context.selected_objects
+    unselected = [obj for obj in objList if obj != context.active_object]
+    rigifyr = unselected[0]  ## Rigified Rig
+
+    obs = [bpy.data.objects[rigifyr.name], bpy.data.objects[newrig]]
+    c={}
+    c["object"] = c["active_object"] = bpy.data.objects[rigifyr.name]
+    c["selected_objects"] = c["selected_editable_objects"] = obs
+    bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.ops.object.select_all(action='DESELECT')
+
+    with bpy.context.temp_override(active_object=bpy.data.objects.get("rigify"), selected_editable_objects=obs):
+        bpy.ops.object.join()
+
+
+    bpy.context.view_layer.objects.active = bpy.data.objects["rigify"]
+    bpy.ops.object.mode_set(mode='EDIT')
+
+    ## Reattach the physics bones to their parents
+    #Go back into rigify, find the main body bones, and reattach every bone in the corresponding dict list
+    for mainbone in savethechildren:    
+        for childbone in savethechildren[mainbone]:
+            rigifyr.data.edit_bones[childbone].parent = rigifyr.data.edit_bones[mainbone]
+
+    for x in [".L", ".R"]:
+        rigifyr.data.edit_bones["DEF-forearm" + x + ".002"].parent = rigifyr.data.edit_bones["DEF-forearm"+x]
+    print("donelol\n")
+    bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.data.objects["rigify"].show_in_front = True
+    rigifyr.data.display_type = 'STICK'
+
+    # Append custom bone shape collections from RootShape.blend
+    try:
+        if file_path:
+            path_to_file = file_path if "/Collection" in file_path else file_path + "/Collection"
+            for coll_name in ['append_Root', 'append_Eyes', 'append_Pelvis', 'append_Foot', 'append_Hand', 'append_Props', 'append_Face Plate']:
+                try:
+                    bpy.ops.wm.append(filename=coll_name, directory=path_to_file)
+                except Exception as e:
+                    print(f"Skipped appending collection {coll_name}: {e}")
+    except Exception as e:
+        print(f"Error appending custom bone shapes: {e}")
+
+    # Assign custom shapes to main control bones and disable bone length scaling ONLY for specific custom shapes
+    this_obj = rigifyr
+
+    def safe_set_custom_shape(bone_name, shape_name=None, scale=None, translation=None, rotation_euler=None, disable_bone_size=True):
+        pbone = this_obj.pose.bones.get(bone_name)
+        if not pbone:
+            return
+        if shape_name and bpy.data.objects.get(shape_name):
+            pbone.custom_shape = bpy.data.objects[shape_name]
+        if disable_bone_size and hasattr(pbone, "use_custom_shape_bone_size"):
+            pbone.use_custom_shape_bone_size = False
+        if scale and hasattr(pbone, "custom_shape_scale_xyz"):
+            pbone.custom_shape_scale_xyz = scale
+        if translation and hasattr(pbone, "custom_shape_translation"):
+            pbone.custom_shape_translation = translation
+        if rotation_euler and hasattr(pbone, "custom_shape_rotation_euler"):
+            pbone.custom_shape_rotation_euler[0] = rotation_euler[0]
+
+    safe_set_custom_shape("root", "root plate.002")
+    safe_set_custom_shape("head", "neck", scale=(1.65, 1.65, 1.65), translation=(0.0, 0.255, 0.0), rotation_euler=(1.5708, 0, 0))
+    safe_set_custom_shape("neck", "neck", scale=(1, 1, 1), translation=(0.0, 0.035, 0.007), rotation_euler=(1.5708, 0, 0))
+    safe_set_custom_shape("foot_ik.L", "foot1")
+    safe_set_custom_shape("foot_ik.R", "foot1")
+
+    if bpy.data.objects.get("primo-joint"):
+        safe_set_custom_shape("thigh_ik_target.L", "primo-joint", scale=(0.75, 0.75, 0.75), disable_bone_size=False)
+        safe_set_custom_shape("thigh_ik_target.R", "primo-joint", scale=(0.75, 0.75, 0.75), disable_bone_size=False)
+        safe_set_custom_shape("upper_arm_ik_target.L", "primo-joint", disable_bone_size=False)
+        safe_set_custom_shape("upper_arm_ik_target.R", "primo-joint", disable_bone_size=False)
+
+    safe_set_custom_shape("torso", "pelvis2")
+    safe_set_custom_shape("hips", "hips", scale=(1, 1, 1), translation=(0.0, -0.04, 0.044), rotation_euler=(1.309, 0, 0))
+    safe_set_custom_shape("chest", "chest", scale=(0.6, 0.6, 0.6), translation=(0.0, 0.18, 0.0), rotation_euler=(1.5708, 0, 0))
+
+    safe_set_custom_shape("shoulder.L", None, scale=(1.6, 1.6, 1.6), disable_bone_size=False)
+    safe_set_custom_shape("shoulder.R", None, scale=(1.6, 1.6, 1.6), disable_bone_size=False)
+
+    safe_set_custom_shape("foot_heel_ik.L", None, translation=(0.0, 0.06, 0.0), disable_bone_size=False)
+    safe_set_custom_shape("foot_heel_ik.R", None, translation=(0.0, 0.06, 0.0), disable_bone_size=False)
+
+    safe_set_custom_shape("foot_spin_ik.L", None, translation=(0.0, -0.05, 0.02), disable_bone_size=False)
+    safe_set_custom_shape("foot_spin_ik.R", None, translation=(0.0, -0.05, 0.02), disable_bone_size=False)
+
+    safe_set_custom_shape("toe_ik.L", None, scale=(0.781, 0.781, 0.350), translation=(0.0, 0.06, 0.00), disable_bone_size=False)
+    safe_set_custom_shape("toe_ik.R", None, scale=(0.781, 0.781, 0.350), translation=(0.0, 0.06, 0.00), disable_bone_size=False)
+
+    safe_set_custom_shape("hand_ik.L", "wrist")
+    safe_set_custom_shape("hand_ik.R", "wrist")
+
+    safe_set_custom_shape("palm.L", None, scale=(1.2, 1.2, 1.2), disable_bone_size=False)
+    safe_set_custom_shape("palm.R", None, scale=(1.2, 1.2, 1.2), disable_bone_size=False)
+
+    rigifyr.pose.bones["thigh_parent.L"]["IK_Stretch"] = 0
+    rigifyr.pose.bones["thigh_parent.R"]["IK_Stretch"] = 0
+    rigifyr.pose.bones["upper_arm_parent.L"]["IK_Stretch"] = 0
+    rigifyr.pose.bones["upper_arm_parent.R"]["IK_Stretch"] = 0
+    rigifyr.pose.bones["upper_arm_parent.L"]["FK_limb_follow"] = 1
+    rigifyr.pose.bones["upper_arm_parent.R"]["FK_limb_follow"] = 1
+
+    bpy.ops.object.mode_set(mode='EDIT')
+    #### Symmetrize clothes/hair bones
+    eb = rigifyr.data.edit_bones
+    for bone in eb:
+        if "L_" in bone.name: # Finds clothes/hair bones with symmetrical bones
             try:
-                bpy.ops.object.mode_set(mode="POSE")
+                y = bone.name.find('L_')  # Finds index of "HairL_1"
+                orgname = bone.name
+                newname = orgname[:y] + "_" + orgname[y+2:]  # newname = "Hair_1
+                oppbone = orgname[:y] + "R_" + orgname[y+2:] # oppbone = "HairR_1"
+                bone.name = newname + ".L"    # Renames bone to _L format
+                eb[oppbone].name = newname + ".R"   # Renames opposite bone to _R format
+                if (round(bone.head[0], 3) == round(-eb[newname+".R"].head[0], 3)): # Not every bone with a symmetrical name is actually *physically* symmetrical. This checks to make sure that they are.
+                    eb[newname+".R"].roll = -bone.roll   # Symmetrizes rolls
             except:
                 pass
 
-    print("HSR Rig: Linking eye deform bones to controller drivers...")
 
-    # --- POSE MODE CONSTRAINTS TO KEEP EYES IN PLACE AND ROTATING/SCALING PERFECTLY ---
-    rig_obj = bpy.context.active_object
-    if rig_obj and rig_obj.type == "ARMATURE":
-        bpy.ops.object.mode_set(mode="POSE")
-        for side in ["L", "R"]:
-            deform_bone_name = f"+EyeBone {side} A02"
-            control_bone_name = f"+EyeBoneA02.{side}"
+    # This part puts all the main bones I use into the second bone layer/collection
+    bpy.ops.object.mode_set(mode='OBJECT')
+    listofbones = ["root", "foot_heel_ik.R", "foot_heel_ik.L", "toe_ik.R", "toe_ik.L", "foot_ik.R", "foot_ik.L", "thigh_ik_target.R", "thigh_ik_target.L", "hips", "torso", "chest", "neck", "head", "eyeRoot", "shoulder.L", "shoulder.R", "upper_arm_fk.L", "upper_arm_fk.R", "forearm_fk.L", "forearm_fk.R", "hand_fk.L", "hand_fk.R", "upper_arm_ik_target.L", "upper_arm_ik_target.R", "hand_ik.R", "hand_ik.L"]
 
-            if (
-                deform_bone_name in rig_obj.pose.bones
-                and control_bone_name in rig_obj.pose.bones
-            ):
-                deform_bone = rig_obj.pose.bones[deform_bone_name]
-                print(
-                    f"  Linking HSR deform bone '{deform_bone_name}' to controller '{control_bone_name}'"
-                )
+    for bone in listofbones:
+        try:
+            bpy.context.active_object.pose.bones[bone].bone.layers[1] = True
+        except:
+            pass
 
-                # Clean up existing constraints to avoid duplicates if re-running
-                for const in list(deform_bone.constraints):
-                    if const.name in ["HSR_Eye_Loc", "HSR_Eye_Rot", "HSR_Eye_Scale"]:
-                        deform_bone.constraints.remove(const)
+    # Separates physics-related bones into their own bone layer/collection
+    clothes_bone_name_subtsrings = ["ribbon", "sleeve", "strap", "skirt", "button", "belt", "cloth"]
+    hair_bone_name_substrings = ["hair", "eardrop"]
 
-                # Copy Location so blink/wink offsets stay glued to the eye mesh
-                loc_const = deform_bone.constraints.new("COPY_LOCATION")
-                loc_const.name = "HSR_Eye_Loc"
-                loc_const.target = rig_obj
-                loc_const.subtarget = control_bone_name
-                loc_const.target_space = "POSE"
-                loc_const.owner_space = "POSE"
-                loc_const.influence = 0.80
+    for armature_bone in rigifyr.pose.bones:
+        for bone_name_substring in clothes_bone_name_subtsrings:
+            if bone_name_substring in armature_bone.name.lower():
+                assign_bone_to_bone_collection(rigifyr.data, rigifyr, armature_bone, collection_name='Clothes', collection_idx=22)
+                break
+        for bone_name_substring in hair_bone_name_substrings:
+            if bone_name_substring in armature_bone.name.lower():
+                assign_bone_to_bone_collection(rigifyr.data, rigifyr, armature_bone, collection_name='Hair', collection_idx=23)
+                break
 
-                # Copy Rotation from controller (+EyeBoneA02.L/R)
-                rot_const = deform_bone.constraints.new("COPY_ROTATION")
-                rot_const.name = "HSR_Eye_Rot"
-                rot_const.target = rig_obj
-                rot_const.subtarget = control_bone_name
-                rot_const.target_space = "POSE"
-                rot_const.owner_space = "POSE"
-                rot_const.influence = 0.85
+    # Change any physics bones attached to shoulder to be attached to spine instead bc it's a pain in the ass to animate
+    bpy.ops.object.mode_set(mode='EDIT')
+    bones = rigifyr.data.edit_bones[:]
+    for bone in bones:
+        if bone.parent:
+            if bone.name not in pre_res and bone.parent.name in ["DEF-shoulder.L", "DEF-shoulder.R"]:
+                print(bone)
+                
+                bone.parent = rigifyr.data.edit_bones["DEF-spine.003"]
 
-                # Copy Scale from controller (+EyeBoneA02.L/R) to pass dilation drivers
-                scale_const = deform_bone.constraints.new("COPY_SCALE")
-                scale_const.name = "HSR_Eye_Scale"
-                scale_const.target = rig_obj
-                scale_const.subtarget = control_bone_name
-                scale_const.target_space = "POSE"
-                scale_const.owner_space = "POSE"
+    # makes a root #2 bone
+    newroot = rigifyr.data.edit_bones.new("root_2")
+    root = rigifyr.data.edit_bones["root"]
+    newroot.head = root.head.copy()
+    newroot.tail = root.tail.copy()
+    newroot.roll = root.roll
+    newroot.matrix = root.matrix.copy()
+    newroot.tail.y += 0.5
+    root.parent = newroot
 
-        bpy.ops.object.mode_set(mode="OBJECT")
-
-    # HSR: Do NOT drive modifier Realtime (show_viewport) for outlines.
-    # Remove any driver linked to outlines show_viewport and leave it manually controllable.
+    bpy.ops.object.mode_set(mode='POSE')   
+    bpy.ops.pose.select_all(action='DESELECT')
+    bones_list = rigifyr.pose.bones
     try:
-        if rig_obj and rig_obj.type == "ARMATURE":
-            removed_outline_drivers = 0
-            for obj_item in bpy.data.objects:
-                if obj_item.type == "MESH" and obj_item.parent == rig_obj:
-                    for mod in obj_item.modifiers:
-                        if "outlines" in mod.name.lower():
-                            try:
-                                mod.driver_remove("show_viewport")
-                                removed_outline_drivers += 1
-                            except Exception:
-                                pass
-                            mod.show_viewport = True
+        rigifyr.pose.bones["root_2"].custom_shape = bpy.data.objects["WGT-" + original_name + "_root"]
+    except:
+        pass
 
-            print(
-                f"HSR Rig: Removed {removed_outline_drivers} outline show_viewport driver(s)."
-            )
-    except Exception as e:
-        print(f"HSR Rig: Outline driver cleanup skipped: {e}")
+    bpy.ops.pose.select_all(action='DESELECT')
+    bone = rigifyr.pose.bones["root_2"].bone
+    rigifyr.data.bones.active = bone
+    assign_root_bone_to_bone_collection(rigifyr.data, bone, collection_name='Root', collection_idx=1)
 
-    print("HSR Rig: Eye bone linking complete.")
+    try:
+        bpy.ops.pose.select_all(action='DESELECT')
+        bone = rigifyr.pose.bones["palm.L"].bone
+        rigifyr.data.bones.active = bone
+        assign_bone_to_bone_collection(rigifyr.data, rigifyr, bone, collection_name='Palms', collection_idx=21)
+        unassign_bone_from_bone_collection(rigifyr.data, rigifyr, bone, collection_name='Fingers', collection_idx_range=(0, 28))
+
+        bpy.ops.pose.select_all(action='DESELECT')
+        bone = rigifyr.pose.bones["palm.R"].bone
+        rigifyr.data.bones.active = bone
+        assign_bone_to_bone_collection(rigifyr.data, rigifyr, bone, collection_name='Palms', collection_idx=21)
+        unassign_bone_from_bone_collection(rigifyr.data, rigifyr, bone, collection_name='Fingers', collection_idx_range=(0, 28))
+    except:
+        pass
+
+    ### Makes it able to scale only the fingertips by scaling the X axis on the finger scale controls
+    rig = rigifyr
+    if rig.animation_data and rig.animation_data.drivers:
+        for oDrv in rig.animation_data.drivers:
+            for variable in oDrv.driver.variables:
+                for target in variable.targets:
+                    if ".03" in oDrv.data_path and target.data_path[-7:] == "scale.y":
+                        target.data_path = target.data_path[:-1] + "x"
+
+    fingerlist = ["thumb.01_master", "f_index.01_master", "f_middle.01_master", "f_ring.01_master", "f_pinky.01_master"]
+    for side in [".L", ".R"]:
+        for bone in fingerlist:
+            if bone + side in rig.pose.bones:
+                rig.pose.bones[bone + side].lock_scale[0] = False
+        
+    # Change the body outline and the hair and face outline values match.
+    def add_driver(source, target, path, dataPath):
+        d = source.driver_add( path).driver
+        v = d.variables.new()
+        d.type = "AVERAGE"
+        v.name                 = "Input_7"
+        v.targets[0].id        = target
+        v.targets[0].data_path = dataPath
+        
+    try:
+        bod = bpy.data.objects["Body"]
+        face = bpy.data.objects["Face"]
+        hair = bpy.data.objects["Hair"]
+
+        add_driver(face, bod, 'modifiers["Outlines Face"]["Input_7"]', 'modifiers["Outlines Body"]["Input_7"]')
+        add_driver(hair, bod, 'modifiers["Outlines Hair"]["Input_7"]', 'modifiers["Outlines Body"]["Input_7"]')
+    except:
+        pass
+        
+    # Puts these into a selection set (you need the addon (well no u dont bc i put this in a try block lmao))
+    try:
+        bpy.ops.pose.select_all(action='DESELECT')
+        ## Arms
+        arms = ['upper_arm_fk', 'forearm_fk', 'hand_fk', 'shoulder']
+        for side in ['.L', '.R']:
+            for bone in arms:
+                bonename = bone + side
+                rigifyr.pose.bones[bonename].bone.select= True
+        bpy.ops.pose.selection_set_add()
+        bpy.ops.pose.selection_set_assign()
+        bpy.ops.pose.select_all(action='DESELECT')    
+        bpy.context.object.selection_sets[0].name = "FK Arms"
+    except:
+        pass
+
+    bpy.ops.object.mode_set(mode='OBJECT')
+    ## If you want no poles, delete these next few lines before 'face_mask' hide
+    try:
+        rigifyr.pose.bones["upper_arm_parent.L"]["pole_parent"] = 2
+        rigifyr.pose.bones["upper_arm_parent.R"]["pole_parent"] = 2
+        rigifyr.pose.bones["thigh_parent.L"]["pole_parent"] = 2
+        rigifyr.pose.bones["thigh_parent.R"]["pole_parent"] = 2
+        rigifyr.pose.bones["upper_arm_parent.R"]["pole_vector"] = True
+        rigifyr.pose.bones["upper_arm_parent.L"]["pole_vector"] = True
+        rigifyr.pose.bones["thigh_parent.L"]["pole_vector"] = True
+        rigifyr.pose.bones["thigh_parent.R"]["pole_vector"] = True
+    except:
+        pass
+
+    # Hide base/DEF/ORG/MCH and secondary bone collections
+    if use_bone_collections():
+        hidden_collections = ["DEF", "ORG", "MCH", "Deformation", "Original", "Mechanism", "Clothes", "Hair", "Palms", "Tweaks", "Props"]
+        for coll_name in hidden_collections:
+            coll = rigifyr.data.collections.get(coll_name)
+            if coll:
+                coll.is_visible = False
+    else:
+        for i in range(1, 32):
+            if i not in [0, 1]:
+                try:
+                    rigifyr.data.layers[i] = False
+                except:
+                    pass
+
+    # Clean up appended shape collections
+    for coll_name in ["append_Root", "append_Eyes", "append_Pelvis", "append_Foot", "append_Hand", "append_Props", "append_Face Plate"]:
+        coll = bpy.data.collections.get(coll_name)
+        if coll:
+            try:
+                bpy.data.collections.remove(coll, do_unlink=True)
+            except:
+                pass
+
+    # Move widget objects (head-control-shape, root plate, metarig, WGT-*) to hidden "wgt" collection
+    for obj in list(bpy.data.objects):
+        if any(keyword in obj.name for keyword in ["head-control-shape", "root plate", "eye circle", "eye controller", "WGT-", "metarig"]):
+            move_into_collection(obj.name, "wgt")
+
+    wgt_coll = bpy.data.collections.get("wgt")
+    if wgt_coll:
+        wgt_coll.hide_viewport = True
+        wgt_coll.hide_select = True
+        wgt_coll.hide_render = True
+
+    try:
+        def find_layer_coll(lc, name):
+            if lc.name == name:
+                return lc
+            for child in lc.children:
+                res = find_layer_coll(child, name)
+                if res:
+                    return res
+            return None
+        wgt_lc = find_layer_coll(bpy.context.view_layer.layer_collection, "wgt")
+        if wgt_lc:
+            wgt_lc.exclude = True
+    except:
+        pass
+
+    try:
+        bpy.data.objects["Face_Mask"].hide_viewport = True
+        bpy.data.objects["Face_Mask"].hide_render = True
+    except:
+        pass
+    try:
+        bpy.context.view_layer.objects.active = bpy.data.objects.get("Head Origin") or bpy.data.objects.get("Head Driver")
+        bpy.ops.constraint.childof_set_inverse(constraint="Child Of", owner='OBJECT')
+    except:
+        pass
+    x = original_name.split("_")
+    try:
+        bpy.data.objects["rigify"].users_collection[0].name = x[-2]
+    except:
+        pass
+    bpy.data.objects["rigify"].name = x[-2] + "Rig"
+
+try:
+    bpy.context.scene.objects["Head Forward"].hide_viewport = True
+    bpy.context.scene.objects["Head Up"].hide_viewport = True
+except:
+    pass
+
+lis = ["Body", "Face", "Hair"]
+
+for obj in lis:
+    try:
+        mod = bpy.context.scene.objects[obj].modifiers[2]
+        mod.show_viewport = False 
+    except:
+        pass
+
+
+def move_into_collection(object_name, collection_name):
+    obj = bpy.data.objects.get(object_name)
+    if not obj:
+        return
+    coll = bpy.data.collections.get(collection_name)
+    if not coll:
+        coll = bpy.data.collections.new(collection_name)
+        bpy.context.scene.collection.children.link(coll)
+    for ucoll in list(obj.users_collection):
+        ucoll.objects.unlink(obj)
+    coll.objects.link(obj)
+
+
+def use_bone_collections():
+    version_tuple = bpy.app.version
+    return version_tuple[0] >= 4
+
+
+def assign_bone_to_bone_collection(armature, armature_obj, bone, collection_name, collection_idx):
+    if use_bone_collections():
+        clothes_bone_collection = armature.collections.get(collection_name) if \
+            armature.collections.get(collection_name) else armature.collections.new(collection_name)
+        clothes_bone_collection.assign(bone)
+    else:
+        armature_obj.pose.bones[bone.name].bone.layers[collection_idx] = True
+        armature_obj.pose.bones[bone.name].bone.layers[0] = False
+
+
+def unassign_bone_from_bone_collection(armature, armature_obj, bone, collection_name, collection_idx_range):
+    if use_bone_collections():
+        clothes_bone_collection = armature.collections.get(collection_name) if \
+            armature.collections.get(collection_name) else armature.collections.new(collection_name)
+        clothes_bone_collection.unassign(bone)
+    else:
+        for i in range(collection_idx_range[0], collection_idx_range[1]):
+            armature_obj.pose.bones[bone.name].bone.layers[i] = False
+
+
+def assign_root_bone_to_bone_collection(armature, bone, collection_name, collection_idx):
+    if use_bone_collections():
+        root_bone_collection = armature.collections.get(collection_name) if \
+            armature.collections.get(collection_name) else armature.collections.new(collection_name)
+        if root_bone_collection:
+            root_bone_collection.assign(bone)
+    else:
+        bpy.ops.pose.group_assign(type=6)
+        for x in range(0, 28):
+            bone.layers[x] = False
+        bone.layers[collection_idx] = True
+

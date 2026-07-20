@@ -61,6 +61,25 @@ class CharacterRigger(ABC):
         raise NotImplementedError
 
 
+def _get_character_armature(context):
+    selected_armatures = [obj for obj in context.selected_objects if obj.type == 'ARMATURE']
+    if selected_armatures:
+        return selected_armatures[0]
+
+    view_layer_objs = getattr(context.view_layer, 'objects', context.scene.objects)
+    view_armatures = [obj for obj in view_layer_objs if obj.type == 'ARMATURE']
+
+    for obj in view_armatures:
+        if 'Rig' in obj.name and not any(ign in obj.name.lower() for ign in ['eyerig', 'facerig', 'lighting', 'metarig']):
+            return obj
+
+    for obj in view_armatures:
+        if not any(ign in obj.name.lower() for ign in ['eyerig', 'facerig', 'lighting', 'metarig']):
+            return obj
+
+    return view_armatures[0] if view_armatures else None
+
+
 class GenshinImpactCharacterRigger(CharacterRigger):
     def __init__(self, blender_operator, context, material_names, texture_node_names, shader):
         self.blender_operator: Operator = blender_operator
@@ -81,8 +100,11 @@ class GenshinImpactCharacterRigger(CharacterRigger):
                                    obj.type == 'MESH' for modifier in obj.modifiers if 
                                    'Light Vectors' in modifier.name]
 
-        armatures = [obj for obj in bpy.context.selected_objects if obj.type == 'ARMATURE']
-        armature: Armature = armatures[0] if armatures else [obj for obj in bpy.data.objects if obj.type == 'ARMATURE'][0]
+        armature: Armature = _get_character_armature(self.context)
+        if not armature:
+            self.blender_operator.report({'ERROR'}, 'No armature found. Please import or select a character.')
+            return
+
         hand_bones = [bone for bone in armature.pose.bones.values() if 'Hand' in bone.name]
         number_of_hand_bone_children = max([len(hand_bone.children) for hand_bone in hand_bones]) if hand_bones else 0
         is_player_hand = number_of_hand_bone_children >= 5
@@ -104,8 +126,11 @@ class GenshinImpactCharacterRigger(CharacterRigger):
         except RuntimeError:
             pass
         bpy.ops.object.select_all(action='DESELECT')
-        armature.hide_set(False)
-        bpy.context.view_layer.objects.active = armature
+        try:
+            armature.hide_set(False)
+        except:
+            pass
+        self.context.view_layer.objects.active = armature
         armature.select_set(True)
 
         meshes_joined = not (bpy.data.objects.get('Body') and bpy.data.objects.get('Face'))
@@ -202,13 +227,6 @@ class GenshinImpactCharacterRigger(CharacterRigger):
         return body_material.node_tree.nodes.get(body_diffuse_node.name).image
 
 
-    # @staticmethod
-    # def __set_head_tracker_constraint_influence(influence_value):
-    #     character_rig = [data_obj for data_obj in bpy.data.objects if data_obj.type == 'ARMATURE' and 'Rig' in data_obj.name][0]
-
-    #     bpy.data.objects[character_rig.name].pose.bones['head'].constraints['Damped Track'].influence = influence_value
-    #     bpy.data.objects[character_rig.name].pose.bones['head-controller'].constraints['Damped Track'].influence = influence_value
-
 class HonkaiStarRailCharacterRigger(CharacterRigger):
     def __init__(self, blender_operator, context):
         self.blender_operator = blender_operator
@@ -222,15 +240,20 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
         if not filepath:
             filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'RootShape.blend')
 
-        armatures = [obj for obj in bpy.context.selected_objects if obj.type == 'ARMATURE']
-        armature = armatures[0] if armatures else [obj for obj in bpy.data.objects if obj.type == 'ARMATURE'][0]
+        armature = _get_character_armature(self.context)
+        if not armature:
+            self.blender_operator.report({'ERROR'}, 'No armature found. Please import or select a character.')
+            return
+
         character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
         meshes_joined = not (bpy.data.objects.get('Body') and bpy.data.objects.get('Face'))
 
-        # Important that the Armature is selected before performing rigging operations
         bpy.ops.object.select_all(action='DESELECT')
-        armature = armatures[0] if armatures else [obj for obj in bpy.data.objects if obj.type == 'ARMATURE'][0]
-        bpy.context.view_layer.objects.active = armature
+        try:
+            armature.hide_set(False)
+        except:
+            pass
+        self.context.view_layer.objects.active = armature
         armature.select_set(True)
 
         hsr_rig_character(
@@ -298,13 +321,20 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
         if not filepath:
             filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'RootShape.blend')
 
-        armatures = [obj for obj in bpy.context.selected_objects if obj.type == 'ARMATURE']
-        armature = armatures[0] if armatures else [obj for obj in bpy.data.objects if obj.type == 'ARMATURE'][0]
+        armature = _get_character_armature(self.context)
+        if not armature:
+            self.blender_operator.report({'ERROR'}, 'No armature found. Please import or select a character.')
+            return
+
         character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
         meshes_joined = not (bpy.data.objects.get('Body') and bpy.data.objects.get('Face'))
 
         bpy.ops.object.select_all(action='DESELECT')
-        bpy.context.view_layer.objects.active = armature
+        try:
+            armature.hide_set(False)
+        except:
+            pass
+        self.context.view_layer.objects.active = armature
         armature.select_set(True)
 
         zzz_rig_character(

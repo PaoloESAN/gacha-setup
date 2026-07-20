@@ -78,17 +78,25 @@ class HSR_OT_FinishSetup(Operator, BasicSetupUIOperator):
             parent_collection.name = self._unique_collection_name(model_name)
 
     def _find_target_armature(self, context):
+        view_layer_objs = getattr(context.view_layer, "objects", context.scene.objects)
+
         armatures = [obj for obj in context.selected_objects if obj.type == "ARMATURE"]
         if armatures:
             return armatures[0]
 
-        for obj in bpy.data.objects:
-            if obj.type == "ARMATURE" and obj.name.endswith("Rig"):
+        for obj in view_layer_objs:
+            if obj.type == "ARMATURE" and obj.name.endswith("Rig") and not any(ign in obj.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig"]):
+                return obj
+
+        for obj in view_layer_objs:
+            if obj.type == "ARMATURE" and not any(ign in obj.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig"]):
                 return obj
 
         for obj in bpy.data.objects:
-            if obj.type == "ARMATURE":
-                return obj
+            if obj.type == "ARMATURE" and obj.name.endswith("Rig") and not any(ign in obj.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig"]):
+                if obj.name in view_layer_objs:
+                    return obj
+
         return None
 
     def _derive_model_name(self, context, armature):
@@ -142,12 +150,12 @@ class HSR_OT_FinishSetup(Operator, BasicSetupUIOperator):
         scene_root = bpy.context.scene.collection
         for coll in bpy.data.collections:
             if obj.name in coll.objects:
-                if coll.name == "wgt":
+                if coll.name.startswith("wgt"):
                     continue
                 if coll.name in scene_root.children:
                     return coll
         for coll in bpy.data.collections:
-            if obj.name in coll.objects and coll.name != "wgt":
+            if obj.name in coll.objects and not coll.name.startswith("wgt"):
                 return coll
         return None
 
@@ -182,21 +190,24 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
     bl_label = "Genshin: Makes Character Upright and Fixes Scale"
 
     def execute(self, context):
-        armatures = [obj for obj in context.selected_objects if obj.type == "ARMATURE"]
-        if not armatures:
-            armatures = [obj for obj in bpy.data.objects if obj.type == "ARMATURE"]
+        armature = self._find_target_armature(context)
+        if not armature:
+            view_layer_objs = getattr(context.view_layer, "objects", context.scene.objects)
+            armatures = [obj for obj in view_layer_objs if obj.type == "ARMATURE" and not any(ign in obj.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig"])]
+            armature = armatures[0] if armatures else None
 
-        if not armatures:
+        if not armature:
             self.report(
                 {"ERROR"}, "No armature found. Please import or select a character."
             )
             return {"CANCELLED"}
 
-        armature: Armature = armatures[0]
-
         bpy.ops.object.select_all(action="DESELECT")
-        armature.select_set(True)
-        context.view_layer.objects.active = armature
+        try:
+            armature.select_set(True)
+            context.view_layer.objects.active = armature
+        except Exception as e:
+            print(f"Warning setting active armature: {e}")
 
         # I don't want to modify any characters unless absolutely necessary
         # So, as Dehya comes with keyframes and is not in an A-Pose by default, let's clean her character
