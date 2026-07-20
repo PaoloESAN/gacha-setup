@@ -1069,8 +1069,7 @@ def rig_character(
     # Let's append our root_shape custom bones
     path_to_file = file_path + "/Collection"
 
-    # Bring in our collections: root shapes, face rig, and the eye rig
-    bpy.ops.wm.append(filename='append_Face Plate', directory=path_to_file)
+    # Bring in our collections: root shapes and the eye rig
 
     bpy.ops.wm.append(filename='append_Root', directory=path_to_file)
 
@@ -1109,10 +1108,14 @@ def rig_character(
     this_obj.pose.bones["foot_ik.L"].custom_shape = bpy.data.objects["foot1"]
     this_obj.pose.bones["foot_ik.R"].custom_shape = bpy.data.objects["foot1"]
 
-    this_obj.pose.bones["thigh_ik_target.L"].custom_shape = bpy.data.objects["primo-joint"]
-    this_obj.pose.bones["thigh_ik_target.R"].custom_shape = bpy.data.objects["primo-joint"]
-    this_obj.pose.bones["upper_arm_ik_target.R"].custom_shape = bpy.data.objects["primo-joint"]
-    this_obj.pose.bones["upper_arm_ik_target.L"].custom_shape = bpy.data.objects["primo-joint"]
+    try:
+        primo_joint = bpy.data.objects["primo-joint"]
+        this_obj.pose.bones["thigh_ik_target.L"].custom_shape = primo_joint
+        this_obj.pose.bones["thigh_ik_target.R"].custom_shape = primo_joint
+        this_obj.pose.bones["upper_arm_ik_target.R"].custom_shape = primo_joint
+        this_obj.pose.bones["upper_arm_ik_target.L"].custom_shape = primo_joint
+    except KeyError:
+        pass
 
     this_obj.pose.bones["thigh_ik_target.L"].custom_shape_scale_xyz[0] = 0.75
     this_obj.pose.bones["thigh_ik_target.L"].custom_shape_scale_xyz[1] = 0.75
@@ -1163,11 +1166,6 @@ def rig_character(
     # Merge the armatures; go into object mode and make sure nothing is selected
     bpy.ops.object.mode_set(mode='OBJECT')
     bpy.ops.object.select_all(action='DESELECT')
-
-    # Select custom face armature
-    face_rig_obj = bpy.data.objects.get("facerig")
-    if face_rig_obj:
-        face_rig_obj.select_set(True)
 
     # Select lighting panel armature
     lighting_panel_rig_obj = bpy.data.objects.get(LightingPanelNames.Objects.LIGHTING_PANEL)
@@ -1252,19 +1250,15 @@ def rig_character(
     ob = bpy.data.objects[char_name+"Rig"]
     armature = ob.data
 
-    # In edit mode, select platebone and head controller and set their parent bones.
+    # In edit mode, set parent bones.
     bpy.ops.object.mode_set(mode='EDIT')
-    armature.edit_bones['plate-border'].parent = armature.edit_bones['head']
+    if 'plate-settings' not in armature.edit_bones:
+        plate_settings_bone = armature.edit_bones.new('plate-settings')
+        plate_settings_bone.head = (0, 0, 0)
+        plate_settings_bone.tail = (0, 0, 1)
     armature.edit_bones['plate-settings'].parent = armature.edit_bones['head']
     if armature.edit_bones.get(LightingPanelNames.Bones.LIGHTING_PANEL):
         armature.edit_bones[LightingPanelNames.Bones.LIGHTING_PANEL].parent = armature.edit_bones['head']
-    
-    armature.edit_bones['plate-border'].head = armature.edit_bones['neck'].head.copy()
-    armature.edit_bones['plate-border'].tail = armature.edit_bones['neck'].tail.copy()
-    armature.edit_bones['plate-border'].head.x = 0.33
-    armature.edit_bones['plate-border'].head.y = 0
-    armature.edit_bones['plate-border'].tail.y = 0
-    armature.edit_bones['plate-border'].tail.x = 0.33
     
     armature.edit_bones['plate-settings'].head = armature.edit_bones['head'].head.copy()
     armature.edit_bones['plate-settings'].tail = armature.edit_bones['head'].head.copy()
@@ -1575,6 +1569,10 @@ def rig_character(
     head_pos_tail1 = head_bone.tail[1]
 
     # Select the head controller bone and position w/ head bone's location.
+    if 'head-controller' not in armature.edit_bones:
+        head_cont_bone = armature.edit_bones.new('head-controller')
+        head_cont_bone.head = (0, 0, 0)
+        head_cont_bone.tail = (0, 0, 1)
     head_cont_bone =  armature.edit_bones['head-controller']
     head_cont_bone.head[0] = 0
     head_cont_bone.head[1] = -0.3
@@ -1689,21 +1687,10 @@ def rig_character(
         
     for bone in back_skirt_bones:
         zero_roll(bone)                                                            
-    # In pose mode select the rig, then select the bone
+
+    # Switch to pose mode for subsequent operations
     bpy.ops.object.mode_set(mode='POSE')
-    faceplate_arm =  bpy.context.scene.objects[char_name+"Rig"]
-    selected_bone = faceplate_arm.pose.bones["Plate"]
-
-    # Change the values to what we want, use neckpos to base the height off the ground.
-    selected_bone.location[0] = .33
-    #selected_bone.location[1] = 0.9
-    selected_bone.location[2] = neck_pos
-    selected_bone.rotation_quaternion[1] = 1
-    selected_bone.scale[0] = 0.1
-    selected_bone.scale[1] = 0.1
-    selected_bone.scale[2] = 0.1
-
-
+    faceplate_arm = bpy.context.scene.objects[char_name+"Rig"]
 
     # Begin moving extra wgt bones to the wgt collection while discarding old collections
     # 1 Root and Eye Bones
@@ -1712,38 +1699,37 @@ def rig_character(
     move_into_collection("root plate","wgt")
     move_into_collection("head-control-shape","wgt")
 
-    # 1 Face Bones
-    to_del_coll = bpy.data.collections.get("wgt.001")
-    for obj in to_del_coll.objects:
-        move_into_collection(obj.name,"wgt")
-    
     # 2 Pelvis Bones
     to_del_coll = bpy.data.collections.get("wgt.002")
-    for obj in to_del_coll.objects:
-        move_into_collection(obj.name,"wgt")
+    if to_del_coll:
+        for obj in to_del_coll.objects:
+            move_into_collection(obj.name,"wgt")
     
     # 3 feet Bones
     to_del_coll = bpy.data.collections.get("wgt.003")
-    for obj in to_del_coll.objects:
-        move_into_collection(obj.name,"wgt")
+    if to_del_coll:
+        for obj in to_del_coll.objects:
+            move_into_collection(obj.name,"wgt")
         
     # 4 hand Bones
     to_del_coll = bpy.data.collections.get("wgt.004")
-    for obj in to_del_coll.objects:
-        move_into_collection(obj.name,"wgt")
+    if to_del_coll:
+        for obj in to_del_coll.objects:
+            move_into_collection(obj.name,"wgt")
         
     # idk bro math is wrong delete whatever this is too
     to_del_coll = bpy.data.collections.get("wgt.005")
-    for obj in to_del_coll.objects:
-        move_into_collection(obj.name,"wgt")
+    if to_del_coll:
+        for obj in to_del_coll.objects:
+            move_into_collection(obj.name,"wgt")
         
     to_del_coll = bpy.data.collections.get("wgt.006")
-    for obj in to_del_coll.objects:
-        move_into_collection(obj.name,"wgt")
+    if to_del_coll:
+        for obj in to_del_coll.objects:
+            move_into_collection(obj.name,"wgt")
 
     # After moving into collection, delete the old empty ones.
     bpy.data.collections.remove(bpy.data.collections.get("append_Root"),do_unlink=True)
-    bpy.data.collections.remove(bpy.data.collections.get("append_Face Plate"),do_unlink=True)
     bpy.data.collections.remove(bpy.data.collections.get("append_Eyes"),do_unlink=True)
     bpy.data.collections.remove(bpy.data.collections.get("append_Pelvis"),do_unlink=True)
     bpy.data.collections.remove(bpy.data.collections.get("append_Foot"),do_unlink=True)
@@ -1762,8 +1748,6 @@ def rig_character(
             plate["Toggle Skirt Constraints"] = 1.00
         if "Toggle Shoulder Constraints" not in plate:
             plate["Toggle Shoulder Constraints"] = 1.00
-        if "Toggle Eyelid Constraints" not in plate:
-            plate["Toggle Eyelid Constraints"] = 1.00
         if "Head Follow" not in plate:
             plate["Head Follow"] = 1.00
         if "Neck Follow" not in plate:
@@ -2026,157 +2010,6 @@ def rig_character(
         depsgraph = bpy.context.evaluated_depsgraph_get()
         depsgraph.update()
         
-    # Dynamic face object resolution for ZZZ / general characters
-    obj_face_dynamic = None
-    for o in bpy.data.objects:
-        if o.type == 'MESH' and "_face" in o.name.lower() and "weapon_" not in o.name.lower() and "gun_" not in o.name.lower():
-            obj_face_dynamic = o
-            break
-
-    # BROW SHAPE KEYS 
-    obj = obj_face_dynamic or bpy.data.objects.get("Brow") or bpy.data.objects.get("Face") or (bpy.data.objects.get("Body") if meshes_joined else None)
-    if obj and obj.data.shape_keys:
-        print(f"[RIG] Using object '{obj.name}' for brow shape key drivers")
-        if "Fac_Ebr_Down" in obj.data.shape_keys.key_blocks:
-            try:
-                makeCon("Fac_Ebr_Down", "Brow-L-Control", "bone * -4", "LOC_Y")
-                makeCon("Fac_Ebr_Down", "Brow-R-Control", "bone * -4", "LOC_Y")
-                makeCon("Fac_Ebr_Up", "Brow-L-Control", "bone * 4", "LOC_Y")
-                makeCon("Fac_Ebr_Up", "Brow-R-Control", "bone * 4", "LOC_Y")
-                makeCon("Fac_Ebr_Angry", "Brow-Angry-L-Control", "bone * 2", "LOC_X")
-                makeCon("Fac_Ebr_Angry", "Brow-Angry-R-Control", "bone * 2", "LOC_X")
-                makeCon("Fac_Ebr_Sad", "Brow-Trouble-L-Control", "bone * 2", "LOC_X")
-                makeCon("Fac_Ebr_Sad", "Brow-Trouble-R-Control", "bone * 2", "LOC_X")
-            except Exception as e:
-                _rig_log.append(f"ZZZ Brow driver failed: {e}")
-        else:
-            try:
-                makeCon("Brow_Down_L","Brow-L-Control","bone * -4","LOC_Y")
-                makeCon("Brow_Down_R","Brow-R-Control","bone * -4","LOC_Y")
-                makeCon("Brow_Up_L","Brow-L-Control","bone * 4","LOC_Y")
-                makeCon("Brow_Up_R","Brow-R-Control","bone * 4","LOC_Y")
-                makeCon("Brow_Trouble_L", "Brow-Trouble-L-Control", "bone * 2", "LOC_X")   
-                makeCon("Brow_Trouble_R", "Brow-Trouble-R-Control", "bone * 2", "LOC_X")   
-                makeCon("Brow_Smily_R", "Brow-Smily-R-Control", "bone * 2", "LOC_X")   
-                makeCon("Brow_Smily_L", "Brow-Smily-L-Control", "bone * 2", "LOC_X")   
-                makeCon("Brow_Angry_L", "Brow-Angry-L-Control", "bone * 2", "LOC_X")   
-                makeCon("Brow_Angry_R", "Brow-Angry-R-Control", "bone * 2", "LOC_X")   
-                makeCon("Brow_Shy_L", "Brow-Shy-L-Control", "bone * 2", "LOC_X")   
-                makeCon("Brow_Shy_R", "Brow-Shy-R-Control", "bone * 2", "LOC_X")   
-                makeCon("Brow_Squeeze_R", "Brow-R-Control", "bone * 4", "LOC_X")   
-                makeCon("Brow_Squeeze_L", "Brow-L-Control", "bone * -4", "LOC_X")   
-            except Exception as e:
-                _rig_log.append(f"Brow driver failed: {e}")
-
-    # EYE SHAPE KEYS
-    obj = obj_face_dynamic or bpy.data.objects.get("Face_Eye") or bpy.data.objects.get("Face") or (bpy.data.objects.get("Body") if meshes_joined else None)
-    if obj and obj.data.shape_keys:
-        print(f"[RIG] Using object '{obj.name}' for eye shape key drivers")
-        if "Fac_Eye_Close" in obj.data.shape_keys.key_blocks:
-            zzz_eye_configs = [
-                ("Fac_Eye_Close", "Eye-Ha-Control", "bone * -2.22", "LOC_Y"),
-                ("Fac_Eye_HalfClose", "Eye-Jito-Control", "bone * -2.22", "LOC_Y"),
-                ("Fac_Eye_Sad", "Eye-Wail-Control", "bone * -2.22", "LOC_Y"),
-                ("Fac_Eye_Angry", "Eye-Hostility-Control", "bone * -2.22", "LOC_Y"),
-                ("Fac_Eye_LowlidUp", "Eye-LowerEyelid-Control", "bone * -2.22", "LOC_Y"),
-                ("Fac_Eye_L_Open", "Eye-Up-Control", "bone * -2.22", "LOC_Y"),
-                ("Fac_Eye_R_Open", "Eye-Up-Control", "bone * -2.22", "LOC_Y"),
-                ("Fac_Eye_L_Wink", "WinkA-L-Invis", "bone * -.82", "LOC_Y"),
-                ("Fac_Eye_R_Wink", "WinkA-R-Invis", "bone * -.82", "LOC_Y"),
-            ]
-            for sk_name, bone_name, expression, transform in zzz_eye_configs:
-                try:
-                    makeCon(sk_name, bone_name, expression, transform)
-                except Exception as e:
-                    _rig_log.append(f"ZZZ Eye driver failed: {sk_name} -> {e}")
-        else:
-            eye_shape_key_configs = [
-                ("Eye_WinkA_L","WinkA-L-Invis","bone * -.82","LOC_Y"),
-                ("Eye_WinkA_R","WinkA-R-Invis","bone * -.82","LOC_Y"),
-                ("Eye_WinkB_L","WinkB-L-Invis","bone * -.82","LOC_Y"),
-                ("Eye_WinkB_R","WinkB-R-Invis","bone * -.82","LOC_Y"),
-                ("Eye_WinkC_L","WinkC-L-Invis","bone * -.82","LOC_Y"),
-                ("Eye_WinkC_R","WinkC-R-Invis","bone * -.82","LOC_Y"),
-                ("Eye_Ha","Eye-Ha-Control","bone * -2.22","LOC_Y"),
-                ("Eye_Jito","Eye-Jito-Control","bone * -2.22","LOC_Y"),
-                ("Eye_Wail","Eye-Wail-Control","bone * -2.22","LOC_Y"),
-                ("Eye_Hostility","Eye-Hostility-Control","bone * -2.22","LOC_Y"),
-                ("Eye_Tired","Eye-Tired-Control","bone * -2.22","LOC_Y"),
-                ("Eye_WUp","Eye-Up-Control","bone * -2.22","LOC_Y"),
-                ("Eye_WDown","Eye-Down-Control","bone * -2.22","LOC_Y"),
-                ("Eye_Lowereyelid","Eye-LowerEyelid-Control","bone * -2.22","LOC_Y"),
-            ]
-            for sk_name, bone_name, expression, transform in eye_shape_key_configs:
-                try:
-                    makeCon(sk_name, bone_name, expression, transform)
-                except Exception as e:
-                    _rig_log.append(f"Eye driver failed: '{sk_name}' / '{bone_name}' -> {e}")
-
-    # Pupils shape key drivers
-    try:
-        obj = bpy.data.objects.get("EyeStar")
-        if obj and obj.data.shape_keys and "EyeStar" in obj.data.shape_keys.key_blocks:
-            makeCon("EyeStar","Eye-Star-Control","1+(bone*2.23)","LOC_Y")
-            print(f"[RIG OK] EyeStar shape key driver created.")
-    except Exception as e:
-        _rig_log.append(f"EyeStar driver failed: {e}")
-
-    # MOUTH SHAPE KEYS
-    obj = obj_face_dynamic or bpy.data.objects.get("Face") or (bpy.data.objects.get("Body") if meshes_joined else None)
-    if obj and obj.data.shape_keys:
-        if "Fac_Mth_Aa1" in obj.data.shape_keys.key_blocks or "Fac_Mth_AaTalk" in obj.data.shape_keys.key_blocks:
-            zzz_mouth_configs = [
-                ("Fac_Mth_Aa1", "Mouth-Control", "bone * -1.33", "LOC_Y"),
-                ("Fac_Mth_Aa2", "Mouth-Control", "bone * -1.33", "LOC_Y"),
-                ("Fac_Mth_AaTalk", "Mouth-Control", "bone * -1.33", "LOC_Y"),
-                ("Fac_Mth_AaShout", "Mouth-Control", "bone * 1.33", "LOC_Y"),
-                ("Fac_Mth_Ii", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X"),
-                ("Fac_Mth_Uu", "Mouth-Neko1-Control", "bone * 1.67", "LOC_X"),
-                ("Fac_Mth_Ee", "Mouth-Smile2-Control", "bone * 1.67", "LOC_X"),
-                ("Fac_Mth_Oo", "Mouth-Control", "bone * 1.33", "LOC_Y"),
-                ("Fac_Mth_Laugh1", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X"),
-                ("Fac_Mth_Laugh2", "Mouth-Smile2-Control", "bone * 1.67", "LOC_X"),
-                ("Fac_Mth_Tsundere", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X"),
-                ("Fac_Mth_Triangle", "Mouth-Angry1-Control", "bone * 1.67", "LOC_X"),
-                ("Fac_Mth_UuOo", "Mouth-Neko1-Control", "bone * 1.67", "LOC_X"),
-                ("Fac_Mth_Right", "Mouth-Control", "bone * 1.33", "LOC_X"),
-                ("Fac_Mth_Left", "Mouth-Control", "bone * -1.33", "LOC_X"),
-                ("Fac_Mth_Up", "Mouth-Control", "bone * 1.33", "LOC_Y"),
-                ("Fac_Mth_Down", "Mouth-Control", "bone * -1.33", "LOC_Y"),
-                ("Fac_Mth_R_Out", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X"),
-                ("Fac_Mth_L_Out", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X"),
-                ("Fac_Mth_R_In", "Mouth-Angry1-Control", "bone * 1.67", "LOC_X"),
-                ("Fac_Mth_L_In", "Mouth-Angry1-Control", "bone * 1.67", "LOC_X"),
-                ("Fac_Mth_R_Up", "Mouth-Smile2-Control", "bone * 1.67", "LOC_X"),
-                ("Fac_Mth_L_Up", "Mouth-Smile2-Control", "bone * 1.67", "LOC_X"),
-                ("Fac_Mth_R_Down", "Mouth-Angry2-Control", "bone * 1.67", "LOC_X"),
-                ("Fac_Mth_L_Down", "Mouth-Angry2-Control", "bone * 1.67", "LOC_X"),
-            ]
-            for sk_name, bone_name, expression, transform in zzz_mouth_configs:
-                try:
-                    makeCon(sk_name, bone_name, expression, transform)
-                except Exception as e:
-                    _rig_log.append(f"ZZZ Mouth driver failed: {sk_name} -> {e}")
-        else:
-            try:
-                makeCon("Mouth_Default","Mouth-Default-Control","bone * 1.67","LOC_X")
-                makeCon("Mouth_A01","Mouth-Control","bone * -1.33","LOC_Y")
-                makeCon("Mouth_Open01","Mouth-Control","bone * 1.33","LOC_Y")
-                makeCon("Mouth_Smile01","Mouth-Smile1-Control","bone * 1.67","LOC_X")
-                makeCon("Mouth_Smile02","Mouth-Smile2-Control","bone * 1.67","LOC_X")
-                makeCon("Mouth_Angry01","Mouth-Angry1-Control","bone * 1.67","LOC_X")
-                makeCon("Mouth_Angry02","Mouth-Angry2-Control","bone * 1.67","LOC_X")
-                makeCon("Mouth_Angry03","Mouth-Angry3-Control","bone * 1.67","LOC_X")
-                makeCon("Mouth_Fury01","Mouth-Fury1-Control","bone * 1.67","LOC_X")
-                makeCon("Mouth_Doya01","Mouth-Doya1-Control","bone * 1.67","LOC_X")
-                makeCon("Mouth_Doya02","Mouth-Doya2-Control","bone * 1.67","LOC_X")
-                makeCon("Mouth_Pero01","Mouth-Pero1-Control","bone * 1.67","LOC_X")
-                makeCon("Mouth_Pero02","Mouth-Pero2-Control","bone * 1.67","LOC_X")
-                makeCon("Mouth_Line01","Mouth-Control","bone * 1.33","LOC_X")
-                makeCon("Mouth_Line02","Mouth-Control","bone * -1.33","LOC_X")
-                makeCon("Mouth_Neko01","Mouth-Neko1-Control","bone * 1.67","LOC_X")
-            except Exception as e:
-                _rig_log.append(f"Mouth driver failed: {e}")
 
     # Since we're still in object mode, here we can add the head pole object in the neck to track head movement
     bpy.ops.object.empty_add(type='PLAIN_AXES', align='WORLD', location=(0, 0, 0), scale=(1, 1, 1))
@@ -2254,7 +2087,7 @@ def rig_character(
         bpy.context.view_layer.objects.active = bpy.data.objects[char_name+"Rig"] # ensure the rig is the active object
         bpy.ops.object.join() # join them
         bpy.ops.object.mode_set(mode='EDIT')
-        armature.edit_bones['extras-panel'].parent = armature.edit_bones['plate-border']
+        armature.edit_bones['extras-panel'].parent = armature.edit_bones['plate-settings']
         armature.edit_bones['extras-panel'].head = armature.edit_bones['plate-settings'].head
         armature.edit_bones['extras-panel'].head.x += 0.723336
         armature.edit_bones['extras-panel'].tail.x = armature.edit_bones['extras-panel'].head.x
@@ -2672,51 +2505,11 @@ def rig_character(
     if not use_leg_ik_poles:
         assign_bone_to_group("thigh_ik.R", "Limbs R")
 
-    # Face BG
-    assign_bone_to_group("Mouth-Control", "Face")
-    assign_bone_to_group("Mouth-Smile1-Control", "Face")
-    assign_bone_to_group("Mouth-Smile2-Control", "Face")
-    assign_bone_to_group("Mouth-Angry1-Control", "Face")
-    assign_bone_to_group("Mouth-Angry2-Control", "Face")
-    assign_bone_to_group("Mouth-Angry3-Control", "Face")
-    assign_bone_to_group("Mouth-Fury1-Control", "Face")
-    assign_bone_to_group("Mouth-Doya1-Control", "Face")
-    assign_bone_to_group("Mouth-Doya2-Control", "Face")
-    assign_bone_to_group("Mouth-Pero1-Control", "Face")
-    assign_bone_to_group("Mouth-Pero2-Control", "Face")
-    assign_bone_to_group("Mouth-Neko1-Control", "Face")
-    assign_bone_to_group("Mouth-Default-Control", "Face")
+    # Face BG (only eye tracking bones remain; Brow/Eye/Mouth controls belong to the separate face rig)
     assign_bone_to_group("plate-settings", "Face")
-
-    assign_bone_to_group("Eye-Down-Control", "Face")
-    assign_bone_to_group("Eye-Up-Control", "Face")
-    assign_bone_to_group("Eye-Jito-Control", "Face")
-    assign_bone_to_group("Eye-Tired-Control", "Face")
-    assign_bone_to_group("Eye-Hostility-Control", "Face")
-    assign_bone_to_group("Eye-Wail-Control", "Face")
-    assign_bone_to_group("Eye-LowerEyelid-Control", "Face")
-    assign_bone_to_group("Eye-Ha-Control", "Face")
-    assign_bone_to_group("Eye-WinkA-Control", "Face")
-    assign_bone_to_group("Eye-WinkB-Control", "Face")
-    assign_bone_to_group("Eye-WinkC-Control", "Face")
-    assign_bone_to_group("Eye-Star-Control", "Face")
-    assign_bone_to_group("Eye-Pupil-Control", "Face")
     assign_bone_to_group("eyetrack", "Face")
     assign_bone_to_group("eyetrack_L", "Face")
     assign_bone_to_group("eyetrack_R", "Face")
-
-    assign_bone_to_group("Wink-Control-R", "Face")
-    assign_bone_to_group("Wink-Control-L", "Face")
-    assign_bone_to_group("Brow-Trouble-L-Control", "Face")
-    assign_bone_to_group("Brow-Trouble-R-Control", "Face")
-    assign_bone_to_group("Brow-Shy-R-Control", "Face")
-    assign_bone_to_group("Brow-Shy-L-Control", "Face")
-    assign_bone_to_group("Brow-Angry-R-Control", "Face")
-    assign_bone_to_group("Brow-Angry-L-Control", "Face")
-    assign_bone_to_group("Brow-Smily-R-Control", "Face")
-    assign_bone_to_group("Brow-Smily-L-Control", "Face")
-    assign_bone_to_group("Brow-R-Control", "Face")
-    assign_bone_to_group("Brow-L-Control", "Face")
     
     try:
         is_zzz = False
@@ -2793,7 +2586,8 @@ def rig_character(
     
     # REENABLE CONSTRAINTS BELOW
 
-    generate_switch_parent_constraints("MCH-head-controller-parent","head-controller")
+    if "MCH-head-controller-parent" in this_obj.pose.bones:
+        generate_switch_parent_constraints("MCH-head-controller-parent","head-controller")
     
     # REENABLE THE CONSTRAINT BELOW.
     generate_switch_parent_constraints("MCH-forearm_tweak-pin.parent.L","forearm_tweak-pin.L")
@@ -3010,9 +2804,11 @@ def rig_character(
         this_obj.pose.bones[bone].lock_scale[2] = False
                
         # Customize bones
-        this_obj.pose.bones[bone].custom_shape = bpy.data.objects["setting-circle"]
-        this_obj.pose.bones[bone].custom_shape_scale_xyz=(0.5,0.5,0.5)
-        this_obj.pose.bones[bone].use_custom_shape_bone_size = False
+        setting_circle = bpy.data.objects.get("setting-circle")
+        if setting_circle:
+            this_obj.pose.bones[bone].custom_shape = setting_circle
+            this_obj.pose.bones[bone].custom_shape_scale_xyz=(0.5,0.5,0.5)
+            this_obj.pose.bones[bone].use_custom_shape_bone_size = False
         
         if "upper_arm" in bone:
             if ".L" in bone:
@@ -3034,7 +2830,8 @@ def rig_character(
                 this_obj.pose.bones[bone].custom_shape_transform = this_obj.pose.bones["MCH-thigh_parent_widget.R"]
         
     # ENABLE CONSTRAINTS AGAIN HERE
-    this_obj.pose.bones["MCH-head-controller-parent"].constraints[0].enabled = True
+    if "MCH-head-controller-parent" in this_obj.pose.bones:
+        this_obj.pose.bones["MCH-head-controller-parent"].constraints[0].enabled = True
     this_obj.pose.bones["MCH-forearm_tweak-pin.parent.L"].constraints[0].enabled = True
     this_obj.pose.bones["MCH-forearm_tweak-pin.parent.R"].constraints[0].enabled = True
     this_obj.pose.bones["MCH-shin_tweak-pin.parent.L"].constraints[0].enabled = True
@@ -3363,7 +3160,7 @@ def rig_character(
         return str
         
     def generate_string_for_settings_slider():
-        str = '\n        if is_selected({"plate-settings"}):\n            layout.prop(pose_bones["plate-settings"], \'["Viewport Outlines"]\', text="Show Viewport Outlines", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Tracker Controller", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Head Follow"]\', text="Head Follow", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Neck Follow"]\', text="Neck Follow", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Toggle Eyelid Constraints"]\', text="Auto Eyelid Constraints", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Toggle Shoulder Constraints"]\', text="Auto Shoulder Constraints", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Toggle Skirt Constraints"]\', text="Auto Skirt Constraints", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["EyeCorrection"]\', text="Adjust Pupil Wink Distance", slider=True)'
+        str = '\n        if is_selected({"plate-settings"}):\n            layout.prop(pose_bones["plate-settings"], \'["Viewport Outlines"]\', text="Show Viewport Outlines", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Tracker Controller", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Head Follow"]\', text="Head Follow", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Neck Follow"]\', text="Neck Follow", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Toggle Shoulder Constraints"]\', text="Auto Shoulder Constraints", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Toggle Skirt Constraints"]\', text="Auto Skirt Constraints", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["EyeCorrection"]\', text="Adjust Pupil Wink Distance", slider=True)'
         return str
 
     def generate_string_for_head_controller_slider():
@@ -3561,60 +3358,15 @@ def rig_character(
     bone_to_layer("foot_ik_pivot.L", 19, "Pivots & Pins") 
     bone_to_layer("foot_ik_pivot.R", 19, "Pivots & Pins") 
     
-    # MOVING FACE
-    bone_to_layer("plate-settings", 0, "Face")        
-    bone_to_layer("plate-border", 0, "Face")        
-    bone_to_layer("Plate", 0, "Face")        
+    # MOVING FACE (eye tracking bones remain; settings + head-controller hidden in _hidden)
+    if "_hidden" not in bpy.context.object.data.collections:
+        bpy.context.object.data.collections.new("_hidden")
+    bpy.context.object.data.collections["_hidden"].is_visible = False
+    bone_to_layer("plate-settings", 0, "_hidden")
     bone_to_layer("eyetrack", 0, "Face")
-    bone_to_layer("head-controller", 0, "Face")  
+    bone_to_layer("head-controller", 0, "_hidden")
     bone_to_layer("eyetrack_L", 0, "Face")        
     bone_to_layer("eyetrack_R", 0, "Face")  
-    
-    # Disable selection of face bone
-    selected_bone = faceplate_arm.pose.bones["Plate"]
-    selected_bone.bone.hide_select = True    
-    
-    bone_to_layer("Brow-Trouble-R-Control", 0, "Face")        
-    bone_to_layer("Brow-Trouble-L-Control", 0, "Face")        
-    bone_to_layer("Brow-Shy-R-Control", 0, "Face")        
-    bone_to_layer("Brow-Shy-L-Control", 0, "Face")        
-    bone_to_layer("Brow-Angry-R-Control", 0, "Face")        
-    bone_to_layer("Brow-Angry-L-Control", 0, "Face")        
-    bone_to_layer("Brow-Smily-R-Control", 0, "Face")        
-    bone_to_layer("Brow-Smily-L-Control", 0, "Face")        
-    bone_to_layer("Brow-R-Control", 0, "Face")        
-    bone_to_layer("Brow-L-Control", 0, "Face")  
-    bone_to_layer("extras-panel", 0, "Face")      
-    
-    bone_to_layer("Eye-Up-Control", 0, "Face")        
-    bone_to_layer("Eye-Tired-Control", 0, "Face")        
-    bone_to_layer("Eye-Wail-Control", 0, "Face")        
-    bone_to_layer("Eye-Ha-Control", 0, "Face")        
-    bone_to_layer("Wink-Control-R", 0, "Face")        
-    bone_to_layer("Eye-WinkA-Control", 0, "Face")        
-    bone_to_layer("Eye-WinkB-Control", 0, "Face")        
-    bone_to_layer("Eye-WinkC-Control", 0, "Face")        
-    bone_to_layer("Wink-Control-L", 0, "Face")        
-    bone_to_layer("Eye-Down-Control", 0, "Face")        
-    bone_to_layer("Eye-Jito-Control", 0, "Face")        
-    bone_to_layer("Eye-Hostility-Control", 0, "Face")        
-    bone_to_layer("Eye-LowerEyelid-Control", 0, "Face")        
-    bone_to_layer("Eye-Star-Control", 0, "Face")        
-    bone_to_layer("Eye-Pupil-Control", 0, "Face")        
-    
-    bone_to_layer("Mouth-Control", 0, "Face")        
-    bone_to_layer("Mouth-Smile1-Control", 0, "Face")        
-    bone_to_layer("Mouth-Smile2-Control", 0, "Face")        
-    bone_to_layer("Mouth-Angry1-Control", 0, "Face")        
-    bone_to_layer("Mouth-Angry2-Control", 0, "Face")        
-    bone_to_layer("Mouth-Angry3-Control", 0, "Face")        
-    bone_to_layer("Mouth-Fury1-Control", 0, "Face")        
-    bone_to_layer("Mouth-Doya1-Control", 0, "Face")        
-    bone_to_layer("Mouth-Doya2-Control", 0, "Face")        
-    bone_to_layer("Mouth-Pero1-Control", 0, "Face")        
-    bone_to_layer("Mouth-Pero2-Control", 0, "Face")        
-    bone_to_layer("Mouth-Neko1-Control", 0, "Face")        
-    bone_to_layer("Mouth-Default-Control", 0, "Face")  
     
     # Moving Torso
     bone_to_layer("head", 3, "Torso (IK)")  
