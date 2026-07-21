@@ -73,6 +73,8 @@ def rig_character(
         'eye_L': 'DEF-eye.L',
         'breast_L': 'DEF-breast.L',
         'breast_R': 'DEF-breast.R',
+        'breastM_L': 'DEF-breast.L',
+        'breastM_R': 'DEF-breast.R',
 
         'HipPart1_R': 'DEF-thigh.R.001',
         'HipPart1_L': 'DEF-thigh.L.001',
@@ -93,12 +95,11 @@ def rig_character(
     elif 'Spine1_M' in pose_bone_names:
         abadidea['Spine1_M'] = 'DEF-spine'
         abadidea['Spine2_M'] = 'DEF-spine.001'
-        abadidea['Chest_M'] = 'DEF-spine.002'
         if 'Chest_M' in pose_bone_names:
-            abadidea['Chest_M'] = 'DEF-spine.003'
+            abadidea['Chest_M'] = 'DEF-spine.002'
         abadidea['Spine1_scale'] = 'DEF-spine'
         abadidea['Spine2_scale'] = 'DEF-spine.001'
-        abadidea['Chest_scale'] = 'DEF-spine.003'
+        abadidea['Chest_scale'] = 'DEF-spine.002'
 
 
     bpy.ops.object.mode_set(mode='EDIT')
@@ -158,8 +159,11 @@ def rig_character(
 
     attachfeets('DEF-spine', 'DEF-spine.001')
     attachfeets('DEF-spine.001', 'DEF-spine.002')
-    attachfeets('DEF-spine.002', 'DEF-spine.003')
-    attachfeets('DEF-spine.003', 'DEF-spine.004')
+    if 'DEF-spine.003' in armature.edit_bones:
+        attachfeets('DEF-spine.002', 'DEF-spine.003')
+        attachfeets('DEF-spine.003', 'DEF-spine.004')
+    else:
+        attachfeets('DEF-spine.002', 'DEF-spine.004')
     attachfeets('DEF-spine.004', 'DEF-spine.006')
 
     ## Points toe bones in correct direction
@@ -269,6 +273,47 @@ def rig_character(
         metarm.edit_bones.remove(metarm.edit_bones["breast.L"])
         metarm.edit_bones.remove(metarm.edit_bones["breast.R"])
 
+    # Update metarig spine bone positions from armature DEF- bones
+    spines = ["spine", "spine.001", "spine.002", "spine.003", "spine.004", "spine.005", "spine.006"]
+    for s_name in spines:
+        def_b = armature.edit_bones.get("DEF-" + s_name)
+        mb = metarm.edit_bones.get(s_name)
+        if def_b and mb:
+            mb.head = def_b.head.copy()
+            mb.tail = def_b.tail.copy()
+
+    # Interpolate spine.003 if unmapped (placed transitionally between spine.002 and spine.004)
+    s002 = metarm.edit_bones.get("spine.002")
+    s003 = metarm.edit_bones.get("spine.003")
+    s004 = metarm.edit_bones.get("spine.004")
+    if s002 and s003 and s004 and "DEF-spine.003" not in armature.edit_bones:
+        s003.head = s002.tail.copy()
+        s003.tail = s004.head.copy()
+
+    # Subdivide neck for spine.005 if unmapped (placed transitionally between spine.004 and spine.006)
+    s005 = metarm.edit_bones.get("spine.005")
+    s006 = metarm.edit_bones.get("spine.006")
+    if s004 and s005 and s006 and "DEF-spine.005" not in armature.edit_bones:
+        neck_h = s004.head.copy()
+        head_h = s006.head.copy()
+        mid_x = (neck_h.x + head_h.x) / 2.0
+        mid_y = (neck_h.y + head_h.y) / 2.0
+        mid_z = (neck_h.z + head_h.z) / 2.0
+        s004.tail.x, s004.tail.y, s004.tail.z = mid_x, mid_y, mid_z
+        s005.head.x, s005.head.y, s005.head.z = mid_x, mid_y, mid_z
+        s005.tail = head_h.copy()
+        s006.head = head_h.copy()
+
+    # Enforce continuous parenting and connections across full spine chain in metarig
+    for idx in range(len(spines) - 1):
+        pb = metarm.edit_bones.get(spines[idx])
+        cb = metarm.edit_bones.get(spines[idx + 1])
+        if pb and cb:
+            cb.parent = pb
+            pb.tail = cb.head.copy()
+            cb.use_connect = True
+
+
 
 
     ##########  DETACH PHYSICS BONES,
@@ -302,13 +347,25 @@ def rig_character(
     for bone in bones:
         if bone.name not in pre_res:
             #this is a physics bone, so select it.
+            bone.use_connect = False
             bone.select = True
             bone.select_tail = True
             bone.select_head = True
 
     bpy.ops.armature.separate()
+
+    # Ensure metarig is active and in POSE mode before generating rigify rig
+    metarig_obj = bpy.data.objects.get("metarig")
+    if metarig_obj:
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.select_all(action='DESELECT')
+        metarig_obj.select_set(True)
+        bpy.context.view_layer.objects.active = metarig_obj
+        bpy.ops.object.mode_set(mode='POSE')
+
     # Generates rigify rig and renames it to 'rigify'
     bpy.ops.pose.rigify_generate()
+
     bpy.data.objects[obj.name].name = "rigify"
     bpy.context.view_layer.objects.active = bpy.data.objects[armature.name + ".001"]
 
@@ -711,11 +768,13 @@ def rig_character(
     except:
         pass
     x = original_name.split("_")
+    char_name = x[-2] if len(x) >= 2 else original_name
     try:
-        bpy.data.objects["rigify"].users_collection[0].name = x[-2]
+        bpy.data.objects["rigify"].users_collection[0].name = char_name
     except:
         pass
-    bpy.data.objects["rigify"].name = x[-2] + "Rig"
+    if "rigify" in bpy.data.objects:
+        bpy.data.objects["rigify"].name = char_name + "Rig"
 
 lis = ["Body", "Face", "Hair"]
 
