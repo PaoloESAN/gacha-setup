@@ -408,6 +408,27 @@ def rig_character(
 
     for x in [".L", ".R"]:
         rigifyr.data.edit_bones["DEF-forearm" + x + ".002"].parent = rigifyr.data.edit_bones["DEF-forearm"+x]
+
+    # Ensure Root_M and pelvic/hip root bones follow DEF-spine (or hips) so lower body moves with caderas/torso
+    target_hip_parent = (
+        rigifyr.data.edit_bones.get("DEF-spine")
+        or rigifyr.data.edit_bones.get("hips")
+        or rigifyr.data.edit_bones.get("torso")
+    )
+    if target_hip_parent:
+        root_m_candidates = [
+            b.name for b in rigifyr.data.edit_bones
+            if b.name.lower() in ["root_m", "hip_m", "root_scale", "root_m_scale", "pelvis_m"]
+            or b.name.lower().startswith("root_m.")
+            or b.name.lower().startswith("hip_m.")
+        ]
+        for r_name in root_m_candidates:
+            r_bone = rigifyr.data.edit_bones.get(r_name)
+            if r_bone and r_bone.name != target_hip_parent.name:
+                if not r_bone.parent or r_bone.parent.name in ["Main", "root", "root_2", ""]:
+                    r_bone.parent = target_hip_parent
+                    r_bone.use_connect = False
+
     print("donelol\n")
     bpy.ops.object.mode_set(mode='OBJECT')
     bpy.data.objects["rigify"].show_in_front = True
