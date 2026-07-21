@@ -134,6 +134,13 @@ def feature_centroid(mesh_obj, key_names):
     return mesh_obj.matrix_world @ c
 
 
+def pick_primary_key(keyblock, candidates):
+    for c in candidates:
+        if c in keyblock:
+            return c
+    return None
+
+
 def plan_hsr_controls(mesh_obj, fwd, right, up, face_size, keyblock):
     OFFSET = face_size * OFFSET_F
     LIM = face_size * TRAVEL_F
@@ -143,46 +150,69 @@ def plan_hsr_controls(mesh_obj, fwd, right, up, face_size, keyblock):
         return feature + fwd * OFFSET + right * h + up * v
 
     controls = []
+    handled_keys = set()
 
-    mouth_keys = [k for k in keyblock.keys() if k.startswith("Mouth_01_")]
-    mouth = feature_centroid(mesh_obj, mouth_keys)
-    eye = feature_centroid(mesh_obj, ["00_Close01_Eye", "00_Default_Eye"])
+    mouth_keys = [k for k in keyblock.keys() if "mouth" in k.lower() or "mth" in k.lower()]
+    eye_keys = [k for k in keyblock.keys() if "eye" in k.lower()]
+    brow_keys = [k for k in keyblock.keys() if "brow" in k.lower() or "ebr" in k.lower()]
+
+    mouth = feature_centroid(mesh_obj, mouth_keys) or feature_centroid(mesh_obj, ["Mouth_01_A", "Mouth_00_A"])
+    eyeC = feature_centroid(mesh_obj, ["00_Close01_Eye", "Eye_Close", "00_Default_Eye"]) or feature_centroid(mesh_obj, eye_keys)
+    brow = feature_centroid(mesh_obj, brow_keys)
 
     fcx = mesh_obj.matrix_world @ (0.125 * sum((Vector(c) for c in mesh_obj.bound_box), Vector()))
     if mouth is None:
         mouth = fcx - up * face_size * 0.12
-    if eye is None:
-        eye = fcx + up * face_size * 0.10
+    if eyeC is None:
+        eyeC = fcx + up * face_size * 0.10
+    if brow is None:
+        brow = eyeC + up * face_size * 0.08
 
     mouth = mouth + up * (face_size * MOUTH_RAISE_F)
     tri_scale = Vector((face_size * TRI_F,) * 3)
 
-    # 1. Eye Close Control
-    if "00_Close01_Eye" in keyblock:
+    # 0. Ignore default rest keys (Basis, Default, Rest, N, Max, Minimum)
+    for k in keyblock.keys():
+        kl = k.lower()
+        if "default" in kl or kl in ["basis", "00_default_brow", "00_default_eye", "00_default_mouth", "mouth_00_n", "mouth_01_n", "mouth_00_max", "mouth_01_max", "mouth_00_minimum", "mouth_01_minimum"]:
+            handled_keys.add(k)
+
+    # 1. Main Direct Face Controls (Pads/Toggles right on face)
+    primary_close = pick_primary_key(keyblock, ["00_Close01_Eye", "Eye_Close", "00_Close02_Eye"])
+    if primary_close and primary_close not in handled_keys:
+        handled_keys.add(primary_close)
         controls.append({
             'name': 'CTRL-Eye_Close',
             'collection': FACERIG_COLLECTION,
             'color': COL_EYELID,
             'group': 'Face Eyelid',
-            'head': place(eye, v=face_size * 0.05),
+            'head': place(eyeC, v=face_size * 0.04),
             'widget': 'triangle_down',
             'lim': LIM,
             'free': ('Z',),
             'range': 'neg',
             'shape_scale': tri_scale,
-            'drivers': [{'key': "00_Close01_Eye", 'axis': 'Z', 'dir': -1}]
+            'drivers': [{'key': primary_close, 'axis': 'Z', 'dir': -1}]
         })
 
-    # 2. Mouth Shift Pad (Driving Mouth_01_Up, Down, Wide, Narrow)
+    p_wide = pick_primary_key(keyblock, ["Mouth_01_Wide", "Mouth_00_Wide", "Mouth_Wide"])
+    p_narrow = pick_primary_key(keyblock, ["Mouth_01_Narrow", "Mouth_00_Narrow", "Mouth_Narrow"])
+    p_up = pick_primary_key(keyblock, ["Mouth_01_Up", "Mouth_00_Up", "Mouth_Up"])
+    p_down = pick_primary_key(keyblock, ["Mouth_01_Down", "Mouth_00_Down", "Mouth_Down"])
+
     drv_shift = []
-    if "Mouth_01_Wide" in keyblock:
-        drv_shift.append({'key': "Mouth_01_Wide", 'axis': 'X', 'dir': +1})
-    if "Mouth_01_Narrow" in keyblock:
-        drv_shift.append({'key': "Mouth_01_Narrow", 'axis': 'X', 'dir': -1})
-    if "Mouth_01_Up" in keyblock:
-        drv_shift.append({'key': "Mouth_01_Up", 'axis': 'Z', 'dir': +1})
-    if "Mouth_01_Down" in keyblock:
-        drv_shift.append({'key': "Mouth_01_Down", 'axis': 'Z', 'dir': -1})
+    if p_wide and p_wide not in handled_keys:
+        drv_shift.append({'key': p_wide, 'axis': 'X', 'dir': +1})
+        handled_keys.add(p_wide)
+    if p_narrow and p_narrow not in handled_keys:
+        drv_shift.append({'key': p_narrow, 'axis': 'X', 'dir': -1})
+        handled_keys.add(p_narrow)
+    if p_up and p_up not in handled_keys:
+        drv_shift.append({'key': p_up, 'axis': 'Z', 'dir': +1})
+        handled_keys.add(p_up)
+    if p_down and p_down not in handled_keys:
+        drv_shift.append({'key': p_down, 'axis': 'Z', 'dir': -1})
+        handled_keys.add(p_down)
 
     if drv_shift:
         mouth_scale = Vector((LIM * 0.9, LIM, LIM * 0.4))
@@ -200,77 +230,143 @@ def plan_hsr_controls(mesh_obj, fwd, right, up, face_size, keyblock):
             'drivers': drv_shift
         })
 
-    # 3. Visemes Row (A, E, I, O, U)
-    viseme_keys = ["Mouth_01_A", "Mouth_01_E", "Mouth_01_I", "Mouth_01_O", "Mouth_01_U"]
-    active_visemes = [k for k in viseme_keys if k in keyblock]
+    # 2. Left-side Panel: Eyebrows and Eyes (A la IZQUIERDA de la cabeza)
+    left_panel_origin = fcx - right * (face_size * 0.45) + up * (face_size * 0.20)
+    current_left_v = 0.0
+    MAX_PER_ROW = 8  # 8 controles por fila
+    ROW_Z_GAP = 0.050
+    ITEM_SP = 0.035
+
+    def add_left_panel_grid(items_list, group_name, color, widget_type='slider'):
+        nonlocal current_left_v
+        if not items_list:
+            return
+        total = len(items_list)
+        for i, item in enumerate(items_list):
+            if isinstance(item, tuple):
+                c_name, drv_list = item[0], item[1]
+            else:
+                c_name = item.get('name') if isinstance(item, dict) else f"CTRL-{item}"
+                drv_list = item.get('drivers') if isinstance(item, dict) else [{'key': item, 'axis': 'Z', 'dir': +1}]
+                if isinstance(item, str):
+                    handled_keys.add(item)
+
+            row_idx = i // MAX_PER_ROW
+            col_idx = i % MAX_PER_ROW
+
+            # Se extiende hacia la izquierda (-right)
+            h = -col_idx * (face_size * ITEM_SP)
+            v = current_left_v - row_idx * (face_size * ROW_Z_GAP)
+
+            controls.append({
+                'name': c_name,
+                'collection': FACERIG_COLLECTION,
+                'color': color,
+                'group': group_name,
+                'head': place(left_panel_origin, h=h, v=v),
+                'widget': widget_type,
+                'lim': LIM,
+                'free': ('Z',),
+                'range': 'pos',
+                'drivers': drv_list
+            })
+
+        num_rows = (total + MAX_PER_ROW - 1) // MAX_PER_ROW
+        current_left_v -= num_rows * (face_size * ROW_Z_GAP) + (face_size * 0.03)
+
+    # A. Brow Keys (Cejas - Panel Izquierdo)
+    unhandled_brows = [k for k in keyblock.keys() if k in brow_keys and k not in handled_keys]
+    if unhandled_brows:
+        add_left_panel_grid(unhandled_brows, 'Face Eyebrow', (0.30, 0.80, 0.35))
+
+    # B. Eye Keys (Ojos - Panel Izquierdo)
+    unhandled_eyes = [k for k in keyblock.keys() if k in eye_keys and k not in handled_keys]
+    if unhandled_eyes:
+        add_left_panel_grid(unhandled_eyes, 'Face Eye Expressions', COL_EYEAIM)
+
+    # 3. Right-side Panel: Mouth, Visemes, Phonemes, Extra (A la DERECHA de la cabeza)
+    right_panel_origin = fcx + right * (face_size * 0.45) + up * (face_size * 0.20)
+    current_right_v = 0.0
+
+    def add_right_panel_grid(items_list, group_name, color, widget_type='slider'):
+        nonlocal current_right_v
+        if not items_list:
+            return
+        total = len(items_list)
+        for i, item in enumerate(items_list):
+            if isinstance(item, tuple):
+                c_name, drv_list = item[0], item[1]
+            else:
+                c_name = item.get('name') if isinstance(item, dict) else f"CTRL-{item}"
+                drv_list = item.get('drivers') if isinstance(item, dict) else [{'key': item, 'axis': 'Z', 'dir': +1}]
+                if isinstance(item, str):
+                    handled_keys.add(item)
+
+            row_idx = i // MAX_PER_ROW
+            col_idx = i % MAX_PER_ROW
+
+            # Se extiende hacia la derecha (+right)
+            h = col_idx * (face_size * ITEM_SP)
+            v = current_right_v - row_idx * (face_size * ROW_Z_GAP)
+
+            controls.append({
+                'name': c_name,
+                'collection': FACERIG_COLLECTION,
+                'color': color,
+                'group': group_name,
+                'head': place(right_panel_origin, h=h, v=v),
+                'widget': widget_type,
+                'lim': LIM,
+                'free': ('Z',),
+                'range': 'pos',
+                'drivers': drv_list
+            })
+
+        num_rows = (total + MAX_PER_ROW - 1) // MAX_PER_ROW
+        current_right_v -= num_rows * (face_size * ROW_Z_GAP) + (face_size * 0.03)
+
+    # A. Visemas (A, E, I, O, U - Panel Derecho)
+    viseme_letters = ["A", "E", "I", "O", "U"]
+    active_visemes = []
+    for letter in viseme_letters:
+        pk = pick_primary_key(keyblock, [f"Mouth_01_{letter}", f"Mouth_00_{letter}", f"Mouth_{letter}"])
+        if pk and pk not in handled_keys:
+            active_visemes.append((f"CTRL-Viseme_{letter}", [{'key': pk, 'axis': 'Z', 'dir': +1}]))
+            handled_keys.add(pk)
     if active_visemes:
-        n = len(active_visemes)
-        for i, k in enumerate(active_visemes):
-            h = (i - (n - 1) / 2.0) * SPACING
-            short_name = k.replace("Mouth_01_", "")
-            controls.append({
-                'name': f'CTRL-Viseme_{short_name}',
-                'collection': FACERIG_COLLECTION,
-                'color': COL_VISEME,
-                'group': 'Face Visemes',
-                'head': place(mouth, h=h, v=-face_size * 0.08),
-                'widget': 'slider',
-                'lim': LIM,
-                'free': ('Z',),
-                'range': 'pos',
-                'drivers': [{'key': k, 'axis': 'Z', 'dir': +1}]
-            })
+        add_right_panel_grid(active_visemes, 'Face Visemes', COL_VISEME)
 
-    # 4. Expressions Row (Smile, Angry, Pain, Worry, Proud, Twisted, Pout)
-    expr_candidates = [
-        "Mouth_01_Smile01", "Mouth_01_Smile02", "Mouth_01_Smile03", "Mouth_01_Smile04",
-        "Mouth_01_Angry01", "Mouth_01_Angry02", "Mouth_01_Angry03", "Mouth_01_Angry04",
-        "Mouth_01_Pain01", "Mouth_01_Pain02", "Mouth_01_Pain03", "Mouth_01_Pain04",
-        "Mouth_01_Worry01", "Mouth_01_Worry02", "Mouth_01_Worry03", "Mouth_01_Worry04",
-        "Mouth_01_Proud01", "Mouth_01_Proud02",
-        "Mouth_01_Twisted01", "Mouth_01_Twisted02",
-        "Mouth_01_Pout"
-    ]
-    active_expr = [k for k in expr_candidates if k in keyblock]
-    if active_expr:
-        n = len(active_expr)
-        expr_spacing = min(SPACING, face_size * 0.035)
-        for i, k in enumerate(active_expr):
-            h = (i - (n - 1) / 2.0) * expr_spacing
-            short_name = k.replace("Mouth_01_", "")
-            controls.append({
-                'name': f'CTRL-Expr_{short_name}',
-                'collection': FACERIG_COLLECTION,
-                'color': COL_EXPRESSION,
-                'group': 'Face Expressions',
-                'head': place(mouth, h=h, v=-face_size * 0.14),
-                'widget': 'slider',
-                'lim': LIM,
-                'free': ('Z',),
-                'range': 'pos',
-                'drivers': [{'key': k, 'axis': 'Z', 'dir': +1}]
-            })
+    # B. Mouth Expression Keys (Expresiones de Boca - Panel Derecho)
+    unhandled_mouth = [k for k in keyblock.keys() if k in mouth_keys and k not in handled_keys and "phoneme" not in k.lower()]
+    if unhandled_mouth:
+        mouth_items = []
+        for k in unhandled_mouth:
+            clean_k = k.replace("Mouth_00_", "").replace("Mouth_01_", "").replace("Mouth_", "")
+            c_name = f"CTRL-Expr_{clean_k}" if clean_k != k else f"CTRL-{k}"
+            handled_keys.add(k)
+            mouth_items.append((c_name, [{'key': k, 'axis': 'Z', 'dir': +1}]))
+        add_right_panel_grid(mouth_items, 'Face Expressions', COL_EXPRESSION)
 
-    # 5. Phonemes Row (cn_*)
-    phoneme_keys = [k for k in keyblock.keys() if k.startswith("Mouth_01_Phoneme_cn_")]
+    # C. Phoneme Keys (Fonemas - Panel Derecho)
+    phoneme_keys = [k for k in keyblock.keys() if "phoneme" in k.lower() and k not in handled_keys]
     if phoneme_keys:
-        n = len(phoneme_keys)
-        ph_spacing = min(SPACING, face_size * 0.025)
-        for i, k in enumerate(phoneme_keys):
-            h = (i - (n - 1) / 2.0) * ph_spacing
-            short_name = k.replace("Mouth_01_Phoneme_cn_", "ph_")
-            controls.append({
-                'name': f'CTRL-{short_name}',
-                'collection': FACERIG_COLLECTION,
-                'color': COL_CORNER,
-                'group': 'Face Phonemes',
-                'head': place(mouth, h=h, v=-face_size * 0.20),
-                'widget': 'slider',
-                'lim': LIM,
-                'free': ('Z',),
-                'range': 'pos',
-                'drivers': [{'key': k, 'axis': 'Z', 'dir': +1}]
-            })
+        ph_items = []
+        for k in phoneme_keys:
+            idx_p = k.lower().find("phoneme_cn_")
+            sub = k[idx_p + len("phoneme_cn_"):] if idx_p != -1 else k
+            c_name = f"CTRL-ph_{sub}"
+            handled_keys.add(k)
+            ph_items.append((c_name, [{'key': k, 'axis': 'Z', 'dir': +1}]))
+        add_right_panel_grid(ph_items, 'Face Phonemes', COL_CORNER)
+
+    # D. Extra Keys (Dynamic Fallback - Panel Derecho)
+    remaining = [k for k in keyblock.keys() if k not in handled_keys]
+    if remaining:
+        rem_items = []
+        for k in remaining:
+            handled_keys.add(k)
+            rem_items.append((f"CTRL-{k}", [{'key': k, 'axis': 'Z', 'dir': +1}]))
+        add_right_panel_grid(rem_items, 'Face Extra Keys', COL_EXPRESSION)
 
     return controls
 
@@ -582,7 +678,7 @@ def hsr_face_rig_main():
     for obj in bpy.data.objects:
         if obj.type == 'MESH' and obj.name in bpy.context.view_layer.objects:
             n = obj.name.lower()
-            if "face" in n or (obj.data.shape_keys and any(k.startswith("Mouth_01_") for k in obj.data.shape_keys.key_blocks.keys())):
+            if "face" in n or (obj.data.shape_keys and any(k.startswith("Mouth_") or k.startswith("Brow_") or k.startswith("Eye_") for k in obj.data.shape_keys.key_blocks.keys())):
                 faceobj = obj
                 break
 
