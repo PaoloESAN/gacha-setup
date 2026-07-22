@@ -419,8 +419,8 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             'Body3',
             'Body_Trans',
             'Mat_Trans',
-            'Face',
             'EyeShadow',
+            'Face',
             'Weapon_Trans',
             'Body',  # Important this is last in the list because it could interfere with Body1 and Body2
         ]

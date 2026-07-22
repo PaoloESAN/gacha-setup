@@ -1090,12 +1090,13 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                     mat_weapon_ol = bpy.data.materials.get("ZZZ Weapon Outlines")
 
                     cam_obj = bpy.data.objects.get("Camera") or getattr(self.context.scene, "camera", None)
+                    outline_thickness = 0.075 if "face" in obj.name.lower() else 0.750
 
                     target_settings = [
                         # Base Geometry = True
                         (["Base Geometry", "Input_12", "Input_0"], True),
-                        # Outline Thickness = 0.750
-                        (["Outline Thickness", "Input_7", "Input_2"], 0.750),
+                        # Outline Thickness (0.075 for face, 0.750 for others)
+                        (["Outline Thickness", "Input_7", "Input_2"], outline_thickness),
                         # Camera
                         (["Camera", "Input_1", "Input_4"], cam_obj),
                         # Hair

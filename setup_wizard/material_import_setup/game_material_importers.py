@@ -241,6 +241,7 @@ class HonkaiStarRailMaterialImporterFacade(GameMaterialImporter):
         {'name': StellarToonShaderMaterialNames.BASE},
         {'name': StellarToonShaderMaterialNames.HAIR},
         {'name': StellarToonShaderMaterialNames.FACE},
+        {'name': StellarToonShaderMaterialNames.EYESHADOW},
         {'name': StellarToonShaderMaterialNames.WEAPON},
         {'name': StellarToonShaderMaterialNames.BASE_OUTLINES},
         {'name': StellarToonShaderMaterialNames.HAIR_OUTLINES},

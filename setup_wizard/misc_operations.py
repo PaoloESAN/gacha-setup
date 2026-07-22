@@ -122,11 +122,26 @@ class HYV_OT_VertexPaintFaceSeeThroughEffect(Operator, CustomOperatorProperties)
 
     def __replace_eyeshadow_material(self):
         face_mesh = bpy.data.objects.get('Face')
+        if not face_mesh:
+            return
         face_mesh_material_slots = face_mesh.material_slots
+
+        eyeshadow_mat = None
+        if hasattr(self.shader_material_names, 'EYESHADOW'):
+            eyeshadow_mat = bpy.data.materials.get(self.shader_material_names.EYESHADOW)
+        
+        if not eyeshadow_mat:
+            for mat in bpy.data.materials:
+                if 'EyeShadow' in mat.name:
+                    eyeshadow_mat = mat
+                    break
 
         for material_slot in face_mesh_material_slots:
             if 'EyeShadow' in material_slot.material.name:
-                material_slot.material = bpy.data.materials.get(self.shader_material_names.FACE)
+                if eyeshadow_mat:
+                    material_slot.material = eyeshadow_mat
+                else:
+                    material_slot.material = bpy.data.materials.get(self.shader_material_names.FACE)
 
 
 class GI_OT_DeleteSpecificObjects(Operator, CustomOperatorProperties):
