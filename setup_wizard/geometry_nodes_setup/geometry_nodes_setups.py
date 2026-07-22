@@ -742,6 +742,128 @@ class HonkaiStarRailGeometryNodesSetup(GameGeometryNodesSetup):
 
         face_meshes = [mesh for mesh_name, mesh in bpy.data.meshes.items() if 'Face' in mesh_name and 'Face_Mask' not in mesh_name]
         self.fix_face_outlines_by_reordering_material_slots(face_meshes)
+        self.apply_hsr_hair_cleanup_and_vertex_paint()
+
+    def apply_hsr_hair_cleanup_and_vertex_paint(self):
+        hair_objs = [obj for obj in bpy.context.scene.objects if obj.type == 'MESH' and 'hair' in obj.name.lower()]
+        for obj in hair_objs:
+            mesh = obj.data
+
+            col_layer = mesh.color_attributes.get('Col') or mesh.color_attributes.get('Color')
+            original_colors_by_pos = {}
+            
+            if col_layer and hasattr(col_layer, "data"):
+                if col_layer.domain == 'POINT':
+                    for v_idx, el in enumerate(col_layer.data):
+                        if v_idx < len(mesh.vertices):
+                            v_co = mesh.vertices[v_idx].co
+                            pos_key = (round(v_co.x, 3), round(v_co.y, 3), round(v_co.z, 3))
+                            original_colors_by_pos[pos_key] = (el.color[0], el.color[1], el.color[2], el.color[3])
+                elif col_layer.domain == 'CORNER':
+                    for loop_idx, el in enumerate(col_layer.data):
+                        if loop_idx < len(mesh.loops):
+                            v_idx = mesh.loops[loop_idx].vertex_index
+                            v_co = mesh.vertices[v_idx].co
+                            pos_key = (round(v_co.x, 3), round(v_co.y, 3), round(v_co.z, 3))
+                            original_colors_by_pos[pos_key] = (el.color[0], el.color[1], el.color[2], el.color[3])
+
+            if bpy.context.mode != 'OBJECT':
+                bpy.ops.object.mode_set(mode='OBJECT')
+
+            try:
+                bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+            except Exception:
+                pass
+
+            try:
+                bpy.context.view_layer.objects.active = obj
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_all(action='SELECT')
+                try:
+                    bpy.ops.mesh.remove_doubles(threshold=0.0001)
+                except Exception:
+                    pass
+                try:
+                    bpy.ops.mesh.clear_sharp()
+                except Exception:
+                    pass
+                try:
+                    bpy.ops.mesh.delete_loose()
+                    bpy.ops.mesh.dissolve_degenerate()
+                except Exception:
+                    pass
+                try:
+                    bpy.ops.mesh.normals_make_consistent(inside=False)
+                except Exception:
+                    pass
+                bpy.ops.object.mode_set(mode='OBJECT')
+            except Exception:
+                if bpy.context.mode != 'OBJECT':
+                    bpy.ops.object.mode_set(mode='OBJECT')
+
+            attr_names_to_remove = []
+            for attr in list(mesh.attributes):
+                aname = attr.name
+                if (aname in ["N", "custom_normals", "corner_normal", "split_normals"] or "normal" in aname.lower()) and not getattr(attr, "is_internal", False):
+                    attr_names_to_remove.append(aname)
+
+            for name in attr_names_to_remove:
+                target_attr = mesh.attributes.get(name)
+                if target_attr:
+                    try:
+                        mesh.attributes.remove(target_attr)
+                    except Exception:
+                        pass
+
+            if hasattr(mesh, "clear_custom_normals"):
+                try:
+                    mesh.clear_custom_normals()
+                except Exception:
+                    pass
+
+            for e in mesh.edges:
+                e.use_edge_sharp = False
+
+            for p in mesh.polygons:
+                p.use_smooth = True
+
+            if len(mesh.vertices) > 0:
+                world_verts_z = [(obj.matrix_world @ v.co).z for v in mesh.vertices]
+                min_z = min(world_verts_z)
+                max_z = max(world_verts_z)
+                height_range = max_z - min_z
+                cutoff_z = min_z + (height_range * 0.45)
+
+                col_layer = mesh.color_attributes.get('Col') or mesh.color_attributes.get('Color')
+                if not col_layer:
+                    col_layer = mesh.color_attributes.new(name='Col', type='FLOAT_COLOR', domain='POINT')
+
+                if hasattr(col_layer, "data"):
+                    if col_layer.domain == 'POINT':
+                        for i, el in enumerate(col_layer.data):
+                            if i < len(mesh.vertices):
+                                v_co = mesh.vertices[i].co
+                                v_z = (obj.matrix_world @ v_co).z
+                                pos_key = (round(v_co.x, 3), round(v_co.y, 3), round(v_co.z, 3))
+                                
+                                if v_z >= cutoff_z and pos_key in original_colors_by_pos:
+                                    el.color = original_colors_by_pos[pos_key]
+                                else:
+                                    el.color = (1.0, 1.0, 1.0, 1.0)
+                    elif col_layer.domain == 'CORNER':
+                        for i, el in enumerate(col_layer.data):
+                            if i < len(mesh.loops):
+                                v_idx = mesh.loops[i].vertex_index
+                                v_co = mesh.vertices[v_idx].co
+                                v_z = (obj.matrix_world @ v_co).z
+                                pos_key = (round(v_co.x, 3), round(v_co.y, 3), round(v_co.z, 3))
+                                
+                                if v_z >= cutoff_z and pos_key in original_colors_by_pos:
+                                    el.color = original_colors_by_pos[pos_key]
+                                else:
+                                    el.color = (1.0, 1.0, 1.0, 1.0)
+
+            mesh.update()
 
     def create_geometry_nodes_modifier(self, mesh_name):
         mesh = bpy.context.scene.objects[mesh_name]
@@ -792,6 +914,7 @@ class StellarToonGeometryNodesSetup(HonkaiStarRailGeometryNodesSetup):
 
         face_meshes = [mesh for mesh_name, mesh in bpy.data.meshes.items() if 'Face' in mesh_name and 'Face_Mask' not in mesh_name]
         self.fix_face_outlines_by_reordering_material_slots(face_meshes)
+        self.apply_hsr_hair_cleanup_and_vertex_paint()
 
     def __set_light_vectors_default_output_attributes(self, light_vectors_modifier):
         set_modifier_property(light_vectors_modifier, self.LIGHTDIR_OUTPUT_ATTRIBUTE, 'lightDir')
