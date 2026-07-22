@@ -1046,7 +1046,7 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                             pass
 
                 # Outlines
-                if zzz_outlines_gn and "face" not in obj.name.lower():
+                if zzz_outlines_gn:
                     mod = obj.modifiers.get("Outlines")
                     if not mod:
                         mod = obj.modifiers.new(name="Outlines", type='NODES')
@@ -1062,29 +1062,68 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                     except:
                         pass
 
-                    mat_mappings = {
-                        "Input_10": "ZZZ Shader Hair",
-                        "Input_5": "ZZZ Hair Outlines",
-                        "Input_11": "ZZZ Shader Body",
-                        "Input_9": "ZZZ Body Outlines",
-                        "Input_14": "ZZZ Shader Body 2",
-                        "Input_15": "ZZZ Body 2 Outlines",
-                        "Input_18": "ZZZ Shader Body",
-                        "Input_19": "ZZZ Body Outlines",
-                        "Input_24": "ZZZ Shader Weapon",
-                        "Input_25": "ZZZ Weapon Outlines",
-                        "Input_26": "ZZZ Shader Weapon",
-                        "Input_27": "ZZZ Weapon Outlines",
-                        "Socket_0": "ZZZ Shader Body3/Leg",
-                        "Socket_1": "ZZZ Body3/Leg Outlines",
-                    }
-                    for sock, mat_name in mat_mappings.items():
-                        m = bpy.data.materials.get(mat_name)
-                        if m:
-                            try:
-                                mod[sock] = m
-                            except:
-                                pass
+                    # Dynamic material resolution for actual character materials & outlines
+                    def find_mat(keywords, fallback_name):
+                        for mat in bpy.data.materials:
+                            if mat.name.startswith("ZZZ Shader") and mat.name.lower() != fallback_name.lower():
+                                m_lower = mat.name.lower()
+                                if any(kw in m_lower for kw in keywords):
+                                    return mat
+                        return bpy.data.materials.get(fallback_name)
+
+                    mat_hair = find_mat(["hair"], "ZZZ Shader Hair")
+                    mat_hair_ol = bpy.data.materials.get("ZZZ Hair Outlines")
+
+                    mat_body1 = find_mat(["body_1", "body1", "body_01"], "ZZZ Shader Body") or find_mat(["body"], "ZZZ Shader Body")
+                    mat_body1_ol = bpy.data.materials.get("ZZZ Body Outlines")
+
+                    mat_face = find_mat(["face"], "ZZZ Shader Face")
+                    mat_face_ol = bpy.data.materials.get("ZZZ Face Outlines") or bpy.data.materials.get("ZZZ Face Outline")
+
+                    mat_body2 = find_mat(["body_2", "body2", "body_02", "dress"], "ZZZ Shader Body 2")
+                    mat_body2_ol = bpy.data.materials.get("ZZZ Body 2 Outlines")
+
+                    mat_body3 = find_mat(["body_3", "body3", "body_03", "leg"], "ZZZ Shader Body3/Leg")
+                    mat_body3_ol = bpy.data.materials.get("ZZZ Body3/Leg Outlines")
+
+                    mat_weapon = find_mat(["weapon"], "ZZZ Shader Weapon")
+                    mat_weapon_ol = bpy.data.materials.get("ZZZ Weapon Outlines")
+
+                    cam_obj = bpy.data.objects.get("Camera") or getattr(self.context.scene, "camera", None)
+
+                    target_settings = [
+                        # Base Geometry = True
+                        (["Base Geometry", "Input_12", "Input_0"], True),
+                        # Outline Thickness = 0.750
+                        (["Outline Thickness", "Input_7", "Input_2"], 0.750),
+                        # Camera
+                        (["Camera", "Input_1", "Input_4"], cam_obj),
+                        # Hair
+                        (["Hair", "Input_10"], mat_hair),
+                        (["Hair Outline", "Input_5"], mat_hair_ol),
+                        # Body
+                        (["Body", "Input_11"], mat_body1),
+                        (["Body Outline", "Input_9"], mat_body1_ol),
+                        # Face
+                        (["Face", "Input_14"], mat_face),
+                        (["Face Outline", "Input_15"], mat_face_ol),
+                        # Dress / Dress 2
+                        (["Dress", "Input_18"], mat_body2),
+                        (["Dress Outline", "Input_19"], mat_body2_ol),
+                        (["Dress 2", "Input_24"], mat_body2),
+                        (["Dress 2 Outline", "Input_25"], mat_body2_ol),
+                        # Body3 / Leg
+                        (["Body3/Leg", "Socket_0"], mat_body3),
+                        (["Body3/Leg Outline", "Socket_1"], mat_body3_ol),
+                        # Other / Weapon
+                        (["Other", "Input_26"], mat_weapon),
+                        (["Other Outline", "Input_27"], mat_weapon_ol),
+                    ]
+
+                    for keys, val in target_settings:
+                        if val is not None:
+                            for key in keys:
+                                set_modifier_property(mod, key, val)
 
                     if bod and obj != bod:
                         try:

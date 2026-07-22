@@ -350,6 +350,15 @@ class ZenlessZoneZeroMaterialImporterFacade(GameMaterialImporter):
                 {'name': ZenlessZoneZeroShaderMaterialNames.WEAPON2},
                 {'name': ZenlessZoneZeroShaderMaterialNames.EYE},
                 {'name': ZenlessZoneZeroShaderMaterialNames.EYE_HIGHLIGHTS},
+                {'name': ZenlessZoneZeroShaderMaterialNames.BODY_OUTLINE},
+                {'name': ZenlessZoneZeroShaderMaterialNames.BODY2_OUTLINE},
+                {'name': ZenlessZoneZeroShaderMaterialNames.BODY3_OUTLINE},
+                {'name': ZenlessZoneZeroShaderMaterialNames.FACE_OUTLINE},
+                {'name': ZenlessZoneZeroShaderMaterialNames.FACE_OUTLINES},
+                {'name': ZenlessZoneZeroShaderMaterialNames.HAIR_OUTLINE},
+                {'name': ZenlessZoneZeroShaderMaterialNames.WEAPON_OUTLINE},
+                {'name': 'Transp OL'},
+                {'name': 'Eye Transparent'},
             ]
         )
 
