@@ -702,26 +702,91 @@ def setup_hsr_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_si
                         pass
             bone.hide = True
 
-    # Apply precise 3D location offsets specifically for eye.L and eye.R
-    eye_L_pbone = armature.pose.bones.get("eye.L")
-    if eye_L_pbone:
-        try:
-            eye_L_pbone.location.x = 0.000645
-            eye_L_pbone.location.y = -0.0035
-            eye_L_pbone.location.z = -0.000568
-        except Exception:
-            pass
-
-    eye_R_pbone = armature.pose.bones.get("eye.R")
-    if eye_R_pbone:
-        try:
-            eye_R_pbone.location.x = -0.000645
-            eye_R_pbone.location.y = -0.0035
-            eye_R_pbone.location.z = -0.000568
-        except Exception:
-            pass
+    # Set up dynamic Y location drivers for eye bones driven by eye shape key activation (up to -0.0040 max offset)
+    setup_dynamic_eye_y_drivers(mesh_obj, armature, max_offset=-0.0040)
 
     print("HSR Face rig build complete.")
+
+
+def setup_dynamic_eye_y_drivers(mesh_obj, armature, max_offset=-0.0040):
+    """
+    Drives eye.L and eye.R Y location backwards up to max_offset (-0.0040)
+    proportionally when eye expression/close shape keys are activated by the facial rig.
+    Replaces static fixed eye location offset hack.
+    """
+    candidate_eye_L = ["eye.L", "DEF-eye.L", "+EyeBone L A01", "+EyeBone L A02", "EYE_L", "Eye_L"]
+    candidate_eye_R = ["eye.R", "DEF-eye.R", "+EyeBone R A01", "+EyeBone R A02", "EYE_R", "Eye_R"]
+
+    eye_L_pbone = next((armature.pose.bones.get(b) for b in candidate_eye_L if armature.pose.bones.get(b)), None)
+    eye_R_pbone = next((armature.pose.bones.get(b) for b in candidate_eye_R if armature.pose.bones.get(b)), None)
+
+    # Reset any static pose location offsets
+    if eye_L_pbone:
+        eye_L_pbone.location = (0.0, 0.0, 0.0)
+    if eye_R_pbone:
+        eye_R_pbone.location = (0.0, 0.0, 0.0)
+
+    if not mesh_obj or not mesh_obj.data or not mesh_obj.data.shape_keys:
+        return
+
+    keyblock = mesh_obj.data.shape_keys.key_blocks
+    sk_id = mesh_obj.data.shape_keys
+
+    eye_sk_L = []
+    eye_sk_R = []
+
+    for k_name in keyblock.keys():
+        kl = k_name.lower()
+        if "default" in kl or kl == "basis":
+            continue
+        # Only select eye shape keys (excluding brow/mouth)
+        if any(kw in kl for kw in ["eye", "wink"]) and not any(ex in kl for ex in ["brow", "mouth"]):
+            is_r_only = kl.endswith("_r") or kl.endswith(".r") or kl.endswith("right") or "_r_" in kl
+            is_l_only = kl.endswith("_l") or kl.endswith(".l") or kl.endswith("left") or "_l_" in kl
+
+            if not is_r_only:
+                eye_sk_L.append(k_name)
+            if not is_l_only:
+                eye_sk_R.append(k_name)
+
+    def attach_driver(pbone, sk_list):
+        if not pbone or not sk_list:
+            return
+        try:
+            pbone.driver_remove("location", 1)
+        except Exception:
+            pass
+
+        driver_obj = pbone.driver_add("location", 1)
+        drv = driver_obj.driver
+        drv.type = 'SCRIPTED'
+
+        var_names = []
+        for i, sk_name in enumerate(sk_list):
+            vn = f"v{i}"
+            var = drv.variables.new()
+            var.name = vn
+            var.type = 'SINGLE_PROP'
+            tgt = var.targets[0]
+            try:
+                tgt.id_type = 'KEY'
+            except Exception:
+                pass
+            tgt.id = sk_id
+            tgt.data_path = f'key_blocks["{sk_name}"].value'
+            var_names.append(vn)
+
+        if len(var_names) == 1:
+            drv.expression = f"{max_offset!r} * max(0.0, min(1.0, {var_names[0]}))"
+        else:
+            terms_str = ", ".join(var_names)
+            drv.expression = f"{max_offset!r} * max(0.0, min(1.0, max({terms_str})))"
+
+    if eye_L_pbone:
+        attach_driver(eye_L_pbone, eye_sk_L)
+    if eye_R_pbone:
+        attach_driver(eye_R_pbone, eye_sk_R)
+
 
 
 def hsr_face_rig_main():
