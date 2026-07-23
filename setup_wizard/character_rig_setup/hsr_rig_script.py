@@ -446,6 +446,85 @@ def rig_character(
     except Exception as e:
         print(f"Error appending custom bone shapes: {e}")
 
+    # Join eyerig armature if present (copied from ZZZ eye rig architecture)
+    eye_rig_obj = bpy.data.objects.get("eyerig")
+    if eye_rig_obj:
+        try:
+            bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.select_all(action='DESELECT')
+            rigifyr.select_set(True)
+            eye_rig_obj.select_set(True)
+            bpy.context.view_layer.objects.active = rigifyr
+            bpy.ops.object.join()
+            print("Successfully joined eyerig to HSR rig.")
+        except Exception as e:
+            print(f"Notice joining eyerig: {e}")
+
+    # Set up eye rig bone parenting and positioning in EDIT mode
+    left_eye_bone_name = None
+    right_eye_bone_name = None
+    try:
+        bpy.ops.object.mode_set(mode='EDIT')
+        armature = rigifyr.data
+
+        possible_eye_L = ["+EyeBone L A02", "+EyeBone L A01", "eye.L", "EYE_L", "Eye_L", "DEF-eye.L", "Skn_L_Eye", "Bdy_L_Eye"]
+        possible_eye_R = ["+EyeBone R A02", "+EyeBone R A01", "eye.R", "EYE_R", "Eye_R", "DEF-eye.R", "Skn_R_Eye", "Bdy_R_Eye"]
+
+        left_eye_bone_name = next((b for b in possible_eye_L if b in armature.edit_bones), None)
+        right_eye_bone_name = next((b for b in possible_eye_R if b in armature.edit_bones), None)
+
+        final_eye_L_name = left_eye_bone_name or "DEF-eye.L"
+        final_eye_R_name = right_eye_bone_name or "DEF-eye.R"
+
+        head_bone = armature.edit_bones.get("head") or armature.edit_bones.get("DEF-spine.006")
+        if head_bone:
+            if "eyetrack" in armature.edit_bones:
+                armature.edit_bones['eyetrack'].parent = head_bone
+            if "+EyeBone R A01.001" in armature.edit_bones:
+                armature.edit_bones['+EyeBone R A01.001'].parent = head_bone
+            if "+EyeBone L A01.001" in armature.edit_bones:
+                armature.edit_bones['+EyeBone L A01.001'].parent = head_bone
+
+        eye_R_pos = armature.edit_bones[final_eye_R_name].head if final_eye_R_name in armature.edit_bones else None
+        eye_L_pos = armature.edit_bones[final_eye_L_name].head if final_eye_L_name in armature.edit_bones else None
+
+        if eye_R_pos and '+EyeBone R A01.001' in armature.edit_bones:
+            armature.edit_bones['+EyeBone R A01.001'].head = eye_R_pos
+            armature.edit_bones['+EyeBone R A01.001'].tail.x = eye_R_pos[0]
+            if final_eye_R_name in armature.edit_bones:
+                armature.edit_bones['+EyeBone R A01.001'].tail.y = armature.edit_bones[final_eye_R_name].tail.y
+            armature.edit_bones['+EyeBone R A01.001'].tail.z = eye_R_pos[2]
+
+        if eye_L_pos and '+EyeBone L A01.001' in armature.edit_bones:
+            armature.edit_bones['+EyeBone L A01.001'].head = eye_L_pos
+            armature.edit_bones['+EyeBone L A01.001'].tail.x = eye_L_pos[0]
+            if final_eye_L_name in armature.edit_bones:
+                armature.edit_bones['+EyeBone L A01.001'].tail.y = armature.edit_bones[final_eye_L_name].tail.y
+            armature.edit_bones['+EyeBone L A01.001'].tail.z = eye_L_pos[2]
+
+        if eye_R_pos and 'eyetrack_R' in armature.edit_bones:
+            armature.edit_bones['eyetrack_R'].head.x = eye_R_pos[0]
+            armature.edit_bones['eyetrack_R'].head.z = eye_R_pos[2]
+            armature.edit_bones['eyetrack_R'].tail.x = eye_R_pos[0]
+            armature.edit_bones['eyetrack_R'].tail.z = eye_R_pos[2] + 0.01
+
+        if eye_L_pos and 'eyetrack_L' in armature.edit_bones:
+            armature.edit_bones['eyetrack_L'].head.x = eye_L_pos[0]
+            armature.edit_bones['eyetrack_L'].head.z = eye_L_pos[2]
+            armature.edit_bones['eyetrack_L'].tail.x = eye_L_pos[0]
+            armature.edit_bones['eyetrack_L'].tail.z = eye_L_pos[2] + 0.01
+
+        if eye_R_pos and eye_L_pos and 'eyetrack' in armature.edit_bones:
+            armature.edit_bones['eyetrack'].head.x = (eye_R_pos[0] + eye_L_pos[0]) / 2
+            armature.edit_bones['eyetrack'].head.z = (eye_R_pos[2] + eye_L_pos[2]) / 2
+            armature.edit_bones['eyetrack'].tail.x = (eye_R_pos[0] + eye_L_pos[0]) / 2
+            if 'eyetrack_L' in armature.edit_bones:
+                armature.edit_bones['eyetrack'].tail.z = armature.edit_bones['eyetrack_L'].tail.z
+    except Exception as e:
+        print(f"Eye edit mode setup notice: {e}")
+
+    bpy.ops.object.mode_set(mode='POSE')
+
     # Assign custom shapes to main control bones and disable bone length scaling ONLY for specific custom shapes
     this_obj = rigifyr
 
@@ -494,6 +573,27 @@ def rig_character(
 
     safe_set_custom_shape("hand_ik.L", "hand", scale=(1.0, 1.0, 1.0), disable_bone_size=True)
     safe_set_custom_shape("hand_ik.R", "hand", scale=(1.0, 1.0, 1.0), disable_bone_size=True)
+
+    safe_set_custom_shape("eyetrack", "eye controller", scale=(4.5, 4.5, 4.5), disable_bone_size=False)
+    safe_set_custom_shape("eyetrack_L", "eye circle", scale=(1.8, 1.8, 1.8), disable_bone_size=False)
+    safe_set_custom_shape("eyetrack_R", "eye circle", scale=(1.8, 1.8, 1.8), disable_bone_size=False)
+
+    def add_eye_bone_const(bone_name, to_bone):
+        pbone = rigifyr.pose.bones.get(bone_name)
+        if pbone and to_bone in rigifyr.pose.bones:
+            co = pbone.constraints.new('COPY_ROTATION')
+            co.target = rigifyr
+            co.subtarget = to_bone
+            co.target_space = "LOCAL_OWNER_ORIENT"
+            co.owner_space = "LOCAL"
+
+    try:
+        if left_eye_bone_name:
+            add_eye_bone_const(left_eye_bone_name, "+EyeBone L A01.001")
+        if right_eye_bone_name:
+            add_eye_bone_const(right_eye_bone_name, "+EyeBone R A01.001")
+    except Exception as e:
+        print(f"Eye bone constraint notice: {e}")
 
     safe_set_custom_shape("palm.L", None, scale=(1.2, 1.2, 1.2), disable_bone_size=False)
     safe_set_custom_shape("palm.R", None, scale=(1.2, 1.2, 1.2), disable_bone_size=False)
@@ -678,6 +778,28 @@ def rig_character(
         if palms_coll:
             palms_coll.is_visible = True
 
+        # Create visible "Facerig" collection for eye control bones
+        facerig_coll = rigifyr.data.collections.get("Facerig") or rigifyr.data.collections.new("Facerig")
+        facerig_coll.is_visible = True
+
+        eye_ctrl_bone_names = ["eyetrack", "eyetrack_L", "eyetrack_R"]
+        for bname in eye_ctrl_bone_names:
+            if bname in rigifyr.data.bones:
+                b = rigifyr.data.bones[bname]
+                try:
+                    facerig_coll.assign(b)
+                    b.hide = False
+                except Exception:
+                    pass
+
+        # Hide helper tracking bones (+EyeBone L/R A01.001)
+        for bname in ["+EyeBone L A01.001", "+EyeBone R A01.001"]:
+            if bname in rigifyr.data.bones:
+                try:
+                    rigifyr.data.bones[bname].hide = True
+                except Exception:
+                    pass
+
         # Create hidden "Face Bones" and "Extra Bones" collections
         face_bones_coll = rigifyr.data.collections.get("Face Bones") or rigifyr.data.collections.new("Face Bones")
         face_bones_coll.is_visible = False
@@ -696,7 +818,7 @@ def rig_character(
             b_name = bone.name
             b_low = b_name.lower()
 
-            if b_name.startswith("CTRL-") or b_name in main_ctrls:
+            if b_name.startswith("CTRL-") or b_name in main_ctrls or b_name in eye_ctrl_bone_names:
                 continue
 
             is_face_bone = any(kw in b_low for kw in face_keywords)
@@ -708,7 +830,7 @@ def rig_character(
                 except Exception:
                     pass
                 for c in list(bone.collections):
-                    if c != target_coll and c.name not in hidden_collections:
+                    if c != target_coll and c != facerig_coll and c.name not in hidden_collections:
                         try:
                             c.unassign(bone)
                         except Exception:
@@ -734,8 +856,8 @@ def rig_character(
             except:
                 pass
 
-    # Delete unnecessary utility armatures (metarig, eyerig) so they don't block Finish Setup
-    for extra_arm in ["metarig", "eyerig"]:
+    # Delete unnecessary utility armatures (metarig) so they don't block Finish Setup
+    for extra_arm in ["metarig"]:
         m_obj = bpy.data.objects.get(extra_arm)
         if m_obj:
             try:

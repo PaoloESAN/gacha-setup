@@ -636,6 +636,28 @@ def setup_hsr_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_si
     if palms_coll:
         palms_coll.is_visible = True
 
+    # Create visible "Facerig" collection for eye control bones
+    facerig_coll = armature.data.collections.get("Facerig") or armature.data.collections.new("Facerig")
+    facerig_coll.is_visible = True
+
+    eye_ctrl_bone_names = ["eyetrack", "eyetrack_L", "eyetrack_R"]
+    for bname in eye_ctrl_bone_names:
+        if bname in armature.data.bones:
+            b = armature.data.bones[bname]
+            try:
+                facerig_coll.assign(b)
+                b.hide = False
+            except Exception:
+                pass
+
+    # Hide helper tracking bones (+EyeBone L/R A01.001)
+    for bname in ["+EyeBone L A01.001", "+EyeBone R A01.001"]:
+        if bname in armature.data.bones:
+            try:
+                armature.data.bones[bname].hide = True
+            except Exception:
+                pass
+
     face_bones_coll = armature.data.collections.get("Face Bones") or armature.data.collections.new("Face Bones")
     face_bones_coll.is_visible = False
 
@@ -651,7 +673,7 @@ def setup_hsr_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_si
     for bone in armature.data.bones:
         b_name = bone.name
         b_low = b_name.lower()
-        if b_name.startswith("CTRL-") or b_name in main_ctrls:
+        if b_name.startswith("CTRL-") or b_name in main_ctrls or b_name in eye_ctrl_bone_names:
             continue
 
         is_face_bone = any(kw in b_low for kw in face_keywords)
@@ -663,7 +685,7 @@ def setup_hsr_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_si
             except Exception:
                 pass
             for c in list(bone.collections):
-                if c != target_coll and c.name not in hidden_colls:
+                if c != target_coll and c != facerig_coll and c.name not in hidden_colls:
                     try:
                         c.unassign(bone)
                     except Exception:
