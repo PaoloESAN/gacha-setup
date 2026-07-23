@@ -743,10 +743,9 @@ def rig_character(
             except:
                 pass
 
-    # Move widget objects (head-control-shape, root plate, Head Origin, Head Forward, Head Up, WGT-*) to hidden "wgt" collection
+    # Move widget objects (head-control-shape, root plate, WGT-*) to hidden "wgt" collection
     widget_keywords = [
-        "head-control-shape", "root plate", "eye circle", "eye controller",
-        "WGT-", "Head Origin", "Head Forward", "Head Up", "Head Driver"
+        "head-control-shape", "root plate", "eye circle", "eye controller", "WGT-"
     ]
     for obj in list(bpy.data.objects):
         if any(keyword in obj.name for keyword in widget_keywords):
@@ -778,14 +777,27 @@ def rig_character(
     except:
         pass
 
+    # Remove empty WGTS collections left by Rigify
+    for coll in list(bpy.data.collections):
+        if coll.name.startswith("WGTS"):
+            if len(coll.objects) == 0 and len(coll.children) == 0:
+                try:
+                    bpy.data.collections.remove(coll, do_unlink=True)
+                except:
+                    pass
+
     try:
         bpy.data.objects["Face_Mask"].hide_viewport = True
         bpy.data.objects["Face_Mask"].hide_render = True
     except:
         pass
     try:
-        bpy.context.view_layer.objects.active = bpy.data.objects.get("Head Origin") or bpy.data.objects.get("Head Driver")
-        bpy.ops.constraint.childof_set_inverse(constraint="Child Of", owner='OBJECT')
+        head_obj = bpy.data.objects.get("Head Origin") or bpy.data.objects.get("Head Driver")
+        if head_obj:
+            saved_mat = head_obj.matrix_world.copy()
+            bpy.context.view_layer.objects.active = head_obj
+            bpy.ops.constraint.childof_set_inverse(constraint="Child Of", owner='OBJECT')
+            head_obj.matrix_world = saved_mat
     except:
         pass
     x = original_name.split("_")

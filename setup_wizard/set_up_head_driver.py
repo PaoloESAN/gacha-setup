@@ -60,18 +60,26 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
         else:
             armature_bones = armature.data.bones
             head_bone_names = [
+                b for b in ["head", "Head", "DEF-head", "DEF-spine.006"]
+                if b in armature_bones
+            ] or [
                 bone_name
                 for bone_name in armature_bones.keys()
-                if "Head" in bone_name or bone_name == "DEF-spine.006"
+                if "Head" in bone_name or "head" in bone_name or bone_name == "DEF-spine.006"
             ]
             if head_bone_names:
                 head_bone_name = head_bone_names[0]  # expecting 1 Head bone
+                saved_matrix = head_driver_object.matrix_world.copy()
                 self.set_contraint_target_and_bone(
                     child_of_constraint, armature, head_bone_name
                 )
                 self.set_inverse(head_driver_object, child_of_constraint.name)
+                head_driver_object.matrix_world = saved_matrix
             else:
                 self.report({"WARNING"}, "No head bone found for head-driver setup.")
+
+        # Mover el objeto Head Driver/Origin y todos sus hijos a la colección 'wgt' como paso final
+        self._move_head_driver_system_to_wgt(head_driver_object)
 
         if self.next_step_idx:
             NextStepInvoker().invoke(
@@ -81,6 +89,41 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
                 game_type=self.game_type,
             )
         return {"FINISHED"}
+
+    def _move_head_driver_system_to_wgt(self, main_obj):
+        wgt_coll = bpy.data.collections.get("wgt")
+        if not wgt_coll:
+            wgt_coll = bpy.data.collections.new("wgt")
+            bpy.context.scene.collection.children.link(wgt_coll)
+
+        def get_all_children(obj):
+            children = []
+            for child in obj.children:
+                children.append(child)
+                children.extend(get_all_children(child))
+            return children
+
+        all_objects = [main_obj] + get_all_children(main_obj)
+        for obj in all_objects:
+            if obj.name not in wgt_coll.objects:
+                wgt_coll.objects.link(obj)
+            for coll in list(obj.users_collection):
+                if coll != wgt_coll:
+                    try:
+                        coll.objects.unlink(obj)
+                    except Exception:
+                        pass
+            try:
+                obj.hide_viewport = True
+                obj.hide_render = True
+            except Exception:
+                pass
+
+        try:
+            wgt_coll.hide_viewport = True
+            wgt_coll.hide_render = True
+        except Exception:
+            pass
 
     def _get_child_of_constraint(self, obj):
         for constraint in obj.constraints:
@@ -96,13 +139,25 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
         return obj.name in bpy.context.view_layer.objects
 
     def set_inverse(self, obj, constraint_name):
-        # This can fail when the object exists in bpy.data but is excluded from current ViewLayer.
-        if not self._is_in_active_view_layer(obj):
-            self.report(
-                {"WARNING"},
-                f"'{obj.name}' is not in active ViewLayer. Skipping Child Of inverse.",
-            )
-            return
+        previous_hide_viewport = getattr(obj, "hide_viewport", False)
+        obj.hide_viewport = False
+
+        changed_lcs = []
+        def enable_layer_colls(lc, target_name):
+            if lc.exclude:
+                lc.exclude = False
+                changed_lcs.append(lc)
+            for child in lc.children:
+                if target_name in child.collection.objects or child.name == "wgt":
+                    if child.exclude:
+                        child.exclude = False
+                        changed_lcs.append(child)
+                    enable_layer_colls(child, target_name)
+
+        try:
+            enable_layer_colls(bpy.context.view_layer.layer_collection, obj.name)
+        except Exception:
+            pass
 
         previous_active = bpy.context.view_layer.objects.active
         previous_selected = list(bpy.context.selected_objects)
@@ -131,6 +186,16 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
                     bpy.context.view_layer.objects.active = previous_active
             except Exception:
                 pass
+            
+            try:
+                obj.hide_viewport = previous_hide_viewport
+            except Exception:
+                pass
+            for lc in changed_lcs:
+                try:
+                    lc.exclude = True
+                except Exception:
+                    pass
 
 
 register, unregister = bpy.utils.register_classes_factory(GI_OT_SetUpHeadDriver)
