@@ -1,7 +1,7 @@
 import os
 
 bl_info = {
-    "name": "HoYoverse Setup Wizard",
+    "name": "Gacha Blender Setup",
     "author": "Mken, OctavoPE, Enthralpy",
     "version": (3, 0, 0),
     "blender": (3, 3, 0),
@@ -11,8 +11,8 @@ bl_info = {
     "doc_url": "",
     "support": "COMMUNITY",
     "category": "HoYoverse",
+    "license": "GPL-3.0-or-later",
     "tracker_url": "",
-    "doc_url": "",
 }
 
 is_test_env = (
