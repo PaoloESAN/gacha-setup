@@ -557,7 +557,7 @@ def rig_character(
 
     safe_set_custom_shape("torso", "pelvis2")
     safe_set_custom_shape("hips", "hips", scale=(1, 1, 1), translation=(0.0, -0.04, 0.044), rotation_euler=(1.309, 0, 0))
-    safe_set_custom_shape("chest", "chest", scale=(0.6, 0.6, 0.6), translation=(0.0, 0.18, 0.0), rotation_euler=(1.5708, 0, 0))
+    safe_set_custom_shape("chest", "chest", scale=(0.45, 0.45, 0.45), translation=(0.0, -0.04, 0.0), rotation_euler=(1.5708, 0, 0))
 
     safe_set_custom_shape("shoulder.L", None, scale=(1.6, 1.6, 1.6), disable_bone_size=False)
     safe_set_custom_shape("shoulder.R", None, scale=(1.6, 1.6, 1.6), disable_bone_size=False)

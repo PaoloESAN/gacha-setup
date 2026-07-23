@@ -702,6 +702,25 @@ def setup_hsr_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_si
                         pass
             bone.hide = True
 
+    # Apply precise 3D location offsets specifically for eye.L and eye.R
+    eye_L_pbone = armature.pose.bones.get("eye.L")
+    if eye_L_pbone:
+        try:
+            eye_L_pbone.location.x = 0.000645
+            eye_L_pbone.location.y = -0.0035
+            eye_L_pbone.location.z = -0.000568
+        except Exception:
+            pass
+
+    eye_R_pbone = armature.pose.bones.get("eye.R")
+    if eye_R_pbone:
+        try:
+            eye_R_pbone.location.x = -0.000645
+            eye_R_pbone.location.y = -0.0035
+            eye_R_pbone.location.z = -0.000568
+        except Exception:
+            pass
+
     print("HSR Face rig build complete.")
 
 
