@@ -574,7 +574,7 @@ def rig_character(
     safe_set_custom_shape("hand_ik.L", "hand", scale=(1.0, 1.0, 1.0), disable_bone_size=True)
     safe_set_custom_shape("hand_ik.R", "hand", scale=(1.0, 1.0, 1.0), disable_bone_size=True)
 
-    safe_set_custom_shape("eyetrack", "eye controller", scale=(4.5, 4.5, 4.5), disable_bone_size=False)
+    safe_set_custom_shape("eyetrack", "eye controller", scale=(5.5, 5.5, 5.5), disable_bone_size=False)
     safe_set_custom_shape("eyetrack_L", "eye circle", scale=(1.8, 1.8, 1.8), disable_bone_size=False)
     safe_set_custom_shape("eyetrack_R", "eye circle", scale=(1.8, 1.8, 1.8), disable_bone_size=False)
 

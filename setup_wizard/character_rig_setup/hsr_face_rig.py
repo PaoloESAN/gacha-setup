@@ -231,10 +231,10 @@ def plan_hsr_controls(mesh_obj, fwd, right, up, face_size, keyblock):
         })
 
     # 2. Left-side Panel: Eyebrows and Eyes (A la IZQUIERDA de la cabeza)
-    left_panel_origin = fcx - right * (face_size * 0.45) + up * (face_size * 0.20)
+    left_panel_origin = fcx - right * (face_size * 0.45) + up * (face_size * 0.45)
     current_left_v = 0.0
-    MAX_PER_ROW = 8  # 8 controles por fila
-    ROW_Z_GAP = 0.050
+    MAX_PER_ROW = 12  # Máximo 12 controles por fila
+    ROW_Z_GAP = 0.120    # Separación vertical en Z entre filas (0.120)
     ITEM_SP = 0.035
 
     def add_left_panel_grid(items_list, group_name, color, widget_type='slider'):
@@ -272,7 +272,7 @@ def plan_hsr_controls(mesh_obj, fwd, right, up, face_size, keyblock):
             })
 
         num_rows = (total + MAX_PER_ROW - 1) // MAX_PER_ROW
-        current_left_v -= num_rows * (face_size * ROW_Z_GAP) + (face_size * 0.03)
+        current_left_v -= num_rows * (face_size * ROW_Z_GAP) + (face_size * 0.01)
 
     # A. Brow Keys (Cejas - Panel Izquierdo)
     unhandled_brows = [k for k in keyblock.keys() if k in brow_keys and k not in handled_keys]
@@ -285,13 +285,19 @@ def plan_hsr_controls(mesh_obj, fwd, right, up, face_size, keyblock):
         add_left_panel_grid(unhandled_eyes, 'Face Eye Expressions', COL_EYEAIM)
 
     # 3. Right-side Panel: Mouth, Visemes, Phonemes, Extra (A la DERECHA de la cabeza)
-    right_panel_origin = fcx + right * (face_size * 0.45) + up * (face_size * 0.20)
-    current_right_v = 0.0
+    right_panel_origin = fcx + right * (face_size * 0.45) + up * (face_size * 0.45)
+    current_right_v_col1 = 0.0
+    current_right_v_col2 = 0.0
 
-    def add_right_panel_grid(items_list, group_name, color, widget_type='slider'):
-        nonlocal current_right_v
+    col2_offset = face_size * (ITEM_SP * MAX_PER_ROW + 0.05)
+
+    def add_right_panel_grid(items_list, group_name, color, widget_type='slider', is_col2=False):
+        nonlocal current_right_v_col1, current_right_v_col2
         if not items_list:
             return
+        col_offset = col2_offset if is_col2 else 0.0
+        v_base = current_right_v_col2 if is_col2 else current_right_v_col1
+
         total = len(items_list)
         for i, item in enumerate(items_list):
             if isinstance(item, tuple):
@@ -305,9 +311,9 @@ def plan_hsr_controls(mesh_obj, fwd, right, up, face_size, keyblock):
             row_idx = i // MAX_PER_ROW
             col_idx = i % MAX_PER_ROW
 
-            # Se extiende hacia la derecha (+right)
-            h = col_idx * (face_size * ITEM_SP)
-            v = current_right_v - row_idx * (face_size * ROW_Z_GAP)
+            # Se extiende hacia la derecha (+right) con col_offset
+            h = col_idx * (face_size * ITEM_SP) + col_offset
+            v = v_base - row_idx * (face_size * ROW_Z_GAP)
 
             controls.append({
                 'name': c_name,
@@ -323,9 +329,13 @@ def plan_hsr_controls(mesh_obj, fwd, right, up, face_size, keyblock):
             })
 
         num_rows = (total + MAX_PER_ROW - 1) // MAX_PER_ROW
-        current_right_v -= num_rows * (face_size * ROW_Z_GAP) + (face_size * 0.03)
+        v_drop = num_rows * (face_size * ROW_Z_GAP) + (face_size * 0.01)
+        if is_col2:
+            current_right_v_col2 -= v_drop
+        else:
+            current_right_v_col1 -= v_drop
 
-    # A. Visemas (A, E, I, O, U - Panel Derecho)
+    # A. Visemas (A, E, I, O, U - Panel Derecho, Columna 1)
     viseme_letters = ["A", "E", "I", "O", "U"]
     active_visemes = []
     for letter in viseme_letters:
@@ -334,9 +344,9 @@ def plan_hsr_controls(mesh_obj, fwd, right, up, face_size, keyblock):
             active_visemes.append((f"CTRL-Viseme_{letter}", [{'key': pk, 'axis': 'Z', 'dir': +1}]))
             handled_keys.add(pk)
     if active_visemes:
-        add_right_panel_grid(active_visemes, 'Face Visemes', COL_VISEME)
+        add_right_panel_grid(active_visemes, 'Face Visemes', COL_VISEME, is_col2=False)
 
-    # B. Mouth Expression Keys (Expresiones de Boca - Panel Derecho)
+    # B. Mouth Expression Keys (Expresiones de Boca - Panel Derecho, Columna 1)
     unhandled_mouth = [k for k in keyblock.keys() if k in mouth_keys and k not in handled_keys and "phoneme" not in k.lower()]
     if unhandled_mouth:
         mouth_items = []
@@ -345,9 +355,9 @@ def plan_hsr_controls(mesh_obj, fwd, right, up, face_size, keyblock):
             c_name = f"CTRL-Expr_{clean_k}" if clean_k != k else f"CTRL-{k}"
             handled_keys.add(k)
             mouth_items.append((c_name, [{'key': k, 'axis': 'Z', 'dir': +1}]))
-        add_right_panel_grid(mouth_items, 'Face Expressions', COL_EXPRESSION)
+        add_right_panel_grid(mouth_items, 'Face Expressions', COL_EXPRESSION, is_col2=False)
 
-    # C. Phoneme Keys (Fonemas - Panel Derecho)
+    # C. Phoneme Keys (Fonemas - Panel Derecho, COLUMNA 2 a la Derecha de las expresiones moradas)
     phoneme_keys = [k for k in keyblock.keys() if "phoneme" in k.lower() and k not in handled_keys]
     if phoneme_keys:
         ph_items = []
@@ -357,16 +367,16 @@ def plan_hsr_controls(mesh_obj, fwd, right, up, face_size, keyblock):
             c_name = f"CTRL-ph_{sub}"
             handled_keys.add(k)
             ph_items.append((c_name, [{'key': k, 'axis': 'Z', 'dir': +1}]))
-        add_right_panel_grid(ph_items, 'Face Phonemes', COL_CORNER)
+        add_right_panel_grid(ph_items, 'Face Phonemes', (0.30, 0.80, 0.35), is_col2=True)
 
-    # D. Extra Keys (Dynamic Fallback - Panel Derecho)
+    # D. Extra Keys (Dynamic Fallback - Panel Derecho, COLUMNA 2 a la Derecha)
     remaining = [k for k in keyblock.keys() if k not in handled_keys]
     if remaining:
         rem_items = []
         for k in remaining:
             handled_keys.add(k)
             rem_items.append((f"CTRL-{k}", [{'key': k, 'axis': 'Z', 'dir': +1}]))
-        add_right_panel_grid(rem_items, 'Face Extra Keys', COL_EXPRESSION)
+        add_right_panel_grid(rem_items, 'Face Extra Keys', (0.25, 0.75, 0.35), is_col2=True)
 
     return controls
 
