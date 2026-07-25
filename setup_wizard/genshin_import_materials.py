@@ -84,8 +84,13 @@ def build_anisotropic_hair_spec_group():
     add_socket(tree, "BNormal", "NodeSocketVector", "INPUT", (0.0, 1.0, 0.0))
     add_socket(tree, "ViewDir V", "NodeSocketVector", "INPUT", (0.0, 0.0, 1.0))
     add_socket(tree, "LightDir L", "NodeSocketVector", "INPUT", (0.0, 0.0, 1.0))
+
+    # Masks.
     add_socket(tree, "Hair M R Mask", "NodeSocketFloat", "INPUT", 1.0)
+    add_socket(tree, "Hair M G Offset", "NodeSocketFloat", "INPUT", 0.5)
     add_socket(tree, "Aniso Map", "NodeSocketFloat", "INPUT", 1.0)
+
+    # Mint hair defaults from the material JSON.
     add_socket(tree, "Spec Color", "NodeSocketColor", "INPUT", (0.097309, 0.225041, 0.234375, 1.0))
     add_socket(tree, "Spec Intensity", "NodeSocketFloat", "INPUT", 0.416)
     add_socket(tree, "Center Offset", "NodeSocketFloat", "INPUT", 0.466)
@@ -95,6 +100,8 @@ def build_anisotropic_hair_spec_group():
     add_socket(tree, "D Max", "NodeSocketFloat", "INPUT", 14.360021)
     add_socket(tree, "D Min / Power", "NodeSocketFloat", "INPUT", 1.009032)
     add_socket(tree, "Stretch Contrast", "NodeSocketFloat", "INPUT", 0.728)
+    add_socket(tree, "G Offset Scale", "NodeSocketFloat", "INPUT", 1.0)
+    add_socket(tree, "G Offset Contrast", "NodeSocketFloat", "INPUT", 1.0)
     add_socket(tree, "Flip B", "NodeSocketFloat", "INPUT", 1.0)
 
     add_socket(tree, "Spec Factor", "NodeSocketFloat", "OUTPUT")
@@ -135,6 +142,22 @@ def build_anisotropic_hair_spec_group():
     links.new(b_dot_h.outputs[1], dot_mul.inputs[0])
     links.new(dot_mul.outputs[0], dot_add.inputs[0])
 
+    g_mul_scale = new_math(nodes, "MULTIPLY", "M.G * Scale", -100, 360)
+    g_minus_half = new_math(nodes, "SUBTRACT", "G - 0.5", 80, 360)
+    g_minus_half.inputs[1].default_value = 0.5
+    g_mul_contrast = new_math(nodes, "MULTIPLY", "* G Contrast", 260, 360)
+    g_times_two = new_math(nodes, "MULTIPLY", "* 2", 440, 360)
+    g_times_two.inputs[1].default_value = 2.0
+    bdot_with_g = new_math(nodes, "ADD", "Bdot + M.G Offset", 260, 160, clamp=True)
+    links.new(socket_by_name(group_in.outputs, "Hair M G Offset"), g_mul_scale.inputs[0])
+    links.new(socket_by_name(group_in.outputs, "G Offset Scale"), g_mul_scale.inputs[1])
+    links.new(g_mul_scale.outputs[0], g_minus_half.inputs[0])
+    links.new(g_minus_half.outputs[0], g_mul_contrast.inputs[0])
+    links.new(socket_by_name(group_in.outputs, "G Offset Contrast"), g_mul_contrast.inputs[1])
+    links.new(g_mul_contrast.outputs[0], g_times_two.inputs[0])
+    links.new(dot_add.outputs[0], bdot_with_g.inputs[0])
+    links.new(g_times_two.outputs[0], bdot_with_g.inputs[1])
+
     time_mul = new_math(nodes, "MULTIPLY", "Time * SlideSpeed", -320, -300)
     center_add_1 = new_math(nodes, "ADD", "Center + Offset1", -100, -260)
     center_add_2 = new_math(nodes, "ADD", "Center + Motion", 80, -220)
@@ -145,12 +168,12 @@ def build_anisotropic_hair_spec_group():
     links.new(center_add_1.outputs[0], center_add_2.inputs[0])
     links.new(time_mul.outputs[0], center_add_2.inputs[1])
 
-    sub_center = new_math(nodes, "SUBTRACT", "Bdot - Center", 280, 80)
-    abs_center = new_math(nodes, "ABSOLUTE", "abs()", 460, 80)
-    mul_dmax = new_math(nodes, "MULTIPLY", "* DMax", 640, 80)
-    one_minus = new_math(nodes, "SUBTRACT", "1 - x", 820, 80, clamp=True)
+    sub_center = new_math(nodes, "SUBTRACT", "Bdot - Center", 460, 80)
+    abs_center = new_math(nodes, "ABSOLUTE", "abs()", 640, 80)
+    mul_dmax = new_math(nodes, "MULTIPLY", "* DMax", 820, 80)
+    one_minus = new_math(nodes, "SUBTRACT", "1 - x", 1000, 80, clamp=True)
     one_minus.inputs[0].default_value = 1.0
-    links.new(dot_add.outputs[0], sub_center.inputs[0])
+    links.new(bdot_with_g.outputs[0], sub_center.inputs[0])
     links.new(center_add_2.outputs[0], sub_center.inputs[1])
     links.new(sub_center.outputs[0], abs_center.inputs[0])
     links.new(abs_center.outputs[0], mul_dmax.inputs[0])
@@ -203,6 +226,7 @@ def build_anisotropic_hair_spec_group():
     return tree
 
 
+
 class NTE_OT_SetUpHairSpecular(Operator, BasicSetupUIOperator):
     '''Genera y asigna el nodo especular anisotrópico de cabello (KK_Anisotropic_HairSpec)'''
     bl_idname = 'neverness_to_everness.set_up_hair_specular'
@@ -210,8 +234,8 @@ class NTE_OT_SetUpHairSpecular(Operator, BasicSetupUIOperator):
 
     def execute(self, context):
         group = build_anisotropic_hair_spec_group()
-
         ng_hair = bpy.data.node_groups.get('异环-头发')
+
         for mat in bpy.data.materials:
             if not mat.use_nodes or not mat.node_tree:
                 continue
@@ -219,20 +243,85 @@ class NTE_OT_SetUpHairSpecular(Operator, BasicSetupUIOperator):
             if any(k in matname for k in ["前发", "后发", "hair", "pelo"]):
                 nodes = mat.node_tree.nodes
                 links = mat.node_tree.links
+
+                nte_hair_node = next((n for n in nodes if n.type == 'GROUP' and n.node_tree == ng_hair), None) if ng_hair else None
+
                 aniso_node = next((n for n in nodes if n.type == 'GROUP' and n.node_tree == group), None)
                 if not aniso_node:
                     aniso_node = nodes.new('ShaderNodeGroup')
                     aniso_node.node_tree = group
-                    aniso_node.location = (-300, 200)
-
-                nte_hair_node = next((n for n in nodes if n.type == 'GROUP' and n.node_tree == ng_hair), None) if ng_hair else None
                 if nte_hair_node:
-                    spec_in = nte_hair_node.inputs.get('高光') or nte_hair_node.inputs.get('Specular') or nte_hair_node.inputs.get('Hair Specular')
-                    if spec_in and not spec_in.is_linked:
-                        links.new(aniso_node.outputs['Spec Color Out'], spec_in)
+                    aniso_node.location = (nte_hair_node.location.x + 300, nte_hair_node.location.y - 300)
+                else:
+                    aniso_node.location = (400, -200)
 
-        self.report({'INFO'}, 'Created and assigned Hair Specular Node Group: KK_Anisotropic_HairSpec')
+                # Geometry (Normal, ViewDir V)
+                geom_node = next((n for n in nodes if n.type == 'NEW_GEOMETRY' or n.type == 'GEOMETRY'), None)
+                if not geom_node:
+                    try:
+                        geom_node = nodes.new('ShaderNodeNewGeometry')
+                        geom_node.location = (aniso_node.location.x - 400, aniso_node.location.y - 200)
+                    except Exception:
+                        geom_node = None
+
+                if geom_node:
+                    if 'BNormal' in aniso_node.inputs and not aniso_node.inputs['BNormal'].is_linked:
+                        links.new(geom_node.outputs['Normal'], aniso_node.inputs['BNormal'])
+                    if 'ViewDir V' in aniso_node.inputs and not aniso_node.inputs['ViewDir V'].is_linked:
+                        links.new(geom_node.outputs['Incoming'], aniso_node.inputs['ViewDir V'])
+
+                # Hair Mask Texture (Hair M R Mask & Hair M G Offset)
+                mask_tex_node = next((n for n in nodes if n.type == 'TEX_IMAGE' and n.image and ('hair' in n.image.name.lower() or 'mask' in n.image.name.lower()) and ('_m' in n.image.name.lower() or 'm_' in n.image.name.lower())), None)
+                if not mask_tex_node:
+                    mask_tex_node = next((n for n in nodes if n.type == 'TEX_IMAGE' and n.image and '_m' in n.image.name.lower()), None)
+
+                if mask_tex_node:
+                    sep_color = next((n for n in nodes if n.type == 'SEPARATE_COLOR' or n.type == 'SEPRGB'), None)
+                    if not sep_color:
+                        try:
+                            sep_color = nodes.new('ShaderNodeSeparateColor')
+                        except Exception:
+                            sep_color = nodes.new('ShaderNodeSeparateRGB')
+                        sep_color.location = (mask_tex_node.location.x + 250, mask_tex_node.location.y - 100)
+                        links.new(mask_tex_node.outputs['Color'], sep_color.inputs[0])
+
+                    r_out = sep_color.outputs[0]
+                    g_out = sep_color.outputs[1]
+
+                    if 'Hair M R Mask' in aniso_node.inputs and not aniso_node.inputs['Hair M R Mask'].is_linked:
+                        links.new(r_out, aniso_node.inputs['Hair M R Mask'])
+                    if 'Hair M G Offset' in aniso_node.inputs and not aniso_node.inputs['Hair M G Offset'].is_linked:
+                        links.new(g_out, aniso_node.inputs['Hair M G Offset'])
+
+                # Connect Spec Color Out -> 特效... or Mix (ADD) Color + Spec Color Out
+                out_node = next((n for n in nodes if n.type == 'OUTPUT_MATERIAL'), None)
+                connected_to_effect = False
+
+                if nte_hair_node:
+                    eff_in = nte_hair_node.inputs.get('特效...') or nte_hair_node.inputs.get('特效') or nte_hair_node.inputs.get('高光')
+                    if eff_in and not eff_in.is_linked:
+                        links.new(aniso_node.outputs['Spec Color Out'], eff_in)
+                        connected_to_effect = True
+
+                if not connected_to_effect and nte_hair_node and out_node:
+                    mix_node = next((n for n in nodes if n.name == 'Hair_Spec_Mix_Add'), None)
+                    if not mix_node:
+                        try:
+                            mix_node = nodes.new('ShaderNodeMixRGB')
+                            mix_node.blend_type = 'ADD'
+                            mix_node.name = 'Hair_Spec_Mix_Add'
+                            mix_node.inputs['Fac'].default_value = 1.0
+                            mix_node.location = (nte_hair_node.location.x + 250, nte_hair_node.location.y)
+
+                            links.new(nte_hair_node.outputs['Color'], mix_node.inputs[1])
+                            links.new(aniso_node.outputs['Spec Color Out'], mix_node.inputs[2])
+                            links.new(mix_node.outputs['Color'], out_node.inputs['Surface'])
+                        except Exception:
+                            pass
+
+        self.report({'INFO'}, 'Created and fully connected Hair Specular Node Group: KK_Anisotropic_HairSpec')
         return {'FINISHED'}
+
 
 
 

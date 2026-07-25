@@ -1036,6 +1036,12 @@ class NevernessToEvernessDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 if ng:
                     process_node_tree(ng, image_files, folder, "NodeGroup_" + ng_name)
 
+        try:
+            bpy.ops.neverness_to_everness.set_up_hair_specular()
+        except Exception as ex:
+            print(f"Notice: Handled setting up hair specular: {ex}")
+
+
         # Clean up any duplicate empties (.001, .002) safely without ReferenceError
         orig_head = bpy.data.objects.get('Head Origin')
         orig_light = bpy.data.objects.get('Light Direction')
