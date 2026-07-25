@@ -7,11 +7,13 @@ from bpy.types import Operator, Context
 from setup_wizard.domain.game_types import GameType
 from setup_wizard.domain.shader_material_names import StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, \
     V2_FestivityGenshinImpactMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, \
-    JaredNytsPunishingGrayRavenShaderMaterialNames, V4_PrimoToonGenshinImpactMaterialNames, ZenlessZoneZeroShaderMaterialNames
+    JaredNytsPunishingGrayRavenShaderMaterialNames, V4_PrimoToonGenshinImpactMaterialNames, ZenlessZoneZeroShaderMaterialNames, \
+    NevernessToEvernessShaderMaterialNames
 from setup_wizard.import_order import GENSHIN_IMPACT_OUTLINES_FILE_PATH, NextStepInvoker, cache_using_cache_key, get_cache, \
     GENSHIN_IMPACT_ROOT_FOLDER_FILE_PATH, GENSHIN_IMPACT_SHADER_FILE_PATH, HONKAI_STAR_RAIL_ROOT_FOLDER_FILE_PATH, \
     HONKAI_STAR_RAIL_SHADER_FILE_PATH, PUNISHING_GRAY_RAVEN_ROOT_FOLDER_FILE_PATH, PUNISHING_GRAY_RAVEN_SHADER_FILE_PATH, \
-    ZENLESS_ZONE_ZERO_ROOT_FOLDER_FILE_PATH, ZENLESS_ZONE_ZERO_SHADER_FILE_PATH, ZENLESS_ZONE_ZERO_OUTLINES_FILE_PATH
+    ZENLESS_ZONE_ZERO_ROOT_FOLDER_FILE_PATH, ZENLESS_ZONE_ZERO_SHADER_FILE_PATH, ZENLESS_ZONE_ZERO_OUTLINES_FILE_PATH, \
+    NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH, NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH, NEVERNESS_TO_EVERNESS_OUTLINES_FILE_PATH
 from setup_wizard.material_import_setup.empty_names import LightDirectionEmptyNames
 from setup_wizard.outline_import_setup.outline_node_groups import OutlineNodeGroupNames
 from setup_wizard.texture_import_setup.material_default_value_setters import MaterialDefaultValueSetter, MaterialDefaultValueSetterFactory
@@ -27,8 +29,11 @@ class GameMaterialImporterFactory:
             return PunishingGrayRavenMaterialImporterFacade(blender_operator, context)
         elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
             return ZenlessZoneZeroMaterialImporterFacade(blender_operator, context)
+        elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
+            return NevernessToEvernessMaterialImporterFacade(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
+
 
 
 class GameMaterialImporter:
@@ -60,9 +65,10 @@ class GameMaterialImporter:
             or get_cache(cache_enabled).get(self.game_shader_folder_path) \
             or os.path.dirname(self.blender_operator.filepath)
 
+        print(f"[DEBUG] GameMaterialImporter.import_materials: user_selected_shader_blend_file_path='{user_selected_shader_blend_file_path}', project_root_directory_file_path='{project_root_directory_file_path}'")
+
         if not user_selected_shader_blend_file_path and not project_root_directory_file_path:
-            # Use Case: Advanced Setup
-            # The Operator is Executed directly with no cached files and so we need to Invoke to prompt the user
+            print(f"[DEBUG] No blend path or root folder cached. Calling bpy.ops.genshin.import_materials('INVOKE_DEFAULT')")
             bpy.ops.genshin.import_materials(
                 'INVOKE_DEFAULT',
                 next_step_idx=self.blender_operator.next_step_idx, 
@@ -72,6 +78,7 @@ class GameMaterialImporter:
                 game_type=self.blender_operator.game_type,
             )
             return {'FINISHED'}
+
 
         blend_file_with_genshin_materials = os.path.join(
             user_selected_shader_blend_file_path,
@@ -140,20 +147,36 @@ class GameMaterialImporter:
     def import_light_vectors_geometry_node(self, node_tree_filepath, object_file_path):
         for outline_node_group_name in OutlineNodeGroupNames.V3_LIGHT_VECTORS_GEOMETRY_NODES:
             if not bpy.data.node_groups.get(outline_node_group_name):
-                bpy.ops.wm.append(
-                    filepath=os.path.join(node_tree_filepath, outline_node_group_name),
-                    directory=os.path.join(node_tree_filepath),
-                    filename=outline_node_group_name
-                )
+                try:
+                    bpy.ops.wm.append(
+                        filepath=os.path.join(node_tree_filepath, outline_node_group_name),
+                        directory=os.path.join(node_tree_filepath),
+                        filename=outline_node_group_name
+                    )
+                except Exception as ex:
+                    print(f"Notice: Handled appending light vectors node group: {ex}")
 
-        light_direction_empties_to_append = \
-            [empty_object for empty_object in LightDirectionEmptyNames.LIGHT_DIRECTION_EMPTIES_FILE_IMPORT 
-             if not bpy.data.objects.get(empty_object.get('name'))]
-        if light_direction_empties_to_append:
-            bpy.ops.wm.append(
-                directory=os.path.join(object_file_path),
-                files=light_direction_empties_to_append
-            )
+        # Clean up any existing duplicate empties (.001, .002) first
+        for obj in list(bpy.data.objects):
+            if any(base in obj.name for base in ['Head Origin', 'Light Direction']) and ('.00' in obj.name or '.01' in obj.name):
+                base_name = obj.name.split('.')[0]
+                if bpy.data.objects.get(base_name) and bpy.data.objects.get(base_name) != obj:
+                    bpy.data.objects.remove(obj, do_unlink=True)
+
+        has_light_empties = any(bpy.data.objects.get(name) for name in ['Head Origin', 'Light Direction'])
+        if not has_light_empties:
+            light_direction_empties_to_append = [
+                empty_object for empty_object in LightDirectionEmptyNames.LIGHT_DIRECTION_EMPTIES_FILE_IMPORT 
+                if not bpy.data.objects.get(empty_object.get('name'))
+            ]
+            if light_direction_empties_to_append:
+                try:
+                    bpy.ops.wm.append(
+                        directory=object_file_path,
+                        files=light_direction_empties_to_append,
+                    )
+                except Exception as ex:
+                    print(f"Notice: Handled appending light empties: {ex}")
 
     def __get_outlines_node_group_from_shader_blend_file(self, shader_blend_file_path):
         with bpy.data.libraries.load(shader_blend_file_path) as (data_from, data_to):
@@ -388,3 +411,162 @@ class ZenlessZoneZeroMaterialImporterFacade(GameMaterialImporter):
             high_level_step_name=self.blender_operator.high_level_step_name,
             game_type=self.blender_operator.game_type,
         )
+
+
+class NevernessToEvernessMaterialImporterFacade(GameMaterialImporter):
+    NTE_MATERIAL_NAMES = [
+        {'name': '异环-头发'},
+        {'name': '异环-身体'},
+        {'name': '异环-面部'},
+        {'name': 'YH-Main-UP'},
+        {'name': 'YH-Main-DOWN'},
+        {'name': '前发'},
+        {'name': '后发'},
+        {'name': '面'},
+        {'name': '肌'},
+        {'name': '目'},
+        {'name': '目Hi'},
+        {'name': '目影'},
+        {'name': '目白'},
+        {'name': '眉毛'},
+        {'name': '睫毛'},
+        {'name': '二重'},
+        {'name': '口'},
+        {'name': '齿舌'},
+        {'name': '表情'},
+        {'name': 'edge_clothes2'},
+        {'name': 'facerim'},
+        {'name': 'hairrim'},
+        {'name': 'mrim'},
+        {'name': 'Dots Stroke'},
+    ]
+
+    NTE_NODE_GROUPS = [
+        {'name': '异环-头发'},
+        {'name': '异环-身体'},
+        {'name': '异环-面部'},
+        {'name': 'Light Vectors'},
+        {'name': 'Face Factor Main'},
+        {'name': 'Dot Creation Main'},
+        {'name': 'WuwaNormals'},
+        {'name': 'Super Color Ramp'},
+        {'name': 'Super-Color-Ramp'},
+        {'name': '几何节点描边'},
+        {'name': '实体化描边.001'},
+        {'name': 'DX To GL'},
+        {'name': 'Matcap矢量'},
+        {'name': 'Matcap采样'},
+        {'name': '全局调色'},
+        {'name': '深度边缘光'},
+        {'name': '菲涅尔'},
+        {'name': '衣服描边'},
+    ]
+
+    def __init__(self, blender_operator, context):
+        super().__init__(
+            blender_operator=blender_operator,
+            context=context,
+            game_shader_cache_file_path=NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH,
+            game_shader_cache_folder_path=NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH,
+            game_default_blend_file_with_materials='YH Shader.blend',
+            names_of_game_materials=self.NTE_MATERIAL_NAMES
+        )
+
+    def import_materials(self):
+        print(f"[DEBUG] NevernessToEvernessMaterialImporterFacade.import_materials called: filepath='{self.blender_operator.filepath}'")
+        status = super().import_materials()
+        print(f"[DEBUG] super().import_materials() returned: {status}")
+
+        if status == {'FINISHED'}:
+            return status
+
+        cache_enabled = self.context.window_manager.cache_enabled
+        user_selected_shader_blend_file_path = self.blender_operator.filepath if \
+            self.blender_operator.filepath and not os.path.isdir(self.blender_operator.filepath) else \
+            get_cache(cache_enabled).get(self.game_shader_file_path)
+        print(f"[DEBUG] user_selected_shader_blend_file_path: '{user_selected_shader_blend_file_path}'")
+
+
+        if user_selected_shader_blend_file_path:
+            node_tree_path = os.path.join(user_selected_shader_blend_file_path, 'NodeTree')
+            try:
+                bpy.ops.wm.append(
+                    directory=node_tree_path,
+                    files=self.NTE_NODE_GROUPS,
+                    set_fake=True
+                )
+            except Exception as ex:
+                print(f"Notice: Handled appending NTE node groups: {ex}")
+
+        if user_selected_shader_blend_file_path and cache_enabled:
+            cache_using_cache_key(get_cache(cache_enabled), NEVERNESS_TO_EVERNESS_OUTLINES_FILE_PATH, user_selected_shader_blend_file_path)
+
+        # Clean up any duplicate empties (.001, .002) safely without ReferenceError
+        orig_head = bpy.data.objects.get('Head Origin')
+        orig_light = bpy.data.objects.get('Light Direction')
+
+        head_dupes = []
+        light_dupes = []
+
+        for obj in list(bpy.data.objects):
+            try:
+                name_low = obj.name.lower()
+                has_suffix = '.00' in obj.name or '.01' in obj.name
+                if has_suffix:
+                    if any(k in name_low for k in ['head origin', 'head forward', 'head up']):
+                        if orig_head and obj != orig_head:
+                            head_dupes.append(obj)
+                    elif any(k in name_low for k in ['light direction', 'sun']):
+                        if orig_light and obj != orig_light:
+                            light_dupes.append(obj)
+            except Exception:
+                pass
+
+        for obj in head_dupes:
+            try:
+                if orig_head:
+                    for other in list(bpy.data.objects):
+                        try:
+                            if getattr(other, 'parent', None) == obj:
+                                other.parent = orig_head
+                            for con in getattr(other, 'constraints', []):
+                                if getattr(con, 'target', None) == obj:
+                                    con.target = orig_head
+                        except Exception:
+                            pass
+                bpy.data.objects.remove(obj, do_unlink=True)
+            except Exception:
+                pass
+
+        for obj in light_dupes:
+            try:
+                if orig_light:
+                    for other in list(bpy.data.objects):
+                        try:
+                            if getattr(other, 'parent', None) == obj:
+                                other.parent = orig_light
+                            for con in getattr(other, 'constraints', []):
+                                if getattr(con, 'target', None) == obj:
+                                    con.target = orig_light
+                        except Exception:
+                            pass
+                bpy.data.objects.remove(obj, do_unlink=True)
+            except Exception:
+                pass
+
+        project_root_directory_file_path = self.blender_operator.file_directory \
+            or get_cache(cache_enabled).get(self.game_shader_folder_path) \
+            or (os.path.dirname(self.blender_operator.filepath) if self.blender_operator.filepath else None)
+
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx, 
+            self.blender_operator.invoker_type, 
+            file_path_to_cache=project_root_directory_file_path,
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=self.blender_operator.game_type,
+        )
+
+
+
+
+

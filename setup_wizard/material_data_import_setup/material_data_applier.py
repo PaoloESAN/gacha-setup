@@ -46,8 +46,11 @@ class MaterialDataAppliersFactory:
                 StellarToon_MaterialDataApplier(material_data_parser, outline_material_group),
                 V2_HSR_MaterialDataApplier(material_data_parser, outline_material_group),
             ]
+        elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
+            return []
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
+
 
 
 class MaterialDataApplier(ABC):

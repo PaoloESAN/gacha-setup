@@ -82,6 +82,25 @@ class ZZZ_OT_SetupWizardUI(Operator, BasicSetupUIOperator):
         return {'FINISHED'}
 
 
+class NTE_OT_SetupWizardUI(Operator, BasicSetupUIOperator):
+    '''Runs through entire setup process'''
+    bl_idname = 'neverness_to_everness.setup_wizard_ui'
+    bl_label = 'Neverness to Everness: Setup Wizard (UI)'
+
+    def execute(self, context):
+        next_step_index = 0
+
+        NextStepInvoker().invoke(
+            next_step_index,
+            'invoke_next_step_ui', 
+            high_level_step_name=self.bl_idname if bpy.app.version >= (3,3,0) \
+                else self.bl_idname + '_no_outlines',
+            game_type=self.game_type,
+        )
+        return {'FINISHED'}
+
+
+
 class GI_OT_GenshinSetupWizard(Operator):
     """Setup Wizard Process"""
     bl_idname = "genshin.setup_wizard"

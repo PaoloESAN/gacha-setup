@@ -171,8 +171,11 @@ class GameGeometryNodesSetupFactory:
             return PunishingGrayRavenGeometryNodesSetup(blender_operator, context)
         elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
             return ZenlessZoneZeroGeometryNodesSetup(blender_operator, context)
+        elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
+            return NevernessToEvernessGeometryNodesSetup(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
+
 
 class GameGeometryNodesSetup(ABC):
     GEOMETRY_NODES_MATERIAL_IGNORE_LIST = []
@@ -1397,3 +1400,17 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                         face_outline_d = nodes.get("Face_D")
                         if face_d_img and face_outline_d:
                             face_outline_d.image = face_d_img.image
+
+
+class NevernessToEvernessGeometryNodesSetup(GameGeometryNodesSetup):
+    def __init__(self, blender_operator, context):
+        super().__init__(blender_operator, context)
+
+    def setup_geometry_nodes(self):
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx, 
+            self.blender_operator.invoker_type,
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=self.blender_operator.game_type,
+        )
+

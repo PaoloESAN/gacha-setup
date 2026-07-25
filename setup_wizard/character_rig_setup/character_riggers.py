@@ -48,8 +48,11 @@ class CharacterRiggerFactory:
             return PunishingGrayRavenCharacterRigger(blender_operator, context)
         elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
             return ZenlessZoneZeroCharacterRigger(blender_operator, context)
+        elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
+            return NevernessToEvernessCharacterRigger(blender_operator, context)
         else:
             raise Exception(f'Unexpected input GameType "{game_type}" for CharacterRiggerFactory')
+
 
 
 class CharacterRigger(ABC):
@@ -389,3 +392,33 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
             high_level_step_name=self.blender_operator.high_level_step_name,
             game_type=GameType.ZENLESS_ZONE_ZERO.name
         )
+
+
+class NevernessToEvernessCharacterRigger(CharacterRigger):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+
+    def rig_character(self):
+        armature = [obj for obj in bpy.context.scene.objects if obj.type == 'ARMATURE']
+        armature = armature[0] if armature else None
+
+        cache_enabled = self.context.window_manager.cache_enabled
+        filepath = self.blender_operator.filepath or get_cache(cache_enabled).get(GENSHIN_RIGIFY_BONE_SHAPES_FILE_PATH)
+
+        if armature:
+            try:
+                rig_character(armature, filepath)
+            except Exception as ex:
+                self.blender_operator.report({'ERROR'}, f"Failed to rig NTE character: {ex}")
+
+        self.blender_operator.report({'INFO'}, 'Successfully rigged NTE character')
+
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx,
+            self.blender_operator.invoker_type,
+            file_path_to_cache=filepath,
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=GameType.NEVERNESS_TO_EVERNESS.name
+        )
+

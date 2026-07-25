@@ -37,6 +37,20 @@ class GI_OT_GenshinImportTextures(Operator, ImportHelper, CustomOperatorProperti
     )
 
     def execute(self, context):
+        import os
+        from setup_wizard.import_order import CHARACTER_MODEL_FOLDER_FILE_PATH, cache_using_cache_key, get_cache
+
+        if not self.file_directory:
+            fp = self.filepath or getattr(self, 'import_path', '') or getattr(self, 'directory', '')
+            if fp:
+                folder = fp if os.path.isdir(fp) else os.path.dirname(fp)
+                if folder and os.path.isdir(folder):
+                    self.file_directory = folder
+
+        if self.file_directory and context.window_manager.cache_enabled:
+            cache_using_cache_key(get_cache(context.window_manager.cache_enabled), CHARACTER_MODEL_FOLDER_FILE_PATH, self.file_directory)
+
+
         game_texture_importer: GameTextureImporter = \
             GameTextureImporterFactory.create(self.game_type, self, context)
         material_default_value_setter = MaterialDefaultValueSetterFactory.create(self.game_type)
@@ -49,6 +63,7 @@ class GI_OT_GenshinImportTextures(Operator, ImportHelper, CustomOperatorProperti
 
         super().clear_custom_properties()
         return {'FINISHED'}
+
 
 
 register, unregister = bpy.utils.register_classes_factory(GI_OT_GenshinImportTextures)

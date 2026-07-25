@@ -21,3 +21,8 @@ class PunishingGrayRavenUIRenderChecker(UIRenderChecker):
 
 class ZenlessZoneZeroUIRenderChecker(UIRenderChecker):
     GAME_TYPE = GameType.ZENLESS_ZONE_ZERO.name
+
+
+class NevernessToEvernessUIRenderChecker(UIRenderChecker):
+    GAME_TYPE = GameType.NEVERNESS_TO_EVERNESS.name
+

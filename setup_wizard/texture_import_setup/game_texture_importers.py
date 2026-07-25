@@ -29,8 +29,11 @@ class GameTextureImporterFactory:
             return PunishingGrayRavenTextureImporterFacade(blender_operator, context)
         elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
             return ZenlessZoneZeroTextureImporterFacade(blender_operator, context)
+        elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
+            return NevernessToEvernessTextureImporterFacade(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
+
 
 
 '''
@@ -442,3 +445,182 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                             face_lightmap_node.image = img
                             img.colorspace_settings.name = 'Non-Color'
                             img.alpha_mode = 'CHANNEL_PACKED'
+
+
+def find_nte_texture_for_material(mat_name, tex_type, image_files):
+    name_lower = mat_name.lower()
+
+    def matches_type(f):
+        flow = f.lower()
+        if tex_type == 'd':
+            return any(k in flow for k in ['_d.', '_d_', '_d1', '_d2', '_diff', '_color', '_base', '_albedo'])
+        elif tex_type == 'n':
+            return any(k in flow for k in ['_n.', '_n_', '_n1', '_n2', '_norm', '_normal'])
+        elif tex_type == 'm':
+            return any(k in flow for k in ['_m.', '_m_', '_m1', '_m2', '_mask', '_lightmap'])
+        elif tex_type == 'id':
+            return any(k in flow for k in ['_id.', '_id_', '_id1', '_id2', '_idmap'])
+        return True
+
+    if 'hair' in name_lower or 'pelo' in name_lower or '发' in name_lower:
+        sub_idx = '02' if ('02' in name_lower or '2' in name_lower or '后发' in name_lower) else '01'
+        candidates = [f for f in image_files if 'hair' in f.lower() and matches_type(f) and (sub_idx in f.lower() or f'_{int(sub_idx)}_' in f.lower() or f'_{int(sub_idx)}.' in f.lower())]
+        if not candidates:
+            candidates = [f for f in image_files if 'hair' in f.lower() and matches_type(f)]
+        if candidates:
+            return candidates[0]
+
+    if 'face' in name_lower or 'cara' in name_lower or '面' in name_lower or 'head' in name_lower:
+        candidates = [f for f in image_files if 'face' in f.lower() and matches_type(f)]
+        if candidates:
+            return candidates[0]
+
+    if any(k in name_lower for k in ['gaoguang', 'hi', 'high', 'bantou']):
+        candidates = [f for f in image_files if ('gaoguang' in f.lower() or 'bantou' in f.lower())]
+        if candidates:
+            return candidates[0]
+
+    if any(k in name_lower for k in ['eye', '目', 'iris', 'pupil', 'eyelash', 'eyebrow', '眉毛', '睫毛']):
+        candidates = [f for f in image_files if ('eyes' in f.lower() or 'eye_' in f.lower() or 'eye.' in f.lower()) and matches_type(f)]
+        if not candidates:
+            candidates = [f for f in image_files if 'eye' in f.lower()]
+        if candidates:
+            return candidates[0]
+
+    if any(k in name_lower for k in ['down', '02', '_2', 'bottom', 'skirt', 'leg']):
+        candidates = [f for f in image_files if ('_02_' in f.lower() or '_2_' in f.lower() or 'down' in f.lower() or 'body2' in f.lower()) and matches_type(f)]
+        if not candidates:
+            candidates = [f for f in image_files if '_02_' in f.lower() or '_2_' in f.lower()]
+        if candidates:
+            return candidates[0]
+
+    if any(k in name_lower for k in ['up', '01', '_1', 'top', 'upper', 'body', 'skin', 'chastener_1']):
+        candidates = [f for f in image_files if ('_01_' in f.lower() or '_1_' in f.lower() or 'up' in f.lower()) and matches_type(f)]
+        if not candidates:
+            candidates = [f for f in image_files if '_01_' in f.lower() or '_1_' in f.lower()]
+        if candidates:
+            return candidates[0]
+
+    clean_parts = [p for p in name_lower.split('_') if p not in ['player', '075', '019', 'oneiroi', 'oneir', 'mint', 'skin', 'lod0', 'skeleton', 'nte', 'shader', 'mi', 'mat', 'chastener']]
+    if clean_parts:
+        candidates = [
+            f for f in image_files
+            if any(part in f.lower() for part in clean_parts) and matches_type(f)
+        ]
+        if candidates:
+            return candidates[0]
+
+    candidates = [f for f in image_files if matches_type(f)]
+    return candidates[0] if candidates else (image_files[0] if image_files else None)
+
+
+
+class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+
+    def import_textures(self):
+        cache_enabled = self.context.window_manager.cache_enabled
+        op = self.blender_operator
+
+        fp = getattr(op, 'filepath', '') or getattr(op, 'import_path', '') or getattr(op, 'directory', '')
+        folder = op.file_directory
+        if not folder and fp:
+            folder = fp if os.path.isdir(fp) else os.path.dirname(fp)
+        if not folder:
+            folder = get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH)
+
+        has_textures = False
+        if folder and os.path.isdir(folder):
+            try:
+                has_textures = any(f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp')) for f in os.listdir(folder))
+            except Exception:
+                has_textures = False
+
+        if not folder or not os.path.isdir(folder) or not has_textures:
+            print(f"[DEBUG] Character texture folder not set or valid. Prompting user via INVOKE_DEFAULT.")
+            bpy.ops.genshin.import_textures(
+                'INVOKE_DEFAULT',
+                next_step_idx=self.blender_operator.next_step_idx,
+                file_directory=self.blender_operator.file_directory,
+                invoker_type=self.blender_operator.invoker_type,
+                high_level_step_name=self.blender_operator.high_level_step_name,
+                game_type=self.blender_operator.game_type,
+            )
+            return {'FINISHED'}
+
+        if cache_enabled and folder:
+            cache_using_cache_key(get_cache(cache_enabled), CHARACTER_MODEL_FOLDER_FILE_PATH, folder)
+
+        import json
+        files = os.listdir(folder)
+        image_files = [f for f in files if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
+        json_files = [f for f in files if f.lower().endswith('.json')]
+
+        json_data_map = {}
+        for jf in json_files:
+            try:
+                jpath = os.path.join(folder, jf)
+                with open(jpath, 'r', encoding='utf-8') as f:
+                    jcontent = json.load(f)
+                    json_data_map[jf.lower()] = jcontent
+            except Exception as ex:
+                print(f"Notice: Reading JSON {jf}: {ex}")
+
+        for mat in bpy.data.materials:
+            if not mat.use_nodes or not mat.node_tree or mat.name == '材质球':
+                continue
+
+            mat_name_lower = mat.name.lower()
+
+            for node in mat.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree:
+                    ng_name = node.node_tree.name
+                    if ng_name in ['异环-头发', '异环-身体', '异环-面部']:
+                        if ng_name == '异环-头发' or any(k in mat_name_lower for k in ['hair', 'pelo', '前发', '后发']):
+                            target_socket = node.inputs.get('基础色') or node.inputs.get('Color') or node.inputs.get('Input')
+                        elif ng_name == '异环-面部' or any(k in mat_name_lower for k in ['face', 'cara', '面']):
+                            target_socket = node.inputs.get('Color') or node.inputs.get('Input') or node.inputs.get('基础色')
+                        else:
+                            target_socket = node.inputs.get('Input') or node.inputs.get('Color') or node.inputs.get('基础色')
+
+                        best_diff = find_nte_texture_for_material(mat.name, 'd', image_files)
+
+                        if best_diff and target_socket and not target_socket.is_linked:
+                            img_path = os.path.join(folder, best_diff)
+                            img = bpy.data.images.load(img_path, check_existing=True)
+
+                            tex_node = next((n for n in mat.node_tree.nodes if n.type == 'TEX_IMAGE' and n.image == img), None)
+                            if not tex_node:
+                                tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
+                                tex_node.image = img
+                                tex_node.location = (node.location.x - 320, node.location.y)
+
+                            mat.node_tree.links.new(tex_node.outputs['Color'], target_socket)
+
+                        mask_socket = node.inputs.get('M') or node.inputs.get('MASK') or node.inputs.get('Mask')
+                        if mask_socket and not mask_socket.is_linked:
+                            best_mask = find_nte_texture_for_material(mat.name, 'm', image_files)
+                            if best_mask:
+                                img_path = os.path.join(folder, best_mask)
+                                img = bpy.data.images.load(img_path, check_existing=True)
+                                img.colorspace_settings.name = 'Non-Color'
+                                tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
+                                tex_node.image = img
+                                tex_node.location = (node.location.x - 320, node.location.y - 220)
+                                mat.node_tree.links.new(tex_node.outputs['Color'], mask_socket)
+
+
+
+        self.blender_operator.report({'INFO'}, 'Imported Neverness to Everness textures and JSON material data...')
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx, 
+            self.blender_operator.invoker_type, 
+            file_path_to_cache=folder,
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=self.blender_operator.game_type,
+        )
+
+
+

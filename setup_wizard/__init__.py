@@ -52,7 +52,10 @@ else:
         GI_OT_SetUpMaterials,
         HSR_OT_SetUpMaterials,
         ZZZ_OT_SetUpMaterials,
+        NTE_OT_SetUpMaterials,
+        NTE_OT_SetUpHairSpecular,
     )
+
     from setup_wizard.genshin_import_outlines import (
         GI_OT_SetUpOutlines,
         HSR_OT_SetUpOutlines,
@@ -62,6 +65,7 @@ else:
         GI_OT_GenshinSetupWizardUI,
         HSR_OT_HonkaiStarRailSetupWizardUI,
         ZZZ_OT_SetupWizardUI,
+        NTE_OT_SetupWizardUI,
         setup_dependencies,
     )
     from setup_wizard.genshin_setup_wizard import (
@@ -96,6 +100,15 @@ else:
         HSR_PT_UI_Materials_Menu,
         HSR_PT_UI_Outlines_Menu,
     )
+    from setup_wizard.ui.nte_ui_setup_wizard_menu import (
+        NTE_PT_Setup_Wizard_UI_Layout,
+        NTE_PT_Basic_Setup_Wizard_UI_Layout,
+        NTE_PT_Advanced_Setup_Wizard_UI_Layout,
+        NTE_PT_UI_Character_Model_Menu,
+        NTE_PT_UI_Materials_Menu,
+        NTE_PT_UI_Hair_Specular_Menu,
+    )
+
     from setup_wizard.ui.unified_ui_setup_wizard_menu import (
         CSW_PT_Unified_Character_Setup_Wizard_UI_Layout,
     )
@@ -118,6 +131,7 @@ else:
     modules = [
         setup_wizard.ui.gi_ui_setup_wizard_menu,
         setup_wizard.ui.zzz_ui_setup_wizard_menu,
+        setup_wizard.ui.nte_ui_setup_wizard_menu,
         setup_wizard.genshin_setup_wizard,
         setup_wizard.cache_operator,
     ]
@@ -172,8 +186,19 @@ else:
         ZZZ_OT_SetUpOutlines,
         ZZZ_OT_FinishSetup,
         ZZZ_OT_FixBoneChains,
+        NTE_PT_Setup_Wizard_UI_Layout,
+        NTE_PT_Basic_Setup_Wizard_UI_Layout,
+        NTE_PT_Advanced_Setup_Wizard_UI_Layout,
+        NTE_PT_UI_Character_Model_Menu,
+        NTE_PT_UI_Materials_Menu,
+        NTE_PT_UI_Hair_Specular_Menu,
+        NTE_OT_SetupWizardUI,
+        NTE_OT_SetUpMaterials,
+        NTE_OT_SetUpHairSpecular,
         ClearCacheOperator,
     ]
+
+
 
     for module in modules:
         try:

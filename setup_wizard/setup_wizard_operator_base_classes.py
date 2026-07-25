@@ -33,6 +33,7 @@ class BasicSetupUIOperator:
     game_type: StringProperty()
 
     def execute(self, context):
+        print(f"[DEBUG] BasicSetupUIOperator executed: bl_idname={getattr(self, 'bl_idname', 'N/A')}, game_type='{self.game_type}'")
         next_step_index = 0
 
         NextStepInvoker().invoke(
@@ -42,3 +43,4 @@ class BasicSetupUIOperator:
             game_type=self.game_type,
         )
         return {'FINISHED'}
+
