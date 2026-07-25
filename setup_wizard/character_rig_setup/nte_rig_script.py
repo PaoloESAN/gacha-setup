@@ -151,9 +151,52 @@ def rig_character(
     bpy.ops.object.mode_set(mode='POSE')
     bpy.ops.object.expykit_extract_metarig(rig_preset='Rigify_Metarig.py', assign_metarig=True)
 
-    # Generate Rigify
+    # Generate Rigify with aligned Head bone (halo widget) and centered Breast bones
     metarig_obj = bpy.data.objects.get("metarig")
     if metarig_obj:
+        context.view_layer.objects.active = metarig_obj
+        bpy.ops.object.mode_set(mode='EDIT')
+        eb_head = metarig_obj.data.edit_bones.get("spine.006") or metarig_obj.data.edit_bones.get("head")
+        if eb_head:
+            # Set head bone tail pointing straight up (+Z) above crown of head for halo control ring
+            eb_head.tail.x = eb_head.head.x
+            eb_head.tail.y = eb_head.head.y
+            eb_head.tail.z = eb_head.head.z + 0.22
+            eb_head.roll = 0.0
+
+        # Center breast bones on front of chest (more centered and lower down)
+        chest_eb = metarig_obj.data.edit_bones.get("spine.003") or metarig_obj.data.edit_bones.get("chest")
+        if chest_eb:
+            cz = chest_eb.head.z + (chest_eb.tail.z - chest_eb.head.z) * 0.25
+            cy = chest_eb.head.y - 0.07
+
+            eb_bl = metarig_obj.data.edit_bones.get("breast.L")
+            if eb_bl:
+                eb_bl.head.x = 0.050
+                eb_bl.head.y = cy
+                eb_bl.head.z = cz
+                eb_bl.tail.x = 0.050
+                eb_bl.tail.y = cy - 0.05
+                eb_bl.tail.z = cz
+
+            eb_br = metarig_obj.data.edit_bones.get("breast.R")
+            if eb_br:
+                eb_br.head.x = -0.050
+                eb_br.head.y = cy
+                eb_br.head.z = cz
+                eb_br.tail.x = -0.050
+                eb_br.tail.y = cy - 0.05
+                eb_br.tail.z = cz
+
+        # Align hand.L and hand.R metarig bones straight along forearm vector so hand_ik widget is centered on wrist
+        for side in [".L", ".R"]:
+            forearm_eb = metarig_obj.data.edit_bones.get("forearm" + side)
+            hand_eb = metarig_obj.data.edit_bones.get("hand" + side)
+            if forearm_eb and hand_eb:
+                arm_vec = (forearm_eb.tail - forearm_eb.head).normalized()
+                hand_eb.tail = hand_eb.head + arm_vec * 0.05
+                hand_eb.roll = forearm_eb.roll
+
         bpy.ops.object.mode_set(mode='OBJECT')
         bpy.ops.object.select_all(action='DESELECT')
         metarig_obj.select_set(True)
@@ -168,6 +211,24 @@ def rig_character(
             if o.type == 'ARMATURE' and o.name != "metarig" and o != backup_arm:
                 rigifyr = o
                 break
+
+    # Adjust custom shape scales in Pose mode for hand_ik and breast controls
+    if rigifyr:
+        context.view_layer.objects.active = rigifyr
+        bpy.ops.object.mode_set(mode='POSE')
+        for b_name in ["hand_ik.L", "hand_ik.R"]:
+            pb = rigifyr.pose.bones.get(b_name)
+            if pb:
+                pb.custom_shape_scale_xyz = (0.65, 0.65, 0.65)
+
+        for b_name in ["breast.L", "breast.R"]:
+            pb = rigifyr.pose.bones.get(b_name)
+            if pb:
+                pb.custom_shape_scale_xyz = (0.70, 0.70, 0.70)
+
+
+        bpy.ops.object.mode_set(mode='OBJECT')
+
 
     # Transfer and parent ALL secondary/dynamic bones from backup_arm into rigifyr
     if rigifyr and backup_arm:
@@ -252,9 +313,7 @@ def rig_character(
         face_coll = rigifyr.data.collections.get("Face & Accessories") or rigifyr.data.collections.new("Face & Accessories")
         deform_coll = rigifyr.data.collections.get("Deform & Helpers") or rigifyr.data.collections.new("Deform & Helpers")
         others_coll = rigifyr.data.collections.get("Others") or rigifyr.data.collections.new("Others")
-
-        for coll in [hair_coll, skirt_coll, clothes_coll, face_coll, deform_coll, others_coll]:
-            coll.is_visible = False
+        torso_coll = rigifyr.data.collections.get("Torso") or rigifyr.data.collections.get("Torso (Primary)") or rigifyr.data.collections.new("Torso")
 
         main_ctrl_keywords = [
             "root", "torso", "hips", "chest", "neck", "head",
@@ -265,15 +324,30 @@ def rig_character(
             b_name = bone.name
             b_low = b_name.lower()
 
+            # Assign ONLY control breast bones (excluding DEF-, ORG-, MCH-) explicitly to Torso collection
+            if "breast" in b_low and not (b_name.startswith("DEF-") or b_name.startswith("ORG-") or b_name.startswith("MCH-")):
+                try:
+                    torso_coll.assign(bone)
+                except Exception:
+                    pass
+                for c in list(bone.collections):
+                    if c != torso_coll:
+                        try:
+                            c.unassign(bone)
+                        except Exception:
+                            pass
+                bone.hide = False
+                continue
+
             # Check if this bone is a main Rigify UI control widget
             is_main_ctrl = any(kw in b_low for kw in main_ctrl_keywords) and not (
                 b_name.startswith("DEF-") or b_name.startswith("ORG-") or b_name.startswith("MCH-") or
-                "bip" in b_low or "bn_" in b_low or "bone" in b_low or "wq_" in b_low
+                "bip" in b_low or "bn_" in b_low or "bone" in b_low or "wq_" in b_low or "root_" in b_low or "_root" in b_low
             )
+
 
             if is_main_ctrl:
                 continue
-
 
             target_coll = others_coll
             if any(k in b_low for k in ["hair", "headline", "bone00"]):
@@ -299,11 +373,19 @@ def rig_character(
                         pass
             bone.hide = True
 
-        hidden_collections = ["DEF", "ORG", "MCH", "Deformation", "Original", "Mechanism", "Tweaks", "Props"]
-        for coll_name in hidden_collections:
-            coll = rigifyr.data.collections.get(coll_name)
-            if coll:
+        # Sync active Rig Layers visibility to EXACT requested list: Face, Torso, Fingers, Arm IK, Leg IK, Root
+        exact_visible_names = {
+            "Face", "Torso", "Fingers",
+            "Arm.L (IK)", "Arm.R (IK)", "Leg.L (IK)", "Leg.R (IK)", "Root",
+            "Face (Primary)", "Torso (Primary)", "Fingers (Primary)", "Root (Primary)"
+        }
+        for coll in rigifyr.data.collections:
+            if coll.name in exact_visible_names:
+                coll.is_visible = True
+            else:
                 coll.is_visible = False
+
+
     elif rigifyr:
         for bone in rigifyr.data.bones:
             if bone.name.startswith("DEF-") or bone.name.startswith("ORG-") or bone.name.startswith("MCH-") or "Bn_" in bone.name or "Bone-" in bone.name or "Bip" in bone.name:
