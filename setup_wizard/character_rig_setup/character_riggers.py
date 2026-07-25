@@ -11,7 +11,9 @@ from setup_wizard.character_rig_setup.rig_script import rig_character
 from setup_wizard.character_rig_setup.npc_rig_script import rig_character as rig_npc
 from setup_wizard.character_rig_setup.hsr_rig_script import rig_character as hsr_rig_character
 from setup_wizard.character_rig_setup.zzz_rig_script import rig_character as zzz_rig_character
+from setup_wizard.character_rig_setup.nte_rig_script import rig_character as nte_rig_character
 from setup_wizard.character_rig_setup.zzz_face_rig import zzz_face_rig_main
+
 
 from abc import ABC, abstractmethod
 from bpy.types import Armature, Operator, Context
@@ -400,15 +402,25 @@ class NevernessToEvernessCharacterRigger(CharacterRigger):
         self.context = context
 
     def rig_character(self):
-        armature = [obj for obj in bpy.context.scene.objects if obj.type == 'ARMATURE']
-        armature = armature[0] if armature else None
+        armature = _get_character_armature(self.context)
+        if armature:
+            self.context.view_layer.objects.active = armature
+            armature.select_set(True)
 
         cache_enabled = self.context.window_manager.cache_enabled
         filepath = self.blender_operator.filepath or get_cache(cache_enabled).get(GENSHIN_RIGIFY_BONE_SHAPES_FILE_PATH)
 
         if armature:
             try:
-                rig_character(armature, filepath)
+                nte_rig_character(
+                    filepath,
+                    disallow_arm_ik_stretch=True,
+                    disallow_leg_ik_stretch=True,
+                    use_arm_ik_poles=True,
+                    use_leg_ik_poles=True,
+                    add_child_of_constraints=True,
+                    use_head_tracker=True
+                )
             except Exception as ex:
                 self.blender_operator.report({'ERROR'}, f"Failed to rig NTE character: {ex}")
 
@@ -421,4 +433,5 @@ class NevernessToEvernessCharacterRigger(CharacterRigger):
             high_level_step_name=self.blender_operator.high_level_step_name,
             game_type=GameType.NEVERNESS_TO_EVERNESS.name
         )
+
 
