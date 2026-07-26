@@ -3325,6 +3325,10 @@ def rig_character(
         bpy.context.object.data.collections["Clothes"].is_visible = False
         bpy.context.object.data.collections["Cage"].is_visible = False
         bpy.context.object.data.collections["Other"].is_visible = False
+        if "Light Panel Extras" in bpy.context.object.data.collections:
+            bpy.context.object.data.collections["Light Panel Extras"].is_visible = False
+        if "Light Panel" in bpy.context.object.data.collections:
+            bpy.context.object.data.collections["Light Panel"].is_visible = True
     
     # Send the given bone to its new location for either version. Adjusted for actual layer num.
     # MOVING OF BONES BELOW -------------------------------

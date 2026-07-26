@@ -656,9 +656,9 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         target_mat_name = "ZZZ Shader Body3/Leg"
                     else:
                         target_mat_name = "ZZZ Shader Body"
-                elif "weapon" in matname:
-                    if "weapon 2" in matname or "weapon2" in matname or "weapon_2" in matname:
-                        target_mat_name = "ZZZ Shader Weapon 2"
+                elif "weapon" in matname or "wpn" in matname or "equip" in matname or "sword" in matname or "blade" in matname or "spear" in matname or "lance" in matname or "gun" in matname or "prop" in matname:
+                    if "weapon 2" in matname or "weapon2" in matname or "weapon_2" in matname or "map2" in matname:
+                        target_mat_name = "ZZZ Shader Weapon 2" if bpy.data.materials.get("ZZZ Shader Weapon 2") else "ZZZ Shader Weapon"
                     else:
                         target_mat_name = "ZZZ Shader Weapon"
 
@@ -670,6 +670,18 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         new_mat.name = f"ZZZ Shader {name_base}"
                         new_mat.use_fake_user = True
                         slot.material = new_mat
+
+        # Fallback: Ensure any weapon mesh object with empty material slots gets assigned a valid ZZZ Weapon material
+        weapon_mats = [m for m in bpy.data.materials if m.name.startswith("ZZZ Shader") and "weapon" in m.name.lower()]
+        main_weapon_mat = weapon_mats[0] if weapon_mats else bpy.data.materials.get("ZZZ Shader Weapon")
+
+        for mesh in meshes:
+            m_lower = mesh.name.lower()
+            if any(k in m_lower for k in ["weapon", "wpn", "equip", "sword", "blade", "spear", "lance", "gun", "prop"]):
+                for slot in mesh.material_slots:
+                    if not slot.material and main_weapon_mat:
+                        slot.material = main_weapon_mat
+
         self.blender_operator.report({'INFO'}, 'Replaced default materials with ZZZ shader materials...')
 
 

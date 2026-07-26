@@ -223,6 +223,42 @@ class ZenlessZoneZeroOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
                 if cache_enabled and filepath:
                     cache_using_cache_key(get_cache(cache_enabled), self.outlines_file_path, filepath)
 
+        # Import strictly the Lighting Panel UI & Direction Objects / Collections
+        try:
+            with bpy.data.libraries.load(filepath, link=False) as (data_from, data_to):
+                excluded_kw = ["face", "phoneme", "mouth", "eyebrow", "expression", "facrig"]
+                lighting_keywords = [
+                    "colorwheel", "colorpicker", "slider-rim", "origin-rim",
+                    "light direction", "head direction", "head forward", "head up",
+                    "lighting panel", "light panel", "lighting_panel", "light_panel"
+                ]
+                
+                target_colls = [
+                    c for c in data_from.collections 
+                    if not any(kw in c.lower() for kw in excluded_kw) and
+                    ("lighting" in c.lower() or "panel" in c.lower() or "light" in c.lower()) and
+                    c not in bpy.data.collections
+                ]
+                data_to.collections = target_colls
+
+                target_objs = [
+                    o for o in data_from.objects 
+                    if not any(kw in o.lower() for kw in excluded_kw) and
+                    (any(kw in o.lower() for kw in lighting_keywords) or "panel" in o.lower() or "lighting" in o.lower()) and
+                    o not in bpy.data.objects
+                ]
+                data_to.objects = target_objs
+
+            for coll in data_to.collections:
+                if coll and coll.name not in [c.name for c in bpy.context.scene.collection.children]:
+                    bpy.context.scene.collection.children.link(coll)
+
+            for obj in data_to.objects:
+                if obj and not any(obj.name in c.objects for c in bpy.data.collections.values()):
+                    bpy.context.scene.collection.objects.link(obj)
+        except Exception as e:
+            print(f"Failed to append lighting objects/collections from {filepath}: {e}")
+
         NextStepInvoker().invoke(
             self.blender_operator.next_step_idx, 
             self.blender_operator.invoker_type,

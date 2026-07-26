@@ -1095,8 +1095,29 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                 bod = obj
                 break
 
+        # Configure Armature Bone Collections for Light Panel vs Light Panel Extras
+        for arm_obj in bpy.data.objects:
+            if arm_obj.type == 'ARMATURE' and arm_obj.data:
+                arm = arm_obj.data
+                if hasattr(arm, "collections"):
+                    if "Light Panel Extras" in arm.collections:
+                        arm.collections["Light Panel Extras"].is_visible = False
+                    if "Light Panel" in arm.collections:
+                        arm.collections["Light Panel"].is_visible = True
+
         for obj in bpy.data.objects:
             if obj.type == 'MESH':
+                # Skip LightPanelWGTPlane, LightPanelSelectorWGT, or any WGT panel widgets
+                o_lower = obj.name.lower()
+                if "lightpanelwgt" in o_lower or "lightpanelselector" in o_lower or "wgtplane" in o_lower or "selectorwgt" in o_lower:
+                    obj.modifiers.clear()
+                    try:
+                        obj.hide_viewport = True
+                        obj.hide_render = True
+                    except Exception:
+                        pass
+                    continue
+
                 # Light Vectors
                 if light_vectors_gn:
                     mod = obj.modifiers.get("Light Vectors")
@@ -1105,24 +1126,33 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                         mod.node_group = light_vectors_gn
                     
                     socket_mapping = {
+                        # Direction Empties
+                        "Light Direction": "Light Direction",
+                        "Head Origin": "Head Direction",
+                        "Head Forward": "Head Forward",
+                        "Head Up": "Head Up",
                         "Input_3": "Light Direction",
                         "Input_7": "Head Direction",
-                        "Input_4": "Head Origin",
+                        "Input_4": "Head Direction",
                         "Input_5": "Head Forward",
-                        "Input_6": "Head Up"
-                    }
-                    for socket_name, target_name in socket_mapping.items():
-                        target_obj = None
-                        if char_name:
-                            target_obj = bpy.data.objects.get(f"{target_name}_{char_name}")
-                        if not target_obj:
-                            target_obj = bpy.data.objects.get(target_name)
-                        if target_obj:
-                            set_modifier_property(mod, socket_name, target_obj)
-
-                    # Connect pickers and wheels
-                    obs = bpy.data.objects
-                    sockets = {
+                        "Input_6": "Head Up",
+                        # Color Wheels & Pickers
+                        "Ambient Color Wheel": "ColorWheel-Ambient",
+                        "Ambient Color Picker": "ColorPicker-Ambient",
+                        "Lit Color Wheel": "ColorWheel-Lit",
+                        "Lit Color Picker": "ColorPicker-Lit",
+                        "Shadow Color Wheel": "ColorWheel-Shadow",
+                        "Shadow Color Picker": "ColorPicker-Shadow",
+                        "Rim Lit Color Wheel": "ColorWheel-RimLit",
+                        "Rim Lit Color Picker": "ColorPicker-RimLit",
+                        "Rim Shadow Color Wheel": "ColorWheel-RimShadow",
+                        "Rim Shadow Color Picker": "ColorPicker-RimShadow",
+                        # Sliders & Origins
+                        "Rim X Size Origin": "Origin-RimX",
+                        "Rim X Size Slider": "Slider-RimX",
+                        "Rim Y Size Origin": "Origin-RimY",
+                        "Rim Y Size Slider": "Slider-RimY",
+                        # Legacy socket fallback IDs
                         "Socket_0": "ColorWheel-Ambient",
                         "Socket_1": "ColorPicker-Ambient",
                         "Socket_2": "ColorWheel-Lit",
@@ -1138,13 +1168,14 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                         "Socket_28": "Origin-RimY",
                         "Socket_29": "Slider-RimY",
                     }
-                    for sock, target in sockets.items():
-                        target_obj = obs.get(target)
+                    for socket_name, target_name in socket_mapping.items():
+                        target_obj = None
+                        if char_name:
+                            target_obj = bpy.data.objects.get(f"{target_name}_{char_name}")
+                        if not target_obj:
+                            target_obj = bpy.data.objects.get(target_name)
                         if target_obj:
-                            try:
-                                mod[sock] = target_obj
-                            except:
-                                pass
+                            set_modifier_property(mod, socket_name, target_obj)
 
                 # Extra FX
                 if extra_fx_gn:

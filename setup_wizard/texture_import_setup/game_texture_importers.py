@@ -465,6 +465,25 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                                 if obj.data.materials[i] == mat:
                                     obj.data.materials.pop(index=i)
 
+        # Ensure all weapon mesh objects/slots are assigned a valid weapon material (Weapon 1)
+        weapon_mats = [m for m in bpy.data.materials if m.name.startswith("ZZZ Shader") and "weapon" in m.name.lower()]
+        main_weapon_mat = weapon_mats[0] if weapon_mats else bpy.data.materials.get("ZZZ Shader Weapon")
+
+        for obj in bpy.data.objects:
+            if obj.type == 'MESH':
+                o_lower = obj.name.lower()
+                is_weapon_obj = any(k in o_lower for k in ["weapon", "wpn", "equip", "sword", "blade", "spear", "lance", "gun", "prop"])
+                
+                for slot in obj.material_slots:
+                    if is_weapon_obj and (not slot.material or not slot.material.node_tree):
+                        if main_weapon_mat:
+                            slot.material = main_weapon_mat
+                    elif slot.material and "weapon" in slot.material.name.lower():
+                        nodes = slot.material.node_tree.nodes if slot.material.node_tree else []
+                        has_tex = any(n.type == 'TEX_IMAGE' and n.image for n in nodes)
+                        if not has_tex and main_weapon_mat and slot.material != main_weapon_mat:
+                            slot.material = main_weapon_mat
+
         # Sync textures from main ZZZ materials to ZZZ Outline materials
         sync_zzz_outline_textures()
 
