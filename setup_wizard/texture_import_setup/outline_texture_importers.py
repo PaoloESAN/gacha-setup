@@ -418,7 +418,8 @@ class ZenlessZoneZeroOutlineTextureImporter(OutlineTextureImporter):
         super().__init__(blender_operator, context, None, shader_node_names)
 
     def import_textures(self):
-        return
+        from setup_wizard.texture_import_setup.game_texture_importers import sync_zzz_outline_textures
+        sync_zzz_outline_textures()
 
 
 class NevernessToEvernessOutlineTextureImporter(OutlineTextureImporter):

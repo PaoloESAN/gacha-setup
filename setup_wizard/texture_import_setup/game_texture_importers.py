@@ -311,10 +311,11 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
 
         for filename in filtered_files:
             lower_name = filename.lower()
-            if "weapon_2" in lower_name or "weapon2" in lower_name or "weapon_map2" in lower_name or "weaponmap2" in lower_name:
-                groups["Weapon_2"].append(filename)
-            elif "weapon" in lower_name:
-                groups["Weapon"].append(filename)
+            if "weapon" in lower_name:
+                if "weapon_2" in lower_name or "weapon2" in lower_name or "weapon 2" in lower_name or "weapon_map2" in lower_name or "weaponmap2" in lower_name or "map2" in lower_name or "map_2" in lower_name:
+                    groups["Weapon_2"].append(filename)
+                else:
+                    groups["Weapon"].append(filename)
             elif "face" in lower_name:
                 groups["Face"].append(filename)
             elif "hair" in lower_name:
@@ -323,11 +324,17 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                 groups["Leg"].append(filename)
             elif "tail" in lower_name:
                 groups["Tail"].append(filename)
-            elif "body_3" in lower_name or "body3" in lower_name or "body_map3" in lower_name or "bodymap3" in lower_name:
+            elif "body_3" in lower_name or "body3" in lower_name or "body 3" in lower_name or "body_map3" in lower_name or "bodymap3" in lower_name or "map3" in lower_name or "map_3" in lower_name:
                 groups["Body_3"].append(filename)
-            elif "body_2" in lower_name or "body2" in lower_name or "body_map2" in lower_name or "bodymap2" in lower_name:
+            elif "body_2" in lower_name or "body2" in lower_name or "body 2" in lower_name or "body_map2" in lower_name or "bodymap2" in lower_name or "map2" in lower_name or "map_2" in lower_name:
                 groups["Body_2"].append(filename)
             elif "body" in lower_name:
+                groups["Body_1"].append(filename)
+            elif "map3" in lower_name or "map_3" in lower_name:
+                groups["Body_3"].append(filename)
+            elif "map2" in lower_name or "map_2" in lower_name:
+                groups["Body_2"].append(filename)
+            elif "map1" in lower_name or "map_1" in lower_name:
                 groups["Body_1"].append(filename)
 
         for mat in bpy.data.materials:
@@ -343,17 +350,17 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
             elif "eye" in matname:
                 group_keys = ["Face"]
             elif "body" in matname or "leg" in matname or "tail" in matname:
-                if "body 2" in matname or "body2" in matname or "body_2" in matname:
-                    group_keys = ["Body_2"]
-                elif "body3" in matname or "body3/leg" in matname or "body_3" in matname or "body 3" in matname or "leg" in matname or "tail" in matname:
-                    group_keys = ["Body_3", "Leg", "Tail"]
+                if "body 3" in matname or "body3" in matname or "body_3" in matname or "map3" in matname or "map_3" in matname or "_3_" in matname or matname.endswith("_3") or "leg" in matname or "tail" in matname:
+                    group_keys = ["Body_3", "Body_2", "Body_1", "Leg", "Tail"]
+                elif "body 2" in matname or "body2" in matname or "body_2" in matname or "map2" in matname or "map_2" in matname or "_2_" in matname or matname.endswith("_2"):
+                    group_keys = ["Body_2", "Body_1"]
                 else:
-                    group_keys = ["Body_1"]
+                    group_keys = ["Body_1", "Body_2", "Body_3"]
             elif "weapon" in matname:
-                if "weapon 2" in matname or "weapon2" in matname or "weapon_2" in matname:
-                    group_keys = ["Weapon_2"]
+                if "weapon 2" in matname or "weapon2" in matname or "weapon_2" in matname or "map2" in matname or "map_2" in matname or "_2_" in matname or matname.endswith("_2"):
+                    group_keys = ["Weapon_2", "Weapon"]
                 else:
-                    group_keys = ["Weapon"]
+                    group_keys = ["Weapon", "Weapon_2"]
 
             nodes = mat.node_tree.nodes
             for node in nodes:
@@ -364,9 +371,10 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                     def get_best_match(target_suf):
                         candidates = []
                         for key in group_keys:
-                            for f in groups[key]:
-                                if f.lower().endswith(target_suf.lower()):
-                                    candidates.append(f)
+                            key_candidates = [f for f in groups[key] if f.lower().endswith(target_suf.lower())]
+                            if key_candidates:
+                                candidates = key_candidates
+                                break
                         
                         if len(candidates) > 1:
                             sub_keywords = ["2", "3", "pro"]
@@ -445,6 +453,80 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                             face_lightmap_node.image = img
                             img.colorspace_settings.name = 'Non-Color'
                             img.alpha_mode = 'CHANNEL_PACKED'
+
+            # If this is a Hair material and no hair texture was found,
+            # remove its material slot (Slot 2+) from mesh objects so the hair inherits Slot 1
+            if "hair" in matname:
+                has_hair_texture = any(node.type == 'TEX_IMAGE' and node.image for node in nodes)
+                if not has_hair_texture:
+                    for obj in bpy.data.objects:
+                        if obj.type == 'MESH' and obj.data and hasattr(obj.data, "materials"):
+                            for i in range(len(obj.data.materials) - 1, 0, -1):
+                                if obj.data.materials[i] == mat:
+                                    obj.data.materials.pop(index=i)
+
+        # Sync textures from main ZZZ materials to ZZZ Outline materials
+        sync_zzz_outline_textures()
+
+
+def sync_zzz_outline_textures():
+    outline_materials = [m for m in bpy.data.materials if "outlines" in m.name.lower() or m.name.endswith("Outlines")]
+    main_materials = [m for m in bpy.data.materials if m.name.startswith("ZZZ Shader") and m.node_tree]
+
+    for outline_mat in outline_materials:
+        if not outline_mat.node_tree:
+            continue
+        
+        outline_lower = outline_mat.name.lower()
+        matched_main_mat = None
+
+        if "hair" in outline_lower:
+            cand = [m for m in main_materials if "hair" in m.name.lower()]
+            if cand: matched_main_mat = cand[0]
+        elif "face" in outline_lower:
+            cand = [m for m in main_materials if "face" in m.name.lower()]
+            if cand: matched_main_mat = cand[0]
+        elif "body 2" in outline_lower or "body2" in outline_lower or "body_2" in outline_lower or "dress" in outline_lower:
+            cand = [m for m in main_materials if "body 2" in m.name.lower() or "body2" in m.name.lower() or "body_2" in m.name.lower() or "map2" in m.name.lower()]
+            if cand: matched_main_mat = cand[0]
+        elif "body 3" in outline_lower or "body3" in outline_lower or "body_3" in outline_lower or "leg" in outline_lower:
+            cand = [m for m in main_materials if "body 3" in m.name.lower() or "body3" in m.name.lower() or "body_3" in m.name.lower() or "map3" in m.name.lower() or "leg" in m.name.lower()]
+            if cand: matched_main_mat = cand[0]
+        elif "body" in outline_lower:
+            cand = [m for m in main_materials if "body_1" in m.name.lower() or "body1" in m.name.lower() or "body 1" in m.name.lower() or ("body" in m.name.lower() and "2" not in m.name.lower() and "3" not in m.name.lower())]
+            if cand: matched_main_mat = cand[0]
+        elif "weapon" in outline_lower:
+            cand = [m for m in main_materials if "weapon" in m.name.lower()]
+            if cand: matched_main_mat = cand[0]
+
+        if not matched_main_mat:
+            out_words = [w for w in outline_lower.replace("zzz", "").replace("outlines", "").split("_") if w]
+            best_match = None
+            best_score = 0
+            for m in main_materials:
+                m_words = [w for w in m.name.lower().replace("zzz shader", "").split("_") if w]
+                score = sum(1 for w in out_words if w in m_words)
+                if score > best_score:
+                    best_score = score
+                    best_match = m
+            matched_main_mat = best_match
+
+        if matched_main_mat and matched_main_mat.node_tree:
+            main_images = {}
+            for node in matched_main_mat.node_tree.nodes:
+                if node.type == 'TEX_IMAGE' and node.image:
+                    suffix = node.name.rsplit("_", 1)[-1].upper() if "_" in node.name else node.name.upper()
+                    main_images[suffix] = node.image
+                    main_images[node.name] = node.image
+                    if "D" in suffix or "DIFFUSE" in suffix or "MAIN" not in main_images:
+                        main_images["MAIN"] = node.image
+
+            for node in outline_mat.node_tree.nodes:
+                if node.type == 'TEX_IMAGE':
+                    suffix = node.name.rsplit("_", 1)[-1].upper() if "_" in node.name else node.name.upper()
+                    assigned_img = main_images.get(node.name) or main_images.get(suffix) or main_images.get("D") or main_images.get("MAIN")
+                    if assigned_img:
+                        node.image = assigned_img
 
 
 def find_nte_texture_for_material(mat_name, tex_type, image_files):

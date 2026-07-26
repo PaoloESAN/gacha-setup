@@ -1188,32 +1188,61 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                     except:
                         pass
 
-                    # Dynamic material resolution for actual character materials & outlines
+                    # Dynamic material resolution for actual character materials & outlines based on mesh slots
+                    obj_mats = [slot.material for slot in obj.material_slots if slot.material]
+
                     def find_mat(keywords, fallback_name):
+                        # 1. Prioritize materials assigned directly to this mesh object
+                        for mat in obj_mats:
+                            m_lower = mat.name.lower()
+                            if any(kw in m_lower for kw in keywords):
+                                return mat
+                        # 2. Global search across scene materials
                         for mat in bpy.data.materials:
                             if mat.name.startswith("ZZZ Shader") and mat.name.lower() != fallback_name.lower():
                                 m_lower = mat.name.lower()
                                 if any(kw in m_lower for kw in keywords):
                                     return mat
+                        # 3. Fallback to active material on object if present
+                        if obj_mats:
+                            return obj_mats[0]
                         return bpy.data.materials.get(fallback_name)
 
-                    mat_hair = find_mat(["hair"], "ZZZ Shader Hair")
-                    mat_hair_ol = bpy.data.materials.get("ZZZ Hair Outlines")
+                    def get_outline_mat(main_mat):
+                        if not main_mat:
+                            return None
+                        m_lower = main_mat.name.lower()
+                        if "hair" in m_lower:
+                            return bpy.data.materials.get("ZZZ Hair Outlines")
+                        elif "face" in m_lower:
+                            return bpy.data.materials.get("ZZZ Face Outlines") or bpy.data.materials.get("ZZZ Face Outline")
+                        elif "body 2" in m_lower or "body2" in m_lower or "body_2" in m_lower or "dress" in m_lower:
+                            return bpy.data.materials.get("ZZZ Body 2 Outlines")
+                        elif "body 3" in m_lower or "body3" in m_lower or "body_3" in m_lower or "leg" in m_lower:
+                            return bpy.data.materials.get("ZZZ Body3/Leg Outlines")
+                        elif "body" in m_lower:
+                            return bpy.data.materials.get("ZZZ Body Outlines")
+                        elif "weapon" in m_lower:
+                            return bpy.data.materials.get("ZZZ Weapon Outlines")
+                        return None
 
                     mat_body1 = find_mat(["body_1", "body1", "body_01"], "ZZZ Shader Body") or find_mat(["body"], "ZZZ Shader Body")
-                    mat_body1_ol = bpy.data.materials.get("ZZZ Body Outlines")
+                    mat_body1_ol = get_outline_mat(mat_body1) or bpy.data.materials.get("ZZZ Body Outlines")
+
+                    mat_hair = find_mat(["hair"], "ZZZ Shader Hair")
+                    mat_hair_ol = get_outline_mat(mat_hair) or bpy.data.materials.get("ZZZ Hair Outlines")
 
                     mat_face = find_mat(["face"], "ZZZ Shader Face")
-                    mat_face_ol = bpy.data.materials.get("ZZZ Face Outlines") or bpy.data.materials.get("ZZZ Face Outline")
+                    mat_face_ol = get_outline_mat(mat_face) or bpy.data.materials.get("ZZZ Face Outlines") or bpy.data.materials.get("ZZZ Face Outline")
 
                     mat_body2 = find_mat(["body_2", "body2", "body_02", "dress"], "ZZZ Shader Body 2")
-                    mat_body2_ol = bpy.data.materials.get("ZZZ Body 2 Outlines")
+                    mat_body2_ol = get_outline_mat(mat_body2) or bpy.data.materials.get("ZZZ Body 2 Outlines")
 
                     mat_body3 = find_mat(["body_3", "body3", "body_03", "leg"], "ZZZ Shader Body3/Leg")
-                    mat_body3_ol = bpy.data.materials.get("ZZZ Body3/Leg Outlines")
+                    mat_body3_ol = get_outline_mat(mat_body3) or bpy.data.materials.get("ZZZ Body3/Leg Outlines")
 
                     mat_weapon = find_mat(["weapon"], "ZZZ Shader Weapon")
-                    mat_weapon_ol = bpy.data.materials.get("ZZZ Weapon Outlines")
+                    mat_weapon_ol = get_outline_mat(mat_weapon) or bpy.data.materials.get("ZZZ Weapon Outlines")
 
                     cam_obj = bpy.data.objects.get("Camera") or getattr(self.context.scene, "camera", None)
                     outline_thickness = 0.075 if "face" in obj.name.lower() else 0.750
