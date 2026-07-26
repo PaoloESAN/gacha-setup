@@ -74,18 +74,26 @@ class NTE_PT_Basic_Setup_Wizard_UI_Layout(Panel, NevernessToEvernessUIRenderChec
         )
 
 
-        # Step 3: Set Up Hair Specular button
+        # Step 3: Setup Outlines button
         OperatorFactory.create(
             sub_layout,
-            "neverness_to_everness.set_up_hair_specular",
-            "Set Up Hair Specular",
-            icon="STRANDS",
+            "neverness_to_everness.set_up_outlines",
+            "Setup Outlines",
+            icon="GEOMETRY_NODES",
             game_type=GameType.NEVERNESS_TO_EVERNESS.name,
         )
 
         # Step 4: Rig Character button
         OperatorFactory.create_rig_character_ui(sub_layout)
 
+        # Step 5: Finish Setup button
+        OperatorFactory.create(
+            sub_layout,
+            "neverness_to_everness.finish_setup",
+            "Finish Setup",
+            icon="CHECKMARK",
+            game_type=GameType.NEVERNESS_TO_EVERNESS.name,
+        )
 
 
 class NTE_PT_Advanced_Setup_Wizard_UI_Layout(Panel, NevernessToEvernessUIRenderChecker):
@@ -151,8 +159,8 @@ class NTE_PT_UI_Materials_Menu(Panel, NevernessToEvernessUIRenderChecker):
         )
 
 
-class NTE_PT_UI_Hair_Specular_Menu(Panel, NevernessToEvernessUIRenderChecker):
-    bl_label = "3. Hair Specular"
+class NTE_PT_UI_Outlines_Menu(Panel, NevernessToEvernessUIRenderChecker):
+    bl_label = "3. Outlines"
     bl_parent_id = "NTE_PT_UI_Advanced_Setup_Layout"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -164,9 +172,9 @@ class NTE_PT_UI_Hair_Specular_Menu(Panel, NevernessToEvernessUIRenderChecker):
 
         OperatorFactory.create(
             sub_layout,
-            "neverness_to_everness.set_up_hair_specular",
-            "Set Up Hair Specular",
-            "STRANDS",
+            "neverness_to_everness.set_up_outlines",
+            "Setup Outlines",
+            "GEOMETRY_NODES",
             game_type=GameType.NEVERNESS_TO_EVERNESS.name,
         )
 
@@ -185,6 +193,25 @@ class NTE_PT_UI_Rig_Character_Menu(Panel, NevernessToEvernessUIRenderChecker):
         OperatorFactory.create_rig_character_ui(sub_layout)
 
 
+class NTE_PT_UI_Finish_Setup_Menu(Panel, NevernessToEvernessUIRenderChecker):
+    bl_label = "5. Finish Setup"
+    bl_parent_id = "NTE_PT_UI_Advanced_Setup_Layout"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        layout = self.layout
+        sub_layout = layout.column(align=True)
+
+        OperatorFactory.create(
+            sub_layout,
+            "neverness_to_everness.finish_setup",
+            "Finish Setup",
+            "CHECKMARK",
+            game_type=GameType.NEVERNESS_TO_EVERNESS.name,
+        )
+
 
 classes = (
     NTE_PT_Setup_Wizard_UI_Layout,
@@ -192,9 +219,11 @@ classes = (
     NTE_PT_Advanced_Setup_Wizard_UI_Layout,
     NTE_PT_UI_Character_Model_Menu,
     NTE_PT_UI_Materials_Menu,
-    NTE_PT_UI_Hair_Specular_Menu,
+    NTE_PT_UI_Outlines_Menu,
     NTE_PT_UI_Rig_Character_Menu,
+    NTE_PT_UI_Finish_Setup_Menu,
 )
+
 
 
 

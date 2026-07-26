@@ -9,6 +9,7 @@ from bpy.types import Armature, Operator
 from setup_wizard.domain.game_types import GameType
 from setup_wizard.import_order import (
     CHARACTER_MODEL_FOLDER_FILE_PATH,
+    NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH,
     NextStepInvoker,
     get_cache,
 )
@@ -181,6 +182,58 @@ class ZZZ_OT_FinishSetup(Operator, BasicSetupUIOperator):
 
     bl_idname = "zenless_zone_zero.finish_setup"
     bl_label = "Zenless Zone Zero: Finish Setup (UI)"
+
+
+class NTE_OT_FinishSetup(Operator, BasicSetupUIOperator):
+    """Neverness to Everness Finish Setup"""
+
+    bl_idname = "neverness_to_everness.finish_setup"
+    bl_label = "Neverness to Everness: Finish Setup (UI)"
+
+    def execute(self, context):
+        result = BasicSetupUIOperator.execute(self, context)
+
+        # 1. Color Management -> Standard
+        try:
+            context.scene.display_settings.display_device = 'sRGB'
+            context.scene.view_settings.view_transform = 'Standard'
+        except Exception as e:
+            print(f"Warning setting Standard View Transform: {e}")
+
+        # 2. Enable Raytracing (Eevee Next / Cycles)
+        try:
+            if hasattr(context.scene.eevee, "use_raytracing"):
+                context.scene.eevee.use_raytracing = True
+            if hasattr(context.scene.eevee, "use_ssr"):
+                context.scene.eevee.use_ssr = True
+                context.scene.eevee.use_ssr_refraction = True
+        except Exception as e:
+            print(f"Warning enabling Raytracing: {e}")
+
+        # 3. Copy Compositor Post-Processing from Shader blend file (if present)
+        try:
+            context.scene.use_nodes = True
+            cache_enabled = context.window_manager.cache_enabled
+            filepath = get_cache(cache_enabled).get(NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH)
+            if filepath and os.path.exists(filepath):
+                inner_path = 'NodeTree'
+                with bpy.data.libraries.load(filepath) as (data_from, data_to):
+                    comp_trees = [name for name in data_from.node_groups if any(k in name.lower() for k in ["compositor", "post", "nte", "composite"])]
+                    data_to.node_groups = comp_trees
+
+                if data_to.node_groups and context.scene.node_tree:
+                    comp_tree = context.scene.node_tree
+                    ng = data_to.node_groups[0]
+                    existing = next((n for n in comp_tree.nodes if n.type == 'GROUP' and n.node_tree == ng), None)
+                    if not existing:
+                        grp_node = comp_tree.nodes.new("CompositorNodeGroup")
+                        grp_node.node_tree = ng
+        except Exception as e:
+            print(f"Warning setting up compositor post-processing: {e}")
+
+        self.report({'INFO'}, 'Neverness to Everness Finish Setup completed.')
+        return result
+
 
 
 class GI_OT_FixTransformations(Operator, CustomOperatorProperties):

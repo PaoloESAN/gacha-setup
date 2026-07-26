@@ -227,13 +227,18 @@
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
       "import_character_textures",
       "import_materials",
-      "replace_default_materials"
+      "replace_default_materials",
+      "nte_setup_outlines",
+      "rig_character",
+      "nte_finish_setup"
     ],
     "NEVERNESS_TO_EVERNESS_OT_setup_wizard_ui_no_outlines": [
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
       "import_character_textures",
       "import_materials",
-      "replace_default_materials"
+      "replace_default_materials",
+      "rig_character",
+      "nte_finish_setup"
     ],
     "NEVERNESS_TO_EVERNESS_OT_set_up_materials": [
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_materials",
@@ -241,26 +246,47 @@
       "import_materials",
       "replace_default_materials"
     ],
+    "NEVERNESS_TO_EVERNESS_OT_set_up_outlines": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_outlines",
+      "nte_setup_outlines"
+    ],
+    "NEVERNESS_TO_EVERNESS_OT_finish_setup": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_finish_setup",
+      "nte_finish_setup"
+    ],
     "neverness_to_everness.setup_wizard_ui": [
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
       "import_character_textures",
       "import_materials",
-      "replace_default_materials"
+      "replace_default_materials",
+      "nte_setup_outlines",
+      "rig_character",
+      "nte_finish_setup"
     ],
     "neverness_to_everness.setup_wizard_ui_no_outlines": [
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
       "import_character_textures",
       "import_materials",
-      "replace_default_materials"
+      "replace_default_materials",
+      "rig_character",
+      "nte_finish_setup"
     ],
     "neverness_to_everness.set_up_materials": [
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_materials",
       "import_character_textures",
       "import_materials",
       "replace_default_materials"
+    ],
+    "neverness_to_everness.set_up_outlines": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_outlines",
+      "nte_setup_outlines"
+    ],
+    "neverness_to_everness.finish_setup": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_finish_setup",
+      "nte_finish_setup"
     ]
-
   }
 }
+
 
 

@@ -53,6 +53,7 @@ else:
         HSR_OT_SetUpMaterials,
         ZZZ_OT_SetUpMaterials,
         NTE_OT_SetUpMaterials,
+        NTE_OT_SetUpOutlines,
         NTE_OT_SetUpHairSpecular,
     )
 
@@ -75,6 +76,7 @@ else:
         GI_OT_FinishSetup,
         HSR_OT_FinishSetup,
         ZZZ_OT_FinishSetup,
+        NTE_OT_FinishSetup,
     )
     from setup_wizard.preferences import CharacterSetupWizardAddonPreferences
     from setup_wizard.ui.gi_ui_setup_wizard_menu import (
@@ -106,7 +108,9 @@ else:
         NTE_PT_Advanced_Setup_Wizard_UI_Layout,
         NTE_PT_UI_Character_Model_Menu,
         NTE_PT_UI_Materials_Menu,
-        NTE_PT_UI_Hair_Specular_Menu,
+        NTE_PT_UI_Outlines_Menu,
+        NTE_PT_UI_Rig_Character_Menu,
+        NTE_PT_UI_Finish_Setup_Menu,
     )
 
     from setup_wizard.ui.unified_ui_setup_wizard_menu import (
@@ -191,12 +195,17 @@ else:
         NTE_PT_Advanced_Setup_Wizard_UI_Layout,
         NTE_PT_UI_Character_Model_Menu,
         NTE_PT_UI_Materials_Menu,
-        NTE_PT_UI_Hair_Specular_Menu,
+        NTE_PT_UI_Outlines_Menu,
+        NTE_PT_UI_Rig_Character_Menu,
+        NTE_PT_UI_Finish_Setup_Menu,
         NTE_OT_SetupWizardUI,
         NTE_OT_SetUpMaterials,
+        NTE_OT_SetUpOutlines,
         NTE_OT_SetUpHairSpecular,
+        NTE_OT_FinishSetup,
         ClearCacheOperator,
     ]
+
 
 
 

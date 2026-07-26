@@ -227,10 +227,178 @@ def build_anisotropic_hair_spec_group():
 
 
 
-class NTE_OT_SetUpHairSpecular(Operator, BasicSetupUIOperator):
-    '''Genera y asigna el nodo especular anisotrópico de cabello (KK_Anisotropic_HairSpec)'''
-    bl_idname = 'neverness_to_everness.set_up_hair_specular'
-    bl_label = 'Neverness to Everness: Set Up Hair Specular'
+def set_nte_gn_input(modifier, name_or_id_keywords, value):
+    props = getattr(modifier, "properties", None)
+    if not props:
+        return False
+    inputs = getattr(props, "inputs", None)
+    if not inputs:
+        return False
+
+    kw_list = name_or_id_keywords if isinstance(name_or_id_keywords, list) else [name_or_id_keywords]
+
+    # 1. Direct key match in dir(inputs)
+    for kw in kw_list:
+        if kw in dir(inputs):
+            try:
+                inputs[kw]['type'] = 'VALUE'
+            except Exception:
+                pass
+            try:
+                inputs[kw]['value'] = value
+                return True
+            except Exception:
+                pass
+
+    # 2. Interface item name matching to identifier in Blender 4.x
+    if hasattr(modifier, "node_group") and modifier.node_group and hasattr(modifier.node_group, "interface"):
+        for item in modifier.node_group.interface.items_tree:
+            if getattr(item, "item_type", None) == 'SOCKET' and getattr(item, "in_out", None) == 'INPUT':
+                item_name = getattr(item, "name", "")
+                item_id = getattr(item, "identifier", "")
+                if any(kw.lower() in item_name.lower() for kw in kw_list):
+                    if item_id and item_id in dir(inputs):
+                        try:
+                            inputs[item_id]['type'] = 'VALUE'
+                        except Exception:
+                            pass
+                        try:
+                            inputs[item_id]['value'] = value
+                            return True
+                        except Exception:
+                            pass
+
+    return False
+
+
+def copy_nte_modifiers_to_character_models():
+    # 1. Get or create the 4 Light Vector empties
+    rig_obj = None
+    for o in bpy.data.objects:
+        if o.type == 'ARMATURE' and "metarig" not in o.name.lower():
+            rig_obj = o
+            break
+
+    head_matrix = None
+    if rig_obj and hasattr(rig_obj, "pose"):
+        head_bone = (
+            rig_obj.pose.bones.get("head") or
+            rig_obj.pose.bones.get("DEF-spine.006") or
+            rig_obj.pose.bones.get("Bip001-Head")
+        )
+        if head_bone:
+            head_matrix = rig_obj.matrix_world @ head_bone.matrix
+
+    light_dir = bpy.data.objects.get("Light Direction")
+    if not light_dir:
+        light_dir = bpy.data.objects.new("Light Direction", None)
+        light_dir.empty_display_type = 'SINGLE_ARROW'
+        light_dir.location = (0, -2, 1.5)
+        bpy.context.scene.collection.objects.link(light_dir)
+
+    head_orig = bpy.data.objects.get("Head Origin")
+    if not head_orig:
+        head_orig = bpy.data.objects.new("Head Origin", None)
+        head_orig.empty_display_type = 'PLAIN_AXES'
+        if head_matrix:
+            head_orig.location = head_matrix.translation
+        else:
+            head_orig.location = (0, 0, 1.5)
+        bpy.context.scene.collection.objects.link(head_orig)
+
+    head_fwd = bpy.data.objects.get("Head Forward")
+    if not head_fwd:
+        head_fwd = bpy.data.objects.new("Head Forward", None)
+        head_fwd.empty_display_type = 'SINGLE_ARROW'
+        if head_matrix:
+            head_fwd.location = head_matrix.translation + head_matrix.to_3x3() @ bpy.mathutils.Vector((0, -0.2, 0))
+        else:
+            head_fwd.location = (0, -0.2, 1.5)
+        bpy.context.scene.collection.objects.link(head_fwd)
+
+    head_up = bpy.data.objects.get("Head Up")
+    if not head_up:
+        head_up = bpy.data.objects.new("Head Up", None)
+        head_up.empty_display_type = 'SINGLE_ARROW'
+        if head_matrix:
+            head_up.location = head_matrix.translation + head_matrix.to_3x3() @ bpy.mathutils.Vector((0, 0, 0.2))
+        else:
+            head_up.location = (0, 0, 1.7)
+        bpy.context.scene.collection.objects.link(head_up)
+
+    # 2. Get mrim outline material
+    mrim_mat = (
+        bpy.data.materials.get("mrim") or
+        bpy.data.materials.get("mrim.001") or
+        next((m for m in bpy.data.materials if "mrim" in m.name.lower()), None)
+    )
+
+    # 3. Search for template object in scene
+    src_obj = None
+    for o in bpy.data.objects:
+        if o.type == 'MESH' and ("球体" in o.name or "template" in o.name.lower() or "shader" in o.name.lower()):
+            if len(o.modifiers) > 0:
+                src_obj = o
+                break
+
+    if not src_obj:
+        for o in bpy.data.objects:
+            if o.type == 'MESH' and any("Light Vectors" in m.name or "描边" in m.name or "Outline" in m.name for m in o.modifiers):
+                src_obj = o
+                break
+
+    # Character mesh objects: all mesh objects including template object
+    char_meshes = [
+        o for o in bpy.context.scene.objects
+        if o.type == 'MESH' and not o.name.startswith("append_")
+    ]
+
+    # Find node groups for Light Vectors and Outlines
+    ng_light = next((ng for ng in bpy.data.node_groups if any(k in ng.name for k in ["Light Vectors", "灯光矢量"])), None)
+    ng_outline = next((ng for ng in bpy.data.node_groups if any(k in ng.name for k in ["几何节点描边", "描边", "Outline", "Outlines"])), None)
+
+    for mesh_obj in char_meshes:
+        # Replicate template modifiers from src_obj if present
+        if src_obj and src_obj != mesh_obj and src_obj.modifiers:
+            for src_mod in src_obj.modifiers:
+                if src_mod.type == 'NODES' and src_mod.node_group:
+                    existing = next((m for m in mesh_obj.modifiers if m.type == 'NODES' and m.node_group == src_mod.node_group), None)
+                    if not existing:
+                        new_mod = mesh_obj.modifiers.new(name=src_mod.name, type='NODES')
+                        new_mod.node_group = src_mod.node_group
+
+        # Get or add Light Vectors modifier
+        mod_l = next((m for m in mesh_obj.modifiers if m.type == 'NODES' and (m.name == "Light Vectors - 灯光矢量" or (m.node_group and ("Light Vectors" in m.node_group.name or "灯光矢量" in m.node_group.name)))), None)
+        if not mod_l and ng_light:
+            mod_l = mesh_obj.modifiers.new(name="Light Vectors - 灯光矢量", type='NODES')
+            mod_l.node_group = ng_light
+
+        if mod_l:
+            set_nte_gn_input(mod_l, ["Input_3", "光照方向", "Light Direction"], light_dir)
+            set_nte_gn_input(mod_l, ["Input_4", "头部原点", "Head Origin"], head_orig)
+            set_nte_gn_input(mod_l, ["Input_5", "头部前向", "Head Forward"], head_fwd)
+            set_nte_gn_input(mod_l, ["Input_6", "头部上向", "Head Up"], head_up)
+
+        # Get or add Outline modifier
+        mod_o = next((m for m in mesh_obj.modifiers if m.type == 'NODES' and (m.name == "几何节点描边" or (m.node_group and ("描边" in m.node_group.name or "Outline" in m.node_group.name)))), None)
+        if not mod_o and ng_outline:
+            mod_o = mesh_obj.modifiers.new(name="几何节点描边", type='NODES')
+            mod_o.node_group = ng_outline
+
+        if mod_o:
+            set_nte_gn_input(mod_o, ["Socket_2", "描边宽度", "Outline Width", "Width"], 0.0003)
+            set_nte_gn_input(mod_o, ["Socket_3", "描边权重", "Weight"], 1.0)
+            if mrim_mat:
+                set_nte_gn_input(mod_o, ["Socket_6", "描边颜色", "Outline Material", "mrim"], mrim_mat)
+
+
+
+
+
+class NTE_OT_SetUpOutlines(Operator, BasicSetupUIOperator, CustomOperatorProperties):
+    '''Setup Outlines, Hair Specular and Geometry Nodes modifiers for Neverness to Everness'''
+    bl_idname = 'neverness_to_everness.set_up_outlines'
+    bl_label = 'Neverness to Everness: Setup Outlines'
 
     def execute(self, context):
         group = build_anisotropic_hair_spec_group()
@@ -319,8 +487,38 @@ class NTE_OT_SetUpHairSpecular(Operator, BasicSetupUIOperator):
                         except Exception:
                             pass
 
-        self.report({'INFO'}, 'Created and fully connected Hair Specular Node Group: KK_Anisotropic_HairSpec')
+        # Copy Geometry Nodes modifiers from shader/template object onto character meshes
+        copy_nte_modifiers_to_character_models()
+
+        self.report({'INFO'}, 'Setup Outlines completed: Hair Specular & Geometry Nodes modifiers assigned.')
+
+        next_step = getattr(self, 'next_step_idx', 0)
+        if next_step:
+            NextStepInvoker().invoke(
+                next_step, 
+                getattr(self, 'invoker_type', 'invoke_next_step_ui'),
+                high_level_step_name=getattr(self, 'high_level_step_name', ''),
+                game_type=getattr(self, 'game_type', 'NEVERNESS_TO_EVERNESS'),
+            )
+
         return {'FINISHED'}
+
+
+class NTE_OT_SetUpHairSpecular(Operator, BasicSetupUIOperator, CustomOperatorProperties):
+    '''Legacy alias for Setup Outlines'''
+    bl_idname = 'neverness_to_everness.set_up_hair_specular'
+    bl_label = 'Neverness to Everness: Setup Outlines (Hair Specular)'
+
+    def execute(self, context):
+        return bpy.ops.neverness_to_everness.set_up_outlines(
+            'EXEC_DEFAULT',
+            next_step_idx=getattr(self, 'next_step_idx', 0),
+            invoker_type=getattr(self, 'invoker_type', 'invoke_next_step_ui'),
+            high_level_step_name=getattr(self, 'high_level_step_name', ''),
+            game_type=getattr(self, 'game_type', 'NEVERNESS_TO_EVERNESS'),
+        )
+
+
 
 
 
