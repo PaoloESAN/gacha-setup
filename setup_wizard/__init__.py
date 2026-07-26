@@ -77,6 +77,7 @@ else:
         HSR_OT_FinishSetup,
         ZZZ_OT_FinishSetup,
         NTE_OT_FinishSetup,
+        NTE_OT_SetupCompositorNodes,
     )
     from setup_wizard.preferences import CharacterSetupWizardAddonPreferences
     from setup_wizard.ui.gi_ui_setup_wizard_menu import (
@@ -202,6 +203,7 @@ else:
         NTE_OT_SetUpMaterials,
         NTE_OT_SetUpOutlines,
         NTE_OT_SetUpHairSpecular,
+        NTE_OT_SetupCompositorNodes,
         NTE_OT_FinishSetup,
         ClearCacheOperator,
     ]

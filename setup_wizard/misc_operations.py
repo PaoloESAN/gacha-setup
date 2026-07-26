@@ -36,19 +36,26 @@ class HYV_OT_SetUpScreenSpaceReflections(Operator, CustomOperatorProperties):
     bl_label = 'HoYoverse: Set Up Screen Space Reflections'
 
     def execute(self, context):
-        shader_identifier_service = ShaderIdentifierServiceFactory.create(self.game_type)
-        shader = shader_identifier_service.identify_shader(bpy.data.materials, bpy.data.node_groups)
-
-        if shader is HonkaiStarRailShaders.STELLARTOON_HONKAI_STAR_RAIL_SHADER:
+        eevee = context.scene.eevee
+        # Blender 4.2+ / Blender 5.x EEVEE Next Raytracing
+        if hasattr(eevee, "use_raytracing"):
             try:
-                bpy.context.scene.eevee.use_ssr = True
-                bpy.context.scene.eevee.use_ssr_refraction = True
-            except AttributeError:
-                # Blender 4.2+ (EEVEE Next) compatibility
-                try:
-                    bpy.context.scene.eevee.use_raytracing = True
-                except AttributeError:
-                    pass
+                eevee.use_raytracing = True
+            except Exception as e:
+                print(f"Notice: Setting use_raytracing: {e}")
+        if hasattr(eevee, "raytracing_method"):
+            try:
+                eevee.raytracing_method = 'SCREEN_SPACE'
+            except Exception as e:
+                print(f"Notice: Setting raytracing_method: {e}")
+
+        # Blender 4.1 and earlier EEVEE SSR
+        if hasattr(eevee, "use_ssr"):
+            try:
+                eevee.use_ssr = True
+                eevee.use_ssr_refraction = True
+            except Exception as e:
+                print(f"Notice: Setting use_ssr: {e}")
 
         if self.next_step_idx:
             NextStepInvoker().invoke(

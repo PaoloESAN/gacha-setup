@@ -206,9 +206,23 @@ class NTE_PT_UI_Finish_Setup_Menu(Panel, NevernessToEvernessUIRenderChecker):
 
         OperatorFactory.create(
             sub_layout,
-            "neverness_to_everness.finish_setup",
-            "Finish Setup",
-            "CHECKMARK",
+            "genshin.set_color_management_to_standard",
+            "Set Color Mgmt to Standard",
+            "COLOR",
+            game_type=GameType.NEVERNESS_TO_EVERNESS.name,
+        )
+        OperatorFactory.create(
+            sub_layout,
+            "hoyoverse.set_up_screen_space_reflections",
+            "Enable Raytracing & SSR",
+            "SCENE",
+            game_type=GameType.NEVERNESS_TO_EVERNESS.name,
+        )
+        OperatorFactory.create(
+            sub_layout,
+            "neverness_to_everness.setup_compositor_nodes",
+            "Setup Compositor Nodes",
+            "NODE_COMPOSITING",
             game_type=GameType.NEVERNESS_TO_EVERNESS.name,
         )
 

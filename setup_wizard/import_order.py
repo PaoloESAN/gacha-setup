@@ -332,6 +332,8 @@ class ComponentFunctionFactory:
             return bpy.ops.hoyoverse.post_processing_default_settings
         elif component_name == 'nte_setup_outlines':
             return bpy.ops.neverness_to_everness.set_up_outlines
+        elif component_name == 'nte_setup_compositor_nodes':
+            return bpy.ops.neverness_to_everness.setup_compositor_nodes
         elif component_name == 'nte_finish_setup':
             return bpy.ops.neverness_to_everness.finish_setup
         else:
