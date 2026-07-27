@@ -1,37 +1,83 @@
-# Gacha Blender Setup (Blender 5.0+ Modified Version)
+# Gacha Blender Setup
 
-Gacha Blender Setup is a modified and optimized version of the original Setup Wizard add-on from Addons-And-Tools-For-Blender-miHoYo-Shaders, updated to ensure full compatibility, modern rigging support, and stability with Blender 5.0 and newer versions.
+**Gacha Blender Setup** is a fork of the original Setup Wizard add-on, created to provide a simple, automated character setup process for Gacha models specifically in modern **official Blender versions (Blender 5.2+)**. Using older versions of Blender or Goo Blender is not recommended, as the primary focus and target of this project is standard official Blender 5.2+.
+
+---
+
+## Requirements
+
+* **ExpyKit**: [pKrime/Expy-Kit](https://github.com/pKrime/Expy-Kit) (Required for Rigify character rigging automation)
+* **UEFormat** (*ONLY for Neverness to Everness / NTE*): [h4lfheart/UEFormat](https://github.com/h4lfheart/UEFormat)
+
+---
 
 ## License and Attribution
 
 This project is a derivative work modified in 2026 and distributed under the GNU General Public License v3 (GPL v3).
 
 - Original Repository & Author: [michael-gh1/Addons-And-Tools-For-Blender-miHoYo-Shaders](https://github.com/michael-gh1/Addons-And-Tools-For-Blender-miHoYo-Shaders)
-- Additional Credits: jideeh (ZZZ Face Rig)
 
-## Summary of Key Modifications
+### Original Project Credits & Acknowledgments
+
+Thanks to all those who collaborated on the original project:
+
+* [@Festivity](https://github.com/festivities) — [YouTube](https://www.youtube.com/channel/UCXCTHNBA8TVs0s5aQuNtWwg) | [Twitter](https://x.com/festivizing)
+* TheyCallMeSpy
+* Sultana
+* M4urlcl0
+* Modder4869
+* [@BonnyAnimations](https://github.com/BonnyAnimations) — [YouTube](https://www.youtube.com/@BonnyAnimations) | [Twitter](https://x.com/BonnyTweetsOFF)
+* Enthralpy — [YouTube](https://www.youtube.com/@Enthralpy) | [Twitter](https://x.com/Enthralpy)
+* [@OctavoPE](https://github.com/OctavoPE) — [Twitter](https://x.com/Llama3D)
+* JaredNyts — [Twitter](https://twitter.com/jared_nyts)
+* SubutaiProduction — [YouTube](https://www.youtube.com/@SubutaiProduction) | [Twitter](https://twitter.com/SubutaiEdits)
+* Aiko — [YouTube](https://www.youtube.com/@AikoDesu) | [Twitter](https://x.com/Aiko__ya)
+
+### Additional Credits & Acknowledgments (This Project)
+
+* **ZZZ**:
+  * **Rigging + Scripting**: Enthralpy
+  * **Shader**: Just_ScaasI, BonnyAnimations, Aiko
+  * **Supervised and made possible by**: Stormz67
+  * **Face Rig**: [@jideeh](https://github.com/Jideeh1)
+* **NTE**:
+  * **Shader**: Respective Owner(s)
+  * **Rig**: 矩阵映画
+
+---
+
+## Summary of Key Modifications & Features
 
 In compliance with Section 5a of the GNU General Public License v3, the following primary modifications and major features have been implemented:
 
-- Blender 5.x Full Support:
-  - Added support and compatibility fixes for Blender 5.1.1, 5.2, and newer versions.
-  - Resolved null pointer crashes, updated legacy Python API calls, and fixed mesh join operations during final setup.
-- Honkai: Star Rail (HSR) Rigging & Texture Pipeline:
+- **Blender 5.x Full Support**:
+  - Added support and compatibility fixes for Blender 5.2+.
+  - Dynamically queries active armature bone collections for interactive N-panel **Rig Layers UI** (with visibility toggles and solo star $\star$ buttons).
+  - Resolved null pointer crashes, updated legacy Python API calls, and cleaned up final setup operations.
+- **Honkai: Star Rail (HSR) Rigging & Texture Pipeline**:
   - Integrated complete HSR character rigging and automatic texture loading pipelines.
   - Corrected finger, arm, torso, and hip bone rotations/hierarchies.
   - Implemented advanced eye tracking controls and a dynamic eye Y-location driver system to prevent eye popping and mesh clipping during shape key expressions.
-- Zenless Zone Zero (ZZZ) Model & Facial Rigging:
-  - Added full support for importing and setup of ZZZ models using Genshin rigging as a baseline.
+- **Zenless Zone Zero (ZZZ) Model & Rigging Suite**:
+  - Added full support for importing and setting up ZZZ models with custom breast/breath physics controls (`Torso (IK)`).
   - Integrated the specialized ZZZ facial rig by jideeh.
-- Shader, Outline & Material Fixes:
+  - Corrected shoulder widget roll rotations and repositioned thigh parent controls.
+  - Automated character collection/armature renaming and `lights` collection handling with native completion status popups.
+- **Neverness to Everness (NTE) Support**:
+  - Integrated complete character importing, UEFormat support, material assignment, outline setup, and compositor post-processing node configuration.
+- **Shader, Outline & Material Fixes**:
   - Fixed broken outline rendering, eyeshadow, and outline line thickness across Genshin, ZZZ, and HSR models.
   - Enhanced post-processing execution and automated texture binding for both manual and standard imports.
-- Codebase Refactoring & Streamlining:
-  - Removed outdated third-party dependencies (e.g., BetterFBX) and legacy auto-updater code for a clean, lightweight addon architecture.
+- **Codebase Refactoring & Streamlining**:
+  - Removed Punishing: Gray Raven (PGR) support and outdated third-party dependencies (e.g., BetterFBX, legacy auto-updater) for a clean, lightweight addon architecture.
+
+---
 
 ## Installation
 
-1. In Blender, go to Edit > Preferences > Add-ons.
-2. Click the drop-down menu in the top right corner and select Install from Disk...
-3. Select the .zip file of the Gacha Blender Setup add-on.
-4. Enable the add-on by checking the checkbox next to it.
+1. Download the `setup_wizard.zip` file from the **Releases** page.
+2. In Blender 5.2+, go to **Edit > Preferences > Add-ons**.
+3. Click the drop-down menu in the top right corner and select **Install from Disk...**
+4. Select the downloaded `setup_wizard.zip` file.
+5. Enable the add-on by checking the checkbox next to it.
+6. Press **N** in the 3D Viewport to access the `Character Setup Wizard` sidebar panel.

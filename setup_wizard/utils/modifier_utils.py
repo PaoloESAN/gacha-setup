@@ -99,6 +99,27 @@ def get_modifier_property(modifier, key):
         return None
 
 def set_modifier_property(modifier, key, value):
+    # Support for Blender 4.0+ and 5.0+ Geometry Nodes NodeGroup Interface
+    if getattr(modifier, "type", None) == 'NODES' and hasattr(modifier, "node_group") and modifier.node_group:
+        ng = modifier.node_group
+        if hasattr(ng, "interface"):
+            for item in ng.interface.items_tree:
+                if getattr(item, "item_type", None) == 'SOCKET' and getattr(item, "in_out", None) == 'INPUT':
+                    if item.name == key or item.identifier == key:
+                        try:
+                            modifier[item.identifier] = value
+                            return
+                        except Exception:
+                            pass
+        elif hasattr(ng, "inputs"):
+            for inp in ng.inputs:
+                if inp.name == key or inp.identifier == key:
+                    try:
+                        modifier[inp.identifier] = value
+                        return
+                    except Exception:
+                        pass
+
     inputs = get_modifier_inputs(modifier)
     outputs = get_modifier_outputs(modifier)
     
@@ -127,5 +148,5 @@ def set_modifier_property(modifier, key, value):
     # Safe fallback
     try:
         modifier[key] = value
-    except (TypeError, AttributeError):
+    except (TypeError, AttributeError, KeyError):
         pass

@@ -30,6 +30,10 @@ class ZenlessZoneZeroShaders(Enum):
     V1_ZENLESS_ZONE_ZERO_SHADER = auto()
 
 
+class NevernessToEvernessShaders(Enum):
+    V1_NEVERNESS_TO_EVERNESS_SHADER = auto()
+
+
 class ShaderIdentifier:
     def __init__(self, material_name, shader_node_name, shader_label_name, material_prefix_after_rename, material_endswith_after_rename):
         self.material_name = material_name
@@ -49,8 +53,11 @@ class ShaderIdentifierServiceFactory:
             return PunishingGrayRavenShaderIdentifierService()
         elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
             return ZenlessZoneZeroShaderIdentifierService()
+        elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
+            return NevernessToEvernessShaderIdentifierService()
         else:
             raise Exception(f'Unexpected input GameType "{game_type}" for ShaderIdentifierServiceFactory')
+
 
 
 class ShaderIdentifierService:
@@ -246,3 +253,16 @@ class ZenlessZoneZeroShaderIdentifierService(ShaderIdentifierService):
 
     def __init__(self):
         super().__init__()
+
+
+class NevernessToEvernessShaderIdentifierService(ShaderIdentifierService):
+    V1_NAMES_OF_NTE_MATERIALS = [
+        '异环-',
+    ]
+    material_lists_to_search_through = {
+        NevernessToEvernessShaders.V1_NEVERNESS_TO_EVERNESS_SHADER: V1_NAMES_OF_NTE_MATERIALS
+    }
+
+    def __init__(self):
+        super().__init__()
+

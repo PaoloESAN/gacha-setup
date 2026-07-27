@@ -197,8 +197,11 @@ class OutlineTextureImporterFactory:
             return PunishingGrayRavenOutlineTextureImporter(blender_operator, context, shader_node_names)
         elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
             return ZenlessZoneZeroOutlineTextureImporter(blender_operator, context, shader_node_names)
+        elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
+            return NevernessToEvernessOutlineTextureImporter(blender_operator, context, shader_node_names)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
+
 
 
 class GenshinImpactOutlineTextureImporter(OutlineTextureImporter):
@@ -415,4 +418,14 @@ class ZenlessZoneZeroOutlineTextureImporter(OutlineTextureImporter):
         super().__init__(blender_operator, context, None, shader_node_names)
 
     def import_textures(self):
+        from setup_wizard.texture_import_setup.game_texture_importers import sync_zzz_outline_textures
+        sync_zzz_outline_textures()
+
+
+class NevernessToEvernessOutlineTextureImporter(OutlineTextureImporter):
+    def __init__(self, blender_operator, context, shader_node_names: ShaderNodeNames):
+        super().__init__(blender_operator, context, None, shader_node_names)
+
+    def import_textures(self):
         return
+

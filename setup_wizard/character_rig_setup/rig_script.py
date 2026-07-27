@@ -1332,6 +1332,9 @@ def rig_character(
 
         # Get object
         this_obj = bpy.context.scene.objects.get(object)
+        # Never move objects that belong to the 'lights' collection
+        if this_obj and any(c.name == "lights" for c in this_obj.users_collection):
+            return
         # Get existing collection or make new one
         this_coll = bpy.data.collections.get(collection)
         if not this_coll:
@@ -4760,11 +4763,19 @@ def rig_character(
     rig_char_id = rig_text.split('rig_id = "')[1].split('"')[0]
 
     # for debugging & helping purposes, we can display the version of the setup addon used to generate this character.
-    setup_version_tuple = [
-        mod.bl_info
-        for mod in addon_utils.modules()
-        if mod.bl_info.get("name") == "HoYoverse Setup Wizard"
-    ][0].get("version")
+    try:
+        from .. import bl_info
+        setup_version_tuple = bl_info.get("version", (0, 0, 0))
+    except Exception:
+        matching_mods = [
+            mod.bl_info
+            for mod in addon_utils.modules()
+            if mod.bl_info.get("name") in ("Gacha Blender Setup", "HoYoverse Setup Wizard")
+        ]
+        if matching_mods:
+            setup_version_tuple = matching_mods[0].get("version", (0, 0, 0))
+        else:
+            setup_version_tuple = (0, 0, 0)
     setup_version = (
         "v"
         + str(setup_version_tuple[0])
@@ -4773,6 +4784,7 @@ def rig_character(
         + "."
         + str(setup_version_tuple[2])
     )
+
 
     def make_layer_str(text, layer, version, title=""):
         string3 = (

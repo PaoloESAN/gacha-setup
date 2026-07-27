@@ -44,15 +44,30 @@ class GI_OT_CharacterRiggerOperator(Operator, ImportHelper, CustomOperatorProper
 
     GAME_TYPES_FULL_SETUP_RIGGING_ENABLED = [
         GameType.GENSHIN_IMPACT.name,
+        GameType.HONKAI_STAR_RAIL.name,
+        GameType.ZENLESS_ZONE_ZERO.name,
+        GameType.NEVERNESS_TO_EVERNESS.name,
     ]
 
     def execute(self, context):
+        selected_armatures = [obj for obj in context.selected_objects if obj.type == 'ARMATURE']
+        if not selected_armatures:
+            selected_armatures = [obj for obj in context.scene.objects if obj.type == 'ARMATURE']
+
+        if selected_armatures:
+            arm_obj = selected_armatures[0]
+            b_names = set(arm_obj.data.bones.keys())
+            if 'Bip001-Pelvis' in b_names or 'Bip001-Head' in b_names or 'Bip001-Spine' in b_names:
+                self.game_type = GameType.NEVERNESS_TO_EVERNESS.name
+
         is_advanced_setup = self.high_level_step_name != 'GENSHIN_OT_setup_wizard_ui' and \
             self.high_level_step_name != 'GENSHIN_OT_setup_wizard_ui_no_outlines' and \
             self.high_level_step_name != 'HONKAI_STAR_RAIL_OT_setup_wizard_ui' and \
-            self.high_level_step_name != 'HONKAI_STAR_RAIL_OT_setup_wizard_ui_no_outlines'
+            self.high_level_step_name != 'HONKAI_STAR_RAIL_OT_setup_wizard_ui_no_outlines' and \
+            self.high_level_step_name != 'neverness_to_everness.setup_wizard_ui'
         rigging_enabled = is_advanced_setup or \
             (bpy.context.window_manager.setup_wizard_full_run_rigging_enabled and self.game_type in self.GAME_TYPES_FULL_SETUP_RIGGING_ENABLED)
+
         expy_kit_installed = bpy.context.preferences.addons.get('Expy-Kit-main')
         rigify_installed = bpy.context.preferences.addons.get('rigify')
 

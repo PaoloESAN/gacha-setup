@@ -821,17 +821,19 @@ def setup_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_size, 
             if bone and coll:
                 coll.assign(bone)
         hook_names = [c['hook_name'] for c in controls if c.get('hook_name')]
-        if hook_names:
-            hc = armature.data.collections.get("Facerig Hooks") \
-                or armature.data.collections.new("Facerig Hooks")
-            try:
-                hc.is_visible = False
-            except Exception:
-                pass
-            for hn in hook_names:
-                bone = armature.data.bones.get(hn)
-                if bone:
-                    hc.assign(bone)
+        hc = armature.data.collections.get("Facerig Hooks") \
+            or armature.data.collections.new("Facerig Hooks")
+        try:
+            hc.is_visible = False
+        except Exception:
+            pass
+        for hn in hook_names:
+            bone = armature.data.bones.get(hn)
+            if bone:
+                hc.assign(bone)
+        face_root_bone = armature.data.bones.get("Face-Root")
+        if face_root_bone:
+            hc.assign(face_root_bone)
 
     wgt_coll = get_widget_collection()
     bpy.ops.object.mode_set(mode='POSE')

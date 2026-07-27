@@ -205,3 +205,31 @@ class ZenlessZoneZeroShaderMaterialNames(ShaderMaterialNames):
     FACE_OUTLINES = 'ZZZ Face Outlines'
     HAIR_OUTLINE = 'ZZZ Hair Outlines'
     WEAPON_OUTLINE = 'ZZZ Weapon Outlines'
+
+
+class NevernessToEvernessShaderMaterialNames(ShaderMaterialNames):
+    MATERIAL_PREFIX = 'NTE Shader '
+    MATERIAL_PREFIX_AFTER_RENAME = 'NTE Shader '
+    HAIR = '异环-头发'
+    BODY = '异环-身体'
+    FACE = '异环-面部'
+    OUTLINES = '几何节点描边'
+
+    # Original Chinese material names
+    HAIR_FRONT = '前发'
+    HAIR_BACK = '后发'
+    FACE_MAT = '面'
+    SKIN = '肌'
+    MAIN_UP = 'YH-Main-UP'
+    MAIN_DOWN = 'YH-Main-DOWN'
+    EYE = '目'
+    EYE_HI = '目Hi'
+    EYE_SHADOW = '目影'
+    EYE_WHITE = '目白'
+    EYEBROW = '眉毛'
+    EYELASH = '睫毛'
+    DOUBLE_EYELID = '二重'
+    MOUTH = '口'
+    TEETH_TONGUE = '齿舌'
+    EXPRESSION = '表情'
+

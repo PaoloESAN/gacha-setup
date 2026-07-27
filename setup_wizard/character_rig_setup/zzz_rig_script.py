@@ -381,9 +381,53 @@ def rig_character(
         'Bn_Eye_L': 'eye.L',
         'PT_L_Eye': 'eye.L',
         'PT_R_Eye': 'eye.R',
+        'breast.L': 'breast.L',
+        'breast.R': 'breast.R',
+        'breast.L.001': 'breast.L.001',
+        'breast.R.001': 'breast.R.001',
+        'breast.L.002': 'breast.L.002',
+        'breast.R.002': 'breast.R.002',
         '+Breast L A01': 'breast.L',
-        '+Breast R A01': 'breast.R', 
+        '+Breast R A01': 'breast.R',
+        'Skn_L_Chest': 'breast.L',
+        'Skn_R_Chest': 'breast.R',
+        'Skn_L_Chest_01': 'breast.L.001',
+        'Skn_R_Chest_01': 'breast.R.001',
+        'Skn_L_Chest1': 'breast.L.001',
+        'Skn_R_Chest1': 'breast.R.001',
+        'Skn_L_Chest_02': 'breast.L.002',
+        'Skn_R_Chest_02': 'breast.R.002',
+        'Skn_Bn_Chest_L': 'breast.L',
+        'Skn_Bn_Chest_R': 'breast.R',
+        'Bn_L_Chest': 'breast.L',
+        'Bn_R_Chest': 'breast.R',
+        'Bdy_L_Chest': 'breast.L',
+        'Bdy_R_Chest': 'breast.R',
+        'Chest_L': 'breast.L',
+        'Chest_R': 'breast.R',
     }
+
+    # Dynamically detect any leftover chest/breast/breath bones for breast.L and breast.R mapping
+    for pb in obj.pose.bones:
+        p_name = pb.name
+        if p_name.startswith("breast.") or p_name.startswith("breast_") or p_name.startswith("DEF-breast"):
+            continue
+        p_low = p_name.lower()
+        if ("chest" in p_low or "breast" in p_low or "breath" in p_low or "bust" in p_low) and not p_name.startswith("DEF-") and not p_name.startswith("ORG-") and not p_name.startswith("MCH-"):
+            if ("_l" in p_low or ".l" in p_low or "l_" in p_low or "left" in p_low) and p_name not in abadidea:
+                if "001" in p_name or "_01" in p_name or "1" in p_name:
+                    abadidea[p_name] = 'breast.L.001'
+                elif "002" in p_name or "_02" in p_name or "2" in p_name:
+                    abadidea[p_name] = 'breast.L.002'
+                else:
+                    abadidea[p_name] = 'breast.L'
+            elif ("_r" in p_low or ".r" in p_low or "r_" in p_low or "right" in p_low) and p_name not in abadidea:
+                if "001" in p_name or "_01" in p_name or "1" in p_name:
+                    abadidea[p_name] = 'breast.R.001'
+                elif "002" in p_name or "_02" in p_name or "2" in p_name:
+                    abadidea[p_name] = 'breast.R.002'
+                else:
+                    abadidea[p_name] = 'breast.R'
     if kachina:
         # Only add Kachina thumb/fingers if it's Kachina
         # There is the potential to clash and have duplicate bone names with other characters (like Wriotheseley)
@@ -464,15 +508,21 @@ def rig_character(
     #Aw shit here we go again.  This second loop is for making it possible to symmetrize pose bones properly.
     for bone in bones_list:
         if ".L" in bone.name: 
-            whee = bone.name[:-2] + ".R"
-            if "f_" in bone.name or "thumb" in bone.name:
-                armature.edit_bones[whee].roll = -armature.edit_bones[bone.name].roll
+            if bone.name.endswith(".L"):
+                whee = bone.name[:-2] + ".R"
+            elif ".L." in bone.name:
+                whee = bone.name.replace(".L.", ".R.")
             else:
-                armature.edit_bones[bone.name].roll = -armature.edit_bones[whee].roll
+                whee = bone.name.replace(".L", ".R")
+            if whee in armature.edit_bones and bone.name in armature.edit_bones:
+                if "f_" in bone.name or "thumb" in bone.name:
+                    armature.edit_bones[whee].roll = -armature.edit_bones[bone.name].roll
+                else:
+                    armature.edit_bones[bone.name].roll = -armature.edit_bones[whee].roll
 
-    # Set shoulder rolls to point local Z-axis forward (Rigify default)
-    armature.edit_bones["shoulder.L"].align_roll(Vector((0, -1, 0)))
-    armature.edit_bones["shoulder.R"].align_roll(Vector((0, -1, 0)))
+    # Set shoulder rolls so local Z-axis points UP so crescent widgets lie flat on shoulders
+    armature.edit_bones["shoulder.L"].align_roll(Vector((0, 0, 1)))
+    armature.edit_bones["shoulder.R"].align_roll(Vector((0, 0, 1)))
 
 
     
@@ -586,10 +636,17 @@ def rig_character(
             
         
     try:
-        xh, yh, zh = getboob("breast.L", "head")
-        xt, yt, zt = getboob("breast.L", "tail")
+        boob_bone_L = None
+        for candidate in ["breast.L", "breast.L.001", "DEF-breast.L", "Skn_L_Chest", "Skn_L_Chest_01", "+Breast L A01"]:
+            if candidate in armature.edit_bones:
+                boob_bone_L = candidate
+                break
 
-        ## Change the meta arm's boob positions
+        boob_bone_R = None
+        for candidate in ["breast.R", "breast.R.001", "DEF-breast.R", "Skn_R_Chest", "Skn_R_Chest_01", "+Breast R A01"]:
+            if candidate in armature.edit_bones:
+                boob_bone_R = candidate
+                break
 
         def fixboob(bone, xh, yh, zh, xt, yt, zt):
             bone.head.x = xh
@@ -599,17 +656,52 @@ def rig_character(
             bone.tail.y = yt
             bone.tail.z = zt
 
-        boobL = metarm.edit_bones["breast.L"]
-        fixboob(boobL, xh, yh, zh, xt, yt, zt)
-        boobR = metarm.edit_bones["breast.R"]
-        fixboob(boobR, -xh, yh, zh, -xt, yt, zt)
+        if boob_bone_L and "breast.L" in metarm.edit_bones:
+            xh, yh, zh = getboob(boob_bone_L, "head")
+            xt, yt, zt = getboob(boob_bone_L, "tail")
 
-        boobL.roll = armature.edit_bones["breast.L"].roll
-        boobR.roll = -boobL.roll
-    except Exception:
-        # If breast bones dont exist in the orig rig, then delete from the meta rig
-        metarm.edit_bones.remove(metarm.edit_bones["breast.L"])
-        metarm.edit_bones.remove(metarm.edit_bones["breast.R"])
+            # Center circle controls right on front volume of breasts
+            c_xh = xh * 0.70
+            c_xt = xt * 0.70
+
+            boobL = metarm.edit_bones["breast.L"]
+            fixboob(boobL, c_xh, yh, zh, c_xt, yt, zt)
+
+            if "breast.R" in metarm.edit_bones:
+                boobR = metarm.edit_bones["breast.R"]
+                if boob_bone_R:
+                    r_xh, r_yh, r_zh = getboob(boob_bone_R, "head")
+                    r_xt, r_yt, r_zt = getboob(boob_bone_R, "tail")
+                    c_r_xh = r_xh * 0.70
+                    c_r_xt = r_xt * 0.70
+                    fixboob(boobR, c_r_xh, r_yh, r_zh, c_r_xt, r_yt, r_zt)
+                else:
+                    fixboob(boobR, -c_xh, yh, zh, -c_xt, yt, zt)
+
+                boobL.roll = armature.edit_bones[boob_bone_L].roll
+                boobR.roll = -boobL.roll
+        elif "breast.L" in metarm.edit_bones:
+            if "spine.003" in metarm.edit_bones:
+                chest_b = metarm.edit_bones["spine.003"]
+                ch_head = chest_b.head.copy()
+                boobL = metarm.edit_bones["breast.L"]
+                boobR = metarm.edit_bones["breast.R"]
+
+                boobL.head.x = 0.055
+                boobL.head.y = ch_head.y - 0.1
+                boobL.head.z = ch_head.z + 0.05
+                boobL.tail.x = 0.055
+                boobL.tail.y = ch_head.y - 0.2
+                boobL.tail.z = ch_head.z + 0.05
+
+                boobR.head.x = -0.055
+                boobR.head.y = ch_head.y - 0.1
+                boobR.head.z = ch_head.z + 0.05
+                boobR.tail.x = -0.055
+                boobR.tail.y = ch_head.y - 0.2
+                boobR.tail.z = ch_head.z + 0.05
+    except Exception as ex:
+        print(f"[DEBUG] breast metarig setup warning: {ex}")
         
 
 
@@ -902,6 +994,9 @@ def rig_character(
         
         # Get object
         this_obj = bpy.context.scene.objects.get(object)
+        # Never move objects that belong to the 'lights' collection
+        if this_obj and any(c.name == "lights" for c in this_obj.users_collection):
+            return
         # Get existing collection or make new one
         this_coll = bpy.data.collections.get(collection)
         if not this_coll:
@@ -963,7 +1058,9 @@ def rig_character(
             wgt_coll.objects.link(obj)
             
     # Remove old unused wgt collection                
-    bpy.data.collections.remove(bpy.data.collections.get("WG"))
+    wg_coll = bpy.data.collections.get("WG")
+    if wg_coll:
+        bpy.data.collections.remove(wg_coll)
 
     def get_and_rename_empty(empty_name):
         obj = bpy.data.objects.get(empty_name)
@@ -1000,27 +1097,13 @@ def rig_character(
     if new_name: move_into_collection(new_name, "wgt")
 
 
-    # IMPORTANT: This must be done before deleting the "Collection" collection in case Lighting Panel gets appended in there
-    # remove lighting colls - also move the RGB wheels into the rig obj
-    lighting_panel_rig_obj = bpy.data.objects.get(LightingPanelNames.Objects.LIGHTING_PANEL)
-    if lighting_panel_rig_obj:
-        to_del_coll = bpy.data.collections.get(LightingPanelNames.Collections.WIDGET_COLLECTION)
-        for obj in to_del_coll.objects:
-            move_into_collection(obj.name, "wgt")
-        to_del_coll = bpy.data.collections.get(LightingPanelNames.Collections.PICKER)
-        for obj in to_del_coll.objects:
-            move_into_collection(obj.name, "wgt")
-        to_del_coll = bpy.data.collections.get(LightingPanelNames.Collections.WHEEL)
-        for obj in to_del_coll.objects:
-            move_into_collection(obj.name, char_name)
-        # DO NOT INCLUDE CHILDREN. This will cause ColorPickers to be moved into the rig object.
-        move_into_collection(LightingPanelNames.Objects.LIGHTING_PANEL, char_name, include_children=False)
-        bpy.data.collections.remove(bpy.data.collections.get(LightingPanelNames.Collections.LIGHTING_PANEL), do_unlink=True)
+    # Do NOT modify or affect the Lighting Panel during rig generation
+    lighting_panel_rig_obj = None
 
-    # If it exists, gets rid of the default collection.
+    # If default collection exists and is empty, get rid of it.
     camera_coll = bpy.data.collections.get("Collection")
-    if camera_coll:
-        bpy.data.collections.remove(camera_coll,do_unlink=True)
+    if camera_coll and len(camera_coll.objects) == 0 and len(camera_coll.children) == 0:
+        bpy.data.collections.remove(camera_coll, do_unlink=True)
 
     layer_collection = bpy.context.view_layer.layer_collection
     layerColl = searchForLayerCollection(layer_collection, "wgt")
@@ -1167,10 +1250,8 @@ def rig_character(
     bpy.ops.object.mode_set(mode='OBJECT')
     bpy.ops.object.select_all(action='DESELECT')
 
-    # Select lighting panel armature
-    lighting_panel_rig_obj = bpy.data.objects.get(LightingPanelNames.Objects.LIGHTING_PANEL)
-    if lighting_panel_rig_obj:
-        lighting_panel_rig_obj.select_set(True)
+    # Do not select or join lighting panel armature
+    lighting_panel_rig_obj = None
 
     # Select eye rig    
     eye_rig_obj = bpy.data.objects.get("eyerig")
@@ -1729,12 +1810,10 @@ def rig_character(
             move_into_collection(obj.name,"wgt")
 
     # After moving into collection, delete the old empty ones.
-    bpy.data.collections.remove(bpy.data.collections.get("append_Root"),do_unlink=True)
-    bpy.data.collections.remove(bpy.data.collections.get("append_Eyes"),do_unlink=True)
-    bpy.data.collections.remove(bpy.data.collections.get("append_Pelvis"),do_unlink=True)
-    bpy.data.collections.remove(bpy.data.collections.get("append_Foot"),do_unlink=True)
-    bpy.data.collections.remove(bpy.data.collections.get("append_Hand"),do_unlink=True)
-    bpy.data.collections.remove(bpy.data.collections.get("append_Props"),do_unlink=True)
+    for append_name in ["append_Root", "append_Eyes", "append_Pelvis", "append_Foot", "append_Hand", "append_Props"]:
+        app_coll = bpy.data.collections.get(append_name)
+        if app_coll:
+            bpy.data.collections.remove(app_coll, do_unlink=True)
 
     # Adding Shape Key Drivers
     ourRig = char_name+"Rig"
@@ -2099,10 +2178,13 @@ def rig_character(
         bpy.ops.object.mode_set(mode='OBJECT')
 
         to_del_coll = bpy.data.collections.get("wgt.008") # note to future self, at some point, we can switch to a single mechanism that identifies wgt.00X and moves into wgt
-        for obj in to_del_coll.objects:
-            move_into_collection(obj.name,"wgt")
+        if to_del_coll:
+            for obj in to_del_coll.objects:
+                move_into_collection(obj.name,"wgt")
 
-        bpy.data.collections.remove(bpy.data.collections.get("append_extras"),do_unlink=True)
+        ext_coll = bpy.data.collections.get("append_extras")
+        if ext_coll:
+            bpy.data.collections.remove(ext_coll,do_unlink=True)
 
         # From extra header's position, we can setup the first position to use
         slider_starting_position = extras_position.copy()
@@ -2160,7 +2242,9 @@ def rig_character(
             makeCon(sk,f"slider-{sk}","bone * 16.7","LOC_X")
             merge_duplicate_collections("wgt")
             merge_duplicate_collections("append_slider")
-            bpy.data.collections.remove(bpy.data.collections.get("append_slider"),do_unlink=True)
+            slider_coll = bpy.data.collections.get("append_slider")
+            if slider_coll:
+                bpy.data.collections.remove(slider_coll,do_unlink=True)
 
 
     # Let's go into object mode and select the body for the pupil shape keys, and to control our glow sliders.
@@ -2807,25 +2891,25 @@ def rig_character(
         setting_circle = bpy.data.objects.get("setting-circle")
         if setting_circle:
             this_obj.pose.bones[bone].custom_shape = setting_circle
-            this_obj.pose.bones[bone].custom_shape_scale_xyz=(0.5,0.5,0.5)
+            this_obj.pose.bones[bone].custom_shape_scale_xyz=(0.38,0.38,0.38)
             this_obj.pose.bones[bone].use_custom_shape_bone_size = False
         
         if "upper_arm" in bone:
             if ".L" in bone:
-                this_obj.pose.bones[bone].custom_shape_translation=(-0.05,0.0,0.0)
+                this_obj.pose.bones[bone].custom_shape_translation=(-0.02,0.0,0.0)
                 this_obj.pose.bones[bone].custom_shape_rotation_euler=(0,-1.5708,0)
                 this_obj.pose.bones[bone].custom_shape_transform = this_obj.pose.bones["MCH-upper_arm_parent_widget.L"]
             else:
-                this_obj.pose.bones[bone].custom_shape_translation=(0.05,0.0,0.0)
+                this_obj.pose.bones[bone].custom_shape_translation=(0.02,0.0,0.0)
                 this_obj.pose.bones[bone].custom_shape_rotation_euler=(0,-1.5708,0)
                 this_obj.pose.bones[bone].custom_shape_transform = this_obj.pose.bones["MCH-upper_arm_parent_widget.R"]
         else:
             if ".L" in bone:
-                this_obj.pose.bones[bone].custom_shape_translation=(0.1,0,0)
+                this_obj.pose.bones[bone].custom_shape_translation=(0.02,0,0)
                 this_obj.pose.bones[bone].custom_shape_rotation_euler=(-0.0820305, -1.5708, 0)
                 this_obj.pose.bones[bone].custom_shape_transform = this_obj.pose.bones["MCH-thigh_parent_widget.L"]
             else:
-                this_obj.pose.bones[bone].custom_shape_translation=(-0.1,0,0)
+                this_obj.pose.bones[bone].custom_shape_translation=(-0.02,0,0)
                 this_obj.pose.bones[bone].custom_shape_rotation_euler=(-0.0820305, 1.5708, 0)
                 this_obj.pose.bones[bone].custom_shape_transform = this_obj.pose.bones["MCH-thigh_parent_widget.R"]
         
@@ -2871,7 +2955,19 @@ def rig_character(
     rig_char_id = rig_text.split("rig_id = \"")[1].split("\"")[0]
     
     # for debugging & helping purposes, we can display the version of the setup addon used to generate this character.
-    setup_version_tuple = [mod.bl_info for mod in addon_utils.modules() if mod.bl_info.get('name') == 'HoYoverse Setup Wizard'][0].get('version')
+    try:
+        from .. import bl_info
+        setup_version_tuple = bl_info.get("version", (0, 0, 0))
+    except Exception:
+        matching_mods = [
+            mod.bl_info
+            for mod in addon_utils.modules()
+            if mod.bl_info.get("name") in ("Gacha Blender Setup", "HoYoverse Setup Wizard")
+        ]
+        if matching_mods:
+            setup_version_tuple = matching_mods[0].get("version", (0, 0, 0))
+        else:
+            setup_version_tuple = (0, 0, 0)
     setup_version = "v" + str(setup_version_tuple[0]) + "." + str(setup_version_tuple[1]) + "." + str(setup_version_tuple[2])
 
                                                                                                                                                                                                                                                     
@@ -3116,8 +3212,11 @@ def rig_character(
             "\n            row = col.row()" +
             "\n            row.label(text=\"Rig: \" + setup_vers + \" | \" + v_str)" +
             "\n        elif bpy.app.version[0] >= 4:" +
-            "\n            # If you want to use duplicated armatures for the same character, you'd have to change the rig_id for each so that they all have their own rig layers. " +
-            "\n            collection = bpy.data.armatures[\"" + original_name + "\"].collections" +
+            "\n            # Dynamically retrieve active armature collections in Blender 4/5" +
+            "\n            arm_obj = context.active_object if (context.active_object and context.active_object.type == 'ARMATURE') else (context.object if (context.object and context.object.type == 'ARMATURE') else None)" +
+            "\n            if not arm_obj or not hasattr(arm_obj, 'data') or not hasattr(arm_obj.data, 'collections'):" +
+            "\n                return" +
+            "\n            collection = arm_obj.data.collections" +
             layers_to_generate(4) +
             "\n            row = col.row()" +
             "\n            row.label(text=\"Rig: \" + setup_vers + \" | \" + v_str)" +
@@ -3240,6 +3339,30 @@ def rig_character(
     with bpy.context.temp_override(edit_text=rig_file):
         bpy.ops.text.run_script()
     
+    # Ensure all breast sub-bones (breast.L.001 - breast.L.005, breast.R.001 - breast.R.005, etc.) are parented to DEF-breast.L / DEF-breast.R
+    try:
+        if bpy.context.object and bpy.context.object.type == 'ARMATURE':
+            bpy.ops.object.mode_set(mode='EDIT')
+            eb = bpy.context.object.data.edit_bones
+
+            def_l = eb.get("DEF-breast.L") or eb.get("breast.L")
+            def_r = eb.get("DEF-breast.R") or eb.get("breast.R")
+
+            for b in eb:
+                b_low = b.name.lower()
+                if b.name in ["breast.L", "breast.R", "DEF-breast.L", "DEF-breast.R", "ORG-breast.L", "ORG-breast.R", "MCH-breast.L", "MCH-breast.R"]:
+                    continue
+                if ("breast.l" in b_low or "breast_l" in b_low or "skn_l_chest" in b_low or "chest_l" in b_low or "+breast l" in b_low) and def_l:
+                    b.parent = def_l
+                    b.use_connect = False
+                elif ("breast.r" in b_low or "breast_r" in b_low or "skn_r_chest" in b_low or "chest_r" in b_low or "+breast r" in b_low) and def_r:
+                    b.parent = def_r
+                    b.use_connect = False
+
+            bpy.ops.object.mode_set(mode='OBJECT')
+    except Exception as ex:
+        print(f"[DEBUG] breast sub-bones parenting warning: {ex}")
+    
     # DONE MODIFYING ui.py FILE --------------------------------------------
     
     
@@ -3313,6 +3436,10 @@ def rig_character(
         bpy.context.object.data.collections["Clothes"].is_visible = False
         bpy.context.object.data.collections["Cage"].is_visible = False
         bpy.context.object.data.collections["Other"].is_visible = False
+        if "Light Panel Extras" in bpy.context.object.data.collections:
+            bpy.context.object.data.collections["Light Panel Extras"].is_visible = False
+        if "Light Panel" in bpy.context.object.data.collections:
+            bpy.context.object.data.collections["Light Panel"].is_visible = True
     
     # Send the given bone to its new location for either version. Adjusted for actual layer num.
     # MOVING OF BONES BELOW -------------------------------
@@ -3367,6 +3494,7 @@ def rig_character(
     bone_to_layer("head-controller", 0, "_hidden")
     bone_to_layer("eyetrack_L", 0, "Face")        
     bone_to_layer("eyetrack_R", 0, "Face")  
+    bone_to_layer("Face-Root", 0, "Facerig Hooks")
     
     # Moving Torso
     bone_to_layer("head", 3, "Torso (IK)")  
@@ -3571,8 +3699,17 @@ def rig_character(
     bone_to_layer("foot_fk.R",17,"Leg.R (FK)")
     bone_to_layer("toe_fk.R",17,"Leg.R (FK)")
     
-    bone_to_layer("breast.L",22,"Clothes")
-    bone_to_layer("breast.R",22,"Clothes")
+    # Move main circular controls to Torso (IK)
+    main_breast_controls = ["breast.L", "breast.R", "breast_master", "breath", "breath.L", "breath.R", "breath_master", "bust.L", "bust.R"]
+    for c_name in main_breast_controls:
+        bone_to_layer(c_name, 3, "Torso (IK)")
+
+    # Move all stick / deform breast bones to 'Other' collection so only circular widgets remain in Torso (IK)
+    for b in loop_arm.bones:
+        b_low = b.name.lower()
+        if ("breast" in b_low or "breath" in b_low or "bust" in b_low or "chest" in b_low or "boob" in b_low):
+            if b.name not in main_breast_controls:
+                bone_to_layer(b.name, 25, "Other")
     
     bone_to_layer("prop.L",21,"Props")
     bone_to_layer("prop.R",21,"Props")

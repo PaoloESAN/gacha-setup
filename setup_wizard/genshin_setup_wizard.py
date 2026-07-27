@@ -82,6 +82,25 @@ class ZZZ_OT_SetupWizardUI(Operator, BasicSetupUIOperator):
         return {'FINISHED'}
 
 
+class NTE_OT_SetupWizardUI(Operator, BasicSetupUIOperator):
+    '''Runs through entire setup process'''
+    bl_idname = 'neverness_to_everness.setup_wizard_ui'
+    bl_label = 'Neverness to Everness: Setup Wizard (UI)'
+
+    def execute(self, context):
+        next_step_index = 0
+
+        NextStepInvoker().invoke(
+            next_step_index,
+            'invoke_next_step_ui', 
+            high_level_step_name=self.bl_idname if bpy.app.version >= (3,3,0) \
+                else self.bl_idname + '_no_outlines',
+            game_type=self.game_type,
+        )
+        return {'FINISHED'}
+
+
+
 class GI_OT_GenshinSetupWizard(Operator):
     """Setup Wizard Process"""
     bl_idname = "genshin.setup_wizard"
@@ -207,12 +226,15 @@ def setup_dependencies():
         setup_wizard.fix_mouth_outlines.GI_OT_FixMouthOutlines,
         setup_wizard.misc_final_steps.GI_OT_FixTransformations,
         setup_wizard.set_up_head_driver.GI_OT_SetUpHeadDriver,
+        setup_wizard.set_up_head_driver.ZZZ_OT_SetUpHeadDriver,
         setup_wizard.misc_operations.GI_OT_SetColorManagementToStandard,
         setup_wizard.misc_operations.HYV_OT_SetUpScreenSpaceReflections,
         setup_wizard.misc_operations.HYV_OT_VertexPaintFaceSeeThroughEffect,
         setup_wizard.misc_operations.GI_OT_DeleteSpecificObjects,
         setup_wizard.misc_operations.GI_OT_SetUpArmTwistBoneConstraints,
         setup_wizard.misc_operations.GI_OT_RenameShaderMaterials,
+        setup_wizard.misc_operations.ZZZ_OT_RenameCollectionAndRig,
+        setup_wizard.misc_operations.ZZZ_OT_MoveLightingPanelToCharacterCollection,
         setup_wizard.misc_operations.PGR_OT_PaintVertexColors,
         setup_wizard.misc_operations.PGR_OT_PaintFaceShadowTexture,
         setup_wizard.misc_operations.PGR_OT_PaintVertexEraseFaceAlpha,

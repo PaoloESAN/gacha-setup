@@ -1,6 +1,8 @@
 # Author: michael-gh1
 
 import bpy
+import os
+
 
 from abc import ABC, abstractmethod
 from bpy.types import Context, Operator
@@ -8,7 +10,9 @@ from setup_wizard.domain.shader_node_names import ShaderNodeNames, StellarToonSh
 from setup_wizard.domain.star_cloak_types import StarCloakTypes
 from setup_wizard.domain.material_identifier_service import PunishingGrayRavenMaterialIdentifierService
 
-from setup_wizard.import_order import get_actual_material_name_for_dress
+from setup_wizard.import_order import CHARACTER_MODEL_FOLDER_FILE_PATH, NextStepInvoker, get_actual_material_name_for_dress, get_cache
+
+
 from setup_wizard.domain.game_types import GameType
 from setup_wizard.domain.shader_identifier_service import GenshinImpactShaders, HonkaiStarRailShaders, ShaderIdentifierService, \
     ShaderIdentifierServiceFactory
@@ -52,8 +56,11 @@ class GameDefaultMaterialReplacerFactory:
             return PunishingGrayRavenDefaultMaterialReplacer(blender_operator, context)
         elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
             return ZenlessZoneZeroDefaultMaterialReplacer(blender_operator, context)
+        elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
+            return NevernessToEvernessDefaultMaterialReplacer(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
+
 
 
 class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
@@ -636,6 +643,8 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 target_mat_name = None
                 if "hair" in matname:
                     target_mat_name = "ZZZ Shader Hair"
+                elif "eyebrow" in matname or "brow" in matname or "眉" in matname:
+                    target_mat_name = "ZZZ Shader Face"
                 elif "eyehighlight" in matname or "highlight" in matname:
                     target_mat_name = "ZZZ Shader EyeHighlights" if bpy.data.materials.get("ZZZ Shader EyeHighlights") else "ZZZ Shader Face"
                 elif "eye" in matname and matname != "eye transparent":
@@ -643,15 +652,17 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 elif "face" in matname:
                     target_mat_name = "ZZZ Shader Face"
                 elif "body" in matname or "leg" in matname or "tail" in matname:
-                    if "body 2" in matname or "body2" in matname or "body_2" in matname:
+                    if "leg" in matname or "tail" in matname:
+                        target_mat_name = "ZZZ Shader Body3/Leg"
+                    elif "body 2" in matname or "body2" in matname or "body_2" in matname:
                         target_mat_name = "ZZZ Shader Body 2"
-                    elif "body3" in matname or "body3/leg" in matname or "body_3" in matname or "body 3" in matname or "leg" in matname or "tail" in matname:
+                    elif "body3" in matname or "body3/leg" in matname or "body_3" in matname or "body 3" in matname:
                         target_mat_name = "ZZZ Shader Body3/Leg"
                     else:
                         target_mat_name = "ZZZ Shader Body"
-                elif "weapon" in matname:
-                    if "weapon 2" in matname or "weapon2" in matname or "weapon_2" in matname:
-                        target_mat_name = "ZZZ Shader Weapon 2"
+                elif "weapon" in matname or "wpn" in matname or "equip" in matname or "sword" in matname or "blade" in matname or "spear" in matname or "lance" in matname or "gun" in matname or "prop" in matname:
+                    if "weapon 2" in matname or "weapon2" in matname or "weapon_2" in matname or "map2" in matname:
+                        target_mat_name = "ZZZ Shader Weapon 2" if bpy.data.materials.get("ZZZ Shader Weapon 2") else "ZZZ Shader Weapon"
                     else:
                         target_mat_name = "ZZZ Shader Weapon"
 
@@ -663,5 +674,564 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         new_mat.name = f"ZZZ Shader {name_base}"
                         new_mat.use_fake_user = True
                         slot.material = new_mat
+
+        # Fallback: Ensure any weapon mesh object with empty material slots gets assigned a valid ZZZ Weapon material
+        weapon_mats = [m for m in bpy.data.materials if m.name.startswith("ZZZ Shader") and "weapon" in m.name.lower()]
+        main_weapon_mat = weapon_mats[0] if weapon_mats else bpy.data.materials.get("ZZZ Shader Weapon")
+
+        for mesh in meshes:
+            m_lower = mesh.name.lower()
+            if any(k in m_lower for k in ["weapon", "wpn", "equip", "sword", "blade", "spear", "lance", "gun", "prop"]):
+                for slot in mesh.material_slots:
+                    if not slot.material and main_weapon_mat:
+                        slot.material = main_weapon_mat
+
         self.blender_operator.report({'INFO'}, 'Replaced default materials with ZZZ shader materials...')
+
+
+def find_nte_texture_for_material(mat_name, tex_type, image_files):
+    name_lower = mat_name.lower()
+
+    def matches_type(f):
+        flow = f.lower()
+        if tex_type == 'd':
+            return any(k in flow for k in ['_d.', '_d_', '_d1', '_d2', '_diff', '_color', '_base', '_albedo'])
+        elif tex_type == 'n':
+            return any(k in flow for k in ['_n.', '_n_', '_n1', '_n2', '_norm', '_normal'])
+        elif tex_type == 'm':
+            return any(k in flow for k in ['_m.', '_m_', '_m1', '_m2', '_mask', '_lightmap'])
+        elif tex_type == 'id':
+            return any(k in flow for k in ['_id.', '_id_', '_id1', '_id2', '_idmap'])
+        return True
+
+    if 'hair' in name_lower or 'pelo' in name_lower or '发' in name_lower:
+        sub_idx = '02' if ('02' in name_lower or '2' in name_lower or '后发' in name_lower) else '01'
+        candidates = [f for f in image_files if 'hair' in f.lower() and matches_type(f) and (sub_idx in f.lower() or f'_{int(sub_idx)}_' in f.lower() or f'_{int(sub_idx)}.' in f.lower())]
+        if not candidates:
+            candidates = [f for f in image_files if 'hair' in f.lower() and matches_type(f)]
+        if candidates:
+            return candidates[0]
+
+    if 'face' in name_lower or 'cara' in name_lower or '面' in name_lower or 'head' in name_lower:
+        candidates = [f for f in image_files if 'face' in f.lower() and matches_type(f)]
+        specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent'])]
+        if specific_candidates:
+            return specific_candidates[0]
+        if candidates:
+            return candidates[0]
+
+    if any(k in name_lower for k in ['gaoguang', 'hi', 'high', 'bantou']):
+        candidates = [f for f in image_files if 'face' in f.lower() and matches_type(f)]
+        specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
+        if specific_candidates:
+            return specific_candidates[0]
+        if candidates:
+            return candidates[0]
+
+    if any(k in name_lower for k in ['eye', '目', 'iris', 'pupil', 'eyelash', 'eyebrow', '眉毛', '睫毛']):
+        candidates = [f for f in image_files if ('eyes' in f.lower() or 'eye_' in f.lower() or 'eye.' in f.lower() or 'eye' in f.lower()) and matches_type(f)]
+        specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['touming', 'common', 'default', 'dummy', 'transparent'])]
+        if specific_candidates:
+            return specific_candidates[0]
+        if not candidates:
+            candidates = [f for f in image_files if 'eye' in f.lower()]
+            specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['touming', 'common', 'default', 'dummy', 'transparent'])]
+            if specific_candidates:
+                return specific_candidates[0]
+        if candidates:
+            return candidates[0]
+
+    if any(k in name_lower for k in ['down', '02', '_2', 'bottom', 'skirt', 'leg']):
+        candidates = [f for f in image_files if ('_02_' in f.lower() or '_2_' in f.lower() or 'down' in f.lower() or 'body2' in f.lower()) and matches_type(f)]
+        if not candidates:
+            candidates = [f for f in image_files if '_02_' in f.lower() or '_2_' in f.lower()]
+        if candidates:
+            return candidates[0]
+
+    if any(k in name_lower for k in ['up', '01', '_1', 'top', 'upper', 'body', 'skin', 'chastener_1']):
+        candidates = [f for f in image_files if ('_01_' in f.lower() or '_1_' in f.lower() or 'up' in f.lower()) and matches_type(f)]
+        if not candidates:
+            candidates = [f for f in image_files if '_01_' in f.lower() or '_1_' in f.lower()]
+        if candidates:
+            return candidates[0]
+
+    clean_parts = [p for p in name_lower.split('_') if p not in ['player', '075', '019', 'oneiroi', 'oneir', 'mint', 'skin', 'lod0', 'skeleton', 'nte', 'shader', 'mi', 'mat', 'chastener']]
+    if clean_parts:
+        candidates = [
+            f for f in image_files
+            if any(part in f.lower() for part in clean_parts) and matches_type(f)
+        ]
+        if candidates:
+            return candidates[0]
+
+    candidates = [f for f in image_files if matches_type(f)]
+    return candidates[0] if candidates else (image_files[0] if image_files else None)
+
+
+def replace_template_image_node(tex_node, image_files, folder, slot_mat_name=""):
+    if not tex_node.image:
+        return
+
+    old_img_name = tex_node.image.name.lower()
+    mat_name_lower = slot_mat_name.lower()
+    replacement_file = None
+
+    hair_sub_idx = '01'
+    if any(k in mat_name_lower for k in ['hair_2', 'hair_02', 'hair2', '后发', 'back']):
+        hair_sub_idx = '02'
+    elif any(k in mat_name_lower for k in ['hair_3', 'hair_03', 'hair3']):
+        hair_sub_idx = '03'
+    elif '02' in old_img_name or '2' in old_img_name:
+        hair_sub_idx = '02'
+
+    if any(fk in mat_name_lower for fk in ['面部因子', 'face factor', 'face_factor']):
+        is_r_node = any(rk in old_img_name for rk in ['_r.', '_r_', 'r_1', 'r_2', 'face_r', 'ramp', 'blush'])
+        is_m_node = any(mk in old_img_name for mk in ['_m.', '_m_', 'm_1', 'm_2', 'face_m', '_mask'])
+
+        if not is_r_node and not is_m_node:
+            if getattr(tex_node, 'location', None) and tex_node.location.y < -50:
+                is_r_node = True
+            else:
+                is_m_node = True
+
+        if is_r_node and not is_m_node:
+            candidates = [f for f in image_files if 'face' in f.lower() and any(rk in f.lower() for rk in ['_r.', '_r_', '_r1', '_r_1', '_ramp', 'face_r', 'blush'])]
+            specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
+            if specific_candidates:
+                replacement_file = specific_candidates[0]
+            elif candidates:
+                replacement_file = candidates[0]
+        else:
+            candidates = [f for f in image_files if 'face' in f.lower() and ('_m' in f.lower() or 'm_' in f.lower() or '_mask' in f.lower() or 'm.' in f.lower())]
+            specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
+            if specific_candidates:
+                replacement_file = specific_candidates[0]
+            elif candidates:
+                replacement_file = candidates[0]
+
+    elif any(k in old_img_name for k in ['ramp', 'night_dusk', 'srgb']):
+        clean_old_base = old_img_name.split('.')[0].replace('.001', '').replace('.002', '').strip()
+        exact_match = next((f for f in image_files if clean_old_base in f.lower() or f.lower().split('.')[0] == clean_old_base), None)
+        if exact_match:
+            replacement_file = exact_match
+        else:
+            white_candidate = next((f for f in image_files if 't_srgb_white' in f.lower() or 'srgb_white' in f.lower() or ('srgb' in f.lower() and 'white' in f.lower())), None)
+            if white_candidate:
+                replacement_file = white_candidate
+            else:
+                ramp_candidates = [f for f in image_files if 't_srgb' in f.lower() or 'srgb' in f.lower() or 'ramp' in f.lower()]
+                if ramp_candidates:
+                    replacement_file = ramp_candidates[0]
+
+    elif any(k in old_img_name for k in ['matcap', 'silk']):
+        clean_old_base = old_img_name.split('.')[0].replace('.001', '').replace('.002', '').strip()
+        exact_match = next((f for f in image_files if clean_old_base in f.lower() or f.lower().split('.')[0] == clean_old_base), None)
+        if exact_match:
+            replacement_file = exact_match
+        else:
+            matcap_candidates = [f for f in image_files if 'matcap' in f.lower() or 'silk' in f.lower()]
+            if matcap_candidates:
+                replacement_file = matcap_candidates[0]
+
+    elif 'hair' in old_img_name and any(dk in old_img_name for dk in ['_d.', '_d_', '_d1', '_d2', '_diff', 'd_0', 'd_1', 'd_2']):
+        candidates = [f for f in image_files if 'hair' in f.lower() and ('_d' in f.lower() or 'd_' in f.lower()) and hair_sub_idx in f.lower()]
+        if not candidates:
+            candidates = [f for f in image_files if 'hair' in f.lower() and ('_d' in f.lower() or 'd_' in f.lower())]
+        if candidates:
+            replacement_file = candidates[0]
+
+    elif 'hair' in old_img_name and any(mk in old_img_name for mk in ['_m.', '_m_', '_m1', '_m2', '_mask', 'm_0', 'm_1', 'm_2']):
+        candidates = [f for f in image_files if 'hair' in f.lower() and ('_m' in f.lower() or 'm_' in f.lower()) and hair_sub_idx in f.lower()]
+        if not candidates:
+            candidates = [f for f in image_files if 'hair' in f.lower() and ('_m' in f.lower() or 'm_' in f.lower())]
+        if candidates:
+            replacement_file = candidates[0]
+
+    elif 'hair' in old_img_name and any(nk in old_img_name for nk in ['_n.', '_n_', '_n1', '_n2', '_norm', 'n_0', 'n_1', 'n_2']):
+        candidates = [f for f in image_files if 'hair' in f.lower() and ('_n' in f.lower() or 'n_' in f.lower()) and hair_sub_idx in f.lower()]
+        if not candidates:
+            candidates = [f for f in image_files if 'hair' in f.lower() and ('_n' in f.lower() or 'n_' in f.lower())]
+        if candidates:
+            replacement_file = candidates[0]
+
+    elif 'face' in old_img_name and any(rk in old_img_name for rk in ['_r.', '_r_', '_r1', '_r_1', '_ramp', 'face_r', 'blush']):
+        candidates = [f for f in image_files if 'face' in f.lower() and ('_r' in f.lower() or 'r_' in f.lower() or 'ramp' in f.lower())]
+        specific_candidates = [f for f in candidates if 'common' not in f.lower()]
+        if specific_candidates:
+            replacement_file = specific_candidates[0]
+        elif candidates:
+            replacement_file = candidates[0]
+
+    elif 'face' in old_img_name and any(mk in old_img_name for mk in ['_m.', '_m_', '_mask']):
+        candidates = [f for f in image_files if 'face' in f.lower() and ('_m' in f.lower() or 'm_' in f.lower())]
+        specific_candidates = [f for f in candidates if 'common' not in f.lower()]
+        if specific_candidates:
+            replacement_file = specific_candidates[0]
+        elif candidates:
+            replacement_file = candidates[0]
+
+    elif 'face' in old_img_name and any(dk in old_img_name for dk in ['_d.', '_d_', '_d1', '_diff', 'd_0']):
+        candidates = [f for f in image_files if 'face' in f.lower() and ('_d' in f.lower() or 'd_' in f.lower() or 'd1' in f.lower())]
+        specific_candidates = [f for f in candidates if 'common' not in f.lower()]
+        if specific_candidates:
+            replacement_file = specific_candidates[0]
+        elif candidates:
+            replacement_file = candidates[0]
+
+    elif any(gk in mat_name_lower for gk in ['gaoguang', '目hi']):
+        candidates = [f for f in image_files if 'face' in f.lower() and any(dk in f.lower() for dk in ['_d.', '_d_', '_d1', '_diff', 'd_0'])]
+        specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
+        if specific_candidates:
+            replacement_file = specific_candidates[0]
+        elif candidates:
+            replacement_file = candidates[0]
+        else:
+            candidates = [f for f in image_files if 'face' in f.lower()]
+            specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
+            if specific_candidates:
+                replacement_file = specific_candidates[0]
+            elif candidates:
+                replacement_file = candidates[0]
+
+
+    elif ('eyes' in old_img_name or 'eye' in old_img_name or 'eye' in mat_name_lower) and not any(ek in mat_name_lower for ek in ['eyelash', 'eyebrow', 'shadow', 'white', '二重', '眉', '睫', 'gaoguang', 'bantou', '目hi']):
+        candidates = [
+            f for f in image_files
+            if ('eyes' in f.lower() or 'eye' in f.lower())
+            and not any(bg in f.lower() for bg in ['bantou', 'gaoguang', 'eyelash', 'eyebrow', 'shadow', 'white'])
+            and any(dk in f.lower() for dk in ['_d.', '_d_', '_d1', '_diff', 'd_0'])
+        ]
+        specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['touming', 'common', 'default', 'dummy', 'transparent'])]
+        if specific_candidates:
+            replacement_file = specific_candidates[0]
+        elif candidates:
+            replacement_file = candidates[0]
+        if not replacement_file:
+            candidates = [
+                f for f in image_files
+                if ('eyes' in f.lower() or 'eye' in f.lower())
+                and not any(bg in f.lower() for bg in ['bantou', 'gaoguang', 'eyelash', 'eyebrow'])
+            ]
+            specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['touming', 'common', 'default', 'dummy', 'transparent'])]
+            if specific_candidates:
+                replacement_file = specific_candidates[0]
+            elif candidates:
+                replacement_file = candidates[0]
+
+
+
+    elif ('mint_01_d' in old_img_name or 'mint_02_d' in old_img_name or any(dk in old_img_name for dk in ['_d.', '_d_', '_d1', '_diff'])) and 'hair' not in old_img_name and 'face' not in old_img_name:
+        body_sub_idx = '01'
+        if any(k in mat_name_lower for k in ['_2', '_02', 'chastener_2', 'down', 'bottom', 'leg', 'skirt', 'body_2', 'body2']):
+            body_sub_idx = '02'
+        candidates = [
+            f for f in image_files
+            if (f'_{body_sub_idx}_' in f.lower() or f'_{int(body_sub_idx)}_' in f.lower() or (body_sub_idx == '02' and 'down' in f.lower()) or (body_sub_idx == '01' and 'up' in f.lower()))
+            and any(dk in f.lower() for dk in ['_d.', '_d_', '_d1', '_diff', 'd_0', 'd_1', 'd_2'])
+            and 'hair' not in f.lower() and 'face' not in f.lower()
+        ]
+        if not candidates:
+            candidates = [
+                f for f in image_files
+                if any(dk in f.lower() for dk in ['_d.', '_d_', '_d1', '_diff'])
+                and 'hair' not in f.lower() and 'face' not in f.lower()
+            ]
+        if candidates:
+            replacement_file = candidates[0]
+
+    elif ('mint_01_m' in old_img_name or 'mint_02_m' in old_img_name or any(mk in old_img_name for mk in ['_m.', '_m_', '_mask'])) and 'hair' not in old_img_name and 'face' not in old_img_name:
+        body_sub_idx = '01'
+        if any(k in mat_name_lower for k in ['_2', '_02', 'chastener_2', 'down', 'bottom', 'leg', 'skirt', 'body_2', 'body2']):
+            body_sub_idx = '02'
+        candidates = [
+            f for f in image_files
+            if (f'_{body_sub_idx}_' in f.lower() or f'_{int(body_sub_idx)}_' in f.lower() or (body_sub_idx == '02' and 'down' in f.lower()) or (body_sub_idx == '01' and 'up' in f.lower()))
+            and any(mk in f.lower() for mk in ['_m.', '_m_', '_mask'])
+            and 'hair' not in f.lower() and 'face' not in f.lower()
+        ]
+        if candidates:
+            replacement_file = candidates[0]
+
+    elif ('mint_01_n' in old_img_name or 'mint_02_n' in old_img_name or any(nk in old_img_name for nk in ['_n.', '_n_', '_norm'])) and 'hair' not in old_img_name and 'face' not in old_img_name:
+        body_sub_idx = '01'
+        if any(k in mat_name_lower for k in ['_2', '_02', 'chastener_2', 'down', 'bottom', 'leg', 'skirt', 'body_2', 'body2']):
+            body_sub_idx = '02'
+        candidates = [
+            f for f in image_files
+            if (f'_{body_sub_idx}_' in f.lower() or f'_{int(body_sub_idx)}_' in f.lower() or (body_sub_idx == '02' and 'down' in f.lower()) or (body_sub_idx == '01' and 'up' in f.lower()))
+            and any(nk in f.lower() for nk in ['_n.', '_n_', '_norm'])
+            and 'hair' not in f.lower() and 'face' not in f.lower()
+        ]
+        if candidates:
+            replacement_file = candidates[0]
+
+    elif ('mint_01_id' in old_img_name or 'mint_02_id' in old_img_name or any(ik in old_img_name for ik in ['_id.', '_id_'])) and 'hair' not in old_img_name and 'face' not in old_img_name:
+        body_sub_idx = '01'
+        if any(k in mat_name_lower for k in ['_2', '_02', 'chastener_2', 'down', 'bottom', 'leg', 'skirt', 'body_2', 'body2']):
+            body_sub_idx = '02'
+        candidates = [
+            f for f in image_files
+            if (f'_{body_sub_idx}_' in f.lower() or f'_{int(body_sub_idx)}_' in f.lower() or (body_sub_idx == '02' and 'down' in f.lower()) or (body_sub_idx == '01' and 'up' in f.lower()))
+            and any(ik in f.lower() for ik in ['_id.', '_id_'])
+            and 'hair' not in f.lower() and 'face' not in f.lower()
+        ]
+        if candidates:
+            replacement_file = candidates[0]
+
+    if replacement_file:
+        img_path = os.path.join(folder, replacement_file)
+        img = bpy.data.images.load(img_path, check_existing=True)
+        try:
+            img.alpha_mode = 'CHANNEL_PACKED'
+        except Exception:
+            pass
+        tex_node.image = img
+
+
+def process_node_tree(node_tree, image_files, folder, slot_mat_name="", visited=None):
+    if visited is None:
+        visited = set()
+    if not node_tree or node_tree in visited:
+        return
+    visited.add(node_tree)
+
+    for node in node_tree.nodes:
+        if node.type == 'TEX_IMAGE':
+            replace_template_image_node(node, image_files, folder, slot_mat_name)
+        elif node.type == 'GROUP' and node.node_tree:
+            sub_mat_name = f"{slot_mat_name} / {node.node_tree.name}" if slot_mat_name else node.node_tree.name
+            process_node_tree(node.node_tree, image_files, folder, sub_mat_name, visited)
+
+
+
+class NevernessToEvernessDefaultMaterialReplacer(GameDefaultMaterialReplacer):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+
+    def replace_default_materials(self):
+        cache_enabled = self.context.window_manager.cache_enabled
+        folder = self.blender_operator.file_directory or (get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH) if cache_enabled and self.blender_operator.game_type != GameType.NEVERNESS_TO_EVERNESS.name else None)
+        image_files = []
+        if folder and os.path.isdir(folder):
+            try:
+                image_files = [f for f in os.listdir(folder) if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp', '.hdr', '.png.001', '.tga.001', '.dds.001'))]
+            except Exception:
+                image_files = []
+
+        meshes = [mesh for mesh in bpy.context.scene.objects if mesh.type == 'MESH']
+
+        template_names = [
+            'YH-Main-UP', 'YH-Main-DOWN', '前发', '后发', '面', '肌', '目', '目Hi',
+            '目影', '目白', '眉毛', '睫毛', '二重', '口', '齿舌', '表情', 'edge_clothes2', 'Dots Stroke'
+        ]
+
+        for mesh in meshes:
+            if len(mesh.material_slots) == 0:
+                new_mat = bpy.data.materials.new(name=mesh.name)
+                mesh.data.materials.append(new_mat)
+
+            for slot in mesh.material_slots:
+                mat = slot.material
+                if not mat:
+                    continue
+
+                matname = mat.name.lower()
+
+                if "touming" in matname:
+                    mat.use_nodes = True
+                    nodes = mat.node_tree.nodes
+                    links = mat.node_tree.links
+                    nodes.clear()
+                    out_node = nodes.new('ShaderNodeOutputMaterial')
+                    out_node.location = (300, 0)
+                    trans_node = nodes.new('ShaderNodeBsdfTransparent')
+                    trans_node.location = (0, 0)
+                    links.new(trans_node.outputs['BSDF'], out_node.inputs['Surface'])
+                    try:
+                        mat.blend_method = 'BLEND'
+                    except Exception:
+                        pass
+                    continue
+
+                if mat.name in template_names or mat.name == '材质球':
+                    continue
+
+                template_to_use = None
+                is_skin = 0.0
+
+                if any(k in matname for k in ["后发", "back_hair", "hair_2", "hair_02", "hair2", "hair_3", "hair_03", "hair3"]):
+                    template_to_use = "后发"
+                    is_skin = 1.0
+                elif any(k in matname for k in ["前发", "hair", "pelo", "toufa"]):
+                    template_to_use = "前发"
+                    is_skin = 1.0
+                elif any(k in matname for k in ["面", "face", "cara", "head", "mian", "facio", "kao"]):
+                    template_to_use = "面"
+                    is_skin = 1.0
+                elif any(k in matname for k in ["肌", "skin", "piel", "body_skin"]):
+                    template_to_use = "肌"
+                    is_skin = 1.0
+                elif any(k in matname for k in ["目hi", "eye_hi", "gaoguang"]):
+                    template_to_use = "目Hi"
+                elif any(k in matname for k in ["睫毛", "eyelash"]):
+                    template_to_use = "睫毛"
+                elif any(k in matname for k in ["眉毛", "eyebrow"]):
+                    template_to_use = "眉毛"
+                elif any(k in matname for k in ["目影", "eye_shadow", "bantou"]):
+                    template_to_use = "目影"
+
+                elif any(k in matname for k in ["目白", "eye_white"]):
+                    template_to_use = "目白"
+                elif any(k in matname for k in ["二重", "double_eyelid"]):
+                    template_to_use = "二重"
+                elif any(k in matname for k in ["目", "eye", "iris", "pupil"]):
+                    template_to_use = "目"
+
+                elif any(k in matname for k in ["口", "mouth"]):
+                    template_to_use = "口"
+                elif any(k in matname for k in ["齿舌", "teeth", "tongue"]):
+                    template_to_use = "齿舌"
+                elif any(k in matname for k in ["down", "bottom", "skirt", "leg", "02"]):
+                    template_to_use = "YH-Main-DOWN"
+                elif any(k in matname for k in ["edge"]):
+                    template_to_use = "edge_clothes2"
+                else:
+                    template_to_use = "YH-Main-UP"
+
+                template_mat = bpy.data.materials.get(template_to_use)
+                if template_mat:
+                    new_mat = template_mat.copy()
+                    new_mat.name = slot.material.name
+                    slot.material = new_mat
+                    mat = new_mat
+
+                if mat and mat.use_nodes and mat.node_tree:
+                    nodes = mat.node_tree.nodes
+                    for node in nodes:
+                        if node.type == 'GROUP' and node.node_tree:
+                            for inp in node.inputs:
+                                if '是否为' in inp.name or '皮肤' in inp.name or inp.name == '是否为皮肤':
+                                    inp.default_value = is_skin
+
+                    if folder and image_files:
+                        process_node_tree(mat.node_tree, image_files, folder, slot.material.name)
+
+        if folder and image_files:
+            for ng_name in ['异环-头发', '异环-身体', '异环-面部', 'Matcap采样']:
+                ng = bpy.data.node_groups.get(ng_name)
+                if ng:
+                    process_node_tree(ng, image_files, folder, "NodeGroup_" + ng_name)
+
+        try:
+            bpy.ops.neverness_to_everness.set_up_hair_specular()
+        except Exception as ex:
+            print(f"Notice: Handled setting up hair specular: {ex}")
+
+
+        # Clean up any duplicate empties (.001, .002) safely without ReferenceError
+        orig_head = bpy.data.objects.get('Head Origin')
+        orig_light = bpy.data.objects.get('Light Direction')
+
+        head_dupes = []
+        light_dupes = []
+
+        for obj in list(bpy.data.objects):
+            try:
+                name_low = obj.name.lower()
+                has_suffix = '.00' in obj.name or '.01' in obj.name
+                if has_suffix:
+                    if any(k in name_low for k in ['head origin', 'head forward', 'head up']):
+                        if orig_head and obj != orig_head:
+                            head_dupes.append(obj)
+                    elif any(k in name_low for k in ['light direction', 'sun']):
+                        if orig_light and obj != orig_light:
+                            light_dupes.append(obj)
+            except Exception:
+                pass
+
+        for obj in head_dupes:
+            try:
+                if orig_head:
+                    for other in list(bpy.data.objects):
+                        try:
+                            if getattr(other, 'parent', None) == obj:
+                                other.parent = orig_head
+                            for con in getattr(other, 'constraints', []):
+                                if getattr(con, 'target', None) == obj:
+                                    con.target = orig_head
+                        except Exception:
+                            pass
+                bpy.data.objects.remove(obj, do_unlink=True)
+            except Exception:
+                pass
+
+        for obj in light_dupes:
+            try:
+                if orig_light:
+                    for other in list(bpy.data.objects):
+                        try:
+                            if getattr(other, 'parent', None) == obj:
+                                other.parent = orig_light
+                            for con in getattr(other, 'constraints', []):
+                                if getattr(con, 'target', None) == obj:
+                                    con.target = orig_light
+                        except Exception:
+                            pass
+                bpy.data.objects.remove(obj, do_unlink=True)
+            except Exception:
+                pass
+
+        self.blender_operator.report({'INFO'}, 'Replaced default materials with NTE template materials from nteTodo.md...')
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx, 
+            self.blender_operator.invoker_type, 
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=self.blender_operator.game_type,
+        )
+
+
+def clean_hair_mesh_slots():
+    for obj in bpy.context.scene.objects:
+        if obj.type == 'MESH' and obj.data and hasattr(obj.data, "polygons"):
+            obj_name_lower = obj.name.lower()
+            slot_names = [slot.material.name.lower() for slot in obj.material_slots if slot.material]
+            is_hair_mesh = 'hair' in obj_name_lower or any('hair' in s or '头' in s or 'pelo' in s for s in slot_names)
+            if is_hair_mesh and len(obj.material_slots) >= 2:
+                for p in obj.data.polygons:
+                    if p.material_index >= 1:
+                        p.material_index = 0
+                while len(obj.data.materials) > 1:
+                    obj.data.materials.pop(index=1)
+
+
+def clean_face_mesh_slots():
+    for obj in bpy.context.scene.objects:
+        if obj.type == 'MESH' and obj.data and hasattr(obj.data, "polygons"):
+            obj_name_lower = obj.name.lower()
+            slot_names = [slot.material.name.lower() for slot in obj.material_slots if slot.material]
+            is_face_mesh = 'face' in obj_name_lower or any('face' in s or '面' in s or 'cara' in s or 'head' in s for s in slot_names)
+            if is_face_mesh and len(obj.material_slots) >= 2:
+                for p in obj.data.polygons:
+                    if p.material_index == 1:
+                        p.material_index = 0
+                if len(obj.data.materials) >= 2:
+                    obj.data.materials.pop(index=1)
+                try:
+                    obj.data.update()
+                except Exception:
+                    pass
+
+
+def clean_mesh_slots():
+    clean_hair_mesh_slots()
+    clean_face_mesh_slots()
+
+
+
+
+
+
+
+
 

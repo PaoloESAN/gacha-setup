@@ -171,8 +171,11 @@ class GameGeometryNodesSetupFactory:
             return PunishingGrayRavenGeometryNodesSetup(blender_operator, context)
         elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
             return ZenlessZoneZeroGeometryNodesSetup(blender_operator, context)
+        elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
+            return NevernessToEvernessGeometryNodesSetup(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
+
 
 class GameGeometryNodesSetup(ABC):
     GEOMETRY_NODES_MATERIAL_IGNORE_LIST = []
@@ -1092,8 +1095,29 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                 bod = obj
                 break
 
+        # Configure Armature Bone Collections for Light Panel vs Light Panel Extras
+        for arm_obj in bpy.data.objects:
+            if arm_obj.type == 'ARMATURE' and arm_obj.data:
+                arm = arm_obj.data
+                if hasattr(arm, "collections"):
+                    if "Light Panel Extras" in arm.collections:
+                        arm.collections["Light Panel Extras"].is_visible = False
+                    if "Light Panel" in arm.collections:
+                        arm.collections["Light Panel"].is_visible = True
+
         for obj in bpy.data.objects:
             if obj.type == 'MESH':
+                # Skip LightPanelWGTPlane, LightPanelSelectorWGT, or any WGT panel widgets
+                o_lower = obj.name.lower()
+                if "lightpanelwgt" in o_lower or "lightpanelselector" in o_lower or "wgtplane" in o_lower or "selectorwgt" in o_lower:
+                    obj.modifiers.clear()
+                    try:
+                        obj.hide_viewport = True
+                        obj.hide_render = True
+                    except Exception:
+                        pass
+                    continue
+
                 # Light Vectors
                 if light_vectors_gn:
                     mod = obj.modifiers.get("Light Vectors")
@@ -1102,24 +1126,33 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                         mod.node_group = light_vectors_gn
                     
                     socket_mapping = {
+                        # Direction Empties
+                        "Light Direction": "Light Direction",
+                        "Head Origin": "Head Direction",
+                        "Head Forward": "Head Forward",
+                        "Head Up": "Head Up",
                         "Input_3": "Light Direction",
                         "Input_7": "Head Direction",
-                        "Input_4": "Head Origin",
+                        "Input_4": "Head Direction",
                         "Input_5": "Head Forward",
-                        "Input_6": "Head Up"
-                    }
-                    for socket_name, target_name in socket_mapping.items():
-                        target_obj = None
-                        if char_name:
-                            target_obj = bpy.data.objects.get(f"{target_name}_{char_name}")
-                        if not target_obj:
-                            target_obj = bpy.data.objects.get(target_name)
-                        if target_obj:
-                            set_modifier_property(mod, socket_name, target_obj)
-
-                    # Connect pickers and wheels
-                    obs = bpy.data.objects
-                    sockets = {
+                        "Input_6": "Head Up",
+                        # Color Wheels & Pickers
+                        "Ambient Color Wheel": "ColorWheel-Ambient",
+                        "Ambient Color Picker": "ColorPicker-Ambient",
+                        "Lit Color Wheel": "ColorWheel-Lit",
+                        "Lit Color Picker": "ColorPicker-Lit",
+                        "Shadow Color Wheel": "ColorWheel-Shadow",
+                        "Shadow Color Picker": "ColorPicker-Shadow",
+                        "Rim Lit Color Wheel": "ColorWheel-RimLit",
+                        "Rim Lit Color Picker": "ColorPicker-RimLit",
+                        "Rim Shadow Color Wheel": "ColorWheel-RimShadow",
+                        "Rim Shadow Color Picker": "ColorPicker-RimShadow",
+                        # Sliders & Origins
+                        "Rim X Size Origin": "Origin-RimX",
+                        "Rim X Size Slider": "Slider-RimX",
+                        "Rim Y Size Origin": "Origin-RimY",
+                        "Rim Y Size Slider": "Slider-RimY",
+                        # Legacy socket fallback IDs
                         "Socket_0": "ColorWheel-Ambient",
                         "Socket_1": "ColorPicker-Ambient",
                         "Socket_2": "ColorWheel-Lit",
@@ -1135,13 +1168,14 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                         "Socket_28": "Origin-RimY",
                         "Socket_29": "Slider-RimY",
                     }
-                    for sock, target in sockets.items():
-                        target_obj = obs.get(target)
+                    for socket_name, target_name in socket_mapping.items():
+                        target_obj = None
+                        if char_name:
+                            target_obj = bpy.data.objects.get(f"{target_name}_{char_name}")
+                        if not target_obj:
+                            target_obj = bpy.data.objects.get(target_name)
                         if target_obj:
-                            try:
-                                mod[sock] = target_obj
-                            except:
-                                pass
+                            set_modifier_property(mod, socket_name, target_obj)
 
                 # Extra FX
                 if extra_fx_gn:
@@ -1185,32 +1219,61 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                     except:
                         pass
 
-                    # Dynamic material resolution for actual character materials & outlines
+                    # Dynamic material resolution for actual character materials & outlines based on mesh slots
+                    obj_mats = [slot.material for slot in obj.material_slots if slot.material]
+
                     def find_mat(keywords, fallback_name):
+                        # 1. Prioritize materials assigned directly to this mesh object
+                        for mat in obj_mats:
+                            m_lower = mat.name.lower()
+                            if any(kw in m_lower for kw in keywords):
+                                return mat
+                        # 2. Global search across scene materials
                         for mat in bpy.data.materials:
                             if mat.name.startswith("ZZZ Shader") and mat.name.lower() != fallback_name.lower():
                                 m_lower = mat.name.lower()
                                 if any(kw in m_lower for kw in keywords):
                                     return mat
+                        # 3. Fallback to active material on object if present
+                        if obj_mats:
+                            return obj_mats[0]
                         return bpy.data.materials.get(fallback_name)
 
-                    mat_hair = find_mat(["hair"], "ZZZ Shader Hair")
-                    mat_hair_ol = bpy.data.materials.get("ZZZ Hair Outlines")
+                    def get_outline_mat(main_mat):
+                        if not main_mat:
+                            return None
+                        m_lower = main_mat.name.lower()
+                        if "hair" in m_lower:
+                            return bpy.data.materials.get("ZZZ Hair Outlines")
+                        elif "face" in m_lower:
+                            return bpy.data.materials.get("ZZZ Face Outlines") or bpy.data.materials.get("ZZZ Face Outline")
+                        elif "body 2" in m_lower or "body2" in m_lower or "body_2" in m_lower or "dress" in m_lower:
+                            return bpy.data.materials.get("ZZZ Body 2 Outlines")
+                        elif "body 3" in m_lower or "body3" in m_lower or "body_3" in m_lower or "leg" in m_lower:
+                            return bpy.data.materials.get("ZZZ Body3/Leg Outlines")
+                        elif "body" in m_lower:
+                            return bpy.data.materials.get("ZZZ Body Outlines")
+                        elif "weapon" in m_lower:
+                            return bpy.data.materials.get("ZZZ Weapon Outlines")
+                        return None
 
                     mat_body1 = find_mat(["body_1", "body1", "body_01"], "ZZZ Shader Body") or find_mat(["body"], "ZZZ Shader Body")
-                    mat_body1_ol = bpy.data.materials.get("ZZZ Body Outlines")
+                    mat_body1_ol = get_outline_mat(mat_body1) or bpy.data.materials.get("ZZZ Body Outlines")
+
+                    mat_hair = find_mat(["hair"], "ZZZ Shader Hair")
+                    mat_hair_ol = get_outline_mat(mat_hair) or bpy.data.materials.get("ZZZ Hair Outlines")
 
                     mat_face = find_mat(["face"], "ZZZ Shader Face")
-                    mat_face_ol = bpy.data.materials.get("ZZZ Face Outlines") or bpy.data.materials.get("ZZZ Face Outline")
+                    mat_face_ol = get_outline_mat(mat_face) or bpy.data.materials.get("ZZZ Face Outlines") or bpy.data.materials.get("ZZZ Face Outline")
 
                     mat_body2 = find_mat(["body_2", "body2", "body_02", "dress"], "ZZZ Shader Body 2")
-                    mat_body2_ol = bpy.data.materials.get("ZZZ Body 2 Outlines")
+                    mat_body2_ol = get_outline_mat(mat_body2) or bpy.data.materials.get("ZZZ Body 2 Outlines")
 
                     mat_body3 = find_mat(["body_3", "body3", "body_03", "leg"], "ZZZ Shader Body3/Leg")
-                    mat_body3_ol = bpy.data.materials.get("ZZZ Body3/Leg Outlines")
+                    mat_body3_ol = get_outline_mat(mat_body3) or bpy.data.materials.get("ZZZ Body3/Leg Outlines")
 
                     mat_weapon = find_mat(["weapon"], "ZZZ Shader Weapon")
-                    mat_weapon_ol = bpy.data.materials.get("ZZZ Weapon Outlines")
+                    mat_weapon_ol = get_outline_mat(mat_weapon) or bpy.data.materials.get("ZZZ Weapon Outlines")
 
                     cam_obj = bpy.data.objects.get("Camera") or getattr(self.context.scene, "camera", None)
                     outline_thickness = 0.075 if "face" in obj.name.lower() else 0.750
@@ -1397,3 +1460,23 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                         face_outline_d = nodes.get("Face_D")
                         if face_d_img and face_outline_d:
                             face_outline_d.image = face_d_img.image
+
+        try:
+            from setup_wizard.set_up_head_driver import move_lighting_and_head_driver_to_lights
+            move_lighting_and_head_driver_to_lights()
+        except Exception:
+            pass
+
+
+class NevernessToEvernessGeometryNodesSetup(GameGeometryNodesSetup):
+    def __init__(self, blender_operator, context):
+        super().__init__(blender_operator, context)
+
+    def setup_geometry_nodes(self):
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx, 
+            self.blender_operator.invoker_type,
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=self.blender_operator.game_type,
+        )
+

@@ -1,5 +1,5 @@
 
-from setup_wizard.replace_default_materials_setup.game_default_material_replacers import GameDefaultMaterialReplacer
+from setup_wizard.replace_default_materials_setup.game_default_material_replacers import GameDefaultMaterialReplacer, clean_mesh_slots
 
 
 class DefaultMaterialReplacerService:
@@ -7,4 +7,6 @@ class DefaultMaterialReplacerService:
         self.game_default_material_replacer = game_default_material_replacer
 
     def replace_default_materials(self):
-        return self.game_default_material_replacer.replace_default_materials()
+        res = self.game_default_material_replacer.replace_default_materials()
+        clean_mesh_slots()
+        return res

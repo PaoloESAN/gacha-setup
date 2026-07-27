@@ -219,8 +219,11 @@ class GameMaterialDataImporterFactory:
             return PunishingGrayRavenMaterialDataImporter(blender_operator, context, outline_material_group, material_names, shader_node_names)
         elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
             return ZenlessZoneZeroMaterialDataImporter(blender_operator, context, outline_material_group, material_names, shader_node_names)
+        elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
+            return NevernessToEvernessMaterialDataImporter(blender_operator, context, outline_material_group, material_names, shader_node_names)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
+
 
 
 class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
@@ -480,3 +483,17 @@ class ZenlessZoneZeroMaterialDataImporter(GameMaterialDataImporter):
 
     def import_material_data(self):
         return {'FINISHED'}
+
+
+class NevernessToEvernessMaterialDataImporter(GameMaterialDataImporter):
+    def __init__(self, blender_operator, context, outline_material_group: OutlineMaterialGroup, material_names, shader_node_names: ShaderNodeNames):
+        self.blender_operator: Operator = blender_operator
+        self.context: Context = context
+        self.material = outline_material_group.material
+        self.outlines_material = outline_material_group.outlines_material
+        self.material_names = material_names
+        self.shader_node_names = shader_node_names
+
+    def import_material_data(self):
+        return {'FINISHED'}
+

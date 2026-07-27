@@ -38,6 +38,11 @@ ZENLESS_ZONE_ZERO_ROOT_FOLDER_FILE_PATH = 'zenless_zone_zero_folder_file_path'
 ZENLESS_ZONE_ZERO_SHADER_FILE_PATH = 'zenless_zone_zero_shader_file_path'
 ZENLESS_ZONE_ZERO_OUTLINES_FILE_PATH = 'zenless_zone_zero_outlines_file_path'
 
+NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH = 'neverness_to_everness_folder_file_path'
+NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH = 'neverness_to_everness_shader_file_path'
+NEVERNESS_TO_EVERNESS_OUTLINES_FILE_PATH = 'neverness_to_everness_outlines_file_path'
+
+
 
 class NextStepInvoker:
     def invoke(self, 
@@ -49,7 +54,7 @@ class NextStepInvoker:
         if type == 'invoke_next_step':
             invoke_next_step(current_step_index, file_path_to_cache, game_type)
         elif type == 'invoke_next_step_ui':
-            invoke_next_step_ui(high_level_step_name, current_step_index, game_type)
+            invoke_next_step_ui(high_level_step_name, current_step_index, game_type, file_directory=file_path_to_cache)
         else:
             print(f'Warning: Unknown type found when invoking: {type}')
 
@@ -98,17 +103,25 @@ def invoke_next_step(
 def invoke_next_step_ui(
         high_level_step_name, 
         current_step_index, 
-        game_type: str=GameType.GENSHIN_IMPACT.name):
+        game_type: str=GameType.GENSHIN_IMPACT.name,
+        file_directory=None):
+    print(f"[DEBUG] invoke_next_step_ui called: high_level_step_name='{high_level_step_name}', current_step_index={current_step_index}, game_type='{game_type}', file_directory='{file_directory}'")
     path_to_setup_wizard_folder = os.path.dirname(os.path.abspath(__file__))
 
     file = open(f'{path_to_setup_wizard_folder}/config_ui.json')
     config = json.load(file)
     ui_order = config.get(UI_ORDER_CONFIG_KEY)
     high_level_step_list = ui_order.get(high_level_step_name)
-    if current_step_index == len(high_level_step_list) - 1:
+    print(f"[DEBUG] high_level_step_list for '{high_level_step_name}': {high_level_step_list}")
+
+    if not high_level_step_list or current_step_index >= len(high_level_step_list) - 1:
+        print(f"[DEBUG] Reached end of step list or high_level_step_list is empty. Returning.")
         return
+
     component_name = high_level_step_list[current_step_index + 1]
+    print(f"[DEBUG] Next component to execute: '{component_name}' at index {current_step_index + 1}")
     operator_to_execute = ComponentFunctionFactory.create_component_function(component_name)
+    print(f"[DEBUG] Executing operator: {operator_to_execute}")
 
     operator_to_execute(
         'EXEC_DEFAULT',
@@ -116,7 +129,9 @@ def invoke_next_step_ui(
         invoker_type='invoke_next_step_ui',
         high_level_step_name=high_level_step_name,
         game_type=game_type,
+        file_directory=file_directory or '',
     )
+
 
 def read_from_blender_cache():
     try:
@@ -196,6 +211,14 @@ def clear_cache(game_type: str):
             ZENLESS_ZONE_ZERO_SHADER_FILE_PATH,
             ZENLESS_ZONE_ZERO_OUTLINES_FILE_PATH,
         ]
+    elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
+        keys_to_delete = [
+            CHARACTER_MODEL_FOLDER_FILE_PATH,
+            NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH,
+            NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH,
+            NEVERNESS_TO_EVERNESS_OUTLINES_FILE_PATH,
+        ]
+
 
     for key in keys_to_delete:
         cache.pop(key, None)
@@ -283,10 +306,16 @@ class ComponentFunctionFactory:
             return bpy.ops.hoyoverse.set_up_screen_space_reflections
         elif component_name == 'vertex_paint_face_see_through_effect':
             return bpy.ops.hoyoverse.vertex_paint_face_see_through_effect
+        elif component_name == 'zzz_setup_head_driver':
+            return bpy.ops.zenless_zone_zero.setup_head_driver
         elif component_name == 'setup_head_driver':
             return bpy.ops.genshin.setup_head_driver
         elif component_name == 'rename_shader_materials':
             return bpy.ops.hoyoverse.rename_shader_materials
+        elif component_name == 'rename_collection_and_rig':
+            return bpy.ops.zenless_zone_zero.rename_collection_and_rig
+        elif component_name == 'move_lighting_panel_to_char_collection':
+            return bpy.ops.zenless_zone_zero.move_lighting_panel_to_char_collection
         elif component_name == 'set_up_armtwist_bone_constraints':
             return bpy.ops.genshin.set_up_armtwist_bone_constraints
         elif component_name == 'clear_cache_operator':
@@ -309,5 +338,12 @@ class ComponentFunctionFactory:
             return bpy.ops.hoyoverse.custom_composite_node_setup
         elif component_name == 'post_processing_default_settings':
             return bpy.ops.hoyoverse.post_processing_default_settings
+        elif component_name == 'nte_setup_outlines':
+            return bpy.ops.neverness_to_everness.set_up_outlines
+        elif component_name == 'nte_setup_compositor_nodes':
+            return bpy.ops.neverness_to_everness.setup_compositor_nodes
+        elif component_name == 'nte_finish_setup':
+            return bpy.ops.neverness_to_everness.finish_setup
         else:
             raise Exception(f'Unknown component name passed into {__name__}: {component_name}')
+

@@ -11,3 +11,5 @@ class GameType(Enum):
     HONKAI_STAR_RAIL = auto()
     PUNISHING_GRAY_RAVEN = auto()
     ZENLESS_ZONE_ZERO = auto()
+    NEVERNESS_TO_EVERNESS = auto()
+

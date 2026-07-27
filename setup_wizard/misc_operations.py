@@ -36,19 +36,26 @@ class HYV_OT_SetUpScreenSpaceReflections(Operator, CustomOperatorProperties):
     bl_label = 'HoYoverse: Set Up Screen Space Reflections'
 
     def execute(self, context):
-        shader_identifier_service = ShaderIdentifierServiceFactory.create(self.game_type)
-        shader = shader_identifier_service.identify_shader(bpy.data.materials, bpy.data.node_groups)
-
-        if shader is HonkaiStarRailShaders.STELLARTOON_HONKAI_STAR_RAIL_SHADER:
+        eevee = context.scene.eevee
+        # Blender 4.2+ / Blender 5.x EEVEE Next Raytracing
+        if hasattr(eevee, "use_raytracing"):
             try:
-                bpy.context.scene.eevee.use_ssr = True
-                bpy.context.scene.eevee.use_ssr_refraction = True
-            except AttributeError:
-                # Blender 4.2+ (EEVEE Next) compatibility
-                try:
-                    bpy.context.scene.eevee.use_raytracing = True
-                except AttributeError:
-                    pass
+                eevee.use_raytracing = True
+            except Exception as e:
+                print(f"Notice: Setting use_raytracing: {e}")
+        if hasattr(eevee, "raytracing_method"):
+            try:
+                eevee.raytracing_method = 'SCREEN_SPACE'
+            except Exception as e:
+                print(f"Notice: Setting raytracing_method: {e}")
+
+        # Blender 4.1 and earlier EEVEE SSR
+        if hasattr(eevee, "use_ssr"):
+            try:
+                eevee.use_ssr = True
+                eevee.use_ssr_refraction = True
+            except Exception as e:
+                print(f"Notice: Setting use_ssr: {e}")
 
         if self.next_step_idx:
             NextStepInvoker().invoke(
@@ -470,6 +477,185 @@ class PGR_OT_PaintVertexEraseFaceAlpha(Operator, CustomOperatorProperties):
                 game_type=self.game_type,
             )
         return {'FINISHED'}
+
+
+class ZZZ_OT_RenameCollectionAndRig(Operator, CustomOperatorProperties):
+    """Renames character collection and rig to character name"""
+    bl_idname = 'zenless_zone_zero.rename_collection_and_rig'
+    bl_label = 'ZZZ: Rename Collection & Rig'
+
+    def execute(self, context):
+        char_name = self._get_character_name()
+        if char_name:
+            target_coll = self._find_character_collection()
+            if target_coll:
+                target_coll.name = char_name
+
+            arm_obj = self._find_character_armature()
+            if arm_obj:
+                arm_obj.name = char_name
+                if arm_obj.data:
+                    arm_obj.data.name = char_name
+
+        if self.next_step_idx:
+            NextStepInvoker().invoke(
+                self.next_step_idx,
+                self.invoker_type,
+                high_level_step_name=self.high_level_step_name,
+                game_type=self.game_type,
+            )
+        return {'FINISHED'}
+
+    def _get_character_name(self):
+        ignore_words = {
+            "avatar", "female", "male", "size01", "size02", "size03", "ui",
+            "rig", "mesh", "bdy", "skn", "body", "hair", "face", "lighting",
+            "panel", "wgt", "dress", "mat", "shader"
+        }
+
+        # 1. Check materials (e.g. "ZZZ Shader Alice_Body_2" -> "Alice")
+        for mat in bpy.data.materials:
+            if "Shader" in mat.name and not mat.name.startswith("Shader"):
+                clean = mat.name.split("Shader")[-1].strip()
+                parts = clean.split("_")
+                if parts and parts[0] and parts[0].lower() not in ignore_words:
+                    return parts[0]
+
+        # 2. Check Armature objects (excluding Lighting Panel / metarig / rig)
+        for obj in bpy.data.objects:
+            if obj.type == 'ARMATURE':
+                o_lower = obj.name.lower()
+                if "lighting" in o_lower or "panel" in o_lower or "direction" in o_lower or o_lower in ["metarig", "rig", "wgt"]:
+                    continue
+                parts = obj.name.replace("_UI", "").replace("Costume", "").split("_")
+                for p in reversed(parts):
+                    if p.lower() not in ignore_words:
+                        return p
+
+        # 3. Check Mesh objects
+        for obj in bpy.data.objects:
+            if obj.type == 'MESH' and ("Avatar_" in obj.name or "Bdy_" in obj.name or "Skn_" in obj.name):
+                parts = obj.name.replace("_UI", "").split("_")
+                for p in reversed(parts):
+                    if p.lower() not in ignore_words:
+                        return p
+
+        # 4. Check Collections
+        for coll in bpy.data.collections:
+            if coll.name not in ["lights", "wgt", "WGTS", "Collection", "Master Collection"]:
+                parts = coll.name.replace("_UI", "").split("_")
+                for p in reversed(parts):
+                    if p.lower() not in ignore_words:
+                        return p
+
+        if bpy.context.active_object:
+            p = bpy.context.active_object.name.split("_")[0]
+            if p.lower() not in ignore_words:
+                return p
+
+        return "Character"
+
+    def _find_character_collection(self):
+        for coll in bpy.data.collections:
+            if coll.name not in ["lights", "wgt", "WGTS", "Collection", "Master Collection"] and ("Avatar_" in coll.name or "Size" in coll.name):
+                return coll
+        for coll in bpy.data.collections:
+            if coll.name not in ["lights", "wgt", "WGTS", "Collection", "Master Collection"]:
+                return coll
+        for coll in bpy.data.collections:
+            if coll.name not in ["lights", "wgt", "WGTS"]:
+                return coll
+        return None
+
+    def _find_character_armature(self):
+        ignore_names = {"lighting panel", "panel", "light direction", "head direction", "metarig", "wgt"}
+        for obj in bpy.data.objects:
+            if obj.type == 'ARMATURE':
+                o_lower = obj.name.lower()
+                if any(ign in o_lower for ign in ignore_names):
+                    continue
+                return obj
+        return None
+
+
+class ZZZ_OT_MoveLightingPanelToCharacterCollection(Operator, CustomOperatorProperties):
+    """Moves ONLY Lighting Panel armature into character collection while leaving WGTs in lights"""
+    bl_idname = 'zenless_zone_zero.move_lighting_panel_to_char_collection'
+    bl_label = 'ZZZ: Move Lighting Panel to Character Collection'
+
+    def execute(self, context):
+        target_coll = self._find_target_collection()
+        if target_coll:
+            # Find ONLY the Lighting Panel armature object
+            lighting_panel_obj = None
+            for obj in bpy.data.objects:
+                o_lower = obj.name.lower()
+                if ("lighting panel" in o_lower or o_lower == "panel") and "selector" not in o_lower and "plane" not in o_lower and "wgt" not in o_lower:
+                    lighting_panel_obj = obj
+                    break
+                elif obj.type == 'ARMATURE' and ("panel" in o_lower or "lighting" in o_lower):
+                    lighting_panel_obj = obj
+                    break
+
+            if lighting_panel_obj:
+                def get_all_children(obj):
+                    children = []
+                    for child in obj.children:
+                        children.append(child)
+                        children.extend(get_all_children(child))
+                    return children
+
+                panel_objects = [lighting_panel_obj] + get_all_children(lighting_panel_obj)
+                for obj in panel_objects:
+                    if obj.name not in target_coll.objects:
+                        target_coll.objects.link(obj)
+                    for coll in list(obj.users_collection):
+                        if coll != target_coll:
+                            try:
+                                coll.objects.unlink(obj)
+                            except Exception:
+                                pass
+
+        # Desvincular / excluir la colección 'lights' de la escena activa (view layer)
+        def exclude_layer_collection(layer_coll, name):
+            if layer_coll.name == name or layer_coll.collection.name == name:
+                layer_coll.exclude = True
+                return True
+            for child in layer_coll.children:
+                if exclude_layer_collection(child, name):
+                    return True
+            return False
+
+        try:
+            exclude_layer_collection(context.view_layer.layer_collection, "lights")
+        except Exception:
+            pass
+
+        self.report({"INFO"}, "Zenless Zone Zero: Finish Setup Completed Successfully!")
+
+        if self.next_step_idx:
+            NextStepInvoker().invoke(
+                self.next_step_idx,
+                self.invoker_type,
+                high_level_step_name=self.high_level_step_name,
+                game_type=self.game_type,
+            )
+        return {'FINISHED'}
+
+    def _find_target_collection(self):
+        for coll in bpy.data.collections:
+            if coll.name not in ["lights", "wgt", "WGTS", "Collection", "Master Collection"]:
+                return coll
+        return None
+
+
+register, unregister = bpy.utils.register_classes_factory([
+    GI_OT_SetColorManagementToStandard,
+    GI_OT_DeleteSpecificObjects,
+    GI_OT_SetUpArmTwistBoneConstraints,
+    ZZZ_OT_RenameCollectionAndRig,
+    ZZZ_OT_MoveLightingPanelToCharacterCollection,
+])
 
 
 
