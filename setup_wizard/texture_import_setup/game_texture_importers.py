@@ -345,17 +345,23 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
             group_keys = []
             if "hair" in matname:
                 group_keys = ["Hair"]
+            elif "eyebrow" in matname or "brow" in matname or "眉" in matname:
+                group_keys = ["Face"]
             elif "face" in matname:
                 group_keys = ["Face"]
             elif "eye" in matname:
                 group_keys = ["Face"]
             elif "body" in matname or "leg" in matname or "tail" in matname:
-                if "body 3" in matname or "body3" in matname or "body_3" in matname or "map3" in matname or "map_3" in matname or "_3_" in matname or matname.endswith("_3") or "leg" in matname or "tail" in matname:
-                    group_keys = ["Body_3", "Body_2", "Body_1", "Leg", "Tail"]
+                if "leg" in matname:
+                    group_keys = ["Leg", "Body_3", "Body_2", "Body_1", "Tail"]
+                elif "tail" in matname:
+                    group_keys = ["Tail", "Body_3", "Body_2", "Body_1", "Leg"]
+                elif "body 3" in matname or "body3" in matname or "body_3" in matname or "map3" in matname or "map_3" in matname or "_3_" in matname or matname.endswith("_3"):
+                    group_keys = ["Body_3", "Leg", "Body_2", "Body_1", "Tail"]
                 elif "body 2" in matname or "body2" in matname or "body_2" in matname or "map2" in matname or "map_2" in matname or "_2_" in matname or matname.endswith("_2"):
-                    group_keys = ["Body_2", "Body_1"]
+                    group_keys = ["Body_2", "Body_1", "Body_3", "Leg"]
                 else:
-                    group_keys = ["Body_1", "Body_2", "Body_3"]
+                    group_keys = ["Body_1", "Body_2", "Body_3", "Leg"]
             elif "weapon" in matname:
                 if "weapon 2" in matname or "weapon2" in matname or "weapon_2" in matname or "map2" in matname or "map_2" in matname or "_2_" in matname or matname.endswith("_2"):
                     group_keys = ["Weapon_2", "Weapon"]
@@ -460,9 +466,12 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                 has_hair_texture = any(node.type == 'TEX_IMAGE' and node.image for node in nodes)
                 if not has_hair_texture:
                     for obj in bpy.data.objects:
-                        if obj.type == 'MESH' and obj.data and hasattr(obj.data, "materials"):
+                        if obj.type == 'MESH' and obj.data and hasattr(obj.data, "materials") and hasattr(obj.data, "polygons"):
                             for i in range(len(obj.data.materials) - 1, 0, -1):
                                 if obj.data.materials[i] == mat:
+                                    for p in obj.data.polygons:
+                                        if p.material_index == i:
+                                            p.material_index = 0
                                     obj.data.materials.pop(index=i)
 
         # Ensure all weapon mesh objects/slots are assigned a valid weapon material (Weapon 1)

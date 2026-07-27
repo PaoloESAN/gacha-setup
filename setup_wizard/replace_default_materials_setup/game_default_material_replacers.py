@@ -643,6 +643,8 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 target_mat_name = None
                 if "hair" in matname:
                     target_mat_name = "ZZZ Shader Hair"
+                elif "eyebrow" in matname or "brow" in matname or "眉" in matname:
+                    target_mat_name = "ZZZ Shader Face"
                 elif "eyehighlight" in matname or "highlight" in matname:
                     target_mat_name = "ZZZ Shader EyeHighlights" if bpy.data.materials.get("ZZZ Shader EyeHighlights") else "ZZZ Shader Face"
                 elif "eye" in matname and matname != "eye transparent":
@@ -650,9 +652,11 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 elif "face" in matname:
                     target_mat_name = "ZZZ Shader Face"
                 elif "body" in matname or "leg" in matname or "tail" in matname:
-                    if "body 2" in matname or "body2" in matname or "body_2" in matname:
+                    if "leg" in matname or "tail" in matname:
+                        target_mat_name = "ZZZ Shader Body3/Leg"
+                    elif "body 2" in matname or "body2" in matname or "body_2" in matname:
                         target_mat_name = "ZZZ Shader Body 2"
-                    elif "body3" in matname or "body3/leg" in matname or "body_3" in matname or "body 3" in matname or "leg" in matname or "tail" in matname:
+                    elif "body3" in matname or "body3/leg" in matname or "body_3" in matname or "body 3" in matname:
                         target_mat_name = "ZZZ Shader Body3/Leg"
                     else:
                         target_mat_name = "ZZZ Shader Body"
@@ -1185,6 +1189,43 @@ class NevernessToEvernessDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             high_level_step_name=self.blender_operator.high_level_step_name,
             game_type=self.blender_operator.game_type,
         )
+
+
+def clean_hair_mesh_slots():
+    for obj in bpy.context.scene.objects:
+        if obj.type == 'MESH' and obj.data and hasattr(obj.data, "polygons"):
+            obj_name_lower = obj.name.lower()
+            slot_names = [slot.material.name.lower() for slot in obj.material_slots if slot.material]
+            is_hair_mesh = 'hair' in obj_name_lower or any('hair' in s or '头' in s or 'pelo' in s for s in slot_names)
+            if is_hair_mesh and len(obj.material_slots) >= 2:
+                for p in obj.data.polygons:
+                    if p.material_index >= 1:
+                        p.material_index = 0
+                while len(obj.data.materials) > 1:
+                    obj.data.materials.pop(index=1)
+
+
+def clean_face_mesh_slots():
+    for obj in bpy.context.scene.objects:
+        if obj.type == 'MESH' and obj.data and hasattr(obj.data, "polygons"):
+            obj_name_lower = obj.name.lower()
+            slot_names = [slot.material.name.lower() for slot in obj.material_slots if slot.material]
+            is_face_mesh = 'face' in obj_name_lower or any('face' in s or '面' in s or 'cara' in s or 'head' in s for s in slot_names)
+            if is_face_mesh and len(obj.material_slots) >= 2:
+                for p in obj.data.polygons:
+                    if p.material_index == 1:
+                        p.material_index = 0
+                if len(obj.data.materials) >= 2:
+                    obj.data.materials.pop(index=1)
+                try:
+                    obj.data.update()
+                except Exception:
+                    pass
+
+
+def clean_mesh_slots():
+    clean_hair_mesh_slots()
+    clean_face_mesh_slots()
 
 
 
