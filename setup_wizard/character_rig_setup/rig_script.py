@@ -1332,6 +1332,9 @@ def rig_character(
 
         # Get object
         this_obj = bpy.context.scene.objects.get(object)
+        # Never move objects that belong to the 'lights' collection
+        if this_obj and any(c.name == "lights" for c in this_obj.users_collection):
+            return
         # Get existing collection or make new one
         this_coll = bpy.data.collections.get(collection)
         if not this_coll:

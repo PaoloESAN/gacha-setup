@@ -902,6 +902,9 @@ def rig_character(
         
         # Get object
         this_obj = bpy.context.scene.objects.get(object)
+        # Never move objects that belong to the 'lights' collection
+        if this_obj and any(c.name == "lights" for c in this_obj.users_collection):
+            return
         # Get existing collection or make new one
         this_coll = bpy.data.collections.get(collection)
         if not this_coll:
@@ -963,7 +966,9 @@ def rig_character(
             wgt_coll.objects.link(obj)
             
     # Remove old unused wgt collection                
-    bpy.data.collections.remove(bpy.data.collections.get("WG"))
+    wg_coll = bpy.data.collections.get("WG")
+    if wg_coll:
+        bpy.data.collections.remove(wg_coll)
 
     def get_and_rename_empty(empty_name):
         obj = bpy.data.objects.get(empty_name)
@@ -1000,27 +1005,13 @@ def rig_character(
     if new_name: move_into_collection(new_name, "wgt")
 
 
-    # IMPORTANT: This must be done before deleting the "Collection" collection in case Lighting Panel gets appended in there
-    # remove lighting colls - also move the RGB wheels into the rig obj
-    lighting_panel_rig_obj = bpy.data.objects.get(LightingPanelNames.Objects.LIGHTING_PANEL)
-    if lighting_panel_rig_obj:
-        to_del_coll = bpy.data.collections.get(LightingPanelNames.Collections.WIDGET_COLLECTION)
-        for obj in to_del_coll.objects:
-            move_into_collection(obj.name, "wgt")
-        to_del_coll = bpy.data.collections.get(LightingPanelNames.Collections.PICKER)
-        for obj in to_del_coll.objects:
-            move_into_collection(obj.name, "wgt")
-        to_del_coll = bpy.data.collections.get(LightingPanelNames.Collections.WHEEL)
-        for obj in to_del_coll.objects:
-            move_into_collection(obj.name, char_name)
-        # DO NOT INCLUDE CHILDREN. This will cause ColorPickers to be moved into the rig object.
-        move_into_collection(LightingPanelNames.Objects.LIGHTING_PANEL, char_name, include_children=False)
-        bpy.data.collections.remove(bpy.data.collections.get(LightingPanelNames.Collections.LIGHTING_PANEL), do_unlink=True)
+    # Do NOT modify or affect the Lighting Panel during rig generation
+    lighting_panel_rig_obj = None
 
-    # If it exists, gets rid of the default collection.
+    # If default collection exists and is empty, get rid of it.
     camera_coll = bpy.data.collections.get("Collection")
-    if camera_coll:
-        bpy.data.collections.remove(camera_coll,do_unlink=True)
+    if camera_coll and len(camera_coll.objects) == 0 and len(camera_coll.children) == 0:
+        bpy.data.collections.remove(camera_coll, do_unlink=True)
 
     layer_collection = bpy.context.view_layer.layer_collection
     layerColl = searchForLayerCollection(layer_collection, "wgt")
@@ -1167,10 +1158,8 @@ def rig_character(
     bpy.ops.object.mode_set(mode='OBJECT')
     bpy.ops.object.select_all(action='DESELECT')
 
-    # Select lighting panel armature
-    lighting_panel_rig_obj = bpy.data.objects.get(LightingPanelNames.Objects.LIGHTING_PANEL)
-    if lighting_panel_rig_obj:
-        lighting_panel_rig_obj.select_set(True)
+    # Do not select or join lighting panel armature
+    lighting_panel_rig_obj = None
 
     # Select eye rig    
     eye_rig_obj = bpy.data.objects.get("eyerig")
@@ -1729,12 +1718,10 @@ def rig_character(
             move_into_collection(obj.name,"wgt")
 
     # After moving into collection, delete the old empty ones.
-    bpy.data.collections.remove(bpy.data.collections.get("append_Root"),do_unlink=True)
-    bpy.data.collections.remove(bpy.data.collections.get("append_Eyes"),do_unlink=True)
-    bpy.data.collections.remove(bpy.data.collections.get("append_Pelvis"),do_unlink=True)
-    bpy.data.collections.remove(bpy.data.collections.get("append_Foot"),do_unlink=True)
-    bpy.data.collections.remove(bpy.data.collections.get("append_Hand"),do_unlink=True)
-    bpy.data.collections.remove(bpy.data.collections.get("append_Props"),do_unlink=True)
+    for append_name in ["append_Root", "append_Eyes", "append_Pelvis", "append_Foot", "append_Hand", "append_Props"]:
+        app_coll = bpy.data.collections.get(append_name)
+        if app_coll:
+            bpy.data.collections.remove(app_coll, do_unlink=True)
 
     # Adding Shape Key Drivers
     ourRig = char_name+"Rig"
@@ -2099,10 +2086,13 @@ def rig_character(
         bpy.ops.object.mode_set(mode='OBJECT')
 
         to_del_coll = bpy.data.collections.get("wgt.008") # note to future self, at some point, we can switch to a single mechanism that identifies wgt.00X and moves into wgt
-        for obj in to_del_coll.objects:
-            move_into_collection(obj.name,"wgt")
+        if to_del_coll:
+            for obj in to_del_coll.objects:
+                move_into_collection(obj.name,"wgt")
 
-        bpy.data.collections.remove(bpy.data.collections.get("append_extras"),do_unlink=True)
+        ext_coll = bpy.data.collections.get("append_extras")
+        if ext_coll:
+            bpy.data.collections.remove(ext_coll,do_unlink=True)
 
         # From extra header's position, we can setup the first position to use
         slider_starting_position = extras_position.copy()
@@ -2160,7 +2150,9 @@ def rig_character(
             makeCon(sk,f"slider-{sk}","bone * 16.7","LOC_X")
             merge_duplicate_collections("wgt")
             merge_duplicate_collections("append_slider")
-            bpy.data.collections.remove(bpy.data.collections.get("append_slider"),do_unlink=True)
+            slider_coll = bpy.data.collections.get("append_slider")
+            if slider_coll:
+                bpy.data.collections.remove(slider_coll,do_unlink=True)
 
 
     # Let's go into object mode and select the body for the pupil shape keys, and to control our glow sliders.

@@ -1461,6 +1461,12 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                         if face_d_img and face_outline_d:
                             face_outline_d.image = face_d_img.image
 
+        try:
+            from setup_wizard.set_up_head_driver import move_lighting_and_head_driver_to_lights
+            move_lighting_and_head_driver_to_lights()
+        except Exception:
+            pass
+
 
 class NevernessToEvernessGeometryNodesSetup(GameGeometryNodesSetup):
     def __init__(self, blender_operator, context):

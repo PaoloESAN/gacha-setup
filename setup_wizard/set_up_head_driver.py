@@ -78,8 +78,11 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
             else:
                 self.report({"WARNING"}, "No head bone found for head-driver setup.")
 
-        # Mover el objeto Head Driver/Origin y todos sus hijos a la colección 'wgt' como paso final
-        self._move_head_driver_system_to_wgt(head_driver_object)
+        # Mover Head Direction, Lighting Panel y widgets a 'lights' solo si es ZZZ, si no a 'wgt'
+        if self.game_type == "ZENLESS_ZONE_ZERO":
+            self._move_head_driver_system_to_lights(head_driver_object)
+        else:
+            self._move_head_driver_system_to_wgt(head_driver_object)
 
         if self.next_step_idx:
             NextStepInvoker().invoke(
@@ -124,6 +127,58 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
             wgt_coll.hide_render = True
         except Exception:
             pass
+
+    def _move_head_driver_system_to_lights(self, main_obj=None):
+        move_lighting_and_head_driver_to_lights(main_obj)
+
+
+def move_lighting_and_head_driver_to_lights(main_obj=None):
+    lights_coll = bpy.data.collections.get("lights")
+    if not lights_coll:
+        lights_coll = bpy.data.collections.new("lights")
+        bpy.context.scene.collection.children.link(lights_coll)
+
+    def get_all_children(obj):
+        children = []
+        for child in obj.children:
+            children.append(child)
+            children.extend(get_all_children(child))
+        return children
+
+    target_objs = set()
+    if main_obj:
+        target_objs.add(main_obj)
+        for child in get_all_children(main_obj):
+            target_objs.add(child)
+
+    target_names = [
+        "head direction", "head driver", "head origin",
+        "lighting panel", "lightpanelselectorwgt", "lightpanelwgtplane"
+    ]
+
+    for obj in bpy.data.objects:
+        o_lower = obj.name.lower()
+        if "light direction" in o_lower:
+            continue
+        for t_name in target_names:
+            if t_name in o_lower:
+                target_objs.add(obj)
+                for child in get_all_children(obj):
+                    if "light direction" not in child.name.lower():
+                        target_objs.add(child)
+                break
+
+    target_objs = {obj for obj in target_objs if "light direction" not in obj.name.lower()}
+
+    for obj in target_objs:
+        if obj.name not in lights_coll.objects:
+            lights_coll.objects.link(obj)
+        for coll in list(obj.users_collection):
+            if coll != lights_coll:
+                try:
+                    coll.objects.unlink(obj)
+                except Exception:
+                    pass
 
     def _get_child_of_constraint(self, obj):
         for constraint in obj.constraints:
