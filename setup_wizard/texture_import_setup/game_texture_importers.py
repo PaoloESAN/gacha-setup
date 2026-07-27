@@ -573,18 +573,30 @@ def find_nte_texture_for_material(mat_name, tex_type, image_files):
 
     if 'face' in name_lower or 'cara' in name_lower or '面' in name_lower or 'head' in name_lower:
         candidates = [f for f in image_files if 'face' in f.lower() and matches_type(f)]
+        specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent'])]
+        if specific_candidates:
+            return specific_candidates[0]
         if candidates:
             return candidates[0]
 
     if any(k in name_lower for k in ['gaoguang', 'hi', 'high', 'bantou']):
-        candidates = [f for f in image_files if ('gaoguang' in f.lower() or 'bantou' in f.lower())]
+        candidates = [f for f in image_files if 'face' in f.lower() and matches_type(f)]
+        specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
+        if specific_candidates:
+            return specific_candidates[0]
         if candidates:
             return candidates[0]
 
     if any(k in name_lower for k in ['eye', '目', 'iris', 'pupil', 'eyelash', 'eyebrow', '眉毛', '睫毛']):
-        candidates = [f for f in image_files if ('eyes' in f.lower() or 'eye_' in f.lower() or 'eye.' in f.lower()) and matches_type(f)]
+        candidates = [f for f in image_files if ('eyes' in f.lower() or 'eye_' in f.lower() or 'eye.' in f.lower() or 'eye' in f.lower()) and matches_type(f)]
+        specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['touming', 'common', 'default', 'dummy', 'transparent'])]
+        if specific_candidates:
+            return specific_candidates[0]
         if not candidates:
             candidates = [f for f in image_files if 'eye' in f.lower()]
+            specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['touming', 'common', 'default', 'dummy', 'transparent'])]
+            if specific_candidates:
+                return specific_candidates[0]
         if candidates:
             return candidates[0]
 
@@ -664,7 +676,7 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
                 print(f"Notice: Reading JSON {jf}: {ex}")
 
         for mat in bpy.data.materials:
-            if not mat.use_nodes or not mat.node_tree or mat.name == '材质球':
+            if not mat.use_nodes or not mat.node_tree or mat.name == '材质球' or 'touming' in mat.name.lower():
                 continue
 
             mat_name_lower = mat.name.lower()

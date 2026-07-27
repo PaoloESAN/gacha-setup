@@ -710,18 +710,30 @@ def find_nte_texture_for_material(mat_name, tex_type, image_files):
 
     if 'face' in name_lower or 'cara' in name_lower or '面' in name_lower or 'head' in name_lower:
         candidates = [f for f in image_files if 'face' in f.lower() and matches_type(f)]
+        specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent'])]
+        if specific_candidates:
+            return specific_candidates[0]
         if candidates:
             return candidates[0]
 
     if any(k in name_lower for k in ['gaoguang', 'hi', 'high', 'bantou']):
-        candidates = [f for f in image_files if ('gaoguang' in f.lower() or 'bantou' in f.lower())]
+        candidates = [f for f in image_files if 'face' in f.lower() and matches_type(f)]
+        specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
+        if specific_candidates:
+            return specific_candidates[0]
         if candidates:
             return candidates[0]
 
     if any(k in name_lower for k in ['eye', '目', 'iris', 'pupil', 'eyelash', 'eyebrow', '眉毛', '睫毛']):
-        candidates = [f for f in image_files if ('eyes' in f.lower() or 'eye_' in f.lower() or 'eye.' in f.lower()) and matches_type(f)]
+        candidates = [f for f in image_files if ('eyes' in f.lower() or 'eye_' in f.lower() or 'eye.' in f.lower() or 'eye' in f.lower()) and matches_type(f)]
+        specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['touming', 'common', 'default', 'dummy', 'transparent'])]
+        if specific_candidates:
+            return specific_candidates[0]
         if not candidates:
             candidates = [f for f in image_files if 'eye' in f.lower()]
+            specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['touming', 'common', 'default', 'dummy', 'transparent'])]
+            if specific_candidates:
+                return specific_candidates[0]
         if candidates:
             return candidates[0]
 
@@ -769,14 +781,29 @@ def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="")
         hair_sub_idx = '02'
 
     if any(fk in mat_name_lower for fk in ['面部因子', 'face factor', 'face_factor']):
-        candidates = [
-            f for f in image_files
-            if 'face' in f.lower() and any(rk in f.lower() for rk in ['_r.', '_r_', '_r1', '_r_1', '_ramp', 'face_r', 'blush'])
-        ]
-        if not candidates:
-            candidates = [f for f in image_files if 'face' in f.lower() and 'r' in f.lower()]
-        if candidates:
-            replacement_file = candidates[0]
+        is_r_node = any(rk in old_img_name for rk in ['_r.', '_r_', 'r_1', 'r_2', 'face_r', 'ramp', 'blush'])
+        is_m_node = any(mk in old_img_name for mk in ['_m.', '_m_', 'm_1', 'm_2', 'face_m', '_mask'])
+
+        if not is_r_node and not is_m_node:
+            if getattr(tex_node, 'location', None) and tex_node.location.y < -50:
+                is_r_node = True
+            else:
+                is_m_node = True
+
+        if is_r_node and not is_m_node:
+            candidates = [f for f in image_files if 'face' in f.lower() and any(rk in f.lower() for rk in ['_r.', '_r_', '_r1', '_r_1', '_ramp', 'face_r', 'blush'])]
+            specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
+            if specific_candidates:
+                replacement_file = specific_candidates[0]
+            elif candidates:
+                replacement_file = candidates[0]
+        else:
+            candidates = [f for f in image_files if 'face' in f.lower() and ('_m' in f.lower() or 'm_' in f.lower() or '_mask' in f.lower() or 'm.' in f.lower())]
+            specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
+            if specific_candidates:
+                replacement_file = specific_candidates[0]
+            elif candidates:
+                replacement_file = candidates[0]
 
     elif any(k in old_img_name for k in ['ramp', 'night_dusk', 'srgb']):
         clean_old_base = old_img_name.split('.')[0].replace('.001', '').replace('.002', '').strip()
@@ -784,10 +811,13 @@ def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="")
         if exact_match:
             replacement_file = exact_match
         else:
-            ramp_candidates = [f for f in image_files if 't_srgb' in f.lower() or 'srgb' in f.lower() or 'ramp' in f.lower()]
-            if ramp_candidates:
-                replacement_file = ramp_candidates[0]
-
+            white_candidate = next((f for f in image_files if 't_srgb_white' in f.lower() or 'srgb_white' in f.lower() or ('srgb' in f.lower() and 'white' in f.lower())), None)
+            if white_candidate:
+                replacement_file = white_candidate
+            else:
+                ramp_candidates = [f for f in image_files if 't_srgb' in f.lower() or 'srgb' in f.lower() or 'ramp' in f.lower()]
+                if ramp_candidates:
+                    replacement_file = ramp_candidates[0]
 
     elif any(k in old_img_name for k in ['matcap', 'silk']):
         clean_old_base = old_img_name.split('.')[0].replace('.001', '').replace('.002', '').strip()
@@ -822,25 +852,42 @@ def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="")
 
     elif 'face' in old_img_name and any(rk in old_img_name for rk in ['_r.', '_r_', '_r1', '_r_1', '_ramp', 'face_r', 'blush']):
         candidates = [f for f in image_files if 'face' in f.lower() and ('_r' in f.lower() or 'r_' in f.lower() or 'ramp' in f.lower())]
-        if candidates:
+        specific_candidates = [f for f in candidates if 'common' not in f.lower()]
+        if specific_candidates:
+            replacement_file = specific_candidates[0]
+        elif candidates:
             replacement_file = candidates[0]
 
     elif 'face' in old_img_name and any(mk in old_img_name for mk in ['_m.', '_m_', '_mask']):
         candidates = [f for f in image_files if 'face' in f.lower() and ('_m' in f.lower() or 'm_' in f.lower())]
-        if candidates:
+        specific_candidates = [f for f in candidates if 'common' not in f.lower()]
+        if specific_candidates:
+            replacement_file = specific_candidates[0]
+        elif candidates:
             replacement_file = candidates[0]
 
     elif 'face' in old_img_name and any(dk in old_img_name for dk in ['_d.', '_d_', '_d1', '_diff', 'd_0']):
         candidates = [f for f in image_files if 'face' in f.lower() and ('_d' in f.lower() or 'd_' in f.lower() or 'd1' in f.lower())]
-        if candidates:
+        specific_candidates = [f for f in candidates if 'common' not in f.lower()]
+        if specific_candidates:
+            replacement_file = specific_candidates[0]
+        elif candidates:
             replacement_file = candidates[0]
 
     elif any(gk in mat_name_lower for gk in ['gaoguang', '目hi']):
         candidates = [f for f in image_files if 'face' in f.lower() and any(dk in f.lower() for dk in ['_d.', '_d_', '_d1', '_diff', 'd_0'])]
-        if not candidates:
-            candidates = [f for f in image_files if 'face' in f.lower()]
-        if candidates:
+        specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
+        if specific_candidates:
+            replacement_file = specific_candidates[0]
+        elif candidates:
             replacement_file = candidates[0]
+        else:
+            candidates = [f for f in image_files if 'face' in f.lower()]
+            specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
+            if specific_candidates:
+                replacement_file = specific_candidates[0]
+            elif candidates:
+                replacement_file = candidates[0]
 
 
     elif ('eyes' in old_img_name or 'eye' in old_img_name or 'eye' in mat_name_lower) and not any(ek in mat_name_lower for ek in ['eyelash', 'eyebrow', 'shadow', 'white', '二重', '眉', '睫', 'gaoguang', 'bantou', '目hi']):
@@ -850,14 +897,22 @@ def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="")
             and not any(bg in f.lower() for bg in ['bantou', 'gaoguang', 'eyelash', 'eyebrow', 'shadow', 'white'])
             and any(dk in f.lower() for dk in ['_d.', '_d_', '_d1', '_diff', 'd_0'])
         ]
-        if not candidates:
+        specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['touming', 'common', 'default', 'dummy', 'transparent'])]
+        if specific_candidates:
+            replacement_file = specific_candidates[0]
+        elif candidates:
+            replacement_file = candidates[0]
+        if not replacement_file:
             candidates = [
                 f for f in image_files
                 if ('eyes' in f.lower() or 'eye' in f.lower())
                 and not any(bg in f.lower() for bg in ['bantou', 'gaoguang', 'eyelash', 'eyebrow'])
             ]
-        if candidates:
-            replacement_file = candidates[0]
+            specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['touming', 'common', 'default', 'dummy', 'transparent'])]
+            if specific_candidates:
+                replacement_file = specific_candidates[0]
+            elif candidates:
+                replacement_file = candidates[0]
 
 
 
@@ -978,6 +1033,22 @@ class NevernessToEvernessDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     continue
 
                 matname = mat.name.lower()
+
+                if "touming" in matname:
+                    mat.use_nodes = True
+                    nodes = mat.node_tree.nodes
+                    links = mat.node_tree.links
+                    nodes.clear()
+                    out_node = nodes.new('ShaderNodeOutputMaterial')
+                    out_node.location = (300, 0)
+                    trans_node = nodes.new('ShaderNodeBsdfTransparent')
+                    trans_node.location = (0, 0)
+                    links.new(trans_node.outputs['BSDF'], out_node.inputs['Surface'])
+                    try:
+                        mat.blend_method = 'BLEND'
+                    except Exception:
+                        pass
+                    continue
 
                 if mat.name in template_names or mat.name == '材质球':
                     continue
