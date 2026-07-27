@@ -306,10 +306,16 @@ class ComponentFunctionFactory:
             return bpy.ops.hoyoverse.set_up_screen_space_reflections
         elif component_name == 'vertex_paint_face_see_through_effect':
             return bpy.ops.hoyoverse.vertex_paint_face_see_through_effect
+        elif component_name == 'zzz_setup_head_driver':
+            return bpy.ops.zenless_zone_zero.setup_head_driver
         elif component_name == 'setup_head_driver':
             return bpy.ops.genshin.setup_head_driver
         elif component_name == 'rename_shader_materials':
             return bpy.ops.hoyoverse.rename_shader_materials
+        elif component_name == 'rename_collection_and_rig':
+            return bpy.ops.zenless_zone_zero.rename_collection_and_rig
+        elif component_name == 'move_lighting_panel_to_char_collection':
+            return bpy.ops.zenless_zone_zero.move_lighting_panel_to_char_collection
         elif component_name == 'set_up_armtwist_bone_constraints':
             return bpy.ops.genshin.set_up_armtwist_bone_constraints
         elif component_name == 'clear_cache_operator':

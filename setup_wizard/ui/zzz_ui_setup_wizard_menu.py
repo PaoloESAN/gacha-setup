@@ -247,7 +247,7 @@ class ZZZ_PT_UI_Finish_Setup_Menu(Panel, ZenlessZoneZeroUIRenderChecker):
 
         OperatorFactory.create(
             sub_layout,
-            "genshin.setup_head_driver",
+            "zenless_zone_zero.setup_head_driver",
             "Set Up Head Driver",
             "CONSTRAINT",
             game_type=GameType.ZENLESS_ZONE_ZERO.name,
@@ -261,13 +261,6 @@ class ZZZ_PT_UI_Finish_Setup_Menu(Panel, ZenlessZoneZeroUIRenderChecker):
         )
         OperatorFactory.create(
             sub_layout,
-            "genshin.delete_specific_objects",
-            "Delete Helper Empties & Meshes",
-            "TRASH",
-            game_type=GameType.ZENLESS_ZONE_ZERO.name,
-        )
-        OperatorFactory.create(
-            sub_layout,
             "hoyoverse.rename_shader_materials",
             "Rename Shader Materials",
             "FONT_DATA",
@@ -275,9 +268,16 @@ class ZZZ_PT_UI_Finish_Setup_Menu(Panel, ZenlessZoneZeroUIRenderChecker):
         )
         OperatorFactory.create(
             sub_layout,
-            "hoyoverse.join_meshes_on_armature",
-            "Join Meshes on Armature",
-            "LINKED",
+            "zenless_zone_zero.rename_collection_and_rig",
+            "Rename Collection & Rig",
+            "OUTLINER_COLLECTION",
+            game_type=GameType.ZENLESS_ZONE_ZERO.name,
+        )
+        OperatorFactory.create(
+            sub_layout,
+            "zenless_zone_zero.move_lighting_panel_to_char_collection",
+            "Move Lighting Panel to Collection",
+            "LIGHT",
             game_type=GameType.ZENLESS_ZONE_ZERO.name,
         )
 
@@ -313,14 +313,15 @@ class OperatorFactory:
         **kwargs,
     ):
         ui_object.operator_context = operator_context
-        ui_object = ui_object.operator(
+        btn = ui_object.operator(
             operator=operator,
             text=text,
             icon=icon,
         )
 
-        for key, value in kwargs.items():
-            setattr(ui_object, key, value)
+        if btn:
+            for key, value in kwargs.items():
+                setattr(btn, key, value)
 
     @staticmethod
     def create_rig_character_ui(
