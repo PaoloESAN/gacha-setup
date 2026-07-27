@@ -952,7 +952,7 @@ class NevernessToEvernessDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 
     def replace_default_materials(self):
         cache_enabled = self.context.window_manager.cache_enabled
-        folder = get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH)
+        folder = self.blender_operator.file_directory or (get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH) if cache_enabled and self.blender_operator.game_type != GameType.NEVERNESS_TO_EVERNESS.name else None)
         image_files = []
         if folder and os.path.isdir(folder):
             try:

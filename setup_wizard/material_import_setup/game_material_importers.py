@@ -63,11 +63,36 @@ class GameMaterialImporter:
             get_cache(cache_enabled).get(self.game_shader_file_path)
         project_root_directory_file_path = self.blender_operator.file_directory \
             or get_cache(cache_enabled).get(self.game_shader_folder_path) \
-            or os.path.dirname(self.blender_operator.filepath)
+            or (os.path.dirname(self.blender_operator.filepath) if self.blender_operator.filepath else None)
 
         print(f"[DEBUG] GameMaterialImporter.import_materials: user_selected_shader_blend_file_path='{user_selected_shader_blend_file_path}', project_root_directory_file_path='{project_root_directory_file_path}'")
 
-        if not user_selected_shader_blend_file_path and not project_root_directory_file_path:
+        # Resolve exact target blend file
+        target_blend_file = None
+        if user_selected_shader_blend_file_path and os.path.isfile(user_selected_shader_blend_file_path):
+            target_blend_file = user_selected_shader_blend_file_path
+        elif project_root_directory_file_path:
+            c1 = os.path.join(project_root_directory_file_path, self.game_default_blend_file_with_materials)
+            c2 = os.path.join(os.path.dirname(project_root_directory_file_path), self.game_default_blend_file_with_materials) if project_root_directory_file_path else None
+            if os.path.isfile(c1):
+                target_blend_file = c1
+            elif c2 and os.path.isfile(c2):
+                target_blend_file = c2
+
+        if not target_blend_file:
+            addon_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            for rel in [self.game_default_blend_file_with_materials, f"shader/{self.game_default_blend_file_with_materials}"]:
+                cand = os.path.join(addon_dir, rel)
+                if os.path.isfile(cand):
+                    target_blend_file = cand
+                    break
+
+        if not target_blend_file:
+            cached_path = get_cache(cache_enabled).get(self.game_shader_file_path)
+            if cached_path and os.path.isfile(cached_path):
+                target_blend_file = cached_path
+
+        if not target_blend_file and not project_root_directory_file_path:
             print(f"[DEBUG] No blend path or root folder cached. Calling bpy.ops.genshin.import_materials('INVOKE_DEFAULT')")
             bpy.ops.genshin.import_materials(
                 'INVOKE_DEFAULT',
@@ -79,50 +104,16 @@ class GameMaterialImporter:
             )
             return {'FINISHED'}
 
-
-        blend_file_with_genshin_materials = os.path.join(
-            user_selected_shader_blend_file_path,
-            self.MATERIAL_PATH_INSIDE_BLEND_FILE
-        ) if user_selected_shader_blend_file_path else None
-
-        default_blend_file_path = os.path.join(
-            project_root_directory_file_path,
-            self.game_default_blend_file_with_materials,
-            self.MATERIAL_PATH_INSIDE_BLEND_FILE
-        )
-
-        blend_file_with_genshin_node_tree = os.path.join(
-            user_selected_shader_blend_file_path,
-            self.NODE_TREE_PATH_INSIDE_BLEND_FILE
-        ) if user_selected_shader_blend_file_path else None
-
-        default_blend_file_path_node_tree = os.path.join(
-            project_root_directory_file_path,
-            self.game_default_blend_file_with_materials,
-            self.NODE_TREE_PATH_INSIDE_BLEND_FILE
-        )
-
-        blend_file_with_light_direction_empties = os.path.join(
-            user_selected_shader_blend_file_path,
-            self.OBJECT_PATH_INSIDE_BLEND_FILE
-        ) if user_selected_shader_blend_file_path else None
-
-        default_blend_file_with_light_direction_empties = os.path.join(
-            project_root_directory_file_path,
-            self.game_default_blend_file_with_materials,
-            self.OBJECT_PATH_INSIDE_BLEND_FILE
-        )
+        shader_blend_file_path = os.path.join(target_blend_file, self.MATERIAL_PATH_INSIDE_BLEND_FILE) if target_blend_file else os.path.join(project_root_directory_file_path, self.game_default_blend_file_with_materials, self.MATERIAL_PATH_INSIDE_BLEND_FILE)
+        shader_blend_node_tree_file_path = os.path.join(target_blend_file, self.NODE_TREE_PATH_INSIDE_BLEND_FILE) if target_blend_file else os.path.join(project_root_directory_file_path, self.game_default_blend_file_with_materials, self.NODE_TREE_PATH_INSIDE_BLEND_FILE)
+        light_direction_empties_file_path = os.path.join(target_blend_file, self.OBJECT_PATH_INSIDE_BLEND_FILE) if target_blend_file else os.path.join(project_root_directory_file_path, self.game_default_blend_file_with_materials, self.OBJECT_PATH_INSIDE_BLEND_FILE)
 
         try:
-            # Use the exact file the user selected, otherwise fallback to the non-Goo blender file in the directory
-            shader_blend_file_path = blend_file_with_genshin_materials or default_blend_file_path
             bpy.ops.wm.append(
                 directory=shader_blend_file_path,
                 files=self.names_of_game_materials,
                 set_fake=True
             )
-            shader_blend_node_tree_file_path = blend_file_with_genshin_node_tree or default_blend_file_path_node_tree
-            light_direction_empties_file_path = blend_file_with_light_direction_empties or default_blend_file_with_light_direction_empties
             self.import_light_vectors_geometry_node(shader_blend_node_tree_file_path, light_direction_empties_file_path)
         except RuntimeError as ex:
             self.blender_operator.report({'ERROR'}, \
@@ -484,6 +475,14 @@ class NevernessToEvernessMaterialImporterFacade(GameMaterialImporter):
         user_selected_shader_blend_file_path = self.blender_operator.filepath if \
             self.blender_operator.filepath and not os.path.isdir(self.blender_operator.filepath) else \
             get_cache(cache_enabled).get(self.game_shader_file_path)
+
+        if not user_selected_shader_blend_file_path:
+            addon_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            for rel in ["YH Shader.blend", "shader/YH Shader.blend"]:
+                cand = os.path.join(addon_dir, rel)
+                if os.path.isfile(cand):
+                    user_selected_shader_blend_file_path = cand
+                    break
         print(f"[DEBUG] user_selected_shader_blend_file_path: '{user_selected_shader_blend_file_path}'")
 
 

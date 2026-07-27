@@ -622,15 +622,12 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
         self.context = context
 
     def import_textures(self):
-        cache_enabled = self.context.window_manager.cache_enabled
         op = self.blender_operator
 
         fp = getattr(op, 'filepath', '') or getattr(op, 'import_path', '') or getattr(op, 'directory', '')
         folder = op.file_directory
         if not folder and fp:
             folder = fp if os.path.isdir(fp) else os.path.dirname(fp)
-        if not folder:
-            folder = get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH)
 
         has_textures = False
         if folder and os.path.isdir(folder):
@@ -650,9 +647,6 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
                 game_type=self.blender_operator.game_type,
             )
             return {'FINISHED'}
-
-        if cache_enabled and folder:
-            cache_using_cache_key(get_cache(cache_enabled), CHARACTER_MODEL_FOLDER_FILE_PATH, folder)
 
         import json
         files = os.listdir(folder)

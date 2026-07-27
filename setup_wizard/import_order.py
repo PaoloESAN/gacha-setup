@@ -54,7 +54,7 @@ class NextStepInvoker:
         if type == 'invoke_next_step':
             invoke_next_step(current_step_index, file_path_to_cache, game_type)
         elif type == 'invoke_next_step_ui':
-            invoke_next_step_ui(high_level_step_name, current_step_index, game_type)
+            invoke_next_step_ui(high_level_step_name, current_step_index, game_type, file_directory=file_path_to_cache)
         else:
             print(f'Warning: Unknown type found when invoking: {type}')
 
@@ -103,8 +103,9 @@ def invoke_next_step(
 def invoke_next_step_ui(
         high_level_step_name, 
         current_step_index, 
-        game_type: str=GameType.GENSHIN_IMPACT.name):
-    print(f"[DEBUG] invoke_next_step_ui called: high_level_step_name='{high_level_step_name}', current_step_index={current_step_index}, game_type='{game_type}'")
+        game_type: str=GameType.GENSHIN_IMPACT.name,
+        file_directory=None):
+    print(f"[DEBUG] invoke_next_step_ui called: high_level_step_name='{high_level_step_name}', current_step_index={current_step_index}, game_type='{game_type}', file_directory='{file_directory}'")
     path_to_setup_wizard_folder = os.path.dirname(os.path.abspath(__file__))
 
     file = open(f'{path_to_setup_wizard_folder}/config_ui.json')
@@ -128,6 +129,7 @@ def invoke_next_step_ui(
         invoker_type='invoke_next_step_ui',
         high_level_step_name=high_level_step_name,
         game_type=game_type,
+        file_directory=file_directory or '',
     )
 
 
