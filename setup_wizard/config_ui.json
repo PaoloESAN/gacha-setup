@@ -84,6 +84,7 @@
       "import_outline_lightmaps",
       "import_material_data",
       "fix_transformations",
+      "rig_character",
       "setup_head_driver",
       "set_color_management_to_standard",
       "set_up_screen_space_reflections",
@@ -91,8 +92,7 @@
       "delete_specific_objects",
       "rename_shader_materials",
       "set_up_armtwist_bone_constraints",
-      "join_meshes_on_armature",
-      "rig_character"
+      "join_meshes_on_armature"
     ],
     "HONKAI_STAR_RAIL_OT_setup_wizard_ui_no_outlines": [
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
@@ -102,6 +102,7 @@
       "replace_default_materials",
       "import_character_textures",
       "fix_transformations",
+      "rig_character",
       "setup_head_driver",
       "set_color_management_to_standard",
       "set_up_screen_space_reflections",
@@ -109,8 +110,7 @@
       "delete_specific_objects",
       "rename_shader_materials",
       "set_up_armtwist_bone_constraints",
-      "join_meshes_on_armature",
-      "rig_character"
+      "join_meshes_on_armature"
     ],
     "HONKAI_STAR_RAIL_OT_set_up_character": [
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_character",
@@ -175,12 +175,13 @@
       "import_outline_lightmaps",
       "import_material_data",
       "fix_transformations",
-      "setup_head_driver",
+      "rig_character",
+      "zzz_setup_head_driver",
       "set_color_management_to_standard",
       "delete_specific_objects",
       "rename_shader_materials",
-      "join_meshes_on_armature",
-      "rig_character"
+      "rename_collection_and_rig",
+      "move_lighting_panel_to_char_collection"
     ],
     "ZENLESS_ZONE_ZERO_OT_setup_wizard_ui_no_outlines": [
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
@@ -190,12 +191,13 @@
       "replace_default_materials",
       "import_character_textures",
       "fix_transformations",
-      "setup_head_driver",
+      "rig_character",
+      "zzz_setup_head_driver",
       "set_color_management_to_standard",
       "delete_specific_objects",
       "rename_shader_materials",
-      "join_meshes_on_armature",
-      "rig_character"
+      "rename_collection_and_rig",
+      "move_lighting_panel_to_char_collection"
     ],
     "ZENLESS_ZONE_ZERO_OT_set_up_character": [
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_character",
