@@ -51,6 +51,8 @@ class NextStepInvoker:
                file_path_to_cache=None, 
                high_level_step_name=None, 
                game_type: str=GameType.GENSHIN_IMPACT.name):
+        if file_path_to_cache:
+            set_active_character_directory(file_path_to_cache)
         if type == 'invoke_next_step':
             invoke_next_step(current_step_index, file_path_to_cache, game_type)
         elif type == 'invoke_next_step_ui':
@@ -133,96 +135,102 @@ def invoke_next_step_ui(
     )
 
 
+_ACTIVE_CHARACTER_DIRECTORY = ""
+
+
+def set_active_character_directory(file_path_or_dir):
+    global _ACTIVE_CHARACTER_DIRECTORY
+    if not file_path_or_dir:
+        return
+    if os.path.isfile(file_path_or_dir):
+        file_path_or_dir = os.path.dirname(file_path_or_dir)
+    if os.path.isdir(file_path_or_dir):
+        _ACTIVE_CHARACTER_DIRECTORY = file_path_or_dir
+        print(f"[SETUP WIZARD] Set active character directory: {_ACTIVE_CHARACTER_DIRECTORY}")
+
+
+def get_active_character_directory():
+    global _ACTIVE_CHARACTER_DIRECTORY
+    return _ACTIVE_CHARACTER_DIRECTORY
+
+
+def get_shader_file_path(game_type: str, file_type: str = "main") -> str:
+    """
+    Directly resolves the bundled .blend shader file path for the given game type.
+    """
+    addon_dir = os.path.dirname(os.path.abspath(__file__))
+    shaders_dir = os.path.join(addon_dir, 'shaders')
+
+    if game_type == GameType.GENSHIN_IMPACT.name:
+        if file_type == 'outlines':
+            p = os.path.join(shaders_dir, 'gi', 'HoYoverse - Genshin Impact Outlines v3.blend')
+            if os.path.isfile(p):
+                return p
+        elif file_type == 'compositing':
+            p = os.path.join(shaders_dir, 'gi', 'HoYoverse - Genshin Impact Post-Processing.blend')
+            if os.path.isfile(p):
+                return p
+        p_main = os.path.join(shaders_dir, 'gi', 'HoYoverse - Genshin Impact v3.4.blend')
+        if os.path.isfile(p_main):
+            return p_main
+
+    elif game_type == GameType.HONKAI_STAR_RAIL.name:
+        p = os.path.join(shaders_dir, 'hsr', 'StellarToonV1.1.blend')
+        if os.path.isfile(p):
+            return p
+
+    elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
+        p = os.path.join(shaders_dir, 'zzz', 'ZZZ Setup File V2.0.blend')
+        if os.path.isfile(p):
+            return p
+
+    elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
+        p = os.path.join(shaders_dir, 'nte', 'YH Shader.blend')
+        if os.path.isfile(p):
+            return p
+
+    return ""
+
+
 def read_from_blender_cache():
-    try:
-        with open(BLENDER_ADDON_CONFIG_FILEPATH, 'r') as json_file:
-            print(f'Reading from user Blender config: {BLENDER_ADDON_CONFIG_FILEPATH}')
-            config = json.load(json_file)
-            print(f'Retrieved user Blender config')
-            return config
-    except FileNotFoundError as err:
-        return {}
+    return get_cache()
 
 
 def get_cache(cache_enabled=True):
-    if not cache_enabled:
-        return {}
-    return read_from_blender_cache()
+    active_dir = get_active_character_directory()
+    if active_dir:
+        return {
+            CHARACTER_MODEL_FOLDER_FILE_PATH: active_dir,
+            GENSHIN_IMPACT_ROOT_FOLDER_FILE_PATH: active_dir,
+            GENSHIN_IMPACT_SHADER_FILE_PATH: active_dir,
+            HONKAI_STAR_RAIL_ROOT_FOLDER_FILE_PATH: active_dir,
+            HONKAI_STAR_RAIL_SHADER_FILE_PATH: active_dir,
+            PUNISHING_GRAY_RAVEN_ROOT_FOLDER_FILE_PATH: active_dir,
+            PUNISHING_GRAY_RAVEN_SHADER_FILE_PATH: active_dir,
+            ZENLESS_ZONE_ZERO_ROOT_FOLDER_FILE_PATH: active_dir,
+            ZENLESS_ZONE_ZERO_SHADER_FILE_PATH: active_dir,
+            NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH: active_dir,
+            NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH: active_dir,
+        }
+    return {}
+
 
 def write_to_blender_cache(config):
-    with open(BLENDER_ADDON_CONFIG_FILEPATH, 'w') as json_file:
-        print(f'Writing to user Blender config: {BLENDER_ADDON_CONFIG_FILEPATH}')
-        json_string = json.dumps(config, indent=4)
-        json_file.write(json_string)
-        print(f'Successfully wrote to user Blender config')
+    pass
+
 
 def cache_previous_step_file_path(cache, last_step, file_path_to_cache):
-    if not file_path_to_cache:
-        return
-    step_cache_key = last_step.get(CACHE_KEY)
+    set_active_character_directory(file_path_to_cache)
 
-    print(f'Assigning `{step_cache_key}:{file_path_to_cache}` in cache')
-    cache[step_cache_key] = file_path_to_cache
-    write_to_blender_cache(cache)
 
 def cache_using_cache_key(cache, cache_key, file_path_for_cache):
-    if not file_path_for_cache:
-        return
-    print(f'Assigning `{cache_key}:{file_path_for_cache}` in cache')
-    cache[cache_key] = file_path_for_cache
-    write_to_blender_cache(cache)
-
-def clear_cache():
-    write_to_blender_cache({})
+    set_active_character_directory(file_path_for_cache)
 
 
-def clear_cache(game_type: str):
-    cache = get_cache()
-    keys_to_delete = []
-
-    if game_type == GameType.GENSHIN_IMPACT.name:
-        keys_to_delete = [
-            CHARACTER_MODEL_FOLDER_FILE_PATH,
-            GENSHIN_IMPACT_ROOT_FOLDER_FILE_PATH,
-            GENSHIN_IMPACT_SHADER_FILE_PATH,
-            GENSHIN_IMPACT_OUTLINES_FILE_PATH,
-            HOYOVERSE_COMPOSITING_NODE_FILE_PATH,
-            GENSHIN_RIGIFY_BONE_SHAPES_FILE_PATH,
-        ]
-    elif game_type == GameType.HONKAI_STAR_RAIL.name:
-        keys_to_delete = [
-            CHARACTER_MODEL_FOLDER_FILE_PATH,
-            HONKAI_STAR_RAIL_ROOT_FOLDER_FILE_PATH,
-            HONKAI_STAR_RAIL_SHADER_FILE_PATH,
-            HONKAI_STAR_RAIL_OUTLINES_FILE_PATH,
-        ]
-    elif game_type == GameType.PUNISHING_GRAY_RAVEN.name:
-        keys_to_delete = [
-            CHARACTER_MODEL_FOLDER_FILE_PATH,
-            PUNISHING_GRAY_RAVEN_ROOT_FOLDER_FILE_PATH,
-            PUNISHING_GRAY_RAVEN_SHADER_FILE_PATH,
-            PUNISHING_GRAY_RAVEN_OUTLINES_FILE_PATH,
-            PUNISHING_GRAY_RAVEN_CHIBI_MESH_FILE_PATH,
-        ]
-    elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
-        keys_to_delete = [
-            CHARACTER_MODEL_FOLDER_FILE_PATH,
-            ZENLESS_ZONE_ZERO_ROOT_FOLDER_FILE_PATH,
-            ZENLESS_ZONE_ZERO_SHADER_FILE_PATH,
-            ZENLESS_ZONE_ZERO_OUTLINES_FILE_PATH,
-        ]
-    elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
-        keys_to_delete = [
-            CHARACTER_MODEL_FOLDER_FILE_PATH,
-            NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH,
-            NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH,
-            NEVERNESS_TO_EVERNESS_OUTLINES_FILE_PATH,
-        ]
+def clear_cache(game_type: str = None):
+    pass
 
 
-    for key in keys_to_delete:
-        cache.pop(key, None)
-    write_to_blender_cache(cache)
 
 
 '''

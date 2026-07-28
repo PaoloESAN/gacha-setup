@@ -6,7 +6,8 @@ import os
 from bpy_extras.io_utils import ImportHelper
 from bpy.props import StringProperty
 from bpy.types import Operator
-from setup_wizard.import_order import cache_using_cache_key, get_cache, HOYOVERSE_COMPOSITING_NODE_FILE_PATH
+from setup_wizard.import_order import cache_using_cache_key, get_cache, HOYOVERSE_COMPOSITING_NODE_FILE_PATH, get_shader_file_path
+from setup_wizard.domain.game_types import GameType
 
 from setup_wizard.setup_wizard_operator_base_classes import CustomOperatorProperties
 from setup_wizard.setup_wizard_operator_base_classes import NextStepInvoker
@@ -63,6 +64,8 @@ def get_node_tree(scene):
                 node = tree.nodes.new(type=output_type)
                 node.name = output_name
         return scene.compositing_node_group
+
+    scene.use_nodes = True
     return scene.node_tree
 
 
@@ -85,17 +88,17 @@ class PostProcessingFeatureFlag:
         return not post_processing_setup_enabled and not is_advanced_setup
 
 
-class GI_OT_CompositingNodeSetup(Operator, ImportHelper, CustomOperatorProperties, PostProcessingFeatureFlag):
-    """Select the Custom Compositing .blend File to import NodeTree"""
+class HYV_OT_CustomCompositeNodeSetup(Operator, ImportHelper, CustomOperatorProperties, PostProcessingFeatureFlag):
+    """Imports Composite node tree"""
     bl_idname = 'hoyoverse.custom_composite_node_setup'
-    bl_label = 'Select Compositing .blend File'
+    bl_label = 'Hoyoverse: Custom Composite Node Setup'
 
     # ImportHelper mixin class uses this
     filename_ext = "*.*"
 
     import_path: StringProperty(
         name="Path",
-        description="Custom Composite Node .blend File",
+        description="Path to the file to import",
         default="",
         subtype='DIR_PATH'
     )
@@ -129,8 +132,7 @@ class GI_OT_CompositingNodeSetup(Operator, ImportHelper, CustomOperatorPropertie
             self.clear_custom_properties()
             return {'FINISHED'}
 
-        cache_enabled = context.window_manager.cache_enabled
-        composite_blend_file_path = self.filepath or get_cache(cache_enabled).get(HOYOVERSE_COMPOSITING_NODE_FILE_PATH)
+        composite_blend_file_path = get_shader_file_path(GameType.GENSHIN_IMPACT.name, 'compositing')
 
         if hasattr(context.scene, 'use_nodes'):
             context.scene.use_nodes = True
@@ -149,20 +151,11 @@ class GI_OT_CompositingNodeSetup(Operator, ImportHelper, CustomOperatorPropertie
             if composite_node_group:
                 break
 
-        if not composite_node_group:
-            if not composite_blend_file_path:
-                bpy.ops.hoyoverse.custom_composite_node_setup(
-                    'INVOKE_DEFAULT',
-                    next_step_idx=self.next_step_idx, 
-                    file_directory=self.file_directory,
-                    invoker_type=self.invoker_type,
-                    high_level_step_name=self.high_level_step_name
-                )
-                return {'FINISHED'}
+        if not composite_node_group and composite_blend_file_path:
             name_of_composite_node_group = self.append_composite_node_group(composite_blend_file_path)
             composite_node_group = bpy.data.node_groups.get(name_of_composite_node_group)
-        else:
-            self.logs += f'{composite_node_group.name} already appended, skipping.\n'
+        elif not composite_node_group:
+            self.logs += 'No composite node group blend file found.\n'
 
         scene = context.scene
         composite_node = get_node_tree(scene).nodes.get(NAME_OF_COMPOSITE_NODE)
@@ -180,13 +173,6 @@ class GI_OT_CompositingNodeSetup(Operator, ImportHelper, CustomOperatorPropertie
 
         self.connect_starting_nodes(scene)
         self.set_node_locations(scene)
-
-        if cache_enabled and composite_blend_file_path:
-            cache_using_cache_key(
-                get_cache(cache_enabled), 
-                HOYOVERSE_COMPOSITING_NODE_FILE_PATH, 
-                composite_blend_file_path
-            )
 
         self.report({'INFO'}, f'{self.logs}')
         if self.next_step_idx:
@@ -336,3 +322,7 @@ class HYV_OT_HoyoversePostProcessingDefaultSettings(Operator, ImportHelper, Cust
         self.clear_custom_properties()
 
         return {'FINISHED'}
+
+
+GI_OT_CompositingNodeSetup = HYV_OT_CustomCompositeNodeSetup
+

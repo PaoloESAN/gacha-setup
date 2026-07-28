@@ -36,16 +36,6 @@ class ZZZ_PT_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
         settings_box = layout.box()
         settings_box.label(text="Global Settings", icon="WORLD")
 
-        row = settings_box.row()
-        row.prop(window_manager, "cache_enabled")
-        OperatorFactory.create(
-            row,
-            "genshin.clear_cache_operator",
-            "Clear Cache",
-            "TRASH",
-            game_type=GameType.ZENLESS_ZONE_ZERO.name,
-        )
-
 
 class ZZZ_PT_Basic_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
     bl_label = "Basic Setup"

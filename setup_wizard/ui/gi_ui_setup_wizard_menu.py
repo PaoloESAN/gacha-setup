@@ -63,16 +63,6 @@ class GI_PT_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
         settings_box = layout.box()
         settings_box.label(text='Global Settings', icon='WORLD')
 
-        row = settings_box.row()
-        row.prop(window_manager, 'cache_enabled')
-        OperatorFactory.create(
-            row,
-            'genshin.clear_cache_operator',
-            'Clear Cache',
-            'TRASH',
-            game_type=GameType.GENSHIN_IMPACT.name,
-        )
-
 
 
         settings_box.prop(window_manager, 'enable_viewport_outlines')

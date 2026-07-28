@@ -20,6 +20,7 @@ from setup_wizard.import_order import (
     NextStepInvoker,
     cache_using_cache_key,
     get_cache,
+    set_active_character_directory,
 )
 from setup_wizard.setup_wizard_operator_base_classes import (
     BasicSetupUIOperator,
@@ -110,12 +111,8 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                 SHADER_COLOR_ATTRIBUTE_NAME
             )  # Blender 3.4 changed default name to 'Attribute', revert it
 
-            if context.window_manager.cache_enabled and character_model_directory:
-                cache_using_cache_key(
-                    get_cache(),
-                    CHARACTER_MODEL_FOLDER_FILE_PATH,
-                    character_model_directory,
-                )
+            if character_model_directory:
+                set_active_character_directory(character_model_directory)
 
             global IMPORTED_VIA_WIZARD
             IMPORTED_VIA_WIZARD = True

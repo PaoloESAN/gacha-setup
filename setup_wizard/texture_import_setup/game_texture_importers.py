@@ -461,8 +461,8 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                             img.alpha_mode = 'CHANNEL_PACKED'
 
             # If this is a Hair material and no hair texture was found,
-            # remove its material slot (Slot 2+) from mesh objects so the hair inherits Slot 1
-            if "hair" in matname:
+            # remove its material slot (Slot 2+) from mesh objects so the hair inherits Slot 1 (only for ZZZ)
+            if self.blender_operator.game_type == GameType.ZENLESS_ZONE_ZERO.name and "hair" in matname:
                 has_hair_texture = any(node.type == 'TEX_IMAGE' and node.image for node in nodes)
                 if not has_hair_texture:
                     for obj in bpy.data.objects:

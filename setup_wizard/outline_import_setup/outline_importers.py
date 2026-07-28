@@ -10,7 +10,7 @@ from setup_wizard.domain.shader_identifier_service import GenshinImpactShaders, 
 from setup_wizard.outline_import_setup.outline_node_groups import OutlineNodeGroupNames
 from setup_wizard.import_order import GENSHIN_IMPACT_OUTLINES_FILE_PATH, PUNISHING_GRAY_RAVEN_OUTLINES_FILE_PATH, HONKAI_STAR_RAIL_OUTLINES_FILE_PATH, \
     HONKAI_STAR_RAIL_SHADER_FILE_PATH, ZENLESS_ZONE_ZERO_SHADER_FILE_PATH, \
-    ZENLESS_ZONE_ZERO_OUTLINES_FILE_PATH, NextStepInvoker, cache_using_cache_key, get_cache
+    ZENLESS_ZONE_ZERO_OUTLINES_FILE_PATH, NextStepInvoker, cache_using_cache_key, get_cache, get_shader_file_path
 from setup_wizard.domain.game_types import GameType
 
 
@@ -58,30 +58,20 @@ class GenshinImpactOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
         self.outlines_node_group_names = outlines_node_group_name
 
     def import_outline_node_group(self):
-        cache_enabled = self.context.window_manager.cache_enabled
-        filepath = get_cache(cache_enabled).get(self.outlines_file_path) or self.blender_operator.filepath
+        filepath = get_shader_file_path(GameType.GENSHIN_IMPACT.name, 'outlines') or get_shader_file_path(GameType.GENSHIN_IMPACT.name, 'main')
 
-        if not filepath:
-            bpy.ops.genshin.import_outlines(
-                'INVOKE_DEFAULT',
-                next_step_idx=self.blender_operator.next_step_idx, 
-                file_directory=self.blender_operator.file_directory,
-                invoker_type=self.blender_operator.invoker_type,
-                high_level_step_name=self.blender_operator.high_level_step_name,
-                game_type=self.blender_operator.game_type,
-            )
-            return {'FINISHED'}
-
-        for outline_node_group_name in self.outlines_node_group_names:
-            if not bpy.data.node_groups.get(outline_node_group_name):
-                inner_path = 'NodeTree'
-                bpy.ops.wm.append(
-                    filepath=os.path.join(filepath, inner_path, outline_node_group_name),
-                    directory=os.path.join(filepath, inner_path),
-                    filename=outline_node_group_name
-                )
-                if cache_enabled and filepath:
-                    cache_using_cache_key(get_cache(cache_enabled), self.outlines_file_path, filepath)
+        if filepath and os.path.isfile(filepath):
+            for outline_node_group_name in self.outlines_node_group_names:
+                if not bpy.data.node_groups.get(outline_node_group_name):
+                    inner_path = 'NodeTree'
+                    try:
+                        bpy.ops.wm.append(
+                            filepath=os.path.join(filepath, inner_path, outline_node_group_name),
+                            directory=os.path.join(filepath, inner_path),
+                            filename=outline_node_group_name
+                        )
+                    except Exception as e:
+                        print(f"Notice: Failed appending outline node group {outline_node_group_name}: {e}")
 
         NextStepInvoker().invoke(
             self.blender_operator.next_step_idx, 
@@ -98,37 +88,20 @@ class HonkaiStarRailOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
         self.outlines_node_group_names = outlines_node_group_names
 
     def import_outline_node_group(self):
-        cache_enabled = self.context.window_manager.cache_enabled
-        # Try outlines cache first, then fall back to the shader/materials .blend so
-        # the user is not asked to pick a file again if they already chose one for materials.
-        filepath = (
-            get_cache(cache_enabled).get(self.outlines_file_path) or
-            get_cache(cache_enabled).get(HONKAI_STAR_RAIL_SHADER_FILE_PATH) or
-            self.blender_operator.filepath
-        )
+        filepath = get_shader_file_path(GameType.HONKAI_STAR_RAIL.name, 'main')
 
-        if not filepath:
-            bpy.ops.genshin.import_outlines(
-                'INVOKE_DEFAULT',
-                next_step_idx=self.blender_operator.next_step_idx, 
-                file_directory=self.blender_operator.file_directory,
-                invoker_type=self.blender_operator.invoker_type,
-                high_level_step_name=self.blender_operator.high_level_step_name,
-                game_type=self.blender_operator.game_type,
-            )
-            return {'FINISHED'}
-
-        for outline_node_group_name in self.outlines_node_group_names:
-            if not bpy.data.node_groups.get(outline_node_group_name):
-                inner_path = 'NodeTree'
-
-                bpy.ops.wm.append(
-                    filepath=os.path.join(filepath, inner_path, outline_node_group_name),
-                    directory=os.path.join(filepath, inner_path),
-                    filename=outline_node_group_name
-                )
-                if cache_enabled and filepath:
-                    cache_using_cache_key(get_cache(cache_enabled), self.outlines_file_path, filepath)
+        if filepath and os.path.isfile(filepath):
+            for outline_node_group_name in self.outlines_node_group_names:
+                if not bpy.data.node_groups.get(outline_node_group_name):
+                    inner_path = 'NodeTree'
+                    try:
+                        bpy.ops.wm.append(
+                            filepath=os.path.join(filepath, inner_path, outline_node_group_name),
+                            directory=os.path.join(filepath, inner_path),
+                            filename=outline_node_group_name
+                        )
+                    except Exception as e:
+                        print(f"Notice: Failed appending outline node group {outline_node_group_name}: {e}")
 
         NextStepInvoker().invoke(
             self.blender_operator.next_step_idx, 
@@ -147,32 +120,6 @@ class PunishingGrayRavenOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
             OutlineNodeGroupNames.V2_JAREDNYTS_PGR_OUTLINES + OutlineNodeGroupNames.V3_JAREDNYTS_PGR_OUTLINES
 
     def import_outline_node_group(self):
-        cache_enabled = self.context.window_manager.cache_enabled
-        filepath = get_cache(cache_enabled).get(self.outlines_file_path) or self.blender_operator.filepath
-
-        if not filepath:
-            bpy.ops.genshin.import_outlines(
-                'INVOKE_DEFAULT',
-                next_step_idx=self.blender_operator.next_step_idx, 
-                file_directory=self.blender_operator.file_directory,
-                invoker_type=self.blender_operator.invoker_type,
-                high_level_step_name=self.blender_operator.high_level_step_name,
-                game_type=self.blender_operator.game_type,
-            )
-            return {'FINISHED'}
-
-        for outline_node_group_name in self.outlines_node_group_names:
-            if not bpy.data.node_groups.get(outline_node_group_name):
-                inner_path = 'NodeTree'
-
-                bpy.ops.wm.append(
-                    filepath=os.path.join(filepath, inner_path, outline_node_group_name),
-                    directory=os.path.join(filepath, inner_path),
-                    filename=outline_node_group_name
-                )
-                if cache_enabled and filepath:
-                    cache_using_cache_key(get_cache(cache_enabled), self.outlines_file_path, filepath)
-
         NextStepInvoker().invoke(
             self.blender_operator.next_step_idx, 
             self.blender_operator.invoker_type,
@@ -189,75 +136,57 @@ class ZenlessZoneZeroOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
         self.outlines_node_group_names = OutlineNodeGroupNames.ZENLESS_ZONE_ZERO_OUTLINES
 
     def import_outline_node_group(self):
-        cache_enabled = self.context.window_manager.cache_enabled
-        filepath = (
-            get_cache(cache_enabled).get(self.outlines_file_path) or
-            get_cache(cache_enabled).get(ZENLESS_ZONE_ZERO_SHADER_FILE_PATH) or
-            self.blender_operator.filepath
-        )
+        filepath = get_shader_file_path(GameType.ZENLESS_ZONE_ZERO.name, 'main')
 
-        if not filepath:
-            bpy.ops.genshin.import_outlines(
-                'INVOKE_DEFAULT',
-                next_step_idx=self.blender_operator.next_step_idx, 
-                file_directory=self.blender_operator.file_directory,
-                invoker_type=self.blender_operator.invoker_type,
-                high_level_step_name=self.blender_operator.high_level_step_name,
-                game_type=self.blender_operator.game_type,
-            )
-            return {'FINISHED'}
+        if filepath and os.path.isfile(filepath):
+            for outline_node_group_name in self.outlines_node_group_names:
+                if not bpy.data.node_groups.get(outline_node_group_name):
+                    inner_path = 'NodeTree'
 
-        for outline_node_group_name in self.outlines_node_group_names:
-            if not bpy.data.node_groups.get(outline_node_group_name):
-                inner_path = 'NodeTree'
+                    try:
+                        bpy.ops.wm.append(
+                            filepath=os.path.join(filepath, inner_path, outline_node_group_name),
+                            directory=os.path.join(filepath, inner_path),
+                            filename=outline_node_group_name
+                        )
+                    except Exception as e:
+                        print(f"Failed to append {outline_node_group_name} from {filepath}: {e}")
 
-                try:
-                    bpy.ops.wm.append(
-                        filepath=os.path.join(filepath, inner_path, outline_node_group_name),
-                        directory=os.path.join(filepath, inner_path),
-                        filename=outline_node_group_name
-                    )
-                except Exception as e:
-                    print(f"Failed to append {outline_node_group_name} from {filepath}: {e}")
+            # Import strictly the Lighting Panel UI & Direction Objects / Collections
+            try:
+                with bpy.data.libraries.load(filepath, link=False) as (data_from, data_to):
+                    excluded_kw = ["face", "phoneme", "mouth", "eyebrow", "expression", "facrig"]
+                    lighting_keywords = [
+                        "colorwheel", "colorpicker", "slider-rim", "origin-rim",
+                        "light direction", "head direction", "head forward", "head up",
+                        "lighting panel", "light panel", "lighting_panel", "light_panel"
+                    ]
+                    
+                    target_colls = [
+                        c for c in data_from.collections 
+                        if not any(kw in c.lower() for kw in excluded_kw) and
+                        ("lighting" in c.lower() or "panel" in c.lower() or "light" in c.lower()) and
+                        c not in bpy.data.collections
+                    ]
+                    data_to.collections = target_colls
 
-                if cache_enabled and filepath:
-                    cache_using_cache_key(get_cache(cache_enabled), self.outlines_file_path, filepath)
+                    target_objs = [
+                        o for o in data_from.objects 
+                        if not any(kw in o.lower() for kw in excluded_kw) and
+                        (any(kw in o.lower() for kw in lighting_keywords) or "panel" in o.lower() or "lighting" in o.lower()) and
+                        o not in bpy.data.objects
+                    ]
+                    data_to.objects = target_objs
 
-        # Import strictly the Lighting Panel UI & Direction Objects / Collections
-        try:
-            with bpy.data.libraries.load(filepath, link=False) as (data_from, data_to):
-                excluded_kw = ["face", "phoneme", "mouth", "eyebrow", "expression", "facrig"]
-                lighting_keywords = [
-                    "colorwheel", "colorpicker", "slider-rim", "origin-rim",
-                    "light direction", "head direction", "head forward", "head up",
-                    "lighting panel", "light panel", "lighting_panel", "light_panel"
-                ]
-                
-                target_colls = [
-                    c for c in data_from.collections 
-                    if not any(kw in c.lower() for kw in excluded_kw) and
-                    ("lighting" in c.lower() or "panel" in c.lower() or "light" in c.lower()) and
-                    c not in bpy.data.collections
-                ]
-                data_to.collections = target_colls
+                for coll in data_to.collections:
+                    if coll and coll.name not in [c.name for c in bpy.context.scene.collection.children]:
+                        bpy.context.scene.collection.children.link(coll)
 
-                target_objs = [
-                    o for o in data_from.objects 
-                    if not any(kw in o.lower() for kw in excluded_kw) and
-                    (any(kw in o.lower() for kw in lighting_keywords) or "panel" in o.lower() or "lighting" in o.lower()) and
-                    o not in bpy.data.objects
-                ]
-                data_to.objects = target_objs
-
-            for coll in data_to.collections:
-                if coll and coll.name not in [c.name for c in bpy.context.scene.collection.children]:
-                    bpy.context.scene.collection.children.link(coll)
-
-            for obj in data_to.objects:
-                if obj and not any(obj.name in c.objects for c in bpy.data.collections.values()):
-                    bpy.context.scene.collection.objects.link(obj)
-        except Exception as e:
-            print(f"Failed to append lighting objects/collections from {filepath}: {e}")
+                for obj in data_to.objects:
+                    if obj and not any(obj.name in c.objects for c in bpy.data.collections.values()):
+                        bpy.context.scene.collection.objects.link(obj)
+            except Exception as e:
+                print(f"Failed to append lighting objects/collections from {filepath}: {e}")
 
         NextStepInvoker().invoke(
             self.blender_operator.next_step_idx, 

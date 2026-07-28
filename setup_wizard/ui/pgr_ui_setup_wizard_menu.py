@@ -54,16 +54,6 @@ class PGR_PT_Setup_Wizard_UI_Layout(Panel, PunishingGrayRavenUIRenderChecker):
         settings_box = layout.box()
         settings_box.label(text='Global Settings', icon='WORLD')
 
-        row = settings_box.row()
-        row.prop(window_manager, 'cache_enabled')
-        OperatorFactory.create(
-            row,
-            'genshin.clear_cache_operator',
-            'Clear Cache',
-            'TRASH',
-            game_type=GameType.PUNISHING_GRAY_RAVEN.name,
-        )
-
 
 
         if rigging_global_settings_feature_flag:

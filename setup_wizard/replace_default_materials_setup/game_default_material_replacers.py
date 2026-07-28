@@ -10,7 +10,7 @@ from setup_wizard.domain.shader_node_names import ShaderNodeNames, StellarToonSh
 from setup_wizard.domain.star_cloak_types import StarCloakTypes
 from setup_wizard.domain.material_identifier_service import PunishingGrayRavenMaterialIdentifierService
 
-from setup_wizard.import_order import CHARACTER_MODEL_FOLDER_FILE_PATH, NextStepInvoker, get_actual_material_name_for_dress, get_cache
+from setup_wizard.import_order import CHARACTER_MODEL_FOLDER_FILE_PATH, NextStepInvoker, get_actual_material_name_for_dress, get_cache, get_active_character_directory
 
 
 from setup_wizard.domain.game_types import GameType
@@ -1011,11 +1011,14 @@ class NevernessToEvernessDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 
     def replace_default_materials(self):
         cache_enabled = self.context.window_manager.cache_enabled
-        folder = self.blender_operator.file_directory or (get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH) if cache_enabled and self.blender_operator.game_type != GameType.NEVERNESS_TO_EVERNESS.name else None)
+        folder = self.blender_operator.file_directory or get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH) or get_active_character_directory()
         image_files = []
         if folder and os.path.isdir(folder):
             try:
-                image_files = [f for f in os.listdir(folder) if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp', '.hdr', '.png.001', '.tga.001', '.dds.001'))]
+                for root, dirs, files in os.walk(folder):
+                    for f in files:
+                        if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp', '.hdr', '.png.001', '.tga.001', '.dds.001')):
+                            image_files.append(f)
             except Exception:
                 image_files = []
 

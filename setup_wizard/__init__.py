@@ -28,10 +28,8 @@ else:
 
     import bpy
 
-    import setup_wizard.cache_operator
     import setup_wizard.genshin_setup_wizard
     import setup_wizard.ui.gi_ui_setup_wizard_menu
-    from setup_wizard.cache_operator import ClearCacheOperator
     from setup_wizard.character_rig_setup.character_rigger_operator import (
         GI_OT_RigCharacter,
         ZZZ_OT_FixBoneChains,
@@ -138,7 +136,6 @@ else:
         setup_wizard.ui.zzz_ui_setup_wizard_menu,
         setup_wizard.ui.nte_ui_setup_wizard_menu,
         setup_wizard.genshin_setup_wizard,
-        setup_wizard.cache_operator,
     ]
 
     classes = [
@@ -205,7 +202,6 @@ else:
         NTE_OT_SetUpHairSpecular,
         NTE_OT_SetupCompositorNodes,
         NTE_OT_FinishSetup,
-        ClearCacheOperator,
     ]
 
 

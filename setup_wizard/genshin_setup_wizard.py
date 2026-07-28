@@ -133,8 +133,24 @@ class GI_OT_GenshinSetupWizard(Operator):
 
 
 def register():
-    bpy.utils.register_class(GI_OT_GenshinSetupWizard)
-    bpy.app.timers.register(on_register, first_interval=1)
+    if not hasattr(bpy.types, "GI_OT_GenshinSetupWizard"):
+        try:
+            bpy.utils.register_class(GI_OT_GenshinSetupWizard)
+        except ValueError:
+            pass
+    if not bpy.app.timers.is_registered(on_register):
+        try:
+            bpy.app.timers.register(on_register, first_interval=1)
+        except Exception:
+            pass
+
+
+def unregister():
+    if hasattr(bpy.types, "GI_OT_GenshinSetupWizard"):
+        try:
+            bpy.utils.unregister_class(GI_OT_GenshinSetupWizard)
+        except Exception:
+            pass
 
 
 def on_register():

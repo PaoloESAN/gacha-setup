@@ -167,10 +167,15 @@ class GameMaterialDataImporter(ABC):
             material_data_directory_exists = True
             material_data_directory = character_materials_data_directory
         elif character_directory and os.path.isdir(character_directory):
-            # Check if there are any json files directly in the character directory root
             if any(f.endswith('.json') for f in os.listdir(character_directory)):
                 material_data_directory_exists = True
                 material_data_directory = character_directory
+            else:
+                for root, dirs, files in os.walk(character_directory):
+                    if any(f.endswith('.json') for f in files):
+                        material_data_directory_exists = True
+                        material_data_directory = root
+                        break
 
         directory_file_path = os.path.dirname(self.blender_operator.filepath) or material_data_directory
 
