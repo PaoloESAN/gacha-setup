@@ -13,7 +13,7 @@ OFFSET_F = 0.120
 TRAVEL_F = 0.050
 SPACING_F = 0.045
 WIDGET_F = 1.0
-FACERIG_COLLECTION = "Facerig"
+FACERIG_COLLECTION = "Face"
 RIGIFY_UI_ROW = 1
 
 EYE_HL_F = 0.013
@@ -214,7 +214,7 @@ def plan_hsr_controls(mesh_obj, fwd, right, up, face_size, keyblock):
         drv_shift.append({'key': p_down, 'axis': 'Z', 'dir': -1})
         handled_keys.add(p_down)
 
-    if drv_shift:
+    if False and drv_shift:  # Disabled CTRL-Mouth-Shift bone creation per user request
         mouth_scale = Vector((LIM * 0.9, LIM, LIM * 0.4))
         controls.append({
             'name': 'CTRL-Mouth-Shift',
@@ -460,14 +460,21 @@ def purge_previous(armature):
 def get_widget_collection(name="WGTS_FaceRig"):
     wgt = bpy.data.collections.get("wgt")
     if wgt:
-        return wgt
-    for c in bpy.data.collections:
-        if "WGTS" in c.name:
-            return c
-    coll = bpy.data.collections.get(name)
-    if not coll:
-        coll = bpy.data.collections.new(name)
-        bpy.context.scene.collection.children.link(coll)
+        coll = wgt
+    else:
+        coll = None
+        for c in bpy.data.collections:
+            if "WGTS" in c.name:
+                coll = c
+                break
+        if not coll:
+            coll = bpy.data.collections.get(name) or bpy.data.collections.new(name)
+
+    if coll and coll.name in bpy.context.scene.collection.children:
+        try:
+            bpy.context.scene.collection.children.unlink(coll)
+        except Exception:
+            pass
     return coll
 
 
@@ -646,8 +653,8 @@ def setup_hsr_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_si
     if palms_coll:
         palms_coll.is_visible = True
 
-    # Create visible "Facerig" collection for eye control bones
-    facerig_coll = armature.data.collections.get("Facerig") or armature.data.collections.new("Facerig")
+    # Create visible "Face" collection for eye/face control bones
+    facerig_coll = armature.data.collections.get("Face") or armature.data.collections.get("Facerig") or armature.data.collections.new("Face")
     facerig_coll.is_visible = True
 
     eye_ctrl_bone_names = ["eyetrack", "eyetrack_L", "eyetrack_R"]

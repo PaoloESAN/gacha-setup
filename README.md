@@ -37,13 +37,18 @@ Thanks to all those who collaborated on the original project:
 
 ### Additional Credits & Acknowledgments (This Project)
 
+* **Genshin Impact**:
+  * **Shader**: [Blender-miHoYo-Shaders](https://github.com/festivize/Blender-miHoYo-Shaders) by Festivity
+* **HSR**:
+  * **Shader**: [Blender-StellarToon](https://github.com/festivities/Blender-StellarToon) by Festivity
+  * **Face Rig**: Isaac
 * **ZZZ**:
-  * **Rigging + Scripting**: Enthralpy
   * **Shader**: Just_ScaasI, BonnyAnimations, Aiko
+  * **Rigging + Scripting**: Enthralpy
   * **Supervised and made possible by**: Stormz67
   * **Face Rig**: [@jideeh](https://github.com/Jideeh1)
 * **NTE**:
-  * **Shader**: Respective Owner(s)
+  * **Shader**: Omatsuri Discord
   * **Rig**: 矩阵映画
 
 ---
