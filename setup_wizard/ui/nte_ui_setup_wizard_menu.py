@@ -60,8 +60,7 @@ class NTE_PT_Basic_Setup_Wizard_UI_Layout(Panel, NevernessToEvernessUIRenderChec
         info_box = sub_layout.box()
         info_box.label(text="1. Import Model", icon="IMPORT")
         col = info_box.column(align=True)
-        col.label(text="Import the model (.uemodel) yourself")
-        col.label(text="using the free UE Format addon.")
+        col.label(text="File > Import > Unreal Model (.uemodel)")
 
         # Step 2: Set Up Materials button
         OperatorFactory.create(
@@ -118,8 +117,7 @@ class NTE_PT_UI_Character_Model_Menu(Panel, NevernessToEvernessUIRenderChecker):
     def draw(self, context):
         layout = self.layout
         sub_layout = layout.column(align=True)
-        sub_layout.label(text="Import the model (.uemodel)", icon="INFO")
-        sub_layout.label(text="using the UE Format addon.")
+        sub_layout.label(text="File > Import > Unreal Model (.uemodel)", icon="INFO")
 
 
 class NTE_PT_UI_Materials_Menu(Panel, NevernessToEvernessUIRenderChecker):

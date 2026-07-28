@@ -4,10 +4,12 @@
 
 ---
 
-## Requirements
+## Additional Add-ons
 
-* **ExpyKit**: [pKrime/Expy-Kit](https://github.com/pKrime/Expy-Kit) (Required for Rigify character rigging automation)
-* **UEFormat** (*ONLY for Neverness to Everness / NTE*): [h4lfheart/UEFormat](https://github.com/h4lfheart/UEFormat)
+The following add-on dependencies are bundled in the `dependencies` directory and will be **automatically installed and enabled** if they are not already present in your Blender environment:
+
+* **ExpyKit**: [pKrime/Expy-Kit](https://github.com/pKrime/Expy-Kit) — Installed for automating Rigify character rigging setups.
+* **UEFormat**: [h4lfheart/UEFormat](https://github.com/h4lfheart/UEFormat) — Installed for importing Neverness to Everness (NTE) character models.
 
 ---
 

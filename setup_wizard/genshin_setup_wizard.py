@@ -139,29 +139,64 @@ def register():
 
 def on_register():
     try:
-        # Enable Rigify and ExpyKit. If they don't exist, install them from dependencies folder
-        addons_to_enable = {'rigify': '', 'Expy-Kit-main': 'Expy-Kit-v052.zip'}
-        for addon, filename in addons_to_enable.items():
-            try:
-                print(f'Enabling addon: {addon}')
-                status = bpy.ops.preferences.addon_enable(module=addon)
-                if status == {'FINISHED'}:
-                    print(f'Enabled addon: {addon}')
-                    continue
-                install_addon(addon, filename)
-            except Exception as err:  # Blender 3.6
-                install_addon(addon, filename)
+        # Enable Rigify, ExpyKit and UEFormat. If they don't exist, install them from dependencies folder
+        addons_to_check = {
+            'rigify': ('rigify', ''),
+            'expy': ('Expy-Kit-main', 'Expy-Kit-v052.zip'),
+            'ueformat': ('io_scene_ueformat', 'ueformat-blender.zip'),
+        }
+
+        for search_key, (default_module, filename) in addons_to_check.items():
+            if is_addon_enabled_or_installed(search_key):
+                continue
+            if filename:
+                install_addon(default_module, filename, search_key)
     except Exception as err:
         print(f'Unexpected error when trying to enable/install addons: {err}')
 
 
-def install_addon(addon, filename):
+def is_addon_enabled_or_installed(search_key):
+    import addon_utils
+
+    search_key_lower = search_key.lower()
+
+    # Query all installed modules in Blender (including extension modules bl_ext... and legacy modules)
+    for mod in addon_utils.modules():
+        mod_name = getattr(mod, '__name__', '')
+        bl_info = addon_utils.module_bl_info(mod)
+        title = bl_info.get("name", "").lower()
+
+        if search_key_lower in mod_name.lower() or search_key_lower in title:
+            is_enabled, is_loaded = addon_utils.check(mod_name)
+            if is_enabled:
+                print(f"Addon '{mod_name}' ({title}) is already enabled.")
+                return True
+            else:
+                try:
+                    status = bpy.ops.preferences.addon_enable(module=mod_name)
+                    if status == {'FINISHED'}:
+                        print(f"Enabled existing addon: {mod_name}")
+                        return True
+                except Exception as e:
+                    print(f"Attempted enabling {mod_name}, failed: {e}")
+    return False
+
+
+def install_addon(addon, filename, search_key=""):
     addon_path = os.path.join(os.path.dirname(__file__), 'dependencies', filename)
     if os.path.exists(addon_path):
         print(f'Installing addon: {addon_path}')
         bpy.ops.preferences.addon_install(filepath=addon_path, overwrite=False)
-        bpy.ops.preferences.addon_enable(module=addon)
-        print(f'Enabled addon: {addon}')
+
+        if search_key and is_addon_enabled_or_installed(search_key):
+            print(f'Enabled addon for search key: {search_key}')
+            return
+
+        try:
+            bpy.ops.preferences.addon_enable(module=addon)
+            print(f'Enabled addon: {addon}')
+        except Exception:
+            print(f'Could not enable module {addon} after installing {addon_path}')
     else:  #  is not standalone version of Setup Wizard
         print(f'Addon file does not exist at {addon_path}. Unable to install {addon}.')
 
