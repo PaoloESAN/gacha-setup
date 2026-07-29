@@ -1185,29 +1185,106 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                         mod.node_group = extra_fx_gn
                     obj.modifiers.move(len(obj.modifiers) - 1, 1)
 
-                    try:
-                        mod["Socket_0_attribute_name"] = "cast shadow"
-                        mod["Socket_11_attribute_name"] = "shadowsharpness"
-                    except:
-                        pass
+                    # Dynamic & explicit assignment of Output Attributes to match output socket names
+                    extra_fx_mapping = {
+                        "Output_2": "blend",
+                        "Output_3": "depth",
+                        "Socket_5": "face shadow",
+                        "Socket_9": "faceshadadjust",
+                        "Socket_0": "cast shadow",
+                        "Socket_11": "shadowsharpness"
+                    }
+                    for sock_ident, attr_name in extra_fx_mapping.items():
+                        set_modifier_property(mod, sock_ident, attr_name)
+                        set_modifier_property(mod, attr_name, attr_name)
+                        set_modifier_property(mod, f"{attr_name}_attribute_name", attr_name)
 
-                    if "face" in obj.name.lower():
+                    # Input properties for Extra FX:
+                    # - blend: 0.0 for face, 0.3 for body and other parts
+                    # - shadowsharpness: 1.090 for all objects
+                    blend_val = 0.0 if "face" in obj.name.lower() else 0.3
+                    shadowsharpness_val = 1.090
+
+                    for k in ["Input_4", "blend(Off/On)", "blend"]:
+                        set_modifier_property(mod, k, blend_val)
+                    for k in ["Socket_10", "shadowsharpness"]:
+                        set_modifier_property(mod, k, shadowsharpness_val)
+
+                # Outlines vs Solidify
+                is_face = "face" in obj.name.lower()
+
+                if is_face:
+                    # Remove ZZZ Outlines Geonode modifier on Face objects
+                    mod_ol = obj.modifiers.get("Outlines")
+                    if mod_ol:
                         try:
-                            mod["Output_3_attribute_name"] = "depth"
-                            mod["Output_2_attribute_name"] = "blend"
-                            mod["Socket_5_attribute_name"] = "face shadow"
-                            mod["Socket_6_attribute_name"] = "faceshadX"
-                            mod["Socket_7_attribute_name"] = "faceshadY"
-                            mod["Socket_9_attribute_name"] = "faceshadadjust"
-                        except:
+                            obj.modifiers.remove(mod_ol)
+                        except Exception:
                             pass
 
-                # Outlines
-                if zzz_outlines_gn:
+                    # Add and configure Solidify modifier on Face objects
+                    mod_sol = obj.modifiers.get("Solidify")
+                    if not mod_sol:
+                        mod_sol = obj.modifiers.new(name="Solidify", type='SOLIDIFY')
+                    
+                    try:
+                        mod_sol.mode = 'EXTRUDE'
+                    except Exception:
+                        pass
+                    try:
+                        mod_sol.thickness = 0.001
+                    except Exception:
+                        pass
+                    try:
+                        mod_sol.offset = 1.0
+                    except Exception:
+                        pass
+                    try:
+                        mod_sol.use_rim = False
+                    except Exception:
+                        pass
+                    try:
+                        mod_sol.use_flip_normals = True
+                    except Exception:
+                        pass
+                    try:
+                        mod_sol.material_offset = 1
+                    except Exception:
+                        pass
+
+                    # Ensure Material Slot 2 (index 1) has ZZZ Face Outlines
+                    face_ol_mat = bpy.data.materials.get("ZZZ Face Outlines") or bpy.data.materials.get("ZZZ Face Outline")
+                    if face_ol_mat:
+                        while len(obj.material_slots) < 2:
+                            obj.data.materials.append(face_ol_mat)
+                        obj.material_slots[1].material = face_ol_mat
+
+                elif zzz_outlines_gn:
                     mod = obj.modifiers.get("Outlines")
                     if not mod:
                         mod = obj.modifiers.new(name="Outlines", type='NODES')
                         mod.node_group = zzz_outlines_gn
+
+                    # Configure Vertex Colors socket mode to VALUE (single color, not attribute mode) & set black color (0,0,0,1)
+                    props = getattr(mod, "properties", None)
+                    if props and hasattr(props, "inputs"):
+                        for vc_key in ["Input_3", "Vertex Colors"]:
+                            if hasattr(props.inputs, vc_key):
+                                inp_item = getattr(props.inputs, vc_key)
+                                try:
+                                    inp_item.type = 'VALUE'
+                                except Exception:
+                                    pass
+                                try:
+                                    inp_item.value = (0.0, 0.0, 0.0, 1.0)
+                                except Exception:
+                                    try:
+                                        inp_item.value[0] = 0.0
+                                        inp_item.value[1] = 0.0
+                                        inp_item.value[2] = 0.0
+                                        inp_item.value[3] = 1.0
+                                    except Exception:
+                                        pass
                     
                     try:
                         mod['Input_3_use_attribute'] = 0
@@ -1276,12 +1353,16 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                     mat_weapon_ol = get_outline_mat(mat_weapon) or bpy.data.materials.get("ZZZ Weapon Outlines")
 
                     cam_obj = bpy.data.objects.get("Camera") or getattr(self.context.scene, "camera", None)
-                    outline_thickness = 0.075 if "face" in obj.name.lower() else 0.750
+                    outline_thickness = 0.075
 
                     target_settings = [
                         # Base Geometry = True
                         (["Base Geometry", "Input_12", "Input_0"], True),
-                        # Outline Thickness (0.075 for face, 0.750 for others)
+                        # Use Vertex Colors? = True
+                        (["Use Vertex Colors?", "Use Vertex Colors", "Input_13"], True),
+                        # Vertex Colors = #000000FF black
+                        (["Vertex Colors", "Vertex Color", "Input_3"], (0.0, 0.0, 0.0, 1.0)),
+                        # Outline Thickness = 0.075 for ALL objects
                         (["Outline Thickness", "Input_7", "Input_2"], outline_thickness),
                         # Camera
                         (["Camera", "Input_1", "Input_4"], cam_obj),
