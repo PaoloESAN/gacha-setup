@@ -30,7 +30,7 @@ class UI_Properties:
         bpy.types.WindowManager.enable_viewport_outlines = bpy.props.BoolProperty(
             name = "Enable Viewport Outlines",
             description = "Enables Viewport Outlines on Setup",
-            default = False
+            default = True
         )
 
 
@@ -59,15 +59,6 @@ class GI_PT_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
 
         if not expy_kit_installed or not rigify_installed:
             sub_layout.label(text='Rigging Disabled', icon='ERROR')
-
-        settings_box = layout.box()
-        settings_box.label(text='Global Settings', icon='WORLD')
-
-
-
-        settings_box.prop(window_manager, 'enable_viewport_outlines')
-        settings_box.prop(window_manager, 'setup_wizard_full_run_rigging_enabled')
-        settings_box.prop(window_manager, 'post_processing_setup_enabled')
 
 class GI_PT_Basic_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
     bl_label = 'Basic Setup'
@@ -397,14 +388,15 @@ class OperatorFactory:
         **kwargs
     ):
         ui_object.operator_context = operator_context
-        ui_object = ui_object.operator(
+        op_item = ui_object.operator(
             operator=operator,
             text=text,
             icon=icon,
         )
 
-        for key, value in kwargs.items():
-            setattr(ui_object, key, value)
+        if op_item is not None:
+            for key, value in kwargs.items():
+                setattr(op_item, key, value)
 
     @staticmethod
     def create_rig_character_ui(

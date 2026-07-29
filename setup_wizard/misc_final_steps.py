@@ -13,6 +13,7 @@ from setup_wizard.import_order import (
     NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH,
     NextStepInvoker,
     get_cache,
+    get_shader_file_path,
 )
 from setup_wizard.setup_wizard_operator_base_classes import (
     BasicSetupUIOperator,
@@ -220,21 +221,27 @@ class NTE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
             filepath = cache.get(NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH, "")
             root_dir = cache.get(NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH, "")
 
-            target_blend = None
-            if filepath and os.path.isfile(filepath):
-                target_blend = filepath
-            elif filepath and os.path.isdir(filepath):
-                c = os.path.join(filepath, "YH Shader.blend")
-                if os.path.exists(c):
-                    target_blend = c
-            if not target_blend and root_dir:
-                c = os.path.join(root_dir, "YH Shader.blend")
-                if os.path.exists(c):
-                    target_blend = c
+            target_blend = get_shader_file_path(GameType.NEVERNESS_TO_EVERNESS.name, 'main')
+            if not target_blend or not os.path.isfile(target_blend):
+                if filepath and os.path.isfile(filepath):
+                    target_blend = filepath
+                elif filepath and os.path.isdir(filepath):
+                    c = os.path.join(filepath, "YH Shader.blend")
+                    if os.path.exists(c):
+                        target_blend = c
+                if not target_blend and root_dir:
+                    c = os.path.join(root_dir, "YH Shader.blend")
+                    if os.path.exists(c):
+                        target_blend = c
 
-            if not target_blend:
+            if not target_blend or not os.path.exists(target_blend):
                 addon_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-                for rel_path in ["shader/YH Shader.blend", "YH Shader.blend"]:
+                for rel_path in [
+                    "setup_wizard/shaders/nte/YH Shader.blend",
+                    "shaders/nte/YH Shader.blend",
+                    "shader/YH Shader.blend",
+                    "YH Shader.blend",
+                ]:
                     candidate = os.path.join(addon_dir, rel_path)
                     if os.path.exists(candidate):
                         target_blend = candidate

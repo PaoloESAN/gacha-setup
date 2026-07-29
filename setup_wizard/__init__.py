@@ -45,6 +45,7 @@ else:
         GI_OT_SetUpCharacter,
         HSR_OT_SetUpCharacter,
         ZZZ_OT_SetUpCharacter,
+        NTE_OT_SetUpCharacter,
     )
     from setup_wizard.genshin_import_materials import (
         GI_OT_SetUpMaterials,
@@ -197,6 +198,7 @@ else:
         NTE_PT_UI_Rig_Character_Menu,
         NTE_PT_UI_Finish_Setup_Menu,
         NTE_OT_SetupWizardUI,
+        NTE_OT_SetUpCharacter,
         NTE_OT_SetUpMaterials,
         NTE_OT_SetUpOutlines,
         NTE_OT_SetUpHairSpecular,

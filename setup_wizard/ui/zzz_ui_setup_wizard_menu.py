@@ -33,9 +33,6 @@ class ZZZ_PT_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
         if not expy_kit_installed or not rigify_installed:
             sub_layout.label(text="Rigging Disabled", icon="ERROR")
 
-        settings_box = layout.box()
-        settings_box.label(text="Global Settings", icon="WORLD")
-
 
 class ZZZ_PT_Basic_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
     bl_label = "Basic Setup"

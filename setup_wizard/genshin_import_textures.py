@@ -48,7 +48,7 @@ class GI_OT_GenshinImportTextures(Operator, ImportHelper, CustomOperatorProperti
                     self.file_directory = folder
 
         from setup_wizard.domain.game_types import GameType
-        if self.file_directory and context.window_manager.cache_enabled and self.game_type != GameType.NEVERNESS_TO_EVERNESS.name:
+        if self.file_directory and context.window_manager.cache_enabled:
             cache_using_cache_key(get_cache(context.window_manager.cache_enabled), CHARACTER_MODEL_FOLDER_FILE_PATH, self.file_directory)
 
 

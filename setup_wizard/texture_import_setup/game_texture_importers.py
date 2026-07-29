@@ -8,7 +8,15 @@ from bpy.types import Operator, Context
 from setup_wizard.domain.game_types import GameType
 
 from setup_wizard.domain.shader_configurator import ShaderConfigurator
-from setup_wizard.import_order import CHARACTER_MODEL_FOLDER_FILE_PATH, NextStepInvoker, cache_using_cache_key, get_cache
+from setup_wizard.import_order import (
+    CHARACTER_MODEL_FOLDER_FILE_PATH,
+    NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH,
+    NextStepInvoker,
+    cache_using_cache_key,
+    get_cache,
+    get_active_character_directory,
+    set_active_character_directory,
+)
 from setup_wizard.texture_import_setup.texture_importer_types import GenshinTextureImporter, TextureImporterFactory, TextureImporterType
 
 
@@ -644,11 +652,26 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
 
     def import_textures(self):
         op = self.blender_operator
+        cache_enabled = self.context.window_manager.cache_enabled
 
         fp = getattr(op, 'filepath', '') or getattr(op, 'import_path', '') or getattr(op, 'directory', '')
-        folder = op.file_directory
+        folder = op.file_directory \
+            or get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH) \
+            or get_cache(cache_enabled).get(NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH) \
+            or get_active_character_directory() \
+            or self.context.scene.get("setup_wizard_imported_model_dir")
+
         if not folder and fp:
             folder = fp if os.path.isdir(fp) else os.path.dirname(fp)
+
+        if not folder:
+            for img in bpy.data.images:
+                if img.filepath and os.path.exists(bpy.path.abspath(img.filepath)):
+                    cand = os.path.dirname(bpy.path.abspath(img.filepath))
+                    if os.path.isdir(cand):
+                        folder = cand
+                        set_active_character_directory(folder)
+                        break
 
         has_textures = False
         if folder and os.path.isdir(folder):

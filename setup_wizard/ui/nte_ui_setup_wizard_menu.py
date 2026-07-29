@@ -31,10 +31,6 @@ class NTE_PT_Setup_Wizard_UI_Layout(Panel, NevernessToEvernessUIRenderChecker):
         )
 
 
-        settings_box = layout.box()
-        settings_box.label(text="Global Settings", icon="WORLD")
-
-
 class NTE_PT_Basic_Setup_Wizard_UI_Layout(Panel, NevernessToEvernessUIRenderChecker):
     bl_label = "Basic Setup"
     bl_idname = "NTE_PT_UI_Basic_Setup_Layout"
@@ -46,11 +42,15 @@ class NTE_PT_Basic_Setup_Wizard_UI_Layout(Panel, NevernessToEvernessUIRenderChec
         layout = self.layout
         sub_layout = layout.box()
 
-        # Step 1: Informative note about model import
-        info_box = sub_layout.box()
-        info_box.label(text="1. Import Model", icon="IMPORT")
-        col = info_box.column(align=True)
-        col.label(text="File > Import > Unreal Model (.uemodel)")
+        # Step 1: Set Up Character button
+        OperatorFactory.create(
+            sub_layout,
+            "neverness_to_everness.set_up_character",
+            "Set Up Character",
+            icon="OUTLINER_OB_ARMATURE",
+            operator_context="INVOKE_DEFAULT",
+            game_type=GameType.NEVERNESS_TO_EVERNESS.name,
+        )
 
         # Step 2: Set Up Materials button
         OperatorFactory.create(

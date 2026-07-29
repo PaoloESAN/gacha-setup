@@ -17,6 +17,8 @@ from bpy_extras.io_utils import ImportHelper
 from setup_wizard.domain.game_types import GameType
 from setup_wizard.import_order import (
     CHARACTER_MODEL_FOLDER_FILE_PATH,
+    NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH,
+    NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH,
     NextStepInvoker,
     cache_using_cache_key,
     get_cache,
@@ -53,6 +55,71 @@ class ZZZ_OT_SetUpCharacter(Operator, BasicSetupUIOperator):
 
     bl_idname = "zenless_zone_zero.set_up_character"
     bl_label = "Zenless Zone Zero: Set Up Character (UI)"
+
+
+class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
+    """Sets Up Character for Neverness to Everness"""
+
+    bl_idname = "neverness_to_everness.set_up_character"
+    bl_label = "Select NTE Character Model (.uemodel)"
+
+    filename_ext = ".uemodel"
+    filter_glob: StringProperty(
+        default="*.uemodel",
+        options={'HIDDEN'},
+        maxlen=255,
+    )
+
+    def execute(self, context):
+        if not self.filepath:
+            return {"CANCELLED"}
+
+        folder = os.path.dirname(self.filepath) if os.path.isfile(self.filepath) else self.filepath
+        if folder and os.path.isdir(folder):
+            set_active_character_directory(folder)
+            cache_using_cache_key(get_cache(True), CHARACTER_MODEL_FOLDER_FILE_PATH, folder)
+            cache_using_cache_key(get_cache(True), NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH, folder)
+            cache_using_cache_key(get_cache(True), NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH, folder)
+            context.scene["setup_wizard_imported_model_dir"] = folder
+            context.scene["setup_wizard_imported_uemodel_path"] = self.filepath
+            print(f"[NTE SETUP] Cached character folder from uemodel selection: {folder}")
+
+        if hasattr(bpy.ops, 'uf') and hasattr(bpy.ops.uf, 'import_uemodel'):
+            filename = os.path.basename(self.filepath) if os.path.isfile(self.filepath) else ""
+            imported_ok = False
+
+            # Method 1: Pass directory + files collection + filepath (UEFormat ImportHelper standard)
+            try:
+                bpy.ops.uf.import_uemodel(
+                    filepath=self.filepath,
+                    directory=folder,
+                    files=[{"name": filename}]
+                )
+                imported_ok = True
+            except Exception as e1:
+                print(f"[NTE SETUP] Method 1 uf.import_uemodel notice: {e1}")
+
+            # Method 2: Pass filepath only
+            if not imported_ok:
+                try:
+                    bpy.ops.uf.import_uemodel(filepath=self.filepath)
+                    imported_ok = True
+                except Exception as e2:
+                    print(f"[NTE SETUP] Method 2 uf.import_uemodel notice: {e2}")
+
+            # Method 3: Fallback execute
+            if not imported_ok:
+                try:
+                    bpy.ops.uf.import_uemodel('EXEC_DEFAULT', filepath=self.filepath)
+                except Exception as e3:
+                    self.report({"WARNING"}, f"UEFormat import notice: {e3}")
+
+            self.report({"INFO"}, f"Imported NTE character model: {filename}")
+        else:
+            self.report({"ERROR"}, "UEFormat add-on is not enabled or available.")
+            return {"CANCELLED"}
+
+        return {"FINISHED"}
 
 
 class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties):
@@ -534,5 +601,6 @@ register, unregister = bpy.utils.register_classes_factory(
         GI_OT_SetUpCharacter,
         HSR_OT_SetUpCharacter,
         ZZZ_OT_SetUpCharacter,
+        NTE_OT_SetUpCharacter,
     ]
 )
