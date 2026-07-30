@@ -314,12 +314,22 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                     raise RuntimeError(error_message)
 
             obj = None
-            for ob in bpy.data.objects:
-                if ob.type == "ARMATURE" and (
-                    "avatar" in ob.name.lower() or "npc" in ob.name.lower()
-                ):
-                    obj = ob
-                    break
+            new_objects = [
+                bpy.data.objects[name]
+                for name in (set(bpy.data.objects.keys()) - existing_objects)
+                if name in bpy.data.objects
+            ]
+            new_armatures = [o for o in new_objects if o.type == "ARMATURE"]
+            if new_armatures:
+                obj = new_armatures[0]
+
+            if not obj:
+                for ob in bpy.data.objects:
+                    if ob.type == "ARMATURE" and (
+                        "avatar" in ob.name.lower() or "npc" in ob.name.lower()
+                    ):
+                        obj = ob
+                        break
             if not obj:
                 armatures = [o for o in bpy.data.objects if o.type == "ARMATURE"]
                 if armatures:
@@ -330,25 +340,60 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
             if obj:
                 bpy.ops.object.mode_set(mode="OBJECT")
                 bpy.ops.object.select_all(action="DESELECT")
-                obj.select_set(True)
 
-                # Standard FBX importer imports ZZZ models lying down (0,0,0 rotation).
-                # Rotate 90 degrees in X to make it stand upright.
+                # Find top-most parent object (e.g. root empty like Avatar_Female_Size02_ZhenzhenDawnlight_UI)
+                top_root = obj
+                while top_root.parent is not None:
+                    top_root = top_root.parent
+
                 import math
 
-                obj.rotation_euler[0] = math.radians(90)
+                def get_world_bone_extents(arm):
+                    mw = arm.matrix_world
+                    max_wy = max(abs((mw @ b.head_local).y) for b in arm.data.bones) if arm.data.bones else 0
+                    max_wz = max(abs((mw @ b.head_local).z) for b in arm.data.bones) if arm.data.bones else 0
+                    return max_wy, max_wz
 
-                # Select children to apply transform to mesh objects as well
-                for child in obj.children:
-                    child.select_set(True)
+                bpy.context.view_layer.update()
+                wy, wz = get_world_bone_extents(obj)
 
-                bpy.context.view_layer.objects.active = obj
-                try:
-                    bpy.ops.object.transform_apply(
-                        location=False, rotation=True, scale=True
-                    )
-                except Exception as e:
-                    print("Failed to apply rotation/scale transforms:", e)
+                if wy > wz:
+                    orig_rot = top_root.rotation_euler.copy()
+                    best_rot = None
+                    for test_deg in [90, -90, 180, -180]:
+                        top_root.rotation_euler = orig_rot.copy()
+                        top_root.rotation_euler[0] += math.radians(test_deg)
+                        bpy.context.view_layer.update()
+                        test_y, test_z = get_world_bone_extents(obj)
+                        if test_z > test_y and test_z > 0.5:
+                            best_rot = test_deg
+                            break
+
+                    if best_rot is None:
+                        top_root.rotation_euler = orig_rot
+
+                    # Select top_root and all children to apply transform
+                    def select_hierarchy(o):
+                        o.select_set(True)
+                        for c in o.children:
+                            select_hierarchy(c)
+
+                    bpy.ops.object.select_all(action="DESELECT")
+                    select_hierarchy(top_root)
+                    bpy.context.view_layer.objects.active = top_root
+
+                    try:
+                        bpy.ops.object.transform_apply(
+                            location=False, rotation=True, scale=True
+                        )
+                    except Exception as e:
+                        print("Failed to apply rotation/scale transforms:", e)
+
+                    # If top_root is an empty, unparent armature so it's clean
+                    if top_root.type == "EMPTY" and obj.parent == top_root:
+                        mw = obj.matrix_world.copy()
+                        obj.parent = None
+                        obj.matrix_world = mw
 
                 try:
                     for mesh_obj in bpy.data.objects:
