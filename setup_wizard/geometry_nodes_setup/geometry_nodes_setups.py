@@ -1211,6 +1211,18 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                 is_face = "face" in obj.name.lower()
 
                 if is_face:
+                    # Consolidate all face polygons to material slot 0 (main face material) before creating outline slot
+                    if obj.data and hasattr(obj.data, "polygons"):
+                        for p in obj.data.polygons:
+                            if p.material_index >= 1:
+                                p.material_index = 0
+                        while len(obj.data.materials) > 1:
+                            obj.data.materials.pop(index=1)
+                        try:
+                            obj.data.update()
+                        except Exception:
+                            pass
+
                     # Remove ZZZ Outlines Geonode modifier on Face objects
                     mod_ol = obj.modifiers.get("Outlines")
                     if mod_ol:

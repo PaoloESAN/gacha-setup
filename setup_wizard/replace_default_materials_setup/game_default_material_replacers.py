@@ -1221,9 +1221,9 @@ def clean_face_mesh_slots():
             is_face_mesh = 'face' in obj_name_lower or any('face' in s or '面' in s or 'cara' in s or 'head' in s for s in slot_names)
             if is_face_mesh and len(obj.material_slots) >= 2:
                 for p in obj.data.polygons:
-                    if p.material_index == 1:
+                    if p.material_index >= 1:
                         p.material_index = 0
-                if len(obj.data.materials) >= 2:
+                while len(obj.data.materials) > 1:
                     obj.data.materials.pop(index=1)
                 try:
                     obj.data.update()
