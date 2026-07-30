@@ -222,22 +222,32 @@ class GameGeometryNodesSetup(ABC):
                     face_outlines_node_input.default_value = 1.0
 
     def set_up_modifier_default_values(self, modifier, mesh):
-        if get_modifier_property(modifier, f'{NAME_OF_VERTEX_COLORS_INPUT}_use_attribute') == 0:
-            with bpy.context.temp_override(active_object=bpy.data.objects[mesh.name]):
-                bpy.context.view_layer.objects.active = bpy.context.active_object
+        try:
+            modifier[f'{NAME_OF_VERTEX_COLORS_INPUT}_use_attribute'] = 1
+        except Exception:
+            pass
+        try:
+            modifier['Vertex Colors_use_attribute'] = 1
+        except Exception:
+            pass
 
-                if bpy.app.version >= (4,0,0):
-                    bpy.ops.object.geometry_nodes_input_attribute_toggle(
-                        input_name=NAME_OF_VERTEX_COLORS_INPUT, 
-                        modifier_name=modifier.name
-                    )
-                else:
-                    bpy.ops.object.geometry_nodes_input_attribute_toggle(
-                        prop_path=f"[\"{NAME_OF_VERTEX_COLORS_INPUT}_use_attribute\"]", 
-                        modifier_name=modifier.name
-                    )
+        props = getattr(modifier, "properties", None)
+        if props and hasattr(props, "inputs"):
+            for k in [NAME_OF_VERTEX_COLORS_INPUT, "Vertex Colors", "Vertex Color"]:
+                if hasattr(props.inputs, k):
+                    inp = getattr(props.inputs, k)
+                    try:
+                        inp.type = 'ATTRIBUTE'
+                    except Exception:
+                        pass
+                    try:
+                        inp.attribute_name = 'Col'
+                    except Exception:
+                        pass
 
         set_modifier_property(modifier, f'{NAME_OF_VERTEX_COLORS_INPUT}_attribute_name', 'Col')
+        set_modifier_property(modifier, 'Vertex Colors_attribute_name', 'Col')
+        set_modifier_property(modifier, 'Vertex Color_attribute_name', 'Col')
         set_modifier_property(modifier, OUTLINE_THICKNESS_INPUT, self.DEFAULT_OUTLINE_THICKNESS)
 
         for (mask_input, material_input), material in zip(outline_mask_to_material_mapping.items(), mesh.material_slots):
@@ -446,6 +456,14 @@ class V3_GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
         set_modifier_property(modifier, self.BASE_GEOMETRY_INPUT, True)
         set_modifier_property(modifier, self.USE_VERTEX_COLORS_INPUT, True)
         set_modifier_property(modifier, self.OUTLINE_THICKNESS_INPUT, 0.25)
+
+        try:
+            modifier['Input_3_use_attribute'] = 1
+        except Exception:
+            pass
+        set_modifier_property(modifier, 'Input_3_attribute_name', 'Col')
+        set_modifier_property(modifier, 'Vertex Colors_attribute_name', 'Col')
+        set_modifier_property(modifier, 'Vertex Color_attribute_name', 'Col')
 
         for input_name, (material_input_accessor, outline_material_input_accessor) in self.outline_to_material_mapping.items():
             material_name = f'{self.material_names.MATERIAL_PREFIX}{input_name}'
@@ -1208,9 +1226,10 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                         set_modifier_property(mod, k, shadowsharpness_val)
 
                 # Outlines vs Solidify
+                is_zzz_game = self.blender_operator.game_type == GameType.ZENLESS_ZONE_ZERO.name
                 is_face = "face" in obj.name.lower()
 
-                if is_face:
+                if is_zzz_game and is_face:
                     # Consolidate all face polygons to material slot 0 (main face material) before creating outline slot
                     if obj.data and hasattr(obj.data, "polygons"):
                         for p in obj.data.polygons:
@@ -1268,7 +1287,7 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                             obj.data.materials.append(face_ol_mat)
                         obj.material_slots[1].material = face_ol_mat
 
-                elif zzz_outlines_gn:
+                elif is_zzz_game and zzz_outlines_gn:
                     mod = obj.modifiers.get("Outlines")
                     if not mod:
                         mod = obj.modifiers.new(name="Outlines", type='NODES')

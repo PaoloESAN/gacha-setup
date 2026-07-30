@@ -368,6 +368,12 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 elif mesh_body_part_name ==  'Body2_Trans':
                     body_material = self.create_body_trans_material(mesh, self.shader_material_names.BODY2_TRANS) 
                     material_name = body_material.name
+                elif mesh_body_part_name == 'EyeShadow':
+                    eyeshadow_material = self.create_body_material(mesh, self.shader_material_names.EYESHADOW)
+                    material_name = eyeshadow_material.name
+                elif mesh_body_part_name == 'Face':
+                    face_material = self.create_body_material(mesh, self.shader_material_names.FACE)
+                    material_name = face_material.name
                 elif 'Coat' in mesh_body_part_name:
                     body_material = self.create_body_material(mesh, self.shader_material_names.COAT)
                     material_name = body_material.name

@@ -128,27 +128,40 @@ class HYV_OT_VertexPaintFaceSeeThroughEffect(Operator, CustomOperatorProperties)
         return {'FINISHED'}
 
     def __replace_eyeshadow_material(self):
-        face_mesh = bpy.data.objects.get('Face')
-        if not face_mesh:
-            return
-        face_mesh_material_slots = face_mesh.material_slots
+        face_meshes = [
+            obj for obj in bpy.data.objects 
+            if obj.type == 'MESH' and ('face' in obj.name.lower() or 'head' in obj.name.lower())
+        ]
+        if not face_meshes:
+            face_mesh = bpy.data.objects.get('Face')
+            if face_mesh:
+                face_meshes = [face_mesh]
 
         eyeshadow_mat = None
         if hasattr(self.shader_material_names, 'EYESHADOW'):
             eyeshadow_mat = bpy.data.materials.get(self.shader_material_names.EYESHADOW)
         
         if not eyeshadow_mat:
+            # Look for shader EyeShadow material (excluding default FBX raw materials like Mat_EyeShadow_00)
             for mat in bpy.data.materials:
-                if 'EyeShadow' in mat.name:
+                if 'EyeShadow' in mat.name and not mat.name.startswith('Mat_') and mat.name != 'EyeShadow':
                     eyeshadow_mat = mat
                     break
+            if not eyeshadow_mat:
+                for mat in bpy.data.materials:
+                    if 'EyeShadow' in mat.name and mat.name != 'Mat_EyeShadow_00':
+                        eyeshadow_mat = mat
+                        break
 
-        for material_slot in face_mesh_material_slots:
-            if 'EyeShadow' in material_slot.material.name:
-                if eyeshadow_mat:
-                    material_slot.material = eyeshadow_mat
-                else:
-                    material_slot.material = bpy.data.materials.get(self.shader_material_names.FACE)
+        for face_mesh in face_meshes:
+            for material_slot in face_mesh.material_slots:
+                if material_slot.material and ('EyeShadow' in material_slot.material.name or 'eyeshadow' in material_slot.material.name.lower()):
+                    if eyeshadow_mat:
+                        material_slot.material = eyeshadow_mat
+                    elif hasattr(self.shader_material_names, 'FACE'):
+                        face_mat = bpy.data.materials.get(self.shader_material_names.FACE)
+                        if face_mat:
+                            material_slot.material = face_mat
 
 
 class GI_OT_DeleteSpecificObjects(Operator, CustomOperatorProperties):
