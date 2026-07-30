@@ -15,8 +15,22 @@ from setup_wizard.domain.shader_material_names import JaredNytsPunishingGrayRave
 from setup_wizard.domain.shader_material_name_keywords import ShaderMaterialNameKeywords
 
 from setup_wizard.import_order import CHARACTER_MODEL_FOLDER_FILE_PATH, cache_using_cache_key, get_actual_material_name_for_dress, get_cache
-from setup_wizard.texture_import_setup.texture_importer_types import TextureImporterFactory, TextureImporterType, TextureType
+import re
 from setup_wizard.utils.genshin_body_part_deducer import get_npc_mesh_body_part_name
+
+
+def matches_material_part_name(filename, part_name):
+    """
+    Checks if part_name appears as a distinct component in filename.
+    Matches if part_name is followed by an underscore or dot, e.g.
+    'Body' matches '_Body_Diffuse.png' or '_Body.png'
+    but NOT '_Body2_Diffuse.png' or '_Body3_Diffuse.png'.
+    """
+    pattern = rf'{re.escape(part_name)}(?=[_.]|$)'
+    return bool(re.search(pattern, filename))
+
+
+from setup_wizard.texture_import_setup.texture_importer_types import TextureImporterFactory, TextureImporterType, TextureType, find_texture_nodes
 
 
 class OutlineTextureImporter(ABC):
@@ -38,24 +52,24 @@ class OutlineTextureImporter(ABC):
         if not outline_material:
             return
 
-        lightmap_node = None
-        for node in outline_material.node_tree.nodes:
-            if node.type == 'GROUP':
-                for inp in node.inputs:
-                    if 'Lightmap' in inp.name and 'Alpha' in inp.name:
-                        if inp.is_linked and inp.links[0].from_node.type == 'TEX_IMAGE':
-                            lightmap_node = inp.links[0].from_node
-                        break
-        
-        if not lightmap_node:
-            for name in ['Image Texture.001', 'Image Texture.002', 'Image Texture', 'Outline_Lightmap']:
-                n = outline_material.node_tree.nodes.get(name)
-                if n and n.type == 'TEX_IMAGE' and not n.image:
-                    lightmap_node = n
-                    break
+        possible_lightmap_names = ['Main_Lightmap', 'Lightmap (Non-Color) (Channel Packed)', 'Lightmap (Non-Color)', 'Outline_Lightmap', 'Lightmap_UV0', 'Lightmap', 'Image Texture.001', 'Image Texture.002', 'Image Texture']
 
-        if not lightmap_node:
-            # Force create it if missing!
+        lightmap_node = None
+        if outline_material.use_nodes:
+            outline_nodes = find_texture_nodes(outline_material.node_tree, possible_lightmap_names)
+            if outline_nodes:
+                lightmap_node = outline_nodes[0]
+
+        if not lightmap_node and outline_material.use_nodes:
+            for node in outline_material.node_tree.nodes:
+                if node.type == 'GROUP':
+                    for inp in node.inputs:
+                        if 'Lightmap' in inp.name and 'Alpha' in inp.name:
+                            if inp.is_linked and inp.links[0].from_node.type == 'TEX_IMAGE':
+                                lightmap_node = inp.links[0].from_node
+                            break
+
+        if not lightmap_node and outline_material.use_nodes:
             lightmap_node = outline_material.node_tree.nodes.new('ShaderNodeTexImage')
             for node in outline_material.node_tree.nodes:
                 if node.type == 'GROUP':
@@ -63,30 +77,22 @@ class OutlineTextureImporter(ABC):
                         if 'Lightmap' in inp.name and 'Alpha' in inp.name:
                             outline_material.node_tree.links.new(lightmap_node.outputs['Alpha'], inp)
 
+        # 1. Try to copy from base material
         base_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{body_part_material_name}')
         if base_material and base_material.use_nodes:
-            base_lightmap_node = None
-            for name in ['Main_Lightmap', 'Outline_Lightmap', 'Image Texture.001', 'Lightmap Texture']:
-                n = base_material.node_tree.nodes.get(name)
-                if n and n.type == 'TEX_IMAGE' and n.image:
-                    base_lightmap_node = n
-                    break
-            if not base_lightmap_node:
-                for n in base_material.node_tree.nodes:
-                    if n.type == 'TEX_IMAGE' and n.image and 'Lightmap' in n.image.name:
-                        base_lightmap_node = n
-                        break
-            
-            if base_lightmap_node and base_lightmap_node.image:
+            base_nodes = find_texture_nodes(base_material.node_tree, possible_lightmap_names)
+            base_lightmap_node = next((n for n in base_nodes if n.image), None)
+            if base_lightmap_node and base_lightmap_node.image and lightmap_node:
                 lightmap_node.image = base_lightmap_node.image
                 self.blender_operator.report({'INFO'}, f'Assigned base material lightmap onto material "{outline_material.name}"')
                 return
 
+        # 2. Fallback: search files in character directory
         lightmap_filenames = []
         if body_part_material_name == 'EffectHair':
             lightmap_filenames = [file for file in lightmap_files if 'EffectHair' in file]
         else:
-            lightmap_filenames = [file for file in lightmap_files if actual_material_part_name in file and 'EffectHair' not in file]
+            lightmap_filenames = [file for file in lightmap_files if matches_material_part_name(file, actual_material_part_name) and 'EffectHair' not in file]
 
         if lightmap_filenames and lightmap_node:
             self.assign_texture_to_node(lightmap_node, character_model_folder_file_path, lightmap_filenames[0])
@@ -102,55 +108,47 @@ class OutlineTextureImporter(ABC):
         if not outline_material:
             return
 
+        possible_diffuse_names = ['Main_Diffuse', 'Diffuse (sRGB) (Channel Packed)', 'Diffuse (sRGB)', 'Outline_Diffuse', 'Diffuse_UV0', 'Diffuse', 'Image Texture', 'Image Texture.001']
+
         diffuse_node = None
-        for node in outline_material.node_tree.nodes:
-            if node.type == 'GROUP':
-                for inp in node.inputs:
-                    if 'Diffuse' in inp.name and 'Alpha' in inp.name:
-                        if inp.is_linked and inp.links[0].from_node.type == 'TEX_IMAGE':
-                            diffuse_node = inp.links[0].from_node
-                        break
-        
-        if not diffuse_node:
-            for name in ['Image Texture', 'Image Texture.001', 'Image Texture.002', 'Outline_Diffuse']:
-                n = outline_material.node_tree.nodes.get(name)
-                if n and n.type == 'TEX_IMAGE' and not n.image:
-                    diffuse_node = n
-                    break
+        if outline_material.use_nodes:
+            outline_nodes = find_texture_nodes(outline_material.node_tree, possible_diffuse_names)
+            if outline_nodes:
+                diffuse_node = outline_nodes[0]
 
-        if not diffuse_node:
-             # Force create it if missing!
-             diffuse_node = outline_material.node_tree.nodes.new('ShaderNodeTexImage')
-             for node in outline_material.node_tree.nodes:
-                 if node.type == 'GROUP':
-                     for inp in node.inputs:
-                         if 'Diffuse' in inp.name and 'Alpha' in inp.name:
-                             outline_material.node_tree.links.new(diffuse_node.outputs['Alpha'], inp)
+        if not diffuse_node and outline_material.use_nodes:
+            for node in outline_material.node_tree.nodes:
+                if node.type == 'GROUP':
+                    for inp in node.inputs:
+                        if 'Diffuse' in inp.name and 'Alpha' in inp.name:
+                            if inp.is_linked and inp.links[0].from_node.type == 'TEX_IMAGE':
+                                diffuse_node = inp.links[0].from_node
+                            break
 
+        if not diffuse_node and outline_material.use_nodes:
+            diffuse_node = outline_material.node_tree.nodes.new('ShaderNodeTexImage')
+            for node in outline_material.node_tree.nodes:
+                if node.type == 'GROUP':
+                    for inp in node.inputs:
+                        if 'Diffuse' in inp.name and 'Alpha' in inp.name:
+                            outline_material.node_tree.links.new(diffuse_node.outputs['Alpha'], inp)
+
+        # 1. Try to copy from base material
         base_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{body_part_material_name}')
         if base_material and base_material.use_nodes:
-            base_diffuse_node = None
-            for name in ['Main_Diffuse', 'Outline_Diffuse', 'Body_Diffuse_UV0', 'Image Texture', 'Diffuse Texture']:
-                n = base_material.node_tree.nodes.get(name)
-                if n and n.type == 'TEX_IMAGE' and n.image:
-                    base_diffuse_node = n
-                    break
-            if not base_diffuse_node:
-                for n in base_material.node_tree.nodes:
-                    if n.type == 'TEX_IMAGE' and n.image and 'Diffuse' in n.image.name:
-                        base_diffuse_node = n
-                        break
-            
-            if base_diffuse_node and base_diffuse_node.image:
+            base_nodes = find_texture_nodes(base_material.node_tree, possible_diffuse_names)
+            base_diffuse_node = next((n for n in base_nodes if n.image), None)
+            if base_diffuse_node and base_diffuse_node.image and diffuse_node:
                 diffuse_node.image = base_diffuse_node.image
                 self.blender_operator.report({'INFO'}, f'Assigned base material diffuse onto material "{outline_material.name}"')
                 return
 
+        # 2. Fallback: search files in character directory
         diffuse_filenames = []
         if body_part_material_name == 'EffectHair':
             diffuse_filenames = [file for file in diffuse_files if 'EffectHair' in file]
         else:
-            diffuse_filenames = [file for file in diffuse_files if actual_material_part_name in file and 'EffectHair' not in file]
+            diffuse_filenames = [file for file in diffuse_files if matches_material_part_name(file, actual_material_part_name) and 'EffectHair' not in file]
 
         if diffuse_filenames and diffuse_node:
             self.assign_texture_to_node(diffuse_node, character_model_folder_file_path, diffuse_filenames[0])

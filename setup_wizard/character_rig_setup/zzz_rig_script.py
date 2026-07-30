@@ -2099,43 +2099,21 @@ def rig_character(
     bpy.data.objects["Head_Pole"].parent_bone = "neck"
 
 
-    # In object mode, let's take the time to add drivers for viewport outlines (Based on a toggle, optionally to see them before rendering)
+    # Remove any drivers on viewport outlines so user has direct control
     def setup_viewport_outlines(prop):
-        driver = prop.driver_add("show_viewport").driver
-        driver.type = 'SCRIPTED'
-        driver.expression = 'var'
+        try:
+            prop.driver_remove("show_viewport")
+        except:
+            pass
+        try:
+            prop.driver_remove("show_render")
+        except:
+            pass
 
-        var = driver.variables.new()
-        var.name = "var"
-        var.type = 'SINGLE_PROP'
-        var.targets[0].id = bpy.data.objects.get(ourRig)
-        var.targets[0].data_path = "pose.bones[\"plate-settings\"][\"Viewport Outlines\"]"
-        
-        # Update the dependencies
-        depsgraph = bpy.context.evaluated_depsgraph_get()
-        depsgraph.update()
-
-
-    try:
-        setup_viewport_outlines(bpy.data.objects["Body"].modifiers["Outlines Body"])
-    except:
-        pass
-    try:
-        setup_viewport_outlines(bpy.data.objects["Hair"].modifiers["Outlines Hair"])
-    except:
-        pass
-    try:
-        setup_viewport_outlines(bpy.data.objects["Hair.001"].modifiers["Outlines Hair.001"]) # Escoffier? Who else  
-    except:
-        pass
-    try:
-        setup_viewport_outlines(bpy.data.objects["Face"].modifiers["Outlines Face"])
-    except:
-        pass
-    try:
-        setup_viewport_outlines(bpy.data.objects["Dress"].modifiers["Outlines Dress"])
-    except:
-        pass
+    for mesh in [obj for obj in bpy.data.objects if obj.type == 'MESH']:
+        for modifier in mesh.modifiers:
+            if "Outline" in modifier.name or "outlines" in modifier.name.lower() or "Outlines" in modifier.name:
+                setup_viewport_outlines(modifier)
 
     # handled list of face SK
     handled_sks = ['Basis', 'Mouth_Default', 'Mouth_A01', 'Mouth_Open01', 'Mouth_Smile01', 'Mouth_Smile02', 'Mouth_Angry01', 'Mouth_Angry02',

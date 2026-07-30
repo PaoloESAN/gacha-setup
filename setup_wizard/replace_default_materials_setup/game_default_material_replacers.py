@@ -43,6 +43,11 @@ class GameDefaultMaterialReplacerFactory:
             elif shader is GenshinImpactShaders.V3_GENSHIN_IMPACT_SHADER:
                 material_names = V3_BonnyFestivityGenshinImpactMaterialNames
                 shader_node_names = V3_GenshinShaderNodeNames
+            elif shader is GenshinImpactShaders.V1_HOYOTOON_GENSHIN_IMPACT_SHADER:
+                from setup_wizard.domain.shader_material_names import V1_HoYoToonGenshinImpactMaterialNames
+                from setup_wizard.domain.shader_node_names import V1_HoYoToonShaderNodeNames
+                material_names = V1_HoYoToonGenshinImpactMaterialNames
+                shader_node_names = V1_HoYoToonShaderNodeNames
             else:
                 material_names = V4_PrimoToonGenshinImpactMaterialNames 
                 shader_node_names = V4_PrimoToonShaderNodeNames

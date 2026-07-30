@@ -4,10 +4,10 @@
 from abc import abstractmethod
 from enum import Enum, auto
 
-from setup_wizard.domain.shader_node_names import JaredNyts_PunishingGrayRavenNodeNames, ShaderNodeNames, StellarToonShaderNodeNames, V2_GenshinShaderNodeNames, V3_GenshinShaderNodeNames, V4_PrimoToonShaderNodeNames
+from setup_wizard.domain.shader_node_names import JaredNyts_PunishingGrayRavenNodeNames, ShaderNodeNames, StellarToonShaderNodeNames, V2_GenshinShaderNodeNames, V3_GenshinShaderNodeNames, V4_PrimoToonShaderNodeNames, V1_HoYoToonShaderNodeNames
 from setup_wizard.domain.game_types import GameType
-from setup_wizard.domain.shader_material_names import JaredNytsPunishingGrayRavenShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, V2_FestivityGenshinImpactMaterialNames, V4_PrimoToonGenshinImpactMaterialNames, ZenlessZoneZeroShaderMaterialNames
-from setup_wizard.texture_import_setup.texture_node_names import GenshinImpactTextureNodeNames, JaredNytsPunishingGrayRavenTextureNodeNames, Nya222HonkaiStarRailTextureNodeNames, StellarToonTextureNodeNames, V1_GenshinImpactTextureNodeNames, V2_GenshinImpactTextureNodeNames, V3_GenshinImpactTextureNodeNames, V4_GenshinImpactTextureNodeNames, ZenlessZoneZeroTextureNodeNames
+from setup_wizard.domain.shader_material_names import JaredNytsPunishingGrayRavenShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, V2_FestivityGenshinImpactMaterialNames, V4_PrimoToonGenshinImpactMaterialNames, V1_HoYoToonGenshinImpactMaterialNames, ZenlessZoneZeroShaderMaterialNames
+from setup_wizard.texture_import_setup.texture_node_names import GenshinImpactTextureNodeNames, JaredNytsPunishingGrayRavenTextureNodeNames, Nya222HonkaiStarRailTextureNodeNames, StellarToonTextureNodeNames, V1_GenshinImpactTextureNodeNames, V2_GenshinImpactTextureNodeNames, V3_GenshinImpactTextureNodeNames, V4_GenshinImpactTextureNodeNames, V1_HoYoToonGenshinImpactTextureNodeNames, ZenlessZoneZeroTextureNodeNames
 
 
 class GenshinImpactShaders(Enum):
@@ -15,6 +15,7 @@ class GenshinImpactShaders(Enum):
     V2_GENSHIN_IMPACT_SHADER = auto()
     V3_GENSHIN_IMPACT_SHADER = auto()
     V4_GENSHIN_IMPACT_SHADER = auto()
+    V1_HOYOTOON_GENSHIN_IMPACT_SHADER = auto()
 
 
 class HonkaiStarRailShaders(Enum):
@@ -77,9 +78,9 @@ class ShaderIdentifierService:
                                        material.name.startswith(shader_identifier.material_prefix_after_rename) and material.name.endswith(shader_identifier.material_endswith_after_rename)]
 
             shader_material = shader_material or renamed_shader_material[0] if renamed_shader_material else None
-            if shader_material:
+            if shader_material and shader_material.node_tree:
                 shader_node = shader_material.node_tree.nodes.get(shader_identifier.shader_node_name)
-                if shader_node and shader_node.label == shader_identifier.shader_label_name:
+                if shader_node:
                     return shader
 
         # Check for V1 shader
@@ -110,6 +111,8 @@ class ShaderIdentifierService:
                 return V2_FestivityGenshinImpactMaterialNames
             elif game_shader is GenshinImpactShaders.V3_GENSHIN_IMPACT_SHADER:
                 return V3_BonnyFestivityGenshinImpactMaterialNames
+            elif game_shader is GenshinImpactShaders.V1_HOYOTOON_GENSHIN_IMPACT_SHADER:
+                return V1_HoYoToonGenshinImpactMaterialNames
             else:
                 return V4_PrimoToonGenshinImpactMaterialNames
         elif game_type == GameType.HONKAI_STAR_RAIL.name:
@@ -125,7 +128,9 @@ class ShaderIdentifierService:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
     def get_shader_material_names_using_shader(self, shader: GenshinImpactShaders):
-        if shader is GenshinImpactShaders.V4_GENSHIN_IMPACT_SHADER:
+        if shader is GenshinImpactShaders.V1_HOYOTOON_GENSHIN_IMPACT_SHADER:
+            return V1_HoYoToonGenshinImpactMaterialNames
+        elif shader is GenshinImpactShaders.V4_GENSHIN_IMPACT_SHADER:
             return V4_PrimoToonGenshinImpactMaterialNames
         elif shader is GenshinImpactShaders.V3_GENSHIN_IMPACT_SHADER:
             return V3_BonnyFestivityGenshinImpactMaterialNames
@@ -144,7 +149,9 @@ class ShaderIdentifierService:
             raise Exception(f'Unknown Shader: {shader}')
 
     def get_shader_texture_node_names(self, shader):
-        if shader is GenshinImpactShaders.V4_GENSHIN_IMPACT_SHADER:
+        if shader is GenshinImpactShaders.V1_HOYOTOON_GENSHIN_IMPACT_SHADER:
+            return V1_HoYoToonGenshinImpactTextureNodeNames
+        elif shader is GenshinImpactShaders.V4_GENSHIN_IMPACT_SHADER:
             return V4_GenshinImpactTextureNodeNames
         elif shader is GenshinImpactShaders.V3_GENSHIN_IMPACT_SHADER:
             return V3_GenshinImpactTextureNodeNames
@@ -164,7 +171,9 @@ class ShaderIdentifierService:
             raise Exception(f'Unknown Shader: {shader}')
 
     def get_shader_node_names(self, shader):
-        if shader is GenshinImpactShaders.V4_GENSHIN_IMPACT_SHADER:
+        if shader is GenshinImpactShaders.V1_HOYOTOON_GENSHIN_IMPACT_SHADER:
+            return V1_HoYoToonShaderNodeNames
+        elif shader is GenshinImpactShaders.V4_GENSHIN_IMPACT_SHADER:
             return V4_PrimoToonShaderNodeNames
         elif shader is GenshinImpactShaders.V3_GENSHIN_IMPACT_SHADER:
             return V3_GenshinShaderNodeNames
@@ -201,6 +210,13 @@ class GenshinImpactShaderIdentifierService(ShaderIdentifierService):
     }
 
     shader_labels_to_search_through = {
+        GenshinImpactShaders.V1_HOYOTOON_GENSHIN_IMPACT_SHADER: ShaderIdentifier(
+            material_name=V1_HoYoToonGenshinImpactMaterialNames.BODY,
+            shader_node_name=V1_HoYoToonShaderNodeNames.BODY_SHADER,
+            shader_label_name=V1_HoYoToonShaderNodeNames.BODY_SHADER_LABEL,
+            material_prefix_after_rename=V1_HoYoToonGenshinImpactMaterialNames.MATERIAL_PREFIX_AFTER_RENAME,
+            material_endswith_after_rename='Body'
+        ),
         GenshinImpactShaders.V4_GENSHIN_IMPACT_SHADER: ShaderIdentifier(
             material_name=V4_PrimoToonGenshinImpactMaterialNames.BODY,
             shader_node_name=V4_PrimoToonShaderNodeNames.BODY_SHADER,

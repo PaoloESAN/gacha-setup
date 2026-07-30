@@ -36,6 +36,39 @@ SHADER_COLOR_ATTRIBUTE_NAME = "Col"
 IMPORTED_VIA_WIZARD = False
 
 
+def _execute_fbx_import(filepath):
+    """
+    Executes FBX import using the modern Blender C++ importer (bpy.ops.wm.fbx_import) with default options
+    as requested by the user, with fallback to legacy import_scene.fbx if wm.fbx_import is not available.
+    """
+    if hasattr(bpy.ops.wm, "fbx_import"):
+        try:
+            bpy.ops.wm.fbx_import(
+                filepath=filepath,
+                global_scale=1.0,
+                mtl_name_collision_mode='MAKE_UNIQUE',
+                import_colors='SRGB',
+                use_custom_normals=True,
+                use_custom_props=True,
+                use_custom_props_enum_as_string=True,
+                import_subdivision=False,
+                ignore_leaf_bones=False,
+                validate_meshes=True,
+                use_anim=True,
+                anim_offset=1.0,
+            )
+            return
+        except Exception as e:
+            print(f"bpy.ops.wm.fbx_import failed ({e}), falling back to import_scene.fbx")
+
+    # Fallback for older Blender versions / legacy FBX importer
+    bpy.ops.import_scene.fbx(
+        filepath=filepath,
+        force_connect_children=True,
+        automatic_bone_orientation=True,
+    )
+
+
 class GI_OT_SetUpCharacter(Operator, BasicSetupUIOperator):
     """Sets Up Character"""
 
@@ -144,7 +177,17 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
         maxlen=255,  # Max internal buffer length, longer would be clamped.
     )
 
+    def clean_up_scene(self):
+        OBJECTS_TO_CLEAN_UP = [
+            'Cube',
+            'Light',
+        ]
+        for obj in bpy.data.objects:
+            if obj.name in OBJECTS_TO_CLEAN_UP:
+                bpy.data.objects.remove(obj)
+
     def execute(self, context):
+        self.clean_up_scene()
         is_character_model_file = not os.path.isdir(self.filepath) and self.filepath
         character_model_directory = (
             os.path.dirname(self.filepath) or self.file_directory
@@ -252,11 +295,7 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
 
             if not better_fbx_success:
                 try:
-                    bpy.ops.import_scene.fbx(
-                        filepath=character_model_file_path,
-                        force_connect_children=True,
-                        automatic_bone_orientation=True,
-                    )
+                    _execute_fbx_import(character_model_file_path)
                 except Exception as e:
                     # Clean up newly created objects
                     new_objects = [
@@ -360,11 +399,7 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
 
         # Import using recommended settings
         try:
-            bpy.ops.import_scene.fbx(
-                filepath=character_model_file_path,
-                force_connect_children=True,
-                automatic_bone_orientation=True,
-            )
+            _execute_fbx_import(character_model_file_path)
         except Exception as e:
             # Clean up newly created objects
             new_objects = [

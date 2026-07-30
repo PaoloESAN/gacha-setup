@@ -158,6 +158,10 @@ class GenshinImpactMaterialImporterFacade(GameMaterialImporter):
         if status == {'FINISHED'}:
             return status
 
+        self.move_required_scene_objects()
+        self.update_vfx_shader_scene_dependency()
+        self.clean_up_unused_objects()
+
         if self.is_create_hair_material_from_body():  # Genshin Shader >= v4.0
             self.create_hair_material()
 
@@ -173,6 +177,35 @@ class GenshinImpactMaterialImporterFacade(GameMaterialImporter):
             high_level_step_name=self.blender_operator.high_level_step_name,
             game_type=self.blender_operator.game_type,
         )
+
+    def move_required_scene_objects(self):
+        OBJECTS_TO_MOVE = ['Head Origin', 'Light Direction']
+        try:
+            from setup_wizard.utils.scene_utils import move_objects_between_scenes
+            move_objects_between_scenes('Preview', object_names=OBJECTS_TO_MOVE)
+        except Exception:
+            pass
+
+    def update_vfx_shader_scene_dependency(self, material: bpy.types.Material = None):
+        try:
+            from setup_wizard.domain.node_group_names import ShaderNodeGroupNames
+            vfx_shader_node_group = bpy.data.node_groups.get(ShaderNodeGroupNames.VFX_SHADER_STAR_CLOAK)
+            if vfx_shader_node_group:
+                render_size_nodes = [node for node in vfx_shader_node_group.nodes if node.type == 'VALUE' and node.label in ['Screen Res Width', 'Screen Res Height']]
+                for render_size_node in render_size_nodes:
+                    try:
+                        driver = render_size_node.outputs[0].animation_data.drivers[0]
+                        driver.driver.variables[0].targets[0].id = bpy.context.scene
+                    except (AttributeError, IndexError):
+                        pass
+        except Exception:
+            pass
+
+    def clean_up_unused_objects(self, object_names: list = ['Preview']):
+        for object_name in object_names:
+            scene_object = bpy.data.scenes.get(object_name)
+            if scene_object:
+                bpy.data.scenes.remove(scene_object)
 
     def is_create_hair_material_from_body(self):
         body_material_exists = bpy.data.materials.get(V4_PrimoToonGenshinImpactMaterialNames.BODY)

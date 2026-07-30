@@ -176,11 +176,14 @@ class GenshinImpactCharacterRigger(CharacterRigger):
         def refresh_light_vectors_modifiers():
             char_name = armature.name.replace("Rig", "")
             for obj in bpy.data.objects:
-                if obj.type == 'MESH' and obj.parent == armature:
+                if obj.type == 'MESH':
+                    o_lower = obj.name.lower()
+                    if "lightpanelwgt" in o_lower or "lightpanelselector" in o_lower or "wgtplane" in o_lower or "selectorwgt" in o_lower:
+                        continue
                     for modifier in obj.modifiers:
                         if modifier.type == 'NODES' and modifier.node_group and 'Light Vectors' in modifier.node_group.name:
                             def assign_empty(socket, empty_name):
-                                empty_obj = bpy.data.objects.get(f"{empty_name}_{char_name}")
+                                empty_obj = bpy.data.objects.get(f"{empty_name}_{char_name}") or bpy.data.objects.get(empty_name)
                                 if empty_obj:
                                     set_modifier_property(modifier, socket, empty_obj)
 
@@ -436,11 +439,14 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
         def refresh_light_vectors_modifiers():
             char_name = armature.name.replace("Rig", "")
             for obj in bpy.data.objects:
-                if obj.type == 'MESH' and obj.parent == armature:
+                if obj.type == 'MESH':
+                    o_lower = obj.name.lower()
+                    if "lightpanelwgt" in o_lower or "lightpanelselector" in o_lower or "wgtplane" in o_lower or "selectorwgt" in o_lower:
+                        continue
                     for modifier in obj.modifiers:
                         if modifier.type == 'NODES' and modifier.node_group and 'Light Vectors' in modifier.node_group.name:
                             def assign_empty(socket, empty_name):
-                                empty_obj = bpy.data.objects.get(f"{empty_name}_{char_name}")
+                                empty_obj = bpy.data.objects.get(f"{empty_name}_{char_name}") or bpy.data.objects.get(empty_name)
                                 if empty_obj:
                                     set_modifier_property(modifier, socket, empty_obj)
 
@@ -523,11 +529,14 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
         def refresh_light_vectors_modifiers():
             char_name = armature.name.replace("Rig", "")
             for obj in bpy.data.objects:
-                if obj.type == 'MESH' and obj.parent == armature:
+                if obj.type == 'MESH':
+                    o_lower = obj.name.lower()
+                    if "lightpanelwgt" in o_lower or "lightpanelselector" in o_lower or "wgtplane" in o_lower or "selectorwgt" in o_lower:
+                        continue
                     for modifier in obj.modifiers:
                         if modifier.type == 'NODES' and modifier.node_group and 'Light Vectors' in modifier.node_group.name:
                             def assign_empty(socket, empty_name):
-                                empty_obj = bpy.data.objects.get(f"{empty_name}_{char_name}")
+                                empty_obj = bpy.data.objects.get(f"{empty_name}_{char_name}") or bpy.data.objects.get(empty_name)
                                 if empty_obj:
                                     set_modifier_property(modifier, socket, empty_obj)
 

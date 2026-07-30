@@ -401,16 +401,12 @@ class V3_GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
         # character_armature = [obj for obj in bpy.data.objects if obj.type == 'ARMATURE'][0]  # Expecting 1 armature in scene
         # character_armature_mesh_names = [obj.name for obj in character_armature.children if obj.type == 'MESH']
 
-        # Set up Light Vectors for meshes that match the expected mesh name list
-        for mesh_name in meshes_to_create_light_vectors_on:  # It is important that this is created and placed before Outlines!!
-            for object_name, object_data in bpy.context.scene.objects.items():
-                object_name_matches = (mesh_name == object_name or object_name.startswith(f"{mesh_name}.") or f'_{mesh_name}' in object_name)
-                if object_data.type == 'MESH' and object_name_matches:
-                    self.create_light_vectors_modifier(f'{object_name}{BODY_PART_SUFFIX}')
-        # Set up Light Vectors for meshes that have keywords in their names (Ex. SkillObj)
+        # Set up Light Vectors for ALL MESHES in scene (Eyes, Ribbon, Dress, Hair, Body, etc.)
         for object_name, object_data in bpy.context.scene.objects.items():
-            object_name_matches = [object_name for mesh_keyword in mesh_keywords_to_create_geometry_nodes_on if mesh_keyword in object_name]
-            if object_data.type == 'MESH' and object_name_matches:
+            if object_data.type == 'MESH':
+                o_lower = object_name.lower()
+                if "lightpanelwgt" in o_lower or "lightpanelselector" in o_lower or "wgtplane" in o_lower or "selectorwgt" in o_lower:
+                    continue
                 self.create_light_vectors_modifier(f'{object_name}{BODY_PART_SUFFIX}')
 
         # Set up Outlines for meshes that match the expected mesh name list
@@ -533,11 +529,12 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
         self.clone_night_soul_outlines()
 
         for mesh in [obj for obj in bpy.data.objects.values() if obj.type == 'MESH']:
-            create_light_vectors = [
-                material_slot.material for material_slot in mesh.material_slots if 
-                material_slot.material.name.startswith(self.material_names.MATERIAL_PREFIX_AFTER_RENAME)
-            ]  # Only create Light Vectors on meshes with Shader materials
-            if create_light_vectors:
+            o_lower = mesh.name.lower()
+            if "lightpanelwgt" in o_lower or "lightpanelselector" in o_lower or "wgtplane" in o_lower or "selectorwgt" in o_lower:
+                continue
+
+            # Create Light Vectors for ALL mesh parts with material slots
+            if mesh.material_slots:
                 self.create_light_vectors_modifier(mesh.name)
 
             create_outlines = [
@@ -1120,7 +1117,7 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
 
                 # Light Vectors
                 if light_vectors_gn:
-                    mod = obj.modifiers.get("Light Vectors")
+                    mod = next((m for m in obj.modifiers if m.type == 'NODES' and (m.name.startswith("Light Vectors") or (m.node_group and ("Light Vectors" in m.node_group.name or "灯光矢量" in m.node_group.name)))), None)
                     if not mod:
                         mod = obj.modifiers.new(name="Light Vectors", type='NODES')
                         mod.node_group = light_vectors_gn
