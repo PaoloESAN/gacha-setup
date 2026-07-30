@@ -3550,44 +3550,21 @@ def rig_character(
     bpy.data.objects["Head_Pole"].parent_type = "BONE"
     bpy.data.objects["Head_Pole"].parent_bone = "neck"
 
-    # In object mode, let's take the time to add drivers for viewport outlines (Based on a toggle, optionally to see them before rendering)
+    # Remove any drivers on viewport outlines so user has direct control
     def setup_viewport_outlines(prop):
-        driver = prop.driver_add("show_viewport").driver
-        driver.type = "SCRIPTED"
-        driver.expression = "var"
+        try:
+            prop.driver_remove("show_viewport")
+        except:
+            pass
+        try:
+            prop.driver_remove("show_render")
+        except:
+            pass
 
-        var = driver.variables.new()
-        var.name = "var"
-        var.type = "SINGLE_PROP"
-        var.targets[0].id = bpy.data.objects.get(ourRig)
-        var.targets[0].data_path = 'pose.bones["plate-settings"]["Viewport Outlines"]'
-
-        # Update the dependencies
-        depsgraph = bpy.context.evaluated_depsgraph_get()
-        depsgraph.update()
-
-    try:
-        setup_viewport_outlines(bpy.data.objects["Body"].modifiers["Outlines Body"])
-    except:
-        pass
-    try:
-        setup_viewport_outlines(bpy.data.objects["Hair"].modifiers["Outlines Hair"])
-    except:
-        pass
-    try:
-        setup_viewport_outlines(
-            bpy.data.objects["Hair.001"].modifiers["Outlines Hair.001"]
-        )  # Escoffier? Who else
-    except:
-        pass
-    try:
-        setup_viewport_outlines(bpy.data.objects["Face"].modifiers["Outlines Face"])
-    except:
-        pass
-    try:
-        setup_viewport_outlines(bpy.data.objects["Dress"].modifiers["Outlines Dress"])
-    except:
-        pass
+    for mesh in [obj for obj in bpy.data.objects if obj.type == 'MESH']:
+        for modifier in mesh.modifiers:
+            if "Outline" in modifier.name or "outlines" in modifier.name.lower() or "Outlines" in modifier.name:
+                setup_viewport_outlines(modifier)
 
     # handled list of face SK
     handled_sks = [
@@ -5940,15 +5917,43 @@ def rig_character(
             rig_obj.select_set(True)
             bpy.ops.object.mode_set(mode='POSE')
 
-            # Make "Other" bone collection / layer visible so bones can be selected and applied
-            other_coll = rig_obj.data.collections.get("Other") if hasattr(rig_obj.data, "collections") else None
-            if other_coll:
-                other_coll.is_visible = True
-            elif hasattr(rig_obj.data, "layers") and len(rig_obj.data.layers) > 25:
-                rig_obj.data.layers[25] = True
+            # Make "Other", "Clothes", and "Cage" bone collections / layers visible so bones can be selected and applied
+            for cname in ["Other", "Clothes", "Cage"]:
+                coll = rig_obj.data.collections.get(cname) if hasattr(rig_obj.data, "collections") else None
+                if coll:
+                    coll.is_visible = True
+
+            if hasattr(rig_obj.data, "layers"):
+                for l_idx in [24, 25, 27]:
+                    if len(rig_obj.data.layers) > l_idx:
+                        rig_obj.data.layers[l_idx] = True
 
             bpy.ops.pose.select_all(action='DESELECT')
-            target_bones = ["+EyeBone R A01.001", "+EyeBone L A01.001"]
+            target_bones = [
+                "+EyeBone R A01.001",
+                "+EyeBone L A01.001",
+                "+EyeBoneA02.L",
+                "+EyeBoneA02.R",
+                "+EyeBone L A02",
+                "+EyeBone R A02",
+                "+Pelvis Twist CF A01",
+                "+PelvisTwist CF A01",
+                "+Pelvis Twist CF A01.001",
+                "+UpperArmTwistA01.L",
+                "+UpperArmTwistA01.R",
+                "+UpperArmTwistA01.L.001",
+                "+UpperArmTwistA01.R.001",
+                "+UpperArmTwistA02.L",
+                "+UpperArmTwistA02.R",
+                "+ArmLetsSA21.L",
+                "+ArmLetsSA21.R",
+                "+ArmLetsSA21.L.001",
+                "+ArmLetsSA21.R.001",
+                "+ArmLets SA21.L",
+                "+ArmLets SA21.R",
+                "+ClavicleTwistSA01.L",
+                "+ClavicleTwistSA01.R",
+            ]
             for bname in target_bones:
                 pbone = rig_obj.pose.bones.get(bname)
                 if pbone:
@@ -5956,11 +5961,16 @@ def rig_character(
 
             bpy.ops.pose.armature_apply(selected=True)
 
-            # Hide "Other" bone collection / layer again
-            if other_coll:
-                other_coll.is_visible = False
-            elif hasattr(rig_obj.data, "layers") and len(rig_obj.data.layers) > 25:
-                rig_obj.data.layers[25] = False
+            # Hide "Other", "Clothes", and "Cage" bone collections / layers again
+            for cname in ["Other", "Clothes", "Cage"]:
+                coll = rig_obj.data.collections.get(cname) if hasattr(rig_obj.data, "collections") else None
+                if coll:
+                    coll.is_visible = False
+
+            if hasattr(rig_obj.data, "layers"):
+                for l_idx in [24, 25, 27]:
+                    if len(rig_obj.data.layers) > l_idx:
+                        rig_obj.data.layers[l_idx] = False
     except Exception as ex:
         print(f"Notice applying rest pose at end of rig: {ex}")
 
