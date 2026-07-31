@@ -338,7 +338,13 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                 obj = bpy.data.objects.get("Armature")
 
             if obj:
-                bpy.ops.object.mode_set(mode="OBJECT")
+                if obj.name in bpy.context.view_layer.objects:
+                    obj.hide_set(False)
+                    obj.hide_viewport = False
+                    bpy.context.view_layer.objects.active = obj
+                    obj.select_set(True)
+                if bpy.ops.object.mode_set.poll():
+                    bpy.ops.object.mode_set(mode="OBJECT")
                 bpy.ops.object.select_all(action="DESELECT")
 
                 # Find top-most parent object (e.g. root empty like Avatar_Female_Size02_ZhenzhenDawnlight_UI)
@@ -483,11 +489,18 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                 faceobj = obj
                 break
         if faceobj:
-            bpy.ops.object.mode_set(mode="OBJECT")
-            bpy.ops.object.select_all(action="DESELECT")
-            faceobj.select_set(True)
-            bpy.context.view_layer.objects.active = faceobj
             try:
+                if faceobj.name in bpy.context.view_layer.objects:
+                    faceobj.hide_set(False)
+                    faceobj.hide_viewport = False
+                bpy.context.view_layer.objects.active = faceobj
+                faceobj.select_set(True)
+                if bpy.ops.object.mode_set.poll():
+                    bpy.ops.object.mode_set(mode="OBJECT")
+                bpy.ops.object.select_all(action="DESELECT")
+                faceobj.select_set(True)
+                bpy.context.view_layer.objects.active = faceobj
+
                 bpy.ops.object.mode_set(mode="EDIT")
                 bpy.ops.mesh.select_all(action="DESELECT")
                 if "Eye Transparent" in faceobj.vertex_groups:
@@ -500,7 +513,8 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                             faceobj.vertex_groups.active = group
                             bpy.ops.object.vertex_group_deselect()
                     bpy.ops.mesh.separate(type="SELECTED")
-                bpy.ops.object.mode_set(mode="OBJECT")
+                if bpy.ops.object.mode_set.poll():
+                    bpy.ops.object.mode_set(mode="OBJECT")
 
                 eye_obj = None
                 for ob in bpy.context.selected_objects:
@@ -512,8 +526,9 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
             except Exception as e:
                 print("fixeyeshadow error:", e)
                 try:
-                    bpy.ops.object.mode_set(mode="OBJECT")
-                except:
+                    if bpy.ops.object.mode_set.poll():
+                        bpy.ops.object.mode_set(mode="OBJECT")
+                except Exception:
                     pass
 
     def reset_pose_location_and_rotation(self):

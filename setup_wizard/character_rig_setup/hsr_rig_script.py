@@ -506,6 +506,8 @@ def rig_character(
             pbone.custom_shape_translation = translation
         if rotation_euler and hasattr(pbone, "custom_shape_rotation_euler"):
             pbone.custom_shape_rotation_euler[0] = rotation_euler[0]
+            pbone.custom_shape_rotation_euler[1] = rotation_euler[1]
+            pbone.custom_shape_rotation_euler[2] = rotation_euler[2]
 
     safe_set_custom_shape("root", "root plate.002")
     safe_set_custom_shape("head", "neck", scale=(1.65, 1.65, 1.65), translation=(0.0, 0.255, 0.0), rotation_euler=(1.5708, 0, 0))
@@ -535,8 +537,8 @@ def rig_character(
     safe_set_custom_shape("toe_ik.L", None, scale=(0.781, 0.781, 0.350), translation=(0.0, 0.06, 0.00), disable_bone_size=False)
     safe_set_custom_shape("toe_ik.R", None, scale=(0.781, 0.781, 0.350), translation=(0.0, 0.06, 0.00), disable_bone_size=False)
 
-    safe_set_custom_shape("hand_ik.L", "hand", scale=(1.0, 1.0, 1.0), disable_bone_size=True)
-    safe_set_custom_shape("hand_ik.R", "hand", scale=(1.0, 1.0, 1.0), disable_bone_size=True)
+    safe_set_custom_shape("hand_ik.L", "hand", scale=(1.0, 1.0, 1.0), translation=(-0.05, 0.0, 0.0), rotation_euler=(1.5708, 0.0, 0.0), disable_bone_size=True)
+    safe_set_custom_shape("hand_ik.R", "hand", scale=(1.0, 1.0, 1.0), translation=(0.05, 0.0, 0.0), rotation_euler=(-1.5708, 0.0, 0.0), disable_bone_size=True)
 
     def add_eye_bone_const(bone_name, to_bone):
         pbone = rigifyr.pose.bones.get(bone_name)

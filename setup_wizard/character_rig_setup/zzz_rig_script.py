@@ -2663,11 +2663,13 @@ def rig_character(
     this_obj.pose.bones["hand-ik-L"].custom_shape_transform = bpy.data.objects[char_name+"Rig"].pose.bones["mch-hand-ik-pivot-L"]
     this_obj.pose.bones["hand-ik-R"].custom_shape_transform = bpy.data.objects[char_name+"Rig"].pose.bones["mch-hand-ik-pivot-R"]
     
-    # Rotate the custom shape of the hand IK controller bones (wrist) by -45 degrees (left) and +45 degrees (right)
-    this_obj.pose.bones["hand-ik-L"].custom_shape_rotation_euler[1] = 0.0
-    this_obj.pose.bones["hand-ik-L"].custom_shape_rotation_euler[2] = 0.7854
-    this_obj.pose.bones["hand-ik-R"].custom_shape_rotation_euler[1] = 0.0
-    this_obj.pose.bones["hand-ik-R"].custom_shape_rotation_euler[2] = -0.7854
+    # Align custom shape of hand IK controller bones (wrist) straight to center
+    for b_name in ["hand-ik-L", "hand-ik-R", "hand_ik.L", "hand_ik.R", "hand_ik_wrist.L", "hand_ik_wrist.R"]:
+        pb = this_obj.pose.bones.get(b_name)
+        if pb and hasattr(pb, "custom_shape_rotation_euler"):
+            pb.custom_shape_rotation_euler[0] = 0.0
+            pb.custom_shape_rotation_euler[1] = 0.0
+            pb.custom_shape_rotation_euler[2] = 0.0
     
     this_obj.pose.bones["ik-sub-pivot-L"].custom_shape_translation = (foot_L_x_diff*-1.0, 0.0, foot_L_z_diff*-1.0)
     this_obj.pose.bones["ik-sub-pivot-R"].custom_shape_translation = (foot_R_x_diff*-1.0, 0.0, foot_R_z_diff*-1.0)
