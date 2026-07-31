@@ -112,9 +112,15 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 elif material_name.endswith('Hand_Eff_Mat'):  # Asmoday
                     mesh_body_part_name = 'StarCloak'
 
+                if mesh_body_part_name in ['Eye', 'EyeStar', 'Eyes', 'EyeShadow']:
+                    mesh_body_part_name = 'Face'
+
                 # If material_name is ever 'Dress', 'Arm' or 'Cloak', there could be issues with get_actual_material_name_for_dress()
                 material_name = self.create_shader_material_if_unique_mesh(mesh, mesh_body_part_name, material_name)
                 genshin_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
+                if not genshin_material and mesh_body_part_name in ['Eye', 'EyeStar', 'Eyes', 'EyeShadow', 'Brow']:
+                    genshin_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}Face') or \
+                                       bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}Brow')
 
                 if genshin_material:
                     self.__transfer_diffuse_texture(material_slot.material, genshin_material)
@@ -207,6 +213,7 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             glass_material = self.create_glass_material(self.material_names, self.material_names.GLASS_EFF)
             if glass_material:
                 self.__set_glass_star_cloak_toggle(glass_material, False)
+                glass_method_set = True
                 glass_material.blend_method = 'BLEND'
                 glass_material.shadow_method = 'NONE'
                 glass_material.show_transparent_back = False
@@ -282,6 +289,16 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             if star_cloak_type.lower() in original_material_name.lower():
                 vfx_shader_node = material.node_tree.nodes.get(self.shader_node_names.VFX_SHADER)
                 vfx_shader_node.inputs.get(self.shader_node_names.STAR_CLOAK_TYPE).default_value = getattr(StarCloakTypes, star_cloak_type).value
+
+    def create_face_material(self, shader_material_names: ShaderMaterialNames, material_name):
+        face_material = bpy.data.materials.get(material_name)
+        if not face_material:
+            face_template = bpy.data.materials.get(shader_material_names.FACE)
+            if face_template:
+                face_material = face_template.copy()
+                face_material.name = material_name
+                face_material.use_fake_user = True
+        return face_material
 
     def create_body_material(self, shader_material_names: ShaderMaterialNames, material_name):
         body_material = bpy.data.materials.get(material_name)

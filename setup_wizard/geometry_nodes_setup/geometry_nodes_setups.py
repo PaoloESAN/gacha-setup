@@ -557,7 +557,12 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
 
             create_outlines = [
                 material_slot.material for material_slot in mesh.material_slots if 
-                material_slot.material.name.startswith(self.material_names.MATERIAL_PREFIX_AFTER_RENAME) and
+                material_slot.material and
+                (material_slot.material.name.startswith(self.material_names.MATERIAL_PREFIX_AFTER_RENAME) or
+                 material_slot.material.name.startswith(self.material_names.MATERIAL_PREFIX) or
+                 'outlines' in material_slot.material.name.lower() or
+                 ShaderMaterial(material_slot.material, self.shader_node_names).is_outlines_material() or
+                 any(part in material_slot.material.name for part in ['Body', 'Hair', 'Dress', 'Face', 'Eye', 'Helmet', 'Gauntlet', 'Leather', 'Skirt', 'Pupil', 'Brow'])) and
                 not any(keyword in material_slot.material.name for keyword in material_keywords_to_not_create_outlines_on)
             ]  # Only create Outlines on meshes with Shader materials and not in the ignore list (e.g. 'Eff' materials)
             if create_outlines:
@@ -566,7 +571,10 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
         for material in bpy.data.materials:
             if 'Face Outlines' in material.name:
                 outline_shader_node = material.node_tree.nodes.get(self.outlines_shader_node_name)
-                outline_shader_node.inputs.get(self.shader_node_names.TOGGLE_FACE_OUTLINES).default_value = True
+                if outline_shader_node and hasattr(outline_shader_node, 'inputs'):
+                    face_toggle_input = outline_shader_node.inputs.get(self.shader_node_names.TOGGLE_FACE_OUTLINES)
+                    if face_toggle_input:
+                        face_toggle_input.default_value = True
 
         starcloak_material = bpy.data.materials.get(self.material_names.STAR_CLOAK)
         if starcloak_material:
@@ -599,9 +607,19 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
         print(f'Geometry Node Default Values Set for {modifier.name}: {mesh.name}')
 
     def assign_materials_to_empty_modifier_slots(self, mesh, modifier):
+        prefix = getattr(self.material_names, 'MATERIAL_PREFIX', '')
+        prefix_renamed = getattr(self.material_names, 'MATERIAL_PREFIX_AFTER_RENAME', '')
         for material_slot in mesh.material_slots:
             material = material_slot.material
-            if not material or not material.name.startswith(self.material_names.MATERIAL_PREFIX):
+            if not material:
+                continue
+            is_valid_mat = (
+                (prefix and material.name.startswith(prefix)) or
+                (prefix_renamed and material.name.startswith(prefix_renamed)) or
+                'HoYoverse' in material.name or 'miHoYo' in material.name or
+                any(p in material.name for p in ['Body', 'Hair', 'Face', 'Eye', 'Dress', 'Helmet', 'Gauntlet', 'Leather', 'Skirt'])
+            )
+            if not is_valid_mat:
                 continue
             already_assigned = False
             for _, (mask_input, material_input) in self.outline_to_material_mapping.items():
@@ -610,9 +628,13 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
             if not already_assigned:
                 for available_mask_input, available_material_input in available_outline_mask_to_material_mapping.items():
                     if not get_modifier_property(modifier, available_mask_input) and not get_modifier_property(modifier, available_material_input):
-                        set_modifier_property(modifier, available_mask_input, bpy.data.materials.get(material.name))
-                        set_modifier_property(modifier, available_material_input, bpy.data.materials.get(material.name + ' Outlines'))
-                        break
+                        target_outline_mat = bpy.data.materials.get(material.name + ' Outlines') or \
+                                             bpy.data.materials.get(material.name.replace('Genshin ', '') + ' Outlines') or \
+                                             next((m for m in bpy.data.materials if material.name in m.name and 'Outlines' in m.name), None)
+                        if target_outline_mat:
+                            set_modifier_property(modifier, available_mask_input, material)
+                            set_modifier_property(modifier, available_material_input, target_outline_mat)
+                            break
 
     def assign_night_soul_outlines_material(self, mesh, modifier):
         night_soul_outlines_material_using_mesh_name = [

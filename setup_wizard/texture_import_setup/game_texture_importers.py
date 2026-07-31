@@ -565,6 +565,131 @@ def sync_zzz_outline_textures():
                         node.image = assigned_img
 
 
+def create_outline_image_copy(src_image, colorspace_name='Non-Color', suffix='_outline_lightmap'):
+    if not src_image:
+        return None
+    if colorspace_name == 'Non-Color':
+        copy_name = f"{src_image.name}{suffix}"
+        existing = bpy.data.images.get(copy_name)
+        if existing:
+            return existing
+        img_copy = src_image.copy()
+        img_copy.name = copy_name
+        img_copy.colorspace_settings.name = 'Non-Color'
+        img_copy.alpha_mode = 'CHANNEL_PACKED'
+        return img_copy
+    else:
+        if src_image.colorspace_settings.name != 'sRGB':
+            src_image.colorspace_settings.name = 'sRGB'
+        return src_image
+
+
+def sync_genshin_outline_textures():
+    """
+    Scans all Genshin outline materials in bpy.data.materials and syncs their Diffuse & Lightmap texture nodes
+    with loaded textures from corresponding main character materials.
+    Creates a duplicate image datablock for lightmaps set to Non-Color so main character diffuse textures remain in sRGB.
+    """
+    outline_materials = [
+        m for m in bpy.data.materials if m.use_nodes and 
+        (('outlines' in m.name.lower() or m.name.endswith('Outlines')) and
+         'night_soul' not in m.name.lower() and
+         m.name != 'HoYoverse - Genshin Outlines')
+    ]
+    main_materials = [
+        m for m in bpy.data.materials if m.use_nodes and
+        ('HoYoverse' in m.name or 'miHoYo' in m.name) and
+        not ('outlines' in m.name.lower() or m.name.endswith('Outlines'))
+    ]
+
+    def get_all_tex_image_nodes(node_tree):
+        nodes = []
+        if not node_tree:
+            return nodes
+        for n in node_tree.nodes:
+            if n.type == 'TEX_IMAGE':
+                nodes.append(n)
+            elif n.type == 'GROUP' and n.node_tree:
+                nodes.extend(get_all_tex_image_nodes(n.node_tree))
+        return nodes
+
+    for outline_mat in outline_materials:
+        outline_lower = outline_mat.name.lower()
+
+        # 1. Direct name matching by stripping ' Outlines' or ' outlines'
+        direct_base_name = outline_mat.name.replace(' Outlines', '').replace(' outlines', '')
+        matched_main_mat = bpy.data.materials.get(direct_base_name)
+
+        # 2. Body part keyword matching if direct match fails
+        if not matched_main_mat:
+            body_parts = ['hair', 'body3', 'body2', 'body1', 'body', 'dress', 'skirt', 'helmet', 'gauntlet', 'leather', 'glass', 'skillobj']
+            for part in body_parts:
+                if part in outline_lower:
+                    cand = [m for m in main_materials if part in m.name.lower()]
+                    if cand:
+                        matched_main_mat = cand[0]
+                        break
+
+        # 3. Fuzzy word matching score fallback
+        if not matched_main_mat:
+            out_words = [w for w in outline_lower.replace("hoyoverse", "").replace("mihoyo", "").replace("genshin", "").replace("outlines", "").split() if w]
+            best_match = None
+            best_score = 0
+            for m in main_materials:
+                m_words = [w for w in m.name.lower().replace("hoyoverse", "").replace("mihoyo", "").replace("genshin", "").split() if w]
+                score = sum(1 for w in out_words if w in m_words)
+                if score > best_score:
+                    best_score = score
+                    best_match = m
+            matched_main_mat = best_match
+
+        if not matched_main_mat or not matched_main_mat.use_nodes:
+            continue
+
+        # Extract active Diffuse and Lightmap images from matched_main_mat
+        main_tex_nodes = get_all_tex_image_nodes(matched_main_mat.node_tree)
+        main_images = [n.image for n in main_tex_nodes if n.image]
+
+        diffuse_image = None
+        lightmap_image = None
+
+        for n in main_tex_nodes:
+            if not n.image:
+                continue
+            nid = (n.name + " " + (n.label or "")).lower()
+            if 'diffuse' in nid or 'color' in nid or 'main_diffuse' in nid or 'tex' in nid:
+                if not diffuse_image and 'lightmap' not in nid:
+                    diffuse_image = n.image
+            elif 'lightmap' in nid or 'ligntmap' in nid:
+                if not lightmap_image:
+                    lightmap_image = n.image
+
+        if not diffuse_image and main_images:
+            diffuse_image = main_images[0]
+        if not lightmap_image:
+            lightmap_image = diffuse_image
+
+        if not diffuse_image:
+            part_name = outline_mat.name.split()[-2] if len(outline_mat.name.split()) >= 2 else ""
+            if part_name:
+                diffuse_image = next((img for img in bpy.data.images if part_name.lower() in img.name.lower() and 'diffuse' in img.name.lower()), None)
+                lightmap_image = next((img for img in bpy.data.images if part_name.lower() in img.name.lower() and ('lightmap' in img.name.lower() or 'ligntmap' in img.name.lower())), None) or diffuse_image
+
+        if not diffuse_image:
+            continue
+
+        # Assign images to outline_mat's TEX_IMAGE nodes
+        outline_tex_nodes = get_all_tex_image_nodes(outline_mat.node_tree)
+        for node in outline_tex_nodes:
+            nid = (node.name + " " + (node.label or "")).lower()
+            if 'diffuse' in nid or 'srgb' in nid or 'color' in nid or 'main_diffuse' in nid or 'image texture' in nid:
+                if 'lightmap' not in nid:
+                    node.image = create_outline_image_copy(diffuse_image, 'sRGB', '_outline_diffuse')
+            if 'lightmap' in nid or 'non-color' in nid or 'ligntmap' in nid:
+                if lightmap_image:
+                    node.image = create_outline_image_copy(lightmap_image, 'Non-Color', '_outline_lightmap')
+
+
 def find_nte_texture_for_material(mat_name, tex_type, image_files):
     name_lower = mat_name.lower()
 
