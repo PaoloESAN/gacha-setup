@@ -11,6 +11,7 @@ from bpy.types import Operator
 from setup_wizard.material_import_setup.game_material_importers import GameMaterialImporterFactory
 from setup_wizard.material_import_setup.material_importer_service import MaterialImporterService
 from setup_wizard.setup_wizard_operator_base_classes import BasicSetupUIOperator, CustomOperatorProperties
+from setup_wizard.utils.modifier_utils import set_modifier_property
 
 
 class GI_OT_SetUpMaterials(Operator, BasicSetupUIOperator):
@@ -378,6 +379,9 @@ def copy_nte_modifiers_to_character_models():
             set_nte_gn_input(mod_l, ["Input_4", "头部原点", "Head Origin"], head_orig)
             set_nte_gn_input(mod_l, ["Input_5", "头部前向", "Head Forward"], head_fwd)
             set_nte_gn_input(mod_l, ["Input_6", "头部上向", "Head Up"], head_up)
+            for output_attr in ["FM", "FR", "LR"]:
+                set_modifier_property(mod_l, output_attr, output_attr)
+                set_modifier_property(mod_l, f"{output_attr}_attribute_name", output_attr)
 
         # Get or add Outline modifier
         mod_o = next((m for m in mesh_obj.modifiers if m.type == 'NODES' and (m.name == "几何节点描边" or (m.node_group and ("描边" in m.node_group.name or "Outline" in m.node_group.name)))), None)

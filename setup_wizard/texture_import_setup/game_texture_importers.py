@@ -703,7 +703,15 @@ def find_nte_texture_for_material(mat_name, tex_type, image_files):
             return any(k in flow for k in ['_m.', '_m_', '_m1', '_m2', '_mask', '_lightmap'])
         elif tex_type == 'id':
             return any(k in flow for k in ['_id.', '_id_', '_id1', '_id2', '_idmap'])
+        elif tex_type == 'r':
+            return any(k in flow for k in ['_r.', '_r_', '_r1', '_r2', '_rim'])
         return True
+
+    is_eye_mat = any(k in name_lower for k in ['eye', '目', 'iris', 'pupil', 'eyelash', 'eyebrow', '眉毛', '睫毛'])
+
+    def is_eye_texture(f):
+        flow = f.lower()
+        return any(k in flow for k in ['eye', 'eyes', 'bantou', '目', '睫毛', '眉毛', 'eyelash', 'eyebrow'])
 
     if 'hair' in name_lower or 'pelo' in name_lower or '发' in name_lower:
         sub_idx = '02' if ('02' in name_lower or '2' in name_lower or '后发' in name_lower) else '01'
@@ -729,7 +737,7 @@ def find_nte_texture_for_material(mat_name, tex_type, image_files):
         if candidates:
             return candidates[0]
 
-    if any(k in name_lower for k in ['eye', '目', 'iris', 'pupil', 'eyelash', 'eyebrow', '眉毛', '睫毛']):
+    if is_eye_mat:
         candidates = [f for f in image_files if ('eyes' in f.lower() or 'eye_' in f.lower() or 'eye.' in f.lower() or 'eye' in f.lower()) and matches_type(f)]
         specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['touming', 'common', 'default', 'dummy', 'transparent'])]
         if specific_candidates:
@@ -742,30 +750,43 @@ def find_nte_texture_for_material(mat_name, tex_type, image_files):
         if candidates:
             return candidates[0]
 
+    material_noise_tokens = ['player', '075', '019', 'oneiroi', 'oneir', 'mint', 'skin', 'lod0', 'skeleton', 'nte', 'shader', 'mi', 'mat', 'chastener']
+
+    def find_by_material_name():
+        name_tokens = [p for p in name_lower.replace('-', '_').replace('.', '_').split('_') if len(p) >= 3 and p.isalnum() and p not in material_noise_tokens]
+        if not name_tokens:
+            return None
+        best_file = None
+        best_score = 0
+        for f in image_files:
+            if not matches_type(f) or (not is_eye_mat and is_eye_texture(f)):
+                continue
+            fnorm = ''.join(ch for ch in f.lower() if ch.isalnum())
+            score = sum(1 for t in name_tokens if t in fnorm)
+            if score > best_score:
+                best_score = score
+                best_file = f
+        return best_file if best_score > 0 else None
+
+    material_name_match = find_by_material_name()
+    if material_name_match:
+        return material_name_match
+
     if any(k in name_lower for k in ['down', '02', '_2', 'bottom', 'skirt', 'leg']):
-        candidates = [f for f in image_files if ('_02_' in f.lower() or '_2_' in f.lower() or 'down' in f.lower() or 'body2' in f.lower()) and matches_type(f)]
+        candidates = [f for f in image_files if ('_02_' in f.lower() or '_2_' in f.lower() or 'down' in f.lower() or 'body2' in f.lower() or 'cloth' in f.lower() or 'clothing' in f.lower() or '衣服' in f.lower()) and matches_type(f)]
         if not candidates:
             candidates = [f for f in image_files if '_02_' in f.lower() or '_2_' in f.lower()]
         if candidates:
             return candidates[0]
 
     if any(k in name_lower for k in ['up', '01', '_1', 'top', 'upper', 'body', 'skin', 'chastener_1']):
-        candidates = [f for f in image_files if ('_01_' in f.lower() or '_1_' in f.lower() or 'up' in f.lower()) and matches_type(f)]
+        candidates = [f for f in image_files if ('_01_' in f.lower() or '_1_' in f.lower() or 'up' in f.lower() or 'cloth' in f.lower() or 'clothing' in f.lower() or '衣服' in f.lower()) and matches_type(f)]
         if not candidates:
             candidates = [f for f in image_files if '_01_' in f.lower() or '_1_' in f.lower()]
         if candidates:
             return candidates[0]
 
-    clean_parts = [p for p in name_lower.split('_') if p not in ['player', '075', '019', 'oneiroi', 'oneir', 'mint', 'skin', 'lod0', 'skeleton', 'nte', 'shader', 'mi', 'mat', 'chastener']]
-    if clean_parts:
-        candidates = [
-            f for f in image_files
-            if any(part in f.lower() for part in clean_parts) and matches_type(f)
-        ]
-        if candidates:
-            return candidates[0]
-
-    candidates = [f for f in image_files if matches_type(f)]
+    candidates = [f for f in image_files if matches_type(f) and (is_eye_mat or not is_eye_texture(f))]
     return candidates[0] if candidates else (image_files[0] if image_files else None)
 
 

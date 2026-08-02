@@ -117,6 +117,25 @@ def set_modifier_property(modifier, key, value):
                     except Exception:
                         pass
 
+            # Fallback: match output socket by its display NAME via the node group interface
+            # (e.g. name 'FM' -> identifier 'Socket_0' -> modifier.properties.outputs['Socket_0'])
+            if getattr(modifier, "type", None) == 'NODES' and hasattr(modifier, "node_group") and modifier.node_group:
+                ng = modifier.node_group
+                target_identifier = None
+                if hasattr(ng, "interface"):
+                    for item in ng.interface.items_tree:
+                        if getattr(item, "item_type", None) == 'SOCKET' and getattr(item, "in_out", None) == 'OUTPUT':
+                            if item.name == clean_out_key or item.identifier == clean_out_key:
+                                target_identifier = item.identifier
+                                break
+                if target_identifier and hasattr(outputs, "keys") and target_identifier in outputs.keys():
+                    try:
+                        out_item = outputs[target_identifier]
+                        set_property_field(out_item, 'attribute_name', value)
+                        return
+                    except Exception:
+                        pass
+
         if inputs is not None:
             clean_inp_key = key[:-14] if key.endswith('_use_attribute') else key
             clean_inp_key = clean_inp_key[:-15] if clean_inp_key.endswith('_attribute_name') else clean_inp_key
