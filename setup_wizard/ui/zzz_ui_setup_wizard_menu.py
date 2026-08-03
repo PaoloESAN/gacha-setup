@@ -18,33 +18,20 @@ class ZZZ_PT_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
         layout = self.layout
         window_manager = context.window_manager
 
-        sub_layout = layout.box()
-        run_entire_setup_column = sub_layout.column()
-        OperatorFactory.create(
-            run_entire_setup_column,
-            "zenless_zone_zero.setup_wizard_ui",
-            "Run Entire Setup",
-            "PLAY",
-            game_type=GameType.ZENLESS_ZONE_ZERO.name,
-        )
+        # sub_layout = layout.box()
+        # run_entire_setup_column = sub_layout.column()
+        # OperatorFactory.create(
+        #     run_entire_setup_column,
+        #     "zenless_zone_zero.setup_wizard_ui",
+        #     "Run Entire Setup",
+        #     "PLAY",
+        #     game_type=GameType.ZENLESS_ZONE_ZERO.name,
+        # )
         expy_kit_installed = bpy.context.preferences.addons.get("Expy-Kit-main")
         rigify_installed = bpy.context.preferences.addons.get("rigify")
 
         if not expy_kit_installed or not rigify_installed:
-            sub_layout.label(text="Rigging Disabled", icon="ERROR")
-
-        settings_box = layout.box()
-        settings_box.label(text="Global Settings", icon="WORLD")
-
-        row = settings_box.row()
-        row.prop(window_manager, "cache_enabled")
-        OperatorFactory.create(
-            row,
-            "genshin.clear_cache_operator",
-            "Clear Cache",
-            "TRASH",
-            game_type=GameType.ZENLESS_ZONE_ZERO.name,
-        )
+            layout.label(text="Rigging Disabled", icon="ERROR")
 
 
 class ZZZ_PT_Basic_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
@@ -64,14 +51,6 @@ class ZZZ_PT_Basic_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker)
             "zenless_zone_zero.set_up_character",
             "Set Up Character",
             icon="OUTLINER_OB_ARMATURE",
-            game_type=GameType.ZENLESS_ZONE_ZERO.name,
-        )
-
-        OperatorFactory.create(
-            sub_layout,
-            "genshin.delete_empties",
-            "Delete Empties",
-            icon="TRASH",
             game_type=GameType.ZENLESS_ZONE_ZERO.name,
         )
 

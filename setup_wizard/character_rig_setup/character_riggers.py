@@ -176,11 +176,14 @@ class GenshinImpactCharacterRigger(CharacterRigger):
         def refresh_light_vectors_modifiers():
             char_name = armature.name.replace("Rig", "")
             for obj in bpy.data.objects:
-                if obj.type == 'MESH' and obj.parent == armature:
+                if obj.type == 'MESH':
+                    o_lower = obj.name.lower()
+                    if "lightpanelwgt" in o_lower or "lightpanelselector" in o_lower or "wgtplane" in o_lower or "selectorwgt" in o_lower:
+                        continue
                     for modifier in obj.modifiers:
                         if modifier.type == 'NODES' and modifier.node_group and 'Light Vectors' in modifier.node_group.name:
                             def assign_empty(socket, empty_name):
-                                empty_obj = bpy.data.objects.get(f"{empty_name}_{char_name}")
+                                empty_obj = bpy.data.objects.get(f"{empty_name}_{char_name}") or bpy.data.objects.get(empty_name)
                                 if empty_obj:
                                     set_modifier_property(modifier, socket, empty_obj)
 
@@ -272,20 +275,178 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
             meshes_joined=meshes_joined
         )
 
+        def setup_isaac_face_rig(body_rig):
+            import os
+            blend_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'isaacfacerig.blend')
+            if not os.path.exists(blend_path):
+                print(f"[FACE RIG] File not found: {blend_path}")
+                return
+
+            objects_before = set(bpy.data.objects)
+            facerig_obj = None
+            appended_coll = None
+
+            # Detect the first collection inside isaacfacerig.blend dynamically using libraries.load
+            try:
+                with bpy.data.libraries.load(blend_path, link=False) as (data_from, data_to):
+                    if data_from.collections:
+                        first_coll_name = data_from.collections[0]
+                        data_to.collections = [first_coll_name]
+                        print(f"[FACE RIG] Detected first collection in blend: '{first_coll_name}'")
+
+                for collection in data_to.collections:
+                    if collection:
+                        appended_coll = collection
+                        if collection.name not in bpy.context.scene.collection.children:
+                            bpy.context.scene.collection.children.link(collection)
+            except Exception as err:
+                print(f"[FACE RIG] Library load error: {err}")
+
+            new_objects = set(bpy.data.objects) - objects_before
+            for obj in new_objects:
+                if obj.type == 'ARMATURE':
+                    facerig_obj = obj
+                    break
+
+            if not facerig_obj:
+                facerig_obj = bpy.data.objects.get("isaac FaceRig")
+                if not facerig_obj:
+                    for obj in bpy.data.objects:
+                        if obj.type == 'ARMATURE' and any(k in obj.name.lower() for k in ['facerig', 'isaac']):
+                            facerig_obj = obj
+                            break
+
+            if not facerig_obj:
+                print("[FACE RIG] Could not find 'isaac FaceRig' object.")
+                return
+
+            print(f"[FACE RIG] Successfully imported/found FaceRig armature: '{facerig_obj.name}'")
+
+            # Move isaac FaceRig armature to Armature collection, planes to WGTS, and remove empty collection
+            target_armature_coll = body_rig.users_collection[0] if body_rig.users_collection else bpy.context.scene.collection
+            wgt_coll = bpy.data.collections.get("WGTS") or bpy.data.collections.get("WGTS_FaceRig") or bpy.data.collections.get("wgt") or bpy.data.collections.new("WGTS")
+
+            if facerig_obj and target_armature_coll:
+                if facerig_obj.name not in target_armature_coll.objects:
+                    target_armature_coll.objects.link(facerig_obj)
+                for coll in list(facerig_obj.users_collection):
+                    if coll != target_armature_coll:
+                        coll.objects.unlink(facerig_obj)
+
+            plane_objs = [obj for obj in new_objects if obj != facerig_obj]
+            if appended_coll:
+                plane_objs.extend([obj for obj in appended_coll.objects if obj != facerig_obj and obj not in plane_objs])
+
+            for p_obj in plane_objs:
+                if p_obj.name not in wgt_coll.objects:
+                    wgt_coll.objects.link(p_obj)
+                for coll in list(p_obj.users_collection):
+                    if coll != wgt_coll:
+                        coll.objects.unlink(p_obj)
+
+            # Unlink wgt_coll from Scene Collection so it is unlinked from the Outliner
+            for parent_coll in list(bpy.data.collections):
+                if wgt_coll.name in parent_coll.children:
+                    try:
+                        parent_coll.children.unlink(wgt_coll)
+                    except Exception:
+                        pass
+            if wgt_coll.name in bpy.context.scene.collection.children:
+                try:
+                    bpy.context.scene.collection.children.unlink(wgt_coll)
+                except Exception:
+                    pass
+
+            if appended_coll:
+                try:
+                    for parent_coll in bpy.data.collections:
+                        if appended_coll.name in parent_coll.children:
+                            parent_coll.children.unlink(appended_coll)
+                    if appended_coll.name in bpy.context.scene.collection.children:
+                        bpy.context.scene.collection.children.unlink(appended_coll)
+                    bpy.data.collections.remove(appended_coll, do_unlink=True)
+                    print(f"[FACE RIG] Cleaned up temporary collection '{appended_coll.name}'")
+                except Exception as c_err:
+                    print(f"[FACE RIG] Collection cleanup notice: {c_err}")
+
+            body_head_bone_name = None
+            for candidate in ["DEF-spine.006", "head", "Head", "Head_M"]:
+                if candidate in body_rig.data.bones:
+                    body_head_bone_name = candidate
+                    break
+            if not body_head_bone_name:
+                for b in body_rig.data.bones.keys():
+                    if "head" in b.lower() or "spine.006" in b.lower():
+                        body_head_bone_name = b
+                        break
+
+            if not body_head_bone_name:
+                print("[FACE RIG] Could not find head bone on body rig.")
+                return
+
+            facerig_head_bone_name = "DEF-spine.006" if "DEF-spine.006" in facerig_obj.data.bones else facerig_obj.data.bones[0].name
+
+            try:
+                body_head_matrix_world = body_rig.matrix_world @ body_rig.pose.bones[body_head_bone_name].matrix
+                facerig_head_matrix_local = facerig_obj.pose.bones[facerig_head_bone_name].matrix
+                facerig_obj.matrix_world = body_head_matrix_world @ facerig_head_matrix_local.inverted()
+            except Exception as e:
+                print(f"[FACE RIG] Matrix alignment warning: {e}")
+
+            pbone = facerig_obj.pose.bones.get(facerig_head_bone_name)
+            if pbone:
+                constraint = None
+                for c in pbone.constraints:
+                    if c.type in ['COPY_TRANSFORMS', 'CHILD_OF', 'COPY_LOCATION']:
+                        constraint = c
+                        break
+                if not constraint:
+                    constraint = pbone.constraints.new('COPY_TRANSFORMS')
+                    constraint.name = "Copy Head Transforms"
+
+                constraint.target = body_rig
+                constraint.subtarget = body_head_bone_name
+
+            face_obj = bpy.data.objects.get("Face")
+            if not face_obj:
+                char_name = body_rig.name.replace("Rig", "")
+                face_obj = bpy.data.objects.get(f"Face_{char_name}")
+            if not face_obj:
+                for obj in bpy.data.objects:
+                    if obj.type == 'MESH' and ('face' in obj.name.lower() or obj.parent == body_rig):
+                        for mod in obj.modifiers:
+                            if mod.type == 'ARMATURE':
+                                face_obj = obj
+                                break
+
+            if face_obj:
+                for mod in face_obj.modifiers:
+                    if mod.type == 'ARMATURE':
+                        mod.object = facerig_obj
+                        print(f"[FACE RIG] Re-targeted '{face_obj.name}' armature modifier to '{facerig_obj.name}'")
+
         try:
             from setup_wizard.character_rig_setup.hsr_face_rig import hsr_face_rig_main
             hsr_face_rig_main()
         except Exception as e:
             print(f"HSR face rig skipped: {e}")
 
+        try:
+            setup_isaac_face_rig(armature)
+        except Exception as e:
+            print(f"Isaac face rig skipped: {e}")
+
         def refresh_light_vectors_modifiers():
             char_name = armature.name.replace("Rig", "")
             for obj in bpy.data.objects:
-                if obj.type == 'MESH' and obj.parent == armature:
+                if obj.type == 'MESH':
+                    o_lower = obj.name.lower()
+                    if "lightpanelwgt" in o_lower or "lightpanelselector" in o_lower or "wgtplane" in o_lower or "selectorwgt" in o_lower:
+                        continue
                     for modifier in obj.modifiers:
                         if modifier.type == 'NODES' and modifier.node_group and 'Light Vectors' in modifier.node_group.name:
                             def assign_empty(socket, empty_name):
-                                empty_obj = bpy.data.objects.get(f"{empty_name}_{char_name}")
+                                empty_obj = bpy.data.objects.get(f"{empty_name}_{char_name}") or bpy.data.objects.get(empty_name)
                                 if empty_obj:
                                     set_modifier_property(modifier, socket, empty_obj)
 
@@ -368,11 +529,14 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
         def refresh_light_vectors_modifiers():
             char_name = armature.name.replace("Rig", "")
             for obj in bpy.data.objects:
-                if obj.type == 'MESH' and obj.parent == armature:
+                if obj.type == 'MESH':
+                    o_lower = obj.name.lower()
+                    if "lightpanelwgt" in o_lower or "lightpanelselector" in o_lower or "wgtplane" in o_lower or "selectorwgt" in o_lower:
+                        continue
                     for modifier in obj.modifiers:
                         if modifier.type == 'NODES' and modifier.node_group and 'Light Vectors' in modifier.node_group.name:
                             def assign_empty(socket, empty_name):
-                                empty_obj = bpy.data.objects.get(f"{empty_name}_{char_name}")
+                                empty_obj = bpy.data.objects.get(f"{empty_name}_{char_name}") or bpy.data.objects.get(empty_name)
                                 if empty_obj:
                                     set_modifier_property(modifier, socket, empty_obj)
 

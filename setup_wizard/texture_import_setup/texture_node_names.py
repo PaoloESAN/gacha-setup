@@ -90,6 +90,10 @@ class V4_GenshinImpactTextureNodeNames(V3_GenshinImpactTextureNodeNames):
     VFX_DIFFUSE = 'VFX_Diffuse'
 
 
+class V1_HoYoToonGenshinImpactTextureNodeNames(V4_GenshinImpactTextureNodeNames):
+    pass
+
+
 class Nya222HonkaiStarRailTextureNodeNames(TextureNodeNames):
     DIFFUSE = '画像テクスチャ'  # For getting body shader name when renaming shader material names
     LIGHTMAP = '画像テクスチャ.001'

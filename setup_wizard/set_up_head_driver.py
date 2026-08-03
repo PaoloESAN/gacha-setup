@@ -28,7 +28,9 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
             self.report({"ERROR"}, "No armature found")
             return {"CANCELLED"}
 
-        armature = armatures[0]
+        # Prioritize Rigify character rig (named 'rig' or containing 'rig') if present
+        rigify_armatures = [a for a in armatures if a.name == "rig" or "rig" in a.name.lower()]
+        armature = rigify_armatures[0] if rigify_armatures else armatures[0]
         char_name = (
             armature.name.replace("Rig", "")
             if "Rig" in armature.name

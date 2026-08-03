@@ -486,71 +486,18 @@ def rig_character(
         if bone.name in abadidea:
             bone.name = abadidea[bone.name]
     
-    # Fix finger rolls - Thanks Poke!
-    if not kachina:
-        how_not = ['f_index.01.L', 'f_index.02.L', 'f_index.03.L']
-        hahaha = ['f_middle.01.L', 'f_middle.02.L', 'f_middle.03.L']
-        to_name = ['f_ring.01.L', 'f_ring.02.L', 'f_ring.03.L']
-        things_efficiently = ['f_pinky.01.L', 'f_pinky.02.L', 'f_pinky.03.L']
-
-        for bone in how_not:
-            armature.edit_bones[bone].roll -= .1197
-            
-        for bone in hahaha:
-            armature.edit_bones[bone].roll -= .04
-            
-        for bone in to_name:
-            armature.edit_bones[bone].roll += .1297
-            
-        for bone in things_efficiently:
-            armature.edit_bones[bone].roll += .338
-    
-    #Aw shit here we go again.  This second loop is for making it possible to symmetrize pose bones properly.
-    for bone in bones_list:
-        if ".L" in bone.name: 
-            if bone.name.endswith(".L"):
-                whee = bone.name[:-2] + ".R"
-            elif ".L." in bone.name:
-                whee = bone.name.replace(".L.", ".R.")
-            else:
-                whee = bone.name.replace(".L", ".R")
-            if whee in armature.edit_bones and bone.name in armature.edit_bones:
-                if "f_" in bone.name or "thumb" in bone.name:
-                    armature.edit_bones[whee].roll = -armature.edit_bones[bone.name].roll
-                else:
-                    armature.edit_bones[bone.name].roll = -armature.edit_bones[whee].roll
-
     # Set shoulder rolls so local Z-axis points UP so crescent widgets lie flat on shoulders
     armature.edit_bones["shoulder.L"].align_roll(Vector((0, 0, 1)))
     armature.edit_bones["shoulder.R"].align_roll(Vector((0, 0, 1)))
 
-
-    
-    
-    # Fixes the thumb scale rotating inward on x instead of z
-    if not kachina:
-        armature.edit_bones["thumb.01.L"].roll += 3.14 / 4
-        armature.edit_bones["thumb.02.L"].roll += 3.14 / 4
-        armature.edit_bones["thumb.03.L"].roll += 3.14 / 4     
-        armature.edit_bones["thumb.01.R"].roll -= 3.14 / 4
-        armature.edit_bones["thumb.02.R"].roll -= 3.14 / 4
-        armature.edit_bones["thumb.03.R"].roll -= 3.14 / 4 
-
-                                    
-                                                                                                                                
-    for bone in armature.edit_bones:
-        if "thumb" in bone.name or "index" in bone.name or "middle" in bone.name or "ring" in bone.name or "pinky" in bone.name:
-            if ".L" in bone.name:
-                armature.edit_bones[bone.name].roll -= 1.571 
-            else:
-                armature.edit_bones[bone.name].roll += 1.571 
+    for bone in list(armature.edit_bones):
         ## Not sure why this bone exist but it's gotta go lmao                                                      
         if bone.name == "Bip001": 
             for childbone in bone.children:
                 if childbone.name != "spine":
                     armature.edit_bones[childbone.name].parent = armature.edit_bones['spine'] 
             armature.edit_bones.remove(bone)
-        elif ".L" not in bone.name and ".R" not in bone.name:
+        elif ".L" not in bone.name and ".R" not in bone.name and "f_" not in bone.name and "thumb" not in bone.name:
             armature.edit_bones[bone.name].roll = 0
 
             
@@ -737,12 +684,20 @@ def rig_character(
 
 
     bpy.ops.object.mode_set(mode='EDIT')
+    # Align hand.L and hand.R metarig bones straight along forearm vector so hand_ik widget is centered on wrist
+    for side in [".L", ".R"]:
+        forearm_eb = metarm.edit_bones.get("forearm" + side)
+        hand_eb = metarm.edit_bones.get("hand" + side)
+        if forearm_eb and hand_eb:
+            arm_vec = (forearm_eb.tail - forearm_eb.head).normalized()
+            hand_eb.tail = hand_eb.head + arm_vec * 0.05
+            hand_eb.roll = forearm_eb.roll
+
     for bone in metarm.edit_bones:
         if "f_" in bone.name or "thumb" in bone.name:
-            try:
-                bone.roll =  armature.edit_bones["DEF-"+bone.name].roll
-            except:
-                pass
+            orig_b = armature.edit_bones.get(bone.name) or armature.edit_bones.get("DEF-" + bone.name)
+            if orig_b:
+                bone.roll = orig_b.roll
 
     # Fix hand bones being rotated 90 degrees sideways and arm deformation bones being wonky
     if "Loli" in obj.name:
@@ -2099,43 +2054,21 @@ def rig_character(
     bpy.data.objects["Head_Pole"].parent_bone = "neck"
 
 
-    # In object mode, let's take the time to add drivers for viewport outlines (Based on a toggle, optionally to see them before rendering)
+    # Remove any drivers on viewport outlines so user has direct control
     def setup_viewport_outlines(prop):
-        driver = prop.driver_add("show_viewport").driver
-        driver.type = 'SCRIPTED'
-        driver.expression = 'var'
+        try:
+            prop.driver_remove("show_viewport")
+        except:
+            pass
+        try:
+            prop.driver_remove("show_render")
+        except:
+            pass
 
-        var = driver.variables.new()
-        var.name = "var"
-        var.type = 'SINGLE_PROP'
-        var.targets[0].id = bpy.data.objects.get(ourRig)
-        var.targets[0].data_path = "pose.bones[\"plate-settings\"][\"Viewport Outlines\"]"
-        
-        # Update the dependencies
-        depsgraph = bpy.context.evaluated_depsgraph_get()
-        depsgraph.update()
-
-
-    try:
-        setup_viewport_outlines(bpy.data.objects["Body"].modifiers["Outlines Body"])
-    except:
-        pass
-    try:
-        setup_viewport_outlines(bpy.data.objects["Hair"].modifiers["Outlines Hair"])
-    except:
-        pass
-    try:
-        setup_viewport_outlines(bpy.data.objects["Hair.001"].modifiers["Outlines Hair.001"]) # Escoffier? Who else  
-    except:
-        pass
-    try:
-        setup_viewport_outlines(bpy.data.objects["Face"].modifiers["Outlines Face"])
-    except:
-        pass
-    try:
-        setup_viewport_outlines(bpy.data.objects["Dress"].modifiers["Outlines Dress"])
-    except:
-        pass
+    for mesh in [obj for obj in bpy.data.objects if obj.type == 'MESH']:
+        for modifier in mesh.modifiers:
+            if "Outline" in modifier.name or "outlines" in modifier.name.lower() or "Outlines" in modifier.name:
+                setup_viewport_outlines(modifier)
 
     # handled list of face SK
     handled_sks = ['Basis', 'Mouth_Default', 'Mouth_A01', 'Mouth_Open01', 'Mouth_Smile01', 'Mouth_Smile02', 'Mouth_Angry01', 'Mouth_Angry02',
@@ -2730,11 +2663,13 @@ def rig_character(
     this_obj.pose.bones["hand-ik-L"].custom_shape_transform = bpy.data.objects[char_name+"Rig"].pose.bones["mch-hand-ik-pivot-L"]
     this_obj.pose.bones["hand-ik-R"].custom_shape_transform = bpy.data.objects[char_name+"Rig"].pose.bones["mch-hand-ik-pivot-R"]
     
-    # Rotate the custom shape of the hand IK controller bones (wrist) by -45 degrees (left) and +45 degrees (right)
-    this_obj.pose.bones["hand-ik-L"].custom_shape_rotation_euler[1] = 0.0
-    this_obj.pose.bones["hand-ik-L"].custom_shape_rotation_euler[2] = 0.7854
-    this_obj.pose.bones["hand-ik-R"].custom_shape_rotation_euler[1] = 0.0
-    this_obj.pose.bones["hand-ik-R"].custom_shape_rotation_euler[2] = -0.7854
+    # Align custom shape of hand IK controller bones (wrist) straight to center
+    for b_name in ["hand-ik-L", "hand-ik-R", "hand_ik.L", "hand_ik.R", "hand_ik_wrist.L", "hand_ik_wrist.R"]:
+        pb = this_obj.pose.bones.get(b_name)
+        if pb and hasattr(pb, "custom_shape_rotation_euler"):
+            pb.custom_shape_rotation_euler[0] = 0.0
+            pb.custom_shape_rotation_euler[1] = 0.0
+            pb.custom_shape_rotation_euler[2] = 0.0
     
     this_obj.pose.bones["ik-sub-pivot-L"].custom_shape_translation = (foot_L_x_diff*-1.0, 0.0, foot_L_z_diff*-1.0)
     this_obj.pose.bones["ik-sub-pivot-R"].custom_shape_translation = (foot_R_x_diff*-1.0, 0.0, foot_R_z_diff*-1.0)

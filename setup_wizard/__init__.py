@@ -2,8 +2,8 @@ import os
 
 bl_info = {
     "name": "Gacha Blender Setup",
-    "author": "Mken, OctavoPE, Enthralpy",
-    "version": (3, 1, 0),
+    "author": "Mken, OctavoPE, Enthralpy, PaoloESAN",
+    "version": (3, 2, 0),
     "blender": (5, 2, 0),
     "location": "3D View > Sidebar > Genshin Impact / Honkai Star Rail / Zenless Zone Zero / Neverness to Everness",
     "description": "An addon to streamline the character model setup process for Gacha games in Blender 5.2+",
@@ -28,10 +28,8 @@ else:
 
     import bpy
 
-    import setup_wizard.cache_operator
     import setup_wizard.genshin_setup_wizard
     import setup_wizard.ui.gi_ui_setup_wizard_menu
-    from setup_wizard.cache_operator import ClearCacheOperator
     from setup_wizard.character_rig_setup.character_rigger_operator import (
         GI_OT_RigCharacter,
         ZZZ_OT_FixBoneChains,
@@ -47,6 +45,7 @@ else:
         GI_OT_SetUpCharacter,
         HSR_OT_SetUpCharacter,
         ZZZ_OT_SetUpCharacter,
+        NTE_OT_SetUpCharacter,
     )
     from setup_wizard.genshin_import_materials import (
         GI_OT_SetUpMaterials,
@@ -138,7 +137,6 @@ else:
         setup_wizard.ui.zzz_ui_setup_wizard_menu,
         setup_wizard.ui.nte_ui_setup_wizard_menu,
         setup_wizard.genshin_setup_wizard,
-        setup_wizard.cache_operator,
     ]
 
     classes = [
@@ -200,12 +198,12 @@ else:
         NTE_PT_UI_Rig_Character_Menu,
         NTE_PT_UI_Finish_Setup_Menu,
         NTE_OT_SetupWizardUI,
+        NTE_OT_SetUpCharacter,
         NTE_OT_SetUpMaterials,
         NTE_OT_SetUpOutlines,
         NTE_OT_SetUpHairSpecular,
         NTE_OT_SetupCompositorNodes,
         NTE_OT_FinishSetup,
-        ClearCacheOperator,
     ]
 
 

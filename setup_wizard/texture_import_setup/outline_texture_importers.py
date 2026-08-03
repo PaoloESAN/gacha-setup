@@ -15,8 +15,22 @@ from setup_wizard.domain.shader_material_names import JaredNytsPunishingGrayRave
 from setup_wizard.domain.shader_material_name_keywords import ShaderMaterialNameKeywords
 
 from setup_wizard.import_order import CHARACTER_MODEL_FOLDER_FILE_PATH, cache_using_cache_key, get_actual_material_name_for_dress, get_cache
-from setup_wizard.texture_import_setup.texture_importer_types import TextureImporterFactory, TextureImporterType, TextureType
+import re
 from setup_wizard.utils.genshin_body_part_deducer import get_npc_mesh_body_part_name
+
+
+def matches_material_part_name(filename, part_name):
+    """
+    Checks if part_name appears as a distinct component in filename.
+    Matches if part_name is followed by an underscore or dot, e.g.
+    'Body' matches '_Body_Diffuse.png' or '_Body.png'
+    but NOT '_Body2_Diffuse.png' or '_Body3_Diffuse.png'.
+    """
+    pattern = rf'{re.escape(part_name)}(?=[_.]|$)'
+    return bool(re.search(pattern, filename))
+
+
+from setup_wizard.texture_import_setup.texture_importer_types import TextureImporterFactory, TextureImporterType, TextureType, find_texture_nodes
 
 
 class OutlineTextureImporter(ABC):
@@ -30,32 +44,37 @@ class OutlineTextureImporter(ABC):
     def import_textures(self):
         raise NotImplementedError()
 
-    def assign_lightmap_texture(self, character_model_folder_file_path, lightmap_files, body_part_material_name, actual_material_part_name):
+    def assign_lightmap_texture(self, character_model_folder_file_path, lightmap_files, body_part_material_name, actual_material_part_name, target_outline_material=None):
         shader_identifier_service = ShaderIdentifierServiceFactory.create(self.blender_operator.game_type)
         shader = shader_identifier_service.identify_shader(bpy.data.materials, bpy.data.node_groups)
-        outline_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{body_part_material_name} Outlines') or self.get_outline_material_fallback(body_part_material_name)
+        prefix = getattr(self.material_names, 'MATERIAL_PREFIX', '') if self.material_names else ''
+
+        outline_material = target_outline_material or \
+                           (bpy.data.materials.get(f'{prefix}{body_part_material_name} Outlines') if prefix else None) or \
+                           next((m for m in bpy.data.materials if body_part_material_name.lower() in m.name.lower() and 'outlines' in m.name.lower()), None) or \
+                           self.get_outline_material_fallback(body_part_material_name)
 
         if not outline_material:
             return
 
-        lightmap_node = None
-        for node in outline_material.node_tree.nodes:
-            if node.type == 'GROUP':
-                for inp in node.inputs:
-                    if 'Lightmap' in inp.name and 'Alpha' in inp.name:
-                        if inp.is_linked and inp.links[0].from_node.type == 'TEX_IMAGE':
-                            lightmap_node = inp.links[0].from_node
-                        break
-        
-        if not lightmap_node:
-            for name in ['Image Texture.001', 'Image Texture.002', 'Image Texture', 'Outline_Lightmap']:
-                n = outline_material.node_tree.nodes.get(name)
-                if n and n.type == 'TEX_IMAGE' and not n.image:
-                    lightmap_node = n
-                    break
+        possible_lightmap_names = ['Main_Lightmap', 'Lightmap (Non-Color) (Channel Packed)', 'Lightmap (Non-Color)', 'Outline_Lightmap', 'Lightmap_UV0', 'Lightmap', 'Image Texture.001', 'Image Texture.002', 'Image Texture']
 
-        if not lightmap_node:
-            # Force create it if missing!
+        lightmap_node = None
+        if outline_material.use_nodes:
+            outline_nodes = find_texture_nodes(outline_material.node_tree, possible_lightmap_names)
+            if outline_nodes:
+                lightmap_node = outline_nodes[0]
+
+        if not lightmap_node and outline_material.use_nodes:
+            for node in outline_material.node_tree.nodes:
+                if node.type == 'GROUP':
+                    for inp in node.inputs:
+                        if 'Lightmap' in inp.name and 'Alpha' in inp.name:
+                            if inp.is_linked and inp.links[0].from_node.type == 'TEX_IMAGE':
+                                lightmap_node = inp.links[0].from_node
+                            break
+
+        if not lightmap_node and outline_material.use_nodes:
             lightmap_node = outline_material.node_tree.nodes.new('ShaderNodeTexImage')
             for node in outline_material.node_tree.nodes:
                 if node.type == 'GROUP':
@@ -63,30 +82,52 @@ class OutlineTextureImporter(ABC):
                         if 'Lightmap' in inp.name and 'Alpha' in inp.name:
                             outline_material.node_tree.links.new(lightmap_node.outputs['Alpha'], inp)
 
-        base_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{body_part_material_name}')
+        # 1. Try to copy from base material
+        base_material = None
+        if outline_material:
+            base_mat_name = outline_material.name.replace(' Outlines', '').replace(' outlines', '')
+            base_material = bpy.data.materials.get(base_mat_name)
+        if not base_material and prefix:
+            base_material = bpy.data.materials.get(f'{prefix}{body_part_material_name}')
+        if not base_material:
+            base_material = next((m for m in bpy.data.materials if (body_part_material_name.lower() in m.name.lower() or actual_material_part_name.lower() in m.name.lower()) and 'outline' not in m.name.lower()), None)
+
         if base_material and base_material.use_nodes:
-            base_lightmap_node = None
-            for name in ['Main_Lightmap', 'Outline_Lightmap', 'Image Texture.001', 'Lightmap Texture']:
-                n = base_material.node_tree.nodes.get(name)
-                if n and n.type == 'TEX_IMAGE' and n.image:
-                    base_lightmap_node = n
-                    break
+            base_nodes = find_texture_nodes(base_material.node_tree, possible_lightmap_names)
+            base_lightmap_node = next((n for n in base_nodes if n.image), None)
+            if not base_lightmap_node:
+                possible_diffuse_names = ['Main_Diffuse', 'Diffuse (sRGB) (Channel Packed)', 'Diffuse (sRGB)', 'Outline_Diffuse', 'Diffuse_UV0', 'Diffuse', 'Image Texture', 'Image Texture.001']
+                base_diff_nodes = find_texture_nodes(base_material.node_tree, possible_diffuse_names)
+                base_lightmap_node = next((n for n in base_diff_nodes if n.image), None)
             if not base_lightmap_node:
                 for n in base_material.node_tree.nodes:
-                    if n.type == 'TEX_IMAGE' and n.image and 'Lightmap' in n.image.name:
+                    if n.type == 'TEX_IMAGE' and n.image:
                         base_lightmap_node = n
                         break
-            
-            if base_lightmap_node and base_lightmap_node.image:
-                lightmap_node.image = base_lightmap_node.image
+
+            if base_lightmap_node and base_lightmap_node.image and lightmap_node:
+                from setup_wizard.texture_import_setup.game_texture_importers import create_outline_image_copy
+                lightmap_node.image = create_outline_image_copy(base_lightmap_node.image, 'Non-Color', '_outline_lightmap')
                 self.blender_operator.report({'INFO'}, f'Assigned base material lightmap onto material "{outline_material.name}"')
                 return
 
+        # 2. Fallback: search loaded images in bpy.data.images
+        loaded_img = next((img for img in bpy.data.images if (actual_material_part_name.lower() in img.name.lower() or body_part_material_name.lower() in img.name.lower()) and ('lightmap' in img.name.lower() or 'ligntmap' in img.name.lower())), None)
+        if not loaded_img:
+            loaded_img = next((img for img in bpy.data.images if (actual_material_part_name.lower() in img.name.lower() or body_part_material_name.lower() in img.name.lower()) and 'diffuse' in img.name.lower()), None)
+
+        if loaded_img and lightmap_node:
+            from setup_wizard.texture_import_setup.game_texture_importers import create_outline_image_copy
+            lightmap_node.image = create_outline_image_copy(loaded_img, 'Non-Color', '_outline_lightmap')
+            self.blender_operator.report({'INFO'}, f'Assigned loaded image lightmap onto material "{outline_material.name}"')
+            return
+
+        # 3. Fallback: search files in character directory
         lightmap_filenames = []
         if body_part_material_name == 'EffectHair':
             lightmap_filenames = [file for file in lightmap_files if 'EffectHair' in file]
         else:
-            lightmap_filenames = [file for file in lightmap_files if actual_material_part_name in file and 'EffectHair' not in file]
+            lightmap_filenames = [file for file in lightmap_files if matches_material_part_name(file, actual_material_part_name) and 'EffectHair' not in file]
 
         if lightmap_filenames and lightmap_node:
             self.assign_texture_to_node(lightmap_node, character_model_folder_file_path, lightmap_filenames[0])
@@ -94,63 +135,81 @@ class OutlineTextureImporter(ABC):
         else:
             self.blender_operator.report({'WARNING'}, f'"{actual_material_part_name}" lightmap not found for material "{outline_material.name}".')
 
-    def assign_diffuse_texture(self, character_model_folder_file_path, diffuse_files, body_part_material_name, actual_material_part_name):
+    def assign_diffuse_texture(self, character_model_folder_file_path, diffuse_files, body_part_material_name, actual_material_part_name, target_outline_material=None):
         shader_identifier_service = ShaderIdentifierServiceFactory.create(self.blender_operator.game_type)
         shader = shader_identifier_service.identify_shader(bpy.data.materials, bpy.data.node_groups)
-        outline_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{body_part_material_name} Outlines') or self.get_outline_material_fallback(body_part_material_name)
+        prefix = getattr(self.material_names, 'MATERIAL_PREFIX', '') if self.material_names else ''
+
+        outline_material = target_outline_material or \
+                           (bpy.data.materials.get(f'{prefix}{body_part_material_name} Outlines') if prefix else None) or \
+                           next((m for m in bpy.data.materials if body_part_material_name.lower() in m.name.lower() and 'outlines' in m.name.lower()), None) or \
+                           self.get_outline_material_fallback(body_part_material_name)
 
         if not outline_material:
             return
 
+        possible_diffuse_names = ['Main_Diffuse', 'Diffuse (sRGB) (Channel Packed)', 'Diffuse (sRGB)', 'Outline_Diffuse', 'Diffuse_UV0', 'Diffuse', 'Image Texture', 'Image Texture.001']
+
         diffuse_node = None
-        for node in outline_material.node_tree.nodes:
-            if node.type == 'GROUP':
-                for inp in node.inputs:
-                    if 'Diffuse' in inp.name and 'Alpha' in inp.name:
-                        if inp.is_linked and inp.links[0].from_node.type == 'TEX_IMAGE':
-                            diffuse_node = inp.links[0].from_node
-                        break
-        
-        if not diffuse_node:
-            for name in ['Image Texture', 'Image Texture.001', 'Image Texture.002', 'Outline_Diffuse']:
-                n = outline_material.node_tree.nodes.get(name)
-                if n and n.type == 'TEX_IMAGE' and not n.image:
-                    diffuse_node = n
-                    break
+        if outline_material.use_nodes:
+            outline_nodes = find_texture_nodes(outline_material.node_tree, possible_diffuse_names)
+            if outline_nodes:
+                diffuse_node = outline_nodes[0]
 
-        if not diffuse_node:
-             # Force create it if missing!
-             diffuse_node = outline_material.node_tree.nodes.new('ShaderNodeTexImage')
-             for node in outline_material.node_tree.nodes:
-                 if node.type == 'GROUP':
-                     for inp in node.inputs:
-                         if 'Diffuse' in inp.name and 'Alpha' in inp.name:
-                             outline_material.node_tree.links.new(diffuse_node.outputs['Alpha'], inp)
+        if not diffuse_node and outline_material.use_nodes:
+            for node in outline_material.node_tree.nodes:
+                if node.type == 'GROUP':
+                    for inp in node.inputs:
+                        if 'Diffuse' in inp.name and 'Alpha' in inp.name:
+                            if inp.is_linked and inp.links[0].from_node.type == 'TEX_IMAGE':
+                                diffuse_node = inp.links[0].from_node
+                            break
 
-        base_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{body_part_material_name}')
+        if not diffuse_node and outline_material.use_nodes:
+            diffuse_node = outline_material.node_tree.nodes.new('ShaderNodeTexImage')
+            for node in outline_material.node_tree.nodes:
+                if node.type == 'GROUP':
+                    for inp in node.inputs:
+                        if 'Diffuse' in inp.name and 'Alpha' in inp.name:
+                            outline_material.node_tree.links.new(diffuse_node.outputs['Alpha'], inp)
+
+        # 1. Try to copy from base material
+        base_material = None
+        if outline_material:
+            base_mat_name = outline_material.name.replace(' Outlines', '').replace(' outlines', '')
+            base_material = bpy.data.materials.get(base_mat_name)
+        if not base_material and prefix:
+            base_material = bpy.data.materials.get(f'{prefix}{body_part_material_name}')
+        if not base_material:
+            base_material = next((m for m in bpy.data.materials if (body_part_material_name.lower() in m.name.lower() or actual_material_part_name.lower() in m.name.lower()) and 'outline' not in m.name.lower()), None)
+
         if base_material and base_material.use_nodes:
-            base_diffuse_node = None
-            for name in ['Main_Diffuse', 'Outline_Diffuse', 'Body_Diffuse_UV0', 'Image Texture', 'Diffuse Texture']:
-                n = base_material.node_tree.nodes.get(name)
-                if n and n.type == 'TEX_IMAGE' and n.image:
-                    base_diffuse_node = n
-                    break
+            base_nodes = find_texture_nodes(base_material.node_tree, possible_diffuse_names)
+            base_diffuse_node = next((n for n in base_nodes if n.image), None)
             if not base_diffuse_node:
                 for n in base_material.node_tree.nodes:
-                    if n.type == 'TEX_IMAGE' and n.image and 'Diffuse' in n.image.name:
+                    if n.type == 'TEX_IMAGE' and n.image:
                         base_diffuse_node = n
                         break
-            
-            if base_diffuse_node and base_diffuse_node.image:
+
+            if base_diffuse_node and base_diffuse_node.image and diffuse_node:
                 diffuse_node.image = base_diffuse_node.image
                 self.blender_operator.report({'INFO'}, f'Assigned base material diffuse onto material "{outline_material.name}"')
                 return
 
+        # 2. Fallback: search loaded images in bpy.data.images
+        loaded_img = next((img for img in bpy.data.images if (actual_material_part_name.lower() in img.name.lower() or body_part_material_name.lower() in img.name.lower()) and 'diffuse' in img.name.lower()), None)
+        if loaded_img and diffuse_node:
+            diffuse_node.image = loaded_img
+            self.blender_operator.report({'INFO'}, f'Assigned loaded image diffuse onto material "{outline_material.name}"')
+            return
+
+        # 3. Fallback: search files in character directory
         diffuse_filenames = []
         if body_part_material_name == 'EffectHair':
             diffuse_filenames = [file for file in diffuse_files if 'EffectHair' in file]
         else:
-            diffuse_filenames = [file for file in diffuse_files if actual_material_part_name in file and 'EffectHair' not in file]
+            diffuse_filenames = [file for file in diffuse_files if matches_material_part_name(file, actual_material_part_name) and 'EffectHair' not in file]
 
         if diffuse_filenames and diffuse_node:
             self.assign_texture_to_node(diffuse_node, character_model_folder_file_path, diffuse_filenames[0])
@@ -167,11 +226,12 @@ class OutlineTextureImporter(ABC):
         node.image = texture_img
 
     def get_outline_material_fallback(self, body_part_material_name):
-        # If outlines could not be found, the material name may be too long.
-        # Try searching for the outlines material by specific settings in it.
-        shader_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{body_part_material_name}')
+        prefix = getattr(self.material_names, 'MATERIAL_PREFIX', '') if self.material_names else ''
+        shader_material = (bpy.data.materials.get(f'{prefix}{body_part_material_name}') if prefix else None) or \
+                          next((m for m in bpy.data.materials if body_part_material_name.lower() in m.name.lower() and 'outline' not in m.name.lower()), None)
         if shader_material:
             return ShaderMaterial(shader_material, self.shader_node_names).get_outlines_material()
+        return None
 
 class OutlineTextureImporterFactory:
     def create(game_type: GameType, blender_operator: Operator, context: Context):
@@ -233,6 +293,8 @@ class GenshinImpactOutlineTextureImporter(OutlineTextureImporter):
         for name, folder, files in os.walk(character_model_folder_file_path):
             diffuse_files = [file for file in files if 'Diffuse'.lower() in file.lower()]
             lightmap_files = [file for file in files if 'Lightmap'.lower() in file.lower() or 'Ligntmap'.lower() in file.lower()]  # Important typo check for: Wrioth
+            prefix = getattr(self.material_names, 'MATERIAL_PREFIX', '')
+            prefix_renamed = getattr(self.material_names, 'MATERIAL_PREFIX_AFTER_RENAME', '')
             outline_materials = [material for material in bpy.data.materials.values() if 
                                  material.name != self.material_names.OUTLINES and 
                                  material.name != self.material_names.NIGHT_SOUL_OUTLINES and
@@ -267,7 +329,8 @@ class GenshinImpactOutlineTextureImporter(OutlineTextureImporter):
                 else:
                     original_mesh_materials = [material for material in bpy.data.materials if 
                                                body_part_material_name in material.name and
-                                               not material.name.startswith(self.material_names.MATERIAL_PREFIX)
+                                               not material.name.startswith(prefix) and
+                                               not (prefix_renamed and material.name.startswith(prefix_renamed))
                                                ]
                     character_type = TextureImporterType.AVATAR
                     original_mesh_material = original_mesh_materials[0] if original_mesh_materials else None
@@ -286,9 +349,15 @@ class GenshinImpactOutlineTextureImporter(OutlineTextureImporter):
                         actual_material_part_name = body_part_material_name
 
                 if 'Face' not in actual_material_part_name and 'Face' not in body_part_material_name:
-                    self.assign_lightmap_texture(character_model_folder_file_path, lightmap_files, body_part_material_name, actual_material_part_name)
-                    self.assign_diffuse_texture(character_model_folder_file_path, diffuse_files, body_part_material_name, actual_material_part_name)
+                    self.assign_lightmap_texture(character_model_folder_file_path, lightmap_files, body_part_material_name, actual_material_part_name, target_outline_material=outline_material)
+                    self.assign_diffuse_texture(character_model_folder_file_path, diffuse_files, body_part_material_name, actual_material_part_name, target_outline_material=outline_material)
             break  # IMPORTANT: We os.walk which also traverses through folders...we just want the files
+
+        all_outlines = [m for m in bpy.data.materials if m.use_nodes and ('outlines' in m.name.lower() or m.name.endswith('Outlines')) and 'night_soul' not in m.name.lower() and m.name != 'HoYoverse - Genshin Outlines']
+        for o_mat in all_outlines:
+            part = o_mat.name.split()[-2] if len(o_mat.name.split()) >= 2 else ""
+            self.assign_lightmap_texture(character_model_folder_file_path, lightmap_files, part, part, target_outline_material=o_mat)
+            self.assign_diffuse_texture(character_model_folder_file_path, diffuse_files, part, part, target_outline_material=o_mat)
 
         if cache_enabled and character_model_folder_file_path:
             cache_using_cache_key(get_cache(cache_enabled), CHARACTER_MODEL_FOLDER_FILE_PATH, character_model_folder_file_path)

@@ -12,10 +12,12 @@
 
 ---
 
-## Requirements
+## Additional Add-ons
 
-* **ExpyKit**: [pKrime/Expy-Kit](https://github.com/pKrime/Expy-Kit) (Required for Rigify character rigging automation)
-* **UEFormat** (*ONLY for Neverness to Everness / NTE*): [h4lfheart/UEFormat](https://github.com/h4lfheart/UEFormat)
+The following add-on dependencies are bundled in the `dependencies` directory and will be **automatically installed and enabled** if they are not already present in your Blender environment:
+
+* **ExpyKit**: [pKrime/Expy-Kit](https://github.com/pKrime/Expy-Kit) — Installed for automating Rigify character rigging setups.
+* **UEFormat**: [h4lfheart/UEFormat](https://github.com/h4lfheart/UEFormat) — Installed for importing Neverness to Everness (NTE) character models.
 
 ---
 
@@ -68,11 +70,16 @@ Thanks to all those who collaborated on the original project:
 
 ### Additional Credits & Acknowledgments (This Project)
 
+* **Genshin Impact**:
+  * **Shader**: [Blender-miHoYo-Shaders](https://github.com/festivize/Blender-miHoYo-Shaders) by Festivity
+* **HSR**:
+  * **Shader**: [Blender-StellarToon](https://github.com/festivities/Blender-StellarToon) by Festivity
+  * **Face Rig**: Isaac
 * **ZZZ**:
-  * **Rigging + Scripting**: Enthralpy
   * **Shader**: Just_ScaasI, BonnyAnimations, Aiko
+  * **Rigging + Scripting**: Enthralpy
   * **Supervised and made possible by**: Stormz67
   * **Face Rig**: [@jideeh](https://github.com/Jideeh1)
 * **NTE**:
-  * **Shader**: To whom it may concern
+  * **Shader**: Omatsuri Discord
   * **Rig**: 矩阵映画

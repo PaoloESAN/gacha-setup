@@ -8,7 +8,15 @@ from bpy.types import Operator, Context
 from setup_wizard.domain.game_types import GameType
 
 from setup_wizard.domain.shader_configurator import ShaderConfigurator
-from setup_wizard.import_order import CHARACTER_MODEL_FOLDER_FILE_PATH, NextStepInvoker, cache_using_cache_key, get_cache
+from setup_wizard.import_order import (
+    CHARACTER_MODEL_FOLDER_FILE_PATH,
+    NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH,
+    NextStepInvoker,
+    cache_using_cache_key,
+    get_cache,
+    get_active_character_directory,
+    set_active_character_directory,
+)
 from setup_wizard.texture_import_setup.texture_importer_types import GenshinTextureImporter, TextureImporterFactory, TextureImporterType
 
 
@@ -461,8 +469,8 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                             img.alpha_mode = 'CHANNEL_PACKED'
 
             # If this is a Hair material and no hair texture was found,
-            # remove its material slot (Slot 2+) from mesh objects so the hair inherits Slot 1
-            if "hair" in matname:
+            # remove its material slot (Slot 2+) from mesh objects so the hair inherits Slot 1 (only for ZZZ)
+            if self.blender_operator.game_type == GameType.ZENLESS_ZONE_ZERO.name and "hair" in matname:
                 has_hair_texture = any(node.type == 'TEX_IMAGE' and node.image for node in nodes)
                 if not has_hair_texture:
                     for obj in bpy.data.objects:
@@ -557,6 +565,131 @@ def sync_zzz_outline_textures():
                         node.image = assigned_img
 
 
+def create_outline_image_copy(src_image, colorspace_name='Non-Color', suffix='_outline_lightmap'):
+    if not src_image:
+        return None
+    if colorspace_name == 'Non-Color':
+        copy_name = f"{src_image.name}{suffix}"
+        existing = bpy.data.images.get(copy_name)
+        if existing:
+            return existing
+        img_copy = src_image.copy()
+        img_copy.name = copy_name
+        img_copy.colorspace_settings.name = 'Non-Color'
+        img_copy.alpha_mode = 'CHANNEL_PACKED'
+        return img_copy
+    else:
+        if src_image.colorspace_settings.name != 'sRGB':
+            src_image.colorspace_settings.name = 'sRGB'
+        return src_image
+
+
+def sync_genshin_outline_textures():
+    """
+    Scans all Genshin outline materials in bpy.data.materials and syncs their Diffuse & Lightmap texture nodes
+    with loaded textures from corresponding main character materials.
+    Creates a duplicate image datablock for lightmaps set to Non-Color so main character diffuse textures remain in sRGB.
+    """
+    outline_materials = [
+        m for m in bpy.data.materials if m.use_nodes and 
+        (('outlines' in m.name.lower() or m.name.endswith('Outlines')) and
+         'night_soul' not in m.name.lower() and
+         m.name != 'HoYoverse - Genshin Outlines')
+    ]
+    main_materials = [
+        m for m in bpy.data.materials if m.use_nodes and
+        ('HoYoverse' in m.name or 'miHoYo' in m.name) and
+        not ('outlines' in m.name.lower() or m.name.endswith('Outlines'))
+    ]
+
+    def get_all_tex_image_nodes(node_tree):
+        nodes = []
+        if not node_tree:
+            return nodes
+        for n in node_tree.nodes:
+            if n.type == 'TEX_IMAGE':
+                nodes.append(n)
+            elif n.type == 'GROUP' and n.node_tree:
+                nodes.extend(get_all_tex_image_nodes(n.node_tree))
+        return nodes
+
+    for outline_mat in outline_materials:
+        outline_lower = outline_mat.name.lower()
+
+        # 1. Direct name matching by stripping ' Outlines' or ' outlines'
+        direct_base_name = outline_mat.name.replace(' Outlines', '').replace(' outlines', '')
+        matched_main_mat = bpy.data.materials.get(direct_base_name)
+
+        # 2. Body part keyword matching if direct match fails
+        if not matched_main_mat:
+            body_parts = ['hair', 'body3', 'body2', 'body1', 'body', 'dress', 'skirt', 'helmet', 'gauntlet', 'leather', 'glass', 'skillobj']
+            for part in body_parts:
+                if part in outline_lower:
+                    cand = [m for m in main_materials if part in m.name.lower()]
+                    if cand:
+                        matched_main_mat = cand[0]
+                        break
+
+        # 3. Fuzzy word matching score fallback
+        if not matched_main_mat:
+            out_words = [w for w in outline_lower.replace("hoyoverse", "").replace("mihoyo", "").replace("genshin", "").replace("outlines", "").split() if w]
+            best_match = None
+            best_score = 0
+            for m in main_materials:
+                m_words = [w for w in m.name.lower().replace("hoyoverse", "").replace("mihoyo", "").replace("genshin", "").split() if w]
+                score = sum(1 for w in out_words if w in m_words)
+                if score > best_score:
+                    best_score = score
+                    best_match = m
+            matched_main_mat = best_match
+
+        if not matched_main_mat or not matched_main_mat.use_nodes:
+            continue
+
+        # Extract active Diffuse and Lightmap images from matched_main_mat
+        main_tex_nodes = get_all_tex_image_nodes(matched_main_mat.node_tree)
+        main_images = [n.image for n in main_tex_nodes if n.image]
+
+        diffuse_image = None
+        lightmap_image = None
+
+        for n in main_tex_nodes:
+            if not n.image:
+                continue
+            nid = (n.name + " " + (n.label or "")).lower()
+            if 'diffuse' in nid or 'color' in nid or 'main_diffuse' in nid or 'tex' in nid:
+                if not diffuse_image and 'lightmap' not in nid:
+                    diffuse_image = n.image
+            elif 'lightmap' in nid or 'ligntmap' in nid:
+                if not lightmap_image:
+                    lightmap_image = n.image
+
+        if not diffuse_image and main_images:
+            diffuse_image = main_images[0]
+        if not lightmap_image:
+            lightmap_image = diffuse_image
+
+        if not diffuse_image:
+            part_name = outline_mat.name.split()[-2] if len(outline_mat.name.split()) >= 2 else ""
+            if part_name:
+                diffuse_image = next((img for img in bpy.data.images if part_name.lower() in img.name.lower() and 'diffuse' in img.name.lower()), None)
+                lightmap_image = next((img for img in bpy.data.images if part_name.lower() in img.name.lower() and ('lightmap' in img.name.lower() or 'ligntmap' in img.name.lower())), None) or diffuse_image
+
+        if not diffuse_image:
+            continue
+
+        # Assign images to outline_mat's TEX_IMAGE nodes
+        outline_tex_nodes = get_all_tex_image_nodes(outline_mat.node_tree)
+        for node in outline_tex_nodes:
+            nid = (node.name + " " + (node.label or "")).lower()
+            if 'diffuse' in nid or 'srgb' in nid or 'color' in nid or 'main_diffuse' in nid or 'image texture' in nid:
+                if 'lightmap' not in nid:
+                    node.image = create_outline_image_copy(diffuse_image, 'sRGB', '_outline_diffuse')
+            if 'lightmap' in nid or 'non-color' in nid or 'ligntmap' in nid:
+                if lightmap_image:
+                    node.image = create_outline_image_copy(lightmap_image, 'Non-Color', '_outline_lightmap')
+
+
 def find_nte_texture_for_material(mat_name, tex_type, image_files):
     name_lower = mat_name.lower()
 
@@ -570,7 +703,15 @@ def find_nte_texture_for_material(mat_name, tex_type, image_files):
             return any(k in flow for k in ['_m.', '_m_', '_m1', '_m2', '_mask', '_lightmap'])
         elif tex_type == 'id':
             return any(k in flow for k in ['_id.', '_id_', '_id1', '_id2', '_idmap'])
+        elif tex_type == 'r':
+            return any(k in flow for k in ['_r.', '_r_', '_r1', '_r2', '_rim'])
         return True
+
+    is_eye_mat = any(k in name_lower for k in ['eye', '目', 'iris', 'pupil', 'eyelash', 'eyebrow', '眉毛', '睫毛'])
+
+    def is_eye_texture(f):
+        flow = f.lower()
+        return any(k in flow for k in ['eye', 'eyes', 'bantou', '目', '睫毛', '眉毛', 'eyelash', 'eyebrow'])
 
     if 'hair' in name_lower or 'pelo' in name_lower or '发' in name_lower:
         sub_idx = '02' if ('02' in name_lower or '2' in name_lower or '后发' in name_lower) else '01'
@@ -596,7 +737,7 @@ def find_nte_texture_for_material(mat_name, tex_type, image_files):
         if candidates:
             return candidates[0]
 
-    if any(k in name_lower for k in ['eye', '目', 'iris', 'pupil', 'eyelash', 'eyebrow', '眉毛', '睫毛']):
+    if is_eye_mat:
         candidates = [f for f in image_files if ('eyes' in f.lower() or 'eye_' in f.lower() or 'eye.' in f.lower() or 'eye' in f.lower()) and matches_type(f)]
         specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['touming', 'common', 'default', 'dummy', 'transparent'])]
         if specific_candidates:
@@ -609,30 +750,43 @@ def find_nte_texture_for_material(mat_name, tex_type, image_files):
         if candidates:
             return candidates[0]
 
+    material_noise_tokens = ['player', '075', '019', 'oneiroi', 'oneir', 'mint', 'skin', 'lod0', 'skeleton', 'nte', 'shader', 'mi', 'mat', 'chastener']
+
+    def find_by_material_name():
+        name_tokens = [p for p in name_lower.replace('-', '_').replace('.', '_').split('_') if len(p) >= 3 and p.isalnum() and p not in material_noise_tokens]
+        if not name_tokens:
+            return None
+        best_file = None
+        best_score = 0
+        for f in image_files:
+            if not matches_type(f) or (not is_eye_mat and is_eye_texture(f)):
+                continue
+            fnorm = ''.join(ch for ch in f.lower() if ch.isalnum())
+            score = sum(1 for t in name_tokens if t in fnorm)
+            if score > best_score:
+                best_score = score
+                best_file = f
+        return best_file if best_score > 0 else None
+
+    material_name_match = find_by_material_name()
+    if material_name_match:
+        return material_name_match
+
     if any(k in name_lower for k in ['down', '02', '_2', 'bottom', 'skirt', 'leg']):
-        candidates = [f for f in image_files if ('_02_' in f.lower() or '_2_' in f.lower() or 'down' in f.lower() or 'body2' in f.lower()) and matches_type(f)]
+        candidates = [f for f in image_files if ('_02_' in f.lower() or '_2_' in f.lower() or 'down' in f.lower() or 'body2' in f.lower() or 'cloth' in f.lower() or 'clothing' in f.lower() or '衣服' in f.lower()) and matches_type(f)]
         if not candidates:
             candidates = [f for f in image_files if '_02_' in f.lower() or '_2_' in f.lower()]
         if candidates:
             return candidates[0]
 
     if any(k in name_lower for k in ['up', '01', '_1', 'top', 'upper', 'body', 'skin', 'chastener_1']):
-        candidates = [f for f in image_files if ('_01_' in f.lower() or '_1_' in f.lower() or 'up' in f.lower()) and matches_type(f)]
+        candidates = [f for f in image_files if ('_01_' in f.lower() or '_1_' in f.lower() or 'up' in f.lower() or 'cloth' in f.lower() or 'clothing' in f.lower() or '衣服' in f.lower()) and matches_type(f)]
         if not candidates:
             candidates = [f for f in image_files if '_01_' in f.lower() or '_1_' in f.lower()]
         if candidates:
             return candidates[0]
 
-    clean_parts = [p for p in name_lower.split('_') if p not in ['player', '075', '019', 'oneiroi', 'oneir', 'mint', 'skin', 'lod0', 'skeleton', 'nte', 'shader', 'mi', 'mat', 'chastener']]
-    if clean_parts:
-        candidates = [
-            f for f in image_files
-            if any(part in f.lower() for part in clean_parts) and matches_type(f)
-        ]
-        if candidates:
-            return candidates[0]
-
-    candidates = [f for f in image_files if matches_type(f)]
+    candidates = [f for f in image_files if matches_type(f) and (is_eye_mat or not is_eye_texture(f))]
     return candidates[0] if candidates else (image_files[0] if image_files else None)
 
 
@@ -644,11 +798,26 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
 
     def import_textures(self):
         op = self.blender_operator
+        cache_enabled = self.context.window_manager.cache_enabled
 
         fp = getattr(op, 'filepath', '') or getattr(op, 'import_path', '') or getattr(op, 'directory', '')
-        folder = op.file_directory
+        folder = op.file_directory \
+            or get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH) \
+            or get_cache(cache_enabled).get(NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH) \
+            or get_active_character_directory() \
+            or self.context.scene.get("setup_wizard_imported_model_dir")
+
         if not folder and fp:
             folder = fp if os.path.isdir(fp) else os.path.dirname(fp)
+
+        if not folder:
+            for img in bpy.data.images:
+                if img.filepath and os.path.exists(bpy.path.abspath(img.filepath)):
+                    cand = os.path.dirname(bpy.path.abspath(img.filepath))
+                    if os.path.isdir(cand):
+                        folder = cand
+                        set_active_character_directory(folder)
+                        break
 
         has_textures = False
         if folder and os.path.isdir(folder):

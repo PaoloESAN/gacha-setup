@@ -5,8 +5,11 @@ from bpy.types import Operator
 
 from setup_wizard.domain.game_types import GameType
 from setup_wizard.domain.mesh_names import MeshNames
+from setup_wizard.domain.shader_material_names import ShaderMaterialNames
+from setup_wizard.domain.shader_identifier_service import ShaderIdentifierService, ShaderIdentifierServiceFactory
 from setup_wizard.import_order import NextStepInvoker
 from setup_wizard.setup_wizard_operator_base_classes import CustomOperatorProperties
+from setup_wizard.utils.mesh_utils import remove_material_slots
 
 
 class GI_OT_JoinMeshesOnArmature(Operator, CustomOperatorProperties):
@@ -19,6 +22,7 @@ class GI_OT_JoinMeshesOnArmature(Operator, CustomOperatorProperties):
 
         if join_meshes:
             self.__join_face_meshes()
+            self.__delete_brow_material_from_material_slot()
 
         if self.next_step_idx:
             NextStepInvoker().invoke(
@@ -94,3 +98,17 @@ class GI_OT_JoinMeshesOnArmature(Operator, CustomOperatorProperties):
             except Exception as e:
                 print(f"Failed to join meshes or transfer drivers: {e}")
 
+    def __delete_brow_material_from_material_slot(self):
+        face_mesh = bpy.data.objects.get(MeshNames.FACE)
+        if face_mesh:
+            try:
+                shader_identifier_service: ShaderIdentifierService = ShaderIdentifierServiceFactory.create(self.game_type)
+                shader_material_names: ShaderMaterialNames = shader_identifier_service.get_shader_material_names(self.game_type, bpy.data.materials, bpy.data.node_groups)
+                brow_mat_name = getattr(shader_material_names, 'BROW', None)
+                brow_material = bpy.data.materials.get(brow_mat_name) if brow_mat_name else None
+                if not brow_material:
+                    brow_material = bpy.data.materials.get('HoYoverse - Genshin Brow') or bpy.data.materials.get('Brow')
+                if brow_material:
+                    remove_material_slots(face_mesh, [brow_material])
+            except Exception as ex:
+                print(f"Notice: __delete_brow_material_from_material_slot: {ex}")

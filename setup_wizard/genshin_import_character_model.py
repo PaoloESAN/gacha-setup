@@ -17,9 +17,12 @@ from bpy_extras.io_utils import ImportHelper
 from setup_wizard.domain.game_types import GameType
 from setup_wizard.import_order import (
     CHARACTER_MODEL_FOLDER_FILE_PATH,
+    NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH,
+    NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH,
     NextStepInvoker,
     cache_using_cache_key,
     get_cache,
+    set_active_character_directory,
 )
 from setup_wizard.setup_wizard_operator_base_classes import (
     BasicSetupUIOperator,
@@ -31,6 +34,39 @@ SHADER_COLOR_ATTRIBUTE_NAME = "Col"
 
 # Session variable to track if character was imported via the automatic wizard flow in this session
 IMPORTED_VIA_WIZARD = False
+
+
+def _execute_fbx_import(filepath):
+    """
+    Executes FBX import using the modern Blender C++ importer (bpy.ops.wm.fbx_import) with default options
+    as requested by the user, with fallback to legacy import_scene.fbx if wm.fbx_import is not available.
+    """
+    if hasattr(bpy.ops.wm, "fbx_import"):
+        try:
+            bpy.ops.wm.fbx_import(
+                filepath=filepath,
+                global_scale=1.0,
+                mtl_name_collision_mode='MAKE_UNIQUE',
+                import_colors='SRGB',
+                use_custom_normals=True,
+                use_custom_props=True,
+                use_custom_props_enum_as_string=True,
+                import_subdivision=False,
+                ignore_leaf_bones=False,
+                validate_meshes=True,
+                use_anim=True,
+                anim_offset=1.0,
+            )
+            return
+        except Exception as e:
+            print(f"bpy.ops.wm.fbx_import failed ({e}), falling back to import_scene.fbx")
+
+    # Fallback for older Blender versions / legacy FBX importer
+    bpy.ops.import_scene.fbx(
+        filepath=filepath,
+        force_connect_children=True,
+        automatic_bone_orientation=True,
+    )
 
 
 class GI_OT_SetUpCharacter(Operator, BasicSetupUIOperator):
@@ -52,6 +88,71 @@ class ZZZ_OT_SetUpCharacter(Operator, BasicSetupUIOperator):
 
     bl_idname = "zenless_zone_zero.set_up_character"
     bl_label = "Zenless Zone Zero: Set Up Character (UI)"
+
+
+class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
+    """Sets Up Character for Neverness to Everness"""
+
+    bl_idname = "neverness_to_everness.set_up_character"
+    bl_label = "Select NTE Character Model (.uemodel)"
+
+    filename_ext = ".uemodel"
+    filter_glob: StringProperty(
+        default="*.uemodel",
+        options={'HIDDEN'},
+        maxlen=255,
+    )
+
+    def execute(self, context):
+        if not self.filepath:
+            return {"CANCELLED"}
+
+        folder = os.path.dirname(self.filepath) if os.path.isfile(self.filepath) else self.filepath
+        if folder and os.path.isdir(folder):
+            set_active_character_directory(folder)
+            cache_using_cache_key(get_cache(True), CHARACTER_MODEL_FOLDER_FILE_PATH, folder)
+            cache_using_cache_key(get_cache(True), NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH, folder)
+            cache_using_cache_key(get_cache(True), NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH, folder)
+            context.scene["setup_wizard_imported_model_dir"] = folder
+            context.scene["setup_wizard_imported_uemodel_path"] = self.filepath
+            print(f"[NTE SETUP] Cached character folder from uemodel selection: {folder}")
+
+        if hasattr(bpy.ops, 'uf') and hasattr(bpy.ops.uf, 'import_uemodel'):
+            filename = os.path.basename(self.filepath) if os.path.isfile(self.filepath) else ""
+            imported_ok = False
+
+            # Method 1: Pass directory + files collection + filepath (UEFormat ImportHelper standard)
+            try:
+                bpy.ops.uf.import_uemodel(
+                    filepath=self.filepath,
+                    directory=folder,
+                    files=[{"name": filename}]
+                )
+                imported_ok = True
+            except Exception as e1:
+                print(f"[NTE SETUP] Method 1 uf.import_uemodel notice: {e1}")
+
+            # Method 2: Pass filepath only
+            if not imported_ok:
+                try:
+                    bpy.ops.uf.import_uemodel(filepath=self.filepath)
+                    imported_ok = True
+                except Exception as e2:
+                    print(f"[NTE SETUP] Method 2 uf.import_uemodel notice: {e2}")
+
+            # Method 3: Fallback execute
+            if not imported_ok:
+                try:
+                    bpy.ops.uf.import_uemodel('EXEC_DEFAULT', filepath=self.filepath)
+                except Exception as e3:
+                    self.report({"WARNING"}, f"UEFormat import notice: {e3}")
+
+            self.report({"INFO"}, f"Imported NTE character model: {filename}")
+        else:
+            self.report({"ERROR"}, "UEFormat add-on is not enabled or available.")
+            return {"CANCELLED"}
+
+        return {"FINISHED"}
 
 
 class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties):
@@ -76,7 +177,17 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
         maxlen=255,  # Max internal buffer length, longer would be clamped.
     )
 
+    def clean_up_scene(self):
+        OBJECTS_TO_CLEAN_UP = [
+            'Cube',
+            'Light',
+        ]
+        for obj in bpy.data.objects:
+            if obj.name in OBJECTS_TO_CLEAN_UP:
+                bpy.data.objects.remove(obj)
+
     def execute(self, context):
+        self.clean_up_scene()
         is_character_model_file = not os.path.isdir(self.filepath) and self.filepath
         character_model_directory = (
             os.path.dirname(self.filepath) or self.file_directory
@@ -110,12 +221,8 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                 SHADER_COLOR_ATTRIBUTE_NAME
             )  # Blender 3.4 changed default name to 'Attribute', revert it
 
-            if context.window_manager.cache_enabled and character_model_directory:
-                cache_using_cache_key(
-                    get_cache(),
-                    CHARACTER_MODEL_FOLDER_FILE_PATH,
-                    character_model_directory,
-                )
+            if character_model_directory:
+                set_active_character_directory(character_model_directory)
 
             global IMPORTED_VIA_WIZARD
             IMPORTED_VIA_WIZARD = True
@@ -188,11 +295,7 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
 
             if not better_fbx_success:
                 try:
-                    bpy.ops.import_scene.fbx(
-                        filepath=character_model_file_path,
-                        force_connect_children=True,
-                        automatic_bone_orientation=True,
-                    )
+                    _execute_fbx_import(character_model_file_path)
                 except Exception as e:
                     # Clean up newly created objects
                     new_objects = [
@@ -211,12 +314,22 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                     raise RuntimeError(error_message)
 
             obj = None
-            for ob in bpy.data.objects:
-                if ob.type == "ARMATURE" and (
-                    "avatar" in ob.name.lower() or "npc" in ob.name.lower()
-                ):
-                    obj = ob
-                    break
+            new_objects = [
+                bpy.data.objects[name]
+                for name in (set(bpy.data.objects.keys()) - existing_objects)
+                if name in bpy.data.objects
+            ]
+            new_armatures = [o for o in new_objects if o.type == "ARMATURE"]
+            if new_armatures:
+                obj = new_armatures[0]
+
+            if not obj:
+                for ob in bpy.data.objects:
+                    if ob.type == "ARMATURE" and (
+                        "avatar" in ob.name.lower() or "npc" in ob.name.lower()
+                    ):
+                        obj = ob
+                        break
             if not obj:
                 armatures = [o for o in bpy.data.objects if o.type == "ARMATURE"]
                 if armatures:
@@ -225,27 +338,68 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                 obj = bpy.data.objects.get("Armature")
 
             if obj:
-                bpy.ops.object.mode_set(mode="OBJECT")
+                if obj.name in bpy.context.view_layer.objects:
+                    obj.hide_set(False)
+                    obj.hide_viewport = False
+                    bpy.context.view_layer.objects.active = obj
+                    obj.select_set(True)
+                if bpy.ops.object.mode_set.poll():
+                    bpy.ops.object.mode_set(mode="OBJECT")
                 bpy.ops.object.select_all(action="DESELECT")
-                obj.select_set(True)
 
-                # Standard FBX importer imports ZZZ models lying down (0,0,0 rotation).
-                # Rotate 90 degrees in X to make it stand upright.
+                # Find top-most parent object (e.g. root empty like Avatar_Female_Size02_ZhenzhenDawnlight_UI)
+                top_root = obj
+                while top_root.parent is not None:
+                    top_root = top_root.parent
+
                 import math
 
-                obj.rotation_euler[0] = math.radians(90)
+                def get_world_bone_extents(arm):
+                    mw = arm.matrix_world
+                    max_wy = max(abs((mw @ b.head_local).y) for b in arm.data.bones) if arm.data.bones else 0
+                    max_wz = max(abs((mw @ b.head_local).z) for b in arm.data.bones) if arm.data.bones else 0
+                    return max_wy, max_wz
 
-                # Select children to apply transform to mesh objects as well
-                for child in obj.children:
-                    child.select_set(True)
+                bpy.context.view_layer.update()
+                wy, wz = get_world_bone_extents(obj)
 
-                bpy.context.view_layer.objects.active = obj
-                try:
-                    bpy.ops.object.transform_apply(
-                        location=False, rotation=True, scale=True
-                    )
-                except Exception as e:
-                    print("Failed to apply rotation/scale transforms:", e)
+                if wy > wz:
+                    orig_rot = top_root.rotation_euler.copy()
+                    best_rot = None
+                    for test_deg in [90, -90, 180, -180]:
+                        top_root.rotation_euler = orig_rot.copy()
+                        top_root.rotation_euler[0] += math.radians(test_deg)
+                        bpy.context.view_layer.update()
+                        test_y, test_z = get_world_bone_extents(obj)
+                        if test_z > test_y and test_z > 0.5:
+                            best_rot = test_deg
+                            break
+
+                    if best_rot is None:
+                        top_root.rotation_euler = orig_rot
+
+                    # Select top_root and all children to apply transform
+                    def select_hierarchy(o):
+                        o.select_set(True)
+                        for c in o.children:
+                            select_hierarchy(c)
+
+                    bpy.ops.object.select_all(action="DESELECT")
+                    select_hierarchy(top_root)
+                    bpy.context.view_layer.objects.active = top_root
+
+                    try:
+                        bpy.ops.object.transform_apply(
+                            location=False, rotation=True, scale=True
+                        )
+                    except Exception as e:
+                        print("Failed to apply rotation/scale transforms:", e)
+
+                    # If top_root is an empty, unparent armature so it's clean
+                    if top_root.type == "EMPTY" and obj.parent == top_root:
+                        mw = obj.matrix_world.copy()
+                        obj.parent = None
+                        obj.matrix_world = mw
 
                 try:
                     for mesh_obj in bpy.data.objects:
@@ -296,11 +450,7 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
 
         # Import using recommended settings
         try:
-            bpy.ops.import_scene.fbx(
-                filepath=character_model_file_path,
-                force_connect_children=True,
-                automatic_bone_orientation=True,
-            )
+            _execute_fbx_import(character_model_file_path)
         except Exception as e:
             # Clean up newly created objects
             new_objects = [
@@ -339,11 +489,18 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                 faceobj = obj
                 break
         if faceobj:
-            bpy.ops.object.mode_set(mode="OBJECT")
-            bpy.ops.object.select_all(action="DESELECT")
-            faceobj.select_set(True)
-            bpy.context.view_layer.objects.active = faceobj
             try:
+                if faceobj.name in bpy.context.view_layer.objects:
+                    faceobj.hide_set(False)
+                    faceobj.hide_viewport = False
+                bpy.context.view_layer.objects.active = faceobj
+                faceobj.select_set(True)
+                if bpy.ops.object.mode_set.poll():
+                    bpy.ops.object.mode_set(mode="OBJECT")
+                bpy.ops.object.select_all(action="DESELECT")
+                faceobj.select_set(True)
+                bpy.context.view_layer.objects.active = faceobj
+
                 bpy.ops.object.mode_set(mode="EDIT")
                 bpy.ops.mesh.select_all(action="DESELECT")
                 if "Eye Transparent" in faceobj.vertex_groups:
@@ -356,7 +513,8 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                             faceobj.vertex_groups.active = group
                             bpy.ops.object.vertex_group_deselect()
                     bpy.ops.mesh.separate(type="SELECTED")
-                bpy.ops.object.mode_set(mode="OBJECT")
+                if bpy.ops.object.mode_set.poll():
+                    bpy.ops.object.mode_set(mode="OBJECT")
 
                 eye_obj = None
                 for ob in bpy.context.selected_objects:
@@ -368,8 +526,9 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
             except Exception as e:
                 print("fixeyeshadow error:", e)
                 try:
-                    bpy.ops.object.mode_set(mode="OBJECT")
-                except:
+                    if bpy.ops.object.mode_set.poll():
+                        bpy.ops.object.mode_set(mode="OBJECT")
+                except Exception:
                     pass
 
     def reset_pose_location_and_rotation(self):
@@ -537,5 +696,6 @@ register, unregister = bpy.utils.register_classes_factory(
         GI_OT_SetUpCharacter,
         HSR_OT_SetUpCharacter,
         ZZZ_OT_SetUpCharacter,
+        NTE_OT_SetUpCharacter,
     ]
 )

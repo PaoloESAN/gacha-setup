@@ -13,7 +13,7 @@ from setup_wizard.import_order import GENSHIN_IMPACT_OUTLINES_FILE_PATH, NextSte
     GENSHIN_IMPACT_ROOT_FOLDER_FILE_PATH, GENSHIN_IMPACT_SHADER_FILE_PATH, HONKAI_STAR_RAIL_ROOT_FOLDER_FILE_PATH, \
     HONKAI_STAR_RAIL_SHADER_FILE_PATH, PUNISHING_GRAY_RAVEN_ROOT_FOLDER_FILE_PATH, PUNISHING_GRAY_RAVEN_SHADER_FILE_PATH, \
     ZENLESS_ZONE_ZERO_ROOT_FOLDER_FILE_PATH, ZENLESS_ZONE_ZERO_SHADER_FILE_PATH, ZENLESS_ZONE_ZERO_OUTLINES_FILE_PATH, \
-    NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH, NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH, NEVERNESS_TO_EVERNESS_OUTLINES_FILE_PATH
+    NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH, NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH, NEVERNESS_TO_EVERNESS_OUTLINES_FILE_PATH, get_shader_file_path
 from setup_wizard.material_import_setup.empty_names import LightDirectionEmptyNames
 from setup_wizard.outline_import_setup.outline_node_groups import OutlineNodeGroupNames
 from setup_wizard.texture_import_setup.material_default_value_setters import MaterialDefaultValueSetter, MaterialDefaultValueSetterFactory
@@ -57,56 +57,14 @@ class GameMaterialImporter:
         self.names_of_game_materials = names_of_game_materials
 
     def import_materials(self):
-        cache_enabled = self.context.window_manager.cache_enabled
-        user_selected_shader_blend_file_path = self.blender_operator.filepath if \
-            self.blender_operator.filepath and not os.path.isdir(self.blender_operator.filepath) else \
-            get_cache(cache_enabled).get(self.game_shader_file_path)
-        project_root_directory_file_path = self.blender_operator.file_directory \
-            or get_cache(cache_enabled).get(self.game_shader_folder_path) \
-            or (os.path.dirname(self.blender_operator.filepath) if self.blender_operator.filepath else None)
-
-        print(f"[DEBUG] GameMaterialImporter.import_materials: user_selected_shader_blend_file_path='{user_selected_shader_blend_file_path}', project_root_directory_file_path='{project_root_directory_file_path}'")
-
-        # Resolve exact target blend file
-        target_blend_file = None
-        if user_selected_shader_blend_file_path and os.path.isfile(user_selected_shader_blend_file_path):
-            target_blend_file = user_selected_shader_blend_file_path
-        elif project_root_directory_file_path:
-            c1 = os.path.join(project_root_directory_file_path, self.game_default_blend_file_with_materials)
-            c2 = os.path.join(os.path.dirname(project_root_directory_file_path), self.game_default_blend_file_with_materials) if project_root_directory_file_path else None
-            if os.path.isfile(c1):
-                target_blend_file = c1
-            elif c2 and os.path.isfile(c2):
-                target_blend_file = c2
-
-        if not target_blend_file:
-            addon_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            for rel in [self.game_default_blend_file_with_materials, f"shader/{self.game_default_blend_file_with_materials}"]:
-                cand = os.path.join(addon_dir, rel)
-                if os.path.isfile(cand):
-                    target_blend_file = cand
-                    break
-
-        if not target_blend_file:
-            cached_path = get_cache(cache_enabled).get(self.game_shader_file_path)
-            if cached_path and os.path.isfile(cached_path):
-                target_blend_file = cached_path
-
-        if not target_blend_file and not project_root_directory_file_path:
-            print(f"[DEBUG] No blend path or root folder cached. Calling bpy.ops.genshin.import_materials('INVOKE_DEFAULT')")
-            bpy.ops.genshin.import_materials(
-                'INVOKE_DEFAULT',
-                next_step_idx=self.blender_operator.next_step_idx, 
-                file_directory=self.blender_operator.file_directory,
-                invoker_type=self.blender_operator.invoker_type,
-                high_level_step_name=self.blender_operator.high_level_step_name,
-                game_type=self.blender_operator.game_type,
-            )
+        target_blend_file = get_shader_file_path(self.blender_operator.game_type, 'main')
+        if not target_blend_file or not os.path.isfile(target_blend_file):
+            print(f"[ERROR] Could not locate bundled shader blend file for game: {self.blender_operator.game_type}")
             return {'FINISHED'}
 
-        shader_blend_file_path = os.path.join(target_blend_file, self.MATERIAL_PATH_INSIDE_BLEND_FILE) if target_blend_file else os.path.join(project_root_directory_file_path, self.game_default_blend_file_with_materials, self.MATERIAL_PATH_INSIDE_BLEND_FILE)
-        shader_blend_node_tree_file_path = os.path.join(target_blend_file, self.NODE_TREE_PATH_INSIDE_BLEND_FILE) if target_blend_file else os.path.join(project_root_directory_file_path, self.game_default_blend_file_with_materials, self.NODE_TREE_PATH_INSIDE_BLEND_FILE)
-        light_direction_empties_file_path = os.path.join(target_blend_file, self.OBJECT_PATH_INSIDE_BLEND_FILE) if target_blend_file else os.path.join(project_root_directory_file_path, self.game_default_blend_file_with_materials, self.OBJECT_PATH_INSIDE_BLEND_FILE)
+        shader_blend_file_path = os.path.join(target_blend_file, self.MATERIAL_PATH_INSIDE_BLEND_FILE)
+        shader_blend_node_tree_file_path = os.path.join(target_blend_file, self.NODE_TREE_PATH_INSIDE_BLEND_FILE)
+        light_direction_empties_file_path = os.path.join(target_blend_file, self.OBJECT_PATH_INSIDE_BLEND_FILE)
 
         try:
             bpy.ops.wm.append(
@@ -116,23 +74,10 @@ class GameMaterialImporter:
             )
             self.import_light_vectors_geometry_node(shader_blend_node_tree_file_path, light_direction_empties_file_path)
         except RuntimeError as ex:
-            self.blender_operator.report({'ERROR'}, \
-                f"ERROR: Error when trying to append materials and Light Vector geometry node. \n\
-                Did not find `{self.game_default_blend_file_with_materials}` in the directory you selected. \n\
-                Try selecting the exact blend file you want to use.")
+            self.blender_operator.report({'ERROR'}, f"ERROR: Error appending materials from `{target_blend_file}`: {ex}")
             raise ex
 
-        self.blender_operator.report({'INFO'}, 'Imported Shader/Genshin Materials...')
-        if cache_enabled and (user_selected_shader_blend_file_path or project_root_directory_file_path):
-            if user_selected_shader_blend_file_path:
-                cache_using_cache_key(get_cache(cache_enabled), self.game_shader_file_path, user_selected_shader_blend_file_path)
-
-                outlines_in_shader_blend_file = self.__get_outlines_node_group_from_shader_blend_file(
-                    user_selected_shader_blend_file_path)
-                if outlines_in_shader_blend_file:
-                    self.__set_outlines_cache(cache_enabled, user_selected_shader_blend_file_path)
-            else:
-                cache_using_cache_key(get_cache(cache_enabled), self.game_shader_folder_path, project_root_directory_file_path)
+        self.blender_operator.report({'INFO'}, f'Imported Shader Materials from {target_blend_file}...')
 
 
     def import_light_vectors_geometry_node(self, node_tree_filepath, object_file_path):
@@ -213,6 +158,10 @@ class GenshinImpactMaterialImporterFacade(GameMaterialImporter):
         if status == {'FINISHED'}:
             return status
 
+        self.move_required_scene_objects()
+        self.update_vfx_shader_scene_dependency()
+        self.clean_up_unused_objects()
+
         if self.is_create_hair_material_from_body():  # Genshin Shader >= v4.0
             self.create_hair_material()
 
@@ -228,6 +177,35 @@ class GenshinImpactMaterialImporterFacade(GameMaterialImporter):
             high_level_step_name=self.blender_operator.high_level_step_name,
             game_type=self.blender_operator.game_type,
         )
+
+    def move_required_scene_objects(self):
+        OBJECTS_TO_MOVE = ['Head Origin', 'Light Direction']
+        try:
+            from setup_wizard.utils.scene_utils import move_objects_between_scenes
+            move_objects_between_scenes('Preview', object_names=OBJECTS_TO_MOVE)
+        except Exception:
+            pass
+
+    def update_vfx_shader_scene_dependency(self, material: bpy.types.Material = None):
+        try:
+            from setup_wizard.domain.node_group_names import ShaderNodeGroupNames
+            vfx_shader_node_group = bpy.data.node_groups.get(ShaderNodeGroupNames.VFX_SHADER_STAR_CLOAK)
+            if vfx_shader_node_group:
+                render_size_nodes = [node for node in vfx_shader_node_group.nodes if node.type == 'VALUE' and node.label in ['Screen Res Width', 'Screen Res Height']]
+                for render_size_node in render_size_nodes:
+                    try:
+                        driver = render_size_node.outputs[0].animation_data.drivers[0]
+                        driver.driver.variables[0].targets[0].id = bpy.context.scene
+                    except (AttributeError, IndexError):
+                        pass
+        except Exception:
+            pass
+
+    def clean_up_unused_objects(self, object_names: list = ['Preview']):
+        for object_name in object_names:
+            scene_object = bpy.data.scenes.get(object_name)
+            if scene_object:
+                bpy.data.scenes.remove(scene_object)
 
     def is_create_hair_material_from_body(self):
         body_material_exists = bpy.data.materials.get(V4_PrimoToonGenshinImpactMaterialNames.BODY)
@@ -465,28 +443,19 @@ class NevernessToEvernessMaterialImporterFacade(GameMaterialImporter):
 
     def import_materials(self):
         print(f"[DEBUG] NevernessToEvernessMaterialImporterFacade.import_materials called: filepath='{self.blender_operator.filepath}'")
-        status = super().import_materials()
-        print(f"[DEBUG] super().import_materials() returned: {status}")
+        super().import_materials()
 
-        if status == {'FINISHED'}:
-            return status
-
-        cache_enabled = self.context.window_manager.cache_enabled
-        user_selected_shader_blend_file_path = self.blender_operator.filepath if \
-            self.blender_operator.filepath and not os.path.isdir(self.blender_operator.filepath) else \
-            get_cache(cache_enabled).get(self.game_shader_file_path)
-
-        if not user_selected_shader_blend_file_path:
+        user_selected_shader_blend_file_path = get_shader_file_path(GameType.NEVERNESS_TO_EVERNESS.name, 'main')
+        if not user_selected_shader_blend_file_path or not os.path.isfile(user_selected_shader_blend_file_path):
             addon_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            for rel in ["YH Shader.blend", "shader/YH Shader.blend"]:
+            for rel in ["shaders/nte/YH Shader.blend", "YH Shader.blend", "shader/YH Shader.blend"]:
                 cand = os.path.join(addon_dir, rel)
                 if os.path.isfile(cand):
                     user_selected_shader_blend_file_path = cand
                     break
-        print(f"[DEBUG] user_selected_shader_blend_file_path: '{user_selected_shader_blend_file_path}'")
+        print(f"[DEBUG] NTE shader blend path: '{user_selected_shader_blend_file_path}'")
 
-
-        if user_selected_shader_blend_file_path:
+        if user_selected_shader_blend_file_path and os.path.isfile(user_selected_shader_blend_file_path):
             node_tree_path = os.path.join(user_selected_shader_blend_file_path, 'NodeTree')
             try:
                 bpy.ops.wm.append(
@@ -494,11 +463,9 @@ class NevernessToEvernessMaterialImporterFacade(GameMaterialImporter):
                     files=self.NTE_NODE_GROUPS,
                     set_fake=True
                 )
+                print(f"[DEBUG] Successfully appended NTE NodeGroups from '{user_selected_shader_blend_file_path}'")
             except Exception as ex:
                 print(f"Notice: Handled appending NTE node groups: {ex}")
-
-        if user_selected_shader_blend_file_path and cache_enabled:
-            cache_using_cache_key(get_cache(cache_enabled), NEVERNESS_TO_EVERNESS_OUTLINES_FILE_PATH, user_selected_shader_blend_file_path)
 
         # Clean up any duplicate empties (.001, .002) safely without ReferenceError
         orig_head = bpy.data.objects.get('Head Origin')

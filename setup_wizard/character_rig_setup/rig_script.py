@@ -650,24 +650,7 @@ def rig_character(
         if bone.name in abadidea:
             bone.name = abadidea[bone.name]
 
-    # Fix finger rolls - Thanks Poke!
-    if not kachina:
-        how_not = ["f_index.01.L", "f_index.02.L", "f_index.03.L"]
-        hahaha = ["f_middle.01.L", "f_middle.02.L", "f_middle.03.L"]
-        to_name = ["f_ring.01.L", "f_ring.02.L", "f_ring.03.L"]
-        things_efficiently = ["f_pinky.01.L", "f_pinky.02.L", "f_pinky.03.L"]
-
-        for bone in how_not:
-            armature.edit_bones[bone].roll -= 0.1197
-
-        for bone in hahaha:
-            armature.edit_bones[bone].roll -= 0.04
-
-        for bone in to_name:
-            armature.edit_bones[bone].roll += 0.1297
-
-        for bone in things_efficiently:
-            armature.edit_bones[bone].roll += 0.338
+    # Preserve original finger rolls from model armature
 
     # Aw shit here we go again.  This second loop is for making it possible to symmetrize pose bones properly.
     for bone in bones_list:
@@ -682,27 +665,8 @@ def rig_character(
     armature.edit_bones["shoulder.L"].align_roll(Vector((0, -1, 0)))
     armature.edit_bones["shoulder.R"].align_roll(Vector((0, -1, 0)))
 
-    # Fixes the thumb scale rotating inward on x instead of z
-    if not kachina:
-        armature.edit_bones["thumb.01.L"].roll += 3.14 / 4
-        armature.edit_bones["thumb.02.L"].roll += 3.14 / 4
-        armature.edit_bones["thumb.03.L"].roll += 3.14 / 4
-        armature.edit_bones["thumb.01.R"].roll -= 3.14 / 4
-        armature.edit_bones["thumb.02.R"].roll -= 3.14 / 4
-        armature.edit_bones["thumb.03.R"].roll -= 3.14 / 4
-
+    # Preserve natural finger and thumb bone rolls from model armature
     for bone in armature.edit_bones:
-        if (
-            "thumb" in bone.name
-            or "index" in bone.name
-            or "middle" in bone.name
-            or "ring" in bone.name
-            or "pinky" in bone.name
-        ):
-            if ".L" in bone.name:
-                armature.edit_bones[bone.name].roll -= 1.571
-            else:
-                armature.edit_bones[bone.name].roll += 1.571
         ## Not sure why this bone exist but it's gotta go lmao
         if bone.name == "Bip001":
             for childbone in bone.children:
@@ -872,12 +836,20 @@ def rig_character(
             o.select_set(True)
 
     bpy.ops.object.mode_set(mode="EDIT")
+    # Align hand.L and hand.R metarig bones straight along forearm vector so hand_ik widget is centered on wrist
+    for side in [".L", ".R"]:
+        forearm_eb = metarm.edit_bones.get("forearm" + side)
+        hand_eb = metarm.edit_bones.get("hand" + side)
+        if forearm_eb and hand_eb:
+            arm_vec = (forearm_eb.tail - forearm_eb.head).normalized()
+            hand_eb.tail = hand_eb.head + arm_vec * 0.05
+            hand_eb.roll = forearm_eb.roll
+
     for bone in metarm.edit_bones:
         if "f_" in bone.name or "thumb" in bone.name:
-            try:
-                bone.roll = armature.edit_bones["DEF-" + bone.name].roll
-            except:
-                pass
+            orig_b = armature.edit_bones.get(bone.name) or armature.edit_bones.get("DEF-" + bone.name)
+            if orig_b:
+                bone.roll = orig_b.roll
 
     # Fix hand bones being rotated 90 degrees sideways and arm deformation bones being wonky
     if "Loli" in obj.name:
@@ -3578,44 +3550,21 @@ def rig_character(
     bpy.data.objects["Head_Pole"].parent_type = "BONE"
     bpy.data.objects["Head_Pole"].parent_bone = "neck"
 
-    # In object mode, let's take the time to add drivers for viewport outlines (Based on a toggle, optionally to see them before rendering)
+    # Remove any drivers on viewport outlines so user has direct control
     def setup_viewport_outlines(prop):
-        driver = prop.driver_add("show_viewport").driver
-        driver.type = "SCRIPTED"
-        driver.expression = "var"
+        try:
+            prop.driver_remove("show_viewport")
+        except:
+            pass
+        try:
+            prop.driver_remove("show_render")
+        except:
+            pass
 
-        var = driver.variables.new()
-        var.name = "var"
-        var.type = "SINGLE_PROP"
-        var.targets[0].id = bpy.data.objects.get(ourRig)
-        var.targets[0].data_path = 'pose.bones["plate-settings"]["Viewport Outlines"]'
-
-        # Update the dependencies
-        depsgraph = bpy.context.evaluated_depsgraph_get()
-        depsgraph.update()
-
-    try:
-        setup_viewport_outlines(bpy.data.objects["Body"].modifiers["Outlines Body"])
-    except:
-        pass
-    try:
-        setup_viewport_outlines(bpy.data.objects["Hair"].modifiers["Outlines Hair"])
-    except:
-        pass
-    try:
-        setup_viewport_outlines(
-            bpy.data.objects["Hair.001"].modifiers["Outlines Hair.001"]
-        )  # Escoffier? Who else
-    except:
-        pass
-    try:
-        setup_viewport_outlines(bpy.data.objects["Face"].modifiers["Outlines Face"])
-    except:
-        pass
-    try:
-        setup_viewport_outlines(bpy.data.objects["Dress"].modifiers["Outlines Dress"])
-    except:
-        pass
+    for mesh in [obj for obj in bpy.data.objects if obj.type == 'MESH']:
+        for modifier in mesh.modifiers:
+            if "Outline" in modifier.name or "outlines" in modifier.name.lower() or "Outlines" in modifier.name:
+                setup_viewport_outlines(modifier)
 
     # handled list of face SK
     handled_sks = [
@@ -5959,6 +5908,71 @@ def rig_character(
     else:
         log_text.write("No warnings or messages recorded.\n")
     log_text.write("\n=== END ===")
+
+    # Final step: Select armature, enter Pose Mode and apply pose as rest pose for selected eye bones
+    try:
+        rig_obj = bpy.data.objects.get(char_name + "Rig")
+        if rig_obj:
+            bpy.context.view_layer.objects.active = rig_obj
+            rig_obj.select_set(True)
+            bpy.ops.object.mode_set(mode='POSE')
+
+            # Make "Other", "Clothes", and "Cage" bone collections / layers visible so bones can be selected and applied
+            for cname in ["Other", "Clothes", "Cage"]:
+                coll = rig_obj.data.collections.get(cname) if hasattr(rig_obj.data, "collections") else None
+                if coll:
+                    coll.is_visible = True
+
+            if hasattr(rig_obj.data, "layers"):
+                for l_idx in [24, 25, 27]:
+                    if len(rig_obj.data.layers) > l_idx:
+                        rig_obj.data.layers[l_idx] = True
+
+            bpy.ops.pose.select_all(action='DESELECT')
+            target_bones = [
+                "+EyeBone R A01.001",
+                "+EyeBone L A01.001",
+                "+EyeBoneA02.L",
+                "+EyeBoneA02.R",
+                "+EyeBone L A02",
+                "+EyeBone R A02",
+                "+Pelvis Twist CF A01",
+                "+PelvisTwist CF A01",
+                "+Pelvis Twist CF A01.001",
+                "+UpperArmTwistA01.L",
+                "+UpperArmTwistA01.R",
+                "+UpperArmTwistA01.L.001",
+                "+UpperArmTwistA01.R.001",
+                "+UpperArmTwistA02.L",
+                "+UpperArmTwistA02.R",
+                "+ArmLetsSA21.L",
+                "+ArmLetsSA21.R",
+                "+ArmLetsSA21.L.001",
+                "+ArmLetsSA21.R.001",
+                "+ArmLets SA21.L",
+                "+ArmLets SA21.R",
+                "+ClavicleTwistSA01.L",
+                "+ClavicleTwistSA01.R",
+            ]
+            for bname in target_bones:
+                pbone = rig_obj.pose.bones.get(bname)
+                if pbone:
+                    pbone.select = True
+
+            bpy.ops.pose.armature_apply(selected=True)
+
+            # Hide "Other", "Clothes", and "Cage" bone collections / layers again
+            for cname in ["Other", "Clothes", "Cage"]:
+                coll = rig_obj.data.collections.get(cname) if hasattr(rig_obj.data, "collections") else None
+                if coll:
+                    coll.is_visible = False
+
+            if hasattr(rig_obj.data, "layers"):
+                for l_idx in [24, 25, 27]:
+                    if len(rig_obj.data.layers) > l_idx:
+                        rig_obj.data.layers[l_idx] = False
+    except Exception as ex:
+        print(f"Notice applying rest pose at end of rig: {ex}")
 
 
 def setup_neck_and_head_follow(neck_follow_value, head_follow_value):

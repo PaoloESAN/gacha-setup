@@ -19,30 +19,16 @@ class NTE_PT_Setup_Wizard_UI_Layout(Panel, NevernessToEvernessUIRenderChecker):
         layout = self.layout
         window_manager = context.window_manager
 
-        sub_layout = layout.box()
-        run_entire_setup_column = sub_layout.column()
-        OperatorFactory.create(
-            run_entire_setup_column,
-            "neverness_to_everness.setup_wizard_ui",
-            "Run Entire Setup",
-            "PLAY",
-            game_type=GameType.NEVERNESS_TO_EVERNESS.name,
-            operator_context="INVOKE_DEFAULT",
-        )
-
-
-        settings_box = layout.box()
-        settings_box.label(text="Global Settings", icon="WORLD")
-
-        row = settings_box.row()
-        row.prop(window_manager, "cache_enabled")
-        OperatorFactory.create(
-            row,
-            "genshin.clear_cache_operator",
-            "Clear Cache",
-            "TRASH",
-            game_type=GameType.NEVERNESS_TO_EVERNESS.name,
-        )
+        # sub_layout = layout.box()
+        # run_entire_setup_column = sub_layout.column()
+        # OperatorFactory.create(
+        #     run_entire_setup_column,
+        #     "neverness_to_everness.setup_wizard_ui",
+        #     "Run Entire Setup",
+        #     "PLAY",
+        #     game_type=GameType.NEVERNESS_TO_EVERNESS.name,
+        #     operator_context="INVOKE_DEFAULT",
+        # )
 
 
 class NTE_PT_Basic_Setup_Wizard_UI_Layout(Panel, NevernessToEvernessUIRenderChecker):
@@ -56,12 +42,15 @@ class NTE_PT_Basic_Setup_Wizard_UI_Layout(Panel, NevernessToEvernessUIRenderChec
         layout = self.layout
         sub_layout = layout.box()
 
-        # Step 1: Informative note about model import
-        info_box = sub_layout.box()
-        info_box.label(text="1. Import Model", icon="IMPORT")
-        col = info_box.column(align=True)
-        col.label(text="Import the model (.uemodel) yourself")
-        col.label(text="using the free UE Format addon.")
+        # Step 1: Set Up Character button
+        OperatorFactory.create(
+            sub_layout,
+            "neverness_to_everness.set_up_character",
+            "Set Up Character",
+            icon="OUTLINER_OB_ARMATURE",
+            operator_context="INVOKE_DEFAULT",
+            game_type=GameType.NEVERNESS_TO_EVERNESS.name,
+        )
 
         # Step 2: Set Up Materials button
         OperatorFactory.create(
@@ -118,8 +107,7 @@ class NTE_PT_UI_Character_Model_Menu(Panel, NevernessToEvernessUIRenderChecker):
     def draw(self, context):
         layout = self.layout
         sub_layout = layout.column(align=True)
-        sub_layout.label(text="Import the model (.uemodel)", icon="INFO")
-        sub_layout.label(text="using the UE Format addon.")
+        sub_layout.label(text="File > Import > Unreal Model (.uemodel)", icon="INFO")
 
 
 class NTE_PT_UI_Materials_Menu(Panel, NevernessToEvernessUIRenderChecker):

@@ -33,21 +33,6 @@ class HSR_PT_Setup_Wizard_UI_Layout(Panel, HonkaiStarRailUIRenderChecker):
         if not expy_kit_installed or not rigify_installed:
             sub_layout.label(text="Rigging Disabled", icon="ERROR")
 
-        settings_box = layout.box()
-        settings_box.label(text="Global Settings", icon="WORLD")
-
-        row = settings_box.row()
-        row.prop(window_manager, "cache_enabled")
-        OperatorFactory.create(
-            row,
-            "genshin.clear_cache_operator",
-            "Clear Cache",
-            "TRASH",
-            game_type=GameType.HONKAI_STAR_RAIL.name,
-        )
-
-        # settings_box.prop(window_manager, 'setup_wizard_full_run_rigging_enabled')  # temp disabled, feature preview only
-
 
 class HSR_PT_Basic_Setup_Wizard_UI_Layout(Panel, HonkaiStarRailUIRenderChecker):
     bl_label = "Basic Setup"

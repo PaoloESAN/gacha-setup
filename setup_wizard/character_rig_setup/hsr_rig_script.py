@@ -477,49 +477,13 @@ def rig_character(
         final_eye_R_name = right_eye_bone_name or "DEF-eye.R"
 
         head_bone = armature.edit_bones.get("head") or armature.edit_bones.get("DEF-spine.006")
-        if head_bone:
-            if "eyetrack" in armature.edit_bones:
-                armature.edit_bones['eyetrack'].parent = head_bone
-            if "+EyeBone R A01.001" in armature.edit_bones:
-                armature.edit_bones['+EyeBone R A01.001'].parent = head_bone
-            if "+EyeBone L A01.001" in armature.edit_bones:
-                armature.edit_bones['+EyeBone L A01.001'].parent = head_bone
-
-        eye_R_pos = armature.edit_bones[final_eye_R_name].head if final_eye_R_name in armature.edit_bones else None
-        eye_L_pos = armature.edit_bones[final_eye_L_name].head if final_eye_L_name in armature.edit_bones else None
-
-        if eye_R_pos and '+EyeBone R A01.001' in armature.edit_bones:
-            armature.edit_bones['+EyeBone R A01.001'].head = eye_R_pos
-            armature.edit_bones['+EyeBone R A01.001'].tail.x = eye_R_pos[0]
-            if final_eye_R_name in armature.edit_bones:
-                armature.edit_bones['+EyeBone R A01.001'].tail.y = armature.edit_bones[final_eye_R_name].tail.y
-            armature.edit_bones['+EyeBone R A01.001'].tail.z = eye_R_pos[2]
-
-        if eye_L_pos and '+EyeBone L A01.001' in armature.edit_bones:
-            armature.edit_bones['+EyeBone L A01.001'].head = eye_L_pos
-            armature.edit_bones['+EyeBone L A01.001'].tail.x = eye_L_pos[0]
-            if final_eye_L_name in armature.edit_bones:
-                armature.edit_bones['+EyeBone L A01.001'].tail.y = armature.edit_bones[final_eye_L_name].tail.y
-            armature.edit_bones['+EyeBone L A01.001'].tail.z = eye_L_pos[2]
-
-        if eye_R_pos and 'eyetrack_R' in armature.edit_bones:
-            armature.edit_bones['eyetrack_R'].head.x = eye_R_pos[0]
-            armature.edit_bones['eyetrack_R'].head.z = eye_R_pos[2]
-            armature.edit_bones['eyetrack_R'].tail.x = eye_R_pos[0]
-            armature.edit_bones['eyetrack_R'].tail.z = eye_R_pos[2] + 0.01
-
-        if eye_L_pos and 'eyetrack_L' in armature.edit_bones:
-            armature.edit_bones['eyetrack_L'].head.x = eye_L_pos[0]
-            armature.edit_bones['eyetrack_L'].head.z = eye_L_pos[2]
-            armature.edit_bones['eyetrack_L'].tail.x = eye_L_pos[0]
-            armature.edit_bones['eyetrack_L'].tail.z = eye_L_pos[2] + 0.01
-
-        if eye_R_pos and eye_L_pos and 'eyetrack' in armature.edit_bones:
-            armature.edit_bones['eyetrack'].head.x = (eye_R_pos[0] + eye_L_pos[0]) / 2
-            armature.edit_bones['eyetrack'].head.z = (eye_R_pos[2] + eye_L_pos[2]) / 2
-            armature.edit_bones['eyetrack'].tail.x = (eye_R_pos[0] + eye_L_pos[0]) / 2
-            if 'eyetrack_L' in armature.edit_bones:
-                armature.edit_bones['eyetrack'].tail.z = armature.edit_bones['eyetrack_L'].tail.z
+        # Delete eyetrack, eyetrack_L, eyetrack_R bones if present
+        for eb_name in ["eyetrack", "eyetrack_L", "eyetrack_R", "eyetrack.L", "eyetrack.R"]:
+            if eb_name in armature.edit_bones:
+                try:
+                    armature.edit_bones.remove(armature.edit_bones[eb_name])
+                except Exception:
+                    pass
     except Exception as e:
         print(f"Eye edit mode setup notice: {e}")
 
@@ -542,6 +506,8 @@ def rig_character(
             pbone.custom_shape_translation = translation
         if rotation_euler and hasattr(pbone, "custom_shape_rotation_euler"):
             pbone.custom_shape_rotation_euler[0] = rotation_euler[0]
+            pbone.custom_shape_rotation_euler[1] = rotation_euler[1]
+            pbone.custom_shape_rotation_euler[2] = rotation_euler[2]
 
     safe_set_custom_shape("root", "root plate.002")
     safe_set_custom_shape("head", "neck", scale=(1.65, 1.65, 1.65), translation=(0.0, 0.255, 0.0), rotation_euler=(1.5708, 0, 0))
@@ -571,12 +537,8 @@ def rig_character(
     safe_set_custom_shape("toe_ik.L", None, scale=(0.781, 0.781, 0.350), translation=(0.0, 0.06, 0.00), disable_bone_size=False)
     safe_set_custom_shape("toe_ik.R", None, scale=(0.781, 0.781, 0.350), translation=(0.0, 0.06, 0.00), disable_bone_size=False)
 
-    safe_set_custom_shape("hand_ik.L", "hand", scale=(1.0, 1.0, 1.0), disable_bone_size=True)
-    safe_set_custom_shape("hand_ik.R", "hand", scale=(1.0, 1.0, 1.0), disable_bone_size=True)
-
-    safe_set_custom_shape("eyetrack", "eye controller", scale=(5.5, 5.5, 5.5), disable_bone_size=False)
-    safe_set_custom_shape("eyetrack_L", "eye circle", scale=(1.8, 1.8, 1.8), disable_bone_size=False)
-    safe_set_custom_shape("eyetrack_R", "eye circle", scale=(1.8, 1.8, 1.8), disable_bone_size=False)
+    safe_set_custom_shape("hand_ik.L", "hand", scale=(1.0, 1.0, 1.0), translation=(-0.05, 0.0, 0.0), rotation_euler=(1.5708, 0.0, 0.0), disable_bone_size=True)
+    safe_set_custom_shape("hand_ik.R", "hand", scale=(1.0, 1.0, 1.0), translation=(0.05, 0.0, 0.0), rotation_euler=(-1.5708, 0.0, 0.0), disable_bone_size=True)
 
     def add_eye_bone_const(bone_name, to_bone):
         pbone = rigifyr.pose.bones.get(bone_name)
@@ -778,37 +740,15 @@ def rig_character(
         if palms_coll:
             palms_coll.is_visible = True
 
-        # Create visible "Facerig" collection for eye control bones
-        facerig_coll = rigifyr.data.collections.get("Facerig") or rigifyr.data.collections.new("Facerig")
-        facerig_coll.is_visible = True
-
-        eye_ctrl_bone_names = ["eyetrack", "eyetrack_L", "eyetrack_R"]
-        for bname in eye_ctrl_bone_names:
-            if bname in rigifyr.data.bones:
-                b = rigifyr.data.bones[bname]
-                try:
-                    facerig_coll.assign(b)
-                    b.hide = False
-                except Exception:
-                    pass
-
-        # Hide helper tracking bones (+EyeBone L/R A01.001)
-        for bname in ["+EyeBone L A01.001", "+EyeBone R A01.001"]:
-            if bname in rigifyr.data.bones:
-                try:
-                    rigifyr.data.bones[bname].hide = True
-                except Exception:
-                    pass
-
         # Create hidden "Face Bones" and "Extra Bones" collections
         face_bones_coll = rigifyr.data.collections.get("Face Bones") or rigifyr.data.collections.new("Face Bones")
         face_bones_coll.is_visible = False
 
-        extra_bones_coll = rigifyr.data.collections.get("Extra Bones") or rigifyr.data.collections.new("Extra Bones")
+        extra_bones_coll = rigifyr.data.collections.get("Extra Bones") or rigifyr.data.collections.get("Extra_Bones") or rigifyr.data.collections.new("Extra Bones")
         extra_bones_coll.is_visible = False
 
         face_keywords = [
-            "joint_", "brow", "eye", "eyelid", "cheek", "nose",
+            "joint_", "brow", "eyelid", "cheek", "nose",
             "mouth", "lip", "jaw", "teeth", "tongue", "skn", "face-root"
         ]
 
@@ -818,7 +758,24 @@ def rig_character(
             b_name = bone.name
             b_low = b_name.lower()
 
-            if b_name.startswith("CTRL-") or b_name in main_ctrls or b_name in eye_ctrl_bone_names:
+            if b_name.startswith("CTRL-") or b_name in main_ctrls:
+                continue
+
+            # Move eye.L and eye.R (and DEF-eye.L/R) out of Face collection to Extra Bones
+            is_eye_bone = b_low in ["eye.l", "eye.r", "def-eye.l", "def-eye.r", "eye_l", "eye_r"] or b_low.endswith("_eye")
+
+            if is_eye_bone:
+                try:
+                    extra_bones_coll.assign(bone)
+                except Exception:
+                    pass
+                for c in list(bone.collections):
+                    if c != extra_bones_coll:
+                        try:
+                            c.unassign(bone)
+                        except Exception:
+                            pass
+                bone.hide = True
                 continue
 
             is_face_bone = any(kw in b_low for kw in face_keywords)
@@ -830,7 +787,7 @@ def rig_character(
                 except Exception:
                     pass
                 for c in list(bone.collections):
-                    if c != target_coll and c != facerig_coll and c.name not in hidden_collections:
+                    if c != target_coll and c.name not in hidden_collections:
                         try:
                             c.unassign(bone)
                         except Exception:

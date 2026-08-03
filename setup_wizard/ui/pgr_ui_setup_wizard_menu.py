@@ -51,24 +51,6 @@ class PGR_PT_Setup_Wizard_UI_Layout(Panel, PunishingGrayRavenUIRenderChecker):
         if (not expy_kit_installed or not rigify_installed) and rigging_global_settings_feature_flag:
             sub_layout.label(text='Rigging Disabled', icon='ERROR')
 
-        settings_box = layout.box()
-        settings_box.label(text='Global Settings', icon='WORLD')
-
-        row = settings_box.row()
-        row.prop(window_manager, 'cache_enabled')
-        OperatorFactory.create(
-            row,
-            'genshin.clear_cache_operator',
-            'Clear Cache',
-            'TRASH',
-            game_type=GameType.PUNISHING_GRAY_RAVEN.name,
-        )
-
-
-
-        if rigging_global_settings_feature_flag:
-            settings_box.prop(window_manager, 'setup_wizard_full_run_rigging_enabled')
-
 class PGR_PT_Basic_Setup_Wizard_UI_Layout(Panel, PunishingGrayRavenUIRenderChecker):
     bl_label = 'Basic Setup'
     bl_idname = 'PGR_PT_UI_Basic_Setup_Layout'

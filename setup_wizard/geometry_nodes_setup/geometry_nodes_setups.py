@@ -222,22 +222,32 @@ class GameGeometryNodesSetup(ABC):
                     face_outlines_node_input.default_value = 1.0
 
     def set_up_modifier_default_values(self, modifier, mesh):
-        if get_modifier_property(modifier, f'{NAME_OF_VERTEX_COLORS_INPUT}_use_attribute') == 0:
-            with bpy.context.temp_override(active_object=bpy.data.objects[mesh.name]):
-                bpy.context.view_layer.objects.active = bpy.context.active_object
+        try:
+            modifier[f'{NAME_OF_VERTEX_COLORS_INPUT}_use_attribute'] = 1
+        except Exception:
+            pass
+        try:
+            modifier['Vertex Colors_use_attribute'] = 1
+        except Exception:
+            pass
 
-                if bpy.app.version >= (4,0,0):
-                    bpy.ops.object.geometry_nodes_input_attribute_toggle(
-                        input_name=NAME_OF_VERTEX_COLORS_INPUT, 
-                        modifier_name=modifier.name
-                    )
-                else:
-                    bpy.ops.object.geometry_nodes_input_attribute_toggle(
-                        prop_path=f"[\"{NAME_OF_VERTEX_COLORS_INPUT}_use_attribute\"]", 
-                        modifier_name=modifier.name
-                    )
+        props = getattr(modifier, "properties", None)
+        if props and hasattr(props, "inputs"):
+            for k in [NAME_OF_VERTEX_COLORS_INPUT, "Vertex Colors", "Vertex Color"]:
+                if hasattr(props.inputs, k):
+                    inp = getattr(props.inputs, k)
+                    try:
+                        inp.type = 'ATTRIBUTE'
+                    except Exception:
+                        pass
+                    try:
+                        inp.attribute_name = 'Col'
+                    except Exception:
+                        pass
 
         set_modifier_property(modifier, f'{NAME_OF_VERTEX_COLORS_INPUT}_attribute_name', 'Col')
+        set_modifier_property(modifier, 'Vertex Colors_attribute_name', 'Col')
+        set_modifier_property(modifier, 'Vertex Color_attribute_name', 'Col')
         set_modifier_property(modifier, OUTLINE_THICKNESS_INPUT, self.DEFAULT_OUTLINE_THICKNESS)
 
         for (mask_input, material_input), material in zip(outline_mask_to_material_mapping.items(), mesh.material_slots):
@@ -401,16 +411,12 @@ class V3_GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
         # character_armature = [obj for obj in bpy.data.objects if obj.type == 'ARMATURE'][0]  # Expecting 1 armature in scene
         # character_armature_mesh_names = [obj.name for obj in character_armature.children if obj.type == 'MESH']
 
-        # Set up Light Vectors for meshes that match the expected mesh name list
-        for mesh_name in meshes_to_create_light_vectors_on:  # It is important that this is created and placed before Outlines!!
-            for object_name, object_data in bpy.context.scene.objects.items():
-                object_name_matches = (mesh_name == object_name or object_name.startswith(f"{mesh_name}.") or f'_{mesh_name}' in object_name)
-                if object_data.type == 'MESH' and object_name_matches:
-                    self.create_light_vectors_modifier(f'{object_name}{BODY_PART_SUFFIX}')
-        # Set up Light Vectors for meshes that have keywords in their names (Ex. SkillObj)
+        # Set up Light Vectors for ALL MESHES in scene (Eyes, Ribbon, Dress, Hair, Body, etc.)
         for object_name, object_data in bpy.context.scene.objects.items():
-            object_name_matches = [object_name for mesh_keyword in mesh_keywords_to_create_geometry_nodes_on if mesh_keyword in object_name]
-            if object_data.type == 'MESH' and object_name_matches:
+            if object_data.type == 'MESH':
+                o_lower = object_name.lower()
+                if "lightpanelwgt" in o_lower or "lightpanelselector" in o_lower or "wgtplane" in o_lower or "selectorwgt" in o_lower:
+                    continue
                 self.create_light_vectors_modifier(f'{object_name}{BODY_PART_SUFFIX}')
 
         # Set up Outlines for meshes that match the expected mesh name list
@@ -450,6 +456,14 @@ class V3_GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
         set_modifier_property(modifier, self.BASE_GEOMETRY_INPUT, True)
         set_modifier_property(modifier, self.USE_VERTEX_COLORS_INPUT, True)
         set_modifier_property(modifier, self.OUTLINE_THICKNESS_INPUT, 0.25)
+
+        try:
+            modifier['Input_3_use_attribute'] = 1
+        except Exception:
+            pass
+        set_modifier_property(modifier, 'Input_3_attribute_name', 'Col')
+        set_modifier_property(modifier, 'Vertex Colors_attribute_name', 'Col')
+        set_modifier_property(modifier, 'Vertex Color_attribute_name', 'Col')
 
         for input_name, (material_input_accessor, outline_material_input_accessor) in self.outline_to_material_mapping.items():
             material_name = f'{self.material_names.MATERIAL_PREFIX}{input_name}'
@@ -533,16 +547,22 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
         self.clone_night_soul_outlines()
 
         for mesh in [obj for obj in bpy.data.objects.values() if obj.type == 'MESH']:
-            create_light_vectors = [
-                material_slot.material for material_slot in mesh.material_slots if 
-                material_slot.material.name.startswith(self.material_names.MATERIAL_PREFIX_AFTER_RENAME)
-            ]  # Only create Light Vectors on meshes with Shader materials
-            if create_light_vectors:
+            o_lower = mesh.name.lower()
+            if "lightpanelwgt" in o_lower or "lightpanelselector" in o_lower or "wgtplane" in o_lower or "selectorwgt" in o_lower:
+                continue
+
+            # Create Light Vectors for ALL mesh parts with material slots
+            if mesh.material_slots:
                 self.create_light_vectors_modifier(mesh.name)
 
             create_outlines = [
                 material_slot.material for material_slot in mesh.material_slots if 
-                material_slot.material.name.startswith(self.material_names.MATERIAL_PREFIX_AFTER_RENAME) and
+                material_slot.material and
+                (material_slot.material.name.startswith(self.material_names.MATERIAL_PREFIX_AFTER_RENAME) or
+                 material_slot.material.name.startswith(self.material_names.MATERIAL_PREFIX) or
+                 'outlines' in material_slot.material.name.lower() or
+                 ShaderMaterial(material_slot.material, self.shader_node_names).is_outlines_material() or
+                 any(part in material_slot.material.name for part in ['Body', 'Hair', 'Dress', 'Face', 'Eye', 'Helmet', 'Gauntlet', 'Leather', 'Skirt', 'Pupil', 'Brow'])) and
                 not any(keyword in material_slot.material.name for keyword in material_keywords_to_not_create_outlines_on)
             ]  # Only create Outlines on meshes with Shader materials and not in the ignore list (e.g. 'Eff' materials)
             if create_outlines:
@@ -551,7 +571,10 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
         for material in bpy.data.materials:
             if 'Face Outlines' in material.name:
                 outline_shader_node = material.node_tree.nodes.get(self.outlines_shader_node_name)
-                outline_shader_node.inputs.get(self.shader_node_names.TOGGLE_FACE_OUTLINES).default_value = True
+                if outline_shader_node and hasattr(outline_shader_node, 'inputs'):
+                    face_toggle_input = outline_shader_node.inputs.get(self.shader_node_names.TOGGLE_FACE_OUTLINES)
+                    if face_toggle_input:
+                        face_toggle_input.default_value = True
 
         starcloak_material = bpy.data.materials.get(self.material_names.STAR_CLOAK)
         if starcloak_material:
@@ -584,9 +607,19 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
         print(f'Geometry Node Default Values Set for {modifier.name}: {mesh.name}')
 
     def assign_materials_to_empty_modifier_slots(self, mesh, modifier):
+        prefix = getattr(self.material_names, 'MATERIAL_PREFIX', '')
+        prefix_renamed = getattr(self.material_names, 'MATERIAL_PREFIX_AFTER_RENAME', '')
         for material_slot in mesh.material_slots:
             material = material_slot.material
-            if not material or not material.name.startswith(self.material_names.MATERIAL_PREFIX):
+            if not material:
+                continue
+            is_valid_mat = (
+                (prefix and material.name.startswith(prefix)) or
+                (prefix_renamed and material.name.startswith(prefix_renamed)) or
+                'HoYoverse' in material.name or 'miHoYo' in material.name or
+                any(p in material.name for p in ['Body', 'Hair', 'Face', 'Eye', 'Dress', 'Helmet', 'Gauntlet', 'Leather', 'Skirt'])
+            )
+            if not is_valid_mat:
                 continue
             already_assigned = False
             for _, (mask_input, material_input) in self.outline_to_material_mapping.items():
@@ -595,9 +628,13 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
             if not already_assigned:
                 for available_mask_input, available_material_input in available_outline_mask_to_material_mapping.items():
                     if not get_modifier_property(modifier, available_mask_input) and not get_modifier_property(modifier, available_material_input):
-                        set_modifier_property(modifier, available_mask_input, bpy.data.materials.get(material.name))
-                        set_modifier_property(modifier, available_material_input, bpy.data.materials.get(material.name + ' Outlines'))
-                        break
+                        target_outline_mat = bpy.data.materials.get(material.name + ' Outlines') or \
+                                             bpy.data.materials.get(material.name.replace('Genshin ', '') + ' Outlines') or \
+                                             next((m for m in bpy.data.materials if material.name in m.name and 'Outlines' in m.name), None)
+                        if target_outline_mat:
+                            set_modifier_property(modifier, available_mask_input, material)
+                            set_modifier_property(modifier, available_material_input, target_outline_mat)
+                            break
 
     def assign_night_soul_outlines_material(self, mesh, modifier):
         night_soul_outlines_material_using_mesh_name = [
@@ -1120,7 +1157,7 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
 
                 # Light Vectors
                 if light_vectors_gn:
-                    mod = obj.modifiers.get("Light Vectors")
+                    mod = next((m for m in obj.modifiers if m.type == 'NODES' and (m.name.startswith("Light Vectors") or (m.node_group and ("Light Vectors" in m.node_group.name or "灯光矢量" in m.node_group.name)))), None)
                     if not mod:
                         mod = obj.modifiers.new(name="Light Vectors", type='NODES')
                         mod.node_group = light_vectors_gn
@@ -1185,29 +1222,119 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                         mod.node_group = extra_fx_gn
                     obj.modifiers.move(len(obj.modifiers) - 1, 1)
 
-                    try:
-                        mod["Socket_0_attribute_name"] = "cast shadow"
-                        mod["Socket_11_attribute_name"] = "shadowsharpness"
-                    except:
-                        pass
+                    # Dynamic & explicit assignment of Output Attributes to match output socket names
+                    extra_fx_mapping = {
+                        "Output_2": "blend",
+                        "Output_3": "depth",
+                        "Socket_5": "face shadow",
+                        "Socket_9": "faceshadadjust",
+                        "Socket_0": "cast shadow",
+                        "Socket_11": "shadowsharpness"
+                    }
+                    for sock_ident, attr_name in extra_fx_mapping.items():
+                        set_modifier_property(mod, sock_ident, attr_name)
+                        set_modifier_property(mod, attr_name, attr_name)
+                        set_modifier_property(mod, f"{attr_name}_attribute_name", attr_name)
 
-                    if "face" in obj.name.lower():
+                    # Input properties for Extra FX:
+                    # - blend: 0.0 for face, 0.3 for body and other parts
+                    # - shadowsharpness: 1.090 for all objects
+                    blend_val = 0.0 if "face" in obj.name.lower() else 0.3
+                    shadowsharpness_val = 1.090
+
+                    for k in ["Input_4", "blend(Off/On)", "blend"]:
+                        set_modifier_property(mod, k, blend_val)
+                    for k in ["Socket_10", "shadowsharpness"]:
+                        set_modifier_property(mod, k, shadowsharpness_val)
+
+                # Outlines vs Solidify
+                is_zzz_game = self.blender_operator.game_type == GameType.ZENLESS_ZONE_ZERO.name
+                is_face = "face" in obj.name.lower()
+
+                if is_zzz_game and is_face:
+                    # Consolidate all face polygons to material slot 0 (main face material) before creating outline slot
+                    if obj.data and hasattr(obj.data, "polygons"):
+                        for p in obj.data.polygons:
+                            if p.material_index >= 1:
+                                p.material_index = 0
+                        while len(obj.data.materials) > 1:
+                            obj.data.materials.pop(index=1)
                         try:
-                            mod["Output_3_attribute_name"] = "depth"
-                            mod["Output_2_attribute_name"] = "blend"
-                            mod["Socket_5_attribute_name"] = "face shadow"
-                            mod["Socket_6_attribute_name"] = "faceshadX"
-                            mod["Socket_7_attribute_name"] = "faceshadY"
-                            mod["Socket_9_attribute_name"] = "faceshadadjust"
-                        except:
+                            obj.data.update()
+                        except Exception:
                             pass
 
-                # Outlines
-                if zzz_outlines_gn:
+                    # Remove ZZZ Outlines Geonode modifier on Face objects
+                    mod_ol = obj.modifiers.get("Outlines")
+                    if mod_ol:
+                        try:
+                            obj.modifiers.remove(mod_ol)
+                        except Exception:
+                            pass
+
+                    # Add and configure Solidify modifier on Face objects
+                    mod_sol = obj.modifiers.get("Solidify")
+                    if not mod_sol:
+                        mod_sol = obj.modifiers.new(name="Solidify", type='SOLIDIFY')
+                    
+                    try:
+                        mod_sol.mode = 'EXTRUDE'
+                    except Exception:
+                        pass
+                    try:
+                        mod_sol.thickness = 0.001
+                    except Exception:
+                        pass
+                    try:
+                        mod_sol.offset = 1.0
+                    except Exception:
+                        pass
+                    try:
+                        mod_sol.use_rim = False
+                    except Exception:
+                        pass
+                    try:
+                        mod_sol.use_flip_normals = True
+                    except Exception:
+                        pass
+                    try:
+                        mod_sol.material_offset = 1
+                    except Exception:
+                        pass
+
+                    # Ensure Material Slot 2 (index 1) has ZZZ Face Outlines
+                    face_ol_mat = bpy.data.materials.get("ZZZ Face Outlines") or bpy.data.materials.get("ZZZ Face Outline")
+                    if face_ol_mat:
+                        while len(obj.material_slots) < 2:
+                            obj.data.materials.append(face_ol_mat)
+                        obj.material_slots[1].material = face_ol_mat
+
+                elif is_zzz_game and zzz_outlines_gn:
                     mod = obj.modifiers.get("Outlines")
                     if not mod:
                         mod = obj.modifiers.new(name="Outlines", type='NODES')
                         mod.node_group = zzz_outlines_gn
+
+                    # Configure Vertex Colors socket mode to VALUE (single color, not attribute mode) & set black color (0,0,0,1)
+                    props = getattr(mod, "properties", None)
+                    if props and hasattr(props, "inputs"):
+                        for vc_key in ["Input_3", "Vertex Colors"]:
+                            if hasattr(props.inputs, vc_key):
+                                inp_item = getattr(props.inputs, vc_key)
+                                try:
+                                    inp_item.type = 'VALUE'
+                                except Exception:
+                                    pass
+                                try:
+                                    inp_item.value = (0.0, 0.0, 0.0, 1.0)
+                                except Exception:
+                                    try:
+                                        inp_item.value[0] = 0.0
+                                        inp_item.value[1] = 0.0
+                                        inp_item.value[2] = 0.0
+                                        inp_item.value[3] = 1.0
+                                    except Exception:
+                                        pass
                     
                     try:
                         mod['Input_3_use_attribute'] = 0
@@ -1276,12 +1403,16 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                     mat_weapon_ol = get_outline_mat(mat_weapon) or bpy.data.materials.get("ZZZ Weapon Outlines")
 
                     cam_obj = bpy.data.objects.get("Camera") or getattr(self.context.scene, "camera", None)
-                    outline_thickness = 0.075 if "face" in obj.name.lower() else 0.750
+                    outline_thickness = 0.075
 
                     target_settings = [
                         # Base Geometry = True
                         (["Base Geometry", "Input_12", "Input_0"], True),
-                        # Outline Thickness (0.075 for face, 0.750 for others)
+                        # Use Vertex Colors? = True
+                        (["Use Vertex Colors?", "Use Vertex Colors", "Input_13"], True),
+                        # Vertex Colors = #000000FF black
+                        (["Vertex Colors", "Vertex Color", "Input_3"], (0.0, 0.0, 0.0, 1.0)),
+                        # Outline Thickness = 0.075 for ALL objects
                         (["Outline Thickness", "Input_7", "Input_2"], outline_thickness),
                         # Camera
                         (["Camera", "Input_1", "Input_4"], cam_obj),
