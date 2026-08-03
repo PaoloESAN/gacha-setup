@@ -4,9 +4,19 @@
 
 ---
 
+## Installation
+
+1. Download the `Gacha_Blender_Setup-<version>.zip` file from the **Releases** page.
+2. In Blender 5.2+, go to **Edit > Preferences > Add-ons**.
+3. Click the drop-down menu in the top right corner and select **Install from Disk...**
+4. Select the downloaded `Gacha_Blender_Setup-<version>.zip` file.
+5. Press **N** in the 3D Viewport to access the `Character Setup Wizard` sidebar panel.
+
+---
+
 ## Additional Add-ons
 
-The following add-on dependencies are bundled in the `dependencies` directory and will be **automatically installed and enabled** if they are not already present in your Blender environment:
+The following add-on dependencies are bundled in the `dependencies` directory and will be **automatically installed and enabled** if they are not already present in your Blender:
 
 * **ExpyKit**: [pKrime/Expy-Kit](https://github.com/pKrime/Expy-Kit) — Installed for automating Rigify character rigging setups.
 * **UEFormat**: [h4lfheart/UEFormat](https://github.com/h4lfheart/UEFormat) — Installed for importing Neverness to Everness (NTE) character models.
@@ -77,14 +87,3 @@ In compliance with Section 5a of the GNU General Public License v3, the followin
   - Enhanced post-processing execution and automated texture binding for both manual and standard imports.
 - **Codebase Refactoring & Streamlining**:
   - Removed Punishing: Gray Raven (PGR) support and outdated third-party dependencies (e.g., BetterFBX, legacy auto-updater) for a clean, lightweight addon architecture.
-
----
-
-## Installation
-
-1. Download the `setup_wizard.zip` file from the **Releases** page.
-2. In Blender 5.2+, go to **Edit > Preferences > Add-ons**.
-3. Click the drop-down menu in the top right corner and select **Install from Disk...**
-4. Select the downloaded `setup_wizard.zip` file.
-5. Enable the add-on by checking the checkbox next to it.
-6. Press **N** in the 3D Viewport to access the `Character Setup Wizard` sidebar panel.
