@@ -658,8 +658,6 @@ def rig_character(
             whee = bone.name[:-2] + ".R"
             if "f_" in bone.name or "thumb" in bone.name:
                 armature.edit_bones[whee].roll = -armature.edit_bones[bone.name].roll
-            else:
-                armature.edit_bones[bone.name].roll = -armature.edit_bones[whee].roll
 
     # Set shoulder rolls to point local Z-axis forward (Rigify default)
     armature.edit_bones["shoulder.L"].align_roll(Vector((0, -1, 0)))
@@ -809,9 +807,6 @@ def rig_character(
             metapose.bones[
                 f"{bone_name}.01.R"
             ].rigify_parameters.primary_rotation_axis = "-X"
-
-        metapose.bones["thumb.01.L"].rigify_parameters.primary_rotation_axis = "X"
-        metapose.bones["thumb.01.R"].rigify_parameters.primary_rotation_axis = "X"
     else:
         for bone_name in ["f_index", "f_middle", "f_ring", "f_pinky"]:
             metapose.bones[
@@ -820,9 +815,6 @@ def rig_character(
             metapose.bones[
                 f"{bone_name}.01.R"
             ].rigify_parameters.primary_rotation_axis = "X"
-
-        metapose.bones["thumb.01.L"].rigify_parameters.primary_rotation_axis = "X"
-        metapose.bones["thumb.01.R"].rigify_parameters.primary_rotation_axis = "X"
 
     ## This part corrects metarm finger rolls
     bpy.ops.object.mode_set(mode="OBJECT")
@@ -837,13 +829,22 @@ def rig_character(
 
     bpy.ops.object.mode_set(mode="EDIT")
     # Align hand.L and hand.R metarig bones straight along forearm vector so hand_ik widget is centered on wrist
-    for side in [".L", ".R"]:
-        forearm_eb = metarm.edit_bones.get("forearm" + side)
-        hand_eb = metarm.edit_bones.get("hand" + side)
-        if forearm_eb and hand_eb:
-            arm_vec = (forearm_eb.tail - forearm_eb.head).normalized()
-            hand_eb.tail = hand_eb.head + arm_vec * 0.05
-            hand_eb.roll = forearm_eb.roll
+    forearm_R = metarm.edit_bones.get("forearm.R")
+    hand_R = metarm.edit_bones.get("hand.R")
+    if forearm_R and hand_R:
+        arm_vec_R = (forearm_R.tail - forearm_R.head).normalized()
+        hand_R.tail = hand_R.head + arm_vec_R * 0.05
+        hand_R.roll = forearm_R.roll
+
+    forearm_L = metarm.edit_bones.get("forearm.L")
+    hand_L = metarm.edit_bones.get("hand.L")
+    if forearm_L and hand_L:
+        arm_vec_L = (forearm_L.tail - forearm_L.head).normalized()
+        hand_L.tail = hand_L.head + arm_vec_L * 0.05
+        if hand_R:
+            hand_L.roll = -hand_R.roll
+        elif forearm_L:
+            hand_L.roll = -forearm_L.roll
 
     for bone in metarm.edit_bones:
         if "f_" in bone.name or "thumb" in bone.name:
@@ -1917,17 +1918,17 @@ def rig_character(
         - armature.edit_bones["foot_spin_ik.R"].tail.x
     )
 
-    armature.edit_bones["MCH-shin_tweak-pin.parent.R"].head = armature.edit_bones[
+    armature.edit_bones["MCH-shin_tweak-pin.parent.L"].head = armature.edit_bones[
         "MCH-shin_ik.L"
     ].head.copy()
-    armature.edit_bones["MCH-shin_tweak-pin.parent.R"].tail.z = armature.edit_bones[
+    armature.edit_bones["MCH-shin_tweak-pin.parent.L"].tail.z = armature.edit_bones[
         "MCH-shin_ik.L"
     ].tail.z
-    armature.edit_bones["MCH-shin_tweak-pin.parent.R"].tail.x = armature.edit_bones[
+    armature.edit_bones["MCH-shin_tweak-pin.parent.L"].tail.x = armature.edit_bones[
         "MCH-shin_ik.L"
     ].tail.x
-    armature.edit_bones["MCH-shin_tweak-pin.parent.R"].roll = 0
-    armature.edit_bones["MCH-shin_tweak-pin.parent.R"].length = 0.02
+    armature.edit_bones["MCH-shin_tweak-pin.parent.L"].roll = 0
+    armature.edit_bones["MCH-shin_tweak-pin.parent.L"].length = 0.02
 
     armature.edit_bones["shin_tweak-pin.L"].head = armature.edit_bones[
         "MCH-shin_ik.L"
@@ -1964,6 +1965,9 @@ def rig_character(
     armature.edit_bones["shin_tweak-pin.R"].length -= 0.15
 
     # HAND POS Fixing
+    if "hand_ik.R" in armature.edit_bones:
+        armature.edit_bones["hand_ik.L"].roll = -armature.edit_bones["hand_ik.R"].roll
+
     armature.edit_bones["hand-ik-L"].head = armature.edit_bones["hand_ik.L"].head.copy()
     armature.edit_bones["hand-ik-L"].tail = armature.edit_bones["hand_ik.L"].tail.copy()
     armature.edit_bones["hand-ik-L"].roll = armature.edit_bones["hand_ik.L"].roll
