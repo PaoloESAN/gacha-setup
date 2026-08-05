@@ -226,6 +226,10 @@ def rig_character(
             if pb:
                 pb.custom_shape_scale_xyz = (0.70, 0.70, 0.70)
 
+        for b_name in ["thigh_parent.L", "thigh_parent.R", "upper_arm_parent.L", "upper_arm_parent.R"]:
+            pb = rigifyr.pose.bones.get(b_name)
+            if pb:
+                pb["IK_Stretch"] = 0.0
 
         bpy.ops.object.mode_set(mode='OBJECT')
 

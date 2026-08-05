@@ -15,12 +15,12 @@ class CharacterRiggerPropertyGroup(PropertyGroup):
     allow_arm_ik_stretch: BoolProperty(
         name=' Allow Arm IK Stretch', 
         description='Allow Arm IK Stretch',
-        default=True
+        default=False
     )
     allow_leg_ik_stretch: BoolProperty(
         name=' Allow Leg IK Stretch', 
         description='Allow Leg IK Stretch',
-        default=True
+        default=False
     )
     use_arm_ik_poles: BoolProperty(
         name=' Use Arm IK Poles', 

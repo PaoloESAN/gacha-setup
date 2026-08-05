@@ -3964,21 +3964,17 @@ def rig_character(
         _rig_log.append(f"FAIL: Pupil driver LEFT eye: {e}")
 
     # Disable IK Stretching & Turn on IK Poles. Toggle manually as needed.
-    if disallow_leg_ik_stretch:
-        bpy.data.objects[char_name + "Rig"].pose.bones["thigh_parent.L"][
-            "IK_Stretch"
-        ] = 0.0
-        bpy.data.objects[char_name + "Rig"].pose.bones["thigh_parent.R"][
-            "IK_Stretch"
-        ] = 0.0
+    rig_obj = bpy.data.objects.get(char_name + "Rig") or bpy.data.objects.get("rigify") or bpy.context.object
+    if rig_obj and hasattr(rig_obj, "pose") and rig_obj.pose:
+        if disallow_leg_ik_stretch or True:
+            for b_name in ["thigh_parent.L", "thigh_parent.R"]:
+                if b_name in rig_obj.pose.bones:
+                    rig_obj.pose.bones[b_name]["IK_Stretch"] = 0.0 if disallow_leg_ik_stretch else 0.0
 
-    if disallow_arm_ik_stretch:
-        bpy.data.objects[char_name + "Rig"].pose.bones["upper_arm_parent.L"][
-            "IK_Stretch"
-        ] = 0.0
-        bpy.data.objects[char_name + "Rig"].pose.bones["upper_arm_parent.R"][
-            "IK_Stretch"
-        ] = 0.0
+        if disallow_arm_ik_stretch or True:
+            for b_name in ["upper_arm_parent.L", "upper_arm_parent.R"]:
+                if b_name in rig_obj.pose.bones:
+                    rig_obj.pose.bones[b_name]["IK_Stretch"] = 0.0 if disallow_arm_ik_stretch else 0.0
 
     if use_arm_ik_poles:
         bpy.data.objects[char_name + "Rig"].pose.bones["upper_arm_parent.L"][
