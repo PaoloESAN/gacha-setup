@@ -6,7 +6,12 @@ import starlight from '@astrojs/starlight';
 export default defineConfig({
 	integrations: [
 		starlight({
-			title: 'Gacha Blender Setup',
+      title: 'Gacha Blender Setup',
+      logo: {
+				light: '/src/assets/logo-light.svg',
+				dark: '/src/assets/logo-dark.svg',
+				replacesTitle: true,
+			},
 			defaultLocale: 'root',
 			locales: {
 				root: {
@@ -65,11 +70,16 @@ export default defineConfig({
 				},
 			],
 			customCss: [
+				'./src/styles/base.css',
 				'./src/styles/page-transitions.css',
 			],
 			components: {
 				Head: './src/components/Head.astro',
 				PageFrame: './src/components/PageFrame.astro',
+				Sidebar: './src/components/Sidebar.astro',
+				ThemeSelect: './src/components/ThemeSelect.astro',
+				Pagination: './src/components/Pagination.astro',
+				PageSidebar: './src/components/PageSidebar.astro',
 			},
 		}),
 	],

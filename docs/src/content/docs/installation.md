@@ -4,7 +4,7 @@ description: How to install and set up Gacha Blender Setup addon in Blender 5.2+
 ---
 
 :::note[Blender Compatibility]
-**Gacha Blender Setup** is designed for official **Blender 5.2+**. Older Blender versions or Goo Blender are not supported.
+**Gacha Blender Setup** is designed for **Blender 5.2+**. Older Blender versions or Goo Blender are not supported.
 :::
 
 ## Installation Steps

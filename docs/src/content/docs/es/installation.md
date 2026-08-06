@@ -4,7 +4,7 @@ description: Cómo instalar y configurar la extensión Gacha Blender Setup en Bl
 ---
 
 :::note[Compatibilidad de Blender]
-**Gacha Blender Setup** está diseñado para **Blender 5.2+ oficial**. No se recomiendan versiones antiguas ni Goo Blender.
+**Gacha Blender Setup** está diseñado para **Blender 5.2+**. No se recomiendan versiones antiguas ni Goo Blender.
 :::
 
 ## Pasos de Instalación

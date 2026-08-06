@@ -1,11 +1,11 @@
 ---
 title: Gacha Blender Setup
-description: Configuración Automatizada de Personajes y Shaders para Modelos Gacha Anime en Blender 5.2+ Oficial
+description: Configuración Automatizada de Personajes y Shaders para Modelos Gacha Anime en Blender 5.2+
 template: splash
 hero:
-  tagline: Suite moderna de preparación automatizada en 1-clic, integración de shaders y rigging para Blender 5.2+ oficial
+  tagline: Suite moderna de preparación automatizada en 1-clic, integración de shaders y rigging para Blender 5.2+
   image:
-    file: ../../../assets/houston.webp
+    file: ../../../assets/evernight.gif
   actions:
     - text: Comenzar Ahora
       link: /es/installation/
@@ -17,40 +17,84 @@ hero:
       variant: minimal
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
-
-<div class="gacha-badge-container" style="display: flex; justify-content: center; gap: 12px; margin-bottom: 2rem;">
-  <span class="gacha-badge gacha-badge-5star">★ CALIDAD 5 ESTRELLAS</span>
-  <span class="gacha-badge gacha-badge-cyan">COMPATIBLE CON BLENDER 5.2+</span>
-  <span class="gacha-badge gacha-badge-4star">PIPELINE MULTI-JUEGO</span>
-</div>
+import { CardGrid } from '@astrojs/starlight/components';
+import { Image } from 'astro:assets';
+import genshinIcon from '../../../assets/icons/genshin-icon.webp';
+import hsrIcon from '../../../assets/icons/hsr-icon.webp';
+import zzzIcon from '../../../assets/icons/zzz-icon.jpg';
+import nteIcon from '../../../assets/icons/nte-icon.jpg';
+import wuwaIcon from '../../../assets/icons/wuwa-icon.webp';
+import silverIcon from '../../../assets/icons/silver-palace-icon.jpg';
 
 ## Juegos Soportados
 
-<CardGrid stagger>
-	<Card title="Genshin Impact" icon="star">
-		Configuración completa de personajes, shaders toon personalizados, ajuste de outlines y nodos de material.
-		[Ver Guía Rápida de Genshin](/es/genshin/quickstart/)
-	</Card>
-	<Card title="Honkai: Star Rail" icon="rocket">
-		Shaders StellarToon, pipeline de eye tracking por drivers y corrección de jerarquía de armadura.
-		[Ver Guía Rápida de HSR](/es/hsr/quickstart/)
-	</Card>
-	<Card title="Zenless Zone Zero" icon="setting">
-		Físicas de pecho y respiración personalizadas, rig facial de jideeh y colección de luces.
-		[Ver Guía Rápida de ZZZ](/es/zzz/quickstart/)
-	</Card>
-	<Card title="Neverness to Everness" icon="puzzle">
-		Pipeline de importación UEFormat, delineados personalizados y post-procesado en compositor.
-		[Ver Guía Rápida de NTE](/es/nte/quickstart/)
-	</Card>
+<CardGrid>
+	<a href="/es/genshin/quickstart/" class="game-card-link">
+		<div class="card">
+			<div class="title">
+				<Image src={genshinIcon} alt="Genshin Impact" class="game-icon-img" loading="eager" />
+				<span>Genshin Impact</span>
+			</div>
+			<div class="body">
+				Configuración completa de personajes, shaders toon personalizados, ajuste de outlines y nodos de material.
+			</div>
+		</div>
+	</a>
+	<a href="/es/hsr/quickstart/" class="game-card-link">
+		<div class="card">
+			<div class="title">
+				<Image src={hsrIcon} alt="Honkai: Star Rail" class="game-icon-img" loading="eager" />
+				<span>Honkai: Star Rail</span>
+			</div>
+			<div class="body">
+				Shaders StellarToon, pipeline de eye tracking por drivers y corrección de jerarquía de armadura.
+			</div>
+		</div>
+	</a>
+	<a href="/es/zzz/quickstart/" class="game-card-link">
+		<div class="card">
+			<div class="title">
+				<Image src={zzzIcon} alt="Zenless Zone Zero" class="game-icon-img" loading="eager" />
+				<span>Zenless Zone Zero</span>
+			</div>
+			<div class="body">
+				Físicas de pecho y respiración personalizadas, rig facial de jideeh y colección de luces.
+			</div>
+		</div>
+	</a>
+	<a href="/es/nte/quickstart/" class="game-card-link">
+		<div class="card">
+			<div class="title">
+				<Image src={nteIcon} alt="Neverness to Everness" class="game-icon-img" loading="eager" />
+				<span>Neverness to Everness</span>
+			</div>
+			<div class="body">
+				Pipeline de importación UEFormat, delineados personalizados y post-procesado en compositor.
+			</div>
+		</div>
+	</a>
+	<div class="game-card-disabled">
+		<div class="card">
+			<div class="title">
+				<Image src={wuwaIcon} alt="Wuthering Waves" class="game-icon-img" loading="eager" />
+				<span>Wuthering Waves</span>
+			</div>
+			<div class="body">
+				Pipeline de shaders y jerarquía de armaduras en desarrollo activo.
+				<span class="disabled-badge">PRÓXIMAMENTE</span>
+			</div>
+		</div>
+	</div>
+	<div class="game-card-disabled">
+		<div class="card">
+			<div class="title">
+				<Image src={silverIcon} alt="Silver Palace" class="game-icon-img" loading="eager" />
+				<span>Silver Palace</span>
+			</div>
+			<div class="body">
+				Configuración de modelos UE5 y pipeline de shaders planeados para la próxima versión.
+				<span class="disabled-badge">PRÓXIMAMENTE</span>
+			</div>
+		</div>
+	</div>
 </CardGrid>
-
----
-
-## Características Principales
-
-- **Nativo para Blender 5.2+**: API de Python actualizada, interfaz de Capas de Rig en el panel N interactiva con botones de favoritos.
-- **Rigging Automatizado**: Integración de Rigify y ExpyKit sin necesidad de configuración manual.
-- **Suite de Shaders y Materiales**: Enlazado automático de texturas, solución de delineados y sombra de ojos.
-- **i18n y Chibis Interactivos**: Documentación multi-idioma con asistentes flotantes estilo gacha para cada juego.

@@ -1,0 +1,596 @@
+@layer starlight.base {
+	:root,
+	::backdrop {
+		/* Blurple Overlay variables (Dark Mode) */
+		--purple-hsl: 255, 60%, 60%;
+		--overlay-blurple: hsla(var(--purple-hsl), 0.14);
+
+		/* Pastel Anime Theme Base Colors (Dark Mode) */
+		--sl-color-white: hsl(250, 100%, 98%);
+		--sl-color-gray-1: hsl(250, 45%, 90%);
+		--sl-color-gray-2: hsl(250, 25%, 78%);
+		--sl-color-gray-3: hsl(248, 16%, 60%);
+		--sl-color-gray-4: hsl(248, 14%, 42%);
+		--sl-color-gray-5: hsl(248, 18%, 22%);
+		--sl-color-gray-6: hsl(248, 22%, 15%);
+		--sl-color-black: #12101b;
+
+		/* Pastel Color Accents */
+		--sl-color-accent-low: hsl(252, 40%, 18%);
+		--sl-color-accent: hsl(265, 80%, 73%);
+		--sl-color-accent-high: hsl(315, 75%, 80%);
+
+		--sl-color-text: var(--sl-color-gray-2);
+		--sl-color-text-accent: var(--sl-color-accent);
+		--sl-color-text-invert: var(--sl-color-black);
+
+		/* Background Canvas */
+		--sl-color-bg: #161422;
+		--sl-color-bg-nav: rgba(22, 20, 34, 0.85);
+		--sl-color-bg-sidebar: #14121e;
+		--sl-color-bg-inline-code: rgba(179, 136, 255, 0.14);
+		--sl-color-bg-accent: var(--sl-color-accent);
+
+		/* Hairlines & Borders */
+		--sl-color-hairline-light: rgba(255, 255, 255, 0.12);
+		--sl-color-hairline: rgba(255, 255, 255, 0.07);
+		--sl-color-hairline-shade: #100e18;
+
+		--sl-color-backdrop-overlay: hsla(248, 30%, 8%, 0.75);
+
+		/* Shadows */
+		--sl-shadow-sm: 0px 2px 8px rgba(0, 0, 0, 0.25);
+		--sl-shadow-md: 0px 8px 24px rgba(0, 0, 0, 0.35), 0 0 12px rgba(179, 136, 255, 0.08);
+		--sl-shadow-lg: 0px 16px 36px rgba(0, 0, 0, 0.45), 0 0 24px rgba(179, 136, 255, 0.12);
+
+		/* Typography */
+		--sl-text-2xs: 0.75rem;
+		--sl-text-xs: 0.8125rem;
+		--sl-text-sm: 0.875rem;
+		--sl-text-base: 1rem;
+		--sl-text-lg: 1.125rem;
+		--sl-text-xl: 1.25rem;
+		--sl-text-2xl: 1.5rem;
+		--sl-text-3xl: 1.875rem;
+		--sl-text-4xl: 2.25rem;
+		--sl-text-5xl: 2.75rem;
+
+		--sl-line-height: 1.7;
+		--sl-line-height-headings: 1.2;
+
+		--sl-font-system: 'Plus Jakarta Sans', 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+		--sl-font-system-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+		--__sl-font: var(--sl-font, var(--sl-font-system)), var(--sl-font-system);
+		--__sl-font-mono: var(--sl-font-mono, var(--sl-font-system-mono)), var(--sl-font-system-mono);
+
+		--sl-nav-height: 3.75rem;
+		--sl-nav-pad-x: 1.25rem;
+		--sl-sidebar-width: 19rem;
+		--sl-sidebar-pad-x: 1.25rem;
+		--sl-content-width: 50rem;
+		--sl-content-pad-x: 1.5rem;
+	}
+
+	:root[data-theme='light'],
+	[data-theme='light'] ::backdrop {
+		/* Blurple Overlay variables (Light Mode) */
+		--purple-hsl: 255, 85%, 65%;
+		--overlay-blurple: hsla(var(--purple-hsl), 0.12);
+
+		/* Pastel Anime Theme (Light Mode) */
+		--sl-color-white: #1b162c;
+		--sl-color-gray-1: #2d2646;
+		--sl-color-gray-2: #4a406c;
+		--sl-color-gray-3: #6d6197;
+		--sl-color-gray-4: #988bc4;
+		--sl-color-gray-5: #e3dcf8;
+		--sl-color-gray-6: #f2ecfe;
+		--sl-color-black: #ffffff;
+
+		--sl-color-accent-high: #6d28d9;
+		--sl-color-accent: #8b5cf6;
+		--sl-color-accent-low: #ede9fe;
+
+		--sl-color-bg: #faf8ff;
+		--sl-color-bg-nav: rgba(250, 248, 255, 0.85);
+		--sl-color-bg-sidebar: rgba(242, 235, 254, 0.95);
+		--sl-color-bg-inline-code: #ede5ff;
+
+		--sl-color-hairline: rgba(139, 92, 246, 0.14);
+		--sl-color-hairline-light: rgba(139, 92, 246, 0.22);
+	}
+}
+
+/* Dynamic Theme Background Setup */
+html, body {
+	background-color: var(--sl-color-bg) !important;
+	color: var(--sl-color-gray-2);
+	font-family: var(--__sl-font);
+	-webkit-font-smoothing: antialiased;
+}
+
+.page {
+	background-color: var(--sl-color-bg);
+	min-height: 100vh;
+}
+
+/* 1. Header & Title Styling (Solid Color, No Gradient) */
+.site-title {
+	font-weight: 800;
+	font-size: 1.15rem;
+	letter-spacing: -0.01em;
+	color: var(--sl-color-white) !important;
+	background: none !important;
+	-webkit-background-clip: initial !important;
+	-webkit-text-fill-color: initial !important;
+}
+
+/* 2. Hero Section & Custom Background Gradients */
+[data-has-hero] .page {
+	background-color: var(--sl-color-bg) !important;
+	background-image:
+		linear-gradient(215deg, var(--overlay-blurple), transparent 40%),
+		radial-gradient(var(--overlay-blurple), transparent 40%),
+		radial-gradient(var(--overlay-blurple), transparent 65%) !important;
+	background-position:
+		0 0,
+		-60vw -40vh,
+		50% calc(100% + 20rem) !important;
+	background-size:
+		auto,
+		105vw 200vh,
+		60rem 30rem !important;
+	background-repeat:
+		no-repeat,
+		no-repeat,
+		no-repeat !important;
+}
+
+[data-has-hero] header {
+	border-bottom: 1px solid transparent;
+	background-color: transparent;
+	-webkit-backdrop-filter: blur(16px);
+	backdrop-filter: blur(16px);
+}
+
+/* Remove square drop shadow / halo from hero image */
+[data-has-hero] .hero > img,
+.hero img {
+	filter: none !important;
+	box-shadow: none !important;
+}
+
+.hero {
+	position: relative;
+	padding-block: 3.5rem 4.5rem !important;
+	display: grid;
+	gap: 2.5rem;
+	align-items: center;
+}
+
+@media (min-width: 50rem) {
+	.hero {
+		padding-block: 5.5rem 6.5rem !important;
+		grid-template-columns: 7fr 5fr !important;
+		text-align: left !important;
+	}
+}
+
+.hero .hero-html,
+.hero img {
+	max-width: 100%;
+	max-height: 17rem !important;
+	object-fit: contain;
+	margin-inline: auto;
+}
+
+.hero > * {
+	position: relative;
+	z-index: 1;
+}
+
+/* Hero Main Title - Solid Color, No Gradient */
+.hero h1 {
+	font-size: clamp(2.2rem, 5vw, 3.5rem) !important;
+	font-weight: 800 !important;
+	line-height: 1.15 !important;
+	letter-spacing: -0.02em !important;
+	color: var(--sl-color-white) !important;
+	background: none !important;
+	-webkit-background-clip: initial !important;
+	-webkit-text-fill-color: initial !important;
+	margin-bottom: 0.85rem !important;
+}
+
+.hero .tagline {
+	color: var(--sl-color-gray-2) !important;
+	font-size: clamp(1rem, 2vw, 1.25rem) !important;
+	line-height: 1.65 !important;
+	max-width: 40rem;
+}
+
+/* Hero Actions / Pill Buttons */
+.hero .actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 1rem;
+	margin-top: 1.75rem;
+	justify-content: flex-start;
+}
+
+.hero .action {
+	border-radius: 9999px !important;
+	padding: 0.75rem 1.85rem !important;
+	font-weight: 700 !important;
+	font-size: var(--sl-text-base) !important;
+	transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.hero .action.primary {
+	background: linear-gradient(135deg, #b388ff 0%, #f4b8e4 100%) !important;
+	color: #13111c !important;
+	box-shadow: 0 4px 18px rgba(179, 136, 255, 0.35) !important;
+	border: none !important;
+}
+
+.hero .action.primary:hover {
+	transform: none !important;
+	box-shadow: 0 8px 26px rgba(179, 136, 255, 0.5) !important;
+}
+
+.hero .action.minimal {
+	background: rgba(255, 255, 255, 0.05) !important;
+	border: 1px solid var(--sl-color-hairline) !important;
+	color: var(--sl-color-white) !important;
+}
+
+.hero .action.minimal:hover {
+	background: rgba(179, 136, 255, 0.15) !important;
+	border-color: var(--sl-color-accent) !important;
+	transform: none !important;
+}
+
+/* 3. Supported Games Cards & Clickable Grid Layout */
+.card-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr)) !important;
+	gap: 1.5rem !important;
+	margin-top: 1.25rem !important;
+}
+
+/* Reset stagger offset so cards align cleanly in a 3-column / 2-row grid */
+.card-grid[data-stagger],
+.card-grid {
+	grid-template-rows: auto !important;
+}
+
+.card-grid > * {
+	margin-top: 0 !important;
+	transform: none !important;
+}
+
+/* Clickable game card wrapper */
+a.game-card-link {
+	text-decoration: none !important;
+	color: inherit !important;
+	display: block;
+	cursor: pointer;
+	height: 100%;
+}
+
+a.game-card-link .card {
+	cursor: pointer;
+	height: 100%;
+}
+
+/* Dark Mode Card Hover */
+:root:not([data-theme='light']) a.game-card-link:hover .card {
+	transform: translateY(-4px) !important;
+	border-color: rgba(179, 136, 255, 0.4) !important;
+	background: rgba(28, 23, 44, 0.8) !important;
+	box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3), 0 0 20px rgba(179, 136, 255, 0.15) !important;
+}
+
+:root:not([data-theme='light']) a.game-card-link:hover .card .title {
+	color: var(--sl-color-accent) !important;
+}
+
+/* Light Mode Card Default & Hover */
+:root[data-theme='light'] .card {
+	background: rgba(255, 255, 255, 0.9) !important;
+	border-color: rgba(139, 92, 246, 0.15) !important;
+	box-shadow: 0 4px 18px rgba(139, 92, 246, 0.08) !important;
+}
+
+:root[data-theme='light'] .card .title {
+	color: #1b162c !important;
+}
+
+:root[data-theme='light'] .card .body {
+	color: #4a406c !important;
+}
+
+:root[data-theme='light'] a.game-card-link:hover .card {
+	transform: translateY(-4px) !important;
+	background: #ffffff !important;
+	border-color: rgba(139, 92, 246, 0.35) !important;
+	box-shadow: 0 10px 28px rgba(139, 92, 246, 0.18) !important;
+}
+
+:root[data-theme='light'] a.game-card-link:hover .card .title {
+	color: #6d28d9 !important;
+}
+
+/* Disabled game card styling */
+.game-card-disabled {
+	opacity: 0.55;
+	filter: grayscale(40%);
+	pointer-events: none;
+	cursor: not-allowed;
+	position: relative;
+	height: 100%;
+}
+
+.game-card-disabled .card {
+	border-style: dashed !important;
+	border-color: rgba(255, 255, 255, 0.14) !important;
+	background: rgba(16, 14, 24, 0.4) !important;
+	height: 100%;
+}
+
+:root[data-theme='light'] .game-card-disabled .card {
+	background: rgba(245, 240, 255, 0.5) !important;
+	border-color: rgba(139, 92, 246, 0.2) !important;
+}
+
+:root[data-theme='light'] .disabled-badge {
+	background: rgba(139, 92, 246, 0.1);
+	color: #6d6197;
+	border-color: rgba(139, 92, 246, 0.2);
+}
+
+.disabled-badge {
+	display: inline-block;
+	margin-top: auto;
+	padding: 0.25rem 0.75rem;
+	border-radius: 9999px;
+	background: rgba(255, 255, 255, 0.08);
+	color: var(--sl-color-gray-3);
+	font-size: 0.7rem;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	width: fit-content;
+}
+
+.card {
+	border-radius: 1.15rem !important;
+	padding: 1.5rem !important;
+	background: rgba(18, 15, 27, 0.65) !important;
+	border: 1px solid var(--sl-color-hairline) !important;
+	box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25) !important;
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	display: flex !important;
+	flex-direction: column !important;
+	justify-content: flex-start !important;
+	align-items: flex-start !important;
+	gap: 0.6rem !important;
+	height: 100%;
+	transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+	            border-color 0.25s ease,
+	            box-shadow 0.25s ease,
+	            background-color 0.25s ease !important;
+}
+
+.card .title {
+	font-size: var(--sl-text-xl) !important;
+	font-weight: 700 !important;
+	color: var(--sl-color-white) !important;
+	display: flex !important;
+	align-items: center !important;
+	gap: 0.75rem !important;
+	margin-bottom: 0.25rem !important;
+	transition: color 0.2s ease;
+}
+
+/* Custom Game Icon Image in Cards */
+.game-icon-img {
+	width: 2.6rem !important;
+	height: 2.6rem !important;
+	border-radius: 12px !important;
+	object-fit: cover !important;
+	box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25) !important;
+	flex-shrink: 0 !important;
+	border: 1px solid rgba(255, 255, 255, 0.15) !important;
+	transition: transform 0.2s ease !important;
+}
+
+.card:hover .game-icon-img {
+	transform: scale(1.08) !important;
+}
+
+.card .body {
+	color: var(--sl-color-gray-2) !important;
+	font-size: var(--sl-text-sm) !important;
+	line-height: 1.6 !important;
+	margin: 0 !important;
+}
+
+/* 4. Obsidian Sidebar Styling & Compact Vertical Spacing */
+.sidebar-pane {
+	backdrop-filter: blur(14px);
+	-webkit-backdrop-filter: blur(14px);
+	background-color: var(--sl-color-bg-sidebar) !important;
+}
+
+.sidebar-content {
+	gap: 0.25rem !important;
+	padding: 0.75rem var(--sl-sidebar-pad-x) 1rem !important;
+}
+
+.sidebar-top {
+	display: flex;
+	flex-direction: column;
+	gap: 0.25rem !important;
+	padding-bottom: 0.25rem !important;
+	border-bottom: 1px solid var(--sl-color-hairline) !important;
+	margin-bottom: 0 !important;
+}
+
+site-search button.search-input {
+	border-radius: 14px !important;
+	background-color: rgba(255, 255, 255, 0.05) !important;
+	border: 1px solid var(--sl-color-hairline) !important;
+	height: 2.6rem !important;
+	padding-inline: 0.85rem !important;
+	color: var(--sl-color-gray-2) !important;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+site-search button.search-input:hover,
+site-search button.search-input:focus-visible {
+	border-color: var(--sl-color-accent) !important;
+	background-color: rgba(179, 136, 255, 0.1) !important;
+	box-shadow: 0 0 14px rgba(179, 136, 255, 0.2) !important;
+}
+
+.mobile-preferences {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+	padding-top: 0 !important;
+	padding-bottom: 0 !important;
+	margin-top: 0 !important;
+	margin-bottom: 0 !important;
+	border-top: none !important;
+}
+
+.sidebar-content > :not(.sidebar-top) {
+	margin-top: 0.25rem !important;
+	padding-top: 0 !important;
+}
+
+.sidebar-content ul {
+	padding-top: 0 !important;
+	margin-top: 0 !important;
+}
+
+.social-icons {
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+}
+
+.social-icons a {
+	color: var(--sl-color-gray-3);
+	padding: 0.4rem;
+	border-radius: 9999px;
+	transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.social-icons a:hover {
+	color: var(--sl-color-accent);
+	background-color: rgba(179, 136, 255, 0.12);
+	transform: none !important;
+}
+
+.sidebar-content a {
+	border-radius: 10px !important;
+	padding: 0.45rem 0.75rem !important;
+	margin-block: 2px !important;
+	font-weight: 500;
+	font-size: var(--sl-text-sm);
+	color: var(--sl-color-gray-2);
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.sidebar-content a:hover {
+	color: var(--sl-color-white) !important;
+	background-color: rgba(179, 136, 255, 0.12) !important;
+	transform: translateX(3px);
+}
+
+/* Sidebar Active Item: Clean Pill Style WITHOUT vertical blue indicator lines */
+.sidebar-content a[aria-current="page"] {
+	color: var(--sl-color-white) !important;
+	font-weight: 700 !important;
+	background: rgba(179, 136, 255, 0.18) !important;
+	border: 1px solid rgba(179, 136, 255, 0.25) !important;
+	border-left: none !important;
+	padding-left: 0.75rem !important;
+	box-shadow: none !important;
+}
+
+summary {
+	font-weight: 700 !important;
+	color: var(--sl-color-gray-1) !important;
+	padding: 0.4rem 0.5rem !important;
+	border-radius: 8px;
+}
+
+/* 5. Callouts / Asides: Sleek Rounded Glass Boxes WITHOUT thick blue left borders */
+.starlight-aside {
+	border-radius: 1.1rem !important;
+	border-inline-start-width: 0 !important;
+	border-left: none !important;
+	border: 1px solid var(--sl-color-hairline) !important;
+	background: rgba(18, 15, 27, 0.65) !important;
+	backdrop-filter: blur(8px);
+	padding: 1.25rem 1.5rem !important;
+}
+
+:root[data-theme='light'] .starlight-aside {
+	background: rgba(242, 235, 254, 0.7) !important;
+}
+
+.starlight-aside--note {
+	border-color: rgba(179, 136, 255, 0.25) !important;
+}
+
+.starlight-aside--tip {
+	border-color: rgba(129, 200, 190, 0.25) !important;
+}
+
+.starlight-aside--caution {
+	border-color: rgba(255, 209, 102, 0.25) !important;
+}
+
+.starlight-aside--danger {
+	border-color: rgba(244, 184, 228, 0.25) !important;
+}
+
+/* Code & Badges */
+:not(pre) > code {
+	border-radius: 6px !important;
+	padding: 0.2em 0.45em !important;
+	background: var(--sl-color-bg-inline-code) !important;
+	color: var(--sl-color-gray-1) !important;
+	border: 1px solid rgba(179, 136, 255, 0.2) !important;
+}
+
+pre, expressive-code {
+	border-radius: 1.1rem !important;
+	border: 1px solid var(--sl-color-hairline) !important;
+	overflow: hidden !important;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+	width: 8px;
+	height: 8px;
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+	background: rgba(179, 136, 255, 0.25);
+	border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: rgba(179, 136, 255, 0.45);
+}

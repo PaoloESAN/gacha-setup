@@ -1,0 +1,99 @@
+---
+import { Icon } from '@astrojs/starlight/components'
+
+const { dir, pagination } = Astro.locals.starlightRoute;
+const { prev, next } = pagination;
+const isRtl = dir === 'rtl'
+---
+
+{
+  (prev || next) && (
+    <div class="pagination-links" dir={dir}>
+      {prev && (
+        <a href={prev.href} rel="prev">
+          <div class="link-label">
+            <Icon name={isRtl ? 'right-arrow' : 'left-arrow'} size="1.1rem" />
+            <span>{Astro.locals.t('page.previousLink')}</span>
+          </div>
+          <p class="link-title">{prev.label}</p>
+        </a>
+      )}
+      {next && (
+        <a href={next.href} rel="next">
+          <div class="link-label">
+            <span>{Astro.locals.t('page.nextLink')}</span>
+            <Icon name={isRtl ? 'left-arrow' : 'right-arrow'} size="1.1rem" />
+          </div>
+          <p class="link-title">{next.label}</p>
+        </a>
+      )}
+    </div>
+  )
+}
+
+<style>
+  @layer starlight.core {
+	  .pagination-links {
+		  display: grid;
+		  grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
+		  gap: 1.25rem;
+		  margin-top: 3rem;
+	  }
+
+	  a {
+		  display: flex;
+		  flex-direction: column;
+		  gap: 0.35rem;
+		  width: 100%;
+		  border: 1px solid var(--sl-color-hairline);
+		  border-radius: 1.25rem;
+		  padding: 1.25rem 1.5rem;
+		  text-decoration: none;
+		  color: var(--sl-color-gray-2);
+		  background-color: var(--sl-color-bg-sidebar);
+		  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+		  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+		  overflow-wrap: anywhere;
+	  }
+
+	  a:hover {
+		  border-color: var(--sl-color-accent);
+		  transform: translateY(-3px);
+		  box-shadow: 0 8px 28px rgba(179, 136, 255, 0.2);
+		  color: var(--sl-color-white);
+	  }
+
+	  .link-label {
+		  display: flex;
+		  align-items: center;
+		  gap: 0.4rem;
+		  font-size: var(--sl-text-xs);
+		  color: var(--sl-color-gray-3);
+		  text-transform: uppercase;
+		  letter-spacing: 0.04em;
+		  font-weight: 600;
+	  }
+
+	  [rel='next'] {
+		  text-align: end;
+		  align-items: flex-end;
+	  }
+
+	  [rel='next'] .link-label {
+		  justify-content: flex-end;
+	  }
+
+	  .link-title {
+		  color: var(--sl-color-white);
+		  font-size: var(--sl-text-lg);
+		  font-weight: 700;
+		  line-height: var(--sl-line-height-headings);
+		  margin: 0;
+	  }
+
+	  svg {
+		  flex-shrink: 0;
+		  color: var(--sl-color-accent);
+	  }
+  }
+</style>
