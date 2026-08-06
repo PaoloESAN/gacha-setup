@@ -1,40 +1,56 @@
 ---
-title: Welcome to Starlight
-description: Get started building your docs site with Starlight.
-template: splash # Remove or comment out this line to display the site sidebar on this page.
+title: Gacha Blender Setup
+description: Automated 1-Click Character & Shader Setup for Anime Gacha Models in Official Blender 5.2+
+template: splash
 hero:
-  tagline: Congrats on setting up a new Starlight project!
+  tagline: Modern 1-click automated character setup, shader integration, and rigging suite for official Blender 5.2+
   image:
-    file: ../../assets/houston.webp
+    file: ../../assets/blender.webp
   actions:
-    - text: Example Guide
-      link: /guides/example/
+    - text: Get Started
+      link: /installation/
       icon: right-arrow
-    - text: Read the Starlight docs
-      link: https://starlight.astro.build
+      variant: primary
+    - text: View GitHub Repository
+      link: https://github.com/PaoloESAN/gacha-blender-setup
       icon: external
       variant: minimal
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
-## Next steps
+<div class="gacha-badge-container" style="display: flex; justify-content: center; gap: 12px; margin-bottom: 2rem;">
+  <span class="gacha-badge gacha-badge-5star">★ 5-STAR QUALITY</span>
+  <span class="gacha-badge gacha-badge-cyan">BLENDER 5.2+ COMPATIBLE</span>
+  <span class="gacha-badge gacha-badge-4star">MULTI-GAME PIPELINE</span>
+</div>
+
+## Supported Games
 
 <CardGrid stagger>
-	<Card title="Update content" icon="pencil">
-		Edit `src/content/docs/index.mdx` to see this page change.
+	<Card title="Genshin Impact" icon="star">
+		Full character setup, custom cell shaders, outline thickness adjustment, and material nodes.
+		[View Genshin Quickstart](/genshin/quickstart/)
 	</Card>
-	<Card title="Change page layout" icon="document">
-		Delete `template: splash` in `src/content/docs/index.mdx` to display a
-		sidebar on this page.
+	<Card title="Honkai: Star Rail" icon="rocket">
+		StellarToon shaders, eye tracking driver pipeline, and corrected armature hierarchy.
+		[View HSR Quickstart](/hsr/quickstart/)
 	</Card>
-	<Card title="Add new content" icon="add-document">
-		Add Markdown or MDX files to `src/content/docs` to create new pages.
+	<Card title="Zenless Zone Zero" icon="setting">
+		Custom breast & breath physics controls, jideeh facial rig setup, and light collection fixes.
+		[View ZZZ Quickstart](/zzz/quickstart/)
 	</Card>
-	<Card title="Configure your site" icon="setting">
-		Edit your `sidebar` and other config in `astro.config.mjs`.
-	</Card>
-	<Card title="Read the docs" icon="open-book">
-		Learn more in [the Starlight Docs](https://starlight.astro.build/).
+	<Card title="Neverness to Everness" icon="puzzle">
+		UEFormat model import pipeline, custom outlines, and compositor post-processing.
+		[View NTE Quickstart](/nte/quickstart/)
 	</Card>
 </CardGrid>
+
+---
+
+## Key Features
+
+- **Blender 5.2+ Native**: Updated python API calls, dynamic N-panel Rig Layer UI with star toggles.
+- **Automated Rigging**: Rigify & ExpyKit integration out of the box.
+- **Shader & Material Suite**: Automatic texture binding, outline fixes, and eyeshadow rendering.
+- **i18n & Game Chibis**: Multi-language documentation with interactive game companion widgets.

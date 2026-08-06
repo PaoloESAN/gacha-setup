@@ -1,0 +1,56 @@
+---
+title: Gacha Blender Setup
+description: Configuración Automatizada de Personajes y Shaders para Modelos Gacha Anime en Blender 5.2+ Oficial
+template: splash
+hero:
+  tagline: Suite moderna de preparación automatizada en 1-clic, integración de shaders y rigging para Blender 5.2+ oficial
+  image:
+    file: ../../../assets/houston.webp
+  actions:
+    - text: Comenzar Ahora
+      link: /es/installation/
+      icon: right-arrow
+      variant: primary
+    - text: Ver Repositorio en GitHub
+      link: https://github.com/PaoloESAN/gacha-blender-setup
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<div class="gacha-badge-container" style="display: flex; justify-content: center; gap: 12px; margin-bottom: 2rem;">
+  <span class="gacha-badge gacha-badge-5star">★ CALIDAD 5 ESTRELLAS</span>
+  <span class="gacha-badge gacha-badge-cyan">COMPATIBLE CON BLENDER 5.2+</span>
+  <span class="gacha-badge gacha-badge-4star">PIPELINE MULTI-JUEGO</span>
+</div>
+
+## Juegos Soportados
+
+<CardGrid stagger>
+	<Card title="Genshin Impact" icon="star">
+		Configuración completa de personajes, shaders toon personalizados, ajuste de outlines y nodos de material.
+		[Ver Guía Rápida de Genshin](/es/genshin/quickstart/)
+	</Card>
+	<Card title="Honkai: Star Rail" icon="rocket">
+		Shaders StellarToon, pipeline de eye tracking por drivers y corrección de jerarquía de armadura.
+		[Ver Guía Rápida de HSR](/es/hsr/quickstart/)
+	</Card>
+	<Card title="Zenless Zone Zero" icon="setting">
+		Físicas de pecho y respiración personalizadas, rig facial de jideeh y colección de luces.
+		[Ver Guía Rápida de ZZZ](/es/zzz/quickstart/)
+	</Card>
+	<Card title="Neverness to Everness" icon="puzzle">
+		Pipeline de importación UEFormat, delineados personalizados y post-procesado en compositor.
+		[Ver Guía Rápida de NTE](/es/nte/quickstart/)
+	</Card>
+</CardGrid>
+
+---
+
+## Características Principales
+
+- **Nativo para Blender 5.2+**: API de Python actualizada, interfaz de Capas de Rig en el panel N interactiva con botones de favoritos.
+- **Rigging Automatizado**: Integración de Rigify y ExpyKit sin necesidad de configuración manual.
+- **Suite de Shaders y Materiales**: Enlazado automático de texturas, solución de delineados y sombra de ojos.
+- **i18n y Chibis Interactivos**: Documentación multi-idioma con asistentes flotantes estilo gacha para cada juego.
