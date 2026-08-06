@@ -1,6 +1,18 @@
 # Gacha Blender Setup
 
-**Gacha Blender Setup** is a fork of the original Setup Wizard add-on, created to provide a simple, automated character setup process for Gacha models specifically in modern **official Blender versions (Blender 5.2+)**. Using older versions of Blender or Goo Blender is not recommended, as the primary focus and target of this project is standard official Blender 5.2+.
+**Gacha Blender Setup** is a fork of the original [Setup Wizard](https://github.com/michael-gh1/Addons-And-Tools-For-Blender-miHoYo-Shaders) add-on, created to provide a simple, automated character setup process for Gacha models specifically in modern **official Blender versions (Blender 5.2+)**. Using older versions of Blender or Goo Blender is not recommended, as the primary focus and target of this project is standard official Blender 5.2+.
+
+---
+
+## Supported Games
+
+* **Genshin Impact**
+* **Honkai: Star Rail (HSR)**
+* **Zenless Zone Zero (ZZZ)**
+* **Neverness to Everness (NTE)** *(Face rig missing)*
+* **Wuthering Waves** *(Soon)*
+* **Silver Palace** *(Soon)*
+* **Honkai Impact 3rd** *(Soon)*
 
 ---
 
