@@ -1,11 +1,12 @@
 ---
 import type { ImageMetadata } from 'astro';
 import { Image } from 'astro:assets';
-import defaultHouston from '../assets/houston.webp';
+import defaultLayla from '../assets/chibis/genshin/layla.webp';
 
 const globChibis = import.meta.glob<{ default: ImageMetadata }>('../assets/chibis/**/*.{png,jpg,jpeg,webp,svg}', { eager: true });
 
 const CHIBI_MAP: Record<string, ImageMetadata> = {};
+const ALL_CHIBIS: ImageMetadata[] = [];
 
 for (const path in globChibis) {
   const match = path.match(/chibis\/(.+)\.(png|jpg|jpeg|webp|svg)$/i);
@@ -13,21 +14,32 @@ for (const path in globChibis) {
     const fullPathKey = match[1].toLowerCase();
     const fileNameKey = match[1].split('/').pop()!.toLowerCase();
 
-    CHIBI_MAP[fullPathKey] = globChibis[path].default;
-    CHIBI_MAP[fileNameKey] = globChibis[path].default;
+    const img = globChibis[path].default;
+    CHIBI_MAP[fullPathKey] = img;
+    CHIBI_MAP[fileNameKey] = img;
+    ALL_CHIBIS.push(img);
   }
 }
 
 const routeEntry = Astro.locals?.starlightRoute?.entry;
 const chibiName = (Astro.props?.chibi || routeEntry?.data?.chibi || '').toLowerCase().trim();
 
-const selectedImage = CHIBI_MAP[chibiName] || defaultHouston;
+let selectedImage: ImageMetadata;
+
+if (chibiName && CHIBI_MAP[chibiName]) {
+  selectedImage = CHIBI_MAP[chibiName];
+} else if (ALL_CHIBIS.length > 0) {
+  const randomIndex = Math.floor(Math.random() * ALL_CHIBIS.length);
+  selectedImage = ALL_CHIBIS[randomIndex];
+} else {
+  selectedImage = CHIBI_MAP['layla'] || defaultLayla;
+}
 ---
 
 <div class="gacha-chibi-container">
   <Image
     src={selectedImage}
-    alt="Chibi"
+    alt="Chibi Mascot"
     class="chibi-static-img"
     loading="eager"
   />
