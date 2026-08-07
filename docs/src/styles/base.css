@@ -1,112 +1,117 @@
-@layer starlight.base {
-	:root,
-	::backdrop {
-		/* Soft Harmonious Anime Pastel Accent Tokens (Dark Mode) */
-		--purple-hsl: 255, 85%, 75%;
-		--overlay-blurple: rgba(196, 181, 253, 0.12);
+:root,
+:root[data-theme='dark'],
+::backdrop,
+[data-theme='dark'] ::backdrop {
+	/* Soft Harmonious Accent Tokens (Dark Mode) */
+	--purple-hsl: 255, 85%, 75%;
+	--overlay-blurple: rgba(196, 181, 253, 0.12);
 
-		/* Soft Anime Theme Base Colors (Dark Mode) */
-		--sl-color-white: #f5f3ff;
-		--sl-color-gray-1: #ede9fe;
-		--sl-color-gray-2: #c4b5fd;
-		--sl-color-gray-3: #9489ca;
-		--sl-color-gray-4: #685c9d;
-		--sl-color-gray-5: #32285b;
-		--sl-color-gray-6: #1e183a;
-		--sl-color-black: #120e24;
+	/* Soft Base Colors (Dark Mode) */
+	--sl-color-white: #f5f3ff;
+	--sl-color-gray-1: #f1f5f9;
+	--sl-color-gray-2: #cbd5e1;
+	--sl-color-gray-3: #94a3b8;
+	--sl-color-gray-4: #64748b;
+	--sl-color-gray-5: #334155;
+	--sl-color-gray-6: #1e293b;
+	--sl-color-black: #120e24;
 
-		/* Accent Palette - Soft Lavender Milk */
-		--sl-color-accent-low: rgba(196, 181, 253, 0.14);
-		--sl-color-accent: #c4b5fd;
-		--sl-color-accent-high: #d8b4fe;
+	/* Accent Palette */
+	--sl-color-accent-low: rgba(196, 181, 253, 0.14);
+	--sl-color-accent: #c4b5fd;
+	--sl-color-accent-high: #d8b4fe;
 
-		--sl-color-text: var(--sl-color-gray-2);
-		--sl-color-text-accent: var(--sl-color-accent);
-		--sl-color-text-invert: var(--sl-color-black);
+	--sl-color-text: var(--sl-color-gray-2);
+	--sl-color-text-accent: var(--sl-color-accent);
+	--sl-color-text-invert: var(--sl-color-black);
 
-		/* Background Canvas */
-		--sl-color-bg: #141022;
-		--sl-color-bg-nav: rgba(20, 16, 34, 0.85);
-		--sl-color-bg-sidebar: #120e1f;
-		--sl-color-bg-inline-code: rgba(196, 181, 253, 0.14);
-		--sl-color-bg-accent: var(--sl-color-accent);
+	/* Background Canvas - Original Natural Dark Base */
+	--sl-color-bg: #141022;
+	--sl-color-bg-nav: rgba(20, 16, 34, 0.85);
+	--sl-color-bg-sidebar: #120e1f;
+	--sl-color-bg-inline-code: rgba(196, 181, 253, 0.14);
+	--sl-color-bg-accent: var(--sl-color-accent);
 
-		/* Hairlines & Borders */
-		--sl-color-hairline-light: rgba(196, 181, 253, 0.18);
-		--sl-color-hairline: rgba(255, 255, 255, 0.06);
-		--sl-color-hairline-shade: #0e0b19;
+	/* Hairlines & Borders */
+	--sl-color-hairline-light: rgba(196, 181, 253, 0.18);
+	--sl-color-hairline: rgba(255, 255, 255, 0.06);
+	--sl-color-hairline-shade: #0e0b19;
 
-		--sl-color-backdrop-overlay: rgba(14, 11, 24, 0.8);
+	--sl-color-backdrop-overlay: rgba(14, 11, 24, 0.8);
 
-		/* Shadows - Zeroed for flat, clean UI components */
-		--sl-shadow-sm: none;
-		--sl-shadow-md: none;
-		--sl-shadow-lg: none;
+	/* Shadows - Zeroed for flat, clean UI components */
+	--sl-shadow-sm: none;
+	--sl-shadow-md: none;
+	--sl-shadow-lg: none;
 
-		/* Typography */
-		--sl-text-2xs: 0.75rem;
-		--sl-text-xs: 0.8125rem;
-		--sl-text-sm: 0.875rem;
-		--sl-text-base: 1rem;
-		--sl-text-lg: 1.125rem;
-		--sl-text-xl: 1.25rem;
-		--sl-text-2xl: 1.5rem;
-		--sl-text-3xl: 1.875rem;
-		--sl-text-4xl: 2.25rem;
-		--sl-text-5xl: 2.75rem;
+	/* Typography */
+	--sl-text-2xs: 0.75rem;
+	--sl-text-xs: 0.8125rem;
+	--sl-text-sm: 0.875rem;
+	--sl-text-base: 1rem;
+	--sl-text-lg: 1.125rem;
+	--sl-text-xl: 1.25rem;
+	--sl-text-2xl: 1.5rem;
+	--sl-text-3xl: 1.875rem;
+	--sl-text-4xl: 2.25rem;
+	--sl-text-5xl: 2.75rem;
 
-		--sl-line-height: 1.7;
-		--sl-line-height-headings: 1.2;
+	--sl-line-height: 1.7;
+	--sl-line-height-headings: 1.2;
 
-		--sl-font-system: 'Plus Jakarta Sans', 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-		--sl-font-system-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-		--__sl-font: var(--sl-font, var(--sl-font-system)), var(--sl-font-system);
-		--__sl-font-mono: var(--sl-font-mono, var(--sl-font-system-mono)), var(--sl-font-system-mono);
+	--sl-font-system: 'Plus Jakarta Sans', 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+	--sl-font-system-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	--__sl-font: var(--sl-font, var(--sl-font-system)), var(--sl-font-system);
+	--__sl-font-mono: var(--sl-font-mono, var(--sl-font-system-mono)), var(--sl-font-system-mono);
 
-		--sl-nav-height: 3.75rem;
-		--sl-nav-pad-x: 1.25rem;
-		--sl-sidebar-width: 19rem;
-		--sl-sidebar-pad-x: 1.25rem;
-		--sl-content-width: 50rem;
-		--sl-content-pad-x: 1.5rem;
-	}
-
-	:root[data-theme='light'],
-	[data-theme='light'] ::backdrop {
-		--purple-hsl: 255, 85%, 65%;
-		--overlay-blurple: rgba(196, 181, 253, 0.12);
-
-		/* High-Contrast Soft Light Theme Base Colors */
-		--sl-color-white: #1e1b2e;
-		--sl-color-gray-1: #2d2845;
-		--sl-color-gray-2: #4a4268;
-		--sl-color-gray-3: #756a99;
-		--sl-color-gray-4: #a699c7;
-		--sl-color-gray-5: #eae4f8;
-		--sl-color-gray-6: #f6f3ff;
-		--sl-color-black: #ffffff;
-
-		--sl-color-accent-high: #6d28d9;
-		--sl-color-accent: #7c3aed;
-		--sl-color-accent-low: #ede9fe;
-
-		--sl-color-bg: #faf8ff;
-		--sl-color-bg-nav: rgba(250, 248, 255, 0.88);
-		--sl-color-bg-sidebar: rgba(243, 239, 255, 0.95);
-		--sl-color-bg-inline-code: #ede9fe;
-
-		--sl-color-hairline: rgba(124, 58, 237, 0.12);
-		--sl-color-hairline-light: rgba(124, 58, 237, 0.18);
-	}
+	--sl-nav-height: 3.75rem;
+	--sl-nav-pad-x: 1.25rem;
+	--sl-sidebar-width: 19rem;
+	--sl-sidebar-pad-x: 1.25rem;
+	--sl-content-width: 50rem;
+	--sl-content-pad-x: 1.5rem;
 }
 
-/* Japanese Anime Soft Glowing Ambient Mesh Background System */
+[data-has-hero] {
+	--sl-content-width: 75rem !important;
+}
+
+:root[data-theme='light'],
+html[data-theme='light'],
+[data-theme='light'] ::backdrop {
+	--purple-hsl: 255, 85%, 65%;
+	--overlay-blurple: rgba(196, 181, 253, 0.12);
+
+	/* High-Contrast Soft Light Theme Base Colors */
+	--sl-color-white: #0f172a;
+	--sl-color-gray-1: #1e293b;
+	--sl-color-gray-2: #334155;
+	--sl-color-gray-3: #64748b;
+	--sl-color-gray-4: #94a3b8;
+	--sl-color-gray-5: #f1f5f9;
+	--sl-color-gray-6: #f8fafc;
+	--sl-color-black: #ffffff;
+
+	--sl-color-accent-high: #6d28d9;
+	--sl-color-accent: #7c3aed;
+	--sl-color-accent-low: #ede9fe;
+
+	--sl-color-bg: #faf8ff;
+	--sl-color-bg-nav: rgba(250, 248, 255, 0.88);
+	--sl-color-bg-sidebar: rgba(243, 239, 255, 0.95);
+	--sl-color-bg-inline-code: #ede9fe;
+
+	--sl-color-hairline: rgba(124, 58, 237, 0.12);
+	--sl-color-hairline-light: rgba(124, 58, 237, 0.18);
+}
+
+/* Soft Ambient Mesh Background System (Light-mode inspired soft pastels for Dark Mode) */
 html, body, .page, [data-has-hero] .page {
 	background-color: var(--sl-color-bg) !important;
 	background-image:
-		radial-gradient(circle at 82% 15%, rgba(244, 114, 182, 0.16) 0%, transparent 42%),
-		radial-gradient(circle at 18% 30%, rgba(167, 139, 250, 0.18) 0%, transparent 48%),
-		radial-gradient(circle at 50% 80%, rgba(56, 189, 248, 0.12) 0%, transparent 55%) !important;
+		radial-gradient(circle at 82% 15%, rgba(244, 114, 182, 0.08) 0%, transparent 50%),
+		radial-gradient(circle at 18% 30%, rgba(167, 139, 250, 0.09) 0%, transparent 55%),
+		radial-gradient(circle at 50% 80%, rgba(56, 189, 248, 0.07) 0%, transparent 60%) !important;
 	background-attachment: fixed !important;
 	background-repeat: no-repeat !important;
 	background-size: cover !important;
@@ -116,10 +121,11 @@ html, body, .page, [data-has-hero] .page {
 	min-height: 100vh;
 }
 
-:root[data-theme='light'] html,
-:root[data-theme='light'] body,
-:root[data-theme='light'] .page,
-:root[data-theme='light'] [data-has-hero] .page {
+:root[data-theme='light'],
+html[data-theme='light'],
+[data-theme='light'] body,
+[data-theme='light'] .page,
+[data-theme='light'] [data-has-hero] .page {
 	background-image:
 		radial-gradient(circle at 82% 15%, rgba(251, 207, 232, 0.65) 0%, transparent 50%),
 		radial-gradient(circle at 18% 30%, rgba(233, 213, 255, 0.75) 0%, transparent 55%),
@@ -238,7 +244,7 @@ header.header starlight-lang-select {
 	transform: none !important;
 }
 
-/* Primary Button - Soft Lavender Milk (White in Dark Mode, Dark/Black in Light Mode) */
+/* Primary Button - Lilac Background with Black Text */
 [data-has-hero] .hero .actions a.action.primary,
 [data-has-hero] .hero .actions a.action.primary:link,
 [data-has-hero] .hero .actions a.action.primary:visited,
@@ -247,7 +253,7 @@ header.header starlight-lang-select {
 .hero a.primary {
 	background-color: #c4b5fd !important;
 	background: #c4b5fd !important;
-	color: #ffffff !important;
+	color: #120e24 !important;
 	font-weight: 700 !important;
 	box-shadow: none !important;
 	border: none !important;
@@ -258,9 +264,9 @@ header.header starlight-lang-select {
 .hero .actions a.primary:hover,
 .hero .action.primary:hover,
 .hero a.primary:hover {
-	background-color: #c4b5fd !important;
-	background: #c4b5fd !important;
-	color: #ffffff !important;
+	background-color: #b8a5fc !important;
+	background: #b8a5fc !important;
+	color: #120e24 !important;
 	transform: none !important;
 	box-shadow: none !important;
 }
@@ -268,12 +274,19 @@ header.header starlight-lang-select {
 :root[data-theme='light'] [data-has-hero] .hero .actions a.action.primary,
 :root[data-theme='light'] .hero .actions a.primary,
 :root[data-theme='light'] .hero .action.primary,
-:root[data-theme='light'] .hero a.primary,
+:root[data-theme='light'] .hero a.primary {
+	background-color: #a78bfa !important;
+	background: #a78bfa !important;
+	color: #ffffff !important;
+}
+
 :root[data-theme='light'] [data-has-hero] .hero .actions a.action.primary:hover,
 :root[data-theme='light'] .hero .actions a.primary:hover,
 :root[data-theme='light'] .hero .action.primary:hover,
 :root[data-theme='light'] .hero a.primary:hover {
-	color: #1c1732 !important;
+	background-color: #9067fa !important;
+	background: #9067fa !important;
+	color: #ffffff !important;
 }
 
 .hero .action.minimal {
@@ -284,8 +297,8 @@ header.header starlight-lang-select {
 }
 
 .hero .action.minimal:hover {
-	background: rgba(196, 181, 253, 0.12) !important;
-	border-color: rgba(196, 181, 253, 0.3) !important;
+	background: rgba(255, 255, 255, 0.08) !important;
+	border-color: rgba(255, 255, 255, 0.2) !important;
 }
 
 @media (min-width: 50rem) {
@@ -338,7 +351,7 @@ a.game-card-link .card {
 	height: 100%;
 }
 
-/* Dark Mode Card Default & Hover - Flat without glow */
+/* Dark Mode Card Default & Hover */
 :root:not([data-theme='light']) .card {
 	background: rgba(255, 255, 255, 0.035) !important;
 	border: 1px solid rgba(255, 255, 255, 0.06) !important;
@@ -379,7 +392,7 @@ a.game-card-link .card {
 }
 
 :root[data-theme='light'] a.game-card-link:hover .card .title {
-	color: #7c3aed !important;
+	color: #a78bfa !important;
 }
 
 /* Disabled game card styling */
@@ -475,6 +488,11 @@ a.game-card-link .card {
 	background-color: var(--sl-color-bg-sidebar) !important;
 }
 
+:root[data-theme='light'] .sidebar-pane,
+[data-theme='light'] .sidebar-pane {
+	background-color: rgba(243, 239, 255, 0.95) !important;
+}
+
 .sidebar-content {
 	gap: 0.25rem !important;
 	padding: 0.75rem var(--sl-sidebar-pad-x) 1rem !important;
@@ -502,9 +520,22 @@ site-search button.search-input {
 
 site-search button.search-input:hover,
 site-search button.search-input:focus-visible {
-	border-color: rgba(196, 181, 253, 0.3) !important;
-	background-color: rgba(196, 181, 253, 0.08) !important;
+	border-color: rgba(255, 255, 255, 0.18) !important;
+	background-color: rgba(255, 255, 255, 0.06) !important;
 	box-shadow: none !important;
+}
+
+:root[data-theme='light'] site-search button.search-input,
+[data-theme='light'] site-search button.search-input {
+	background-color: rgba(124, 58, 237, 0.05) !important;
+	border: 1px solid rgba(124, 58, 237, 0.15) !important;
+	color: #334155 !important;
+}
+
+:root[data-theme='light'] site-search button.search-input:hover,
+[data-theme='light'] site-search button.search-input:hover {
+	background-color: rgba(124, 58, 237, 0.09) !important;
+	border-color: rgba(124, 58, 237, 0.25) !important;
 }
 
 .mobile-preferences {
@@ -543,8 +574,8 @@ site-search button.search-input:focus-visible {
 }
 
 .social-icons a:hover {
-	color: var(--sl-color-accent);
-	background-color: rgba(196, 181, 253, 0.1);
+	color: var(--sl-color-white);
+	background-color: rgba(255, 255, 255, 0.08);
 	transform: none !important;
 }
 
@@ -554,29 +585,41 @@ site-search button.search-input:focus-visible {
 	margin-block: 2px !important;
 	font-weight: 500;
 	font-size: var(--sl-text-sm);
-	color: var(--sl-color-gray-2);
+	color: var(--sl-color-gray-3) !important;
 	transition: all 0.15s ease !important;
 }
 
 .sidebar-content a:hover {
 	color: var(--sl-color-white) !important;
-	background-color: rgba(196, 181, 253, 0.08) !important;
+	background-color: rgba(255, 255, 255, 0.06) !important;
 	transform: none !important;
 }
 
-/* Sidebar Active Item: Soft Muted Violet Text in Light Mode & Soft Glass Pill in Dark Mode */
+:root[data-theme='light'] .sidebar-content a,
+[data-theme='light'] .sidebar-content a {
+	color: #475569 !important;
+}
+
+:root[data-theme='light'] .sidebar-content a:hover,
+[data-theme='light'] .sidebar-content a:hover {
+	color: #0f172a !important;
+	background-color: rgba(124, 58, 237, 0.06) !important;
+}
+
+/* Sidebar Active Item: Soft Slate Glass Pill in Dark Mode & Clean Grey Pill in Light Mode */
 .sidebar-content a[aria-current="page"] {
-	color: var(--sl-color-white) !important;
+	color: #ffffff !important;
 	font-weight: 600 !important;
-	background: rgba(196, 181, 253, 0.14) !important;
+	background: rgba(255, 255, 255, 0.1) !important;
 	border: none !important;
 	padding-left: 0.75rem !important;
 	box-shadow: none !important;
 }
 
-:root[data-theme='light'] .sidebar-content a[aria-current="page"] {
-	color: #58448c !important;
-	background: #ede9fe !important;
+:root[data-theme='light'] .sidebar-content a[aria-current="page"],
+[data-theme='light'] .sidebar-content a[aria-current="page"] {
+	color: #0f172a !important;
+	background: rgba(124, 58, 237, 0.09) !important;
 	font-weight: 700 !important;
 }
 
@@ -585,6 +628,11 @@ summary {
 	color: var(--sl-color-gray-1) !important;
 	padding: 0.4rem 0.5rem !important;
 	border-radius: 8px;
+}
+
+:root[data-theme='light'] summary,
+[data-theme='light'] summary {
+	color: #0f172a !important;
 }
 
 /* 5. Callouts / Asides: Pure Tinted Glass without solid side bar */

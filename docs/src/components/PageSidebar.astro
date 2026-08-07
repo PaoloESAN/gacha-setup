@@ -41,17 +41,17 @@ import TableOfContents from 'virtual:starlight/components/TableOfContents';
 		}
 		.right-sidebar-panel :global(:where(a):hover) {
 			color: var(--sl-color-white);
-			background-color: rgba(167, 139, 250, 0.08);
+			background-color: rgba(255, 255, 255, 0.06);
 		}
 		.right-sidebar-panel :global(:where(a[aria-current="true"])) {
 			color: var(--sl-color-white) !important;
-			background-color: rgba(167, 139, 250, 0.14) !important;
+			background-color: rgba(255, 255, 255, 0.1) !important;
 			border-radius: 8px;
 			font-weight: 600;
 		}
 		:global([data-theme='light']) .right-sidebar-panel :global(:where(a[aria-current="true"])) {
-			color: #58448c !important;
-			background-color: #ede9fe !important;
+			color: #0f172a !important;
+			background-color: rgba(124, 58, 237, 0.09) !important;
 			font-weight: 700;
 		}
 		@media (min-width: 72rem) {
