@@ -45,21 +45,21 @@ const isRtl = dir === 'rtl'
 		  flex-direction: column;
 		  gap: 0.35rem;
 		  width: 100%;
-		  border: 1px solid var(--sl-color-hairline);
-		  border-radius: 1.25rem;
+		  border: 1px solid rgba(255, 255, 255, 0.06);
+		  border-radius: 1.15rem;
 		  padding: 1.25rem 1.5rem;
 		  text-decoration: none;
 		  color: var(--sl-color-gray-2);
-		  background-color: var(--sl-color-bg-sidebar);
-		  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
-		  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+		  background: rgba(255, 255, 255, 0.03);
+		  backdrop-filter: blur(12px);
+		  transition: none;
 		  overflow-wrap: anywhere;
 	  }
 
 	  a:hover {
-		  border-color: var(--sl-color-accent);
-		  transform: translateY(-3px);
-		  box-shadow: 0 8px 28px rgba(179, 136, 255, 0.2);
+		  border-color: rgba(196, 181, 253, 0.25);
+		  background: rgba(196, 181, 253, 0.08);
+		  transform: none;
 		  color: var(--sl-color-white);
 	  }
 
@@ -68,7 +68,7 @@ const isRtl = dir === 'rtl'
 		  align-items: center;
 		  gap: 0.4rem;
 		  font-size: var(--sl-text-xs);
-		  color: var(--sl-color-gray-3);
+		  color: #a78bfa;
 		  text-transform: uppercase;
 		  letter-spacing: 0.04em;
 		  font-weight: 600;
@@ -84,7 +84,7 @@ const isRtl = dir === 'rtl'
 	  }
 
 	  .link-title {
-		  color: var(--sl-color-white);
+		  color: #f5f3ff;
 		  font-size: var(--sl-text-lg);
 		  font-weight: 700;
 		  line-height: var(--sl-line-height-headings);
@@ -93,7 +93,7 @@ const isRtl = dir === 'rtl'
 
 	  svg {
 		  flex-shrink: 0;
-		  color: var(--sl-color-accent);
+		  color: #a78bfa;
 	  }
   }
 </style>

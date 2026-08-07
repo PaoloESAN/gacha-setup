@@ -25,7 +25,7 @@ import TableOfContents from 'virtual:starlight/components/TableOfContents';
 		.right-sidebar-panel :global(h2) {
 			color: var(--sl-color-white);
 			font-size: var(--sl-text-h5);
-			font-weight: 600;
+			font-weight: 700;
 			line-height: var(--sl-line-height-headings);
 			margin-bottom: 0.75rem;
 		}
@@ -34,18 +34,19 @@ import TableOfContents from 'virtual:starlight/components/TableOfContents';
 			font-size: var(--sl-text-xs);
 			text-decoration: none;
 			color: var(--sl-color-gray-3);
-			padding: 0.25rem 0.5rem;
-			border-radius: 6px;
-			transition: all 0.15s ease;
+			padding: 0.3rem 0.6rem;
+			border-radius: 8px;
+			transition: all 0.2s ease;
 			overflow-wrap: anywhere;
 		}
 		.right-sidebar-panel :global(:where(a):hover) {
 			color: var(--sl-color-white);
-			background-color: rgba(179, 136, 255, 0.1);
+			background-color: rgba(167, 139, 250, 0.08);
 		}
 		.right-sidebar-panel :global(:where(a[aria-current="true"])) {
-			color: var(--sl-color-accent) !important;
-			background-color: rgba(179, 136, 255, 0.15);
+			color: #f5f3ff !important;
+			background-color: rgba(167, 139, 250, 0.14) !important;
+			border-radius: 8px;
 			font-weight: 600;
 		}
 		@media (min-width: 72rem) {

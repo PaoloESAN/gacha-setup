@@ -1,47 +1,47 @@
 @layer starlight.base {
 	:root,
 	::backdrop {
-		/* Blurple Overlay variables (Dark Mode) */
-		--purple-hsl: 255, 60%, 60%;
-		--overlay-blurple: hsla(var(--purple-hsl), 0.14);
+		/* Soft Harmonious Anime Pastel Accent Tokens (Dark Mode) */
+		--purple-hsl: 255, 85%, 75%;
+		--overlay-blurple: rgba(196, 181, 253, 0.12);
 
-		/* Pastel Anime Theme Base Colors (Dark Mode) */
-		--sl-color-white: hsl(250, 100%, 98%);
-		--sl-color-gray-1: hsl(250, 45%, 90%);
-		--sl-color-gray-2: hsl(250, 25%, 78%);
-		--sl-color-gray-3: hsl(248, 16%, 60%);
-		--sl-color-gray-4: hsl(248, 14%, 42%);
-		--sl-color-gray-5: hsl(248, 18%, 22%);
-		--sl-color-gray-6: hsl(248, 22%, 15%);
-		--sl-color-black: #12101b;
+		/* Soft Anime Theme Base Colors (Dark Mode) */
+		--sl-color-white: #f5f3ff;
+		--sl-color-gray-1: #ede9fe;
+		--sl-color-gray-2: #c4b5fd;
+		--sl-color-gray-3: #9489ca;
+		--sl-color-gray-4: #685c9d;
+		--sl-color-gray-5: #32285b;
+		--sl-color-gray-6: #1e183a;
+		--sl-color-black: #120e24;
 
-		/* Pastel Color Accents */
-		--sl-color-accent-low: hsl(252, 40%, 18%);
-		--sl-color-accent: hsl(265, 80%, 73%);
-		--sl-color-accent-high: hsl(315, 75%, 80%);
+		/* Accent Palette - Soft Lavender Milk */
+		--sl-color-accent-low: rgba(196, 181, 253, 0.14);
+		--sl-color-accent: #c4b5fd;
+		--sl-color-accent-high: #d8b4fe;
 
 		--sl-color-text: var(--sl-color-gray-2);
 		--sl-color-text-accent: var(--sl-color-accent);
 		--sl-color-text-invert: var(--sl-color-black);
 
 		/* Background Canvas */
-		--sl-color-bg: #161422;
-		--sl-color-bg-nav: rgba(22, 20, 34, 0.85);
-		--sl-color-bg-sidebar: #14121e;
-		--sl-color-bg-inline-code: rgba(179, 136, 255, 0.14);
+		--sl-color-bg: #141022;
+		--sl-color-bg-nav: rgba(20, 16, 34, 0.85);
+		--sl-color-bg-sidebar: #120e1f;
+		--sl-color-bg-inline-code: rgba(196, 181, 253, 0.14);
 		--sl-color-bg-accent: var(--sl-color-accent);
 
 		/* Hairlines & Borders */
-		--sl-color-hairline-light: rgba(255, 255, 255, 0.12);
-		--sl-color-hairline: rgba(255, 255, 255, 0.07);
-		--sl-color-hairline-shade: #100e18;
+		--sl-color-hairline-light: rgba(196, 181, 253, 0.18);
+		--sl-color-hairline: rgba(255, 255, 255, 0.06);
+		--sl-color-hairline-shade: #0e0b19;
 
-		--sl-color-backdrop-overlay: hsla(248, 30%, 8%, 0.75);
+		--sl-color-backdrop-overlay: rgba(14, 11, 24, 0.8);
 
-		/* Shadows */
-		--sl-shadow-sm: 0px 2px 8px rgba(0, 0, 0, 0.25);
-		--sl-shadow-md: 0px 8px 24px rgba(0, 0, 0, 0.35), 0 0 12px rgba(179, 136, 255, 0.08);
-		--sl-shadow-lg: 0px 16px 36px rgba(0, 0, 0, 0.45), 0 0 24px rgba(179, 136, 255, 0.12);
+		/* Shadows - Zeroed for flat, clean UI components */
+		--sl-shadow-sm: none;
+		--sl-shadow-md: none;
+		--sl-shadow-lg: none;
 
 		/* Typography */
 		--sl-text-2xs: 0.75rem;
@@ -73,48 +73,60 @@
 
 	:root[data-theme='light'],
 	[data-theme='light'] ::backdrop {
-		/* Blurple Overlay variables (Light Mode) */
 		--purple-hsl: 255, 85%, 65%;
-		--overlay-blurple: hsla(var(--purple-hsl), 0.12);
+		--overlay-blurple: rgba(196, 181, 253, 0.12);
 
-		/* Pastel Anime Theme (Light Mode) */
-		--sl-color-white: #1b162c;
-		--sl-color-gray-1: #2d2646;
-		--sl-color-gray-2: #4a406c;
-		--sl-color-gray-3: #6d6197;
-		--sl-color-gray-4: #988bc4;
-		--sl-color-gray-5: #e3dcf8;
-		--sl-color-gray-6: #f2ecfe;
+		/* Soft Light Theme */
+		--sl-color-white: #1c1732;
+		--sl-color-gray-1: #322a52;
+		--sl-color-gray-2: #50447a;
+		--sl-color-gray-3: #796ba4;
+		--sl-color-gray-4: #a699cf;
+		--sl-color-gray-5: #e8e2f8;
+		--sl-color-gray-6: #f4f0ff;
 		--sl-color-black: #ffffff;
 
-		--sl-color-accent-high: #6d28d9;
+		--sl-color-accent-high: #7c3aed;
 		--sl-color-accent: #8b5cf6;
-		--sl-color-accent-low: #ede9fe;
+		--sl-color-accent-low: #f3e8ff;
 
 		--sl-color-bg: #faf8ff;
-		--sl-color-bg-nav: rgba(250, 248, 255, 0.85);
-		--sl-color-bg-sidebar: rgba(242, 235, 254, 0.95);
-		--sl-color-bg-inline-code: #ede5ff;
+		--sl-color-bg-nav: rgba(250, 248, 255, 0.88);
+		--sl-color-bg-sidebar: rgba(245, 241, 255, 0.95);
+		--sl-color-bg-inline-code: #f3e8ff;
 
-		--sl-color-hairline: rgba(139, 92, 246, 0.14);
-		--sl-color-hairline-light: rgba(139, 92, 246, 0.22);
+		--sl-color-hairline: rgba(139, 92, 246, 0.12);
+		--sl-color-hairline-light: rgba(139, 92, 246, 0.18);
 	}
 }
 
-/* Dynamic Theme Background Setup */
-html, body {
+/* Japanese Anime Soft Glowing Ambient Mesh Background System */
+html, body, .page, [data-has-hero] .page {
 	background-color: var(--sl-color-bg) !important;
+	background-image:
+		radial-gradient(circle at 82% 15%, rgba(244, 114, 182, 0.16) 0%, transparent 42%),
+		radial-gradient(circle at 18% 30%, rgba(167, 139, 250, 0.18) 0%, transparent 48%),
+		radial-gradient(circle at 50% 80%, rgba(56, 189, 248, 0.12) 0%, transparent 55%) !important;
+	background-attachment: fixed !important;
+	background-repeat: no-repeat !important;
+	background-size: cover !important;
 	color: var(--sl-color-gray-2);
 	font-family: var(--__sl-font);
 	-webkit-font-smoothing: antialiased;
-}
-
-.page {
-	background-color: var(--sl-color-bg);
 	min-height: 100vh;
 }
 
-/* 1. Header & Title Styling (Solid Color, No Gradient) */
+:root[data-theme='light'] html,
+:root[data-theme='light'] body,
+:root[data-theme='light'] .page,
+:root[data-theme='light'] [data-has-hero] .page {
+	background-image:
+		radial-gradient(circle at 82% 15%, rgba(251, 207, 232, 0.65) 0%, transparent 50%),
+		radial-gradient(circle at 18% 30%, rgba(233, 213, 255, 0.75) 0%, transparent 55%),
+		radial-gradient(circle at 50% 80%, rgba(224, 242, 254, 0.65) 0%, transparent 60%) !important;
+}
+
+/* 1. Header & Title Styling */
 .site-title {
 	font-weight: 800;
 	font-size: 1.15rem;
@@ -125,32 +137,33 @@ html, body {
 	-webkit-text-fill-color: initial !important;
 }
 
-/* 2. Hero Section & Custom Background Gradients */
-[data-has-hero] .page {
-	background-color: var(--sl-color-bg) !important;
-	background-image:
-		linear-gradient(215deg, var(--overlay-blurple), transparent 40%),
-		radial-gradient(var(--overlay-blurple), transparent 40%),
-		radial-gradient(var(--overlay-blurple), transparent 65%) !important;
-	background-position:
-		0 0,
-		-60vw -40vh,
-		50% calc(100% + 20rem) !important;
-	background-size:
-		auto,
-		105vw 200vh,
-		60rem 30rem !important;
-	background-repeat:
-		no-repeat,
-		no-repeat,
-		no-repeat !important;
-}
-
 [data-has-hero] header {
 	border-bottom: 1px solid transparent;
 	background-color: transparent;
 	-webkit-backdrop-filter: blur(16px);
 	backdrop-filter: blur(16px);
+}
+
+/* Show Header Right Controls & Language/Theme select on Mobile */
+header.header .sl-flex,
+header.header .right-group,
+header.header starlight-theme-select,
+header.header starlight-obsidian-theme-select,
+header.header starlight-lang-select {
+	display: flex !important;
+	align-items: center !important;
+}
+
+@media (max-width: 50rem) {
+	header.header {
+		align-items: center !important;
+		justify-content: space-between !important;
+		padding-inline: 1rem !important;
+	}
+
+	header.header .right-group {
+		gap: 0.5rem !important;
+	}
 }
 
 /* Remove square drop shadow / halo from hero image */
@@ -166,14 +179,14 @@ html, body {
 	display: grid;
 	gap: 2.5rem;
 	align-items: center;
+	text-align: center !important;
 }
 
-@media (min-width: 50rem) {
-	.hero {
-		padding-block: 5.5rem 6.5rem !important;
-		grid-template-columns: 7fr 5fr !important;
-		text-align: left !important;
-	}
+.hero > * {
+	display: flex;
+	flex-direction: column;
+	align-items: center !important;
+	text-align: center !important;
 }
 
 .hero .hero-html,
@@ -184,12 +197,7 @@ html, body {
 	margin-inline: auto;
 }
 
-.hero > * {
-	position: relative;
-	z-index: 1;
-}
-
-/* Hero Main Title - Solid Color, No Gradient */
+/* Hero Main Title - Crisp Pastel White */
 .hero h1 {
 	font-size: clamp(2.2rem, 5vw, 3.5rem) !important;
 	font-weight: 800 !important;
@@ -207,15 +215,18 @@ html, body {
 	font-size: clamp(1rem, 2vw, 1.25rem) !important;
 	line-height: 1.65 !important;
 	max-width: 40rem;
+	margin-inline: auto;
 }
 
-/* Hero Actions / Pill Buttons */
+/* Hero Actions / Soft Pastel Pill Buttons (Centered on Mobile, Static No Lift) */
 .hero .actions {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 1rem;
-	margin-top: 1.75rem;
-	justify-content: flex-start;
+	display: flex !important;
+	flex-wrap: wrap !important;
+	gap: 1rem !important;
+	margin-top: 1.75rem !important;
+	justify-content: center !important;
+	align-items: center !important;
+	width: 100% !important;
 }
 
 .hero .action {
@@ -223,31 +234,76 @@ html, body {
 	padding: 0.75rem 1.85rem !important;
 	font-weight: 700 !important;
 	font-size: var(--sl-text-base) !important;
-	transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
-
-.hero .action.primary {
-	background: linear-gradient(135deg, #b388ff 0%, #f4b8e4 100%) !important;
-	color: #13111c !important;
-	box-shadow: 0 4px 18px rgba(179, 136, 255, 0.35) !important;
-	border: none !important;
-}
-
-.hero .action.primary:hover {
+	transition: none !important;
 	transform: none !important;
-	box-shadow: 0 8px 26px rgba(179, 136, 255, 0.5) !important;
+}
+
+/* Primary Button - Soft Lavender Milk (White in Dark Mode, Dark/Black in Light Mode) */
+[data-has-hero] .hero .actions a.action.primary,
+[data-has-hero] .hero .actions a.action.primary:link,
+[data-has-hero] .hero .actions a.action.primary:visited,
+.hero .actions a.primary,
+.hero .action.primary,
+.hero a.primary {
+	background-color: #c4b5fd !important;
+	background: #c4b5fd !important;
+	color: #ffffff !important;
+	font-weight: 700 !important;
+	box-shadow: none !important;
+	border: none !important;
+	transform: none !important;
+}
+
+[data-has-hero] .hero .actions a.action.primary:hover,
+.hero .actions a.primary:hover,
+.hero .action.primary:hover,
+.hero a.primary:hover {
+	background-color: #c4b5fd !important;
+	background: #c4b5fd !important;
+	color: #ffffff !important;
+	transform: none !important;
+	box-shadow: none !important;
+}
+
+:root[data-theme='light'] [data-has-hero] .hero .actions a.action.primary,
+:root[data-theme='light'] .hero .actions a.primary,
+:root[data-theme='light'] .hero .action.primary,
+:root[data-theme='light'] .hero a.primary,
+:root[data-theme='light'] [data-has-hero] .hero .actions a.action.primary:hover,
+:root[data-theme='light'] .hero .actions a.primary:hover,
+:root[data-theme='light'] .hero .action.primary:hover,
+:root[data-theme='light'] .hero a.primary:hover {
+	color: #1c1732 !important;
 }
 
 .hero .action.minimal {
-	background: rgba(255, 255, 255, 0.05) !important;
-	border: 1px solid var(--sl-color-hairline) !important;
+	background: transparent !important;
+	border: 1px solid rgba(255, 255, 255, 0.1) !important;
 	color: var(--sl-color-white) !important;
+	backdrop-filter: blur(8px);
 }
 
 .hero .action.minimal:hover {
-	background: rgba(179, 136, 255, 0.15) !important;
-	border-color: var(--sl-color-accent) !important;
-	transform: none !important;
+	background: rgba(196, 181, 253, 0.12) !important;
+	border-color: rgba(196, 181, 253, 0.3) !important;
+}
+
+@media (min-width: 50rem) {
+	.hero {
+		padding-block: 5.5rem 6.5rem !important;
+		grid-template-columns: 7fr 5fr !important;
+		text-align: left !important;
+	}
+	.hero > * {
+		align-items: flex-start !important;
+		text-align: left !important;
+	}
+	.hero .tagline {
+		margin-inline: 0 !important;
+	}
+	.hero .actions {
+		justify-content: flex-start !important;
+	}
 }
 
 /* 3. Supported Games Cards & Clickable Grid Layout */
@@ -258,7 +314,6 @@ html, body {
 	margin-top: 1.25rem !important;
 }
 
-/* Reset stagger offset so cards align cleanly in a 3-column / 2-row grid */
 .card-grid[data-stagger],
 .card-grid {
 	grid-template-rows: auto !important;
@@ -283,47 +338,53 @@ a.game-card-link .card {
 	height: 100%;
 }
 
-/* Dark Mode Card Hover */
+/* Dark Mode Card Default & Hover - Flat without glow */
+:root:not([data-theme='light']) .card {
+	background: rgba(255, 255, 255, 0.035) !important;
+	border: 1px solid rgba(255, 255, 255, 0.06) !important;
+	box-shadow: none !important;
+}
+
 :root:not([data-theme='light']) a.game-card-link:hover .card {
-	transform: translateY(-4px) !important;
-	border-color: rgba(179, 136, 255, 0.4) !important;
-	background: rgba(28, 23, 44, 0.8) !important;
-	box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3), 0 0 20px rgba(179, 136, 255, 0.15) !important;
+	transform: none !important;
+	border-color: rgba(196, 181, 253, 0.3) !important;
+	background: rgba(196, 181, 253, 0.08) !important;
+	box-shadow: none !important;
 }
 
 :root:not([data-theme='light']) a.game-card-link:hover .card .title {
-	color: var(--sl-color-accent) !important;
+	color: #c4b5fd !important;
 }
 
 /* Light Mode Card Default & Hover */
 :root[data-theme='light'] .card {
-	background: rgba(255, 255, 255, 0.9) !important;
-	border-color: rgba(139, 92, 246, 0.15) !important;
-	box-shadow: 0 4px 18px rgba(139, 92, 246, 0.08) !important;
+	background: rgba(255, 255, 255, 0.85) !important;
+	border: 1px solid rgba(139, 92, 246, 0.1) !important;
+	box-shadow: none !important;
 }
 
 :root[data-theme='light'] .card .title {
-	color: #1b162c !important;
+	color: #1c1732 !important;
 }
 
 :root[data-theme='light'] .card .body {
-	color: #4a406c !important;
+	color: #50447a !important;
 }
 
 :root[data-theme='light'] a.game-card-link:hover .card {
-	transform: translateY(-4px) !important;
+	transform: none !important;
 	background: #ffffff !important;
-	border-color: rgba(139, 92, 246, 0.35) !important;
-	box-shadow: 0 10px 28px rgba(139, 92, 246, 0.18) !important;
+	border-color: rgba(139, 92, 246, 0.25) !important;
+	box-shadow: none !important;
 }
 
 :root[data-theme='light'] a.game-card-link:hover .card .title {
-	color: #6d28d9 !important;
+	color: #7c3aed !important;
 }
 
 /* Disabled game card styling */
 .game-card-disabled {
-	opacity: 0.55;
+	opacity: 0.5;
 	filter: grayscale(40%);
 	pointer-events: none;
 	cursor: not-allowed;
@@ -333,42 +394,33 @@ a.game-card-link .card {
 
 .game-card-disabled .card {
 	border-style: dashed !important;
-	border-color: rgba(255, 255, 255, 0.14) !important;
-	background: rgba(16, 14, 24, 0.4) !important;
+	border-color: rgba(255, 255, 255, 0.08) !important;
+	background: rgba(255, 255, 255, 0.02) !important;
 	height: 100%;
 }
 
 :root[data-theme='light'] .game-card-disabled .card {
-	background: rgba(245, 240, 255, 0.5) !important;
-	border-color: rgba(139, 92, 246, 0.2) !important;
-}
-
-:root[data-theme='light'] .disabled-badge {
-	background: rgba(139, 92, 246, 0.1);
-	color: #6d6197;
-	border-color: rgba(139, 92, 246, 0.2);
+	background: rgba(245, 241, 255, 0.5) !important;
+	border-color: rgba(139, 92, 246, 0.15) !important;
 }
 
 .disabled-badge {
 	display: inline-block;
 	margin-top: auto;
-	padding: 0.25rem 0.75rem;
+	padding: 0.2rem 0.65rem;
 	border-radius: 9999px;
-	background: rgba(255, 255, 255, 0.08);
+	background: rgba(255, 255, 255, 0.06);
 	color: var(--sl-color-gray-3);
-	font-size: 0.7rem;
+	font-size: 0.68rem;
 	font-weight: 700;
-	letter-spacing: 0.06em;
-	border: 1px solid rgba(255, 255, 255, 0.1);
+	letter-spacing: 0.05em;
+	border: 1px solid rgba(255, 255, 255, 0.08);
 	width: fit-content;
 }
 
 .card {
 	border-radius: 1.15rem !important;
 	padding: 1.5rem !important;
-	background: rgba(18, 15, 27, 0.65) !important;
-	border: 1px solid var(--sl-color-hairline) !important;
-	box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25) !important;
 	backdrop-filter: blur(12px);
 	-webkit-backdrop-filter: blur(12px);
 	display: flex !important;
@@ -377,12 +429,10 @@ a.game-card-link .card {
 	align-items: flex-start !important;
 	gap: 0.6rem !important;
 	height: 100%;
-	transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
-	            border-color 0.25s ease,
-	            box-shadow 0.25s ease,
-	            background-color 0.25s ease !important;
+	transition: all 0.25s ease !important;
 }
 
+/* Card Game Name Title - White by default, Pastel Lavender ONLY on hover */
 .card .title {
 	font-size: var(--sl-text-xl) !important;
 	font-weight: 700 !important;
@@ -391,7 +441,7 @@ a.game-card-link .card {
 	align-items: center !important;
 	gap: 0.75rem !important;
 	margin-bottom: 0.25rem !important;
-	transition: color 0.2s ease;
+	transition: color 0.2s ease !important;
 }
 
 /* Custom Game Icon Image in Cards */
@@ -400,14 +450,15 @@ a.game-card-link .card {
 	height: 2.6rem !important;
 	border-radius: 12px !important;
 	object-fit: cover !important;
-	box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25) !important;
+	box-shadow: none !important;
 	flex-shrink: 0 !important;
-	border: 1px solid rgba(255, 255, 255, 0.15) !important;
-	transition: transform 0.2s ease !important;
+	border: 1px solid rgba(255, 255, 255, 0.1) !important;
+	transition: none !important;
+	transform: none !important;
 }
 
 .card:hover .game-icon-img {
-	transform: scale(1.08) !important;
+	transform: none !important;
 }
 
 .card .body {
@@ -417,7 +468,7 @@ a.game-card-link .card {
 	margin: 0 !important;
 }
 
-/* 4. Obsidian Sidebar Styling & Compact Vertical Spacing */
+/* 4. Obsidian Sidebar Styling */
 .sidebar-pane {
 	backdrop-filter: blur(14px);
 	-webkit-backdrop-filter: blur(14px);
@@ -439,20 +490,21 @@ a.game-card-link .card {
 }
 
 site-search button.search-input {
-	border-radius: 14px !important;
-	background-color: rgba(255, 255, 255, 0.05) !important;
+	border-radius: 12px !important;
+	background-color: rgba(255, 255, 255, 0.04) !important;
 	border: 1px solid var(--sl-color-hairline) !important;
-	height: 2.6rem !important;
+	height: 2.5rem !important;
 	padding-inline: 0.85rem !important;
 	color: var(--sl-color-gray-2) !important;
-	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+	transition: all 0.2s ease !important;
+	box-shadow: none !important;
 }
 
 site-search button.search-input:hover,
 site-search button.search-input:focus-visible {
-	border-color: var(--sl-color-accent) !important;
-	background-color: rgba(179, 136, 255, 0.1) !important;
-	box-shadow: 0 0 14px rgba(179, 136, 255, 0.2) !important;
+	border-color: rgba(196, 181, 253, 0.3) !important;
+	background-color: rgba(196, 181, 253, 0.08) !important;
+	box-shadow: none !important;
 }
 
 .mobile-preferences {
@@ -492,73 +544,85 @@ site-search button.search-input:focus-visible {
 
 .social-icons a:hover {
 	color: var(--sl-color-accent);
-	background-color: rgba(179, 136, 255, 0.12);
+	background-color: rgba(196, 181, 253, 0.1);
 	transform: none !important;
 }
 
 .sidebar-content a {
-	border-radius: 10px !important;
+	border-radius: 8px !important;
 	padding: 0.45rem 0.75rem !important;
 	margin-block: 2px !important;
 	font-weight: 500;
 	font-size: var(--sl-text-sm);
 	color: var(--sl-color-gray-2);
-	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+	transition: all 0.15s ease !important;
 }
 
 .sidebar-content a:hover {
 	color: var(--sl-color-white) !important;
-	background-color: rgba(179, 136, 255, 0.12) !important;
-	transform: translateX(3px);
+	background-color: rgba(196, 181, 253, 0.08) !important;
+	transform: none !important;
 }
 
-/* Sidebar Active Item: Clean Pill Style WITHOUT vertical blue indicator lines */
+/* Sidebar Active Item: Soft Solid Monochrome Tint (No Gradients) */
 .sidebar-content a[aria-current="page"] {
-	color: var(--sl-color-white) !important;
-	font-weight: 700 !important;
-	background: rgba(179, 136, 255, 0.18) !important;
-	border: 1px solid rgba(179, 136, 255, 0.25) !important;
-	border-left: none !important;
+	color: #f5f3ff !important;
+	font-weight: 600 !important;
+	background: rgba(196, 181, 253, 0.14) !important;
+	border: none !important;
 	padding-left: 0.75rem !important;
 	box-shadow: none !important;
 }
 
 summary {
-	font-weight: 700 !important;
+	font-weight: 600 !important;
 	color: var(--sl-color-gray-1) !important;
 	padding: 0.4rem 0.5rem !important;
 	border-radius: 8px;
 }
 
-/* 5. Callouts / Asides: Sleek Rounded Glass Boxes WITHOUT thick blue left borders */
+/* 5. Callouts / Asides: Pure Tinted Glass without solid side bar */
 .starlight-aside {
-	border-radius: 1.1rem !important;
+	border-radius: 1rem !important;
+	border: 1px solid rgba(255, 255, 255, 0.06) !important;
 	border-inline-start-width: 0 !important;
-	border-left: none !important;
-	border: 1px solid var(--sl-color-hairline) !important;
-	background: rgba(18, 15, 27, 0.65) !important;
-	backdrop-filter: blur(8px);
-	padding: 1.25rem 1.5rem !important;
-}
-
-:root[data-theme='light'] .starlight-aside {
-	background: rgba(242, 235, 254, 0.7) !important;
+	border-left: 1px solid rgba(255, 255, 255, 0.06) !important;
+	backdrop-filter: blur(8px) !important;
+	-webkit-backdrop-filter: blur(8px) !important;
+	padding: 1.1rem 1.35rem !important;
+	box-shadow: none !important;
 }
 
 .starlight-aside--note {
-	border-color: rgba(179, 136, 255, 0.25) !important;
+	background: rgba(196, 181, 253, 0.06) !important;
+}
+
+.starlight-aside--note .starlight-aside__title {
+	color: #d8b4fe !important;
 }
 
 .starlight-aside--tip {
-	border-color: rgba(129, 200, 190, 0.25) !important;
+	background: rgba(129, 200, 190, 0.06) !important;
+}
+
+.starlight-aside--tip .starlight-aside__title {
+	color: #81c8be !important;
 }
 
 .starlight-aside--caution {
-	border-color: rgba(255, 209, 102, 0.25) !important;
+	background: rgba(255, 209, 102, 0.06) !important;
+}
+
+.starlight-aside--caution .starlight-aside__title {
+	color: #ffd166 !important;
 }
 
 .starlight-aside--danger {
-	border-color: rgba(244, 184, 228, 0.25) !important;
+	background: rgba(244, 114, 182, 0.06) !important;
+}
+
+.starlight-aside--danger .starlight-aside__title {
+	color: #f472b6 !important;
 }
 
 /* Code & Badges */
@@ -567,19 +631,19 @@ summary {
 	padding: 0.2em 0.45em !important;
 	background: var(--sl-color-bg-inline-code) !important;
 	color: var(--sl-color-gray-1) !important;
-	border: 1px solid rgba(179, 136, 255, 0.2) !important;
+	border: 1px solid rgba(196, 181, 253, 0.15) !important;
 }
 
 pre, expressive-code {
-	border-radius: 1.1rem !important;
+	border-radius: 1rem !important;
 	border: 1px solid var(--sl-color-hairline) !important;
 	overflow: hidden !important;
 }
 
-/* Scrollbar */
+/* Soft Scrollbar */
 ::-webkit-scrollbar {
-	width: 8px;
-	height: 8px;
+	width: 7px;
+	height: 7px;
 }
 
 ::-webkit-scrollbar-track {
@@ -587,10 +651,10 @@ pre, expressive-code {
 }
 
 ::-webkit-scrollbar-thumb {
-	background: rgba(179, 136, 255, 0.25);
+	background: rgba(196, 181, 253, 0.3);
 	border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-	background: rgba(179, 136, 255, 0.45);
+	background: rgba(196, 181, 253, 0.5);
 }

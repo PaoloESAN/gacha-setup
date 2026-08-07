@@ -2,12 +2,14 @@
 import MobileTableOfContents from '@astrojs/starlight/components/MobileTableOfContents.astro';
 import MobileMenuToggle from '@astrojs/starlight/components/MobileMenuToggle.astro';
 import SiteTitle from '@astrojs/starlight/components/SiteTitle.astro';
+import ThemeSelect from '@astrojs/starlight/components/ThemeSelect.astro';
+import LanguageSelect from '@astrojs/starlight/components/LanguageSelect.astro';
 import ChibiWidget from './ChibiWidget.astro';
 
 const { hasSidebar } = Astro.locals.starlightRoute;
 ---
 
-{/* (STARLIGHT-THEME-OBSIDIAN): Do not show header component if page has no sidebar, create a separate mobile-header component */}
+{/* (STARLIGHT-THEME-OBSIDIAN): Header component with mobile controls */}
 <div class="page sl-flex">
     {
         hasSidebar ? (
@@ -25,6 +27,10 @@ const { hasSidebar } = Astro.locals.starlightRoute;
             <div class="mobile-header">
                 <div class="title-wrapper">
                     <SiteTitle/>
+                </div>
+                <div class="mobile-controls sl-flex">
+                    <ThemeSelect />
+                    <LanguageSelect />
                 </div>
                 <MobileTableOfContents/>
                 <MobileMenuToggle/>
@@ -118,6 +124,12 @@ const { hasSidebar } = Astro.locals.starlightRoute;
 			border-bottom: 1px solid var(--sl-color-hairline);
 			padding: 0 var(--sl-nav-pad-x);
 			z-index: var(--sl-z-index-navbar);
+		}
+
+		.mobile-controls {
+			display: flex;
+			align-items: center;
+			gap: 0.5rem;
 		}
 
 		@media (min-width: 50rem) {
