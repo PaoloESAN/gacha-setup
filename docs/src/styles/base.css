@@ -76,27 +76,27 @@
 		--purple-hsl: 255, 85%, 65%;
 		--overlay-blurple: rgba(196, 181, 253, 0.12);
 
-		/* Soft Light Theme */
-		--sl-color-white: #1c1732;
-		--sl-color-gray-1: #322a52;
-		--sl-color-gray-2: #50447a;
-		--sl-color-gray-3: #796ba4;
-		--sl-color-gray-4: #a699cf;
-		--sl-color-gray-5: #e8e2f8;
-		--sl-color-gray-6: #f4f0ff;
+		/* High-Contrast Soft Light Theme Base Colors */
+		--sl-color-white: #1e1b2e;
+		--sl-color-gray-1: #2d2845;
+		--sl-color-gray-2: #4a4268;
+		--sl-color-gray-3: #756a99;
+		--sl-color-gray-4: #a699c7;
+		--sl-color-gray-5: #eae4f8;
+		--sl-color-gray-6: #f6f3ff;
 		--sl-color-black: #ffffff;
 
-		--sl-color-accent-high: #7c3aed;
-		--sl-color-accent: #8b5cf6;
-		--sl-color-accent-low: #f3e8ff;
+		--sl-color-accent-high: #6d28d9;
+		--sl-color-accent: #7c3aed;
+		--sl-color-accent-low: #ede9fe;
 
 		--sl-color-bg: #faf8ff;
 		--sl-color-bg-nav: rgba(250, 248, 255, 0.88);
-		--sl-color-bg-sidebar: rgba(245, 241, 255, 0.95);
-		--sl-color-bg-inline-code: #f3e8ff;
+		--sl-color-bg-sidebar: rgba(243, 239, 255, 0.95);
+		--sl-color-bg-inline-code: #ede9fe;
 
-		--sl-color-hairline: rgba(139, 92, 246, 0.12);
-		--sl-color-hairline-light: rgba(139, 92, 246, 0.18);
+		--sl-color-hairline: rgba(124, 58, 237, 0.12);
+		--sl-color-hairline-light: rgba(124, 58, 237, 0.18);
 	}
 }
 
@@ -564,14 +564,20 @@ site-search button.search-input:focus-visible {
 	transform: none !important;
 }
 
-/* Sidebar Active Item: Soft Solid Monochrome Tint (No Gradients) */
+/* Sidebar Active Item: Soft Muted Violet Text in Light Mode & Soft Glass Pill in Dark Mode */
 .sidebar-content a[aria-current="page"] {
-	color: #f5f3ff !important;
+	color: var(--sl-color-white) !important;
 	font-weight: 600 !important;
 	background: rgba(196, 181, 253, 0.14) !important;
 	border: none !important;
 	padding-left: 0.75rem !important;
 	box-shadow: none !important;
+}
+
+:root[data-theme='light'] .sidebar-content a[aria-current="page"] {
+	color: #58448c !important;
+	background: #ede9fe !important;
+	font-weight: 700 !important;
 }
 
 summary {
@@ -625,6 +631,44 @@ summary {
 	color: #f472b6 !important;
 }
 
+/* Light Mode Callouts / Asides Pretty Colors */
+:root[data-theme='light'] .starlight-aside {
+	border: 1px solid rgba(124, 58, 237, 0.12) !important;
+	border-left: 1px solid rgba(124, 58, 237, 0.12) !important;
+}
+
+:root[data-theme='light'] .starlight-aside--note {
+	background: rgba(124, 58, 237, 0.05) !important;
+}
+
+:root[data-theme='light'] .starlight-aside--note .starlight-aside__title {
+	color: #58448c !important;
+}
+
+:root[data-theme='light'] .starlight-aside--tip {
+	background: rgba(13, 148, 136, 0.05) !important;
+}
+
+:root[data-theme='light'] .starlight-aside--tip .starlight-aside__title {
+	color: #0d9488 !important;
+}
+
+:root[data-theme='light'] .starlight-aside--caution {
+	background: rgba(217, 119, 6, 0.05) !important;
+}
+
+:root[data-theme='light'] .starlight-aside--caution .starlight-aside__title {
+	color: #d97706 !important;
+}
+
+:root[data-theme='light'] .starlight-aside--danger {
+	background: rgba(225, 29, 72, 0.05) !important;
+}
+
+:root[data-theme='light'] .starlight-aside--danger .starlight-aside__title {
+	color: #e11d48 !important;
+}
+
 /* Code & Badges */
 :not(pre) > code {
 	border-radius: 6px !important;
@@ -632,6 +676,12 @@ summary {
 	background: var(--sl-color-bg-inline-code) !important;
 	color: var(--sl-color-gray-1) !important;
 	border: 1px solid rgba(196, 181, 253, 0.15) !important;
+}
+
+:root[data-theme='light'] :not(pre) > code {
+	background: #ede9fe !important;
+	color: #4c1d95 !important;
+	border: 1px solid rgba(109, 40, 217, 0.18) !important;
 }
 
 pre, expressive-code {

@@ -44,10 +44,15 @@ import TableOfContents from 'virtual:starlight/components/TableOfContents';
 			background-color: rgba(167, 139, 250, 0.08);
 		}
 		.right-sidebar-panel :global(:where(a[aria-current="true"])) {
-			color: #f5f3ff !important;
+			color: var(--sl-color-white) !important;
 			background-color: rgba(167, 139, 250, 0.14) !important;
 			border-radius: 8px;
 			font-weight: 600;
+		}
+		:global([data-theme='light']) .right-sidebar-panel :global(:where(a[aria-current="true"])) {
+			color: #58448c !important;
+			background-color: #ede9fe !important;
+			font-weight: 700;
 		}
 		@media (min-width: 72rem) {
 			.sl-container {
