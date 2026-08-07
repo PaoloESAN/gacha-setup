@@ -6,8 +6,8 @@ import starlight from '@astrojs/starlight';
 export default defineConfig({
 	integrations: [
 		starlight({
-      title: 'Gacha Blender Setup',
-      logo: {
+			title: 'Gacha Blender Setup',
+			logo: {
 				light: '/src/assets/logo-light.svg',
 				dark: '/src/assets/logo-dark.svg',
 				replacesTitle: true,
@@ -31,41 +31,47 @@ export default defineConfig({
 					label: 'Overview',
 					translations: { es: 'Visión General' },
 					items: [
-						{ label: 'Installation', slug: 'installation', translations: { es: 'Instalación' } },
-						{ label: 'Rigging Guide', slug: 'rigging', translations: { es: 'Guía de Rigging' } },
-						{ label: 'Shaders & Materials', slug: 'shaders', translations: { es: 'Shaders y Materiales' } },
-						{ label: 'FAQ', slug: 'faq', translations: { es: 'Preguntas Frecuentes' } },
+						{ label: 'Quickstart', slug: 'quickstart', translations: { es: 'Guía Rápida' } },
+						{ label: 'Character Models', slug: 'character-models', translations: { es: 'Modelos de Personajes' } },
+						{ label: 'Changelog', slug: 'changelog', translations: { es: 'Registro de Cambios' } },
+						{ label: 'Roadmap', slug: 'roadmap', translations: { es: 'Ruta de Desarrollo' } },
+						{ label: 'Credits', slug: 'credits', translations: { es: 'Créditos' } },
 					],
 				},
 				{
 					label: 'Genshin Impact',
 					items: [
-						{ label: 'Quickstart', slug: 'genshin/quickstart', translations: { es: 'Guía Rápida' } },
-						{ label: 'Bugs & Solutions', slug: 'genshin/bugs', translations: { es: 'Bugs y Soluciones' } },
-						{ label: 'Shaders & Setup', slug: 'genshin/shaders', translations: { es: 'Shaders y Setup' } },
+						{ label: 'Setup Character', slug: 'genshin/setup-character', translations: { es: 'Setup Character' } },
+						{ label: 'Lights & Coloramp', slug: 'genshin/lights-coloramp', translations: { es: 'Luces y Coloramp' } },
+						{ label: 'Bugs & Solutions', slug: 'genshin/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
+						{ label: 'Rigging', slug: 'genshin/rigging', translations: { es: 'Rigging' } },
 					],
 				},
 				{
 					label: 'Honkai: Star Rail',
 					items: [
-						{ label: 'Quickstart', slug: 'hsr/quickstart', translations: { es: 'Guía Rápida' } },
-						{ label: 'Bugs & Solutions', slug: 'hsr/bugs', translations: { es: 'Bugs y Soluciones' } },
-						{ label: 'Eye Tracking Drivers', slug: 'hsr/eye-tracking', translations: { es: 'Drivers Eye Tracking' } },
+						{ label: 'Setup Character', slug: 'hsr/setup-character', translations: { es: 'Setup Character' } },
+						{ label: 'Lights & Coloramp', slug: 'hsr/lights-coloramp', translations: { es: 'Luces y Coloramp' } },
+						{ label: 'Bugs & Solutions', slug: 'hsr/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
+						{ label: 'Rigging', slug: 'hsr/rigging', translations: { es: 'Rigging' } },
 					],
 				},
 				{
 					label: 'Zenless Zone Zero',
 					items: [
-						{ label: 'Quickstart', slug: 'zzz/quickstart', translations: { es: 'Guía Rápida' } },
-						{ label: 'Bugs & Solutions', slug: 'zzz/bugs', translations: { es: 'Bugs y Soluciones' } },
-						{ label: 'Physics Setup', slug: 'zzz/physics', translations: { es: 'Setup de Físicas' } },
+						{ label: 'Setup Character', slug: 'zzz/setup-character', translations: { es: 'Setup Character' } },
+						{ label: 'Lights & Coloramp', slug: 'zzz/lights-coloramp', translations: { es: 'Luces y Coloramp' } },
+						{ label: 'Bugs & Solutions', slug: 'zzz/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
+						{ label: 'Rigging', slug: 'zzz/rigging', translations: { es: 'Rigging' } },
 					],
 				},
 				{
 					label: 'Neverness to Everness',
 					items: [
-						{ label: 'Quickstart', slug: 'nte/quickstart', translations: { es: 'Guía Rápida' } },
-						{ label: 'Bugs & Solutions', slug: 'nte/bugs', translations: { es: 'Bugs y Soluciones' } },
+						{ label: 'Setup Character', slug: 'nte/setup-character', translations: { es: 'Setup Character' } },
+						{ label: 'Lights & Coloramp', slug: 'nte/lights-coloramp', translations: { es: 'Luces y Coloramp' } },
+						{ label: 'Bugs & Solutions', slug: 'nte/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
+						{ label: 'Rigging', slug: 'nte/rigging', translations: { es: 'Rigging' } },
 					],
 				},
 			],
