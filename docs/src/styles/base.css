@@ -27,7 +27,7 @@
 
 	/* Background Canvas - Original Natural Dark Base */
 	--sl-color-bg: #141022;
-	--sl-color-bg-nav: rgba(20, 16, 34, 0.85);
+	--sl-color-bg-nav: #120e1f;
 	--sl-color-bg-sidebar: #120e1f;
 	--sl-color-bg-inline-code: rgba(196, 181, 253, 0.14);
 	--sl-color-bg-accent: var(--sl-color-accent);
@@ -97,8 +97,8 @@ html[data-theme='light'],
 	--sl-color-accent-low: #ede9fe;
 
 	--sl-color-bg: #faf8ff;
-	--sl-color-bg-nav: rgba(250, 248, 255, 0.88);
-	--sl-color-bg-sidebar: rgba(243, 239, 255, 0.95);
+	--sl-color-bg-nav: #f3efff;
+	--sl-color-bg-sidebar: #f3efff;
 	--sl-color-bg-inline-code: #ede9fe;
 
 	--sl-color-hairline: rgba(124, 58, 237, 0.12);
@@ -483,27 +483,25 @@ a.game-card-link .card {
 
 /* 4. Obsidian Sidebar Styling */
 .sidebar-pane {
-	backdrop-filter: blur(14px);
-	-webkit-backdrop-filter: blur(14px);
 	background-color: var(--sl-color-bg-sidebar) !important;
 }
 
 :root[data-theme='light'] .sidebar-pane,
 [data-theme='light'] .sidebar-pane {
-	background-color: rgba(243, 239, 255, 0.95) !important;
+	background-color: #f3efff !important;
 }
 
 .sidebar-content {
 	gap: 0.25rem !important;
-	padding: 0.75rem var(--sl-sidebar-pad-x) 1rem !important;
+	padding: 0 var(--sl-sidebar-pad-x) 1rem !important;
 }
 
 .sidebar-top {
 	display: flex;
 	flex-direction: column;
 	gap: 0.25rem !important;
-	padding-bottom: 0.25rem !important;
-	border-bottom: 1px solid var(--sl-color-hairline) !important;
+	padding-bottom: 0 !important;
+	border-bottom: none !important;
 	margin-bottom: 0 !important;
 }
 
@@ -539,19 +537,52 @@ site-search button.search-input:focus-visible {
 }
 
 .mobile-preferences {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	width: 100%;
-	padding-top: 0 !important;
-	padding-bottom: 0 !important;
-	margin-top: 0 !important;
-	margin-bottom: 0 !important;
+	display: flex !important;
+	align-items: center !important;
+	justify-content: space-between !important;
+	width: 100% !important;
+	padding: 0.25rem 0 0 0 !important;
+	margin: 0 !important;
 	border-top: none !important;
+	border-bottom: none !important;
+}
+
+.mobile-preferences .social-icons {
+	display: flex !important;
+	align-items: center !important;
+	gap: 0.75rem !important;
+	margin-inline-end: auto !important;
+}
+
+.mobile-preferences starlight-obsidian-theme-select {
+	display: flex !important;
+	align-items: center !important;
+	align-self: center !important;
+	margin: 0 !important;
+	padding: 0 !important;
+}
+
+.mobile-preferences starlight-obsidian-theme-select > button {
+	display: flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	height: 2.25rem !important;
+	width: 2.25rem !important;
+	padding: 0 !important;
+	margin: 0 0.25rem !important;
+	background: transparent !important;
+	border: none !important;
+	cursor: pointer !important;
+}
+
+.mobile-preferences starlight-lang-select {
+	display: flex !important;
+	align-items: center !important;
+	margin: 0 !important;
 }
 
 .sidebar-content > :not(.sidebar-top) {
-	margin-top: 0.25rem !important;
+	margin-top: 0.5rem !important;
 	padding-top: 0 !important;
 }
 
@@ -604,6 +635,134 @@ site-search button.search-input:focus-visible {
 [data-theme='light'] .sidebar-content a:hover {
 	color: #0f172a !important;
 	background-color: rgba(124, 58, 237, 0.06) !important;
+}
+
+@media (min-width: 50rem) {
+	.mobile-header {
+		display: none !important;
+		visibility: hidden !important;
+	}
+
+	:root[data-has-sidebar] .page,
+	[data-has-sidebar] .page {
+		padding-left: 0 !important;
+	}
+
+	:root[data-has-sidebar] .sidebar,
+	[data-has-sidebar] .sidebar {
+		position: fixed !important;
+		top: 0 !important;
+		left: 0 !important;
+		width: var(--sl-sidebar-width) !important;
+		height: 100vh !important;
+		z-index: 10 !important;
+	}
+
+	:root[data-has-sidebar] .main-frame,
+	[data-has-sidebar] .main-frame {
+		padding-top: 0 !important;
+		padding-inline-start: var(--sl-sidebar-width) !important;
+		width: 100% !important;
+		box-sizing: border-box !important;
+		overflow-x: hidden !important;
+	}
+
+	:root[data-has-sidebar] .main-pane,
+	[data-has-sidebar] .main-pane {
+		margin-top: 0 !important;
+		padding-top: 1.25rem !important;
+	}
+
+	.sidebar-pane,
+	.sidebar {
+		border-inline-end: 1px solid var(--sl-color-hairline) !important;
+	}
+}
+
+:root:not([data-has-sidebar]) .main-frame,
+:root[data-has-hero] .main-frame,
+:not([data-has-sidebar]) .main-frame,
+[data-has-hero] .main-frame {
+	padding-inline-start: 0 !important;
+	padding-top: 0 !important;
+	margin-inline: auto !important;
+	width: 100% !important;
+}
+
+:root:not([data-has-sidebar]) .main-frame > div,
+:root[data-has-hero] .main-frame > div,
+:not([data-has-sidebar]) .main-frame > div,
+[data-has-hero] .main-frame > div {
+	max-width: 100% !important;
+	margin-inline: auto !important;
+}
+
+@media (min-width: 72rem) {
+	:root[data-has-sidebar] .main-frame > div,
+	[data-has-sidebar] .main-frame > div {
+		display: flex !important;
+		justify-content: center !important;
+		max-width: calc(var(--sl-content-width) + var(--sl-sidebar-width) + 4rem) !important;
+		margin-inline: auto !important;
+		width: 100% !important;
+	}
+
+	:root[data-has-sidebar] .main-pane,
+	:root[data-has-sidebar][data-has-toc] .main-pane,
+	[data-has-sidebar] .main-pane,
+	[data-has-sidebar][data-has-toc] .main-pane {
+		--sl-content-margin-inline: auto !important;
+		order: 1 !important;
+		width: 100% !important;
+		max-width: var(--sl-content-width) !important;
+		flex: 1 1 auto !important;
+	}
+
+	:root[data-has-sidebar] .right-sidebar-container,
+	[data-has-sidebar] .right-sidebar-container {
+		order: 2 !important;
+		position: relative !important;
+		width: var(--sl-sidebar-width) !important;
+		flex: 0 0 var(--sl-sidebar-width) !important;
+		border-inline-start: none !important;
+	}
+
+	.right-sidebar {
+		border-inline-start: 1px solid var(--sl-color-hairline) !important;
+		padding-top: 1.25rem !important;
+	}
+}
+
+/* Horizontal hairline dividing line under page title (Quickstart) extending all the way left to sidebar */
+div.content-panel + div.content-panel {
+	border-top: none !important;
+	position: relative !important;
+	padding-top: 1.5rem !important;
+}
+
+div.content-panel + div.content-panel::before {
+	content: '' !important;
+	position: absolute !important;
+	top: 0 !important;
+	left: -100vw !important;
+	right: 0 !important;
+	height: 1px !important;
+	background-color: var(--sl-color-hairline) !important;
+	pointer-events: none !important;
+}
+
+.sidebar-pane ul ul {
+	margin-inline-start: calc(var(--sl-sidebar-item-padding-inline) + 0.3rem) !important;
+	padding-inline-start: 0.35rem !important;
+}
+
+.sidebar-pane ul ul li {
+	border-inline-start: 1px solid var(--sl-color-hairline-light) !important;
+	margin-inline-start: 0 !important;
+}
+
+.sidebar-pane ul ul li:has(> a[aria-current='page']) {
+	border-inline-start-color: var(--sl-color-accent-high) !important;
 }
 
 /* Sidebar Active Item: Soft Slate Glass Pill in Dark Mode & Clean Grey Pill in Light Mode */
@@ -740,19 +899,114 @@ pre, expressive-code {
 
 /* Soft Scrollbar */
 ::-webkit-scrollbar {
-	width: 7px;
-	height: 7px;
+	width: 6px !important;
+	height: 6px !important;
 }
 
 ::-webkit-scrollbar-track {
-	background: transparent;
+	background: transparent !important;
 }
 
 ::-webkit-scrollbar-thumb {
-	background: rgba(196, 181, 253, 0.3);
-	border-radius: 9999px;
+	background-color: rgba(255, 255, 255, 0.12) !important;
+	border-radius: 9999px !important;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-	background: rgba(196, 181, 253, 0.5);
+	background-color: rgba(196, 181, 253, 0.3) !important;
+}
+
+::-webkit-scrollbar-thumb:active {
+	background-color: rgba(196, 181, 253, 0.45) !important;
+}
+
+:root[data-theme='light'] ::-webkit-scrollbar-thumb {
+	background-color: rgba(0, 0, 0, 0.15) !important;
+}
+
+:root[data-theme='light'] ::-webkit-scrollbar-thumb:hover {
+	background-color: rgba(124, 58, 237, 0.3) !important;
+}
+
+:root[data-theme='light'] ::-webkit-scrollbar-thumb:active {
+	background-color: rgba(124, 58, 237, 0.5) !important;
+}
+
+/* Mobile Header Sticky Fix & High-Visibility Circular Toggle Button */
+.mobile-header {
+	position: fixed !important;
+	top: 0 !important;
+	left: 0 !important;
+	right: 0 !important;
+	width: 100% !important;
+	height: var(--sl-nav-height) !important;
+	z-index: var(--sl-z-index-navbar, 50) !important;
+	background-color: var(--sl-color-bg-sidebar) !important;
+	border-bottom: none !important;
+	display: flex !important;
+	align-items: center !important;
+	padding-inline: 1rem !important;
+}
+
+starlight-menu-button {
+	flex-shrink: 0 !important;
+	margin-left: auto !important;
+	display: flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	height: 100% !important;
+}
+
+starlight-menu-button button,
+starlight-menu-button :is(.inc-spec, button) {
+	position: relative !important;
+	top: auto !important;
+	bottom: auto !important;
+	inset-block-start: auto !important;
+	inset-inline-end: auto !important;
+	display: inline-flex !important;
+	align-items: center !important;
+	justify-content: center !important;
+	width: 2.25rem !important;
+	height: 2.25rem !important;
+	border-radius: 9999px !important;
+	padding: 0 !important;
+	margin: 0 !important;
+	scale: 1 !important;
+	color: #ffffff !important;
+	background-color: rgba(255, 255, 255, 0.1) !important;
+	border: 1px solid rgba(196, 181, 253, 0.25) !important;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+	cursor: pointer !important;
+	transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.15s ease !important;
+}
+
+starlight-menu-button button:hover,
+starlight-menu-button :is(.inc-spec, button):hover {
+	background-color: rgba(196, 181, 253, 0.22) !important;
+	border-color: rgba(196, 181, 253, 0.45) !important;
+	color: #ffffff !important;
+	transform: scale(1.05) !important;
+}
+
+starlight-menu-button[aria-expanded="true"] button,
+starlight-menu-button[aria-expanded="true"] :is(.inc-spec, button) {
+	background-color: rgba(196, 181, 253, 0.25) !important;
+	border-color: var(--sl-color-accent) !important;
+	color: var(--sl-color-accent-high) !important;
+}
+
+:root[data-theme='light'] starlight-menu-button button,
+[data-theme='light'] starlight-menu-button button {
+	color: #4c1d95 !important;
+	background-color: rgba(124, 58, 237, 0.08) !important;
+	border: 1px solid rgba(124, 58, 237, 0.2) !important;
+	box-shadow: 0 2px 8px rgba(124, 58, 237, 0.08) !important;
+}
+
+:root[data-theme='light'] starlight-menu-button button:hover,
+[data-theme='light'] starlight-menu-button button:hover {
+	background-color: rgba(124, 58, 237, 0.15) !important;
+	border-color: rgba(124, 58, 237, 0.35) !important;
+	color: #6d28d9 !important;
 }

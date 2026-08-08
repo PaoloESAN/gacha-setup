@@ -10,7 +10,7 @@ const isRtl = dir === 'rtl'
   (prev || next) && (
     <div class="pagination-links" dir={dir}>
       {prev && (
-        <a href={prev.href} rel="prev">
+        <a href={prev.href} rel="prev" class="card-link">
           <div class="link-label">
             <Icon name={isRtl ? 'right-arrow' : 'left-arrow'} size="1.1rem" />
             <span>{Astro.locals.t('page.previousLink')}</span>
@@ -19,7 +19,7 @@ const isRtl = dir === 'rtl'
         </a>
       )}
       {next && (
-        <a href={next.href} rel="next">
+        <a href={next.href} rel="next" class="card-link">
           <div class="link-label">
             <span>{Astro.locals.t('page.nextLink')}</span>
             <Icon name={isRtl ? 'left-arrow' : 'right-arrow'} size="1.1rem" />
@@ -33,87 +33,90 @@ const isRtl = dir === 'rtl'
 
 <style>
   @layer starlight.core {
-	  .pagination-links {
-		  display: grid;
-		  grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
-		  gap: 1.25rem;
-		  margin-top: 3rem;
+	  .pagination-links.pagination-links {
+		  display: grid !important;
+		  grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)) !important;
+		  gap: 1rem !important;
+		  margin-top: 1rem !important;
 	  }
 
-	  a {
-		  display: flex;
-		  flex-direction: column;
-		  gap: 0.35rem;
-		  width: 100%;
-		  border: 1px solid rgba(255, 255, 255, 0.06);
-		  border-radius: 1.15rem;
-		  padding: 1.25rem 1.5rem;
-		  text-decoration: none;
-		  color: var(--sl-color-gray-2);
-		  background: rgba(255, 255, 255, 0.03);
-		  backdrop-filter: blur(12px);
-		  transition: none;
-		  overflow-wrap: anywhere;
+	  .pagination-links a.card-link {
+		  display: flex !important;
+		  flex-direction: column !important;
+		  gap: 0.35rem !important;
+		  width: 100% !important;
+		  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+		  border-radius: 1.15rem !important;
+		  padding: 1.25rem 1.5rem !important;
+		  text-decoration: none !important;
+		  color: var(--sl-color-gray-2) !important;
+		  background: rgba(255, 255, 255, 0.03) !important;
+		  box-shadow: none !important;
+		  transition: all 0.25s ease !important;
+		  overflow-wrap: anywhere !important;
 	  }
 
-	  a:hover {
-		  border-color: rgba(196, 181, 253, 0.25);
-		  background: rgba(196, 181, 253, 0.08);
-		  transform: none;
-		  color: var(--sl-color-white);
+	  .pagination-links a.card-link:hover {
+		  border-color: rgba(255, 255, 255, 0.15) !important;
+		  background: rgba(255, 255, 255, 0.06) !important;
+		  transform: translateY(-2px) !important;
+		  color: var(--sl-color-white) !important;
+		  box-shadow: none !important;
 	  }
 
 	  .link-label {
-		  display: flex;
-		  align-items: center;
-		  gap: 0.4rem;
-		  font-size: var(--sl-text-xs);
-		  color: #a78bfa;
-		  text-transform: uppercase;
-		  letter-spacing: 0.04em;
-		  font-weight: 600;
+		  display: flex !important;
+		  align-items: center !important;
+		  gap: 0.4rem !important;
+		  font-size: var(--sl-text-xs) !important;
+		  color: #c4b5fd !important;
+		  text-transform: uppercase !important;
+		  letter-spacing: 0.04em !important;
+		  font-weight: 600 !important;
 	  }
 
-	  [rel='next'] {
-		  text-align: end;
-		  align-items: flex-end;
+	  .pagination-links a[rel='next'] {
+		  text-align: end !important;
+		  align-items: flex-end !important;
+		  margin-left: auto !important;
 	  }
 
-	  [rel='next'] .link-label {
-		  justify-content: flex-end;
+	  .pagination-links a[rel='next'] .link-label {
+		  justify-content: flex-end !important;
 	  }
 
 	  .link-title {
-		  color: var(--sl-color-white);
-		  font-size: var(--sl-text-lg);
-		  font-weight: 700;
-		  line-height: var(--sl-line-height-headings);
-		  margin: 0;
+		  color: var(--sl-color-white) !important;
+		  font-size: var(--sl-text-lg) !important;
+		  font-weight: 700 !important;
+		  line-height: var(--sl-line-height-headings) !important;
+		  margin: 0 !important;
 	  }
 
 	  svg {
-		  flex-shrink: 0;
-		  color: #a78bfa;
+		  flex-shrink: 0 !important;
+		  color: #c4b5fd !important;
 	  }
 
-	  :global([data-theme='light']) a {
-		  background: rgba(255, 255, 255, 0.85);
-		  border: 1px solid rgba(139, 92, 246, 0.15);
-		  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.05);
+	  :global([data-theme='light']) .pagination-links a.card-link {
+		  background: rgba(255, 255, 255, 0.85) !important;
+		  border: 1px solid rgba(124, 58, 237, 0.15) !important;
+		  box-shadow: none !important;
 	  }
 
-	  :global([data-theme='light']) a:hover {
-		  background: #ffffff;
-		  border-color: rgba(139, 92, 246, 0.3);
+	  :global([data-theme='light']) .pagination-links a.card-link:hover {
+		  background: #ffffff !important;
+		  border-color: rgba(124, 58, 237, 0.3) !important;
+		  box-shadow: none !important;
 	  }
 
 	  :global([data-theme='light']) .link-title {
-		  color: #1c1732;
+		  color: #1c1732 !important;
 	  }
 
 	  :global([data-theme='light']) .link-label,
 	  :global([data-theme='light']) svg {
-		  color: #7c3aed;
+		  color: #7c3aed !important;
 	  }
   }
 </style>

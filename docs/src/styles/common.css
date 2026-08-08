@@ -1,0 +1,416 @@
+@layer obsidian {
+    /* Remove border of mobile preferences */
+    div.mobile-preferences.mobile-preferences {
+        border-top: unset;
+    }
+
+    a.sl-anchor-link {
+        color: var(--sl-color-gray-3);
+    }
+
+
+    /* Remove border between page heading and content */
+    div.content-panel.content-panel {
+        border-top: unset;
+    }
+
+    /* Remove border between content and right sidebar */
+    .right-sidebar {
+        border-inline-start: unset;
+    }
+
+    /* Add border to footer */
+    footer {
+        border-top: 1px solid var(--sl-color-hairline);
+        padding-top: 1rem;
+
+        .meta {
+            margin-top: unset;
+        }
+    }
+
+    /* --------------------------------------------------- */
+    /* ------------- Site sidebar styling ---------------- */
+    /* Align site actions and links in row */
+    .social-icons {
+        display: flex;
+        gap: 1rem;
+        padding: 0 1rem;
+    }
+
+    .social-icons::after {
+        border-inline-end: unset;
+    }
+
+    .sidebar {
+        .mobile-preferences {
+            display: flex;
+            flex-wrap: nowrap;
+            column-gap: 0;
+        }
+
+        .social-icons {
+            flex: 1;
+            flex-wrap: wrap;
+        }
+
+        starlight-obsidian-theme-select {
+            flex: 0;
+            align-self: flex-start;
+
+            > button {
+                padding-left: 0;
+            }
+        }
+    }
+
+    .sidebar-content {
+        div.md\:sl-hidden {
+            display: none;
+        }
+    }
+
+    /* --------------------------------------------------- */
+    /* ------------- General Content Styling ------------- */
+    .sl-markdown-content {
+        /* Add margin around horizontal lines */
+
+        :is(.inc-spec, hr) {
+            margin: 2rem 0 0 0;
+        }
+
+        /* Use accent color for hovering over link elements */
+
+        a:hover:not(:where(.not-content *)) {
+            color: var(--sl-color-accent);
+        }
+    }
+
+    /* Steps line styling (Adapted from @HiDeoo/starlight-theme-rapide) */
+    .sl-steps > li:last-of-type:after {
+        background: linear-gradient(to bottom, var(--sl-color-hairline-light), var(--sl-color-bg) 85%);
+    }
+
+    /* --------------------------------------------------- */
+
+    /* -------- Obsidian-inspired Callout Styling -------- */
+    .starlight-aside {
+        border-radius: var(--sl-border-radius-md);
+        border: unset;
+    }
+
+    /* --------------------------------------------------- */
+
+    /* ------------------ Badge Styling ------------------ */
+    .sl-badge.sl-badge {
+        border-radius: var(--sl-border-radius-sm);
+        border: unset;
+    }
+
+    /* Impossible to disable variable override, so it needs to be specified each time */
+    .sidebar-content a[aria-current="page"] > .sl-badge.sl-badge {
+        color: var(--sl-color-text-badge);
+        background-color: var(--sl-color-bg-badge);
+
+        &.default {
+            --sl-color-bg-badge: var(--sl-badge-default-bg);
+        }
+
+        &.note {
+            --sl-color-bg-badge: var(--sl-badge-note-bg);
+        }
+
+        &.danger {
+            --sl-color-bg-badge: var(--sl-badge-danger-bg);
+        }
+
+        &.success {
+            --sl-color-bg-badge: var(--sl-badge-success-bg);
+        }
+
+        &.tip {
+            --sl-color-bg-badge: var(--sl-badge-tip-bg);
+        }
+
+        &.caution {
+            --sl-color-bg-badge: var(--sl-badge-caution-bg);
+        }
+    }
+    /* --------------------------------------------------- */
+
+
+    /* ----- Starlight components background styling ----- */
+    starlight-file-tree {
+        background-color: var(--sl-color-black);
+        border: unset;
+        border-radius: var(--sl-border-radius-md);
+    }
+
+    .card {
+        border-radius: var(--sl-border-radius-md);
+        border-color: var(--sl-color-hairline);
+    }
+
+    .card .icon {
+        border: unset;
+    }
+
+    .sl-banner {
+        padding: 1rem;
+        margin: 1rem 1rem 0rem 1rem;
+        border-radius: var(--sl-border-radius-lg);
+    }
+    /* --------------------------------------------------- */
+
+    /* ---------------- Draft styling -------------------- */
+    .content-panel .sl-container > h1 + p.sl-flex {
+        border: unset;
+        border-radius: var(--sl-border-radius-md);
+        margin: 0.5rem auto 0 auto;
+    }
+    /* --------------------------------------------------- */
+
+    /* ------------ Expressive Code styling -------------- */
+    .sl-markdown-content {
+        .expressive-code.expressive-code pre {
+            --code-background: var(--sl-color-black);
+            border: unset;
+            border-radius: var(--sl-border-radius-sm);
+        }
+
+        code {
+            border-radius: var(--sl-border-radius-sm);
+        }
+
+        .expressive-code .ec-line mark::before, .expressive-code .ec-line ins::before, .expressive-code .ec-line del::before {
+            border: unset;
+        }
+
+        .expressive-code .ec-line .code {
+            border-inline-start: unset;
+        }
+
+        .expressive-code .frame {
+            border: unset;
+            border-radius: var(--sl-border-radius-md);
+
+            &.is-terminal, &.has-title {
+                outline: 1px solid var(--sl-color-hairline);
+            }
+
+            & > .header.header.header {
+                border: unset;
+                border-bottom: 1px solid var(--sl-color-hairline);
+                border-radius: var(--sl-border-radius-md) var(--sl-border-radius-md) 0 0;
+                background: var(--sl-color-black);
+
+                &::after {
+                    content: unset;
+                }
+            }
+
+            &:not(.is-terminal) {
+                .header {
+                    &&::before {
+                        content: "";
+                        border: unset;
+                    }
+
+                    .title {
+                        margin: -1px 0 0 -1px;
+
+                        &:first-child {
+                            border-radius: var(--sl-border-radius-md) 0 0 0;
+                        }
+
+                        &::after {
+                            border-top: unset;
+                            border-bottom: 2px solid var(--sl-color-accent);
+                        }
+                    }
+                }
+            }
+
+            pre {
+                border-color: var(--sl-color-hairline);
+            }
+        }
+    }
+    /* --------------------------------------------------- */
+
+    /* ---- Style details to add left rounded border ----- */
+    .sl-markdown-content {
+        details {
+            position: relative;
+            border-inline-start: unset;
+        }
+
+        details::before {
+            content: '';
+            display: inline-block;
+            background: var(--sl-details-border-color);
+            width: 5px;
+            height: 100%;
+            top: 0;
+            left: 0;
+            border-radius: 140px;
+            position: absolute;
+        }
+
+        details:hover {
+            --sl-details-border-color: var(--sl-details-border-color--hover);
+        }
+    }
+    /* --------------------------------------------------- */
+
+    /* --------------- Link Button Styling --------------- */
+    .sl-link-button {
+        --sl-color-text-accent: var(--sl-color-accent-high);
+
+        &.primary:hover {
+            background-color: var(--sl-color-accent);
+            color: var(--sl-color-black);
+            border-color: transparent;
+        }
+
+        &.secondary:hover {
+            border-color: var(--sl-color-accent);
+        }
+
+        &.minimal:hover {
+            background-color: unset;
+            color: var(--sl-color-accent);
+        }
+    }
+    /* --------------------------------------------------- */
+
+    /* ----------------- Link Card Styling --------------- */
+    .sl-link-card {
+        border-radius: var(--sl-border-radius-md);
+        border: unset;
+        padding: 1rem;
+        margin: 1rem 0;
+        background-color: var(--sl-color-black);
+        box-shadow: 0 0 0 1px var(--sl-color-hairline);
+    }
+
+    .sl-link-card:hover {
+        background-color: var(--sl-color-black);
+        box-shadow: 0 0 0 1px var(--sl-color-accent);
+    }
+    /* --------------------------------------------------- */
+
+    /* ------------------- ToC Styling ------------------- */
+    /* Adapted from @HiDeoo/starlight-theme-rapide */
+    .sidebar-pane .top-level li:is(:hover, :focus-visible) .large {
+        color: var(--sl-color-accent-high);
+    }
+
+    .sidebar-pane summary {
+        flex-direction: row-reverse;
+        gap: 0.375rem;
+        justify-content: start;
+        padding: 0.2em var(--sl-sidebar-item-padding-inline);
+        padding-inline: calc(var(--sl-sidebar-item-padding-inline) / 2) var(--sl-sidebar-item-padding-inline);
+    }
+
+    .sidebar-pane summary:is(:hover, :focus-visible),
+    .sidebar-pane summary:is(:hover, :focus-visible) .large {
+        color: var(--sl-color-accent-high);
+    }
+
+    .sidebar-pane ul ul li {
+        margin-inline-start: calc(var(--sl-sidebar-item-padding-inline) + (0.625rem / 2));
+    }
+
+    .sidebar-pane a[aria-current='page'] {
+        background-color: initial;
+        color: var(--sl-color-text-accent);
+    }
+
+    .sidebar-pane ul ul li:has(> a[aria-current='page']) {
+        border-inline-start-color: var(--sl-color-accent-high);
+    }
+
+    .sidebar-pane ul ul li:has(> a:not([aria-current='page']):is(:hover, :focus-visible)) {
+        border-inline-start-color: var(--sl-color-gray-2);
+    }
+
+    .sidebar-pane ul summary:is(:hover, :focus-visible) + ul > li {
+        border-inline-start-color: var(--sl-color-gray-2);
+    }
+    /* --------------------------------------------------- */
+
+
+    /* ------------------ Scrollbar Styling ---------------------- */
+    .sidebar-pane {
+        scrollbar-width: thin;
+    }
+
+    body {
+        scrollbar-color: var(--sl-color-hairline) transparent;
+        scrollbar-gutter: stable;
+
+        &::-webkit-scrollbar {
+            width: 12px;
+        }
+
+        &::-webkit-scrollbar-track {
+            background: transparent;
+        }
+    }
+    /* ----------------------------------------------------------- */
+
+    /* ------------------ Pagination override -------------------- */
+    /* Adapted from @HiDeoo/starlight-theme-rapide */
+    .pagination-links {
+        display: flex;
+        column-gap: unset;
+        row-gap: unset;
+    }
+
+    .pagination-links a {
+        border: unset;
+        box-shadow: unset;
+        padding: 0;
+        align-items: unset;
+        column-gap: unset;
+        display: block;
+    }
+
+    .pagination-links a[rel='next'] {
+        margin-left: auto;
+        text-align: end;
+    }
+
+    .pagination-links a[rel='next'] div {
+        justify-content: flex-end;
+    }
+
+    .pagination-links a div {
+        align-items: center;
+        column-gap: 0.15rem;
+        row-gap: 0.15rem;
+        color: var(--sl-color-gray-3);
+        display: flex;
+        line-height: 24.5px;
+        font-size: var(--sl-text-sm);
+    }
+
+    .pagination-links a p {
+        font-size: var(--sl-text-md);
+        font-weight: 600;
+        margin: 4px;
+        color: var(--sl-color-gray-2);
+    }
+
+    .pagination-links a:is(:hover, :focus-visible) div {
+        color: var(--sl-color-gray-2);
+    }
+
+    .pagination-links a:is(:hover, :focus-visible) p {
+        color: var(--sl-color-white);
+    }
+
+    /* ----------------------------------------------------------- */
+}

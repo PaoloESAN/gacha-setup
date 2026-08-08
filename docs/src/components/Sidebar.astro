@@ -11,7 +11,7 @@ const shouldRenderSearch = config.pagefind || config.components.Search !== '@ast
 
 {/* (STARLIGHT-THEME-OBSIDIAN): Reorder site sidebar to always contain site title */}
 <div class="sidebar-top">
-    <div class="title-wrapper">
+    <div class="title-wrapper ">
         <SiteTitle/>
     </div>
 
@@ -21,19 +21,3 @@ const shouldRenderSearch = config.pagefind || config.components.Search !== '@ast
 </div>
 
 <Default><slot /></Default>
-
-<style>
-	.sidebar-top {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-		padding-bottom: 0.25rem;
-		border-bottom: 1px solid var(--sl-color-hairline);
-		margin-bottom: 0;
-	}
-	.title-wrapper {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-	}
-</style>

@@ -76,6 +76,10 @@ export default defineConfig({
 				},
 			],
 			customCss: [
+				'./src/styles/layers.css',
+				'./src/styles/theme.css',
+				'./src/styles/common.css',
+				'./src/styles/centered-reading.css',
 				'./src/styles/base.css',
 				'./src/styles/page-transitions.css',
 			],
