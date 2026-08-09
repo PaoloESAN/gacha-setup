@@ -21,7 +21,7 @@
 
     /* Add border to footer */
     footer {
-        border-top: 1px solid var(--sl-color-hairline);
+        border-top: unset;
         padding-top: 1rem;
 
         .meta {

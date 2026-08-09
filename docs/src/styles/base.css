@@ -1010,3 +1010,156 @@ starlight-menu-button[aria-expanded="true"] :is(.inc-spec, button) {
 	border-color: rgba(124, 58, 237, 0.35) !important;
 	color: #6d28d9 !important;
 }
+
+/* ---------- Credits & Attribution ---------- */
+.credits-intro {
+	margin: 0 0 1.25rem;
+	color: var(--sl-color-gray-2);
+	font-size: var(--sl-text-base);
+}
+
+.credits-end {
+	margin: 2rem 0 0;
+	text-align: center;
+	color: var(--sl-color-gray-3);
+	font-size: var(--sl-text-base);
+}
+
+.credits-end .credits-end-img {
+	display: inline-block;
+	vertical-align: middle;
+	width: 3.5rem;
+	height: 3.5rem;
+	margin-inline-start: 0.4rem;
+	margin-bottom: 10px;
+}
+
+.credits-group {
+	margin-top: 2rem;
+}
+
+.credits-group-title {
+	margin: 0 0 0.9rem;
+	color: var(--sl-color-gray-3);
+	font-size: var(--sl-text-xs);
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	font-weight: 600;
+}
+
+.credits-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+	gap: 0.75rem;
+	align-items: stretch;
+}
+
+.credits-grid > * {
+	margin-top: 0 !important;
+	transform: none !important;
+}
+
+.credits-card {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.75rem;
+	padding: 0.85rem 1rem;
+	border-radius: 0.9rem;
+	background: rgba(255, 255, 255, 0.035);
+	border: 1px solid rgba(255, 255, 255, 0.06);
+	height: 100%;
+	transition: border-color 0.25s ease, background 0.25s ease;
+}
+
+.credits-card:hover {
+	border-color: rgba(196, 181, 253, 0.4);
+	background: rgba(196, 181, 253, 0.08);
+}
+
+.credits-main {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.credits-name {
+	color: var(--sl-color-white);
+	font-weight: 600;
+	font-size: 0.9rem;
+	line-height: 1.3;
+	overflow-wrap: anywhere;
+}
+
+.credits-name a {
+	color: inherit !important;
+	text-decoration: none !important;
+}
+
+.credits-name a:hover {
+	color: #c4b5fd !important;
+}
+
+.credits-role {
+	color: var(--sl-color-gray-3);
+	font-size: 0.72rem;
+	margin-top: 0.1rem;
+	overflow-wrap: anywhere;
+}
+
+.credits-links {
+	display: flex;
+	align-items: center;
+	gap: 0.35rem;
+	flex-shrink: 0;
+	margin-top: 0;
+}
+
+.credits-link {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.9rem;
+	height: 1.9rem;
+	border-radius: 0.5rem;
+	color: var(--sl-color-gray-3);
+	background: rgba(255, 255, 255, 0.04);
+	border: 1px solid rgba(255, 255, 255, 0.06);
+	text-decoration: none;
+	transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.credits-link:hover {
+	color: #c4b5fd;
+	border-color: rgba(196, 181, 253, 0.45);
+	background: rgba(196, 181, 253, 0.12);
+}
+
+.credits-link svg {
+	width: 1rem;
+	height: 1rem;
+	display: block;
+}
+
+/* Light theme overrides */
+:root[data-theme='light'] .credits-card {
+	background: rgba(255, 255, 255, 0.85);
+	border-color: rgba(124, 58, 237, 0.12);
+}
+
+:root[data-theme='light'] .credits-card:hover {
+	border-color: rgba(124, 58, 237, 0.3);
+	background: #ffffff;
+}
+
+:root[data-theme='light'] .credits-link {
+	color: #50447a;
+	background: rgba(124, 58, 237, 0.06);
+	border-color: rgba(124, 58, 237, 0.15);
+}
+
+:root[data-theme='light'] .credits-link:hover {
+	color: #6d28d9;
+	border-color: rgba(124, 58, 237, 0.35);
+	background: rgba(124, 58, 237, 0.1);
+}

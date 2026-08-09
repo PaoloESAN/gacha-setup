@@ -3,7 +3,7 @@ title: Gacha Blender Setup
 description: Automated 1-Click Character & Shader Setup for Anime Gacha Models in Blender 5.2+
 template: splash
 hero:
-  tagline: Modern 1-click automated character setup, shader integration, and rigging suite for Blender 5.2+
+  tagline: A Blender add-on that makes it easy to set up your favorite character with shaders, rigging, and more.
   image:
     file: ../../assets/evernight.gif
   actions:
@@ -17,7 +17,7 @@ hero:
       variant: minimal
 ---
 
-import { CardGrid } from '@astrojs/starlight/components';
+import { CardGrid, Icon } from '@astrojs/starlight/components';
 import { Image } from 'astro:assets';
 import genshinIcon from '../../assets/icons/genshin-icon.webp';
 import hsrIcon from '../../assets/icons/hsr-icon.webp';
@@ -25,6 +25,7 @@ import zzzIcon from '../../assets/icons/zzz-icon.jpg';
 import nteIcon from '../../assets/icons/nte-icon.jpg';
 import wuwaIcon from '../../assets/icons/wuwa-icon.webp';
 import silverIcon from '../../assets/icons/silver-palace-icon.jpg';
+import laylaIcon from '../../assets/chibis/genshin/layla.webp';
 
 ## Supported Games
 
@@ -36,7 +37,7 @@ import silverIcon from '../../assets/icons/silver-palace-icon.jpg';
 				<span>Genshin Impact</span>
 			</div>
 			<div class="body">
-				Full character setup, custom cell shaders, outline thickness adjustment, and material nodes.
+				Automatic import pipeline: model, textures, materials, custom shaders, outlines, and rigging — ready in one click.
 			</div>
 		</div>
 	</a>
@@ -47,7 +48,7 @@ import silverIcon from '../../assets/icons/silver-palace-icon.jpg';
 				<span>Honkai: Star Rail</span>
 			</div>
 			<div class="body">
-				StellarToon shaders, eye tracking driver pipeline, and corrected armature hierarchy.
+				Automatic import pipeline: model, textures, materials, custom shaders, outlines, and rigging — ready in one click.
 			</div>
 		</div>
 	</a>
@@ -58,7 +59,7 @@ import silverIcon from '../../assets/icons/silver-palace-icon.jpg';
 				<span>Zenless Zone Zero</span>
 			</div>
 			<div class="body">
-				Custom breast & breath physics controls, jideeh facial rig setup, and light collection fixes.
+				Automatic import pipeline: model, textures, materials, custom shaders, outlines, and rigging.
 			</div>
 		</div>
 	</a>
@@ -69,7 +70,8 @@ import silverIcon from '../../assets/icons/silver-palace-icon.jpg';
 				<span>Neverness to Everness</span>
 			</div>
 			<div class="body">
-				UEFormat model import pipeline, custom outlines, and compositor post-processing.
+				UE model, textures, materials, shaders, outlines, and rigging.
+				<span>Face rig still in progress.</span>
 			</div>
 		</div>
 	</a>
@@ -80,7 +82,6 @@ import silverIcon from '../../assets/icons/silver-palace-icon.jpg';
 				<span>Wuthering Waves</span>
 			</div>
 			<div class="body">
-				Automated shader setup and armature hierarchy pipeline under active development.
 				<span class="disabled-badge">COMING SOON</span>
 			</div>
 		</div>
@@ -92,9 +93,146 @@ import silverIcon from '../../assets/icons/silver-palace-icon.jpg';
 				<span>Silver Palace</span>
 			</div>
 			<div class="body">
-				UE5 character model setup and custom toon shader pipeline planned for upcoming release.
 				<span class="disabled-badge">COMING SOON</span>
 			</div>
 		</div>
 	</div>
 </CardGrid>
+
+## Credits & Attribution
+
+<p class="credits-intro">Thanks to all of these people, this project is possible.</p>
+
+<div class="credits-grid">
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name"><a href="https://github.com/festivities">@Festivity</a></div>
+				<div class="credits-role">Genshin & HSR shaders</div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://github.com/festivities" aria-label="GitHub"><Icon name="github" /></a>
+				<a class="credits-link" href="https://www.youtube.com/channel/UCXCTHNBA8TVs0s5aQuNtWwg" aria-label="YouTube"><Icon name="youtube" /></a>
+				<a class="credits-link" href="https://x.com/festivizing" aria-label="X"><Icon name="x.com" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">@BonnyAnimations</div>
+				<div class="credits-role">ZZZ Shader</div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://github.com/BonnyAnimations" aria-label="GitHub"><Icon name="github" /></a>
+				<a class="credits-link" href="https://www.youtube.com/@BonnyAnimations" aria-label="YouTube"><Icon name="youtube" /></a>
+				<a class="credits-link" href="https://x.com/BonnyAnimations" aria-label="X"><Icon name="x.com" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">Enthralpy</div>
+				<div class="credits-role">ZZZ Rigging & scripting</div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://www.youtube.com/@Enthralpy" aria-label="YouTube"><Icon name="youtube" /></a>
+				<a class="credits-link" href="https://x.com/Enthralpy" aria-label="X"><Icon name="x.com" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name"><a href="https://github.com/OctavoPE">@OctavoPE</a></div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://github.com/OctavoPE" aria-label="GitHub"><Icon name="github" /></a>
+				<a class="credits-link" href="https://x.com/Llama3D" aria-label="X"><Icon name="x.com" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">JaredNyts</div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://twitter.com/jared_nyts" aria-label="X"><Icon name="x.com" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">SubutaiProduction</div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://www.youtube.com/@SubutaiProduction" aria-label="YouTube"><Icon name="youtube" /></a>
+				<a class="credits-link" href="https://twitter.com/SubutaiEdits" aria-label="X"><Icon name="x.com" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">Aiko</div>
+				<div class="credits-role">ZZZ Shader</div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://www.youtube.com/@AikoDesu" aria-label="YouTube"><Icon name="youtube" /></a>
+				<a class="credits-link" href="https://x.com/Aiko__ya" aria-label="X"><Icon name="x.com" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">TheyCallMeSpy</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">Sultana</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">M4urlcl0</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">Modder4869</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name"><a href="https://github.com/Jideeh1">@jideeh</a></div>
+				<div class="credits-role">ZZZ Face Rig</div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://github.com/Jideeh1" aria-label="GitHub"><Icon name="github" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">Just_ScaasI</div>
+				<div class="credits-role">ZZZ Shader</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">Isaac</div>
+				<div class="credits-role">HSR Face Rig</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">Stormz67</div>
+				<div class="credits-role">Supervision</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">Omatsuri Discord</div>
+				<div class="credits-role">NTE Shader</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">矩阵映画</div>
+				<div class="credits-role">NTE Rig</div>
+			</div>
+		</div>
+	</div>
+
+---
+
+<p class="credits-end">Happy Blending <Image src={laylaIcon} alt="" class="credits-end-img" loading="lazy" /></p>
