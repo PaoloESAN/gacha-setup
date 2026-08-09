@@ -20,6 +20,9 @@ import TableOfContents from 'virtual:starlight/components/TableOfContents';
 	@layer starlight.core {
 		.right-sidebar-panel {
 			padding: 1rem var(--sl-sidebar-pad-x);
+			max-height: 100vh;
+			overflow-y: auto;
+			overflow-x: hidden;
 		}
 		.sl-container {
 			width: calc(var(--sl-sidebar-width) - 2 * var(--sl-sidebar-pad-x));

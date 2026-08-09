@@ -721,15 +721,19 @@ site-search button.search-input:focus-visible {
 	:root[data-has-sidebar] .right-sidebar-container,
 	[data-has-sidebar] .right-sidebar-container {
 		order: 2 !important;
-		position: relative !important;
+		position: sticky !important;
+		top: 0 !important;
+		align-self: flex-start !important;
 		width: var(--sl-sidebar-width) !important;
 		flex: 0 0 var(--sl-sidebar-width) !important;
 		border-inline-start: none !important;
+		overflow-x: hidden !important;
 	}
 
 	.right-sidebar {
 		border-inline-start: 1px solid var(--sl-color-hairline) !important;
 		padding-top: 1.25rem !important;
+		overflow-x: hidden !important;
 	}
 }
 
