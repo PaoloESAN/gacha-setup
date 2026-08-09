@@ -1111,6 +1111,25 @@ starlight-menu-button[aria-expanded="true"] :is(.inc-spec, button) {
 	overflow-wrap: anywhere;
 }
 
+.credits-original {
+	margin-bottom: 0.75rem;
+}
+
+.credits-original .credits-card {
+	background: rgba(196, 181, 253, 0.08);
+	border-color: rgba(196, 181, 253, 0.3);
+}
+
+.credits-role a {
+	color: var(--sl-color-gray-2);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+.credits-role a:hover {
+	color: #c4b5fd;
+}
+
 .credits-links {
 	display: flex;
 	align-items: center;
