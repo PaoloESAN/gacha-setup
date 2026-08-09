@@ -1,12 +1,24 @@
 ---
-title: Character Models
-description: Overview of supported character models and compatibility guidelines.
+title: Character Assets
+description: Where to download character assets (models, textures, and materials) for each supported game.
 ---
 
-:::tip
-This section is a placeholder for supported character models.
-:::
+## Where to Download Character Assets
 
-## Supported Models
+Here you can find the places where you can download the character assets, which include the model, textures, materials, and more.
 
-Content coming soon.
+### Genshin
+
+- https://assets.hoyotoon.com/?game=gi&type=characters
+
+### HSR
+
+- https://assets.hoyotoon.com/?game=hsr&type=characters
+
+### ZZZ
+
+- https://assets.hoyotoon.com/?game=zzz&type=characters
+
+### NTE
+
+- Soon.

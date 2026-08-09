@@ -32,7 +32,7 @@ export default defineConfig({
 					translations: { es: 'Visión General' },
 					items: [
 						{ label: 'Quickstart', slug: 'quickstart', translations: { es: 'Guía Rápida' } },
-						{ label: 'Character Models', slug: 'character-models', translations: { es: 'Modelos de Personajes' } },
+						{ label: 'Character Assets', slug: 'character-models', translations: { es: 'Assets de Personajes' } },
 						{ label: 'Changelog', slug: 'changelog', translations: { es: 'Registro de Cambios' } },
 						{ label: 'Roadmap', slug: 'roadmap', translations: { es: 'Ruta de Desarrollo' } },
 						{ label: 'Credits', slug: 'credits', translations: { es: 'Créditos' } },

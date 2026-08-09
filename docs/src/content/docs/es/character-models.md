@@ -1,12 +1,24 @@
 ---
-title: Modelos de Personajes
-description: Información sobre los modelos de personajes soportados y su compatibilidad.
+title: Assets de Personajes
+description: Dónde descargar los assets de personajes (modelos, texturas y materiales) para cada juego soportado.
 ---
 
-:::tip
-Esta sección es un marcador de posición para los modelos de personajes soportados.
-:::
+## Dónde Descargar los Assets de Personajes
 
-## Modelos Soportados
+Aquí puedes encontrar los lugares donde descargar los assets de los personajes, que incluyen el modelo, las texturas, los materiales y más.
 
-Contenido próximamente.
+### Genshin
+
+- https://assets.hoyotoon.com/?game=gi&type=characters
+
+### HSR
+
+- https://assets.hoyotoon.com/?game=hsr&type=characters
+
+### ZZZ
+
+- https://assets.hoyotoon.com/?game=zzz&type=characters
+
+### NTE
+
+- Próximamente.

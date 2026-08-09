@@ -3,10 +3,16 @@ title: Roadmap
 description: Future development plans and upcoming features for Gacha Blender Setup.
 ---
 
-:::tip
-Development roadmap and planned updates.
+:::note
+Development roadmap and planned updates. All items are planned but will be worked on in **no particular order** — this list is not a priority ranking.
 :::
 
 ## Planned Features
 
-Content coming soon.
+- **NTE Face Rig**
+- **MMD Tracking to FBX**
+- **Objects Importer**
+- **Wuthering Waves**
+- **Silver Palace**
+- **More Games**
+- **And more...**
