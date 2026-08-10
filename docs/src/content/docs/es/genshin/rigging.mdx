@@ -1,0 +1,41 @@
+---
+title: Rigging y Colecciones de Huesos en Genshin Impact
+description: Controles de expresiones faciales, configuración de drivers y colecciones de huesos para Genshin Impact.
+---
+
+import { Image } from 'astro:assets';
+import genshinRigpanel from '../../../../assets/content/genshin/genshin-rigpanel.png';
+import genshinBonecoll from '../../../../assets/content/genshin/genshin-bonecoll.png';
+
+## 1. Panel 3D de Control de Expresiones Faciales
+
+Detrás de la cabeza del personaje se posiciona un panel de control 3D que permite manipular las claves de forma (shape keys) faciales fácilmente durante el posado o la animación.
+
+<Image src={genshinRigpanel} alt="Panel 3D de control facial para cejas, ojos y boca" loading="eager" />
+
+### Secciones de Control
+- **Brows (Cejas)**: Deslizadores y controles de huesos para activar expresiones de enojo, tristeza, sorpresa e inclinación de cejas.
+- **Eyes (Ojos)**: Gizmos de seguimiento ocular, parpadeo, guiño y deslizadores de mezcla de forma. Los drivers oculares cuentan con límites en el eje Y para evitar desprendimientos o artefactos visuales.
+- **Mouth (Boca)**: Controles para apertura de boca, sonrisa, gesto triste, forma de O y fonemas vocales personalizados.
+
+---
+
+## 2. Colecciones de Huesos
+
+El add-on clasifica automáticamente la armadura en grupos organizados.
+
+<Image src={genshinBonecoll} alt="Panel de Colecciones de Huesos en las propiedades de Armadura" loading="lazy" />
+
+### Grupos de Huesos Principales
+- **Face**: Controles de cejas, ojos, nariz, boca y mejillas.
+- **Torso (IK / FK)**: Controles de columna, pecho, cuello y cabeza en cinemática directa e inversa.
+- **Arm.L / Arm.R (IK & FK)**: Cadenas de brazos izquierdo y derecho con controles de IK y pole targets.
+- **Leg.L / Leg.R (IK & FK)**: Cadenas de piernas con controles de giro de pie y rodilla.
+- **Fingers & Fingers (Detail)**: Controles dedicados para el posado de manos y dedos.
+- **Hair**: Huesos dinámicos secundarios para la animación de mechones de cabello.
+- **Clothes**: Huesos dinámicos secundarios para faldas, capas y lazos.
+- **Lighting**: Controles personalizados para ajustar paneles de luz y efectos Fresnel.
+
+:::tip
+Utiliza el **icono de estrella** en la pestaña **Bone Collections** para aislar una colección de huesos, de modo que solo esa colección sea visible, o los **iconos de ojo** para mostrar u ocultar grupos de huesos durante el trabajo de animación.
+:::

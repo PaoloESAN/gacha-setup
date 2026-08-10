@@ -3,10 +3,6 @@ title: Créditos
 description: Agradecimientos, colaboradores y créditos de recursos.
 ---
 
-## Colaboradores y Créditos
-
-Gracias a todas estas personas este proyecto es posible.
-
 ### Proyecto Original
 
 - [michael-gh1/Addons-And-Tools-For-Blender-miHoYo-Shaders](https://github.com/michael-gh1/Addons-And-Tools-For-Blender-miHoYo-Shaders)

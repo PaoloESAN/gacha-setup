@@ -9,15 +9,15 @@ Here you can find the places where you can download the character assets, which 
 
 ### Genshin
 
-- https://assets.hoyotoon.com/?game=gi&type=characters
+- [Character Assets](https://assets.hoyotoon.com/?game=gi&type=characters) by **HoyoToon** · [Discord](https://discord.com/invite/hoyotoon)
 
 ### HSR
 
-- https://assets.hoyotoon.com/?game=hsr&type=characters
+- [Character Assets](https://assets.hoyotoon.com/?game=hsr&type=characters) by **HoyoToon** · [Discord](https://discord.com/invite/hoyotoon)
 
 ### ZZZ
 
-- https://assets.hoyotoon.com/?game=zzz&type=characters
+- [Character Assets](https://assets.hoyotoon.com/?game=zzz&type=characters) by **HoyoToon** · [Discord](https://discord.com/invite/hoyotoon)
 
 ### NTE
 

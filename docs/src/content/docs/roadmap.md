@@ -12,6 +12,7 @@ Development roadmap and planned updates. All items are planned but will be worke
 - **NTE Face Rig**
 - **MMD Tracking to FBX**
 - **Objects Importer**
+- **Clothing & Hair Physics**
 - **Wuthering Waves**
 - **Silver Palace**
 - **More Games**

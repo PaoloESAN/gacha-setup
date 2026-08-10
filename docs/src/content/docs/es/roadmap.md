@@ -12,6 +12,7 @@ Ruta de desarrollo y actualizaciones planificadas. Todos los elementos están pl
 - **Face Rig de NTE**
 - **MMD Tracking a FBX**
 - **Importador de Objetos**
+- **Físicas de Ropa y Cabello**
 - **Wuthering Waves**
 - **Silver Palace**
 - **Más juegos**

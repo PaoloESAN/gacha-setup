@@ -1,0 +1,42 @@
+---
+title: Genshin Impact Rigging & Bone Collections
+description: Facial expression controls, driver setup, and bone collections for Genshin Impact models.
+---
+
+import { Image } from 'astro:assets';
+import genshinRigpanel from '../../../assets/content/genshin/genshin-rigpanel.png';
+import genshinBonecoll from '../../../assets/content/genshin/genshin-bonecoll.png';
+
+
+## 1. 3D Facial Expression Control Panel
+
+A custom 3D driver board is placed behind the character head to manipulate facial shape keys effortlessly during posing or animation.
+
+<Image src={genshinRigpanel} alt="3D Facial Rig control panel for brows, eyes, and mouth shapes" loading="eager" />
+
+### Control Sections
+- **Brows**: Dedicated sliders and bone widgets to trigger anger, sadness, surprise, and brow tilt shape keys.
+- **Eyes**: Eyeball tracking gizmos, eye squinting, blink triggers, and shape key blend sliders. Eye drivers feature dynamic Y-location bounds to prevent eye mesh clipping or popping.
+- **Mouth**: Expression bone sliders for open mouth, smile, frown, O-shape, and custom mouth phonemes.
+
+---
+
+## 2. Bone Collections
+
+The add-on automatically categorizes character bones into organized groups.
+
+<Image src={genshinBonecoll} alt="Armature Properties Bone Collections panel" loading="lazy" />
+
+### Bone Groups Overview
+- **Face**: Eyebrow, eye, nose, mouth, and cheek controllers.
+- **Torso (IK / FK)**: Spine, chest, neck, and head FK/IK handles.
+- **Arm.L / Arm.R (IK & FK)**: Left and right arm chains with individual IK target pins and pole targets.
+- **Leg.L / Leg.R (IK & FK)**: Left and right leg chains with foot roll and knee target controls.
+- **Fingers & Fingers (Detail)**: Individual digit bone controls for hand posing.
+- **Hair**: Secondary dynamic bones for hair strand animation.
+- **Clothes**: Secondary dynamic bones for skirt, cape, and ribbon animation.
+- **Lighting**: Custom gizmos for adjusting light vectors and Fresnel panels.
+
+:::tip
+Use the **star icon** in the **Bone Collections** tab to isolate a bone collection, making only that collection visible, or the **eye icons** to show or hide bone groups while animating.
+:::

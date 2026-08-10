@@ -3,10 +3,6 @@ title: Credits
 description: Acknowledgements, contributors, and assets credits.
 ---
 
-## Contributors & Credits
-
-Thanks to all of these people, this project is possible.
-
 ### Original Project
 
 - [michael-gh1/Addons-And-Tools-For-Blender-miHoYo-Shaders](https://github.com/michael-gh1/Addons-And-Tools-For-Blender-miHoYo-Shaders)
