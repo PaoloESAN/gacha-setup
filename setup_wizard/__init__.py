@@ -46,6 +46,7 @@ else:
         HSR_OT_SetUpCharacter,
         ZZZ_OT_SetUpCharacter,
         NTE_OT_SetUpCharacter,
+        GI_OT_ReorientBones,
     )
     from setup_wizard.genshin_import_materials import (
         GI_OT_SetUpMaterials,
@@ -156,6 +157,7 @@ else:
         GI_PT_UI_Post_Processing_Node_Editor_Setup_Menu,
         GI_OT_GenshinSetupWizardUI,
         GI_OT_SetUpCharacter,
+        GI_OT_ReorientBones,
         GI_OT_SetUpMaterials,
         GI_OT_SetUpOutlines,
         GI_OT_FinishSetup,

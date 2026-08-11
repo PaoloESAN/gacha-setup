@@ -123,6 +123,9 @@ class HSR_PT_UI_Character_Model_Menu(Panel, HonkaiStarRailUIRenderChecker):
         OperatorFactory.create(
             sub_layout, "genshin.delete_empties", "Delete Empties", "TRASH"
         )
+        OperatorFactory.create(
+            sub_layout, "genshin.reorient_bones", "Fix Orientation", "BONE_DATA"
+        )
 
 
 class HSR_PT_UI_Materials_Menu(Panel, HonkaiStarRailUIRenderChecker):
