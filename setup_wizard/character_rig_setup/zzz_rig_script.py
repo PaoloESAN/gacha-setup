@@ -976,6 +976,18 @@ def rig_character(
             except:
                 pass
 
+    # Apply exact requested Quaternion rotation to thumb.01_master controls
+    bpy.ops.object.mode_set(mode='POSE')
+    if "thumb.01_master.L" in rig.pose.bones:
+        pb_l = rig.pose.bones["thumb.01_master.L"]
+        pb_l.rotation_mode = 'QUATERNION'
+        pb_l.rotation_quaternion = (0.915334, 0.0, 0.402697, 0.0)
+
+    if "thumb.01_master.R" in rig.pose.bones:
+        pb_r = rig.pose.bones["thumb.01_master.R"]
+        pb_r.rotation_mode = 'QUATERNION'
+        pb_r.rotation_quaternion = (0.915334, 0.0, -0.402697, 0.0)
+
     # Fix face shading being offset 90 degrees
     bpy.ops.object.mode_set(mode='OBJECT')
     try:
