@@ -89,6 +89,48 @@ class MaterialDefaultValueSetter:
             if shader_use_lightmap_ao_input:
                 shader_use_lightmap_ao_input.default_value = default_value
 
+    def set_up_normal_map_default_value(self, material, default_missing=0, default_exists=1):
+        if not material or not material.use_nodes or not material.node_tree:
+            return
+
+        from setup_wizard.texture_import_setup.texture_importer_types import find_all_image_nodes_by_category
+        normal_nodes = find_all_image_nodes_by_category(material.node_tree, 'normal')
+        has_normal_image = any(n.image is not None for n in normal_nodes)
+        default_value = default_exists if has_normal_image else default_missing
+
+        socket_name = getattr(self.shader_node_names, 'USE_NORMAL_MAP', 'Use Normal Map') or 'Use Normal Map'
+
+        body_shader_node = material.node_tree.nodes.get(self.shader_node_names.BODY_SHADER)
+        if not body_shader_node:
+            for node in material.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree:
+                    if socket_name in node.inputs:
+                        body_shader_node = node
+                        break
+
+        if body_shader_node:
+            shader_use_normal_map_input = body_shader_node.inputs.get(socket_name)
+            if shader_use_normal_map_input:
+                shader_use_normal_map_input.default_value = default_value
+
+    def set_up_veil_material_default_value(self, material, default_value=1.0):
+        if not material or not material.use_nodes or not material.node_tree:
+            return
+
+        if 'Veil' in material.name or 'veil' in material.name.lower():
+            body_shader_node = material.node_tree.nodes.get(self.shader_node_names.BODY_SHADER)
+            if not body_shader_node:
+                for node in material.node_tree.nodes:
+                    if node.type == 'GROUP' and node.node_tree:
+                        if 'Use Material 2' in node.inputs:
+                            body_shader_node = node
+                            break
+
+            if body_shader_node:
+                use_mat2_input = body_shader_node.inputs.get('Use Material 2')
+                if use_mat2_input:
+                    use_mat2_input.default_value = default_value
+
     def set_up_hair_material(self, material):
         raise NotImplementedError("This method should be implemented in subclasses that require hair material setup.")
 
@@ -98,8 +140,12 @@ class GenshinImpactMaterialDefaultValueSetter(MaterialDefaultValueSetter):
         super().__init__(material_names, shader_node_names)
 
     def set_default_values(self):
-        materials_to_check = [material for material in bpy.data.materials if \
-                              material.name.startswith(self.material_names.MATERIAL_PREFIX)]
+        materials_to_check = [
+            material for material in bpy.data.materials if material.use_nodes and material.node_tree and (
+                (self.material_names.MATERIAL_PREFIX and material.name.startswith(self.material_names.MATERIAL_PREFIX)) or
+                (self.material_names.MATERIAL_PREFIX_AFTER_RENAME and material.name.startswith(self.material_names.MATERIAL_PREFIX_AFTER_RENAME))
+            )
+        ]
 
         for material in materials_to_check:
             # The reason we try both is so that we don't need to explicitly list out materials
@@ -109,6 +155,9 @@ class GenshinImpactMaterialDefaultValueSetter(MaterialDefaultValueSetter):
 
             self.set_up_lightmap_ao_default_value('Body', material)
             self.set_up_lightmap_ao_default_value('Hair', material)
+
+            self.set_up_normal_map_default_value(material)
+            self.set_up_veil_material_default_value(material)
         
         body2_material = bpy.data.materials.get(self.material_names.BODY2)
         if body2_material:

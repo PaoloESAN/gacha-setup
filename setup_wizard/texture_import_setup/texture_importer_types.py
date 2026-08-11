@@ -349,6 +349,17 @@ class GenshinTextureImporter:
             if self.game_type == GameType.GENSHIN_IMPACT:
                 self.setup_dress_textures(node.name, img, self.character_type)
 
+        if self.game_type == GameType.GENSHIN_IMPACT:
+            body_shader = material.node_tree.nodes.get('Body Shader') or material.node_tree.nodes.get('PrimoToon') or material.node_tree.nodes.get('HoYoToon') or material.node_tree.nodes.get('Group.006')
+            if not body_shader:
+                for n in material.node_tree.nodes:
+                    if n.type == 'GROUP' and n.node_tree and 'Use Normal Map' in n.inputs:
+                        body_shader = n
+                        break
+            if body_shader and 'Use Normal Map' in body_shader.inputs:
+                has_normal = any(n.image is not None for n in nodes)
+                body_shader.inputs['Use Normal Map'].default_value = 1.0 if has_normal else 0.0
+
         # Deprecated. Tries only if it exists. Only for V1 Shader
         self.plug_normal_map(f'miHoYo - Genshin {type.value}', 'MUTE IF ONLY 1 UV MAP EXISTS')
         self.plug_normal_map('miHoYo - Genshin Dress', 'MUTE IF ONLY 1 UV MAP EXISTS')
