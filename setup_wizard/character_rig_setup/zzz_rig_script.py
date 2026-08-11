@@ -1553,8 +1553,12 @@ def rig_character(
         armature.edit_bones["DEF-eye.L"].name = final_eye_L_name
         armature.edit_bones["DEF-eye.R"].name = final_eye_R_name
 
-        # Properly finish the parenting of the eye rig we imported!
-        armature.edit_bones['eyetrack'].parent = armature.edit_bones['head']
+        # Delete eyetrack, eyetrack_L, eyetrack_R bones as they are replaced by the new face rig
+        for eb_name in ("eyetrack", "eyetrack_L", "eyetrack_R", "eyetrack.L", "eyetrack.R"):
+            b = armature.edit_bones.get(eb_name)
+            if b:
+                armature.edit_bones.remove(b)
+
         armature.edit_bones['+EyeBone R A01.001'].parent = armature.edit_bones['head']
         armature.edit_bones['+EyeBone L A01.001'].parent = armature.edit_bones['head']
 
@@ -1571,24 +1575,6 @@ def rig_character(
         armature.edit_bones['+EyeBone L A01.001'].tail.x = eye_L_head_pos[0]
         armature.edit_bones['+EyeBone L A01.001'].tail.y = armature.edit_bones[final_eye_L_name].tail.y
         armature.edit_bones['+EyeBone L A01.001'].tail.z = eye_L_head_pos[2]
-
-        armature.edit_bones['eyetrack_R'].head.x = eye_R_head_pos[0]
-        armature.edit_bones['eyetrack_R'].head.z = eye_R_head_pos[2]
-
-        armature.edit_bones['eyetrack_R'].tail.x = eye_R_head_pos[0]
-        armature.edit_bones['eyetrack_R'].tail.z = eye_R_head_pos[2] + 0.01
-
-        armature.edit_bones['eyetrack_L'].head.x = eye_L_head_pos[0]
-        armature.edit_bones['eyetrack_L'].head.z = eye_L_head_pos[2]
-
-        armature.edit_bones['eyetrack_L'].tail.x = eye_L_head_pos[0]
-        armature.edit_bones['eyetrack_L'].tail.z = eye_L_head_pos[2] + 0.01
-
-        armature.edit_bones['eyetrack'].head.x = (eye_R_head_pos[0]+eye_L_head_pos[0])/2
-        armature.edit_bones['eyetrack'].head.z = (eye_R_head_pos[2]+eye_L_head_pos[2])/2
-
-        armature.edit_bones['eyetrack'].tail.x = (eye_R_head_pos[0]+eye_L_head_pos[0])/2
-        armature.edit_bones['eyetrack'].tail.z = armature.edit_bones['eyetrack_L'].tail.z
     except:
         pass
 
@@ -2430,6 +2416,8 @@ def rig_character(
         # New 4.0 functionality: change the bone itself to the color of the group it was originally assigned to.
         else:
             # 4.0: Armature bones or Pose bones?
+            if not bpy.context.object or not hasattr(bpy.context.object, "pose") or bone_name not in bpy.context.object.pose.bones:
+                return
             bone = bpy.context.object.pose.bones[bone_name]
             
             if group_name == "Root":

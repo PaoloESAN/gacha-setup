@@ -22,6 +22,9 @@ This folder contains the shader and rig setup files for **Zenless Zone Zero (ZZZ
 * **Character Rigging & Scripting**:
   * **Rigging & Scripting**: **Enthralpy** ([YouTube](https://www.youtube.com/@Enthralpy))
   * **Facial Rig**: [**jideeh**](https://github.com/Jideeh1)
+    * **Poke / Enthralpy**: Driver Logic
+    * **Isaac / Just_ScaasI**: Facerig Logic + Widgets
+    * **The_Crabnuts / Kan_Natto**: Facerig Logic + Widgets
 * **Supervised & Made Possible By**: **Stormz67**
 * **Community Source**: [Omatsuri Discord Server](https://discord.gg/omatsuri)
 
