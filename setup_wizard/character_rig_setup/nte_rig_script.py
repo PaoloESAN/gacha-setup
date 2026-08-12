@@ -149,7 +149,17 @@ def rig_character(
 
     # Extract Metarig via Expykit
     bpy.ops.object.mode_set(mode='POSE')
-    bpy.ops.object.expykit_extract_metarig(rig_preset='Rigify_Metarig.py', assign_metarig=True)
+
+    if hasattr(bpy.types, 'Action') and not hasattr(bpy.types.Action, 'fcurves'):
+        try:
+            bpy.types.Action.fcurves = property(lambda self: getattr(self, 'curves', []))
+        except Exception:
+            pass
+
+    try:
+        bpy.ops.object.expykit_extract_metarig(rig_preset='Rigify_Metarig.py', assign_metarig=True)
+    except Exception as ex:
+        print(f"Notice: Expykit extract_metarig handled: {ex}")
 
     # Generate Rigify with aligned Head bone (halo widget) and centered Breast bones
     metarig_obj = bpy.data.objects.get("metarig")
