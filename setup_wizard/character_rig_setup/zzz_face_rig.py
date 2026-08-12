@@ -1,5 +1,12 @@
+# BIG CREDITS to these people <3:
+# Poke/Enthralpy | Driver Logic
+# Isaac/Just_ScaasI | Facerig Logic + Widgets
+# The_Crabnuts/Kan_Natto | Facerig Logic + Widgets
+
 import bpy
-import math
+import os
+import tempfile
+import mathutils
 from mathutils import Vector, Matrix
 
 HEAD_BONE_NAME   = None
@@ -13,6 +20,8 @@ OFFSET_F     = 0.120
 TRAVEL_F     = 0.050
 SPACING_F    = 0.055
 WIDGET_F     = 1.0
+EYE_LOOK_FWD_F = 0.45
+SPINE_REF_Z = None
 FACERIG_COLLECTION = "Facerig"
 RIGIFY_UI_ROW = 1
 
@@ -33,11 +42,12 @@ COL_CORNER  = (0.15, 0.85, 0.30)
 COL_VISEME  = (0.95, 0.85, 0.20)
 COL_EYELID  = (0.90, 0.15, 0.15)
 COL_EYEAIM  = (0.20, 0.85, 0.90)
-COL_EYEMOTE = (0.65, 0.35, 0.90)
+COL_EYEGREEN = (0.20, 0.85, 0.30)
+COL_EYEMOTE = (0.90, 0.20, 0.20)
 COL_BROW    = (0.30, 0.80, 0.35)
 COL_BROWSAD = (0.95, 0.45, 0.75)
 COL_EBRBONE = (0.20, 0.55, 0.95)
-COL_EBRMASTER = (0.95, 0.55, 0.10)
+COL_EBRMASTER = (0.65, 0.35, 0.90)
 
 HEAD_CANDIDATES = [
     "DEF-spine.006", "spine.006", "head", "Head", "Head_M", "head_M",
@@ -60,6 +70,8 @@ def is_blender_3():
 _blender_ver = bpy.app.version[0]
 if _blender_ver < 3:
     raise Exception("This script targets Blender 3.x, 4.x, or 5.x.")
+
+ver = _blender_ver
 
 
 def shapekeyrename(keyblock):
@@ -91,6 +103,9 @@ def shapekeyrename(keyblock):
         "EB_↑": "Fac_Ebr_Up", "EB_↓": "Fac_Ebr_Down",
         "EB_Angry": "Fac_Ebr_Angry", "EB_Relax": "Fac_Ebr_Relax",
         "EB_困扰": "Fac_Ebr_Sad",
+        "Fac_Eyebrow_↓": "Fac_Ebr_Down", "Fac_Eyebrow_Angry": "Fac_Ebr_Angry",
+        "Fac_Eyebrow_L↑": "Fac_Ebr_L_Up", "Fac_Eyebrow_R↑": "Fac_Ebr_R_Up",
+        "Fac_Eyebrow_Relax": "Fac_Ebr_Relax", "Fac_Eyebrow_困扰": "Fac_Ebr_Relax",
         "Eye_↙↘": "Fac_Eye_BLBR", "Eye_Angry": "Fac_Eye_Angry",
         "Eye_Close": "Fac_Eye_Close",
         "Eye_Open_L": "Fac_Eye_L_Open", "Eye_Open_R": "Fac_Eye_R_Open",
@@ -203,15 +218,6 @@ def build_brow_shapekey_controls(mesh_obj, armature, fwd, up, face_size):
 
     ebkeys = [sk.name for sk in kb if is_eyebrow_key(sk.name)]
 
-    def match(sub):
-        return [n for n in ebkeys if sub in n.strip().lower()]
-
-    up_keys = match("up")
-    down_keys = match("down")
-    angry = (match("angry") or [None])[0]
-    relax = (match("relax") or [None])[0]
-    sad = (match("sad") or [None])[0]
-
     out = []
 
     brow_c = feature_centroid(mesh_obj, ebkeys)
@@ -224,57 +230,91 @@ def build_brow_shapekey_controls(mesh_obj, armature, fwd, up, face_size):
         bb = [mesh_obj.matrix_world @ Vector(c) for c in mesh_obj.bound_box]
         brow_c = sum(bb, Vector()) / len(bb) + up * face_size * 0.12
 
-    up_l = [n for n in up_keys if eyebrow_side(n) == 'L'] or up_keys
-    up_r = [n for n in up_keys if eyebrow_side(n) == 'R'] or up_keys
-    side_up = {'L': up_l, 'R': up_r}
-
-    def side_brow_center(side):
-        su = side_up[side]
-        if su:
-            c = feature_centroid(mesh_obj, [su[0]])
-            if c is not None:
-                return c
-        pts = [skneyebrow_pos(armature, s, side) for s in ("01", "02", "03")]
-        pts = [p for p in pts if p is not None]
-        if pts:
-            return sum(pts, Vector()) / len(pts)
-        sgn = 1.0 if (side == 'L') != FLIP_EYE_LR else -1.0
-        return brow_c + right * (sgn * face_size * 0.09)
-
-    for side in ('L', 'R'):
-        su = side_up[side]
-        if not su:
-            continue
-        sbc = side_brow_center(side)
-        out.append({'name': 'CTRL-Brow-UpDown.%s' % side,
-                    'collection': FACERIG_COLLECTION, 'color': COL_EBRMASTER,
-                    'group': 'Face Eyebrow', 'head': sbc + fwd * OFFSET + up * (face_size * 0.02),
-                    'widget': 'eyebrow', 'lim': face_size * EBR_MASTER_F,
-                    'free': ('Z',), 'range': 'both',
-                    'shape_scale': Vector((face_size * EBR_MASTER_F,) * 3),
-                    'drivers': [{'key': su[0], 'axis': 'Z', 'dir': +1, 'bidir': True}]})
-
-    eyeL = feature_centroid(mesh_obj, ["Fac_Eye_L_Wink", "Fac_Eye_L_Open"]) \
+    eyeL = feature_centroid(mesh_obj, ["Fac_Eye_L_Wink", "Fac_Eye_L_Open"])\
            or feature_centroid(mesh_obj, ["Fac_Eye_Close"], side='L')
-    eyeR = feature_centroid(mesh_obj, ["Fac_Eye_R_Wink", "Fac_Eye_R_Open"]) \
+    eyeR = feature_centroid(mesh_obj, ["Fac_Eye_R_Wink", "Fac_Eye_R_Open"])\
            or feature_centroid(mesh_obj, ["Fac_Eye_Close"], side='R')
     if eyeL is not None and eyeR is not None:
         eyeC = (eyeL + eyeR) * 0.5
     else:
         eyeC = brow_c
 
-    box = Vector((face_size * EBR_WGT_F,) * 3)
-    stack = [(k, nm) for k, nm in ((angry, 'Angry'), (relax, 'Relax'), (sad, 'Sad')) if k]
-    n = len(stack)
-    for i, (key, nm) in enumerate(stack):
-        h = (i - (n - 1) / 2.0) * (face_size * EMOTE_SPACING_F)
-        out.append({'name': 'CTRL-Brow-%s' % nm,
-                    'collection': FACERIG_COLLECTION, 'color': COL_BROW,
-                    'group': 'Face Eyebrow',
-                    'head': eyeC + fwd * (face_size * (OFFSET_F + 0.05)) + right * h,
-                    'widget': 'pad', 'lim': face_size * EBR_WGT_F,
-                    'free': ('Z',), 'range': 'pos', 'shape_scale': box,
-                    'drivers': [{'key': key, 'axis': 'Z', 'dir': +1}]})
+    kbnames = {sk.name for sk in kb}
+
+    perside = any(("Fac_Ebr_%s_%s" % (s, k)) in kbnames
+                  for s in ("L", "R") for k in ("Angry", "Down", "Sad"))
+    if perside:
+        for side, xoff in (('R', 1.0), ('L', -1.0)):
+            lr = ("Fac_Ebr_%s_Sad" % side, "Fac_Ebr_%s_Angry" % side) if FLIP_HORIZONTAL \
+                else ("Fac_Ebr_%s_Angry" % side, "Fac_Ebr_%s_Sad" % side)
+            drv = []
+            if ("Fac_Ebr_%s_Up" % side) in kbnames:
+                drv.append({'key': "Fac_Ebr_%s_Up" % side, 'axis': 'Z', 'dir': +1})
+            if ("Fac_Ebr_%s_Down" % side) in kbnames:
+                drv.append({'key': "Fac_Ebr_%s_Down" % side, 'axis': 'Z', 'dir': -1})
+            if lr[0] in kbnames:
+                drv.append({'key': lr[0], 'axis': 'X', 'dir': +1})
+            if lr[1] in kbnames:
+                drv.append({'key': lr[1], 'axis': 'X', 'dir': -1})
+            if drv:
+                out.append({'name': 'CTRL-Eyebrow-Viseme-Pad.%s' % side,
+                            'collection': FACERIG_COLLECTION, 'color': COL_EBRMASTER,
+                            'group': 'Face Eyebrow',
+                            'head': place_s(brow_c, h=xoff * face_size * 0.06),
+                            'widget': 'pad', 'lim': face_size * EMOTE_LIM_F,
+                            'free': ('X', 'Z'), 'range': 'both',
+                            'shape_scale': Vector((face_size * 0.09, 1.0, face_size * 0.025)),
+                            'shape_rotation': (0.0, -0.15 if side == 'L' else 0.15,
+                                               0.43825 if side == 'L' else -0.43825),
+                            'drivers': drv})
+            relaxk = "Fac_Ebr_%s_Relax" % side
+            if relaxk in kbnames:
+                if side == 'L':
+                    brow_range = 'neg'
+                    brow_dir = -1
+                else:
+                    brow_range = 'pos'
+                    brow_dir = +1
+                out.append({'name': 'CTRL-Brow-%s_Up' % side,
+                            'collection': FACERIG_COLLECTION, 'color': COL_BROW,
+                            'group': 'Face Eyebrow',
+                            'head': place_s(brow_c, h=xoff * face_size * 0.03),
+                            'widget': 'eyeblink', 'lim': face_size * EMOTE_LIM_F,
+                            'free': ('X',), 'range': brow_range,
+                            'shape_scale': Vector((face_size * 0.028, face_size * 0.05, face_size * 0.028)),
+                            'drivers': [{'key': relaxk, 'axis': 'X', 'dir': brow_dir}]})
+        return out
+
+    ebr_lr = ("Fac_Ebr_Angry", "Fac_Ebr_Sad") if FLIP_HORIZONTAL else ("Fac_Ebr_Sad", "Fac_Ebr_Angry")
+    ebr_drv = []
+    if "Fac_Ebr_Relax" in kbnames: ebr_drv.append({'key': "Fac_Ebr_Relax", 'axis': 'Z', 'dir': +1})
+    if "Fac_Ebr_Down" in kbnames: ebr_drv.append({'key': "Fac_Ebr_Down", 'axis': 'Z', 'dir': -1})
+    if ebr_lr[0] in kbnames: ebr_drv.append({'key': ebr_lr[0], 'axis': 'X', 'dir': +1})
+    if ebr_lr[1] in kbnames: ebr_drv.append({'key': ebr_lr[1], 'axis': 'X', 'dir': -1})
+    if ebr_drv:
+        out.append({'name': 'CTRL-Eyebrow-Viseme-Pad',
+                    'collection': FACERIG_COLLECTION, 'color': COL_EBRMASTER,
+                    'group': 'Face Eyebrow', 'head': place_s(eyeC), 'widget': 'eyeblink',
+                    'lim': face_size * EMOTE_LIM_F, 'free': ('X', 'Z'), 'range': 'both',
+                    'shape_scale': Vector((face_size * 0.0455, face_size * 0.05, face_size * 0.0416)),
+                    'drivers': ebr_drv})
+
+    for side, xoff in (('R', -1.0), ('L', 1.0)):
+        key = "Fac_Ebr_%s_Up" % side
+        if key in kbnames:
+            if side == 'L':
+                brow_range = 'neg'
+                brow_dir = -1
+            else:
+                brow_range = 'pos'
+                brow_dir = +1
+            out.append({'name': 'CTRL-Brow-%s_Up' % side,
+                        'collection': FACERIG_COLLECTION, 'color': COL_BROW,
+                        'group': 'Face Eyebrow',
+                        'head': place_s(eyeC, h=xoff * face_size * 0.03), 'widget': 'eyeblink',
+                        'lim': face_size * EMOTE_LIM_F, 'free': ('X',), 'range': brow_range,
+                        'shape_scale': Vector((face_size * 0.028, face_size * 0.05, face_size * 0.028)),
+                        'drivers': [{'key': key, 'axis': 'X', 'dir': brow_dir}]})
     return out
 
 
@@ -400,7 +440,8 @@ def face_frame(mesh_obj):
     return fwd, right, up, face_size
 
 
-def plan_controls(mesh_obj, fwd, right, up, face_size, keyblock):
+def plan_controls(mesh_obj, fwd, right, up, face_size):
+    keyblock = mesh_obj.data.shape_keys.key_blocks
     OFFSET  = face_size * OFFSET_F
     LIM     = face_size * TRAVEL_F
     SPACING = face_size * SPACING_F
@@ -422,9 +463,9 @@ def plan_controls(mesh_obj, fwd, right, up, face_size, keyblock):
                   "Fac_Mth_L_In", "Fac_Mth_R_In", "Fac_Mth_Aa1", "Fac_Mth_AaTalk"]
 
     mouth = feature_centroid(mesh_obj, MOUTH_KEYS)
-    eyeL = feature_centroid(mesh_obj, ["Fac_Eye_L_Wink", "Fac_Eye_L_Open"]) \
+    eyeL = feature_centroid(mesh_obj, ["Fac_Eye_L_Wink", "Fac_Eye_L_Open"])\
            or feature_centroid(mesh_obj, ["Fac_Eye_Close"], side='L')
-    eyeR = feature_centroid(mesh_obj, ["Fac_Eye_R_Wink", "Fac_Eye_R_Open"]) \
+    eyeR = feature_centroid(mesh_obj, ["Fac_Eye_R_Wink", "Fac_Eye_R_Open"])\
            or feature_centroid(mesh_obj, ["Fac_Eye_Close"], side='R')
     brow = feature_centroid(mesh_obj, ["Fac_Ebr_Up", "Fac_Ebr_Down", "Fac_Ebr_Angry"]
                             + [sk.name for sk in keyblock if is_eyebrow_key(sk.name)])
@@ -469,7 +510,7 @@ def plan_controls(mesh_obj, fwd, right, up, face_size, keyblock):
     corner_scale = Vector((hl, hl, hl))
     tri = face_size * TRI_F
     tri_scale = Vector((tri, tri, tri))
-    emote_scale = Vector((face_size * EMOTE_W_F, LIM, face_size * EMOTE_H_F))
+    emote_scale = Vector((face_size * 0.035, LIM, face_size * 0.032))
 
     lr = hkey("Fac_Mth_Left", "Fac_Mth_Right")
     ud = vkey("Fac_Mth_Up", "Fac_Mth_Down")
@@ -480,10 +521,28 @@ def plan_controls(mesh_obj, fwd, right, up, face_size, keyblock):
     if ud[1] in keyblock: drv.append({'key': ud[1], 'axis': 'Z', 'dir': -1})
     if drv:
         controls.append({'name': 'CTRL-Mouth-Shift', 'collection': 'Face Main',
-                         'color': COL_MOUTH, 'group': 'Face Mouth',
-                         'head': place(mouth), 'widget': 'pad', 'lim': LIM,
-                         'free': ('X', 'Z'), 'range': 'both', 'shape_scale': mouth_scale,
+                         'color': COL_VISEME, 'group': 'Face Mouth',
+                         'head': place(mouth), 'widget': 'lipsmaster', 'lim': LIM,
+                         'free': ('X', 'Z'), 'range': 'both', 'shape_scale': Vector((face_size * 0.09,) * 3),
                          'drivers': drv})
+
+    vud = vkey("Fac_Mth_Ii", "Fac_Mth_Aa1")
+    vdrv = []
+    right_dir = +1 if FLIP_HORIZONTAL else -1
+    left_dir = -1 if FLIP_HORIZONTAL else +1
+    for k in ("Fac_Mth_L_In", "Fac_Mth_R_In"):
+        if k in keyblock: vdrv.append({'key': k, 'axis': 'X', 'dir': right_dir})
+    for k in ("Fac_Mth_L_Out", "Fac_Mth_R_Out"):
+        if k in keyblock: vdrv.append({'key': k, 'axis': 'X', 'dir': left_dir})
+    if vud[0] in keyblock: vdrv.append({'key': vud[0], 'axis': 'Z', 'dir': +1})
+    if vud[1] in keyblock: vdrv.append({'key': vud[1], 'axis': 'Z', 'dir': -1, 'gain': 0.5})
+    if vdrv:
+        controls.append({'name': 'CTRL-Mouth-Viseme-Pad', 'collection': 'Face Main',
+                         'color': COL_MOUTH, 'group': 'Face Visemes',
+                         'head': place(mouth), 'widget': 'pad', 'lim': LIM,
+                         'free': ('X', 'Z'), 'range': 'both',
+                         'shape_scale': mouth_scale * 1.25,
+                         'drivers': vdrv})
 
     for side in ('L', 'R'):
         out_name = "Fac_Mth_%s_Out" % side
@@ -500,9 +559,9 @@ def plan_controls(mesh_obj, fwd, right, up, face_size, keyblock):
         if udk[1] in keyblock:  drv.append({'key': udk[1], 'axis': 'Z', 'dir': -1})
         if drv:
             controls.append({'name': 'CTRL-Mouth-Corner.%s' % side,
-                             'collection': 'Face Main', 'color': COL_CORNER,
+                             'collection': 'Face Main', 'color': COL_MOUTH,
                              'group': 'Face Corner', 'head': place(corner(side) + mouth_raise),
-                             'widget': 'pad', 'lim': LIM, 'free': ('X', 'Z'),
+                             'widget': 'lip00.%s' % side, 'lim': LIM, 'free': ('X', 'Z'),
                              'range': 'both', 'shape_scale': corner_scale,
                              'drivers': drv})
 
@@ -516,9 +575,9 @@ def plan_controls(mesh_obj, fwd, right, up, face_size, keyblock):
             h = (i - (n - 1) / 2.0) * SPACING
             controls.append({'name': 'CTRL-%s' % k[4:], 'collection': 'Face Visemes',
                              'color': COL_VISEME, 'group': 'Face Visemes',
-                             'head': place(mouth, h=h, v=-face_size * 0.09),
-                             'widget': 'slider', 'lim': LIM, 'free': ('Z',),
-                             'range': 'pos',
+                             'head': place(mouth, h=h, v=-face_size * 0.16),
+                             'widget': 'eyeblink', 'lim': LIM, 'free': ('Z',),
+                             'range': 'pos', 'shape_scale': Vector((face_size * 0.045,) * 3),
                              'drivers': [{'key': k, 'axis': 'Z', 'dir': +1}]})
 
     for side, pos in (('L', eyeL), ('R', eyeR)):
@@ -529,17 +588,20 @@ def plan_controls(mesh_obj, fwd, right, up, face_size, keyblock):
                              'collection': 'Face Main', 'color': COL_EYELID,
                              'group': 'Face Eyelid',
                              'head': place(pos, v=face_size * 0.055),
-                             'widget': 'triangle', 'lim': LIM, 'free': ('Z',),
+                             'widget': 'isaac_blink_top', 'lim': LIM, 'free': ('Z',),
                              'range': 'pos', 'shape_scale': tri_scale,
                              'drivers': [{'key': openk, 'axis': 'Z', 'dir': +1}]})
         if winkk in keyblock:
+            wdrv = [{'key': winkk, 'axis': 'Z', 'dir': -1}]
+            if "Fac_Eye_Angry" in keyblock:
+                wdrv.append({'key': "Fac_Eye_Angry", 'axis': 'Z', 'dir': +1})
             controls.append({'name': 'CTRL-Eye_Wink.%s' % side,
                              'collection': 'Face Main', 'color': COL_EYELID,
                              'group': 'Face Eyelid',
                              'head': place(pos, v=-face_size * 0.06),
-                             'widget': 'triangle_down', 'lim': LIM, 'free': ('Z',),
-                             'range': 'neg', 'shape_scale': tri_scale,
-                             'drivers': [{'key': winkk, 'axis': 'Z', 'dir': -1}]})
+                             'widget': 'isaac_blink_bot', 'lim': LIM, 'free': ('Z',),
+                             'range': 'both', 'shape_scale': tri_scale,
+                             'drivers': wdrv})
 
     lr = hkey("Eye_Left", "Eye_Right")
     ud = vkey("Eye_Up", "Eye_Down")
@@ -554,27 +616,39 @@ def plan_controls(mesh_obj, fwd, right, up, face_size, keyblock):
                          'head': place(eyeC, v=face_size * 0.02), 'widget': 'ring',
                          'lim': LIM, 'free': ('X', 'Z'), 'range': 'both', 'drivers': drv})
 
-    emote_order = ["Fac_Eye_Sad", "Fac_Eye_BLBR", "Fac_Eye_MidDown",
-                   "Fac_Eye_Angry", "Fac_Eye_HalfClose", "Fac_Eye_Close",
-                   "Fac_Eye_LowlidUp"]
     emote_lim = face_size * EMOTE_LIM_F
     emote_spacing = face_size * EMOTE_SPACING_F
     emote_fwd = fwd * (face_size * EMOTE_FWD_F)
-    eye_emotes = [k for k in emote_order if k in keyblock]
-    if eye_emotes:
-        n = len(eye_emotes)
-        for i, k in enumerate(eye_emotes):
-            v = ((n - 1) / 2.0 - i) * emote_spacing
-            controls.append({'name': 'CTRL-%s' % k[4:], 'collection': 'Face Eyes',
-                             'color': COL_EYEMOTE, 'group': 'Face Eye-Emote',
-                             'head': place(eyeC, v=v) + emote_fwd, 'widget': 'pad',
-                             'lim': emote_lim, 'free': ('Z',), 'range': 'pos',
-                             'shape_scale': emote_scale,
-                             'drivers': [{'key': k, 'axis': 'Z', 'dir': +1}]})
+    eye_pad_lr = hkey("Fac_Eye_MidDown", "Fac_Eye_LowlidUp")
+    eye_pad_drv = []
+    if "Fac_Eye_Close" in keyblock: eye_pad_drv.append({'key': "Fac_Eye_Close", 'axis': 'Z', 'dir': +1})
+    if "Fac_Eye_HalfClose" in keyblock: eye_pad_drv.append({'key': "Fac_Eye_HalfClose", 'axis': 'Z', 'dir': -1})
+    if eye_pad_lr[0] in keyblock: eye_pad_drv.append({'key': eye_pad_lr[0], 'axis': 'X', 'dir': +1})
+    if eye_pad_lr[1] in keyblock: eye_pad_drv.append({'key': eye_pad_lr[1], 'axis': 'X', 'dir': -1})
+    if eye_pad_drv:
+        controls.append({'name': 'CTRL-Eye-Viseme-Pad', 'collection': 'Face Eyes',
+                         'color': COL_EYEMOTE, 'group': 'Face Eye-Emote',
+                         'head': place(eyeC) + emote_fwd, 'widget': 'eyeblink',
+                         'lim': emote_lim, 'free': ('X', 'Z'), 'range': 'both',
+                         'shape_scale': emote_scale * 1.3, 'drivers': eye_pad_drv})
+    if "Fac_Eye_MidUp" in keyblock:
+        controls.append({'name': 'CTRL-Eye_MidUp', 'collection': 'Face Eyes',
+                         'color': COL_EYEMOTE, 'group': 'Face Eye-Emote',
+                         'head': place(eyeC, v=emote_spacing) + emote_fwd, 'widget': 'eyeblink',
+                         'lim': emote_lim, 'free': ('Z',), 'range': 'both',
+                         'shape_scale': emote_scale,
+                         'drivers': [{'key': "Fac_Eye_MidUp", 'axis': 'Z', 'dir': +1}]})
+    if "Fac_Eye_Sad" in keyblock:
+        controls.append({'name': 'CTRL-Eye_Sad', 'collection': 'Face Eyes',
+                         'color': COL_EYEMOTE, 'group': 'Face Eye-Emote',
+                         'head': place(eyeC, v=-emote_spacing) + emote_fwd, 'widget': 'eyeblink',
+                         'lim': emote_lim, 'free': ('Z',), 'range': 'pos',
+                         'shape_scale': emote_scale,
+                         'drivers': [{'key': "Fac_Eye_Sad", 'axis': 'Z', 'dir': +1}]})
     if "O_O" in keyblock:
         controls.append({'name': 'CTRL-O_O', 'collection': 'Face Eyes',
                          'color': COL_EYEMOTE, 'group': 'Face Eye-Emote',
-                         'head': place(eyeC, h=face_size * 0.14) + emote_fwd, 'widget': 'pad',
+                         'head': place(eyeC, h=face_size * 0.14) + emote_fwd, 'widget': 'eyeblink',
                          'lim': emote_lim, 'free': ('Z',), 'range': 'pos',
                          'shape_scale': emote_scale,
                          'drivers': [{'key': "O_O", 'axis': 'Z', 'dir': +1}]})
@@ -584,18 +658,100 @@ def plan_controls(mesh_obj, fwd, right, up, face_size, keyblock):
     return controls
 
 
-def get_widget_collection(name="WGTS_FaceRig"):
-    wgt = bpy.data.collections.get("wgt")
-    if wgt:
-        return wgt
+def get_widget_collection():
+    for name_candidate in ("WGTS", "wgt"):
+        coll = bpy.data.collections.get(name_candidate)
+        if coll:
+            return coll
+
     for c in bpy.data.collections:
-        if "WGTS" in c.name:
+        c_low = c.name.lower()
+        if "wgts" in c_low or "wgt" in c_low:
             return c
-    coll = bpy.data.collections.get(name)
+
+    coll = bpy.data.collections.get("WGTS")
     if not coll:
-        coll = bpy.data.collections.new(name)
-        bpy.context.scene.collection.children.link(coll)
+        coll = bpy.data.collections.new("WGTS")
     return coll
+
+
+def finalize_widget_collection(wgt_coll):
+    if not wgt_coll:
+        return
+
+    try:
+        wgt_coll.hide_viewport = True
+    except Exception:
+        pass
+
+    main_wgts = None
+    for name_candidate in ("WGTS", "wgt"):
+        c = bpy.data.collections.get(name_candidate)
+        if c and c != wgt_coll:
+            main_wgts = c
+            break
+
+    if main_wgts:
+        if wgt_coll.name not in main_wgts.children:
+            try:
+                main_wgts.children.link(wgt_coll)
+            except Exception:
+                pass
+        if wgt_coll.name in bpy.context.scene.collection.children:
+            try:
+                bpy.context.scene.collection.children.unlink(wgt_coll)
+            except Exception:
+                pass
+    else:
+        if wgt_coll.name in bpy.context.scene.collection.children:
+            try:
+                bpy.context.scene.collection.children.unlink(wgt_coll)
+            except Exception:
+                pass
+
+
+EYE_MASTER_VERTS = [[-0.40348, 0.0, 0.32632], [-0.28803, 0.0, 0.29715], [-0.21194, 0.0, 0.24992], [0.0, 0.0, -0.19968], [0.0, 0.0, 0.19968], [-0.21194, 0.0, -0.24992], [-0.28803, 0.0, -0.29715], [-0.40348, 0.0, -0.32632], [-0.53133, 0.0, -0.31136], [-0.64684, 0.0, -0.24534], [-0.72806, 0.0, -0.13551], [-0.7574, 0.0, 0.0], [-0.72806, 0.0, 0.13551], [-0.64684, 0.0, 0.24534], [-0.53133, 0.0, 0.31136], [-0.11372, 0.0, 0.1995], [-0.11372, 0.0, -0.1995], [-0.03778, 0.0, -0.19971], [-0.03778, 0.0, 0.19971], [-0.16207, 0.0, 0.20723], [-0.16207, 0.0, -0.20723], [-0.34203, 0.0, 0.3157], [-0.24529, 0.0, 0.2746], [-0.0037, 0.0, -0.19969], [-0.07706, 0.0, 0.1997], [-0.24529, 0.0, -0.2746], [-0.34203, 0.0, -0.3157], [-0.4676, 0.0, -0.32523], [-0.59202, 0.0, -0.28451], [-0.693, 0.0, -0.19498], [-0.74991, 0.0, -0.06945], [-0.74991, 0.0, 0.06945], [-0.693, 0.0, 0.19498], [-0.59202, 0.0, 0.28451], [-0.4676, 0.0, 0.32523], [-0.18492, 0.0, 0.22542], [-0.07706, 0.0, -0.1997], [-0.0037, 0.0, 0.19969], [-0.14053, 0.0, -0.20011], [-0.14053, 0.0, 0.20011], [-0.18492, 0.0, -0.22542], [0.40348, 0.0, 0.32632], [0.28803, 0.0, 0.29715], [0.21194, 0.0, 0.24992], [-0.0, 0.0, -0.19968], [-0.0, 0.0, 0.19968], [0.21194, 0.0, -0.24992], [0.28803, 0.0, -0.29715], [0.40348, 0.0, -0.32632], [0.53133, 0.0, -0.31136], [0.64684, 0.0, -0.24534], [0.72806, 0.0, -0.13551], [0.7574, 0.0, 0.0], [0.72806, 0.0, 0.13551], [0.64684, 0.0, 0.24534], [0.53133, 0.0, 0.31136], [0.11372, 0.0, 0.1995], [0.11372, 0.0, -0.1995], [0.03778, 0.0, -0.19971], [0.03778, 0.0, 0.19971], [0.16207, 0.0, 0.20723], [0.16207, 0.0, -0.20723], [0.34203, 0.0, 0.3157], [0.24529, 0.0, 0.2746], [0.0037, 0.0, -0.19969], [0.07706, 0.0, 0.1997], [0.24529, 0.0, -0.2746], [0.34203, 0.0, -0.3157], [0.4676, 0.0, -0.32523], [0.59202, 0.0, -0.28451], [0.693, 0.0, -0.19498], [0.74991, 0.0, -0.06945], [0.74991, 0.0, 0.06945], [0.693, 0.0, 0.19498], [0.59202, 0.0, 0.28451], [0.4676, 0.0, 0.32523], [0.18492, 0.0, 0.22542], [0.07706, 0.0, -0.1997], [0.0037, 0.0, 0.19969], [0.14053, 0.0, -0.20011], [0.14053, 0.0, 0.20011], [0.18492, 0.0, -0.22542]]
+EYE_MASTER_EDGES = [[1, 21], [0, 21], [2, 22], [1, 22], [17, 23], [3, 23], [18, 24], [15, 24], [6, 25], [5, 25], [7, 26], [6, 26], [8, 27], [7, 27], [9, 28], [8, 28], [10, 29], [9, 29], [11, 30], [10, 30], [12, 31], [11, 31], [13, 32], [12, 32], [14, 33], [13, 33], [0, 34], [14, 34], [19, 35], [2, 35], [16, 36], [17, 36], [4, 37], [18, 37], [20, 38], [16, 38], [15, 39], [19, 39], [5, 40], [20, 40], [42, 62], [41, 62], [43, 63], [42, 63], [58, 64], [44, 64], [59, 65], [56, 65], [47, 66], [46, 66], [48, 67], [47, 67], [49, 68], [48, 68], [50, 69], [49, 69], [51, 70], [50, 70], [52, 71], [51, 71], [53, 72], [52, 72], [54, 73], [53, 73], [55, 74], [54, 74], [41, 75], [55, 75], [60, 76], [43, 76], [57, 77], [58, 77], [45, 78], [59, 78], [61, 79], [57, 79], [56, 80], [60, 80], [46, 81], [61, 81]]
+EYE_CIRCLE_VERTS = [[0.0, 0.0, 0.5], [-0.09755, 0.0, 0.49039], [-0.19134, 0.0, 0.46194], [-0.27779, 0.0, 0.41574], [-0.35355, 0.0, 0.35355], [-0.41574, 0.0, 0.27779], [-0.46194, 0.0, 0.19134], [-0.49039, 0.0, 0.09755], [-0.5, 0.0, -0.0], [-0.49039, 0.0, -0.09755], [-0.46194, 0.0, -0.19134], [-0.41574, 0.0, -0.27779], [-0.35355, 0.0, -0.35355], [-0.27779, 0.0, -0.41574], [-0.19134, 0.0, -0.46194], [-0.09755, 0.0, -0.49039], [0.0, 0.0, -0.5], [0.09755, 0.0, -0.49039], [0.19134, 0.0, -0.46194], [0.27779, 0.0, -0.41574], [0.35355, 0.0, -0.35355], [0.41574, 0.0, -0.27779], [0.46194, 0.0, -0.19134], [0.49039, 0.0, -0.09755], [0.5, 0.0, 0.0], [0.49039, 0.0, 0.09755], [0.46194, 0.0, 0.19134], [0.41573, 0.0, 0.27779], [0.35355, 0.0, 0.35355], [0.27779, 0.0, 0.41574], [0.19134, 0.0, 0.46194], [0.09754, 0.0, 0.49039]]
+EYE_CIRCLE_EDGES = [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8], [8, 9], [9, 10], [10, 11], [11, 12], [12, 13], [13, 14], [14, 15], [15, 16], [16, 17], [17, 18], [18, 19], [19, 20], [20, 21], [21, 22], [22, 23], [23, 24], [24, 25], [25, 26], [26, 27], [27, 28], [28, 29], [29, 30], [30, 31], [0, 31]]
+
+LIPS_MASTER_VERTS = [[0.0, 0.19233, 0.11033], [0.13499, 0.18609, 0.10769], [0.2648, 0.15671, 0.10386], [0.38443, 0.10515, 0.09906], [0.48929, 0.03669, 0.09225], [0.57534, -0.04048, 0.08167], [0.63928, -0.11576, 0.0649], [0.67866, -0.17692, 0.03916], [0.69195, -0.21104, 0.00157], [0.67866, -0.20938, -0.04918], [0.63928, -0.17943, -0.10838], [0.57534, -0.13291, -0.1699], [0.48929, -0.08096, -0.22793], [0.38443, -0.03318, -0.27744], [0.2648, 0.00301, -0.31449], [0.13499, 0.02292, -0.33643], [-0.0, 0.02596, -0.34248], [-0.135, 0.02292, -0.33643], [-0.2648, 0.00301, -0.31449], [-0.38443, -0.03318, -0.27744], [-0.48929, -0.08096, -0.22793], [-0.57534, -0.13291, -0.1699], [-0.63928, -0.17943, -0.10838], [-0.67866, -0.20938, -0.04917], [-0.69195, -0.21104, 0.00157], [-0.67866, -0.17692, 0.03916], [-0.63928, -0.11576, 0.0649], [-0.57534, -0.04048, 0.08167], [-0.48928, 0.03669, 0.09225], [-0.38442, 0.10515, 0.09906], [-0.26479, 0.15671, 0.10386], [-0.13499, 0.1861, 0.10769]]
+LIPS_MASTER_EDGES = [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8], [8, 9], [9, 10], [10, 11], [11, 12], [12, 13], [13, 14], [14, 15], [15, 16], [16, 17], [17, 18], [18, 19], [19, 20], [20, 21], [21, 22], [22, 23], [23, 24], [24, 25], [25, 26], [26, 27], [27, 28], [28, 29], [29, 30], [30, 31], [0, 31]]
+EYEBLINK_VERTS = [[-0.42167, 0.0, -0.22917], [0.42167, 0.0, -0.22917], [-0.42167, -0.0, 0.22917], [0.42167, -0.0, 0.22917], [0.46, 0.0, -0.125], [0.46, 0.0, -0.0], [0.46, -0.0, 0.125], [-0.23, 0.0, -0.25], [-0.0, 0.0, -0.25], [0.23, 0.0, -0.25], [-0.46, 0.0, -0.125], [-0.46, -0.0, 0.0], [-0.46, -0.0, 0.125], [-0.23, -0.0, 0.25], [0.0, -0.0, 0.25], [0.23, -0.0, 0.25], [0.4594, -0.0, 0.15592], [0.45521, -0.0, 0.1849], [0.44383, -0.0, 0.20996], [0.2869, 0.0, -0.24968], [0.34021, 0.0, -0.2474], [0.38633, 0.0, -0.24121], [-0.4594, -0.0, 0.15592], [-0.45521, -0.0, 0.1849], [-0.44383, -0.0, 0.20996], [0.2869, -0.0, 0.24968], [0.34021, -0.0, 0.2474], [0.38633, -0.0, 0.24121], [0.44383, 0.0, -0.20996], [0.45521, 0.0, -0.1849], [0.4594, 0.0, -0.15592], [0.46, 0.0, -0.0625], [0.46, -0.0, 0.0625], [-0.38633, 0.0, -0.24121], [-0.34021, 0.0, -0.2474], [-0.2869, 0.0, -0.24967], [-0.115, 0.0, -0.25], [0.115, 0.0, -0.25], [-0.44383, 0.0, -0.20996], [-0.45521, 0.0, -0.1849], [-0.4594, 0.0, -0.15592], [-0.46, 0.0, -0.0625], [-0.46, -0.0, 0.0625], [-0.38633, -0.0, 0.24121], [-0.34021, -0.0, 0.2474], [-0.2869, -0.0, 0.24967], [-0.115, -0.0, 0.25], [0.115, -0.0, 0.25], [-0.39485, -0.00338, -0.20822], [0.39485, 0.00338, -0.20822], [-0.39485, -0.00338, 0.20822], [0.39485, 0.00338, 0.20822], [0.43075, 0.00369, -0.11357], [0.43075, 0.00369, 0.11358], [-0.43075, -0.00369, -0.11357], [-0.43075, -0.00369, 0.11358], [0.43018, 0.00368, 0.14167], [0.42626, 0.00365, 0.168], [0.4156, 0.00356, 0.19077], [0.31857, 0.00273, -0.22478], [0.36176, 0.0031, -0.21916], [-0.43018, -0.00368, 0.14167], [-0.42626, -0.00365, 0.168], [-0.4156, -0.00356, 0.19077], [0.31857, 0.00273, 0.22479], [0.36176, 0.0031, 0.21917], [0.4156, 0.00356, -0.19077], [0.42626, 0.00365, -0.16799], [0.43018, 0.00368, -0.14167], [-0.36176, -0.0031, -0.21916], [-0.31857, -0.00273, -0.22478], [-0.4156, -0.00356, -0.19077], [-0.42626, -0.00365, -0.16799], [-0.43018, -0.00368, -0.14167], [-0.36176, -0.0031, 0.21917], [-0.31857, -0.00273, 0.22479]]
+EYEBLINK_EDGES = [[6, 16], [16, 17], [17, 18], [3, 18], [9, 19], [19, 20], [20, 21], [1, 21], [12, 22], [22, 23], [23, 24], [2, 24], [15, 25], [25, 26], [26, 27], [3, 27], [1, 28], [28, 29], [29, 30], [4, 30], [4, 31], [5, 31], [5, 32], [6, 32], [0, 33], [33, 34], [34, 35], [7, 35], [7, 36], [8, 36], [8, 37], [9, 37], [0, 38], [38, 39], [39, 40], [10, 40], [10, 41], [11, 41], [11, 42], [12, 42], [2, 43], [43, 44], [44, 45], [13, 45], [13, 46], [14, 46], [14, 47], [15, 47], [53, 56], [56, 57], [57, 58], [51, 58], [59, 60], [49, 60], [55, 61], [61, 62], [62, 63], [50, 63], [64, 65], [51, 65], [49, 66], [66, 67], [67, 68], [52, 68], [48, 69], [69, 70], [48, 71], [71, 72], [72, 73], [54, 73], [50, 74], [74, 75]]
+EBROW_MASTER_L_VERTS = [[-1.70158, 0.5298, -0.39297], [1.54361, -0.5298, -0.81676], [-1.54361, 0.5298, 0.81676], [1.70158, -0.5298, 0.39297]]
+EBROW_MASTER_L_EDGES = [[2, 3], [0, 1], [0, 2], [1, 3]]
+EBROW_MASTER_R_VERTS = [[-1.70158, 0.5298, -0.39297], [1.54361, -0.5298, -0.81676], [-1.54361, 0.5298, 0.81676], [1.70158, -0.5298, 0.39297]]
+EBROW_MASTER_R_EDGES = [[2, 3], [0, 1], [0, 2], [1, 3]]
+EBROW_TWEAK_VERTS = [[-0.8305, 0.4681, 0.52663], [0.8305, 0.4681, 0.52663], [-0.8305, -0.4681, 0.52663], [0.8305, -0.4681, 0.52663], [-0.8305, 0.4681, -0.59077], [0.8305, 0.4681, -0.59077], [-0.8305, -0.4681, -0.59077], [0.8305, -0.4681, -0.59077], [1.53746, -0.0, -0.03207], [0.8305, -0.0, 0.00804], [0.8305, -0.0, -0.07218], [1.40016, -0.0, 0.08826], [1.40016, -0.0, -0.15241], [1.40016, -0.0, 0.00804], [1.40016, -0.0, -0.07218], [0.0, 0.0, -1.29822], [0.04011, 0.0, -0.59126], [-0.04011, 0.0, -0.59126], [0.12033, 0.0, -1.16092], [-0.12033, 0.0, -1.16092], [0.04011, 0.0, -1.16092], [-0.04011, 0.0, -1.16092], [-1.53746, -0.0, -0.03207], [-0.8305, -0.0, 0.00804], [-0.8305, -0.0, -0.07218], [-1.40016, -0.0, 0.08826], [-1.40016, -0.0, -0.15241], [-1.40016, -0.0, 0.00804], [-1.40016, -0.0, -0.07218]]
+EBROW_TWEAK_EDGES = [[0, 2], [0, 1], [1, 3], [2, 3], [2, 6], [3, 7], [6, 7], [4, 6], [5, 7], [4, 5], [0, 4], [1, 5], [8, 12], [9, 10], [9, 13], [10, 14], [11, 13], [12, 14], [8, 11], [15, 19], [16, 17], [16, 20], [17, 21], [18, 20], [19, 21], [15, 18], [22, 26], [23, 24], [23, 27], [24, 28], [25, 27], [26, 28], [22, 25]]
+
+ARROW_UP_VERTS = [[-0.55, 0.0, -0.45], [0.55, 0.0, -0.45], [0.0, 0.0, 0.6]]
+ARROW_UP_EDGES = [[0, 1], [1, 2], [2, 0]]
+ARROW_DOWN_VERTS = [[-0.55, 0.0, 0.45], [0.55, 0.0, 0.45], [0.0, 0.0, -0.6]]
+ARROW_DOWN_EDGES = [[0, 1], [1, 2], [2, 0]]
+EBROW_TWEAK2_L_VERTS = [[0.57815, -0.19227, -0.02967], [0.55841, -0.19624, -0.14754], [0.51721, -0.19268, -0.25975], [0.45613, -0.18171, -0.36197], [0.37753, -0.16376, -0.45028], [0.28442, -0.13952, -0.52129], [0.18038, -0.10992, -0.57226], [-0.04424, -0.03933, -0.60712], [-0.15618, -0.00107, -0.58967], [-0.26212, 0.03724, -0.54955], [-0.35798, 0.07411, -0.48832], [-0.44009, 0.10814, -0.40832], [-0.50529, 0.13801, -0.31263], [-0.55107, 0.16258, -0.20492], [-0.57567, 0.1809, -0.08934], [-0.57815, 0.19227, 0.02967], [-0.55841, 0.19624, 0.14754], [-0.51721, 0.19268, 0.25975], [-0.45613, 0.18171, 0.36197], [-0.37753, 0.16376, 0.45028], [-0.28442, 0.13952, 0.52129], [-0.18038, 0.10992, 0.57226], [-0.0694, 0.07609, 0.60124], [0.04424, 0.03933, 0.60712], [0.15618, 0.00107, 0.58967], [0.26212, -0.03724, 0.54955], [0.35798, -0.07411, 0.48832], [0.44009, -0.10814, 0.40832], [0.50529, -0.13801, 0.31263], [0.55107, -0.16258, 0.20492], [0.57567, -0.1809, 0.08934], [0.60157, -0.06474, 0.07763], [0.60434, 0.0539, 0.06294], [0.5839, 0.17047, 0.04583], [0.54102, 0.28049, 0.02696], [0.47734, 0.37973, 0.00705], [0.39532, 0.46438, -0.01313], [0.29811, 0.53118, -0.03281], [0.0735, 0.60176, -0.06767], [-0.04527, 0.60283, -0.08151], [-0.16231, 0.58073, -0.09223], [-0.2731, 0.53632, -0.09939], [-0.3734, 0.47129, -0.10274], [-0.45935, 0.38815, -0.10214], [-0.52765, 0.2901, -0.09762], [0.0, 0.0, 0.0], [-0.03111, 0.1873, 0.5797], [0.00838, 0.29132, 0.53587], [0.04754, 0.38414, 0.47146], [0.08488, 0.4622, 0.38892], [0.11896, 0.5225, 0.29144], [0.14846, 0.56272, 0.18276], [0.17226, 0.58132, 0.06706], [0.18945, 0.57757, -0.05122], [0.19934, 0.55163, -0.16753], [0.20158, 0.50449, -0.27741], [0.19608, 0.43796, -0.37662], [0.18303, 0.3546, -0.46136], [0.16296, 0.25762, -0.52837], [0.13662, 0.15073, -0.57508], [0.10503, 0.03805, -0.59968], [0.0694, -0.07609, -0.60124]]
+EBROW_TWEAK2_L_EDGES = [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [7, 8], [8, 9], [9, 10], [10, 11], [11, 12], [12, 13], [13, 14], [14, 15], [15, 16], [16, 17], [17, 18], [18, 19], [19, 20], [20, 21], [21, 22], [22, 23], [23, 24], [24, 25], [25, 26], [26, 27], [27, 28], [28, 29], [30, 31], [31, 32], [32, 33], [33, 34], [34, 35], [35, 36], [36, 37], [38, 39], [39, 40], [40, 41], [41, 42], [42, 43], [43, 44], [14, 45], [30, 45], [46, 47], [47, 48], [48, 49], [49, 50], [50, 51], [51, 52], [52, 53], [53, 54], [54, 55], [55, 56], [56, 57], [57, 58], [58, 59], [59, 60], [60, 61], [0, 30], [6, 61], [7, 61], [29, 30], [37, 53], [38, 53], [14, 44], [22, 46], [45, 61], [22, 45]]
+EBROW_TWEAK2_R_VERTS = [[-0.57815, -0.19227, -0.02967], [-0.55841, -0.19624, -0.14754], [-0.51721, -0.19268, -0.25975], [-0.45613, -0.18171, -0.36197], [-0.37753, -0.16376, -0.45028], [-0.28442, -0.13952, -0.52129], [-0.18038, -0.10992, -0.57226], [0.04424, -0.03933, -0.60712], [0.15618, -0.00107, -0.58967], [0.26212, 0.03724, -0.54955], [0.35798, 0.07411, -0.48832], [0.44009, 0.10814, -0.40832], [0.50529, 0.13801, -0.31263], [0.55107, 0.16258, -0.20492], [0.57567, 0.1809, -0.08934], [0.57815, 0.19227, 0.02967], [0.55841, 0.19624, 0.14754], [0.51721, 0.19268, 0.25975], [0.45613, 0.18171, 0.36197], [0.37753, 0.16376, 0.45028], [0.28442, 0.13952, 0.52129], [0.18038, 0.10992, 0.57226], [0.0694, 0.07609, 0.60124], [-0.04424, 0.03933, 0.60712], [-0.15618, 0.00107, 0.58967], [-0.26212, -0.03724, 0.54955], [-0.35798, -0.07411, 0.48832], [-0.44009, -0.10814, 0.40832], [-0.50529, -0.13801, 0.31263], [-0.55107, -0.16258, 0.20492], [-0.57567, -0.1809, 0.08934], [-0.60157, -0.06474, 0.07763], [-0.60434, 0.0539, 0.06294], [-0.5839, 0.17047, 0.04583], [-0.54102, 0.28049, 0.02696], [-0.47734, 0.37973, 0.00705], [-0.39532, 0.46438, -0.01313], [-0.29811, 0.53118, -0.03281], [-0.0735, 0.60176, -0.06767], [0.04527, 0.60283, -0.08151], [0.16231, 0.58073, -0.09223], [0.2731, 0.53632, -0.09939], [0.3734, 0.47129, -0.10274], [0.45935, 0.38815, -0.10214], [0.52765, 0.2901, -0.09762], [-0.0, 0.0, 0.0], [0.03111, 0.1873, 0.5797], [-0.00838, 0.29132, 0.53587], [-0.04754, 0.38414, 0.47146], [-0.08488, 0.4622, 0.38892], [-0.11896, 0.5225, 0.29144], [-0.14846, 0.56272, 0.18276], [-0.17226, 0.58132, 0.06706], [-0.18945, 0.57757, -0.05122], [-0.19934, 0.55163, -0.16753], [-0.20158, 0.50449, -0.27741], [-0.19608, 0.43796, -0.37662], [-0.18303, 0.3546, -0.46136], [-0.16296, 0.25762, -0.52837], [-0.13662, 0.15073, -0.57508], [-0.10503, 0.03805, -0.59968], [-0.0694, -0.07609, -0.60124]]
+EBROW_TWEAK2_R_EDGES = [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [7, 8], [8, 9], [9, 10], [10, 11], [11, 12], [12, 13], [13, 14], [14, 15], [15, 16], [16, 17], [17, 18], [18, 19], [19, 20], [20, 21], [21, 22], [22, 23], [23, 24], [24, 25], [25, 26], [26, 27], [27, 28], [28, 29], [30, 31], [31, 32], [32, 33], [33, 34], [34, 35], [35, 36], [36, 37], [38, 39], [39, 40], [40, 41], [41, 42], [42, 43], [43, 44], [14, 45], [30, 45], [46, 47], [47, 48], [48, 49], [49, 50], [50, 51], [51, 52], [52, 53], [53, 54], [54, 55], [55, 56], [56, 57], [57, 58], [58, 59], [59, 60], [60, 61], [0, 30], [6, 61], [7, 61], [29, 30], [37, 53], [38, 53], [14, 44], [22, 46], [45, 61], [22, 45]]
+
+EBROW_TWEAK1_L_VERTS = [[0.44625, -0.70296, -0.70206], [0.25719, -0.49566, 0.93507], [0.73684, 0.18352, -0.78075], [0.54778, 0.39081, 0.85638], [-0.60831, -0.3718, -0.86578], [-0.79738, -0.1645, 0.77135], [-0.31773, 0.51467, -0.94447], [-0.50679, 0.72197, 0.69266], [-0.20527, 0.20139, 1.51067], [-0.08695, 0.10127, 0.81974], [-0.16266, 0.12504, 0.80799], [-0.07608, 0.14859, 1.39297], [-0.30321, 0.21991, 1.35771], [-0.15179, 0.17236, 1.38122], [-0.2275, 0.19614, 1.36946], [-1.22522, 0.38474, -0.19021], [-0.56258, 0.18023, -0.0471], [-0.55345, 0.17022, -0.12617], [-1.10934, 0.35907, -0.05149], [-1.08194, 0.32903, -0.2887], [-1.1002, 0.34906, -0.13056], [-1.09107, 0.33904, -0.20963], [0.14474, -0.18238, -1.52007], [0.10212, -0.10603, -0.81739], [0.02641, -0.08226, -0.82914], [0.24268, -0.2009, -1.36711], [0.01554, -0.12958, -1.40237], [0.16696, -0.17713, -1.37886], [0.09125, -0.15335, -1.39061]]
+EBROW_TWEAK1_L_EDGES = [[0, 2], [0, 1], [1, 3], [2, 3], [2, 6], [3, 7], [6, 7], [4, 6], [5, 7], [4, 5], [0, 4], [1, 5], [8, 12], [9, 10], [9, 13], [10, 14], [11, 13], [12, 14], [8, 11], [15, 19], [16, 17], [16, 20], [17, 21], [18, 20], [19, 21], [15, 18], [22, 26], [23, 24], [23, 27], [24, 28], [25, 27], [26, 28], [22, 25]]
+EBROW_TWEAK1_R_VERTS = [[-0.44625, -0.70296, -0.70206], [-0.25719, -0.49566, 0.93507], [-0.73684, 0.18352, -0.78075], [-0.54778, 0.39081, 0.85638], [0.60831, -0.3718, -0.86578], [0.79738, -0.1645, 0.77135], [0.31773, 0.51467, -0.94447], [0.50679, 0.72197, 0.69266], [0.20527, 0.20139, 1.51067], [0.08695, 0.10127, 0.81974], [0.16266, 0.12504, 0.80799], [0.07608, 0.14859, 1.39297], [0.30321, 0.21991, 1.35771], [0.15179, 0.17236, 1.38122], [0.2275, 0.19614, 1.36946], [1.22522, 0.38474, -0.19021], [0.56258, 0.18023, -0.0471], [0.55345, 0.17022, -0.12617], [1.10934, 0.35907, -0.05149], [1.08194, 0.32903, -0.2887], [1.1002, 0.34906, -0.13056], [1.09107, 0.33904, -0.20963], [-0.14474, -0.18238, -1.52007], [-0.10212, -0.10603, -0.81739], [-0.02641, -0.08226, -0.82914], [-0.24268, -0.2009, -1.36711], [-0.01554, -0.12958, -1.40237], [-0.16696, -0.17713, -1.37886], [-0.09125, -0.15335, -1.39061]]
+EBROW_TWEAK1_R_EDGES = [[0, 2], [0, 1], [1, 3], [2, 3], [2, 6], [3, 7], [6, 7], [4, 6], [5, 7], [4, 5], [0, 4], [1, 5], [8, 12], [9, 10], [9, 13], [10, 14], [11, 13], [12, 14], [8, 11], [15, 19], [16, 17], [16, 20], [17, 21], [18, 20], [19, 21], [15, 18], [22, 26], [23, 24], [23, 27], [24, 28], [25, 27], [26, 28], [22, 25]]
+EBROW_TWEAK3_L_VERTS = [[-0.66599, -0.3537, -0.87474], [-0.85504, -0.14651, 0.76241], [-0.3755, 0.53281, -0.95339], [-0.56454, 0.73999, 0.68376], [0.3956, -0.68696, -0.70998], [0.20655, -0.47977, 0.92717], [0.68609, 0.19955, -0.78863], [0.49705, 0.40674, 0.84852], [-0.25946, 0.2183, 1.50227], [-0.2171, 0.14207, 0.79955], [-0.14089, 0.11815, 0.81138], [-0.35816, 0.23706, 1.3492], [-0.12951, 0.16528, 1.38469], [-0.28194, 0.21313, 1.36103], [-0.20572, 0.18921, 1.37286], [1.11843, -0.3511, 0.17358], [0.44222, -0.13525, 0.10888], [0.45135, -0.14526, 0.0298], [0.97429, -0.29514, 0.27194], [1.00168, -0.32516, 0.03473], [0.98342, -0.30515, 0.19287], [0.99255, -0.31515, 0.1138], [0.09051, -0.16526, -1.52849], [-0.02806, -0.06511, -0.8376], [0.04816, -0.08904, -0.82577], [-0.03944, -0.11224, -1.41091], [0.18921, -0.18402, -1.37542], [0.03678, -0.13617, -1.39908], [0.11299, -0.16009, -1.38725]]
+EBROW_TWEAK3_L_EDGES = [[0, 2], [0, 1], [1, 3], [2, 3], [2, 6], [3, 7], [6, 7], [4, 6], [5, 7], [4, 5], [0, 4], [1, 5], [8, 12], [9, 10], [9, 13], [10, 14], [11, 13], [12, 14], [8, 11], [15, 19], [16, 17], [16, 20], [17, 21], [18, 20], [19, 21], [15, 18], [22, 26], [23, 24], [23, 27], [24, 28], [25, 27], [26, 28], [22, 25]]
+EBROW_TWEAK3_R_VERTS = [[0.66599, -0.3537, -0.87474], [0.85504, -0.14651, 0.76241], [0.3755, 0.53281, -0.95339], [0.56454, 0.73999, 0.68376], [-0.3956, -0.68696, -0.70998], [-0.20655, -0.47977, 0.92717], [-0.68609, 0.19955, -0.78863], [-0.49705, 0.40674, 0.84852], [0.25946, 0.2183, 1.50227], [0.2171, 0.14207, 0.79955], [0.14089, 0.11815, 0.81138], [0.35816, 0.23706, 1.3492], [0.12951, 0.16528, 1.38469], [0.28194, 0.21313, 1.36103], [0.20572, 0.18921, 1.37286], [-1.11843, -0.3511, 0.17358], [-0.44222, -0.13525, 0.10888], [-0.45135, -0.14526, 0.0298], [-0.97429, -0.29514, 0.27194], [-1.00168, -0.32516, 0.03473], [-0.98342, -0.30515, 0.19287], [-0.99255, -0.31515, 0.1138], [-0.09051, -0.16526, -1.52849], [0.02806, -0.06511, -0.8376], [-0.04816, -0.08904, -0.82577], [0.03944, -0.11224, -1.41091], [-0.18921, -0.18402, -1.37542], [-0.03678, -0.13617, -1.39908], [-0.11299, -0.16009, -1.38725]]
+EBROW_TWEAK3_R_EDGES = [[0, 2], [0, 1], [1, 3], [2, 3], [2, 6], [3, 7], [6, 7], [4, 6], [5, 7], [4, 5], [0, 4], [1, 5], [8, 12], [9, 10], [9, 13], [10, 14], [11, 13], [12, 14], [8, 11], [15, 19], [16, 17], [16, 20], [17, 21], [18, 20], [19, 21], [15, 18], [22, 26], [23, 24], [23, 27], [24, 28], [25, 27], [26, 28], [22, 25]]
+LIP00_L_VERTS = [[0.25457, -0.31, -0.55], [0.25457, -0.31, 0.55], [0.25457, 0.31, -0.55], [0.25457, 0.31, 0.55], [-0.48543, -0.31, -0.55], [-0.48543, -0.31, 0.55], [-0.48543, 0.31, -0.55], [-0.48543, 0.31, 0.55], [-0.11543, 0.0, 1.01819], [-0.08887, 0.0, 0.55], [-0.142, 0.0, 0.55], [-0.03574, 0.0, 0.92726], [-0.19512, 0.0, 0.92726], [-0.08887, 0.0, 0.92726], [-0.142, 0.0, 0.92726], [-0.95394, -0.0, 0.0], [-0.48575, -0.0, 0.02656], [-0.48575, -0.0, -0.02656], [-0.86301, -0.0, 0.07969], [-0.86301, -0.0, -0.07969], [-0.86301, -0.0, 0.02656], [-0.86301, -0.0, -0.02656], [-0.11543, 0.0, -1.01819], [-0.08887, 0.0, -0.55], [-0.142, 0.0, -0.55], [-0.03574, 0.0, -0.92726], [-0.19512, 0.0, -0.92726], [-0.08887, 0.0, -0.92726], [-0.142, 0.0, -0.92726]]
+LIP00_L_EDGES = [[0, 2], [0, 1], [1, 3], [2, 3], [2, 6], [3, 7], [6, 7], [4, 6], [5, 7], [4, 5], [0, 4], [1, 5], [8, 12], [9, 10], [9, 13], [10, 14], [11, 13], [12, 14], [8, 11], [15, 19], [16, 17], [16, 20], [17, 21], [18, 20], [19, 21], [15, 18], [22, 26], [23, 24], [23, 27], [24, 28], [25, 27], [26, 28], [22, 25]]
+LIP00_R_VERTS = [[-0.25457, -0.31, -0.55], [-0.25457, -0.31, 0.55], [-0.25457, 0.31, -0.55], [-0.25457, 0.31, 0.55], [0.48543, -0.31, -0.55], [0.48543, -0.31, 0.55], [0.48543, 0.31, -0.55], [0.48543, 0.31, 0.55], [0.11543, 0.0, 1.01819], [0.08887, 0.0, 0.55], [0.142, 0.0, 0.55], [0.03574, 0.0, 0.92726], [0.19512, 0.0, 0.92726], [0.08887, 0.0, 0.92726], [0.142, 0.0, 0.92726], [0.95394, -0.0, 0.0], [0.48575, -0.0, 0.02656], [0.48575, -0.0, -0.02656], [0.86301, -0.0, 0.07969], [0.86301, -0.0, -0.07969], [0.86301, -0.0, 0.02656], [0.86301, -0.0, -0.02656], [0.11543, 0.0, -1.01819], [0.08887, 0.0, -0.55], [0.142, 0.0, -0.55], [0.03574, 0.0, -0.92726], [0.19512, 0.0, -0.92726], [0.08887, 0.0, -0.92726], [0.142, 0.0, -0.92726]]
+LIP00_R_EDGES = [[0, 2], [0, 1], [1, 3], [2, 3], [2, 6], [3, 7], [6, 7], [4, 6], [5, 7], [4, 5], [0, 4], [1, 5], [8, 12], [9, 10], [9, 13], [10, 14], [11, 13], [12, 14], [8, 11], [15, 19], [16, 17], [16, 20], [17, 21], [18, 20], [19, 21], [15, 18], [22, 26], [23, 24], [23, 27], [24, 28], [25, 27], [26, 28], [22, 25]]
+
+ISAAC_BLINK_TOP_VERTS = [[1.0, 0.0, 0.5638], [-1.0, 0.0, 0.5638], [-0.0, 0.0, 0.8878], [-0.0, 0.0, -0.484], [-0.5916, 0.0, -0.0569], [0.5916, 0.0, -0.0569], [0.6306, 0.0, 0.8199], [-0.6306, 0.0, 0.8199], [-1.0, 0.0, 0.5638], [-0.0, 0.0, -0.484], [1.0, 0.0, 0.5638]]
+ISAAC_BLINK_TOP_EDGES = [[7, 1], [4, 1], [3, 4], [6, 2], [5, 3], [0, 5], [0, 6], [2, 7], [1, 8], [3, 9], [0, 10]]
+ISAAC_BLINK_BOT_VERTS = [[-1.0, 0.0, -0.5638], [1.0, 0.0, -0.5638], [0.0, 0.0, -0.8878], [0.0, 0.0, 0.484], [0.5916, 0.0, 0.0569], [-0.5916, 0.0, 0.0569], [-0.6306, 0.0, -0.8199], [0.6306, 0.0, -0.8199], [1.0, 0.0, -0.5638], [0.0, 0.0, 0.484], [-1.0, 0.0, -0.5638]]
+ISAAC_BLINK_BOT_EDGES = [[7, 1], [4, 1], [3, 4], [6, 2], [5, 3], [0, 5], [0, 6], [2, 7], [1, 8], [3, 9], [0, 10]]
 
 
 def make_widget(kind, coll):
@@ -603,7 +759,64 @@ def make_widget(kind, coll):
     obj = bpy.data.objects.get(name)
     if obj:
         return obj
-    if kind == 'pad':
+    if kind == 'isaac_blink_top':
+        verts = ISAAC_BLINK_TOP_VERTS
+        edges = ISAAC_BLINK_TOP_EDGES
+    elif kind == 'isaac_blink_bot':
+        verts = ISAAC_BLINK_BOT_VERTS
+        edges = ISAAC_BLINK_BOT_EDGES
+    elif kind == 'ebrowtweak1.L':
+        verts = EBROW_TWEAK1_L_VERTS
+        edges = EBROW_TWEAK1_L_EDGES
+    elif kind == 'ebrowtweak1.R':
+        verts = EBROW_TWEAK1_R_VERTS
+        edges = EBROW_TWEAK1_R_EDGES
+    elif kind == 'ebrowtweak3.L':
+        verts = EBROW_TWEAK3_L_VERTS
+        edges = EBROW_TWEAK3_L_EDGES
+    elif kind == 'ebrowtweak3.R':
+        verts = EBROW_TWEAK3_R_VERTS
+        edges = EBROW_TWEAK3_R_EDGES
+    elif kind == 'lip00.L':
+        verts = LIP00_L_VERTS
+        edges = LIP00_L_EDGES
+    elif kind == 'lip00.R':
+        verts = LIP00_R_VERTS
+        edges = LIP00_R_EDGES
+    elif kind == 'arrow_up':
+        verts = ARROW_UP_VERTS
+        edges = ARROW_UP_EDGES
+    elif kind == 'arrow_down':
+        verts = ARROW_DOWN_VERTS
+        edges = ARROW_DOWN_EDGES
+    elif kind == 'ebrowtweak2.L':
+        verts = EBROW_TWEAK2_L_VERTS
+        edges = EBROW_TWEAK2_L_EDGES
+    elif kind == 'ebrowtweak2.R':
+        verts = EBROW_TWEAK2_R_VERTS
+        edges = EBROW_TWEAK2_R_EDGES
+    elif kind == 'lipsmaster':
+        verts = LIPS_MASTER_VERTS
+        edges = LIPS_MASTER_EDGES
+    elif kind == 'eyeblink':
+        verts = EYEBLINK_VERTS
+        edges = EYEBLINK_EDGES
+    elif kind == 'ebrowmaster.L':
+        verts = EBROW_MASTER_L_VERTS
+        edges = EBROW_MASTER_L_EDGES
+    elif kind == 'ebrowmaster.R':
+        verts = EBROW_MASTER_R_VERTS
+        edges = EBROW_MASTER_R_EDGES
+    elif kind == 'ebrowtweak':
+        verts = EBROW_TWEAK_VERTS
+        edges = EBROW_TWEAK_EDGES
+    elif kind == 'eyemaster':
+        verts = EYE_MASTER_VERTS
+        edges = EYE_MASTER_EDGES
+    elif kind == 'eyecircle':
+        verts = EYE_CIRCLE_VERTS
+        edges = EYE_CIRCLE_EDGES
+    elif kind == 'pad':
         s = 1.0
         verts = [(-s, 0, -s), (s, 0, -s), (s, 0, s), (-s, 0, s)]
         edges = [(0, 1), (1, 2), (2, 3), (3, 0)]
@@ -611,6 +824,7 @@ def make_widget(kind, coll):
         verts = [(0, 0, -1), (0, 0, 1), (-0.35, 0, 1), (0.35, 0, 1)]
         edges = [(0, 1), (2, 3)]
     elif kind == 'ring':
+        import math
         verts, edges, N = [], [], 20
         for i in range(N):
             a = 2 * math.pi * i / N
@@ -651,7 +865,16 @@ def lighten(rgb, amt):
 
 
 def apply_color(armature, pb, group_name, rgb, cache):
-    if is_blender_3():
+    if ver != 3:
+        try:
+            pb.color.palette = 'CUSTOM'
+            cc = pb.color.custom
+            cc.normal = rgb
+            cc.select = lighten(rgb, 0.25)
+            cc.active = lighten(rgb, 0.5)
+        except Exception:
+            pass
+    else:
         grp = cache.get(group_name)
         if grp is None:
             grp = armature.pose.bone_groups.get(group_name)
@@ -663,15 +886,6 @@ def apply_color(armature, pb, group_name, rgb, cache):
             grp.colors.active = lighten(rgb, 0.5)
             cache[group_name] = grp
         pb.bone_group = grp
-    else:
-        try:
-            pb.color.palette = 'CUSTOM'
-            cc = pb.color.custom
-            cc.normal = rgb
-            cc.select = lighten(rgb, 0.25)
-            cc.active = lighten(rgb, 0.5)
-        except Exception:
-            pass
 
 
 def purge_previous(armature):
@@ -689,10 +903,8 @@ def purge_previous(armature):
             bpy.data.objects.remove(o, do_unlink=True)
 
 
-def setup_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_size, keyblock):
-    print("Building %d controls on armature '%s' under bone '%s'"
-          % (len(controls), armature.name, head_name))
-
+def setup_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_size):
+    keyblock = mesh_obj.data.shape_keys.key_blocks
     amw_inv = armature.matrix_world.inverted()
     bone_len = face_size * BONE_LEN_F
 
@@ -708,15 +920,9 @@ def setup_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_size, 
     has_ebrow_sk = any(is_eyebrow_key(sk.name) for sk in keyblock)
     ebrow_bones = [] if has_ebrow_sk else find_eyebrow_bones(armature)
     if has_ebrow_sk:
-        print("Eyebrow shape keys found; using shape-key controls (skipping bone rig).")
         controls.extend(build_brow_shapekey_controls(mesh_obj, armature, fwd, up, face_size))
     elif ebrow_bones:
-        print("Eyebrow bones detected: %s" % ", ".join(ebrow_bones))
-    else:
-        cand = [b.name for b in armature.data.bones
-                if 'ebr' in b.name.lower() or 'brow' in b.name.lower()]
-        print("No eyebrow shape keys or bones matched on '%s'. Candidates: %s"
-              % (armature.name, cand))
+        pass
 
     sides = {}
     for name in ebrow_bones:
@@ -732,19 +938,37 @@ def setup_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_size, 
             center += p
         center /= len(items)
         master_name = 'CTRL-Master-Eyebrow.%s' % s
+        positions = [p for _, p in items]
+        ebw = 0.0
+        for _ia in range(len(positions)):
+            for _ib in range(_ia + 1, len(positions)):
+                _d = (positions[_ia] - positions[_ib]).length
+                if _d > ebw:
+                    ebw = _d
+        if ebw < 1e-6:
+            ebw = face_size * 0.1
         controls.append({'name': master_name, 'collection': FACERIG_COLLECTION,
                          'color': COL_EBRMASTER, 'group': 'Face Eyebrow',
-                         'head': center + fwd * (face_size * OFFSET_F * 1.5),
-                         'widget': 'eyebrow', 'lim': face_size * EBR_MASTER_F,
+                         'head': center + fwd * (face_size * OFFSET_F * 0.8),
+                         'widget': 'pad', 'lim': face_size * EBR_MASTER_F,
                          'free': ('X', 'Y', 'Z'), 'range': 'both',
-                         'shape_scale': Vector((face_size * EBR_MASTER_F,) * 3),
+                         'shape_scale': Vector((ebw * 0.65, 1.0, ebw * 0.14)),
+                         'shape_rotation': (0.0, -0.15 if s == 'L' else 0.15, 0.43825 if s == 'L' else -0.43825),
                          'kind': 'master', 'drivers': []})
         for name, head_world in items:
-            front = head_world + fwd * (face_size * OFFSET_F)
+            front = center + (head_world - center) * 0.75 + fwd * (face_size * OFFSET_F * 0.8)
             ctrl_name = 'CTRL-' + name.strip().replace(' ', '_')
+            if '01' in name:
+                tw_widget = 'ebrowtweak3.%s' % s
+            elif '02' in name:
+                tw_widget = 'ebrowtweak2.%s' % s
+            elif '03' in name:
+                tw_widget = 'ebrowtweak1.%s' % s
+            else:
+                tw_widget = 'ebrowtweak1.%s' % s
             controls.append({'name': ctrl_name, 'collection': FACERIG_COLLECTION,
                              'color': COL_EBRBONE, 'group': 'Face Eyebrow',
-                             'head': front, 'widget': 'pad',
+                             'head': front, 'widget': tw_widget,
                              'lim': face_size * EBR_WGT_F, 'free': ('X', 'Y', 'Z'),
                              'range': 'both',
                              'shape_scale': Vector((face_size * EBR_WGT_F,) * 3),
@@ -802,7 +1026,7 @@ def setup_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_size, 
     for c in controls:
         if c['collection'] not in coll_names:
             coll_names.append(c['collection'])
-    if not is_blender_3() and hasattr(armature.data, "collections"):
+    if ver != 3 and hasattr(armature.data, "collections"):
         for cn in coll_names:
             coll = armature.data.collections.get(cn)
             if not coll:
@@ -821,19 +1045,17 @@ def setup_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_size, 
             if bone and coll:
                 coll.assign(bone)
         hook_names = [c['hook_name'] for c in controls if c.get('hook_name')]
-        hc = armature.data.collections.get("Facerig Hooks") \
-            or armature.data.collections.new("Facerig Hooks")
-        try:
-            hc.is_visible = False
-        except Exception:
-            pass
-        for hn in hook_names:
-            bone = armature.data.bones.get(hn)
-            if bone:
-                hc.assign(bone)
-        face_root_bone = armature.data.bones.get("Face-Root")
-        if face_root_bone:
-            hc.assign(face_root_bone)
+        if hook_names:
+            hc = armature.data.collections.get("Facerig Hooks")\
+                or armature.data.collections.new("Facerig Hooks")
+            try:
+                hc.is_visible = False
+            except Exception:
+                pass
+            for hn in hook_names:
+                bone = armature.data.bones.get(hn)
+                if bone:
+                    hc.assign(bone)
 
     wgt_coll = get_widget_collection()
     bpy.ops.object.mode_set(mode='POSE')
@@ -858,6 +1080,12 @@ def setup_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_size, 
                 pass
             ss = c.get('shape_scale')
             pb.custom_shape_scale_xyz = ss if ss is not None else Vector((c['lim'] * WIDGET_F,) * 3)
+            sr = c.get('shape_rotation')
+            if sr is not None:
+                try:
+                    pb.custom_shape_rotation_euler = sr
+                except Exception:
+                    pass
             apply_color(armature, pb, c['group'], c['color'], color_cache)
             tb = armature.pose.bones.get(c['target_bone']) if c.get('target_bone') else None
             if tb:
@@ -906,6 +1134,12 @@ def setup_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_size, 
             pass
         ss = c.get('shape_scale')
         pb.custom_shape_scale_xyz = ss if ss is not None else Vector((lim * WIDGET_F,) * 3)
+        sr = c.get('shape_rotation')
+        if sr is not None:
+            try:
+                pb.custom_shape_rotation_euler = sr
+            except Exception:
+                pass
 
         apply_color(armature, pb, c['group'], c['color'], color_cache)
 
@@ -916,7 +1150,8 @@ def setup_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_size, 
         for d in c['drivers']:
             agg.setdefault(d['key'], []).append(
                 {'bone': c['name'], 'axis': d['axis'], 'dir': d['dir'],
-                 'lim': c['lim'], 'bidir': d.get('bidir', False)})
+                 'lim': c['lim'], 'bidir': d.get('bidir', False),
+                 'gain': d.get('gain', 1.0)})
 
     for key, entries in agg.items():
         sk = keyblock.get(key)
@@ -941,24 +1176,393 @@ def setup_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_size, 
             tgt.transform_type = 'LOC_' + e['axis']
             tgt.transform_space = 'LOCAL_SPACE'
             sign = '' if e['dir'] > 0 else '-'
+            g = e.get('gain', 1.0)
             if e['bidir']:
-                terms.append("%s%s / %r" % (sign, vn, e['lim']))
+                base = "%s%s / %r" % (sign, vn, e['lim'])
             else:
-                terms.append("max(0.0, %s%s / %r)" % (sign, vn, e['lim']))
+                base = "max(0.0, %s%s / %r)" % (sign, vn, e['lim'])
+            terms.append(base if g == 1.0 else "%r * (%s)" % (g, base))
         drv.expression = terms[0] if len(terms) == 1 else "max(" + ", ".join(terms) + ")"
 
-    print("Face rig build complete.")
+    _ang = keyblock.get("Fac_Ebr_Angry")
+    if _ang is not None:
+        _ang.slider_min = 0.0
+
+
+def assign_bones_to_other_collection(armature, bone_names):
+    if ver != 3 and hasattr(armature.data, "collections"):
+        coll = armature.data.collections.get("Other") or armature.data.collections.new("Other")
+        try:
+            coll.is_visible = False
+        except Exception:
+            pass
+        for bname in bone_names:
+            b = armature.data.bones.get(bname)
+            if b:
+                for c in list(b.collections):
+                    try:
+                        c.unassign(b)
+                    except Exception:
+                        pass
+                coll.assign(b)
+    elif hasattr(armature.pose, "bone_groups"):
+        bg = armature.pose.bone_groups.get("Other")
+        if bg:
+            for bname in bone_names:
+                pb = armature.pose.bones.get(bname)
+                if pb:
+                    pb.bone_group = bg
+
+
+def remove_eyetrack_bones(armature):
+    if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.context.view_layer.objects.active = armature
+    bpy.ops.object.mode_set(mode='EDIT')
+    ebs = armature.data.edit_bones
+    targets = ("eyetrack", "eyetrack_L", "eyetrack_R", "eyetrack.L", "eyetrack.R",
+               "EyeTrack", "EyeTrack_L", "EyeTrack_R", "EyeTrack.L", "EyeTrack.R")
+    for name in targets:
+        b = ebs.get(name)
+        if b:
+            ebs.remove(b)
+    for b in list(ebs):
+        if b.name.lower().startswith("eyetrack"):
+            ebs.remove(b)
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+
+def hide_mechanism_bones(armature):
+    HIDE_PREFIXES = ("CtrEyebrow", "SknEyebrow", "SknEyeLight", "SknMouth", "Face-Root")
+
+    if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.context.view_layer.objects.active = armature
+    hidden = 0
+    for b in armature.data.bones:
+        if b.name.startswith(HIDE_PREFIXES):
+            b.hide = True
+            hidden += 1
+
+    assign_bones_to_other_collection(armature, ("MCH-EyeAim.L", "MCH-EyeAim.R", "Face-Root"))
+
+
+def get_facerig_bone_collection(armature, name=FACERIG_COLLECTION):
+    if ver != 3 and hasattr(armature.data, "collections"):
+        coll = armature.data.collections.get(name) or armature.data.collections.new(name)
+        try:
+            coll.is_visible = True
+        except Exception:
+            pass
+        return coll
+    return None
+
+
+def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
+    if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.context.view_layer.objects.active = armature
+    if "eye.L" not in armature.data.bones or "eye.R" not in armature.data.bones:
+        return
+
+    amw_inv = armature.matrix_world.inverted()
+    fwd_arm = (amw_inv.to_3x3() @ fwd).normalized()
+    up_arm = (amw_inv.to_3x3() @ up).normalized()
+
+    MASTER = "CTRL-Eye_Master"
+    PAIRS = (("eye.L", "CTRL-Eye.L", "MCH-EyeAim.L"), ("eye.R", "CTRL-Eye.R", "MCH-EyeAim.R"))
+
+    bpy.ops.object.mode_set(mode='EDIT')
+    eb = armature.data.edit_bones
+    for nm in (MASTER, "CTRL-Eye.L", "CTRL-Eye.R", "MCH-EyeAim.L", "MCH-EyeAim.R"):
+        old = eb.get(nm)
+        if old:
+            eb.remove(old)
+
+    e_heads = {}
+    gaze_dirs = {}
+    track_axes = {}
+    for eye_name, ctl_name, mch_name in PAIRS:
+        e = eb[eye_name]
+        m = e.matrix
+        cand = [(m.col[0].to_3d(), 'TRACK_X', 'TRACK_NEGATIVE_X'),
+                (m.col[1].to_3d(), 'TRACK_Y', 'TRACK_NEGATIVE_Y'),
+                (m.col[2].to_3d(), 'TRACK_Z', 'TRACK_NEGATIVE_Z')]
+        best = None
+        for vec, pax, nax in cand:
+            if vec.length < 1e-9:
+                continue
+            v = vec.normalized()
+            d = v.dot(fwd_arm)
+            if best is None or abs(d) > abs(best[0]):
+                best = (d, v, pax, nax)
+        if best is None:
+            gaze_dirs[eye_name] = fwd_arm.copy()
+            track_axes[eye_name] = 'TRACK_Y'
+        else:
+            d, v, pax, nax = best
+            if d >= 0:
+                gaze_dirs[eye_name] = v
+                track_axes[eye_name] = pax
+            else:
+                gaze_dirs[eye_name] = -v
+                track_axes[eye_name] = nax
+        e_heads[eye_name] = e.head.copy()
+
+    sep = (e_heads["eye.L"] - e_heads["eye.R"]).length
+    if sep < 1e-6:
+        sep = face_size * 0.1
+    blen = max(sep * 0.5, face_size * BONE_LEN_F * 2.0)
+    offset = min(face_size * EYE_LOOK_FWD_F, sep * 3.0)
+    offv = fwd_arm * offset
+
+    parent_bone = eb.get(head_name) if head_name else None
+    if parent_bone is None:
+        parent_bone = eb["eye.L"].parent
+
+    heads = {
+        MASTER: (e_heads["eye.L"] + e_heads["eye.R"]) * 0.5 + offv,
+        "CTRL-Eye.L": e_heads["eye.L"] + offv,
+        "CTRL-Eye.R": e_heads["eye.R"] + offv,
+    }
+    mb = eb.new(MASTER)
+    mb.head = heads[MASTER]
+    mb.tail = heads[MASTER] + fwd_arm * blen
+    try:
+        mb.align_roll(up_arm)
+    except Exception:
+        pass
+    mb.use_deform = False
+    mb.parent = parent_bone
+    mb.use_connect = False
+    for eye_name, ctl_name, mch_name in PAIRS:
+        cb = eb.new(ctl_name)
+        cb.head = heads[ctl_name]
+        cb.tail = heads[ctl_name] + fwd_arm * blen
+        try:
+            cb.align_roll(up_arm)
+        except Exception:
+            pass
+        cb.use_deform = False
+        cb.parent = mb
+        cb.use_connect = False
+        gd = gaze_dirs[eye_name]
+        ah = e_heads[eye_name] + gd * offset
+        ab = eb.new(mch_name)
+        ab.head = ah
+        ab.tail = ah + gd * blen
+        ab.use_deform = False
+        ab.parent = cb
+        ab.use_connect = False
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    wgt_coll = get_widget_collection()
+    bpy.ops.object.mode_set(mode='POSE')
+    pbm = armature.pose.bones.get(MASTER)
+    if pbm:
+        pbm.custom_shape = make_widget('eyemaster', wgt_coll)
+        try:
+            pbm.use_custom_shape_bone_size = False
+        except Exception:
+            pass
+        sm = max(sep * 1.2, face_size * 0.02)
+        pbm.custom_shape_scale_xyz = Vector((sm, sm, sm))
+        apply_color(armature, pbm, 'Face Eye-Aim', COL_EYEGREEN, {})
+    se = max(sep * 0.5, face_size * 0.01)
+    for eye_name, ctl_name, mch_name in PAIRS:
+        pbc = armature.pose.bones.get(ctl_name)
+        if pbc:
+            pbc.custom_shape = make_widget('eyecircle', wgt_coll)
+            try:
+                pbc.use_custom_shape_bone_size = False
+            except Exception:
+                pass
+            pbc.custom_shape_scale_xyz = Vector((se, se, se))
+            apply_color(armature, pbc, 'Face Eye-Aim', COL_EYEGREEN, {})
+    for eye_name, ctl_name, mch_name in PAIRS:
+        pbe = armature.pose.bones.get(eye_name)
+        if not pbe:
+            continue
+        for con in list(pbe.constraints):
+            if con.name == "CTRL-EyeAim":
+                pbe.constraints.remove(con)
+        con = pbe.constraints.new('DAMPED_TRACK')
+        con.name = "CTRL-EyeAim"
+        con.target = armature
+        con.subtarget = mch_name
+        con.track_axis = track_axes[eye_name]
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    fcoll = get_facerig_bone_collection(armature)
+    if fcoll is not None:
+        for nm in (MASTER, "CTRL-Eye.L", "CTRL-Eye.R"):
+            b = armature.data.bones.get(nm)
+            if not b:
+                continue
+            for c in list(b.collections):
+                try:
+                    c.unassign(b)
+                except Exception:
+                    pass
+            fcoll.assign(b)
+    for nm in ("MCH-EyeAim.L", "MCH-EyeAim.R"):
+        b = armature.data.bones.get(nm)
+        if b:
+            b.hide = True
+
+
+def apply_position_overrides(armature):
+    exact = {
+        "CTRL-Master-Eyebrow.L": (None, -0.061795, 1.43368),
+        "CTRL-Master-Eyebrow.L": (None, -0.061795, None),
+        "CTRL-Master-Eyebrow.R": (None, -0.061795, None),
+        "CTRL-SknEyebrow_01.L": (0.024106, -0.067089, None),
+        "CTRL-SknEyebrow_01.R": (-0.024106, -0.067089, None),
+        "CTRL-SknEyebrow_02.L": (None, -0.062502, None),
+        "CTRL-SknEyebrow_02.R": (None, -0.062502, None),
+        "CTRL-SknEyebrow_03.L": (None, -0.055875, None),
+        "CTRL-SknEyebrow_03.R": (None, -0.055875, None),
+        "CTRL-Eye_Wink.L": (None, -0.049393, None),
+        "CTRL-Eye_Wink.R": (None, -0.049393, None),
+        "CTRL-Eye_Open.L": (None, -0.049393, None),
+        "CTRL-Eye_Open.R": (None, -0.049393, None),
+        "CTRL-Mouth-Shift": (None, -0.064528, None),
+        "CTRL-Mouth-Viseme-Pad": (None, -0.062256, None),
+        "CTRL-Mouth-Corner.L": (0.017711, -0.060101, None),
+        "CTRL-Mouth-Corner.R": (-0.017711, -0.060101, None),
+        "CTRL-Eyebrow-Viseme-Pad": (None, -0.067089, None),
+        "CTRL-Eyebrow-Viseme-Pad.L": (0.047873, None, None),
+        "CTRL-Eyebrow-Viseme-Pad.R": (-0.047873, None, None),
+        "CTRL-Brow-R_Up": (-0.008817, -0.067089, None),
+        "CTRL-Brow-L_Up": (0.008817, -0.067089, None),
+    }
+    group_jaw_y = -0.053571
+    group_eyes_y = -0.059066
+    between = ("CTRL-Eye-Viseme-Pad", "CTRL-Eye_MidUp", "CTRL-Eye_Sad", "CTRL-O_O")
+
+    if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.context.view_layer.objects.active = armature
+    amw = armature.matrix_world
+    amw_inv = amw.inverted()
+    z_adjust = 0.0
+    _sp = armature.data.bones.get("ORG-spine.005")
+    if _sp is not None:
+        _spz = (amw @ _sp.head_local).z
+        if SPINE_REF_Z is not None:
+            z_adjust = _spz - SPINE_REF_Z
+        else:
+            _reff = os.path.join(tempfile.gettempdir(), "facerig_spine005_ref.txt")
+            _ref = None
+            try:
+                if os.path.exists(_reff):
+                    with open(_reff) as _f:
+                        _ref = float(_f.read().strip())
+            except Exception:
+                _ref = None
+            if _ref is None:
+                try:
+                    with open(_reff, "w") as _f:
+                        _f.write(repr(_spz))
+                except Exception:
+                    pass
+            else:
+                z_adjust = _spz - _ref
+    bpy.ops.object.mode_set(mode='EDIT')
+    eb = armature.data.edit_bones
+
+    def move(bone, tx, ty, tz):
+        hw = amw @ bone.head
+        tw = amw @ bone.tail
+        new_hw = Vector((hw.x if tx is None else tx,
+                         hw.y if ty is None else ty,
+                         hw.z if tz is None else tz))
+        delta = new_hw - hw
+        bone.head = amw_inv @ new_hw
+        bone.tail = amw_inv @ (tw + delta)
+
+    for nm, (tx, ty, tz) in exact.items():
+        b = eb.get(nm)
+        if b:
+            move(b, tx, ty, None if tz is None else tz + z_adjust)
+    for b in eb:
+        if b.name.startswith("CTRL-Mth_"):
+            move(b, None, group_jaw_y, None)
+    for nm in between:
+        b = eb.get(nm)
+        if b:
+            move(b, None, group_eyes_y, None)
+
+    # Align mouth controls (CTRL-Mouth-Viseme-Pad, CTRL-Mouth-Corner.L/R) to the height of CTRL-Mouth-Shift
+    m_shift = eb.get("CTRL-Mouth-Shift")
+    if m_shift:
+        m_shift_z = (amw @ m_shift.head).z
+        for m_name in ("CTRL-Mouth-Viseme-Pad", "CTRL-Mouth-Corner.L", "CTRL-Mouth-Corner.R"):
+            mbone = eb.get(m_name)
+            if mbone:
+                move(mbone, None, None, m_shift_z)
+
+    # Align CTRL-Master-Eyebrow.L and R to the height of eyebrow tweak controls (CTRL-Skn_L_Eyebrow_01,02,03 etc)
+    def is_side(bname, side):
+        bn = bname.lower()
+        if side == 'L':
+            return '.l' in bn or '_l' in bn or 'l_' in bn
+        else:
+            return '.r' in bn or '_r' in bn or 'r_' in bn
+
+    for side in ("L", "R"):
+        master_brow = eb.get(f"CTRL-Master-Eyebrow.{side}")
+        if master_brow:
+            tweak_bones = [
+                b for b in eb
+                if b.name.startswith("CTRL-")
+                and ("eyebrow" in b.name.lower() or "ebr" in b.name.lower())
+                and b != master_brow
+                and is_side(b.name, side)
+            ]
+            if tweak_bones:
+                avg_z = sum((amw @ b.head).z for b in tweak_bones) / len(tweak_bones)
+                move(master_brow, None, None, avg_z)
+
+    bpy.ops.object.mode_set(mode='OBJECT')
 
 
 def zzz_face_rig_main():
     faceobj = None
     for obj in bpy.data.objects:
         n = obj.name.lower()
-        if "_face" in n and "weapon_" not in n and "gun_" not in n:
+        if obj.type != 'MESH' or "_face" not in n or "weapon_" in n or "gun_" in n:
+            continue
+        if obj.data.shape_keys is not None:
+            faceobj = obj
+            break
+        if faceobj is None:
             faceobj = obj
 
     if faceobj is None:
         raise Exception("Couldn't find a '*_face' mesh in the scene.")
+
+    _ebrow_meshes = [o for o in bpy.data.objects
+                     if o.type == 'MESH' and o is not faceobj and "_eyebrow" in o.name.lower()]
+    if _ebrow_meshes:
+        if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+        try:
+            bpy.ops.object.select_all(action='DESELECT')
+            for _e in _ebrow_meshes:
+                try:
+                    _e.hide_set(False)
+                except Exception:
+                    pass
+                _e.hide_viewport = False
+                _e.select_set(True)
+            faceobj.hide_viewport = False
+            faceobj.select_set(True)
+            bpy.context.view_layer.objects.active = faceobj
+            bpy.ops.object.join()
+        except Exception:
+            pass
+
     if faceobj.data.shape_keys is None:
         raise Exception("The face mesh has no shape keys to drive.")
 
@@ -966,8 +1570,28 @@ def zzz_face_rig_main():
 
     shapekeyrename(keyblock)
     armature, head_name = find_armature_and_head(faceobj)
+    for _hn in ("eye.L", "eye.R", "eye.L.001", "eye.R.001", "SknEyeStar.L", "SknEyeStar.R", "Eye Control", "Skn_M_Mouth", "BdyMouth.L", "BdyMouth.R", "Bdy_M_Mouth", "PTMouth.L", "PTMouth.R", "PT_M_Mouth", "Mouth_A", "Mouth_B", "Mouth_C", "Ctr_Up_Teeth", "Ctr_Down_Teeth", "Bn_MouthControl_L", "Bn_MouthControl_R", "Bn_MouthControl_M", "SknEyebrow_01.L", "SknEyebrow_02.L", "SknEyebrow_03.L", "SknEyebrow_01.R", "SknEyebrow_02.R", "SknEyebrow_03.R", "SknMouth.R", "SknMouth.L","Skn_M_Mouth", "eyetrack", "eyetrack_L", "eyetrack_R", "EyeTrack", "EyeTrack_L", "EyeTrack_R", "eyetrack.L", "eyetrack.R", "EyeTrack.L", "EyeTrack.R"):
+        _hb = armature.data.bones.get(_hn)
+        if _hb:
+            _hb.hide = True
     fwd, right, up, face_size = face_frame(faceobj)
-    controls = plan_controls(faceobj, fwd, right, up, face_size, keyblock)
+    controls = plan_controls(faceobj, fwd, right, up, face_size)
+
+    if any(armature.data.bones.get(_bn) for _bn in ("Mouth_A", "Mouth_B", "Mouth_C", "Bn_MouthControl_L", "Bn_MouthControl_R", "Bn_MouthControl_M")):
+        controls = [c for c in controls if not c['name'].startswith("CTRL-Mouth-Corner")]
+
+    if any(any(_p in _b.name.lower() for _p in ("bdymouth", "bdy_m_mouth", "ptmouth", "pt_m_mouth")) for _b in armature.data.bones):
+        for _cn, _frm, _to in (("CTRL-Mouth-Corner.L", "_L_", "_R_"),
+                               ("CTRL-Mouth-Corner.R", "_R_", "_L_")):
+            _c = next((x for x in controls if x['name'] == _cn), None)
+            if _c is not None:
+                for _d in _c['drivers']:
+                    _d['key'] = _d['key'].replace(_frm, _to)
+        _ms = next((x for x in controls if x['name'] == 'CTRL-Mouth-Shift'), None)
+        if _ms is not None:
+            for _d in _ms['drivers']:
+                if _d['axis'] == 'X':
+                    _d['dir'] = -_d['dir']
 
     if not controls:
         raise Exception("No drivable face shape keys were found after renaming.")
@@ -975,7 +1599,21 @@ def zzz_face_rig_main():
     if CLEAN_REBUILD:
         purge_previous(armature)
 
-    setup_face_rig(faceobj, controls, armature, head_name, fwd, up, face_size, keyblock)
+    remove_eyetrack_bones(armature)
+    setup_face_rig(faceobj, controls, armature, head_name, fwd, up, face_size)
+    setup_lookat_eyes(armature, head_name, fwd, up, face_size)
+    apply_position_overrides(armature)
+    hide_mechanism_bones(armature)
 
-    print("\nZZZ Isaac-style face rig done. %d controls built on '%s'.\n"
+    wgt_coll = get_widget_collection()
+    finalize_widget_collection(wgt_coll)
+    old_facerig_wgt = bpy.data.collections.get("WGTS_FaceRig")
+    if old_facerig_wgt:
+        finalize_widget_collection(old_facerig_wgt)
+
+    print("\nZZZ Isaac-style face rig v6 done. %d controls built on '%s'.\n"
           % (len(controls), armature.name))
+
+
+if __name__ == "__main__":
+    zzz_face_rig_main()

@@ -129,6 +129,13 @@ class ZZZ_PT_UI_Character_Model_Menu(Panel, ZenlessZoneZeroUIRenderChecker):
             "TRASH",
             game_type=GameType.ZENLESS_ZONE_ZERO.name,
         )
+        OperatorFactory.create(
+            sub_layout,
+            "genshin.reorient_bones",
+            "Fix Orientation",
+            "BONE_DATA",
+            game_type=GameType.ZENLESS_ZONE_ZERO.name,
+        )
 
 
 class ZZZ_PT_UI_Materials_Menu(Panel, ZenlessZoneZeroUIRenderChecker):

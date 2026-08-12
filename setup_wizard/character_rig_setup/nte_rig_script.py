@@ -1,6 +1,7 @@
 ### IMPORTANT: YOU NEED THE ADDON EXPYKIT AND YOU ALSO NEED TO IMPORT WITH 'Automatic Bone Orientation' TURNED ON UNDER 'Armature' WHEN YOU IMPORT THE FBX.
 
 import bpy
+import mathutils
 
 def rig_character(
     file_path,
@@ -52,87 +53,112 @@ def rig_character(
         pb.scale = (1, 1, 1)
     bpy.ops.object.mode_set(mode='OBJECT')
 
-    # NTE / Bip001 Bone Mapping to Rigify DEF- Naming
-    abadidea = {
-        'Bip001-Pelvis': 'DEF-spine',
-        'Bip001-Spine': 'DEF-spine.001',
-        'Bip001-Spine1': 'DEF-spine.002',
-        'Bip001-Spine2': 'DEF-spine.003',
-        'Bip001-Neck': 'DEF-spine.004',
-        'Bip001-Head': 'DEF-spine.006',
+    # Build comprehensive NTE / Bip001 Bone Mapping to Rigify DEF- Naming
+    abadidea = {}
+    prefixes = ['Bip001-', 'Bip001 ', 'Bip001_']
 
-        # Pierna Izquierda
-        'Bip001-L-Thigh': 'DEF-thigh.L',
-        'Bip001-L-Calf': 'DEF-shin.L',
-        'Bip001-L-Foot': 'DEF-foot.L',
-        'Bip001-L-Toe0': 'DEF-toe.L',
+    body_base_map = {
+        'Pelvis': 'DEF-spine',
+        'Spine': 'DEF-spine.001',
+        'Spine1': 'DEF-spine.002',
+        'Spine2': 'DEF-spine.003',
+        'Neck': 'DEF-spine.004',
+        'Head': 'DEF-spine.006',
 
-        # Pierna Derecha
-        'Bip001-R-Thigh': 'DEF-thigh.R',
-        'Bip001-R-Calf': 'DEF-shin.R',
-        'Bip001-R-Foot': 'DEF-foot.R',
-        'Bip001-R-Toe0': 'DEF-toe.R',
+        'L-Thigh': 'DEF-thigh.L', 'L Thigh': 'DEF-thigh.L', 'L_Thigh': 'DEF-thigh.L',
+        'L-Calf': 'DEF-shin.L', 'L Calf': 'DEF-shin.L', 'L_Calf': 'DEF-shin.L',
+        'L-Foot': 'DEF-foot.L', 'L Foot': 'DEF-foot.L', 'L_Foot': 'DEF-foot.L',
+        'L-Toe0': 'DEF-toe.L', 'L Toe0': 'DEF-toe.L', 'L_Toe0': 'DEF-toe.L',
 
-        # Brazo Izquierdo
-        'Bip001-L-Clavicle': 'DEF-shoulder.L',
-        'Bip001-L-UpperArm': 'DEF-upper_arm.L',
-        'Bip001-L-Forearm': 'DEF-forearm.L',
-        'Bip001-L-Hand': 'DEF-hand.L',
+        'R-Thigh': 'DEF-thigh.R', 'R Thigh': 'DEF-thigh.R', 'R_Thigh': 'DEF-thigh.R',
+        'R-Calf': 'DEF-shin.R', 'R Calf': 'DEF-shin.R', 'R_Calf': 'DEF-shin.R',
+        'R-Foot': 'DEF-foot.R', 'R Foot': 'DEF-foot.R', 'R_Foot': 'DEF-foot.R',
+        'R-Toe0': 'DEF-toe.R', 'R Toe0': 'DEF-toe.R', 'R_Toe0': 'DEF-toe.R',
 
-        # Brazo Derecho
-        'Bip001-R-Clavicle': 'DEF-shoulder.R',
-        'Bip001-R-UpperArm': 'DEF-upper_arm.R',
-        'Bip001-R-Forearm': 'DEF-forearm.R',
-        'Bip001-R-Hand': 'DEF-hand.R',
+        'L-Clavicle': 'DEF-shoulder.L', 'L Clavicle': 'DEF-shoulder.L', 'L_Clavicle': 'DEF-shoulder.L',
+        'L-UpperArm': 'DEF-upper_arm.L', 'L UpperArm': 'DEF-upper_arm.L', 'L_UpperArm': 'DEF-upper_arm.L',
+        'L-Forearm': 'DEF-forearm.L', 'L Forearm': 'DEF-forearm.L', 'L_Forearm': 'DEF-forearm.L',
+        'L-Hand': 'DEF-hand.L', 'L Hand': 'DEF-hand.L', 'L_Hand': 'DEF-hand.L',
 
-        # Dedos Mano Izquierda
-        'Bip001-L-Finger0': 'DEF-thumb.01.L',
-        'Bip001-L-Finger01': 'DEF-thumb.02.L',
-        'Bip001-L-Finger02': 'DEF-thumb.03.L',
-
-        'Bip001-L-Finger11': 'DEF-f_index.01.L',
-        'Bip001-L-Finger12': 'DEF-f_index.02.L',
-        'Bip001-L-Finger13': 'DEF-f_index.03.L',
-
-        'Bip001-L-Finger21': 'DEF-f_middle.01.L',
-        'Bip001-L-Finger22': 'DEF-f_middle.02.L',
-        'Bip001-L-Finger23': 'DEF-f_middle.03.L',
-
-        'Bip001-L-Finger31': 'DEF-f_ring.01.L',
-        'Bip001-L-Finger32': 'DEF-f_ring.02.L',
-        'Bip001-L-Finger33': 'DEF-f_ring.03.L',
-
-        'Bip001-L-Finger41': 'DEF-f_pinky.01.L',
-        'Bip001-L-Finger42': 'DEF-f_pinky.02.L',
-        'Bip001-L-Finger43': 'DEF-f_pinky.03.L',
-
-        # Dedos Mano Derecha
-        'Bip001-R-Finger0': 'DEF-thumb.01.R',
-        'Bip001-R-Finger01': 'DEF-thumb.02.R',
-        'Bip001-R-Finger02': 'DEF-thumb.03.R',
-
-        'Bip001-R-Finger11': 'DEF-f_index.01.R',
-        'Bip001-R-Finger12': 'DEF-f_index.02.R',
-        'Bip001-R-Finger13': 'DEF-f_index.03.R',
-
-        'Bip001-R-Finger21': 'DEF-f_middle.01.R',
-        'Bip001-R-Finger22': 'DEF-f_middle.02.R',
-        'Bip001-R-Finger23': 'DEF-f_middle.03.R',
-
-        'Bip001-R-Finger31': 'DEF-f_ring.01.R',
-        'Bip001-R-Finger32': 'DEF-f_ring.02.R',
-        'Bip001-R-Finger33': 'DEF-f_ring.03.R',
-
-        'Bip001-R-Finger41': 'DEF-f_pinky.01.R',
-        'Bip001-R-Finger42': 'DEF-f_pinky.02.R',
-        'Bip001-R-Finger43': 'DEF-f_pinky.03.R',
-
-        # Ojos y Pechos
-        'eye_R': 'DEF-eye.R',
-        'eye_L': 'DEF-eye.L',
-        'Bn_l_breast_01': 'DEF-breast.L',
-        'Bn_r_breast_01': 'DEF-breast.R',
+        'R-Clavicle': 'DEF-shoulder.R', 'R Clavicle': 'DEF-shoulder.R', 'R_Clavicle': 'DEF-shoulder.R',
+        'R-UpperArm': 'DEF-upper_arm.R', 'R UpperArm': 'DEF-upper_arm.R', 'R_UpperArm': 'DEF-upper_arm.R',
+        'R-Forearm': 'DEF-forearm.R', 'R Forearm': 'DEF-forearm.R', 'R_Forearm': 'DEF-forearm.R',
+        'R-Hand': 'DEF-hand.R', 'R Hand': 'DEF-hand.R', 'R_Hand': 'DEF-hand.R',
     }
+
+    for pfx in prefixes:
+        for k, v in body_base_map.items():
+            abadidea[pfx + k] = v
+
+    # Add extra exact matches for eyes & breasts
+    abadidea.update({
+        'eye_R': 'DEF-eye.R', 'eye_L': 'DEF-eye.L',
+        'Bn_l_breast_01': 'DEF-breast.L', 'Bn_r_breast_01': 'DEF-breast.R',
+        'breast.L': 'DEF-breast.L', 'breast.R': 'DEF-breast.R',
+    })
+
+    # Dynamic Finger Mappings for both Left (.L) and Right (.R) hands
+    existing_bone_names = {pb.name for pb in obj.pose.bones}
+    finger_names_map = [
+        ("f_index", 1),
+        ("f_middle", 2),
+        ("f_ring", 3),
+        ("f_pinky", 4),
+    ]
+
+    for side in ["L", "R"]:
+        s_suffix = f".{side}"
+
+        # Detect separator used in armature bone names (e.g. "-", " ", "_")
+        sep_found = None
+        for test_s in ["-", " ", "_"]:
+            for f_idx in [0, 1, 2, 3, 4]:
+                if f"Bip001{test_s}{side}{test_s}Finger{f_idx}" in existing_bone_names or f"Bip001{test_s}{side}{test_s}Finger{f_idx}1" in existing_bone_names:
+                    sep_found = test_s
+                    break
+            if sep_found:
+                break
+        if not sep_found:
+            sep_found = "-"
+
+        # 1. Map Thumb (Finger0, Finger01, Finger02 or Finger00, Finger01, Finger02 or Finger01, Finger02, Finger03)
+        b0_key = f"Bip001{sep_found}{side}{sep_found}Finger0"
+        b00_key = f"Bip001{sep_found}{side}{sep_found}Finger00"
+        b01_key = f"Bip001{sep_found}{side}{sep_found}Finger01"
+        b02_key = f"Bip001{sep_found}{side}{sep_found}Finger02"
+        b03_key = f"Bip001{sep_found}{side}{sep_found}Finger03"
+
+        t1 = b0_key if b0_key in existing_bone_names else (b00_key if b00_key in existing_bone_names else b01_key)
+        t2 = b01_key if (t1 != b01_key and b01_key in existing_bone_names) else b02_key
+        t3 = b02_key if (t2 != b02_key and b02_key in existing_bone_names) else b03_key
+
+        if t1 in existing_bone_names: abadidea[t1] = f"DEF-thumb.01{s_suffix}"
+        if t2 in existing_bone_names: abadidea[t2] = f"DEF-thumb.02{s_suffix}"
+        if t3 in existing_bone_names: abadidea[t3] = f"DEF-thumb.03{s_suffix}"
+
+        # 2. Map Index, Middle, Ring, Pinky
+        for fname, f_idx in finger_names_map:
+            b1_key = f"Bip001{sep_found}{side}{sep_found}Finger{f_idx}"
+            b10_key = f"Bip001{sep_found}{side}{sep_found}Finger{f_idx}0"
+            b11_key = f"Bip001{sep_found}{side}{sep_found}Finger{f_idx}1"
+            b12_key = f"Bip001{sep_found}{side}{sep_found}Finger{f_idx}2"
+            b13_key = f"Bip001{sep_found}{side}{sep_found}Finger{f_idx}3"
+
+            # Check if FingerX3 (fingertip bone) is present in the model
+            if b13_key in existing_bone_names:
+                # If FingerX3 is present: FingerX1 -> .01, FingerX2 -> .02, FingerX3 -> .03 (covers down to fingertip!)
+                if b11_key in existing_bone_names: abadidea[b11_key] = f"DEF-{fname}.01{s_suffix}"
+                if b12_key in existing_bone_names: abadidea[b12_key] = f"DEF-{fname}.02{s_suffix}"
+                if b13_key in existing_bone_names: abadidea[b13_key] = f"DEF-{fname}.03{s_suffix}"
+            else:
+                # If FingerX3 is NOT present: 3-bone chain (FingerX -> .01, FingerX1 -> .02, FingerX2 -> .03)
+                d1 = b1_key if b1_key in existing_bone_names else (b10_key if b10_key in existing_bone_names else b11_key)
+                d2 = b11_key if (d1 != b11_key and b11_key in existing_bone_names) else b12_key
+                d3 = b12_key if (d2 != b12_key and d2 != b13_key and b12_key in existing_bone_names) else b13_key
+
+                if d1 in existing_bone_names: abadidea[d1] = f"DEF-{fname}.01{s_suffix}"
+                if d2 in existing_bone_names: abadidea[d2] = f"DEF-{fname}.02{s_suffix}"
+                if d3 in existing_bone_names: abadidea[d3] = f"DEF-{fname}.03{s_suffix}"
 
     # Rename bones FIRST so Blender updates linked vertex groups automatically
     for pb in obj.pose.bones:
@@ -147,11 +173,64 @@ def rig_character(
                 if target_def not in m.vertex_groups:
                     vg.name = target_def
 
-    # Extract Metarig via Expykit
-    bpy.ops.object.mode_set(mode='POSE')
-    bpy.ops.object.expykit_extract_metarig(rig_preset='Rigify_Metarig.py', assign_metarig=True)
+    # Switch to Edit mode to sanitize finger hierarchy, head/tail vectors, and connections
+    bpy.ops.object.mode_set(mode='EDIT')
+    ebs = obj.data.edit_bones
 
-    # Generate Rigify with aligned Head bone (halo widget) and centered Breast bones
+    for side in [".L", ".R"]:
+        hand_eb = ebs.get("DEF-hand" + side) or ebs.get("hand" + side)
+        for fname in ["thumb", "f_index", "f_middle", "f_ring", "f_pinky"]:
+            b1 = ebs.get(f"DEF-{fname}.01{side}") or ebs.get(f"{fname}.01{side}")
+            b2 = ebs.get(f"DEF-{fname}.02{side}") or ebs.get(f"{fname}.02{side}")
+            b3 = ebs.get(f"DEF-{fname}.03{side}") or ebs.get(f"{fname}.03{side}")
+
+            if b1 and hand_eb:
+                b1.parent = hand_eb
+
+            if b1 and b2:
+                b2.parent = b1
+                # If tail of b1 is misaligned or zero-length, connect to b2 head
+                if (b1.tail - b2.head).length > 0.001 or (b1.tail - b1.head).length < 0.0005:
+                    b1.tail = b2.head.copy()
+
+            if b2 and b3:
+                b3.parent = b2
+                # If tail of b2 is misaligned or zero-length, connect to b3 head
+                if (b2.tail - b3.head).length > 0.001 or (b2.tail - b2.head).length < 0.0005:
+                    b2.tail = b3.head.copy()
+
+            if b3:
+                # Ensure b3 has a valid non-zero tail vector extending along the finger
+                if (b3.tail - b3.head).length < 0.0005 or b3.tail.length < 0.001:
+                    if b2:
+                        dir_v = (b3.head - b2.head)
+                        if dir_v.length < 0.0001:
+                            dir_v = (b2.head - b1.head) if b1 else mathutils.Vector((0, 0.025, 0))
+                        flen = b2.length if b2.length > 0.001 else 0.025
+                        b3.tail = b3.head + dir_v.normalized() * flen
+                    else:
+                        b3.tail = b3.head + mathutils.Vector((0, 0.025, 0))
+
+    bpy.ops.object.mode_set(mode='POSE')
+
+    if hasattr(bpy.types, 'Action') and not hasattr(bpy.types.Action, 'fcurves'):
+        try:
+            bpy.types.Action.fcurves = property(lambda self: getattr(self, 'curves', []))
+        except Exception:
+            pass
+
+    # Expykit convert bone names & extract metarig
+    try:
+        bpy.ops.object.expykit_convert_bone_names(src_preset='Rigify_Metarig.py', trg_preset='Rigify_Deform.py')
+    except Exception as ex:
+        print(f"Notice: Expykit convert_bone_names handled: {ex}")
+
+    try:
+        bpy.ops.object.expykit_extract_metarig(rig_preset='Rigify_Metarig.py', assign_metarig=True)
+    except Exception as ex:
+        print(f"Notice: Expykit extract_metarig handled: {ex}")
+
+    # Generate Rigify with aligned Head bone, Breast bones, Hand alignment, and Finger Roll alignment
     metarig_obj = bpy.data.objects.get("metarig")
     if metarig_obj:
         context.view_layer.objects.active = metarig_obj
@@ -164,7 +243,7 @@ def rig_character(
             eb_head.tail.z = eb_head.head.z + 0.22
             eb_head.roll = 0.0
 
-        # Center breast bones on front of chest (more centered and lower down)
+        # Center breast bones on front of chest
         chest_eb = metarig_obj.data.edit_bones.get("spine.003") or metarig_obj.data.edit_bones.get("chest")
         if chest_eb:
             cz = chest_eb.head.z + (chest_eb.tail.z - chest_eb.head.z) * 0.25
@@ -189,13 +268,96 @@ def rig_character(
                 eb_br.tail.z = cz
 
         # Align hand.L and hand.R metarig bones straight along forearm vector so hand_ik widget is centered on wrist
+        forearm_R = metarig_obj.data.edit_bones.get("forearm.R")
+        hand_R = metarig_obj.data.edit_bones.get("hand.R")
+        if forearm_R and hand_R:
+            arm_vec_R = (forearm_R.tail - forearm_R.head).normalized()
+            hand_R.tail = hand_R.head + arm_vec_R * 0.05
+            hand_R.roll = forearm_R.roll
+
+        forearm_L = metarig_obj.data.edit_bones.get("forearm.L")
+        hand_L = metarig_obj.data.edit_bones.get("hand.L")
+        if forearm_L and hand_L:
+            arm_vec_L = (forearm_L.tail - forearm_L.head).normalized()
+            hand_L.tail = hand_L.head + arm_vec_L * 0.05
+            if hand_R:
+                hand_L.roll = -hand_R.roll
+            elif forearm_L:
+                hand_L.roll = -forearm_L.roll
+
+        # Align metarig finger rolls directly to hand / index finger plane normal
+        armature_ebs = obj.data.edit_bones
+        metarm_ebs = metarig_obj.data.edit_bones
+
         for side in [".L", ".R"]:
-            forearm_eb = metarig_obj.data.edit_bones.get("forearm" + side)
-            hand_eb = metarig_obj.data.edit_bones.get("hand" + side)
-            if forearm_eb and hand_eb:
-                arm_vec = (forearm_eb.tail - forearm_eb.head).normalized()
-                hand_eb.tail = hand_eb.head + arm_vec * 0.05
-                hand_eb.roll = forearm_eb.roll
+            hand_mb = metarm_ebs.get("hand" + side)
+            hand_ab = armature_ebs.get("hand" + side) or armature_ebs.get("DEF-hand" + side)
+
+            index_chain = []
+            for idx in ["01", "02", "03"]:
+                b_meta = metarm_ebs.get(f"f_index.{idx}{side}")
+                if b_meta:
+                    index_chain.append(b_meta)
+
+            index_plane_normal = None
+            if len(index_chain) >= 2:
+                dir1 = (index_chain[0].tail - index_chain[0].head).normalized()
+                dir2 = (index_chain[1].tail - index_chain[1].head).normalized()
+                cross_vec = dir1.cross(dir2)
+                if cross_vec.length > 0.0001:
+                    index_plane_normal = cross_vec.normalized()
+
+            if not index_plane_normal and hand_mb:
+                index_plane_normal = hand_mb.matrix.col[2].normalized()
+            elif not index_plane_normal and hand_ab:
+                index_plane_normal = hand_ab.matrix.col[2].normalized()
+
+            if index_plane_normal:
+                for fname in ["f_index", "f_middle", "f_ring", "f_pinky"]:
+                    chain = []
+                    for idx in ["01", "02", "03"]:
+                        b_meta = metarm_ebs.get(f"{fname}.{idx}{side}")
+                        if b_meta:
+                            chain.append(b_meta)
+
+                    for b_meta in chain:
+                        dir_b = (b_meta.tail - b_meta.head).normalized()
+                        z_target = index_plane_normal.cross(dir_b)
+                        if z_target.length > 0.0001:
+                            b_meta.align_roll(z_target)
+
+                        orig_b = (
+                            armature_ebs.get(b_meta.name)
+                            or armature_ebs.get("DEF-" + b_meta.name)
+                        )
+                        if orig_b:
+                            orig_b.roll = b_meta.roll
+
+        # Thumb alignment using vector from thumb knuckle to index knuckle so flexing points directly into palm
+        for side in [".L", ".R"]:
+            thumb_01 = metarm_ebs.get(f"thumb.01{side}")
+            index_01 = metarm_ebs.get(f"f_index.01{side}")
+            if thumb_01 and index_01:
+                v_towards_index = (index_01.head - thumb_01.head).normalized()
+                for idx in ["01", "02", "03"]:
+                    t_meta = metarm_ebs.get(f"thumb.{idx}{side}")
+                    if t_meta:
+                        dir_t = (t_meta.tail - t_meta.head).normalized()
+                        z_target_thumb = v_towards_index.cross(dir_t)
+                        if z_target_thumb.length > 0.0001:
+                            t_meta.align_roll(z_target_thumb)
+                            orig_b = armature_ebs.get(t_meta.name) or armature_ebs.get("DEF-" + t_meta.name)
+                            if orig_b:
+                                orig_b.roll = t_meta.roll
+
+        # Set primary rotation axis in Pose mode on metarig for fingers and thumb
+        bpy.ops.object.mode_set(mode='POSE')
+        metapose = metarig_obj.pose
+        for fname in ["f_index", "f_middle", "f_ring", "f_pinky", "thumb"]:
+            for side in [".L", ".R"]:
+                p_b = metapose.bones.get(f"{fname}.01{side}")
+                if p_b and hasattr(p_b, 'rigify_parameters'):
+                    p_b.rigify_parameters.primary_rotation_axis = "X"
 
         bpy.ops.object.mode_set(mode='OBJECT')
         bpy.ops.object.select_all(action='DESELECT')
@@ -212,10 +374,26 @@ def rig_character(
                 rigifyr = o
                 break
 
-    # Adjust custom shape scales in Pose mode for hand_ik and breast controls
+    # Adjust master finger controls size in Edit mode and Pose mode
     if rigifyr:
         context.view_layer.objects.active = rigifyr
+        bpy.ops.object.mode_set(mode='EDIT')
+        
+        finger_masters = [
+            "thumb.01_master.L", "f_index.01_master.L", "f_middle.01_master.L", "f_ring.01_master.L", "f_pinky.01_master.L",
+            "thumb.01_master.R", "f_index.01_master.R", "f_middle.01_master.R", "f_ring.01_master.R", "f_pinky.01_master.R"
+        ]
+        
+        for b_name in finger_masters:
+            eb = rigifyr.data.edit_bones.get(b_name)
+            if eb:
+                # Keep master finger edit bone length proportional so control line extends nicely without being giant
+                if eb.length > 0.08:
+                    eb.tail = eb.head + (eb.tail - eb.head).normalized() * 0.06
+
         bpy.ops.object.mode_set(mode='POSE')
+        
+        # Scale down custom shape sizes for hand_ik, breast, and finger controls
         for b_name in ["hand_ik.L", "hand_ik.R"]:
             pb = rigifyr.pose.bones.get(b_name)
             if pb:
@@ -226,13 +404,29 @@ def rig_character(
             if pb:
                 pb.custom_shape_scale_xyz = (0.70, 0.70, 0.70)
 
+        for b_name in finger_masters:
+            pb = rigifyr.pose.bones.get(b_name)
+            if pb:
+                pb.custom_shape_scale_xyz = (1.50, 1.50, 1.50)
+                try:
+                    pb.lock_scale[0] = False
+                except Exception:
+                    pass
+
+        # Scale down individual finger tweak/detail control shapes if present
+        for fname in ["thumb", "f_index", "f_middle", "f_ring", "f_pinky"]:
+            for idx in ["01", "02", "03"]:
+                for side in [".L", ".R"]:
+                    pb = rigifyr.pose.bones.get(f"{fname}.{idx}{side}")
+                    if pb and hasattr(pb, 'custom_shape_scale_xyz'):
+                        pb.custom_shape_scale_xyz = (0.40, 0.40, 0.40)
+
         for b_name in ["thigh_parent.L", "thigh_parent.R", "upper_arm_parent.L", "upper_arm_parent.R"]:
             pb = rigifyr.pose.bones.get(b_name)
             if pb:
                 pb["IK_Stretch"] = 0.0
 
         bpy.ops.object.mode_set(mode='OBJECT')
-
 
     # Transfer and parent ALL secondary/dynamic bones from backup_arm into rigifyr
     if rigifyr and backup_arm:
@@ -318,6 +512,8 @@ def rig_character(
         deform_coll = rigifyr.data.collections.get("Deform & Helpers") or rigifyr.data.collections.new("Deform & Helpers")
         others_coll = rigifyr.data.collections.get("Others") or rigifyr.data.collections.new("Others")
         torso_coll = rigifyr.data.collections.get("Torso") or rigifyr.data.collections.get("Torso (Primary)") or rigifyr.data.collections.new("Torso")
+        fingers_coll = rigifyr.data.collections.get("Fingers") or rigifyr.data.collections.get("Fingers (Primary)") or rigifyr.data.collections.new("Fingers")
+        fingers_detail_coll = rigifyr.data.collections.get("Fingers (Detail)") or rigifyr.data.collections.new("Fingers (Detail)")
 
         main_ctrl_keywords = [
             "root", "torso", "hips", "chest", "neck", "head",
@@ -343,12 +539,37 @@ def rig_character(
                 bone.hide = False
                 continue
 
+            # Separate finger master controls (*_master) into Fingers, and detail ring/tweak controls into Fingers (Detail)
+            if any(f in b_low for f in ["thumb", "f_index", "f_middle", "f_ring", "f_pinky"]) and not (b_name.startswith("DEF-") or b_name.startswith("ORG-") or b_name.startswith("MCH-")):
+                if "_master" in b_low:
+                    target_finger_coll = fingers_coll
+                    other_finger_coll = fingers_detail_coll
+                else:
+                    target_finger_coll = fingers_detail_coll
+                    other_finger_coll = fingers_coll
+
+                try:
+                    target_finger_coll.assign(bone)
+                except Exception:
+                    pass
+                try:
+                    other_finger_coll.unassign(bone)
+                except Exception:
+                    pass
+                for c in list(bone.collections):
+                    if c != target_finger_coll:
+                        try:
+                            c.unassign(bone)
+                        except Exception:
+                            pass
+                bone.hide = False
+                continue
+
             # Check if this bone is a main Rigify UI control widget
             is_main_ctrl = any(kw in b_low for kw in main_ctrl_keywords) and not (
                 b_name.startswith("DEF-") or b_name.startswith("ORG-") or b_name.startswith("MCH-") or
                 "bip" in b_low or "bn_" in b_low or "bone" in b_low or "wq_" in b_low or "root_" in b_low or "_root" in b_low
             )
-
 
             if is_main_ctrl:
                 continue
@@ -370,7 +591,7 @@ def rig_character(
             except Exception:
                 pass
             for c in list(bone.collections):
-                if c != target_coll:
+                if c != target_coll and c != fingers_coll and c != fingers_detail_coll:
                     try:
                         c.unassign(bone)
                     except Exception:
@@ -389,12 +610,10 @@ def rig_character(
             else:
                 coll.is_visible = False
 
-
     elif rigifyr:
         for bone in rigifyr.data.bones:
             if bone.name.startswith("DEF-") or bone.name.startswith("ORG-") or bone.name.startswith("MCH-") or "Bn_" in bone.name or "Bone-" in bone.name or "Bip" in bone.name:
                 bone.hide = True
-
 
     for extra_arm in ["metarig"]:
         m_obj = bpy.data.objects.get(extra_arm)
@@ -412,7 +631,6 @@ def rig_character(
             bpy.data.objects["rigify"].name = char_name + "Rig"
     except Exception:
         pass
-
 
 
 def use_bone_collections():

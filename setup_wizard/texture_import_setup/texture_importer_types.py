@@ -349,6 +349,17 @@ class GenshinTextureImporter:
             if self.game_type == GameType.GENSHIN_IMPACT:
                 self.setup_dress_textures(node.name, img, self.character_type)
 
+        if self.game_type == GameType.GENSHIN_IMPACT:
+            body_shader = material.node_tree.nodes.get('Body Shader') or material.node_tree.nodes.get('PrimoToon') or material.node_tree.nodes.get('HoYoToon') or material.node_tree.nodes.get('Group.006')
+            if not body_shader:
+                for n in material.node_tree.nodes:
+                    if n.type == 'GROUP' and n.node_tree and 'Use Normal Map' in n.inputs:
+                        body_shader = n
+                        break
+            if body_shader and 'Use Normal Map' in body_shader.inputs:
+                has_normal = any(n.image is not None for n in nodes)
+                body_shader.inputs['Use Normal Map'].default_value = 1.0 if has_normal else 0.0
+
         # Deprecated. Tries only if it exists. Only for V1 Shader
         self.plug_normal_map(f'miHoYo - Genshin {type.value}', 'MUTE IF ONLY 1 UV MAP EXISTS')
         self.plug_normal_map('miHoYo - Genshin Dress', 'MUTE IF ONLY 1 UV MAP EXISTS')
@@ -488,9 +499,17 @@ class GenshinTextureImporter:
 
     def setup_dress_textures(self, texture_name, texture_img, character_type: TextureImporterType):
         shader_dress_materials = [material for material in bpy.data.materials if 
-                                  'Genshin Dress' in material.name and 'Outlines' not in material.name]
+                                  ('Genshin Dress' in material.name or 'Dress' in material.name) and 'Outlines' not in material.name and not material.name.endswith('_Mat')]
         shader_cloak_materials = [material for material in bpy.data.materials
                                   if 'Genshin Arm' in material.name or 'Genshin Cloak' in material.name]
+
+        tex_name_lower = texture_name.lower()
+        if 'normal' in tex_name_lower:
+            target_node_names = [texture_name, 'Main_Normalmap', 'Normal Map (Non-Color) (Channel Packed)']
+        elif 'lightmap' in tex_name_lower:
+            target_node_names = [texture_name, 'Main_Lightmap', 'Lightmap (Non-Color) (Channel Packed)', 'Lightmap UV1 (Non-Color) (Channel Packed)']
+        else:
+            target_node_names = [texture_name, 'Main_Diffuse', 'Diffuse (sRGB) (Channel Packed)', 'Diffuse UV1 (sRGB) (Channel Packed)']
 
         if shader_cloak_materials:
             matching_orig = [material for material in bpy.data.materials if material.name.endswith(shader_cloak_materials[0].name.split(' ')[-1])]
@@ -500,7 +519,7 @@ class GenshinTextureImporter:
                 if actual_cloak_material in texture_img.name:
                     cloak_mat = bpy.data.materials.get(shader_cloak_materials[0].name)
                     if cloak_mat and cloak_mat.use_nodes:
-                        nodes = find_texture_nodes(cloak_mat.node_tree, [texture_name, 'Main_Diffuse', 'Main_Lightmap', 'Main_Normalmap', 'Diffuse (sRGB) (Channel Packed)', 'Lightmap (Non-Color) (Channel Packed)', 'Normal Map (Non-Color) (Channel Packed)'])
+                        nodes = find_texture_nodes(cloak_mat.node_tree, target_node_names)
                         for n in nodes:
                             n.image = texture_img
 
@@ -513,10 +532,21 @@ class GenshinTextureImporter:
                 actual_material = OriginalTextureLocatorUtils.get_monster_original_texture_part(original_dress_material)
             else:
                 actual_material = get_actual_material_name_for_dress(original_dress_material.name, character_type.name)
-            if actual_material and actual_material in texture_img.name:
+
+            is_match = (
+                actual_material and (
+                    actual_material in texture_img.name or
+                    actual_material.replace('1', '01') in texture_img.name or
+                    actual_material.replace('2', '02') in texture_img.name or
+                    (actual_material == 'Body1' and ('Body01' in texture_img.name or 'Body1' in texture_img.name or 'Dress01' in texture_img.name or 'Dress1' in texture_img.name)) or
+                    (actual_material == 'Body2' and ('Body02' in texture_img.name or 'Body2' in texture_img.name or 'Dress02' in texture_img.name or 'Dress2' in texture_img.name))
+                )
+            )
+
+            if is_match:
                 print(f'Importing texture "{texture_name}" onto material "{shader_dress_material.name}"')
                 if shader_dress_material.use_nodes:
-                    nodes = find_texture_nodes(shader_dress_material.node_tree, [texture_name, 'Main_Diffuse', 'Main_Lightmap', 'Main_Normalmap', 'Diffuse (sRGB) (Channel Packed)', 'Lightmap (Non-Color) (Channel Packed)', 'Normal Map (Non-Color) (Channel Packed)'])
+                    nodes = find_texture_nodes(shader_dress_material.node_tree, target_node_names)
                     for n in nodes:
                         n.image = texture_img
 
@@ -534,7 +564,7 @@ class GenshinTextureImporter:
             return False
 
         matched_any = False
-        parts_to_check = ['Dress3', 'Dress2', 'Dress1', 'Dress', 'Ribbon', 'VeilShadow', 'Stockings', 'Arm', 'Cloak', 'Helmet', 'HelmetEmo']
+        parts_to_check = ['Dress3', 'Dress2', 'Dress1', 'Dress03', 'Dress02', 'Dress01', 'Dress', 'Ribbon', 'VeilShadow', 'Stockings', 'Arm', 'Cloak', 'Helmet', 'HelmetEmo']
         
         for part in parts_to_check:
             if part.lower() in file.lower():
@@ -567,7 +597,8 @@ class GenshinTextureImporter:
 
     def get_original_dress_material(self, shader_dress_material):
         for material in bpy.data.materials:
-            is_not_original_material = material.name.startswith(self.material_names.MATERIAL_PREFIX)
+            is_not_original_material = (self.material_names.MATERIAL_PREFIX and material.name.startswith(self.material_names.MATERIAL_PREFIX)) or \
+                                       (self.material_names.MATERIAL_PREFIX_AFTER_RENAME and material.name.startswith(self.material_names.MATERIAL_PREFIX_AFTER_RENAME))
             if is_not_original_material:
                 continue
 
@@ -688,6 +719,45 @@ class GenshinTextureImporter:
                 shadow_ramp_node_group.nodes[shader_node_names.STOCKINGS_DETAIL].image = img
 
 
+    def set_multi_pupil_textures(self, material, pupil_images_dict):
+        if not material or not material.use_nodes or not material.node_tree:
+            return
+
+        def get_all_tex_nodes(tree):
+            nodes = []
+            for n in tree.nodes:
+                if n.type == 'TEX_IMAGE':
+                    nodes.append(n)
+                elif n.type == 'GROUP' and n.node_tree:
+                    nodes.extend(get_all_tex_nodes(n.node_tree))
+            return nodes
+
+        tex_nodes = get_all_tex_nodes(material.node_tree)
+        # Sort nodes top to bottom by location.y in descending order
+        tex_nodes.sort(key=lambda n: n.location.y, reverse=True)
+
+        matched_nodes = set()
+        for n in tex_nodes:
+            n_id = (n.name + " " + (n.label or "")).lower()
+            if 'blend' in n_id or 'ramp' in n_id:
+                continue
+            for key in ['01', '1', '02', '2', '03', '3', '04', '4']:
+                if (f'pupil{key}' in n_id or f'pupil_{key}' in n_id or f'pupil 0{key}' in n_id or f'pupil{key}_' in n_id) and key in pupil_images_dict:
+                    n.image = pupil_images_dict[key]
+                    matched_nodes.add(n)
+                    break
+
+        remaining_nodes = [n for n in tex_nodes if n not in matched_nodes and not ('blend' in (n.name + " " + (n.label or "")).lower() or 'ramp' in (n.name + " " + (n.label or "")).lower())]
+
+        slot_keys = ['01', '04', '02', '03']
+        for idx, node in enumerate(remaining_nodes):
+            if idx < len(slot_keys):
+                key = slot_keys[idx]
+                img = pupil_images_dict.get(key) or pupil_images_dict.get(str(int(key)))
+                if img:
+                    node.image = img
+
+
 class GenshinAvatarTextureImporter(GenshinTextureImporter):
     def __init__(self, material_names: ShaderMaterialNames):
         super().__init__(GameType.GENSHIN_IMPACT, TextureImporterType.AVATAR)
@@ -699,6 +769,40 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
     def import_textures(self, directory):
         for name, folder, files in os.walk(directory):
             self.files = files
+
+            pupil_diffuse_images = {}
+            for f_name in files:
+                f_lower = f_name.lower()
+                if 'pupil' in f_lower and 'diffuse' in f_lower and f_lower.endswith('.png'):
+                    for k in ['01', '1', '02', '2', '03', '3', '04', '4']:
+                        if f'pupil{k}' in f_lower or f'pupil_{k}' in f_lower or f'pupil 0{k}' in f_lower or f'pupil{k}_' in f_lower or f'pupila{k}' in f_lower:
+                            img_p = os.path.normpath(os.path.join(name, f_name))
+                            img_obj = bpy.data.images.get(f_name) or bpy.data.images.load(filepath=img_p, check_existing=True)
+                            img_obj.alpha_mode = 'CHANNEL_PACKED'
+                            pupil_diffuse_images[k] = img_obj
+                            break
+
+            has_multiple_pupil_diffuse = len(pupil_diffuse_images) > 1
+
+            if has_multiple_pupil_diffuse:
+                target_pupil_mat = bpy.data.materials.get(getattr(self.material_names, 'NEW_PUPIL', f'{self.material_names.MATERIAL_PREFIX}New Pupil')) or \
+                                   bpy.data.materials.get('HoYoverse - Genshin New Pupil') or \
+                                   bpy.data.materials.get('miHoYo - Genshin New Pupil') or \
+                                   bpy.data.materials.get('HoYoverse - New Pupil') or \
+                                   next((m for m in bpy.data.materials if 'New Pupil' in m.name and 'Outlines' not in m.name), None)
+                if target_pupil_mat:
+                    self.set_multi_pupil_textures(target_pupil_mat, pupil_diffuse_images)
+                    old_pupil_mat = bpy.data.materials.get(f'{self.material_names.PUPIL}') or \
+                                    bpy.data.materials.get('HoYoverse - Genshin Pupil') or \
+                                    bpy.data.materials.get('miHoYo - Genshin Pupil') or \
+                                    bpy.data.materials.get('HoYoverse - Pupil')
+                    if old_pupil_mat:
+                        for obj in bpy.data.objects:
+                            if obj.type == 'MESH':
+                                for slot in obj.material_slots:
+                                    if slot.material == old_pupil_mat:
+                                        slot.material = target_pupil_mat
+
             for file in files:
                 # load the file with the correct alpha mode
                 img_path = os.path.normpath(os.path.join(name, file))
@@ -721,7 +825,10 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                 glass_material = bpy.data.materials.get(f'{self.material_names.GLASS}')
                 glass_eff_material = bpy.data.materials.get(f'{self.material_names.GLASS_EFF}')
                 leather_material = bpy.data.materials.get(f'{self.material_names.LEATHER}')
-                pupil_material = bpy.data.materials.get(f'{self.material_names.PUPIL}')
+                pupil_material = bpy.data.materials.get(f'{self.material_names.PUPIL}') or \
+                                 bpy.data.materials.get('HoYoverse - Genshin Pupil') or \
+                                 bpy.data.materials.get('HoYoverse - Pupil') or \
+                                 next((m for m in bpy.data.materials if 'Pupil' in m.name and 'Outlines' not in m.name), None)
                 skirt_material = bpy.data.materials.get(f'{self.material_names.SKIRT}')
                 star_cloak_material = bpy.data.materials.get(f'{self.material_names.STAR_CLOAK}')
                 ribbon_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}Ribbon') or \
@@ -770,7 +877,8 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                     for extra_name, extra_mat in extra_mapping:
                         if extra_mat and not self.has_dedicated_texture(extra_name, 'Diffuse'):
                             self.set_diffuse_texture(TextureType.BODY, extra_mat, img, override=False)
-                    self.set_diffuse_texture(TextureType.BODY, pupil_material, img) if pupil_material and selected_body_material is body1_material else None
+                    if not has_multiple_pupil_diffuse:
+                        self.set_diffuse_texture(TextureType.BODY, pupil_material, img) if pupil_material and selected_body_material is body1_material else None
                     if star_cloak_material and self.star_cloak_uses_body_texture(file):
                         self.set_diffuse_texture(TextureType.BODY, star_cloak_material, img)
                 elif self.is_one_texture_identifier_in_texture_name(
@@ -784,7 +892,11 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                         body1_material if ShaderMaterialNameKeywords.BODY1_LIGHTMAP in file else \
                         body2_material if ShaderMaterialNameKeywords.BODY2_LIGHTMAP in file else body_material
                     self.set_lightmap_texture(TextureType.BODY, selected_body_material, img)
-                    self.set_lightmap_texture(TextureType.BODY, pupil_material, img) if pupil_material and selected_body_material is body1_material else None
+                    if not has_multiple_pupil_diffuse:
+                        self.set_lightmap_texture(TextureType.BODY, pupil_material, img) if pupil_material and selected_body_material is body1_material else None
+                elif "Pupil" in file and "Diffuse" in file:
+                    if not has_multiple_pupil_diffuse:
+                        self.set_diffuse_texture(TextureType.BODY, pupil_material, img)
                 elif self.is_texture_identifiers_in_texture_name([ShaderMaterialNameKeywords.BODY, ShaderMaterialNameKeywords.NORMAL_MAP], file):
                     self.set_normalmap_texture(TextureType.BODY, body_material, img)
                 elif self.is_one_texture_identifier_in_texture_name(

@@ -733,12 +733,25 @@ def rig_character(
 
     bpy.ops.object.mode_set(mode="POSE")
 
-    bpy.ops.object.expykit_convert_bone_names(
-        src_preset="Rigify_Metarig.py", trg_preset="Rigify_Deform.py"
-    )
-    bpy.ops.object.expykit_extract_metarig(
-        rig_preset="Rigify_Metarig.py", assign_metarig=True
-    )
+    if hasattr(bpy.types, 'Action') and not hasattr(bpy.types.Action, 'fcurves'):
+        try:
+            bpy.types.Action.fcurves = property(lambda self: getattr(self, 'curves', []))
+        except Exception:
+            pass
+
+    try:
+        bpy.ops.object.expykit_convert_bone_names(
+            src_preset="Rigify_Metarig.py", trg_preset="Rigify_Deform.py"
+        )
+    except Exception as ex:
+        print(f"Notice: Expykit convert_bone_names handled: {ex}")
+
+    try:
+        bpy.ops.object.expykit_extract_metarig(
+            rig_preset="Rigify_Metarig.py", assign_metarig=True
+        )
+    except Exception as ex:
+        print(f"Notice: Expykit extract_metarig handled: {ex}")
 
     # Poke's code to turn on the finger's IK.
     if not kachina:
@@ -846,8 +859,60 @@ def rig_character(
         elif forearm_L:
             hand_L.roll = -forearm_L.roll
 
+    for side in [".L", ".R"]:
+        hand_mb = metarm.edit_bones.get("hand" + side)
+        hand_ab = armature.edit_bones.get("hand" + side) or armature.edit_bones.get("DEF-hand" + side)
+
+        # 1. Determine index finger's plane normal as reference for all fingers
+        index_chain = []
+        for idx in ["01", "02", "03"]:
+            b_meta = metarm.edit_bones.get(f"f_index.{idx}{side}")
+            if b_meta:
+                index_chain.append(b_meta)
+
+        index_plane_normal = None
+        if len(index_chain) >= 2:
+            dir1 = (index_chain[0].tail - index_chain[0].head).normalized()
+            dir2 = (index_chain[1].tail - index_chain[1].head).normalized()
+            cross_vec = dir1.cross(dir2)
+            if cross_vec.length > 0.0001:
+                index_plane_normal = cross_vec.normalized()
+
+        if not index_plane_normal and hand_mb:
+            index_plane_normal = hand_mb.matrix.col[2].normalized()
+        elif not index_plane_normal and hand_ab:
+            index_plane_normal = hand_ab.matrix.col[2].normalized()
+
+        if not index_plane_normal:
+            continue
+
+        # 2. Align f_index, f_middle, f_ring, f_pinky directly to index_plane_normal
+        for fname in ["f_index", "f_middle", "f_ring", "f_pinky"]:
+            chain = []
+            for idx in ["01", "02", "03"]:
+                b_meta = metarm.edit_bones.get(f"{fname}.{idx}{side}")
+                if b_meta:
+                    chain.append(b_meta)
+
+            if not chain:
+                continue
+
+            for b_meta in chain:
+                dir_b = (b_meta.tail - b_meta.head).normalized()
+                z_target = index_plane_normal.cross(dir_b)
+                if z_target.length > 0.0001:
+                    b_meta.align_roll(z_target)
+
+                orig_b = (
+                    armature.edit_bones.get(b_meta.name)
+                    or armature.edit_bones.get("DEF-" + b_meta.name)
+                    or armature.edit_bones.get(b_meta.name.replace(".0", "0"))
+                )
+                if orig_b:
+                    orig_b.roll = b_meta.roll
+
     for bone in metarm.edit_bones:
-        if "f_" in bone.name or "thumb" in bone.name:
+        if "thumb" in bone.name:
             orig_b = armature.edit_bones.get(bone.name) or armature.edit_bones.get("DEF-" + bone.name)
             if orig_b:
                 bone.roll = orig_b.roll

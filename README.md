@@ -63,12 +63,15 @@ Thanks to all those who collaborated on the original project:
   * **Shader**: [Blender-miHoYo-Shaders](https://github.com/festivize/Blender-miHoYo-Shaders) by Festivity
 * **HSR**:
   * **Shader**: [Blender-StellarToon](https://github.com/festivities/Blender-StellarToon) by Festivity
-  * **Face Rig**: Isaac
+  * **Face Rig**: Isaac / Just_ScaasI
 * **ZZZ**:
   * **Shader**: Just_ScaasI, BonnyAnimations, Aiko
   * **Rigging + Scripting**: Enthralpy
   * **Supervised and made possible by**: Stormz67
   * **Face Rig**: [@jideeh](https://github.com/Jideeh1)
+    * **Poke / Enthralpy**: Driver Logic
+    * **Isaac / Just_ScaasI**: Facerig Logic + Widgets
+    * **The_Crabnuts / Kan_Natto**: Facerig Logic + Widgets
 * **NTE**:
   * **Shader**: Omatsuri Discord
   * **Rig**: 矩阵映画
@@ -89,7 +92,7 @@ In compliance with Section 5a of the GNU General Public License v3, the followin
   - Implemented advanced eye tracking controls and a dynamic eye Y-location driver system to prevent eye popping and mesh clipping during shape key expressions.
 - **Zenless Zone Zero (ZZZ) Model & Rigging Suite**:
   - Added full support for importing and setting up ZZZ models with custom breast/breath physics controls (`Torso (IK)`).
-  - Integrated the specialized ZZZ facial rig by jideeh.
+  - Integrated the specialized ZZZ facial rig (v6) with advanced shapekey drivers and eye tracking by jideeh.
   - Corrected shoulder widget roll rotations and repositioned thigh parent controls.
   - Automated character collection/armature renaming and `lights` collection handling with native completion status popups.
 - **Neverness to Everness (NTE) Support**:

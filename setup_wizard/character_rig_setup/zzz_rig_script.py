@@ -558,8 +558,21 @@ def rig_character(
 
     bpy.ops.object.mode_set(mode='POSE')
 
-    bpy.ops.object.expykit_convert_bone_names(src_preset='Rigify_Metarig.py', trg_preset='Rigify_Deform.py')
-    bpy.ops.object.expykit_extract_metarig(rig_preset='Rigify_Metarig.py', assign_metarig=True)
+    if hasattr(bpy.types, 'Action') and not hasattr(bpy.types.Action, 'fcurves'):
+        try:
+            bpy.types.Action.fcurves = property(lambda self: getattr(self, 'curves', []))
+        except Exception:
+            pass
+
+    try:
+        bpy.ops.object.expykit_convert_bone_names(src_preset='Rigify_Metarig.py', trg_preset='Rigify_Deform.py')
+    except Exception as ex:
+        print(f"Notice: Expykit convert_bone_names handled: {ex}")
+
+    try:
+        bpy.ops.object.expykit_extract_metarig(rig_preset='Rigify_Metarig.py', assign_metarig=True)
+    except Exception as ex:
+        print(f"Notice: Expykit extract_metarig handled: {ex}")
 
     # Poke's code to turn on the finger's IK.
     if not kachina:
@@ -659,16 +672,10 @@ def rig_character(
         for bone_name in ['f_index', 'f_middle', 'f_ring', 'f_pinky']:
             metapose.bones[f"{bone_name}.01.L"].rigify_parameters.primary_rotation_axis = '-X'
             metapose.bones[f"{bone_name}.01.R"].rigify_parameters.primary_rotation_axis = '-X'
-
-        metapose.bones["thumb.01.L"].rigify_parameters.primary_rotation_axis = 'X'
-        metapose.bones["thumb.01.R"].rigify_parameters.primary_rotation_axis = 'X'
     else:
         for bone_name in ['f_index', 'f_middle', 'f_ring', 'f_pinky']:
             metapose.bones[f"{bone_name}.01.L"].rigify_parameters.primary_rotation_axis = 'X'
             metapose.bones[f"{bone_name}.01.R"].rigify_parameters.primary_rotation_axis = 'X'
-
-        metapose.bones["thumb.01.L"].rigify_parameters.primary_rotation_axis = 'X'
-        metapose.bones["thumb.01.R"].rigify_parameters.primary_rotation_axis = 'X'
                                           
 
     ## This part corrects metarm finger rolls
@@ -693,8 +700,60 @@ def rig_character(
             hand_eb.tail = hand_eb.head + arm_vec * 0.05
             hand_eb.roll = forearm_eb.roll
 
+    for side in [".L", ".R"]:
+        hand_mb = metarm.edit_bones.get("hand" + side)
+        hand_ab = armature.edit_bones.get("hand" + side) or armature.edit_bones.get("DEF-hand" + side)
+
+        # 1. Determine index finger's plane normal as reference for all fingers
+        index_chain = []
+        for idx in ["01", "02", "03"]:
+            b_meta = metarm.edit_bones.get(f"f_index.{idx}{side}")
+            if b_meta:
+                index_chain.append(b_meta)
+
+        index_plane_normal = None
+        if len(index_chain) >= 2:
+            dir1 = (index_chain[0].tail - index_chain[0].head).normalized()
+            dir2 = (index_chain[1].tail - index_chain[1].head).normalized()
+            cross_vec = dir1.cross(dir2)
+            if cross_vec.length > 0.0001:
+                index_plane_normal = cross_vec.normalized()
+
+        if not index_plane_normal and hand_mb:
+            index_plane_normal = hand_mb.matrix.col[2].normalized()
+        elif not index_plane_normal and hand_ab:
+            index_plane_normal = hand_ab.matrix.col[2].normalized()
+
+        if not index_plane_normal:
+            continue
+
+        # 2. Align f_index, f_middle, f_ring, f_pinky directly to index_plane_normal
+        for fname in ["f_index", "f_middle", "f_ring", "f_pinky"]:
+            chain = []
+            for idx in ["01", "02", "03"]:
+                b_meta = metarm.edit_bones.get(f"{fname}.{idx}{side}")
+                if b_meta:
+                    chain.append(b_meta)
+
+            if not chain:
+                continue
+
+            for b_meta in chain:
+                dir_b = (b_meta.tail - b_meta.head).normalized()
+                z_target = index_plane_normal.cross(dir_b)
+                if z_target.length > 0.0001:
+                    b_meta.align_roll(z_target)
+
+                orig_b = (
+                    armature.edit_bones.get(b_meta.name)
+                    or armature.edit_bones.get("DEF-" + b_meta.name)
+                    or armature.edit_bones.get(b_meta.name.replace(".0", "0"))
+                )
+                if orig_b:
+                    orig_b.roll = b_meta.roll
+
     for bone in metarm.edit_bones:
-        if "f_" in bone.name or "thumb" in bone.name:
+        if "thumb" in bone.name:
             orig_b = armature.edit_bones.get(bone.name) or armature.edit_bones.get("DEF-" + bone.name)
             if orig_b:
                 bone.roll = orig_b.roll
@@ -929,6 +988,18 @@ def rig_character(
                 rig.pose.bones[bone + side].lock_scale[0] = False
             except:
                 pass
+
+    # Apply exact requested Quaternion rotation to thumb.01_master controls
+    bpy.ops.object.mode_set(mode='POSE')
+    if "thumb.01_master.L" in rig.pose.bones:
+        pb_l = rig.pose.bones["thumb.01_master.L"]
+        pb_l.rotation_mode = 'QUATERNION'
+        pb_l.rotation_quaternion = (0.915334, 0.0, 0.402697, 0.0)
+
+    if "thumb.01_master.R" in rig.pose.bones:
+        pb_r = rig.pose.bones["thumb.01_master.R"]
+        pb_r.rotation_mode = 'QUATERNION'
+        pb_r.rotation_quaternion = (0.915334, 0.0, -0.402697, 0.0)
 
     # Fix face shading being offset 90 degrees
     bpy.ops.object.mode_set(mode='OBJECT')
@@ -1553,8 +1624,12 @@ def rig_character(
         armature.edit_bones["DEF-eye.L"].name = final_eye_L_name
         armature.edit_bones["DEF-eye.R"].name = final_eye_R_name
 
-        # Properly finish the parenting of the eye rig we imported!
-        armature.edit_bones['eyetrack'].parent = armature.edit_bones['head']
+        # Delete eyetrack, eyetrack_L, eyetrack_R bones as they are replaced by the new face rig
+        for eb_name in ("eyetrack", "eyetrack_L", "eyetrack_R", "eyetrack.L", "eyetrack.R"):
+            b = armature.edit_bones.get(eb_name)
+            if b:
+                armature.edit_bones.remove(b)
+
         armature.edit_bones['+EyeBone R A01.001'].parent = armature.edit_bones['head']
         armature.edit_bones['+EyeBone L A01.001'].parent = armature.edit_bones['head']
 
@@ -1571,24 +1646,6 @@ def rig_character(
         armature.edit_bones['+EyeBone L A01.001'].tail.x = eye_L_head_pos[0]
         armature.edit_bones['+EyeBone L A01.001'].tail.y = armature.edit_bones[final_eye_L_name].tail.y
         armature.edit_bones['+EyeBone L A01.001'].tail.z = eye_L_head_pos[2]
-
-        armature.edit_bones['eyetrack_R'].head.x = eye_R_head_pos[0]
-        armature.edit_bones['eyetrack_R'].head.z = eye_R_head_pos[2]
-
-        armature.edit_bones['eyetrack_R'].tail.x = eye_R_head_pos[0]
-        armature.edit_bones['eyetrack_R'].tail.z = eye_R_head_pos[2] + 0.01
-
-        armature.edit_bones['eyetrack_L'].head.x = eye_L_head_pos[0]
-        armature.edit_bones['eyetrack_L'].head.z = eye_L_head_pos[2]
-
-        armature.edit_bones['eyetrack_L'].tail.x = eye_L_head_pos[0]
-        armature.edit_bones['eyetrack_L'].tail.z = eye_L_head_pos[2] + 0.01
-
-        armature.edit_bones['eyetrack'].head.x = (eye_R_head_pos[0]+eye_L_head_pos[0])/2
-        armature.edit_bones['eyetrack'].head.z = (eye_R_head_pos[2]+eye_L_head_pos[2])/2
-
-        armature.edit_bones['eyetrack'].tail.x = (eye_R_head_pos[0]+eye_L_head_pos[0])/2
-        armature.edit_bones['eyetrack'].tail.z = armature.edit_bones['eyetrack_L'].tail.z
     except:
         pass
 
@@ -2430,6 +2487,8 @@ def rig_character(
         # New 4.0 functionality: change the bone itself to the color of the group it was originally assigned to.
         else:
             # 4.0: Armature bones or Pose bones?
+            if not bpy.context.object or not hasattr(bpy.context.object, "pose") or bone_name not in bpy.context.object.pose.bones:
+                return
             bone = bpy.context.object.pose.bones[bone_name]
             
             if group_name == "Root":

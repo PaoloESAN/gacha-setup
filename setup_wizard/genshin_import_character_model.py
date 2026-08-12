@@ -69,6 +69,45 @@ def _execute_fbx_import(filepath):
     )
 
 
+def reorient_armature_bones(armature):
+    """
+    Reorients edit bone tails towards their children's average position
+    and recalculates bone roll along the global +Y axis.
+    Applied exclusively for Genshin Impact, Honkai: Star Rail, and Zenless Zone Zero.
+    """
+    if not armature or armature.type != 'ARMATURE':
+        return
+
+    orig_mode = bpy.context.object.mode if bpy.context.object else 'OBJECT'
+
+    try:
+        if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        armature.hide_viewport = False
+        armature.hide_set(False)
+        armature.select_set(True)
+        bpy.context.view_layer.objects.active = armature
+
+        bpy.ops.object.mode_set(mode='EDIT')
+        edit_bones = armature.data.edit_bones
+
+        for bone in edit_bones:
+            if bone.children:
+                avg_child_pos = sum((child.head for child in bone.children), bone.children[0].head * 0) / len(bone.children)
+                if (avg_child_pos - bone.head).length > 0.001:
+                    bone.tail = avg_child_pos
+
+        bpy.ops.armature.calculate_roll(type='GLOBAL_POS_Y')
+    except Exception as e:
+        print(f"[REORIENT BONES] Notice: {e}")
+    finally:
+        try:
+            bpy.ops.object.mode_set(mode=orig_mode if orig_mode in ('OBJECT', 'EDIT', 'POSE') else 'OBJECT')
+        except Exception:
+            pass
+
+
 class GI_OT_SetUpCharacter(Operator, BasicSetupUIOperator):
     """Sets Up Character"""
 
@@ -121,6 +160,13 @@ class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
             filename = os.path.basename(self.filepath) if os.path.isfile(self.filepath) else ""
             imported_ok = False
 
+            if hasattr(context.scene, 'uf_settings') and hasattr(context.scene.uf_settings, 'reorient_bones'):
+                try:
+                    context.scene.uf_settings.reorient_bones = True
+                    print(f"[NTE SETUP] Set context.scene.uf_settings.reorient_bones = True")
+                except Exception as e_set:
+                    print(f"[NTE SETUP] Notice setting reorient_bones: {e_set}")
+
             # Method 1: Pass directory + files collection + filepath (UEFormat ImportHelper standard)
             try:
                 bpy.ops.uf.import_uemodel(
@@ -132,20 +178,34 @@ class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
             except Exception as e1:
                 print(f"[NTE SETUP] Method 1 uf.import_uemodel notice: {e1}")
 
-            # Method 2: Pass filepath only
+            # Method 2: Pass directory + files collection with EXEC_DEFAULT
             if not imported_ok:
                 try:
-                    bpy.ops.uf.import_uemodel(filepath=self.filepath)
+                    bpy.ops.uf.import_uemodel(
+                        'EXEC_DEFAULT',
+                        filepath=self.filepath,
+                        directory=folder,
+                        files=[{"name": filename}]
+                    )
                     imported_ok = True
                 except Exception as e2:
                     print(f"[NTE SETUP] Method 2 uf.import_uemodel notice: {e2}")
 
-            # Method 3: Fallback execute
+            # Method 3: Pass filepath only
+            if not imported_ok:
+                try:
+                    bpy.ops.uf.import_uemodel(filepath=self.filepath)
+                    imported_ok = True
+                except Exception as e3:
+                    print(f"[NTE SETUP] Method 3 uf.import_uemodel notice: {e3}")
+
+            # Method 4: Fallback execute with filepath only
             if not imported_ok:
                 try:
                     bpy.ops.uf.import_uemodel('EXEC_DEFAULT', filepath=self.filepath)
-                except Exception as e3:
-                    self.report({"WARNING"}, f"UEFormat import notice: {e3}")
+                    imported_ok = True
+                except Exception as e4:
+                    self.report({"WARNING"}, f"UEFormat import notice: {e4}")
 
             self.report({"INFO"}, f"Imported NTE character model: {filename}")
         else:
@@ -217,6 +277,16 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                 character_model_file_path_or_directory, is_character_model_file
             )
             self.reset_pose_location_and_rotation()
+
+            if self.game_type in (
+                GameType.GENSHIN_IMPACT.name,
+                GameType.HONKAI_STAR_RAIL.name,
+                GameType.ZENLESS_ZONE_ZERO.name,
+            ):
+                armatures = [o for o in bpy.data.objects if o.type == "ARMATURE"]
+                if armatures:
+                    reorient_armature_bones(armatures[0])
+
             self.rename_mesh_color_attribute_name(
                 SHADER_COLOR_ATTRIBUTE_NAME
             )  # Blender 3.4 changed default name to 'Attribute', revert it
@@ -433,6 +503,13 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                         mesh_obj.hide_render = True
 
                 self.fix_zzz_eye_shadow()
+
+                if obj and self.game_type in (
+                    GameType.GENSHIN_IMPACT.name,
+                    GameType.HONKAI_STAR_RAIL.name,
+                    GameType.ZENLESS_ZONE_ZERO.name,
+                ):
+                    reorient_armature_bones(obj)
 
             for object in bpy.data.objects:
                 if object.type == "MESH" and not object.data.uv_layers.get("UV1"):
@@ -689,10 +766,38 @@ class GI_OT_DeleteEmpties(Operator, CustomOperatorProperties):
         return {"FINISHED"}
 
 
+class GI_OT_ReorientBones(Operator, CustomOperatorProperties):
+    """Reorients armature bones toward children and recalculates roll along global +Y axis"""
+
+    bl_idname = "genshin.reorient_bones"
+    bl_label = "Fix Orientation"
+
+    def execute(self, context):
+        armature = context.active_object
+        if not armature or armature.type != "ARMATURE":
+            armatures = [o for o in context.selected_objects if o.type == "ARMATURE"]
+            if not armatures:
+                armatures = [
+                    o for o in context.scene.objects
+                    if o.type == "ARMATURE" and not any(ign in o.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig"])
+                ]
+            if armatures:
+                armature = armatures[0]
+
+        if not armature or armature.type != "ARMATURE":
+            self.report({"ERROR"}, "Please select a character armature first.")
+            return {"CANCELLED"}
+
+        reorient_armature_bones(armature)
+        self.report({"INFO"}, f"Successfully fixed bone orientation for '{armature.name}'.")
+        return {"FINISHED"}
+
+
 register, unregister = bpy.utils.register_classes_factory(
     [
         GI_OT_GenshinImportModel,
         GI_OT_DeleteEmpties,
+        GI_OT_ReorientBones,
         GI_OT_SetUpCharacter,
         HSR_OT_SetUpCharacter,
         ZZZ_OT_SetUpCharacter,

@@ -150,6 +150,12 @@ class GI_PT_UI_Character_Model_Menu(Panel, GenshinImpactUIRenderChecker):
             'Delete Empties',
             'TRASH'
         )
+        OperatorFactory.create(
+            sub_layout,
+            'genshin.reorient_bones',
+            'Fix Orientation',
+            'BONE_DATA'
+        )
 
 
 class GI_PT_UI_Materials_Menu(Panel, GenshinImpactUIRenderChecker):

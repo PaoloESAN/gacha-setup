@@ -134,10 +134,14 @@ class GenshinImpactMaterialImporterFacade(GameMaterialImporter):
         {'name': V2_FestivityGenshinImpactMaterialNames.FACE},
         {'name': V2_FestivityGenshinImpactMaterialNames.HAIR},
         {'name': V2_FestivityGenshinImpactMaterialNames.OUTLINES},
+        {'name': V2_FestivityGenshinImpactMaterialNames.PUPIL},
+        {'name': V2_FestivityGenshinImpactMaterialNames.NEW_PUPIL},
         {'name': V3_BonnyFestivityGenshinImpactMaterialNames.BODY},
         {'name': V3_BonnyFestivityGenshinImpactMaterialNames.FACE},
         {'name': V3_BonnyFestivityGenshinImpactMaterialNames.HAIR},
         {'name': V3_BonnyFestivityGenshinImpactMaterialNames.OUTLINES},
+        {'name': V3_BonnyFestivityGenshinImpactMaterialNames.PUPIL},
+        {'name': V3_BonnyFestivityGenshinImpactMaterialNames.NEW_PUPIL},
         {'name': V4_PrimoToonGenshinImpactMaterialNames.VFX},
     ]
     OUTLINES_FILE_PATH = GENSHIN_IMPACT_OUTLINES_FILE_PATH

@@ -3,7 +3,7 @@ import os
 bl_info = {
     "name": "Gacha Blender Setup",
     "author": "Mken, OctavoPE, Enthralpy, PaoloESAN",
-    "version": (3, 2, 1),
+    "version": (3, 2, 2),
     "blender": (5, 2, 0),
     "location": "3D View > Sidebar > Genshin Impact / Honkai Star Rail / Zenless Zone Zero / Neverness to Everness",
     "description": "An addon to streamline the character model setup process for Gacha games in Blender 5.2+",
@@ -46,6 +46,7 @@ else:
         HSR_OT_SetUpCharacter,
         ZZZ_OT_SetUpCharacter,
         NTE_OT_SetUpCharacter,
+        GI_OT_ReorientBones,
     )
     from setup_wizard.genshin_import_materials import (
         GI_OT_SetUpMaterials,
@@ -156,6 +157,7 @@ else:
         GI_PT_UI_Post_Processing_Node_Editor_Setup_Menu,
         GI_OT_GenshinSetupWizardUI,
         GI_OT_SetUpCharacter,
+        GI_OT_ReorientBones,
         GI_OT_SetUpMaterials,
         GI_OT_SetUpOutlines,
         GI_OT_FinishSetup,
