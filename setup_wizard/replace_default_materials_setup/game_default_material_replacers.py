@@ -2,6 +2,7 @@
 
 import bpy
 import os
+import re
 
 
 from abc import ABC, abstractmethod
@@ -760,8 +761,18 @@ def find_nte_texture_for_material(mat_name, tex_type, image_files):
         return any(k in flow for k in ['eye', 'eyes', 'bantou', '目', '睫毛', '眉毛', 'eyelash', 'eyebrow'])
 
     if 'hair' in name_lower or 'pelo' in name_lower or '发' in name_lower:
-        sub_idx = '02' if ('02' in name_lower or '2' in name_lower or '后发' in name_lower) else '01'
-        candidates = [f for f in image_files if 'hair' in f.lower() and matches_type(f) and (sub_idx in f.lower() or f'_{int(sub_idx)}_' in f.lower() or f'_{int(sub_idx)}.' in f.lower())]
+        hair_num = None
+        for p in re.split(r'[-_.\s]+', name_lower):
+            if p.isdigit():
+                hair_num = p
+                break
+        if not hair_num and ('02' in name_lower or '2' in name_lower or '后发' in name_lower):
+            hair_num = '02'
+        elif not hair_num:
+            hair_num = '01'
+
+        padded_num = hair_num.zfill(2)
+        candidates = [f for f in image_files if 'hair' in f.lower() and matches_type(f) and (f'_{padded_num}_' in f.lower() or f'_{padded_num}.' in f.lower() or f'_{int(padded_num)}_' in f.lower() or f'_{int(padded_num)}.' in f.lower() or padded_num in f.lower())]
         if not candidates:
             candidates = [f for f in image_files if 'hair' in f.lower() and matches_type(f)]
         if candidates:
@@ -796,27 +807,48 @@ def find_nte_texture_for_material(mat_name, tex_type, image_files):
         if candidates:
             return candidates[0]
 
-    material_noise_tokens = ['player', '075', '019', 'oneiroi', 'oneir', 'mint', 'skin', 'lod0', 'skeleton', 'nte', 'shader', 'mi', 'mat', 'chastener']
+    material_noise_tokens = {'player', 'oneiroi', 'oneir', 'mint', 'skin', 'lod0', 'skeleton', 'nte', 'shader', 'mi', 'mat', 'chastener'}
 
-    def find_by_material_name():
-        name_tokens = [p for p in name_lower.replace('-', '_').replace('.', '_').split('_') if len(p) >= 3 and p.isalnum() and p not in material_noise_tokens]
-        if not name_tokens:
-            return None
-        best_file = None
-        best_score = 0
-        for f in image_files:
-            if not matches_type(f) or (not is_eye_mat and is_eye_texture(f)):
-                continue
-            fnorm = ''.join(ch for ch in f.lower() if ch.isalnum())
-            score = sum(1 for t in name_tokens if t in fnorm)
-            if score > best_score:
-                best_score = score
-                best_file = f
-        return best_file if best_score > 0 else None
+    clean_mat = name_lower.split('.')[0] if '.' in name_lower and name_lower.split('.')[-1].isdigit() else name_lower
+    raw_tokens = [p for p in re.split(r'[-_.\s]+', clean_mat) if p]
+    tokens = [p for p in raw_tokens if p not in material_noise_tokens]
 
-    material_name_match = find_by_material_name()
-    if material_name_match:
-        return material_name_match
+    def score_file(f):
+        if not matches_type(f) or (not is_eye_mat and is_eye_texture(f)):
+            return -1000
+        
+        f_lower = f.lower()
+        f_clean = f_lower.rsplit('.', 1)[0]
+        f_tokens = set(re.split(r'[-_.\s]+', f_clean))
+
+        score = 0
+        for t in tokens:
+            if t.isdigit():
+                t_num = str(int(t))
+                t_pad = t.zfill(2)
+                if t in f_tokens or t_num in f_tokens or t_pad in f_tokens or f'_{t}_' in f_lower or f'_{t_pad}_' in f_lower or f'_{t_num}_' in f_lower or f'_{t_pad}.' in f_lower or f'_{t}.' in f_lower:
+                    score += 50
+                elif any(f'_{num.zfill(2)}_' in f_lower or f'_{int(num)}_' in f_lower for num in ['01', '02', '03', '04', '05', '1', '2', '3', '4', '5'] if int(num) != int(t)):
+                    score -= 30
+            else:
+                if len(t) >= 2:
+                    if t in f_tokens:
+                        score += 20
+                    elif t in f_lower:
+                        score += 10
+
+        return score
+
+    best_file = None
+    best_score = 0
+    for f in image_files:
+        sc = score_file(f)
+        if sc > best_score:
+            best_score = sc
+            best_file = f
+
+    if best_file and best_score > 0:
+        return best_file
 
     if any(k in name_lower for k in ['down', '02', '_2', 'bottom', 'skirt', 'leg']):
         candidates = [f for f in image_files if ('_02_' in f.lower() or '_2_' in f.lower() or 'down' in f.lower() or 'body2' in f.lower() or 'cloth' in f.lower() or 'clothing' in f.lower() or '衣服' in f.lower()) and matches_type(f)]
@@ -837,22 +869,50 @@ def find_nte_texture_for_material(mat_name, tex_type, image_files):
 
 
 def find_nte_body_texture_by_material_name(mat_name_lower, type_keys, image_files):
-    material_noise_tokens = ['player', '075', '019', '001', 'oneiroi', 'oneir', 'mint', 'skin', 'lod0', 'skeleton', 'nte', 'shader', 'mi', 'mat', 'chastener']
-    name_tokens = [p for p in mat_name_lower.replace('-', '_').replace('.', '_').split('_') if len(p) >= 3 and p.isalnum() and p not in material_noise_tokens]
-    if not name_tokens:
+    material_noise_tokens = {'player', 'oneiroi', 'oneir', 'mint', 'skin', 'lod0', 'skeleton', 'nte', 'shader', 'mi', 'mat', 'chastener'}
+
+    clean_mat = mat_name_lower.split('.')[0] if '.' in mat_name_lower and mat_name_lower.split('.')[-1].isdigit() else mat_name_lower
+    raw_tokens = [p for p in re.split(r'[-_.\s]+', clean_mat) if p]
+    tokens = [p for p in raw_tokens if p not in material_noise_tokens]
+    if not tokens:
         return None
+
+    def score_file(f):
+        f_lower = f.lower()
+        if not any(tk in f_lower for tk in type_keys):
+            return -1000
+        if any(k in f.lower() for k in ['hair', 'face', 'eye', 'eyes', 'bantou', 'gaoguang', '睫毛', '眉毛']):
+            return -1000
+
+        f_clean = f_lower.rsplit('.', 1)[0]
+        f_tokens = set(re.split(r'[-_.\s]+', f_clean))
+
+        score = 0
+        for t in tokens:
+            if t.isdigit():
+                t_num = str(int(t))
+                t_pad = t.zfill(2)
+                if t in f_tokens or t_num in f_tokens or t_pad in f_tokens or f'_{t}_' in f_lower or f'_{t_pad}_' in f_lower or f'_{t_num}_' in f_lower or f'_{t_pad}.' in f_lower or f'_{t}.' in f_lower:
+                    score += 50
+                elif any(f'_{num.zfill(2)}_' in f_lower or f'_{int(num)}_' in f_lower for num in ['01', '02', '03', '04', '05', '1', '2', '3', '4', '5'] if int(num) != int(t)):
+                    score -= 30
+            else:
+                if len(t) >= 2:
+                    if t in f_tokens:
+                        score += 20
+                    elif t in f_lower:
+                        score += 10
+
+        return score
+
     best_file = None
     best_score = 0
     for f in image_files:
-        if not any(tk in f.lower() for tk in type_keys):
-            continue
-        if any(k in f.lower() for k in ['hair', 'face', 'eye', 'eyes', 'bantou', 'gaoguang', '睫毛', '眉毛']):
-            continue
-        fnorm = ''.join(ch for ch in f.lower() if ch.isalnum())
-        score = sum(1 for t in name_tokens if t in fnorm)
-        if score > best_score:
-            best_score = score
+        sc = score_file(f)
+        if sc > best_score:
+            best_score = sc
             best_file = f
+
     return best_file if best_score > 0 else None
 
 

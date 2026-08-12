@@ -160,6 +160,13 @@ class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
             filename = os.path.basename(self.filepath) if os.path.isfile(self.filepath) else ""
             imported_ok = False
 
+            if hasattr(context.scene, 'uf_settings') and hasattr(context.scene.uf_settings, 'reorient_bones'):
+                try:
+                    context.scene.uf_settings.reorient_bones = True
+                    print(f"[NTE SETUP] Set context.scene.uf_settings.reorient_bones = True")
+                except Exception as e_set:
+                    print(f"[NTE SETUP] Notice setting reorient_bones: {e_set}")
+
             # Method 1: Pass directory + files collection + filepath (UEFormat ImportHelper standard)
             try:
                 bpy.ops.uf.import_uemodel(
@@ -171,20 +178,34 @@ class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
             except Exception as e1:
                 print(f"[NTE SETUP] Method 1 uf.import_uemodel notice: {e1}")
 
-            # Method 2: Pass filepath only
+            # Method 2: Pass directory + files collection with EXEC_DEFAULT
             if not imported_ok:
                 try:
-                    bpy.ops.uf.import_uemodel(filepath=self.filepath)
+                    bpy.ops.uf.import_uemodel(
+                        'EXEC_DEFAULT',
+                        filepath=self.filepath,
+                        directory=folder,
+                        files=[{"name": filename}]
+                    )
                     imported_ok = True
                 except Exception as e2:
                     print(f"[NTE SETUP] Method 2 uf.import_uemodel notice: {e2}")
 
-            # Method 3: Fallback execute
+            # Method 3: Pass filepath only
+            if not imported_ok:
+                try:
+                    bpy.ops.uf.import_uemodel(filepath=self.filepath)
+                    imported_ok = True
+                except Exception as e3:
+                    print(f"[NTE SETUP] Method 3 uf.import_uemodel notice: {e3}")
+
+            # Method 4: Fallback execute with filepath only
             if not imported_ok:
                 try:
                     bpy.ops.uf.import_uemodel('EXEC_DEFAULT', filepath=self.filepath)
-                except Exception as e3:
-                    self.report({"WARNING"}, f"UEFormat import notice: {e3}")
+                    imported_ok = True
+                except Exception as e4:
+                    self.report({"WARNING"}, f"UEFormat import notice: {e4}")
 
             self.report({"INFO"}, f"Imported NTE character model: {filename}")
         else:
