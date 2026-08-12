@@ -1,0 +1,46 @@
+---
+title: "Rigging y Colecciones de Huesos en Honkai: Star Rail"
+description: "Controles de expresiones faciales Isaac, rig facial y colecciones de huesos para Honkai: Star Rail."
+---
+
+import { Image } from 'astro:assets';
+import hsrFacerig from '../../../../assets/content/hsr/hsr-facerig.png';
+import hsrManualrig from '../../../../assets/content/hsr/hsr-manualrig.png';
+import hsrShapekeys from '../../../../assets/content/hsr/hsr-shapekeys.png';
+import hsrTworigs from '../../../../assets/content/hsr/hsr-tworigs.png';
+
+## 1. Panel 3D de Control Facial e Isaac Face Rig
+
+Al importar y configurar el personaje, el add-on genera dos esqueletos principales: el rig de cuerpo normal y el rig facial de **Isaac Face Rig** posicionado cerca de la cabeza para controlar las expresiones faciales.
+
+<Image src={hsrFacerig} alt="Panel 3D de control facial Isaac Face Rig y rig del personaje" loading="eager" />
+
+<Image src={hsrTworigs} alt="Estructura del rig normal y el rig facial de Isaac en el proyecto" loading="lazy" />
+
+### Modos de Control Facial
+
+- **Controles Manuales en la Cara**: Los controles posicionados directamente sobre los ojos, cejas y boca sirven para ajustar y manipular las expresiones de la cara de forma completamente manual.
+
+<Image src={hsrManualrig} alt="Controles manuales posicionados directamente sobre la cara del personaje" loading="lazy" />
+
+- **Controles de Poses y Shapekeys Laterales**: Las barras y deslizadores ubicados a los lados permiten activar y mezclar de forma rápida las poses y expresiones faciales predeterminadas que trae el modelo original del personaje.
+
+<Image src={hsrShapekeys} alt="Barras laterales para activar y mezclar las shape keys y poses predeterminadas" loading="lazy" />
+
+---
+
+## 2. Colecciones de Huesos y Ajustes de Armadura
+
+La armadura de Honkai: Star Rail se organiza en el panel de **Bone Collections** para facilitar el ocultamiento e aislamiento de huesos durante la animación.
+
+:::note
+Actualmente hay un bug que no coloca los huesos en su categoría correspondiente en la pestaña de **Bone Collections**. Se solucionará pronto en una próxima actualización.
+:::
+
+### Grupos de Huesos Principales
+
+- **Face & Eye Controls**: Huesos de control para ojos, párpados, cejas y boca.
+- **Torso & Spine**: Controles de columna, pecho, cuello y cabeza en IK / FK.
+- **Arms & Hands**: Cinemática inversa/directa (IK/FK) para brazos y reorientación corregida de roll de huesos digitales (dedos).
+- **Legs & Feet**: Cadenas de piernas con IK, pole targets y control de giro de pies.
+- **Secondary / Cloth & Hair**: Huesos de física secundaria para capas, faldas, corbatas y mechones de cabello.

@@ -1,0 +1,43 @@
+---
+title: "Configuración de Luces y Coloramp"
+description: "Control de dirección de luz e iluminación ambiental del StellarToon shader para modelos de Honkai: Star Rail."
+---
+
+import { Image } from 'astro:assets';
+import hsrLightdir from '../../../../assets/content/hsr/hsr-lightdir.png';
+import hsrAmbient1 from '../../../../assets/content/hsr/hsr-ambient1.png';
+import hsrAmbient2 from '../../../../assets/content/hsr/hsr-ambient2.png';
+
+## 1. Controlar la Dirección de Luz y Sombras
+
+Durante la configuración del personaje de Honkai: Star Rail, se genera un objeto especializado de dirección de luz llamado `Light Direction_<Personaje>` en tu colección de la escena.
+
+1. Selecciona `Light Direction_<Personaje>` en el panel **Outliner** (por ejemplo, `Light Direction_March7th`).
+2. Abre la pestaña **Transformar** en las Propiedades del Objeto.
+3. Modifica los valores de **Rotación** (XYZ Euler) para orientar el vector de luz:
+   - **Rotación Z**: Gira horizontalmente la inclinación de la luz alrededor del personaje.
+   - **Rotación Y**: Ajusta la inclinación horizontal de la luz a través del modelo.
+   - **Rotación X**: Ajusta la altura e inclinación vertical de la línea de sombra.
+
+<Image src={hsrLightdir} alt="Ajuste de rotación del objeto Light Direction de Honkai: Star Rail en el Outliner" loading="eager" />
+
+---
+
+## 2. Iluminación Ambiental y Personalización en Global Properties
+
+Para personalizar el color, la luz ambiental y los tonos cel-shaded del shader **StellarToon**:
+
+1. Selecciona el objeto del personaje y ve al **Shader Editor**.
+2. Ubica el nodo de **Global Properties** y haz doble clic sobre él para entrar a su grupo de nodos.
+
+<Image src={hsrAmbient1} alt="Nodo Global Properties en el Shader Editor" loading="lazy" />
+
+3. Dentro del grupo de nodos, desplázate a la parte inferior donde se encuentran las opciones para colorear e iluminar:
+   - **Tint Lit / Custom Ambient Color**: Permite definir el color base de la luz ambiental y las tonalidades de iluminación del personaje.
+   - **Coloramp & Sombras**: Control de rampas de color y degradados para las áreas cel-shaded.
+
+<Image src={hsrAmbient2} alt="Opciones de coloreado y luz ambiental en la parte inferior del nodo Global Properties" loading="lazy" />
+
+:::tip
+Puedes hacer que los ojos también se pinten si pones la opción **Eye Cant be tinted** en `0`.
+:::

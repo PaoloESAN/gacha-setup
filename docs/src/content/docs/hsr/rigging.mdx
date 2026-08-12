@@ -1,0 +1,46 @@
+---
+title: "Honkai: Star Rail Rigging & Bone Collections"
+description: "Isaac facial expression controls, face rig setup, and bone collections for Honkai: Star Rail models."
+---
+
+import { Image } from 'astro:assets';
+import hsrFacerig from '../../../assets/content/hsr/hsr-facerig.png';
+import hsrManualrig from '../../../assets/content/hsr/hsr-manualrig.png';
+import hsrShapekeys from '../../../assets/content/hsr/hsr-shapekeys.png';
+import hsrTworigs from '../../../assets/content/hsr/hsr-tworigs.png';
+
+## 1. 3D Facial Expression Control Board & Isaac Face Rig
+
+Upon importing and setting up the character, the add-on configures two main rigs: the normal body rig and the secondary **Isaac Face Rig** placed near the head for controlling facial expressions.
+
+<Image src={hsrFacerig} alt="Isaac Face Rig 3D control board and character rig" loading="eager" />
+
+<Image src={hsrTworigs} alt="Normal body rig and Isaac face rig structure in Blender" loading="lazy" />
+
+### Facial Control Modes
+
+- **On-Face Manual Controls**: The control widgets placed directly over the eyes, brows, and mouth allow you to manipulate individual facial expressions manually.
+
+<Image src={hsrManualrig} alt="Manual control widgets positioned directly on the character face" loading="lazy" />
+
+- **Side Preset Shapekey Sliders**: The sliders located on the sides of the head are used to easily trigger and blend the character's built-in preset facial poses.
+
+<Image src={hsrShapekeys} alt="Side sliders for triggering and blending built-in preset shape keys" loading="lazy" />
+
+---
+
+## 2. Bone Collections & Armature Hierarchy
+
+Honkai: Star Rail armatures are organized within the **Bone Collections** tab to simplify showing and hiding bone groups during posing and animation.
+
+:::note
+There is currently a bug that prevents bones from being assigned to their correct categories in the **Bone Collections** tab. This will be fixed in an upcoming update.
+:::
+
+### Bone Groups Overview
+
+- **Face & Eye Controls**: Eyebrow, eye, eyelid, pupil, and facial controllers.
+- **Torso & Spine**: Spine, chest, neck, and head FK/IK handles.
+- **Arms & Hands**: Left and right arm IK/FK chains with corrected finger bone rolls.
+- **Legs & Feet**: Leg chains with foot roll and knee target controls.
+- **Secondary / Cloth & Hair**: Secondary dynamic bones for capes, skirts, ribbons, and hair strands.
