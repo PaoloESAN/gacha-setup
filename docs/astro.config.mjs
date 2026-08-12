@@ -26,6 +26,10 @@ export default defineConfig({
 			social: [
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/PaoloESAN/gacha-blender-setup' }
 			],
+			editLink: {
+				baseUrl: 'https://github.com/PaoloESAN/gacha-blender-setup/edit/main/docs/',
+			},
+			lastUpdated: true,
 			sidebar: [
 				{
 					label: 'Overview',
