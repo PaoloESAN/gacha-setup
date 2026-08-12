@@ -7,7 +7,7 @@ description: Overview of character rigging, bone collections, facial drivers, an
 
 # Rigging Suite Overview
 
-The **Gacha Blender Setup** rigging module unifies bone hierarchy fixes, facial driver creation, bone collections, and Rigify generation across anime gacha models.
+The **Gacha Setup** rigging module unifies bone hierarchy fixes, facial driver creation, bone collections, and Rigify generation across anime gacha models.
 
 ## Key Rigging Features
 

@@ -1,6 +1,6 @@
 ---
 title: Registro de Cambios
-description: Historial de versiones y actualizaciones para Gacha Blender Setup.
+description: Historial de versiones y actualizaciones para Gacha Setup.
 ---
 
 ## Historial de Versiones

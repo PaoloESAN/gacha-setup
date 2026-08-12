@@ -5,7 +5,7 @@ description: Overview of anime toon shaders, outline rendering, eyeshadow, and p
 
 # Shaders & Material Pipeline
 
-Gacha Blender Setup automatically binds and configures custom anime shaders for each game engine pipeline.
+Gacha Setup automatically binds and configures custom anime shaders for each game engine pipeline.
 
 ## Features
 

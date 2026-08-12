@@ -2314,7 +2314,7 @@ def rig_character(
         matching_mods = [
             mod.bl_info
             for mod in addon_utils.modules()
-            if mod.bl_info.get("name") in ("Gacha Blender Setup", "HoYoverse Setup Wizard")
+            if mod.bl_info.get("name") in ("Gacha Setup", "Gacha Blender Setup", "HoYoverse Setup Wizard")
         ]
         if matching_mods:
             setup_version_tuple = matching_mods[0].get("version", (0, 0, 0))

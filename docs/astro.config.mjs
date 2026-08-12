@@ -6,7 +6,7 @@ import starlight from '@astrojs/starlight';
 export default defineConfig({
 	integrations: [
 		starlight({
-			title: 'Gacha Blender Setup',
+			title: 'Gacha Setup for Blender',
 			logo: {
 				light: '/src/assets/logo-light.svg',
 				dark: '/src/assets/logo-dark.svg',
@@ -37,6 +37,7 @@ export default defineConfig({
 					items: [
 						{ label: 'Quickstart', slug: 'quickstart', translations: { es: 'Guía Rápida' } },
 						{ label: 'Character Assets', slug: 'character-models', translations: { es: 'Assets de Personajes' } },
+						{ label: 'FAQ', slug: 'faq', translations: { es: 'Preguntas Frecuentes' } },
 						{ label: 'Changelog', slug: 'changelog', translations: { es: 'Registro de Cambios' } },
 						{ label: 'Roadmap', slug: 'roadmap', translations: { es: 'Ruta de Desarrollo' } },
 						{ label: 'Credits', slug: 'credits', translations: { es: 'Créditos' } },

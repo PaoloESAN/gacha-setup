@@ -1,6 +1,6 @@
-# [Blender] Character Setup Wizard Addon for HoYoverse & Gacha Shaders
+# Gacha Setup for Blender
 
-**Gacha Blender Setup** is a fork of the original Setup Wizard add-on, created to provide a simple, automated character setup process for Gacha models specifically in modern **official Blender versions (Blender 5.2+)**. Using older versions of Blender or Goo Blender is not recommended, as the primary focus and target of this project is standard official Blender 5.2+.
+**Gacha Setup** is a fork of the original Setup Wizard add-on, created to provide a simple, automated character setup process for Gacha models specifically in modern **official Blender versions (Blender 5.2+)**. Using older versions of Blender or Goo Blender is not recommended, as the primary focus and target of this project is standard official Blender 5.2+.
 
 **Important**: This tool is intended to be used with:
 * Festivity's Genshin Impact Shader: https://github.com/festivize/Blender-miHoYo-Shaders
@@ -86,3 +86,4 @@ Thanks to all those who collaborated on the original project:
 * **NTE**:
   * **Shader**: Omatsuri Discord
   * **Rig**: 矩阵映画
+* **Logo Icon**: <a href="https://www.flaticon.com/free-icons/star" title="star icons">Star icons created by Magnific - Flaticon</a>

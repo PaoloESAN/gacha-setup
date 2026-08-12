@@ -5,7 +5,7 @@ description: Visión general de shaders toon anime, renderizado de delineados (o
 
 # Pipeline de Shaders y Materiales
 
-Gacha Blender Setup vincula y configura automáticamente shaders anime personalizados adaptados al pipeline de cada juego.
+Gacha Setup vincula y configura automáticamente shaders anime personalizados adaptados al pipeline de cada juego.
 
 ## Características
 

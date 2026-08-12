@@ -7,7 +7,7 @@ description: Visión general del sistema de rigging, colecciones de huesos, driv
 
 # Visión General del Rigging
 
-El módulo de rigging de **Gacha Blender Setup** unifica la corrección de jerarquía de huesos, la creación de drivers faciales, el manejo de colecciones de huesos y la generación de rgs Rigify para modelos gacha anime.
+El módulo de rigging de **Gacha Setup** unifica la corrección de jerarquía de huesos, la creación de drivers faciales, el manejo de colecciones de huesos y la generación de rgs Rigify para modelos gacha anime.
 
 ## Características Principales de Rigging
 

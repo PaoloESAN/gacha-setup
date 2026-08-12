@@ -1,6 +1,6 @@
 ---
 title: Roadmap
-description: Future development plans and upcoming features for Gacha Blender Setup.
+description: Future development plans and upcoming features for Gacha Setup.
 ---
 
 :::note

@@ -1,6 +1,6 @@
 ---
 title: Changelog
-description: Release history and version updates for Gacha Blender Setup.
+description: Release history and version updates for Gacha Setup.
 ---
 
 ## Version History

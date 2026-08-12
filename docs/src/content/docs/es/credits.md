@@ -27,3 +27,4 @@ description: Agradecimientos, colaboradores y créditos de recursos.
 - **Omatsuri Discord** — Shader de NTE · [Discord](https://discord.gg/omatsuri)
 - **矩阵映画** — Rig de NTE
 - **HoyoToon** — Assets · [Discord](https://discord.com/invite/hoyotoon)
+- **Icono del Logo** — <a href="https://www.flaticon.com/free-icons/star" title="star icons">Star icons created by Magnific - Flaticon</a>

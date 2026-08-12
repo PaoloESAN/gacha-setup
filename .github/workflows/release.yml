@@ -17,7 +17,7 @@ jobs:
       - name: Create setup wizard zip
         run: |
           zip -r setup_wizard.zip setup_wizard
-          mv setup_wizard.zip "Gacha_Blender_Setup-${{ github.ref_name }}.zip"
+          mv setup_wizard.zip "Gacha_Setup-${{ github.ref_name }}.zip"
 
       - name: Create release and upload asset
         uses: softprops/action-gh-release@v2
@@ -25,4 +25,4 @@ jobs:
           name: ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
           generate_release_notes: true
-          files: Gacha_Blender_Setup-${{ github.ref_name }}.zip
+          files: Gacha_Setup-${{ github.ref_name }}.zip
