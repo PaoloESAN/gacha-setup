@@ -112,13 +112,26 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 elif material_name.endswith('Hand_Eff_Mat'):  # Asmoday
                     mesh_body_part_name = 'StarCloak'
 
+                is_numbered_pupil = any(f'pupil{k}' in material_name.lower() or f'pupil_{k}' in material_name.lower() or f'pupil 0{k}' in material_name.lower() or f'pupila{k}' in material_name.lower() or f'pupila_{k}' in material_name.lower() for k in ['01', '1', '02', '2', '03', '3', '04', '4'])
+                if not is_numbered_pupil and ('pupil' in material_name.lower() or 'pupila' in material_name.lower()):
+                    for img in bpy.data.images:
+                        img_lower = img.name.lower()
+                        if 'pupil' in img_lower and 'diffuse' in img_lower:
+                            if any(f'pupil{k}' in img_lower or f'pupil_{k}' in img_lower or f'pupil 0{k}' in img_lower or f'pupila{k}' in img_lower for k in ['01', '1', '02', '2', '03', '3', '04', '4']):
+                                is_numbered_pupil = True
+                                break
+
                 if mesh_body_part_name in ['Eye', 'EyeStar', 'Eyes', 'EyeShadow']:
                     mesh_body_part_name = 'Face'
+                elif is_numbered_pupil:
+                    mesh_body_part_name = 'New Pupil'
+                elif mesh_body_part_name and ('pupil' in mesh_body_part_name.lower() or 'pupila' in mesh_body_part_name.lower()):
+                    mesh_body_part_name = 'Pupil'
 
                 # If material_name is ever 'Dress', 'Arm' or 'Cloak', there could be issues with get_actual_material_name_for_dress()
                 material_name = self.create_shader_material_if_unique_mesh(mesh, mesh_body_part_name, material_name)
                 genshin_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
-                if not genshin_material and mesh_body_part_name in ['Eye', 'EyeStar', 'Eyes', 'EyeShadow', 'Brow']:
+                if not genshin_material and mesh_body_part_name in ['Eye', 'EyeStar', 'Eyes', 'EyeShadow', 'Brow', 'Pupil', 'Pupila', 'New Pupil']:
                     genshin_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}Face') or \
                                        bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}Brow')
 
@@ -227,7 +240,13 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             material_name = skirt_material.name
         elif mesh_body_part_name == 'Pupil':
             pupil_material = self.create_body_material(self.material_names, self.material_names.PUPIL)
-            material_name = pupil_material.name
+            if pupil_material:
+                material_name = pupil_material.name
+        elif mesh_body_part_name == 'New Pupil':
+            new_pupil_name = getattr(self.material_names, 'NEW_PUPIL', f'{self.material_names.MATERIAL_PREFIX}New Pupil')
+            pupil_material = self.create_body_material(self.material_names, new_pupil_name)
+            if pupil_material:
+                material_name = pupil_material.name
         elif mesh_body_part_name and 'Item' in mesh_body_part_name:  # NPCs
             item_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
             material_name = item_material.name
@@ -237,7 +256,7 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         elif mesh_body_part_name and 'Others' in mesh_body_part_name:  # NPCs, Frem Penguins
             new_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
             material_name = new_material.name
-        elif mesh_body_part_name and mesh_body_part_name not in ['Face', 'Body', 'Hair', 'Eye', 'Dress', 'Arm', 'Cloak', 'VFX', 'StarCloak']:
+        elif mesh_body_part_name and mesh_body_part_name not in ['Face', 'Body', 'Hair', 'Eye', 'Dress', 'Arm', 'Cloak', 'VFX', 'StarCloak', 'Pupil', 'Pupila', 'New Pupil']:
             # Fallback for completely unknown materials (like 'Stockings', 'Wings', etc)
             new_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
             material_name = new_material.name

@@ -28,6 +28,7 @@ class ShaderMaterialNames:
     NIGHT_SOUL_OUTLINES_SUFFIX = 'Night Soul Outlines'
     NIGHT_SOUL_OUTLINES = ''
     PUPIL = ''
+    NEW_PUPIL = ''
     RIBBON = ''
     SKILLOBJ = f'{MATERIAL_PREFIX}SkillObj'
     SKIRT = ''
@@ -77,6 +78,7 @@ class V2_FestivityGenshinImpactMaterialNames(ShaderMaterialNames):
     FACE = f'{MATERIAL_PREFIX}Face'
     OUTLINES = f'{MATERIAL_PREFIX}Outlines'
     PUPIL = f'{MATERIAL_PREFIX}Pupil'
+    NEW_PUPIL = f'{MATERIAL_PREFIX}New Pupil'
     SKILLOBJ = f'{MATERIAL_PREFIX}SkillObj'
     SKIRT = f'{MATERIAL_PREFIX}Skirt'
 
@@ -99,6 +101,7 @@ class V3_BonnyFestivityGenshinImpactMaterialNames(ShaderMaterialNames):
     FACE = f'{MATERIAL_PREFIX}Face'
     OUTLINES = f'{MATERIAL_PREFIX}Outlines'
     PUPIL = f'{MATERIAL_PREFIX}Pupil'
+    NEW_PUPIL = f'{MATERIAL_PREFIX}New Pupil'
     SKILLOBJ = f'{MATERIAL_PREFIX}SkillObj'
     SKIRT = f'{MATERIAL_PREFIX}Skirt'
 

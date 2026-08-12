@@ -265,21 +265,34 @@ def get_actual_material_name_for_dress(material_name, character_type='AVATAR', i
                         actual_material_name = base_color_texture_image_name.split('_')[-3]
                     else:
                         actual_material_name = base_color_texture_image_name.split('_')[-2]
-                    actual_material_name = \
-                        actual_material_name if actual_material_name == 'Hair' or actual_material_name == 'Body' \
-                            else 'Hair' if 'Hair' in base_color_texture_image_name \
-                            else 'Body1' if 'Body1' in base_color_texture_image_name \
-                            else 'Body2' if 'Body2' in base_color_texture_image_name \
-                            else 'Body' if 'Body' in base_color_texture_image_name \
-                                else actual_material_name  # fallback method to get mat name
-                    # If actual_material_name is still a non-shader name (e.g. 'Dress', 'Arm', 'Cloak', 'Veil'),
-                    # default to 'Body' since these are typically Body-type materials (e.g. Columbina's Dress textures)
-                    if actual_material_name not in ('Hair', 'Body', 'Body1', 'Body2', 'Face', 'Effect', 'Eff', 'Cloak'):
+                    
+                    if 'Hair' in base_color_texture_image_name:
+                        actual_material_name = 'Hair'
+                    elif any(k in base_color_texture_image_name for k in ['Body2', 'Body02', 'Dress2', 'Dress02']):
+                        actual_material_name = 'Body2'
+                    elif any(k in base_color_texture_image_name for k in ['Body1', 'Body01', 'Dress1', 'Dress01']):
+                        actual_material_name = 'Body1'
+                    elif 'Body' in base_color_texture_image_name:
                         actual_material_name = 'Body'
-                except IndexError:
+
+                    # If actual_material_name is still a non-shader name (e.g. 'Dress', 'Dress01', 'Arm', 'Cloak', 'Veil'),
+                    # default to 'Body1' for Dress01/1, 'Body2' for Dress02/2, or 'Body'
+                    if actual_material_name not in ('Hair', 'Body', 'Body1', 'Body2', 'Face', 'Effect', 'Eff', 'Cloak'):
+                        if any(k in material_name for k in ['Dress02', 'Dress2', 'Body02', 'Body2']):
+                            actual_material_name = 'Body2'
+                        elif any(k in material_name for k in ['Dress01', 'Dress1', 'Body01', 'Body1']):
+                            actual_material_name = 'Body1'
+                        else:
+                            actual_material_name = 'Body'
+                except (IndexError, AttributeError, KeyError, Exception):
                     # ex. 'Diffuse Texture.001'
                     actual_material_name = material_name.split('_')[-1]
-                    actual_material_name = actual_material_name if actual_material_name != 'Dress' else 'Body'  # if mat name is 'body' or 'hair' use that, else fallback to 'body'
+                    if any(k in material_name or k in actual_material_name for k in ['Dress02', 'Dress2', 'Body02', 'Body2']):
+                        actual_material_name = 'Body2'
+                    elif any(k in material_name or k in actual_material_name for k in ['Dress01', 'Dress1', 'Body01', 'Body1']):
+                        actual_material_name = 'Body1'
+                    elif actual_material_name == 'Dress' or 'Dress' in material_name:
+                        actual_material_name = 'Body'
                     print(f'WARNING: Fallback to applying "{actual_material_name}" onto "{material_name}". Image name is not parseable for: {material_name}')
                 return actual_material_name
     else:
@@ -289,7 +302,12 @@ def get_actual_material_name_for_dress(material_name, character_type='AVATAR', i
 
         # is it the shader's Dress material? or are we checking the original material's name?
         actual_material_name = material_name.split(' ')[-1] if is_shader_dress_material else material_name.split('_')[-2] if material_name.split('_')[-2] != 'Mat' else material_name.split('_')[-1]
-        actual_material_name = actual_material_name if actual_material_name != 'Dress' else 'Body'  # if mat name is 'body' or 'hair' use that, else fallback to 'body'
+        if any(k in material_name or k in actual_material_name for k in ['Dress02', 'Dress2', 'Body02', 'Body2']):
+            actual_material_name = 'Body2'
+        elif any(k in material_name or k in actual_material_name for k in ['Dress01', 'Dress1', 'Body01', 'Body1']):
+            actual_material_name = 'Body1'
+        elif actual_material_name == 'Dress':
+            actual_material_name = 'Body'
         print(f'WARNING: Fallback to applying "{actual_material_name}" onto "{material_name}". Image name is not parseable for: {material_name}')
         return actual_material_name
 
