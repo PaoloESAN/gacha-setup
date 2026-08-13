@@ -1,5 +1,10 @@
 # Gacha Setup for Blender
 
+![Gacha Setup](image.jpg)
+*Reference: Kaguya-sama: Love Is War*
+
+**Official Website & Documentation:** [https://gacha-setup.pages.dev/](https://gacha-setup.pages.dev/)
+
 **Gacha Setup** is a fork of the original [Setup Wizard](https://github.com/michael-gh1/Addons-And-Tools-For-Blender-miHoYo-Shaders) add-on, created to provide a simple, automated character setup process for Gacha models specifically in modern **official Blender versions (Blender 5.2+)**. Using older versions of Blender or Goo Blender is not recommended, as the primary focus and target of this project is standard official Blender 5.2+.
 
 ---
