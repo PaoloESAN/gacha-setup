@@ -35,6 +35,13 @@ export default defineConfig({
 				{
 					tag: 'meta',
 					attrs: {
+						name: 'google-site-verification',
+						content: 'hp76bd1odx0IE5OGqe6Jfi4uQLa6tYttacJzMGcF3Rc',
+					},
+				},
+				{
+					tag: 'meta',
+					attrs: {
 						property: 'og:image',
 						content: 'https://gacha-setup.pages.dev/og-image.jpg',
 					},
