@@ -26,4 +26,4 @@
 ## Resources
 
 - Site: https://gacha-setup.pages.dev
-- Repository: https://github.com/PaoloESAN/gacha-blender-setup
+- Repository: https://github.com/PaoloESAN/gacha-setup

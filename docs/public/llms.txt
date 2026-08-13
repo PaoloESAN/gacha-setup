@@ -40,6 +40,6 @@
 
 ## Repositories & Resources
 
-- GitHub Repository: https://github.com/PaoloESAN/gacha-blender-setup
-- Latest Release Download: https://github.com/PaoloESAN/gacha-blender-setup/releases/latest
+- GitHub Repository: https://github.com/PaoloESAN/gacha-setup
+- Latest Release Download: https://github.com/PaoloESAN/gacha-setup/releases/latest
 - Documentation Website: https://gacha-setup.pages.dev

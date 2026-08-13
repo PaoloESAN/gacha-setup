@@ -12,14 +12,14 @@ description: Historial de versiones y actualizaciones para Gacha Setup.
 - **Rigging:** Orientación de huesos corregida para la próxima configuración de físicas.
 - **Genshin & Core:** Correcciones en materiales de shaders para ojos/normales y correcciones de extracción en ExpyKit.
 
-[Changelog completo: v3.2.1...v3.2.2](https://github.com/PaoloESAN/gacha-blender-setup/compare/v3.2.1...v3.2.2)
+[Changelog completo: v3.2.1...v3.2.2](https://github.com/PaoloESAN/gacha-setup/compare/v3.2.1...v3.2.2)
 
 ### v3.2.1
 
 - **fix(genshin):** el pulgar no rotaba correctamente y la IK izquierda fallaba.
 - **fix(gi, zzz, nte):** las extremidades ya no se estiran.
 
-[Changelog completo: v3.2.0...v3.2.1](https://github.com/PaoloESAN/gacha-blender-setup/releases/tag/v3.2.1)
+[Changelog completo: v3.2.0...v3.2.1](https://github.com/PaoloESAN/gacha-setup/releases/tag/v3.2.1)
 
 ### v3.2.0
 
@@ -40,13 +40,13 @@ description: Historial de versiones y actualizaciones para Gacha Setup.
 - Correcciones en el importador de ZZZ.
 - Mejores outlines y sombra facial para ZZZ.
 
-[Changelog completo: v3.1.0...v3.2.0](https://github.com/PaoloESAN/gacha-blender-setup/releases/tag/v3.2.0)
+[Changelog completo: v3.1.0...v3.2.0](https://github.com/PaoloESAN/gacha-setup/releases/tag/v3.2.0)
 
 ### v3.1.0
 
 - **feat:** soporte de NTE y correcciones en ZZZ.
 
-[Changelog completo: v3.0.0...v3.1.0](https://github.com/PaoloESAN/gacha-blender-setup/releases/tag/v3.1.0)
+[Changelog completo: v3.0.0...v3.1.0](https://github.com/PaoloESAN/gacha-setup/releases/tag/v3.1.0)
 
 ### v3.0.0
 
