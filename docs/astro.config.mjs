@@ -31,6 +31,22 @@ export default defineConfig({
 				baseUrl: 'https://github.com/PaoloESAN/gacha-blender-setup/edit/main/docs/',
 			},
 			lastUpdated: true,
+			head: [
+				{
+					tag: 'meta',
+					attrs: {
+						property: 'og:image',
+						content: 'https://gacha-setup.pages.dev/og-image.jpg',
+					},
+				},
+				{
+					tag: 'meta',
+					attrs: {
+						name: 'twitter:image',
+						content: 'https://gacha-setup.pages.dev/og-image.jpg',
+					},
+				},
+			],
 			sidebar: [
 				{
 					label: 'Overview',
