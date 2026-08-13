@@ -273,8 +273,8 @@ header.header starlight-lang-select {
 :root[data-theme='light'] .hero .actions a.primary,
 :root[data-theme='light'] .hero .action.primary,
 :root[data-theme='light'] .hero a.primary {
-	background-color: #ea580c !important;
-	background: #ea580c !important;
+	background-color: #9a3412 !important;
+	background: #9a3412 !important;
 	color: #ffffff !important;
 }
 
@@ -282,8 +282,8 @@ header.header starlight-lang-select {
 :root[data-theme='light'] .hero .actions a.primary:hover,
 :root[data-theme='light'] .hero .action.primary:hover,
 :root[data-theme='light'] .hero a.primary:hover {
-	background-color: #f97316 !important;
-	background: #f97316 !important;
+	background-color: #7c2d12 !important;
+	background: #7c2d12 !important;
 	color: #ffffff !important;
 }
 
