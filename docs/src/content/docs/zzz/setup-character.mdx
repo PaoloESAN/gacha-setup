@@ -1,0 +1,67 @@
+---
+title: Zenless Zone Zero Character Setup
+description: Step-by-step setup guide for Zenless Zone Zero character models in Blender 5.2+.
+---
+
+import { Image } from 'astro:assets';
+import zzzPanel from '../../../assets/content/zzz/zzz-panel.png';
+import zzzCharacter from '../../../assets/content/zzz/zzz-character.png';
+import zzzScene from '../../../assets/content/zzz/zzz-scene.png';
+import zzzEyeshadow1 from '../../../assets/content/zzz/zzz-eyeshadow1.png';
+import zzzEyeshadow2 from '../../../assets/content/zzz/zzz-eyeshadow2.png';
+import zzzEyeshadow3 from '../../../assets/content/zzz/zzz-eyeshadow3.png';
+
+## 1. Opening the Setup Wizard
+
+1. Press `N` in the 3D Viewport to open the sidebar.
+2. Navigate to the **Character Setup Wizard** tab.
+3. In the **Game** drop-down menu, select **Zenless Zone Zero**.
+
+<Image src={zzzPanel} alt="Zenless Zone Zero Setup Wizard N-Panel" loading="eager" />
+
+---
+
+## 2. Importing Your Character
+
+You can set up your model in one click using **Run Entire Setup** or step-by-step via **Basic Setup**.
+
+1. Click **Run Entire Setup** (or **Set Up Character** under Basic Setup).
+2. A file browser window will appear. Navigate to your [character folder](/character-models/#zzz) containing the `.fbx` model and textures.
+3. Click **Select Character Folder**.
+
+<Image src={zzzCharacter} alt="Blender File View selecting ZZZ character model folder" loading="lazy" />
+
+---
+
+## 3. Automated Basic Setup Pipeline
+
+When running the setup, the add-on executes the following automated steps for Zenless Zone Zero:
+
+- **Set Up Character**: Imports the `.fbx` mesh, cleans vertex groups, and standardizes bone hierarchies.
+- **Set Up Materials**: Replaces default Blender materials with custom **ZZZ Toon Shader** nodes, automatically binding diffuse, lightmap, eyeshadow, and color ramp textures.
+- **Set Up Outlines**: Applies geometry-node inverted-hull outline modifiers to all character meshes for crisp line art rendering.
+- **Fix Transformations**: Resets location, rotation, and scale transformations.
+- **Rig Character**: Integrates the specialized **jideeh ZZZ Face Rig** and configures breast/torso physics controls.
+- **Finish Setup**: Switches Color Management to **Standard** to preserve raw texture color accuracy.
+
+<Image src={zzzScene} alt="Zenless Zone Zero character imported into 3D scene" loading="lazy" />
+
+---
+
+## 4. Optional: Adding Eyeshadow Material
+
+If your character requires manual eyeshadow material assignment:
+
+1. Select the character's face mesh and press `Tab` to enter **Edit Mode**.
+2. Hover over the eyeshadow geometry and press `L` to select the eyeshadow mesh components.
+3. In the **Material Properties** tab, click the `+` button to create a new material slot.
+
+<Image src={zzzEyeshadow1} alt="Selecting eyeshadow mesh in Edit Mode and adding a new material slot" loading="lazy" />
+
+4. Assign the **ZZZ Shader Eye** material to the newly created slot.
+
+<Image src={zzzEyeshadow2} alt="Assigning ZZZ Shader Eye material to slot" loading="lazy" />
+
+5. Click the **Assign** button to apply the material to the selected eyeshadow mesh.
+
+<Image src={zzzEyeshadow3} alt="Clicking Assign button to apply eyeshadow material" loading="lazy" />

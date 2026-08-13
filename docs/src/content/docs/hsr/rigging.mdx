@@ -1,6 +1,6 @@
 ---
-title: "Honkai: Star Rail Rigging & Bone Collections"
-description: "Isaac facial expression controls, face rig setup, and bone collections for Honkai: Star Rail models."
+title: "Honkai: Star Rail Rigging"
+description: "Isaac facial expression controls and face rig setup for Honkai: Star Rail models."
 ---
 
 import { Image } from 'astro:assets';
@@ -26,21 +26,3 @@ Upon importing and setting up the character, the add-on configures two main rigs
 - **Side Preset Shapekey Sliders**: The sliders located on the sides of the head are used to easily trigger and blend the character's built-in preset facial poses.
 
 <Image src={hsrShapekeys} alt="Side sliders for triggering and blending built-in preset shape keys" loading="lazy" />
-
----
-
-## 2. Bone Collections & Armature Hierarchy
-
-Honkai: Star Rail armatures are organized within the **Bone Collections** tab to simplify showing and hiding bone groups during posing and animation.
-
-:::note
-There is currently a bug that prevents bones from being assigned to their correct categories in the **Bone Collections** tab. This will be fixed in an upcoming update.
-:::
-
-### Bone Groups Overview
-
-- **Face & Eye Controls**: Eyebrow, eye, eyelid, pupil, and facial controllers.
-- **Torso & Spine**: Spine, chest, neck, and head FK/IK handles.
-- **Arms & Hands**: Left and right arm IK/FK chains with corrected finger bone rolls.
-- **Legs & Feet**: Leg chains with foot roll and knee target controls.
-- **Secondary / Cloth & Hair**: Secondary dynamic bones for capes, skirts, ribbons, and hair strands.

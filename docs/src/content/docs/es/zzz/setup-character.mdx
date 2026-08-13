@@ -1,0 +1,67 @@
+---
+title: Configuración de Personajes de Zenless Zone Zero
+description: Guía paso a paso para importar y configurar modelos de Zenless Zone Zero en Blender 5.2+.
+---
+
+import { Image } from 'astro:assets';
+import zzzPanel from '../../../../assets/content/zzz/zzz-panel.png';
+import zzzCharacter from '../../../../assets/content/zzz/zzz-character.png';
+import zzzScene from '../../../../assets/content/zzz/zzz-scene.png';
+import zzzEyeshadow1 from '../../../../assets/content/zzz/zzz-eyeshadow1.png';
+import zzzEyeshadow2 from '../../../../assets/content/zzz/zzz-eyeshadow2.png';
+import zzzEyeshadow3 from '../../../../assets/content/zzz/zzz-eyeshadow3.png';
+
+## 1. Abrir el Setup Wizard
+
+1. Presiona `N` en la Vista 3D (3D Viewport) para desplegar la barra lateral.
+2. Ve a la pestaña **Character Setup Wizard**.
+3. En el menú desplegable **Game**, selecciona **Zenless Zone Zero**.
+
+<Image src={zzzPanel} alt="Panel lateral N-Panel de Zenless Zone Zero Setup Wizard" loading="eager" />
+
+---
+
+## 2. Importar tu Personaje
+
+Puedes configurar todo tu modelo con un solo clic mediante **Run Entire Setup** o paso a paso desde **Basic Setup**.
+
+1. Haz clic en **Run Entire Setup** (o en **Set Up Character** dentro de Basic Setup).
+2. Se abrirá el explorador de archivos de Blender. Navega hasta la carpeta de tu personaje que contiene el modelo `.fbx` y sus texturas.
+3. Haz clic en **Select Character Folder**.
+
+<Image src={zzzCharacter} alt="Navegador de archivos de Blender seleccionando la carpeta del personaje ZZZ" loading="lazy" />
+
+---
+
+## 3. Flujo Automatizado de Basic Setup
+
+Al ejecutar el proceso, el add-on realiza automáticamente los siguientes pasos para Zenless Zone Zero:
+
+- **Set Up Character**: Importa la malla `.fbx`, limpia los grupos de vértices y estandariza las jerarquías del esqueleto.
+- **Set Up Materials**: Reemplaza los materiales por defecto de Blender con nodos del **ZZZ Toon Shader**, vinculando automáticamente texturas difusas, lightmaps, sombra de ojos (eyeshadow) y rampas de color.
+- **Set Up Outlines**: Aplica modificadores de geometría tipo inverted-hull a las mallas del personaje para obtener un delineado estilo anime limpio.
+- **Fix Transformations**: Resetea las transformaciones de posición, rotación y escala.
+- **Rig Character**: Integra el rig facial especializado **jideeh ZZZ Face Rig** y configura los controles de físicas de pecho y torso.
+- **Finish Setup**: Cambia la gestión de color de Blender a **Standard** para conservar la precisión de color original de las texturas.
+
+<Image src={zzzScene} alt="Personaje de Zenless Zone Zero importado en la escena 3D" loading="lazy" />
+
+---
+
+## 4. Opcional: Agregar Material de Eyeshadow
+
+Si tu personaje requiere la configuración manual del material de sombra de ojos (eyeshadow):
+
+1. Selecciona la cara del personaje e ingresa a **Edit Mode** presionando `Tab`.
+2. Posiciona el cursor sobre la malla de los eyeshadow y presiona la tecla `L` para seleccionarlos.
+3. En la pestaña de **Material Properties** (propiedades de material), haz clic en el botón `+` para crear un nuevo slot de material.
+
+<Image src={zzzEyeshadow1} alt="Seleccionando la malla de eyeshadow en Edit Mode y agregando un nuevo slot de material" loading="lazy" />
+
+4. Asigna el material **ZZZ Shader Eye** a ese nuevo slot de material.
+
+<Image src={zzzEyeshadow2} alt="Asignando el material ZZZ Shader Eye al slot" loading="lazy" />
+
+5. Por último, pulsa el botón **Assign** (Asignar) para aplicar el material a la selección.
+
+<Image src={zzzEyeshadow3} alt="Haciendo clic en el botón Assign para aplicar el material" loading="lazy" />
