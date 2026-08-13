@@ -4,6 +4,7 @@ import starlight from '@astrojs/starlight';
 
 // https://astro.build/config
 export default defineConfig({
+	site: 'https://gacha-setup.pages.dev',
 	integrations: [
 		starlight({
 			title: 'Gacha Setup for Blender',
