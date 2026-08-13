@@ -1,0 +1,58 @@
+---
+title: Genshin Impact Character Setup
+description: Step-by-step setup guide for Genshin Impact character models in Blender 5.2+.
+---
+
+import { Image } from 'astro:assets';
+import genshinPanel from '../../../assets/content/genshin/genshin-panel.png';
+import genshinCharacter from '../../../assets/content/genshin/genshin-character.png';
+import genshinScene from '../../../assets/content/genshin/genshin-scene.png';
+import genshinCompositor from '../../../assets/content/genshin/genshin-compositor.png';
+
+
+## 1. Opening the Setup Wizard
+
+1. Press `N` in the 3D Viewport to open the sidebar.
+2. Navigate to the **Character Setup Wizard** tab.
+3. In the **Game** drop-down menu, select **Genshin Impact**.
+
+<Image src={genshinPanel} alt="Genshin Impact Setup Wizard N-Panel" loading="eager" />
+
+---
+
+## 2. Importing Your Character
+
+You can set up your model in one click using **Run Entire Setup** or step-by-step via **Basic Setup**.
+
+1. Click **Run Entire Setup** (or **Set Up Character** under Basic Setup).
+2. A file browser window will appear. Navigate to your [character folder](/character-models/#genshin) containing the `.fbx` model and textures (such as `Avatar_Girl_Catalyst_Charlotte.fbx`).
+3. Click **Select Character Folder**.
+
+<Image src={genshinCharacter} alt="Blender File View selecting character model folder" loading="lazy" />
+
+---
+
+## 3. Automated Basic Setup Pipeline
+
+When running the setup, the add-on executes the following automated steps:
+
+- **Set Up Character**: Imports the `.fbx` mesh, cleans vertex groups, and standardizes bone hierarchies.
+- **Set Up Materials**: Replaces default Blender materials with custom **Festivity Toon Shader** nodes, automatically binding diffuse (`_fuse`), lightmap (`_map`), and color ramp (`_amp`) textures.
+- **Set Up Outlines**: Applies geometry-node inverted-hull outline modifiers to all character meshes for crisp line art rendering.
+- **Fix Transformations**: Resets location, rotation, and scale transformations while linking facial drivers to light vectors.
+- **Rig Character**: Configures control shapes and facial bone drivers.
+- **Finish Setup**: Switches Color Management to **Standard** to preserve raw texture color accuracy.
+
+<Image src={genshinScene} alt="Genshin Impact character imported into 3D scene" loading="lazy" />
+
+---
+
+## 4. Viewport Shading & Compositor Settings
+
+To view Festivity shaders and real-time head shadow compositing in the viewport:
+
+1. Open the **Viewport Shading** menu (top right of the 3D Viewport).
+2. Under **Lighting**, enable **Scene Lights** and **Scene World**.
+3. Under **Compositor**, set the dropdown mode to **Always** (or **Camera**).
+
+<Image src={genshinCompositor} alt="Viewport Shading compositor settings set to Always" loading="lazy" />

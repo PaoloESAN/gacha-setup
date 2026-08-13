@@ -1,0 +1,19 @@
+---
+import Default from '@astrojs/starlight/components/Sidebar.astro';
+import Search from 'virtual:starlight/components/Search';
+import SiteTitle from 'virtual:starlight/components/SiteTitle';
+import MobileMenuFooter from 'virtual:starlight/components/MobileMenuFooter';
+---
+
+{/* (STARLIGHT-THEME-OBSIDIAN): Reorder site sidebar to always contain site title and search */}
+<div class="sidebar-top">
+    <div class="title-wrapper ">
+        <SiteTitle/>
+    </div>
+
+    <Search/>
+
+    <MobileMenuFooter/>
+</div>
+
+<Default><slot /></Default>

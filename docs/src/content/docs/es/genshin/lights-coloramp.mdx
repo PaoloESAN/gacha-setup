@@ -1,0 +1,57 @@
+---
+title: Configuración de Luces y Coloramp
+description: Control de dirección de luz y personalización de rampas de color del Festivity toon shader para modelos de Genshin Impact.
+---
+
+import { Image } from 'astro:assets';
+import genshinLightdir from '../../../../assets/content/genshin/genshin-lightdir.png';
+import genshinLightpanel from '../../../../assets/content/genshin/genshin-lightpanel.png';
+import genshinFresnel1 from '../../../../assets/content/genshin/genshin-fresnel1.png';
+import genshinFresnel2 from '../../../../assets/content/genshin/genshin-fresnel2.png';
+
+## 1. Controlar la Dirección de Luz y Sombras
+
+Durante la configuración del personaje, se genera un objeto especializado llamado `Light Direction_<Personaje>` en tu colección de la escena.
+
+1. Selecciona `Light Direction_<Personaje>` en el panel **Outliner** (por ejemplo, `Light Direction_Charlotte`).
+2. Abre la pestaña **Transformar** en las Propiedades del Objeto.
+3. Modifica los valores de **Rotación** (XYZ Euler) para orientar el vector de luz:
+   - **Rotación Z**: Gira horizontalmente la inclinación del sol alrededor del personaje.
+   - **Rotación Y**: Ajusta la inclinación horizontal de la luz a través del personaje.
+   - **Rotación X**: Ajusta la altura e inclinación vertical de la línea de sombra.
+
+<Image src={genshinLightdir} alt="Ajuste de rotación del objeto Light Direction en el Outliner y transformaciones" loading="eager" />
+
+---
+
+## 2. Panel 3D Interactivo de Iluminación y Fresnel
+
+Cada personaje incluye un panel 3D de control posicionado en la escena, permitiéndote cambiar los parámetros del shader Festivity en tiempo real sin tener que abrir el editor de nodos.
+
+<Image src={genshinLightpanel} alt="Panel de control 3D de Iluminación y Fresnel en la vista 3D" loading="lazy" />
+
+:::note
+Algunos controles del panel de luz podrían no funcionar como se espera. Lo sentimos — es una limitación conocida que se mejorará en futuras versiones.
+:::
+
+### Controles de Iluminación
+- **Soft Lit y Soft Shadow**: Ruedas de color para graduar los tonos suaves de transición de sombra.
+- **Sharp Lit y Sharp Shadow**: Ruedas de color para definir los tonos y bordes nítidos cel-shade.
+- **Ambient**: Ajusta el brillo base ambiental y el tinte de iluminación difusa.
+- **Rim Lit y Rim Shadow**: Define la intensidad y color del brillo de borde (Rim Light).
+- **Shadow Offset**: Deslizador para controlar el umbral de posición de las sombras en el cuerpo del personaje.
+
+### Controles de Fresnel
+- **Fresnel Toggle**: Activa o desactiva el efecto de resplandor en los bordes.
+- **Fresnel Color**: Rueda de color para personalizar el tono del brillo Fresnel.
+- **Fresnel Size**: Deslizador para graduar el grosor de la caída del resplandor.
+
+Para activar el fresnel selecciona el objeto, ve al **Shader Editor**, luego ubica el nodo de **Global Properties** y haz doble clic para entrar:
+
+<Image src={genshinFresnel1} alt="Configuración de fresnel en Global Properties" loading="lazy" />
+
+Luego para activarlo debes cambiar el valor de **Use Fresnel** a `1`:
+
+<Image src={genshinFresnel2} alt="Use Fresnel activado" loading="lazy" />
+
+Para cambiar el color puedes usar el **Fresnel Color** del panel de luz y ajustar su intensidad con **Fresnel Power**.

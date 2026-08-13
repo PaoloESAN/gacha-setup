@@ -1,0 +1,43 @@
+---
+title: "Lights & Coloramp Configuration"
+description: "Controlling light direction and customizing StellarToon shader color ramps for Honkai: Star Rail models."
+---
+
+import { Image } from 'astro:assets';
+import hsrLightdir from '../../../assets/content/hsr/hsr-lightdir.png';
+import hsrAmbient1 from '../../../assets/content/hsr/hsr-ambient1.png';
+import hsrAmbient2 from '../../../assets/content/hsr/hsr-ambient2.png';
+
+## 1. Controlling Light & Shadow Direction
+
+During character setup, a dedicated `Light Direction_<Character>` object is created in your scene collection.
+
+1. Locate `Light Direction_<Character>` in the **Outliner** panel (e.g. `Light Direction_March7th`).
+2. Open the **Item Transform** panel in Object Properties.
+3. Adjust the **Rotation** values (XYZ Euler) to rotate the light vector:
+   - **Rotation Z**: Rotates the sun angle horizontally around the character.
+   - **Rotation Y**: Adjusts the horizontal tilt of the light across the character.
+   - **Rotation X**: Adjusts the vertical pitch of the shadow line.
+
+<Image src={hsrLightdir} alt="Adjusting Light Direction object rotation in Outliner for Honkai: Star Rail" loading="eager" />
+
+---
+
+## 2. Ambient Lighting & Global Properties Customization
+
+To customize the color tint, ambient lighting, and cel-shaded tones of the **StellarToon Shader**:
+
+1. Select your character object and open the **Shader Editor**.
+2. Locate the **Global Properties** node group and double-click it to enter into the node tree.
+
+<Image src={hsrAmbient1} alt="Global Properties node in Shader Editor" loading="lazy" />
+
+3. Inside the node group, scroll to the bottom section where the coloring and ambient light options are located:
+   - **Tint Lit / Custom Ambient Color**: Controls the ambient light base tint and lighting color scheme.
+   - **Coloramp & Shadows**: Manages color ramps and gradient falloffs for cel-shaded areas.
+
+<Image src={hsrAmbient2} alt="Coloring and ambient light options at the bottom of the Global Properties node" loading="lazy" />
+
+:::tip
+You can allow the eyes to be tinted as well by setting the **Eye Cant be tinted** option to `0`.
+:::

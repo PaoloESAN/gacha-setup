@@ -1,0 +1,123 @@
+---
+import { Icon } from '@astrojs/starlight/components'
+
+const { dir, pagination } = Astro.locals.starlightRoute;
+const { prev, next } = pagination;
+const isRtl = dir === 'rtl'
+---
+
+{
+  (prev || next) && (
+    <div class="pagination-links" dir={dir}>
+      {prev && (
+        <a href={prev.href} rel="prev" class="card-link">
+          <div class="link-label">
+            <Icon name={isRtl ? 'right-arrow' : 'left-arrow'} size="1.1rem" />
+            <span>{Astro.locals.t('page.previousLink')}</span>
+          </div>
+          <p class="link-title">{prev.label}</p>
+        </a>
+      )}
+      {next && (
+        <a href={next.href} rel="next" class="card-link">
+          <div class="link-label">
+            <span>{Astro.locals.t('page.nextLink')}</span>
+            <Icon name={isRtl ? 'left-arrow' : 'right-arrow'} size="1.1rem" />
+          </div>
+          <p class="link-title">{next.label}</p>
+        </a>
+      )}
+    </div>
+  )
+}
+
+<style>
+  @layer starlight.core {
+	  .pagination-links.pagination-links {
+		  display: grid !important;
+		  grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr)) !important;
+		  gap: 1rem !important;
+		  margin-top: 1rem !important;
+		  margin-bottom: 7rem !important;
+	  }
+
+	  .pagination-links a.card-link {
+		  display: flex !important;
+		  flex-direction: column !important;
+		  gap: 0.35rem !important;
+		  width: 100% !important;
+		  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+		  border-radius: 1.15rem !important;
+		  padding: 1.25rem 1.5rem !important;
+		  text-decoration: none !important;
+		  color: var(--sl-color-gray-2) !important;
+		  background: rgba(255, 255, 255, 0.03) !important;
+		  box-shadow: none !important;
+		  transition: all 0.25s ease !important;
+		  overflow-wrap: anywhere !important;
+	  }
+
+	  .pagination-links a.card-link:hover {
+		  border-color: rgba(255, 255, 255, 0.15) !important;
+		  background: rgba(255, 255, 255, 0.06) !important;
+		  transform: translateY(-2px) !important;
+		  color: var(--sl-color-white) !important;
+		  box-shadow: none !important;
+	  }
+
+	  .link-label {
+		  display: flex !important;
+		  align-items: center !important;
+		  gap: 0.4rem !important;
+		  font-size: var(--sl-text-xs) !important;
+		  color: #ff7024 !important;
+		  text-transform: uppercase !important;
+		  letter-spacing: 0.04em !important;
+		  font-weight: 600 !important;
+	  }
+
+	  .pagination-links a[rel='next'] {
+		  text-align: end !important;
+		  align-items: flex-end !important;
+		  margin-left: auto !important;
+	  }
+
+	  .pagination-links a[rel='next'] .link-label {
+		  justify-content: flex-end !important;
+	  }
+
+	  .link-title {
+		  color: var(--sl-color-white) !important;
+		  font-size: var(--sl-text-lg) !important;
+		  font-weight: 700 !important;
+		  line-height: var(--sl-line-height-headings) !important;
+		  margin: 0 !important;
+	  }
+
+	  svg {
+		  flex-shrink: 0 !important;
+		  color: #ff7024 !important;
+	  }
+
+	  :global([data-theme='light']) .pagination-links a.card-link {
+		  background: rgba(255, 255, 255, 0.85) !important;
+		  border: 1px solid rgba(234, 88, 12, 0.15) !important;
+		  box-shadow: none !important;
+	  }
+
+	  :global([data-theme='light']) .pagination-links a.card-link:hover {
+		  background: #ffffff !important;
+		  border-color: rgba(234, 88, 12, 0.3) !important;
+		  box-shadow: none !important;
+	  }
+
+	  :global([data-theme='light']) .link-title {
+		  color: #0f172a !important;
+	  }
+
+	  :global([data-theme='light']) .link-label,
+	  :global([data-theme='light']) svg {
+		  color: #ea580c !important;
+	  }
+  }
+</style>

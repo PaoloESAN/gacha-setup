@@ -1,0 +1,33 @@
+---
+title: "Neverness to Everness Rigging & Bone Collections"
+description: "Facial expression controls, face rig setup, and bone collections for Neverness to Everness models."
+---
+
+import { Image } from 'astro:assets';
+import nteRig from '../../../assets/content/nte/nte-rig.png';
+import nteBonecoll from '../../../assets/content/nte/nte-bonecoll.png';
+
+:::note
+Moving the rig may cause minor lag.
+:::
+
+## 1. 3D Facial Expression Control Panel & Rigging
+
+A dedicated facial rig control board will be added coming soon. For now, you can select the face mesh and use the shape keys manually.
+
+<Image src={nteRig} alt="NTE character armature and control widgets in Blender" loading="eager" />
+
+---
+
+## 2. Bone Collections & Armature Hierarchy
+
+Neverness to Everness armatures are organized into structured groups within the **Bone Collections** tab to streamline posing and animation workflows.
+
+<Image src={nteBonecoll} alt="Armature Properties Bone Collections panel for NTE character" loading="lazy" />
+
+### Bone Groups Overview
+- **Face & Eye Controls**: Eyebrow, eye, eyelid, pupil, and facial controllers.
+- **Torso & Spine**: Spine, chest, neck, and head FK/IK handles.
+- **Arms & Hands**: Left and right arm chains with individual IK target pins and finger bone controls.
+- **Legs & Feet**: Left and right leg chains with foot roll and knee target controls.
+- **Secondary / Cloth & Hair**: Secondary dynamic bones for skirts, jackets, ribbons, and hair strands.

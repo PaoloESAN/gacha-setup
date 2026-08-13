@@ -1,7 +1,7 @@
 import os
 
 bl_info = {
-    "name": "Gacha Blender Setup",
+    "name": "Gacha Setup",
     "author": "Mken, OctavoPE, Enthralpy, PaoloESAN",
     "version": (3, 2, 2),
     "blender": (5, 2, 0),

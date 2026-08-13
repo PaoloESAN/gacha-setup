@@ -1,0 +1,45 @@
+# Gacha Setup for Blender 5.2+
+
+> Gacha Setup is an open-source Blender add-on that automates character model importing, anime toon shading (Festivity, StellarToon, ZZZ Shader, NTE Shader), inverted-hull outline setup, facial driver controls, and rigging for 3D anime models from Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, and Neverness to Everness.
+
+## Core Documentation
+
+- [Quickstart Guide](https://gacha-setup.pages.dev/quickstart/): Automated setup, compatibility (Blender 5.2+), installation steps, and N-panel wizard guide.
+- [Spanish Quickstart Guide](https://gacha-setup.pages.dev/es/quickstart/): Guía rápida de instalación y configuración de personajes en español.
+- [Character Assets](https://gacha-setup.pages.dev/character-models/): Official asset download links for Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, and Neverness to Everness.
+- [FAQ](https://gacha-setup.pages.dev/faq/): Frequently asked questions about Blender compatibility, shaders, and community.
+- [Changelog](https://gacha-setup.pages.dev/changelog/): Release history, version updates, and bug fixes.
+- [Roadmap](https://gacha-setup.pages.dev/roadmap/): Upcoming features and planned updates.
+- [Credits](https://gacha-setup.pages.dev/credits/): Credits and contributors (BonnyAnimations, Enthralpy, Aiko, jideeh, Just_ScaasI).
+
+## Supported Games & Features
+
+### Genshin Impact
+- [Setup Character](https://gacha-setup.pages.dev/genshin/setup-character/): Import `.fbx` models, automatic Festivity Toon Shader assignment, outline geometry nodes, and compositor setup.
+- [Lights & Coloramp](https://gacha-setup.pages.dev/genshin/lights-coloramp/): Controlling `Light Direction` object rotation, 3D viewport control panel, soft/sharp shadow color wheels, and Fresnel glow.
+- [Rigging](https://gacha-setup.pages.dev/genshin/rigging/): 3D facial expression control board (brows, eyes, mouth) and bone collection categorization.
+- [Bugs & Solutions](https://gacha-setup.pages.dev/genshin/bugs-solutions/): Troubleshooting common Genshin Impact model and shader issues.
+
+### Honkai: Star Rail
+- [Setup Character](https://gacha-setup.pages.dev/hsr/setup-character/): Import HSR models, StellarToon shader nodes, outline setup, and eye Y-driver configuration.
+- [Lights & Coloramp](https://gacha-setup.pages.dev/hsr/lights-coloramp/): Light direction rotation, Global Properties ambient lighting customization, and eye tint settings.
+- [Rigging](https://gacha-setup.pages.dev/hsr/rigging/): Isaac Face Rig 3D control board, manual face controls, and preset shapekey sliders.
+- [Bugs & Solutions](https://gacha-setup.pages.dev/hsr/bugs-solutions/): Troubleshooting HSR model issues.
+
+### Zenless Zone Zero
+- [Setup Character](https://gacha-setup.pages.dev/zzz/setup-character/): ZZZ model pipeline, ZZZ Toon Shader, eyeshadow material assignment, and setup wizard.
+- [Lights & Coloramp](https://gacha-setup.pages.dev/zzz/lights-coloramp/): Light Direction object control, 3D lighting control panel in Pose Mode (Ambient, Sharp Lit/Shadow, Rim Lit/Shadow, Rim X/Y).
+- [Rigging](https://gacha-setup.pages.dev/zzz/rigging/): jideeh ZZZ Face Rig v6 integration and shapekey driver controls.
+- [Bugs & Solutions](https://gacha-setup.pages.dev/zzz/bugs-solutions/): Troubleshooting ZZZ model issues.
+
+### Neverness to Everness
+- [Setup Character](https://gacha-setup.pages.dev/nte/setup-character/): NTE setup pipeline, long import process notes, and Compositing workspace node setup (connecting Mix node to Group Output/Viewer).
+- [Lights & Coloramp](https://gacha-setup.pages.dev/nte/lights-coloramp/): Light direction setup and development roadmap.
+- [Rigging](https://gacha-setup.pages.dev/nte/rigging/): Armature posing, lag notes, manual shape keys usage, and Bone Collections.
+- [Bugs & Solutions](https://gacha-setup.pages.dev/nte/bugs-solutions/): Troubleshooting NTE model issues.
+
+## Repositories & Resources
+
+- GitHub Repository: https://github.com/PaoloESAN/gacha-blender-setup
+- Latest Release Download: https://github.com/PaoloESAN/gacha-blender-setup/releases/latest
+- Documentation Website: https://gacha-setup.pages.dev

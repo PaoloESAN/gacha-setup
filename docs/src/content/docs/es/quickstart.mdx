@@ -1,0 +1,48 @@
+---
+title: Guía Rápida
+description: Empieza rápidamente con Gacha Setup para Blender 5.2+.
+---
+
+import { Image } from 'astro:assets';
+import mainPanel from '../../../assets/content/overview/main-panel.png';
+import selectCharacter from '../../../assets/content/overview/select-character.png';
+import characterEscene from '../../../assets/content/overview/character-escene.png';
+import panelLegend from '../../../assets/content/overview/panel-legend.webp';
+
+:::note
+Gacha Setup está diseñado para **Blender 5.2+**. Versiones anteriores de Blender o Goo Blender no están soportadas.
+:::
+
+## Instalación
+
+1. Descarga el `Gacha_Setup-<version>.zip` más reciente desde el [último release de GitHub](https://github.com/PaoloESAN/gacha-blender-setup/releases/latest).
+2. Inicia **Blender 5.2+**.
+3. Arrastra y suelta el archivo `.zip` descargado dentro de la ventana de Blender.
+4. Activa la casilla **Enable Add-on** y haz clic en **OK** para confirmar.
+5. Si no se instala automáticamente, ve a **Editar > Preferencias > Add-ons**, haz clic en **Instalar desde disco...**, selecciona el `.zip` y activa la casilla del add-on.
+
+## Configurar Personaje
+
+1. Presiona `N` en la Vista 3D para abrir el panel lateral **Character Setup Wizard**.
+
+<Image src={mainPanel} alt="Panel principal del Character Setup Wizard" loading="eager" />
+
+2. Selecciona tu juego.
+3. Haz clic en **Run entire setup**.
+   > Nota: en **ZZZ** y **NTE** tendrás que correr los pasos uno por uno de arriba a abajo en **Basic Setup**.
+4. Selecciona la [carpeta de personaje](/es/character-models/) y haz clic en **Select Character Folder**.
+
+<Image src={selectCharacter} alt="Select Character Folder" loading="lazy" />
+
+5. Espera unos segundos y tendrás a tu personaje listo en la escena.
+
+<Image src={characterEscene} alt="Personaje listo en la escena" loading="lazy" />
+
+## Leyenda
+
+<Image src={panelLegend} alt="Leyenda del panel Character Setup Wizard" loading="lazy" />
+
+1. **Selector de juego**: Genshin, HSR, ZZZ, NTE.
+2. **Run entire setup**: Corre todo el Basic Setup paso a paso con un solo clic. Nota: ese botón no existe en ZZZ y NTE.
+3. **Basic Setup**: Si no hay botón de Run entire setup, puedes correr los pasos uno por uno de arriba a abajo para poner todo del personaje.
+4. **Advanced Setup**: No es recomendable usarlo.

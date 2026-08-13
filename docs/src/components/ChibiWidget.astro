@@ -1,0 +1,88 @@
+---
+import type { ImageMetadata } from 'astro';
+import { Image } from 'astro:assets';
+import defaultLayla from '../assets/chibis/genshin/layla.webp';
+
+const globChibis = import.meta.glob<{ default: ImageMetadata }>('../assets/chibis/**/*.{png,jpg,jpeg,webp,svg}', { eager: true });
+
+const CHIBI_MAP: Record<string, ImageMetadata> = {};
+const ALL_CHIBIS: ImageMetadata[] = [];
+
+for (const path in globChibis) {
+  const match = path.match(/chibis\/(.+)\.(png|jpg|jpeg|webp|svg)$/i);
+  if (match) {
+    const fullPathKey = match[1].toLowerCase();
+    const fileNameKey = match[1].split('/').pop()!.toLowerCase();
+
+    const img = globChibis[path].default;
+    CHIBI_MAP[fullPathKey] = img;
+    CHIBI_MAP[fileNameKey] = img;
+    ALL_CHIBIS.push(img);
+  }
+}
+
+const routeEntry = Astro.locals?.starlightRoute?.entry;
+const chibiName = (Astro.props?.chibi || routeEntry?.data?.chibi || '').toLowerCase().trim();
+
+let selectedImage: ImageMetadata;
+
+if (chibiName && CHIBI_MAP[chibiName]) {
+  selectedImage = CHIBI_MAP[chibiName];
+} else if (ALL_CHIBIS.length > 0) {
+  const randomIndex = Math.floor(Math.random() * ALL_CHIBIS.length);
+  selectedImage = ALL_CHIBIS[randomIndex];
+} else {
+  selectedImage = CHIBI_MAP['layla'] || defaultLayla;
+}
+---
+
+<div class="gacha-chibi-container">
+  <Image
+    src={selectedImage}
+    alt="Chibi Mascot"
+    class="chibi-static-img"
+    loading="eager"
+  />
+</div>
+
+<style>
+  .gacha-chibi-container {
+    position: fixed;
+    bottom: clamp(12px, 2.5vw, 24px);
+    right: clamp(12px, 2.5vw, 24px);
+    z-index: 100;
+    pointer-events: none;
+  }
+
+  .chibi-static-img {
+    display: block;
+    width: clamp(150px, 20vw, 300px);
+    height: clamp(150px, 20vw, 300px);
+    max-width: 25vw;
+    max-height: 25vh;
+    object-fit: contain;
+    cursor: grab;
+    pointer-events: auto;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.3s ease;
+    user-select: none;
+    -webkit-user-drag: none;
+  }
+
+  .chibi-static-img:hover {
+    transform: scale(1.12) translateY(-4px) rotate(-2deg);
+  }
+
+  @media (max-width: 768px) {
+    .gacha-chibi-container {
+      bottom: 12px;
+      right: 12px;
+    }
+
+    .chibi-static-img {
+      width: clamp(130px, 35vw, 170px);
+      height: clamp(130px, 35vw, 170px);
+      max-width: 40vw;
+      max-height: 22vh;
+    }
+  }
+</style>

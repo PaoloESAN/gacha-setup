@@ -1,4 +1,4 @@
-# Author: Gacha Blender Setup (NTE Integration)
+# Author: Gacha Setup (NTE Integration)
 
 import bpy
 from bpy.types import Panel, UILayout

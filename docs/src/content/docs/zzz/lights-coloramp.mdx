@@ -1,0 +1,45 @@
+---
+title: "Lights & Coloramp Configuration"
+description: "Controlling light direction and customizing ZZZ toon shader color ramps for Zenless Zone Zero models."
+---
+
+import { Image } from 'astro:assets';
+import zzzLightdir from '../../../assets/content/zzz/zzz-lightdir.png';
+import zzzLightpanel from '../../../assets/content/zzz/zzz-lightpanel.png';
+import zzzTworigs from '../../../assets/content/zzz/zzz-tworigs.png';
+
+## 1. Controlling Light & Shadow Direction
+
+During character setup, a dedicated `Light Direction_<Character>` object is created in your scene collection.
+
+1. Locate `Light Direction_<Character>` in the **Outliner** panel.
+2. Open the **Item Transform** panel in Object Properties.
+3. Adjust the **Rotation** values (XYZ Euler) to rotate the light vector:
+   - **Rotation Z**: Rotates the sun angle horizontally around the character.
+   - **Rotation Y**: Adjusts the horizontal tilt of the light across the character.
+   - **Rotation X**: Adjusts the vertical pitch of the shadow line.
+
+<Image src={zzzLightdir} alt="Adjusting Light Direction object rotation in Outliner for Zenless Zone Zero" loading="eager" />
+
+---
+
+## 2. Interactive 3D Lighting & Control Panel
+
+Every setup includes a 3D control board generated in your viewport, allowing real-time adjustment of ZZZ shader parameters without digging into node trees.
+
+<Image src={zzzLightpanel} alt="3D Lighting and control board in viewport for ZZZ" loading="lazy" />
+
+<Image src={zzzTworigs} alt="Light control panel armature rig structure in Blender" loading="lazy" />
+
+:::note
+The 3D light control board is generated as a separate rig object in your scene. To modify the character's colors, shadow tones, ambient brightness, or rim light intensity, select the light panel rig and enter **Pose Mode** (`Ctrl + Tab`). Once in Pose Mode, you can manipulate the color picker bones and control sliders.
+:::
+
+### Lighting Controls
+- **Ambient**: Color wheel controlling unshaded base ambient lighting brightness and tint.
+- **Sharp Lit**: Color wheel controlling lit region tones for sharp cel shading.
+- **Sharp Shadow**: Color wheel controlling cel-shadow region tones.
+- **Rim Lit**: Color wheel controlling rim light highlight color and intensity.
+- **Rim Shadow**: Color wheel controlling rim light shadow tones.
+- **Rim X**: Slider controlling horizontal rim light placement and vector offset.
+- **Rim Y**: Slider controlling vertical rim light placement and vector offset.

@@ -1,0 +1,45 @@
+---
+title: Configuración de Luces y Coloramp
+description: Control de dirección de luz y personalización de rampas de color del ZZZ toon shader para modelos de Zenless Zone Zero.
+---
+
+import { Image } from 'astro:assets';
+import zzzLightdir from '../../../../assets/content/zzz/zzz-lightdir.png';
+import zzzLightpanel from '../../../../assets/content/zzz/zzz-lightpanel.png';
+import zzzTworigs from '../../../../assets/content/zzz/zzz-tworigs.png';
+
+## 1. Controlar la Dirección de Luz y Sombras
+
+Durante la configuración del personaje de Zenless Zone Zero, se genera un objeto especializado de dirección de luz llamado `Light Direction_<Personaje>` en tu colección de la escena.
+
+1. Selecciona `Light Direction_<Personaje>` en el panel **Outliner**.
+2. Abre la pestaña **Transformar** en las Propiedades del Objeto.
+3. Modifica los valores de **Rotación** (XYZ Euler) para orientar el vector de luz:
+   - **Rotación Z**: Gira horizontalmente la inclinación de la luz alrededor del personaje.
+   - **Rotación Y**: Ajusta la inclinación horizontal de la luz a través del modelo.
+   - **Rotación X**: Ajusta la altura e inclinación vertical de la línea de sombra.
+
+<Image src={zzzLightdir} alt="Ajuste de rotación del objeto Light Direction de Zenless Zone Zero en el Outliner" loading="eager" />
+
+---
+
+## 2. Panel 3D Interactivo de Iluminación y Control
+
+Cada personaje incluye un panel 3D de control posicionado en la escena, permitiéndote cambiar los parámetros del shader de ZZZ en tiempo real sin tener que abrir el editor de nodos.
+
+<Image src={zzzLightpanel} alt="Panel de control 3D de iluminación en la vista 3D para ZZZ" loading="lazy" />
+
+<Image src={zzzTworigs} alt="Estructura del rig independiente del panel de luz en Blender" loading="lazy" />
+
+:::note
+El panel 3D de control de luz es un rig independiente generado en la escena. Para poder cambiar los colores del personaje, ajustar las sombras, el brillo ambiental o la luz de borde, debes seleccionar el rig del panel de luz e ingresar en **Pose Mode** (`Ctrl + Tab`). Una vez en Pose Mode, podrás manipular los huesos selectores de color y deslizadores de ajuste.
+:::
+
+### Controles de Iluminación
+- **Ambient**: Rueda de color para ajustar el brillo y tinte de la iluminación ambiental base.
+- **Sharp Lit**: Rueda de color para los tonos de las zonas iluminadas en el sombreado cel-shade nítido.
+- **Sharp Shadow**: Rueda de color para los tonos de las zonas de sombra cel-shade nítida.
+- **Rim Lit**: Rueda de color para controlar la intensidad y tono del brillo de borde (Rim Light).
+- **Rim Shadow**: Rueda de color para los tonos de sombra del brillo de borde.
+- **Rim X**: Deslizador para controlar el desplazamiento horizontal (vector X) del rim light.
+- **Rim Y**: Deslizador para controlar el desplazamiento vertical (vector Y) del rim light.

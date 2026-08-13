@@ -1,0 +1,29 @@
+# Gacha Setup for Blender 5.2+ — Full Documentation Summary
+
+> Comprehensive documentation reference for AI models and automated assistants parsing Gacha Setup for Blender 5.2+.
+
+## System Requirements & Compatibility
+
+- **Target Software**: Blender 5.2+ required. (Older Blender versions, 4.x, or Goo Blender are NOT supported).
+- **Supported Operating Systems**: Windows 10/11, macOS, Linux.
+- **Dependencies**: Bundled automatically (ExpyKit, UEFormat, custom toon shaders).
+
+## Workflow & Pipeline Overview
+
+1. **Installation**: Download `Gacha_Setup-<version>.zip` from GitHub Releases. Drag & drop `.zip` into Blender 5.2+ window to auto-install and enable the add-on.
+2. **Setup Wizard Panel**: Press `N` in the 3D Viewport -> **Character Setup Wizard** tab -> Select Game dropdown (Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Neverness to Everness).
+3. **Execution**:
+   - For Genshin Impact / HSR: Click **Run Entire Setup** to auto-process mesh, shaders, outlines, drivers, and color management.
+   - For ZZZ / NTE: Execute steps sequentially in **Basic Setup** (Set Up Character -> Set Up Materials -> Set Up Outlines -> Fix Transformations -> Rig Character -> Finish Setup).
+
+## Game Specific Shader & Rigging Details
+
+- **Genshin Impact**: Festivity Toon Shader node tree (`_fuse`, `_map`, `_amp` bindings), 3D viewport lighting panel, fresnel rim lighting, and 3D facial driver board.
+- **Honkai: Star Rail**: StellarToon shader nodes, Isaac Face Rig 3D control board, manual face controls, and preset shapekey sliders.
+- **Zenless Zone Zero**: ZZZ Toon Shader, jideeh Face Rig v6 integration, eyeshadow material assignment (Edit mode -> select eyeshadow mesh -> assign `ZZZ Shader Eye` material -> Assign), and 3D Pose Mode light control panel.
+- **Neverness to Everness**: NTE Toon Shader, longer import processing time, Compositing workspace node setup (disconnecting Alpha node, connecting Mix node to Group Output and Viewer), and manual shapekey facial posing.
+
+## Resources
+
+- Site: https://gacha-setup.pages.dev
+- Repository: https://github.com/PaoloESAN/gacha-blender-setup
