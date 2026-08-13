@@ -170,6 +170,13 @@ header.header starlight-lang-select {
 	}
 }
 
+@media (max-width: 36rem) {
+	header.header site-search,
+	header.header .social-icons {
+		display: none !important;
+	}
+}
+
 /* Remove square drop shadow / halo from hero image */
 [data-has-hero] .hero > img,
 .hero img {
@@ -532,6 +539,14 @@ site-search button.search-input:focus-visible {
 [data-theme='light'] site-search button.search-input:hover {
 	background-color: rgba(234, 88, 12, 0.09) !important;
 	border-color: rgba(234, 88, 12, 0.25) !important;
+}
+
+/* Hide text in search input clear button so only the X icon renders */
+#starlight__search .pagefind-ui__search-clear {
+	color: transparent !important;
+	font-size: 0 !important;
+	line-height: 0 !important;
+	text-shadow: none !important;
 }
 
 .mobile-preferences {

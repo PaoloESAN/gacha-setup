@@ -8,3 +8,140 @@ import { ClientRouter } from 'astro:transitions';
 </Default>
 
 <ClientRouter />
+
+<script>
+	import { pagefindUserConfig } from 'virtual:starlight/pagefind-config';
+
+	document.addEventListener('astro:page-load', () => {
+		const siteSearch = document.querySelector('site-search');
+		if (!siteSearch) return;
+
+		const openBtn = siteSearch.querySelector<HTMLButtonElement>('button[data-open-modal]');
+		const closeBtn = siteSearch.querySelector<HTMLButtonElement>('button[data-close-modal]');
+		const dialog = siteSearch.querySelector<HTMLDialogElement>('dialog');
+		const dialogFrame = siteSearch.querySelector<HTMLElement>('.dialog-frame');
+
+		if (!openBtn || !closeBtn || !dialog || !dialogFrame) return;
+
+		// 1. Ensure trigger button is enabled and show shortcut badge
+		openBtn.disabled = false;
+		const shortcut = openBtn.querySelector<HTMLElement>('kbd');
+		if (shortcut) {
+			const platformKey = shortcut.querySelector('kbd');
+			if (platformKey && /(Mac|iPhone|iPod|iPad)/i.test(navigator.platform)) {
+				platformKey.textContent = '⌘';
+				openBtn.setAttribute('aria-keyshortcuts', 'Meta+K');
+			}
+			shortcut.style.display = '';
+		}
+
+		// 2. Setup click outside to close modal
+		const onClickOutside = (event: MouseEvent) => {
+			const isLink = 'href' in (event.target || {});
+			if (
+				isLink ||
+				(document.body.contains(event.target as Node) &&
+					!dialogFrame.contains(event.target as Node))
+			) {
+				closeModal();
+			}
+		};
+
+		const openModal = (event?: MouseEvent) => {
+			if (typeof dialog.showModal === 'function') {
+				dialog.showModal();
+			} else {
+				dialog.setAttribute('open', '');
+			}
+			document.body.toggleAttribute('data-search-modal-open', true);
+			siteSearch.querySelector<HTMLInputElement>('input')?.focus();
+			event?.stopPropagation();
+			window.addEventListener('click', onClickOutside);
+		};
+
+		const closeModal = () => {
+			if (typeof dialog.close === 'function') {
+				dialog.close();
+			} else {
+				dialog.removeAttribute('open');
+			}
+		};
+
+		openBtn.onclick = (e) => openModal(e);
+		closeBtn.onclick = () => closeModal();
+		dialog.onclose = () => {
+			document.body.toggleAttribute('data-search-modal-open', false);
+			window.removeEventListener('click', onClickOutside);
+		};
+
+		// 3. Setup Ctrl+K / Cmd+K keydown listener globally
+		if (!(window as any).__starlight_search_keydown_registered) {
+			(window as any).__starlight_search_keydown_registered = true;
+			window.addEventListener('keydown', (e) => {
+				if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+					const activeSearch = document.querySelector('site-search');
+					const activeDialog = activeSearch?.querySelector<HTMLDialogElement>('dialog');
+					if (activeDialog) {
+						if (activeDialog.open) {
+							if (typeof activeDialog.close === 'function') activeDialog.close();
+							else activeDialog.removeAttribute('open');
+						} else {
+							if (typeof activeDialog.showModal === 'function') activeDialog.showModal();
+							else activeDialog.setAttribute('open', '');
+							document.body.toggleAttribute('data-search-modal-open', true);
+							activeSearch?.querySelector<HTMLInputElement>('input')?.focus();
+						}
+					}
+					e.preventDefault();
+				}
+			});
+		}
+
+		// 4. Initialize Pagefind UI if container is empty
+		if (import.meta.env.DEV) return;
+		const container = siteSearch.querySelector('#starlight__search');
+		if (!container || container.children.length > 0) return;
+
+		let translations = {};
+		try {
+			translations = JSON.parse((siteSearch as HTMLElement).dataset.translations || '{}');
+		} catch {}
+
+		const shouldStrip = (siteSearch as HTMLElement).dataset.stripTrailingSlash !== undefined;
+		const stripTrailingSlash = (path: string) => path.replace(/(.)\/(#.*)?$/, '$1$2');
+		const formatURL = shouldStrip ? stripTrailingSlash : (path: string) => path;
+
+		const onIdle = window.requestIdleCallback || ((cb) => setTimeout(cb, 1));
+		onIdle(async () => {
+			if (container.children.length > 0) return;
+			try {
+				let PagefindUI = (window as any).PagefindUI;
+				if (!PagefindUI) {
+					const pagefindUrl = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/pagefind/pagefind-ui.js`;
+					const mod = await import(/* @vite-ignore */ pagefindUrl);
+					PagefindUI = mod.PagefindUI || (window as any).PagefindUI;
+				}
+				if (PagefindUI && container.children.length === 0) {
+					new PagefindUI({
+						...pagefindUserConfig,
+						element: '#starlight__search',
+						baseUrl: import.meta.env.BASE_URL,
+						bundlePath: import.meta.env.BASE_URL.replace(/\/$/, '') + '/pagefind/',
+						showImages: false,
+						translations,
+						showSubResults: true,
+						processResult: (result: { url: string; sub_results: Array<{ url: string }> }) => {
+							result.url = formatURL(result.url);
+							result.sub_results = result.sub_results.map((sub_result) => {
+								sub_result.url = formatURL(sub_result.url);
+								return sub_result;
+							});
+						},
+					});
+				}
+			} catch (err) {
+				console.error('Failed to initialize PagefindUI on page-load:', err);
+			}
+		});
+	});
+</script>
