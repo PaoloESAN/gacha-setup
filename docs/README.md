@@ -47,3 +47,13 @@ All commands are run from the root of the project, from a terminal:
 ## 👀 Want to learn more?
 
 Check out [Starlight’s docs](https://starlight.astro.build/), read [the Astro documentation](https://docs.astro.build), or jump into the [Astro Discord server](https://astro.build/chat).
+
+---
+
+## Disclaimer & Credits
+
+This project is an unofficial community tool built for Blender. 
+
+- **No Game Assets Included:** This repository does NOT contain, host, or distribute any 3D models, textures, or proprietary files from any game. Users are responsible for importing their own legally acquired assets.
+- **Trademarks:** All game titles (*Genshin Impact*, *Honkai: Star Rail*, *Zenless Zone Zero*, *Wuthering Waves*, *Neverness to Everness*), logos, and character names are registered trademarks of their respective owners (miHoYo / HoYoverse, Kuro Games, Hotta Studio, Perfect World Games).
+- **Affiliation:** This project is an independent community tool and is not affiliated with, sponsored by, or endorsed by the game publishers or studios mentioned above.

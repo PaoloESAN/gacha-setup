@@ -1194,6 +1194,25 @@ starlight-menu-button[aria-expanded="true"] :is(.inc-spec, button) {
 	border-color: rgba(234, 88, 12, 0.15);
 }
 
+/* Disclaimer text styling */
+.disclaimer-text {
+	margin-top: 2.5rem;
+	padding: 1.1rem 1.35rem;
+	border-radius: 0.9rem;
+	background: rgba(255, 255, 255, 0.035);
+	border: 1px solid rgba(255, 255, 255, 0.06);
+	font-size: var(--sl-text-xs);
+	line-height: 1.6;
+	color: var(--sl-color-gray-3);
+	text-align: center;
+}
+
+:root[data-theme='light'] .disclaimer-text {
+	background: rgba(0, 0, 0, 0.03);
+	border-color: rgba(0, 0, 0, 0.08);
+	color: #475569;
+}
+
 :root[data-theme='light'] .credits-link:hover {
 	color: #ea580c;
 	border-color: rgba(234, 88, 12, 0.35);

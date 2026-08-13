@@ -28,3 +28,7 @@ description: Agradecimientos, colaboradores y créditos de recursos.
 - **矩阵映画** — Rig de NTE
 - **HoyoToon** — Assets · [Discord](https://discord.com/invite/hoyotoon)
 - **Icono del Logo** — <a href="https://www.flaticon.com/free-icons/star" title="star icons">Star icons created by Magnific - Flaticon</a>
+
+<div class="disclaimer-text">
+  <strong>Disclaimer:</strong> This tool is an independent, open-source project and is not affiliated with, endorsed, or sponsored by HoYoverse, Kuro Games, Hotta Studio, or Perfect World Games. All game assets, trademarks, and character names belong to their respective owners. No copyrighted assets or models are included with this addon.
+</div>
