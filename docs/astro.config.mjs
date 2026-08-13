@@ -45,6 +45,7 @@ export default defineConfig({
 				},
 				{
 					label: 'Genshin Impact',
+					collapsed: true,
 					items: [
 						{ label: 'Setup Character', slug: 'genshin/setup-character', translations: { es: 'Setup Character' } },
 						{ label: 'Lights & Coloramp', slug: 'genshin/lights-coloramp', translations: { es: 'Luces y Coloramp' } },
@@ -54,6 +55,7 @@ export default defineConfig({
 				},
 				{
 					label: 'Honkai: Star Rail',
+					collapsed: true,
 					items: [
 						{ label: 'Setup Character', slug: 'hsr/setup-character', translations: { es: 'Setup Character' } },
 						{ label: 'Lights & Coloramp', slug: 'hsr/lights-coloramp', translations: { es: 'Luces y Coloramp' } },
@@ -63,6 +65,7 @@ export default defineConfig({
 				},
 				{
 					label: 'Zenless Zone Zero',
+					collapsed: true,
 					items: [
 						{ label: 'Setup Character', slug: 'zzz/setup-character', translations: { es: 'Setup Character' } },
 						{ label: 'Lights & Coloramp', slug: 'zzz/lights-coloramp', translations: { es: 'Luces y Coloramp' } },
@@ -72,6 +75,7 @@ export default defineConfig({
 				},
 				{
 					label: 'Neverness to Everness',
+					collapsed: true,
 					items: [
 						{ label: 'Setup Character', slug: 'nte/setup-character', translations: { es: 'Setup Character' } },
 						{ label: 'Lights & Coloramp', slug: 'nte/lights-coloramp', translations: { es: 'Luces y Coloramp' } },

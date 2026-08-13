@@ -5,7 +5,16 @@ description: Historial de versiones y actualizaciones para Gacha Setup.
 
 ## Historial de Versiones
 
-### v3.2.1 — Última
+### v3.2.2 — Última
+
+- **ZZZ:** Integración del nuevo facial rig v6 por jideeh.
+- **NTE:** Corregidas las texturas de los personajes y problemas en el rigging de los dedos (tamaño, rotación y huesos de las puntas).
+- **Rigging:** Orientación de huesos corregida para la próxima configuración de físicas.
+- **Genshin & Core:** Correcciones en materiales de shaders para ojos/normales y correcciones de extracción en ExpyKit.
+
+[Changelog completo: v3.2.1...v3.2.2](https://github.com/PaoloESAN/gacha-blender-setup/compare/v3.2.1...v3.2.2)
+
+### v3.2.1
 
 - **fix(genshin):** el pulgar no rotaba correctamente y la IK izquierda fallaba.
 - **fix(gi, zzz, nte):** las extremidades ya no se estiran.

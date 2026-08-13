@@ -48,34 +48,41 @@ if (chibiName && CHIBI_MAP[chibiName]) {
 <style>
   .gacha-chibi-container {
     position: fixed;
-    bottom: 24px;
-    right: 24px;
+    bottom: clamp(12px, 2.5vw, 24px);
+    right: clamp(12px, 2.5vw, 24px);
     z-index: 100;
+    pointer-events: none;
   }
 
   .chibi-static-img {
     display: block;
-    width: 240px;
-    height: 240px;
+    width: clamp(150px, 20vw, 300px);
+    height: clamp(150px, 20vw, 300px);
+    max-width: 25vw;
+    max-height: 25vh;
     object-fit: contain;
     cursor: grab;
+    pointer-events: auto;
     transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.3s ease;
     user-select: none;
     -webkit-user-drag: none;
   }
 
   .chibi-static-img:hover {
-    transform: scale(1.15) translateY(-4px) rotate(-2deg);
+    transform: scale(1.12) translateY(-4px) rotate(-2deg);
   }
 
   @media (max-width: 768px) {
     .gacha-chibi-container {
-      bottom: 16px;
-      right: 16px;
+      bottom: 12px;
+      right: 12px;
     }
+
     .chibi-static-img {
-      width: 90px;
-      height: 90px;
+      width: clamp(130px, 35vw, 170px);
+      height: clamp(130px, 35vw, 170px);
+      max-width: 40vw;
+      max-height: 22vh;
     }
   }
 </style>
