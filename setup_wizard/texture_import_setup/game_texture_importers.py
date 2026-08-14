@@ -844,6 +844,11 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
 
             mat_name_lower = mat.name.lower()
 
+            if any(k in mat_name_lower for k in ["common_face", "common_face_mask", "face_mask", "facemask"]):
+                from setup_wizard.replace_default_materials_setup.game_default_material_replacers import setup_common_face_material
+                setup_common_face_material(mat, folder=folder, image_files=image_files)
+                continue
+
             for node in mat.node_tree.nodes:
                 if node.type == 'GROUP' and node.node_tree:
                     ng_name = node.node_tree.name

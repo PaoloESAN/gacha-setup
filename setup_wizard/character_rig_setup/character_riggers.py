@@ -588,6 +588,12 @@ class NevernessToEvernessCharacterRigger(CharacterRigger):
             except Exception as ex:
                 self.blender_operator.report({'ERROR'}, f"Failed to rig NTE character: {ex}")
 
+        try:
+            from setup_wizard.character_rig_setup.nte_face_rig import nte_face_rig_main
+            nte_face_rig_main()
+        except Exception as e:
+            print(f"NTE face rig skipped/notice: {e}")
+
         self.blender_operator.report({'INFO'}, 'Successfully rigged NTE character')
 
         NextStepInvoker().invoke(
@@ -597,5 +603,6 @@ class NevernessToEvernessCharacterRigger(CharacterRigger):
             high_level_step_name=self.blender_operator.high_level_step_name,
             game_type=GameType.NEVERNESS_TO_EVERNESS.name
         )
+
 
 

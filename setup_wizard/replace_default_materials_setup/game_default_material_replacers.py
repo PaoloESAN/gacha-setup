@@ -1172,6 +1172,80 @@ def process_node_tree(node_tree, image_files, folder, slot_mat_name="", visited=
 
 
 
+def setup_common_face_material(mat, folder=None, image_files=None):
+    if not mat:
+        return
+    mat.use_nodes = True
+    nt = mat.node_tree
+    if not nt:
+        return
+    nodes = nt.nodes
+    links = nt.links
+    nodes.clear()
+
+    out_node = nodes.new('ShaderNodeOutputMaterial')
+    out_node.location = (350, 0)
+
+    mix_node = nodes.new('ShaderNodeMixShader')
+    mix_node.location = (100, 50)
+
+    trans_node = nodes.new('ShaderNodeBsdfTransparent')
+    trans_node.location = (-120, 180)
+    try:
+        trans_node.inputs['Color'].default_value = (1.0, 1.0, 1.0, 1.0)
+    except Exception:
+        pass
+
+    tex_node = nodes.new('ShaderNodeTexImage')
+    tex_node.location = (-400, -50)
+
+    img = None
+    for im in bpy.data.images:
+        if 'common_face' in im.name.lower():
+            img = im
+            break
+
+    if not img and folder:
+        cands = []
+        if image_files:
+            cands = [f for f in image_files if 'common_face' in f.lower()]
+        elif os.path.isdir(folder):
+            cands = [f for f in os.listdir(folder) if 'common_face' in f.lower() and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
+        if cands:
+            diff_cands = [f for f in cands if '_d.' in f.lower() or '_d_' in f.lower() or 'face_d' in f.lower()]
+            picked = diff_cands[0] if diff_cands else cands[0]
+            try:
+                img_path = os.path.join(folder, picked)
+                img = bpy.data.images.load(img_path, check_existing=True)
+            except Exception as ex:
+                print(f"Notice: Loading common_face texture: {ex}")
+
+    if img:
+        tex_node.image = img
+
+    links.new(tex_node.outputs['Alpha'], mix_node.inputs[0])
+    links.new(trans_node.outputs['BSDF'], mix_node.inputs[1])
+    links.new(tex_node.outputs['Color'], mix_node.inputs[2])
+    links.new(mix_node.outputs['Shader'], out_node.inputs['Surface'])
+
+    try:
+        mat.blend_method = 'BLEND'
+    except Exception:
+        pass
+    try:
+        mat.surface_render_method = 'BLENDED'
+    except Exception:
+        pass
+    try:
+        mat.shadow_method = 'NONE'
+    except Exception:
+        pass
+    try:
+        mat.show_transparent_back = False
+    except Exception:
+        pass
+
+
 class NevernessToEvernessDefaultMaterialReplacer(GameDefaultMaterialReplacer):
     def __init__(self, blender_operator, context):
         self.blender_operator = blender_operator
@@ -1223,6 +1297,10 @@ class NevernessToEvernessDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         mat.blend_method = 'BLEND'
                     except Exception:
                         pass
+                    continue
+
+                if any(k in matname for k in ["common_face", "common_face_mask", "face_mask", "facemask"]):
+                    setup_common_face_material(mat, folder=folder, image_files=image_files)
                     continue
 
                 if mat.name in template_names or mat.name == '材质球':
