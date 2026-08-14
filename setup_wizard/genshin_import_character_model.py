@@ -129,15 +129,53 @@ class ZZZ_OT_SetUpCharacter(Operator, BasicSetupUIOperator):
     bl_label = "Zenless Zone Zero: Set Up Character (UI)"
 
 
+def find_largest_uemodel_file(directory_or_file):
+    """
+    Finds the largest .uemodel file in the given directory or file path.
+    Selecting the largest file ensures we import the full detailed character model (e.g. LOD0)
+    rather than a low-poly LOD, accessory, or sub-mesh.
+    """
+    if not directory_or_file:
+        return None
+
+    if os.path.isfile(directory_or_file):
+        if directory_or_file.lower().endswith(".uemodel"):
+            return directory_or_file
+        directory_or_file = os.path.dirname(directory_or_file)
+
+    if not os.path.isdir(directory_or_file):
+        return None
+
+    uemodel_files = []
+    for root, _, files in os.walk(directory_or_file):
+        for file_name in files:
+            if file_name.lower().endswith(".uemodel"):
+                full_path = os.path.join(root, file_name)
+                try:
+                    size = os.path.getsize(full_path)
+                    uemodel_files.append((size, full_path))
+                except Exception:
+                    uemodel_files.append((0, full_path))
+
+    if not uemodel_files:
+        return None
+
+    # Sort descending by file size
+    uemodel_files.sort(key=lambda item: item[0], reverse=True)
+    largest_file = uemodel_files[0][1]
+    print(f"[NTE IMPORT] Scanned {len(uemodel_files)} .uemodel files. Selected largest ({uemodel_files[0][0]} bytes): {largest_file}")
+    return largest_file
+
+
 class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
     """Sets Up Character for Neverness to Everness"""
 
     bl_idname = "neverness_to_everness.set_up_character"
-    bl_label = "Select NTE Character Model (.uemodel)"
+    bl_label = "Select NTE Character Folder or .uemodel"
 
-    filename_ext = ".uemodel"
+    filename_ext = "*.*"
     filter_glob: StringProperty(
-        default="*.uemodel",
+        default="*.*",
         options={'HIDDEN'},
         maxlen=255,
     )
@@ -146,18 +184,22 @@ class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
         if not self.filepath:
             return {"CANCELLED"}
 
-        folder = os.path.dirname(self.filepath) if os.path.isfile(self.filepath) else self.filepath
-        if folder and os.path.isdir(folder):
-            set_active_character_directory(folder)
-            cache_using_cache_key(get_cache(True), CHARACTER_MODEL_FOLDER_FILE_PATH, folder)
-            cache_using_cache_key(get_cache(True), NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH, folder)
-            cache_using_cache_key(get_cache(True), NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH, folder)
-            context.scene["setup_wizard_imported_model_dir"] = folder
-            context.scene["setup_wizard_imported_uemodel_path"] = self.filepath
-            print(f"[NTE SETUP] Cached character folder from uemodel selection: {folder}")
+        uemodel_path = find_largest_uemodel_file(self.filepath)
+        if not uemodel_path or not os.path.isfile(uemodel_path):
+            self.report({"ERROR"}, f"No .uemodel file found in: {self.filepath}")
+            return {"CANCELLED"}
+
+        folder = os.path.dirname(uemodel_path)
+        filename = os.path.basename(uemodel_path)
+        set_active_character_directory(folder)
+        cache_using_cache_key(get_cache(True), CHARACTER_MODEL_FOLDER_FILE_PATH, folder)
+        cache_using_cache_key(get_cache(True), NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH, folder)
+        cache_using_cache_key(get_cache(True), NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH, folder)
+        context.scene["setup_wizard_imported_model_dir"] = folder
+        context.scene["setup_wizard_imported_uemodel_path"] = uemodel_path
+        print(f"[NTE SETUP] Cached character folder: {folder} (model: {filename})")
 
         if hasattr(bpy.ops, 'uf') and hasattr(bpy.ops.uf, 'import_uemodel'):
-            filename = os.path.basename(self.filepath) if os.path.isfile(self.filepath) else ""
             imported_ok = False
 
             if hasattr(context.scene, 'uf_settings') and hasattr(context.scene.uf_settings, 'reorient_bones'):
@@ -170,7 +212,7 @@ class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
             # Method 1: Pass directory + files collection + filepath (UEFormat ImportHelper standard)
             try:
                 bpy.ops.uf.import_uemodel(
-                    filepath=self.filepath,
+                    filepath=uemodel_path,
                     directory=folder,
                     files=[{"name": filename}]
                 )
@@ -183,7 +225,7 @@ class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
                 try:
                     bpy.ops.uf.import_uemodel(
                         'EXEC_DEFAULT',
-                        filepath=self.filepath,
+                        filepath=uemodel_path,
                         directory=folder,
                         files=[{"name": filename}]
                     )
@@ -194,7 +236,7 @@ class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
             # Method 3: Pass filepath only
             if not imported_ok:
                 try:
-                    bpy.ops.uf.import_uemodel(filepath=self.filepath)
+                    bpy.ops.uf.import_uemodel(filepath=uemodel_path)
                     imported_ok = True
                 except Exception as e3:
                     print(f"[NTE SETUP] Method 3 uf.import_uemodel notice: {e3}")
@@ -202,7 +244,7 @@ class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
             # Method 4: Fallback execute with filepath only
             if not imported_ok:
                 try:
-                    bpy.ops.uf.import_uemodel('EXEC_DEFAULT', filepath=self.filepath)
+                    bpy.ops.uf.import_uemodel('EXEC_DEFAULT', filepath=uemodel_path)
                     imported_ok = True
                 except Exception as e4:
                     self.report({"WARNING"}, f"UEFormat import notice: {e4}")
@@ -276,7 +318,8 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
             self.import_character_model(
                 character_model_file_path_or_directory, is_character_model_file
             )
-            self.reset_pose_location_and_rotation()
+            if self.game_type != GameType.NEVERNESS_TO_EVERNESS.name:
+                self.reset_pose_location_and_rotation()
 
             if self.game_type in (
                 GameType.GENSHIN_IMPACT.name,
@@ -321,6 +364,74 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
     def import_character_model(
         self, character_model_file_path_or_directory, is_character_model_file
     ):
+        if self.game_type == GameType.NEVERNESS_TO_EVERNESS.name:
+            uemodel_path = find_largest_uemodel_file(character_model_file_path_or_directory)
+            if not uemodel_path or not os.path.isfile(uemodel_path):
+                self.report({"ERROR"}, f"No .uemodel file found in: {character_model_file_path_or_directory}")
+                raise RuntimeError(f"No .uemodel file found in: {character_model_file_path_or_directory}")
+
+            folder = os.path.dirname(uemodel_path)
+            filename = os.path.basename(uemodel_path)
+            set_active_character_directory(folder)
+            cache_using_cache_key(get_cache(True), CHARACTER_MODEL_FOLDER_FILE_PATH, folder)
+            cache_using_cache_key(get_cache(True), NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH, folder)
+            cache_using_cache_key(get_cache(True), NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH, folder)
+            try:
+                bpy.context.scene["setup_wizard_imported_model_dir"] = folder
+                bpy.context.scene["setup_wizard_imported_uemodel_path"] = uemodel_path
+            except Exception:
+                pass
+
+            if hasattr(bpy.context.scene, 'uf_settings') and hasattr(bpy.context.scene.uf_settings, 'reorient_bones'):
+                try:
+                    bpy.context.scene.uf_settings.reorient_bones = True
+                except Exception:
+                    pass
+
+            if hasattr(bpy.ops, 'uf') and hasattr(bpy.ops.uf, 'import_uemodel'):
+                imported_ok = False
+                try:
+                    bpy.ops.uf.import_uemodel(
+                        filepath=uemodel_path,
+                        directory=folder,
+                        files=[{"name": filename}]
+                    )
+                    imported_ok = True
+                except Exception as e1:
+                    print(f"[NTE SETUP] Method 1 uf.import_uemodel notice: {e1}")
+
+                if not imported_ok:
+                    try:
+                        bpy.ops.uf.import_uemodel(
+                            'EXEC_DEFAULT',
+                            filepath=uemodel_path,
+                            directory=folder,
+                            files=[{"name": filename}]
+                        )
+                        imported_ok = True
+                    except Exception as e2:
+                        print(f"[NTE SETUP] Method 2 uf.import_uemodel notice: {e2}")
+
+                if not imported_ok:
+                    try:
+                        bpy.ops.uf.import_uemodel(filepath=uemodel_path)
+                        imported_ok = True
+                    except Exception as e3:
+                        print(f"[NTE SETUP] Method 3 uf.import_uemodel notice: {e3}")
+
+                if not imported_ok:
+                    try:
+                        bpy.ops.uf.import_uemodel('EXEC_DEFAULT', filepath=uemodel_path)
+                        imported_ok = True
+                    except Exception as e4:
+                        self.report({"WARNING"}, f"UEFormat import notice: {e4}")
+
+                self.report({"INFO"}, f"Imported NTE character model (largest .uemodel): {filename}")
+                return
+            else:
+                self.report({"ERROR"}, "UEFormat add-on is not enabled or available.")
+                raise RuntimeError("UEFormat add-on is not enabled or available.")
+
         character_model_file_path = (
             character_model_file_path_or_directory
             if is_character_model_file

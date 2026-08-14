@@ -19,16 +19,16 @@ class NTE_PT_Setup_Wizard_UI_Layout(Panel, NevernessToEvernessUIRenderChecker):
         layout = self.layout
         window_manager = context.window_manager
 
-        # sub_layout = layout.box()
-        # run_entire_setup_column = sub_layout.column()
-        # OperatorFactory.create(
-        #     run_entire_setup_column,
-        #     "neverness_to_everness.setup_wizard_ui",
-        #     "Run Entire Setup",
-        #     "PLAY",
-        #     game_type=GameType.NEVERNESS_TO_EVERNESS.name,
-        #     operator_context="INVOKE_DEFAULT",
-        # )
+        sub_layout = layout.box()
+        run_entire_setup_column = sub_layout.column()
+        OperatorFactory.create(
+            run_entire_setup_column,
+            "neverness_to_everness.setup_wizard_ui",
+            "Run Entire Setup",
+            "PLAY",
+            game_type=GameType.NEVERNESS_TO_EVERNESS.name,
+            operator_context="INVOKE_DEFAULT",
+        )
 
 
 class NTE_PT_Basic_Setup_Wizard_UI_Layout(Panel, NevernessToEvernessUIRenderChecker):

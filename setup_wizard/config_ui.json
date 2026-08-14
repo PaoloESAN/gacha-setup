@@ -228,20 +228,28 @@
     ],
     "NEVERNESS_TO_EVERNESS_OT_setup_wizard_ui": [
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
+      "import_character_model",
       "import_character_textures",
       "import_materials",
       "replace_default_materials",
       "nte_setup_outlines",
       "rig_character",
-      "nte_finish_setup"
+      "setup_head_driver",
+      "set_color_management_to_standard",
+      "set_up_screen_space_reflections",
+      "nte_setup_compositor_nodes"
     ],
     "NEVERNESS_TO_EVERNESS_OT_setup_wizard_ui_no_outlines": [
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
+      "import_character_model",
       "import_character_textures",
       "import_materials",
       "replace_default_materials",
       "rig_character",
-      "nte_finish_setup"
+      "setup_head_driver",
+      "set_color_management_to_standard",
+      "set_up_screen_space_reflections",
+      "nte_setup_compositor_nodes"
     ],
     "NEVERNESS_TO_EVERNESS_OT_set_up_materials": [
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_materials",
@@ -262,6 +270,7 @@
     ],
     "neverness_to_everness.setup_wizard_ui": [
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
+      "import_character_model",
       "import_character_textures",
       "import_materials",
       "replace_default_materials",
@@ -274,6 +283,7 @@
     ],
     "neverness_to_everness.setup_wizard_ui_no_outlines": [
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
+      "import_character_model",
       "import_character_textures",
       "import_materials",
       "replace_default_materials",
