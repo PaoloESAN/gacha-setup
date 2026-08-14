@@ -248,13 +248,15 @@ class NTE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
                         break
 
             source_tree = None
+            temp_scenes = []
             if target_blend and os.path.exists(target_blend):
                 try:
                     with bpy.data.libraries.load(target_blend) as (data_from, data_to):
                         data_to.scenes = list(data_from.scenes)
                         data_to.node_groups = list(data_from.node_groups)
 
-                    for sc in data_to.scenes:
+                    temp_scenes = [sc for sc in data_to.scenes if sc]
+                    for sc in temp_scenes:
                         if sc and hasattr(sc, "node_tree") and sc.node_tree and sc.node_tree.nodes:
                             source_tree = sc.node_tree
                             break
@@ -268,6 +270,10 @@ class NTE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
             if source_tree and source_tree.nodes:
                 node_map = {}
                 for src_node in source_tree.nodes:
+                    # Skip static placeholder image nodes
+                    if getattr(src_node, "type", "") == "IMAGE" or "CompositorNodeImage" in src_node.bl_idname:
+                        continue
+
                     new_node = None
                     candidates = [src_node.bl_idname]
                     if 'Composite' in src_node.bl_idname or src_node.type == 'COMPOSITE':
@@ -286,8 +292,8 @@ class NTE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
                         if hasattr(src_node, "node_tree") and src_node.node_tree:
                             new_node.node_tree = src_node.node_tree
 
-                        # Copy node properties (e.g. data_type='RGBA', blend_type='MIX') BEFORE creating links!
-                        for prop in ("data_type", "blend_type", "mode", "use_clamp", "label"):
+                        # Copy node properties BEFORE creating links
+                        for prop in ("data_type", "blend_type", "mode", "use_clamp", "label", "filter_type", "size_x", "size_y"):
                             if hasattr(src_node, prop) and hasattr(new_node, prop):
                                 try:
                                     setattr(new_node, prop, getattr(src_node, prop))
@@ -404,7 +410,48 @@ class NTE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
                     if rl_img and viewer_in:
                         node_tree.links.new(rl_img, viewer_in)
 
-            # 5. POST-FIX: ENSURE BLENDER 5.x NODE_TREE INTERFACE HAS 'Image' OUTPUT SOCKET FOR Group Output
+            # 5. REMOVE TEMPORARY / DUPLICATE SCENES SO ONLY THE ACTIVE SCENE REMAINS
+            for sc in temp_scenes:
+                if sc and sc != scene and sc.name in bpy.data.scenes:
+                    try:
+                        bpy.data.scenes.remove(sc, do_unlink=True)
+                    except Exception as ex_sc:
+                        print(f"Notice removing temp scene {sc.name}: {ex_sc}")
+
+            for sc in list(bpy.data.scenes):
+                if sc != scene and ("Scene.001" in sc.name or sc.name.startswith("Scene.")):
+                    try:
+                        bpy.data.scenes.remove(sc, do_unlink=True)
+                    except Exception:
+                        pass
+
+            # 6. ENSURE RENDER LAYERS POINTS TO ACTIVE SCENE
+            rl_node = next((n for n in node_tree.nodes if getattr(n, "type", "") in ("R_LAYERS", "RENDER_LAYERS") or "RLayers" in n.bl_idname or "RenderLayers" in n.bl_idname), None)
+            if rl_node:
+                try:
+                    rl_node.scene = scene
+                except Exception:
+                    pass
+
+            # 7. CONNECT RENDER LAYERS IMAGE DIRECTLY TO BLUR IMAGE INPUT
+            blur_node = next((n for n in node_tree.nodes if getattr(n, "type", "") == "BLUR" or "Blur" in n.bl_idname or "blur" in n.name.lower()), None)
+            if rl_node and blur_node:
+                rl_img = rl_node.outputs.get("Image") or (rl_node.outputs[0] if rl_node.outputs else None)
+                blur_in = blur_node.inputs.get("Image") or (blur_node.inputs[0] if blur_node.inputs else None)
+                if rl_img and blur_in:
+                    for l in list(blur_in.links):
+                        node_tree.links.remove(l)
+                    node_tree.links.new(rl_img, blur_in)
+
+            # Clean any remaining standalone image nodes
+            for n in list(node_tree.nodes):
+                if getattr(n, "type", "") == "IMAGE" or "CompositorNodeImage" in n.bl_idname:
+                    try:
+                        node_tree.nodes.remove(n)
+                    except Exception:
+                        pass
+
+            # 8. POST-FIX: ENSURE BLENDER 5.x NODE_TREE INTERFACE HAS 'Image' OUTPUT SOCKET FOR Group Output
             if hasattr(node_tree, "interface"):
                 try:
                     items = getattr(node_tree.interface, "items_tree", None) or getattr(node_tree.interface, "sockets", [])
