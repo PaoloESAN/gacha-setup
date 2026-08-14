@@ -1,11 +1,23 @@
 ---
 import Default from '@astrojs/starlight/components/Head.astro';
 import { ClientRouter } from 'astro:transitions';
+
+const isHomepage = Astro.props.slug === '' || Astro.props.slug === 'es' || Astro.url.pathname === '/' || Astro.url.pathname === '/es/' || Astro.url.pathname === '/es';
 ---
 
 <Default {...Astro.props } transition:animate="none">
     <slot />
 </Default>
+
+{isHomepage && (
+	<script type="application/ld+json" set:html={JSON.stringify({
+		'@context': 'https://schema.org',
+		'@type': 'WebSite',
+		name: 'Gacha Setup for Blender',
+		alternateName: 'Gacha Setup',
+		url: 'https://gacha-setup.pages.dev/',
+	})} />
+)}
 
 <ClientRouter />
 
