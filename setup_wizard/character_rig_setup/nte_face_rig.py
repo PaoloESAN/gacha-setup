@@ -1241,6 +1241,86 @@ def setup_common_face_materials_if_present():
                 print(f"Notice: Setting up common_face material {mat.name}: {ex}")
 
 
+def cleanup_head_driver_to_wgts_if_present(armature=None, head_name=None):
+    """
+    Finds Head Origin / Head Driver object hierarchy and places them into the WGTS collection,
+    ensuring Child Of constraint points to the armature's head bone.
+    """
+    head_origin = (
+        bpy.data.objects.get("Head Origin")
+        or bpy.data.objects.get("Head Driver")
+        or bpy.data.objects.get("Head Direction")
+    )
+    if not head_origin:
+        for obj in bpy.data.objects:
+            if obj.type == "EMPTY" and (
+                obj.name.startswith("Head Origin")
+                or obj.name.startswith("Head Driver")
+                or obj.name.startswith("Head Direction")
+            ):
+                head_origin = obj
+                break
+
+    if not head_origin:
+        return
+
+    # Find WGTS collection
+    wgt_coll = None
+    for c in bpy.data.collections:
+        if c.name.startswith("WGTS") or c.name.lower() == "wgt":
+            wgt_coll = c
+            break
+    if not wgt_coll:
+        wgt_coll = bpy.data.collections.get("WGTS") or bpy.data.collections.get("wgt")
+    if not wgt_coll:
+        wgt_coll = bpy.data.collections.new("WGTS")
+        try:
+            bpy.context.scene.collection.children.link(wgt_coll)
+        except Exception:
+            pass
+
+    # Ensure Child Of constraint on Head Origin
+    if armature and head_name:
+        con = None
+        for c in head_origin.constraints:
+            if c.type == "CHILD_OF":
+                con = c
+                break
+        if not con:
+            con = head_origin.constraints.new("CHILD_OF")
+        con.target = armature
+        con.subtarget = head_name
+
+    def get_all_children(obj):
+        res = []
+        for ch in obj.children:
+            res.append(ch)
+            res.extend(get_all_children(ch))
+        return res
+
+    all_objs = [head_origin] + get_all_children(head_origin)
+    for o in all_objs:
+        if o.name not in wgt_coll.objects:
+            wgt_coll.objects.link(o)
+        for col in list(o.users_collection):
+            if col != wgt_coll:
+                try:
+                    col.objects.unlink(o)
+                except Exception:
+                    pass
+        try:
+            o.hide_viewport = True
+            o.hide_render = True
+        except Exception:
+            pass
+
+    try:
+        wgt_coll.hide_viewport = True
+        wgt_coll.hide_render = True
+    except Exception:
+        pass
+
+
 def nte_face_rig_main():
     faceobj = find_face_mesh()
     if faceobj is None:
@@ -1268,6 +1348,7 @@ def nte_face_rig_main():
     finalize_widget_collection(wgt_coll)
 
     setup_common_face_materials_if_present()
+    cleanup_head_driver_to_wgts_if_present(armature, head_name)
 
     print(f"\nNTE Face Rig complete: {len(controls)} controls built on '{armature.name}'.\n")
 

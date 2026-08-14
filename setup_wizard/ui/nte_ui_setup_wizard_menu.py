@@ -194,6 +194,13 @@ class NTE_PT_UI_Finish_Setup_Menu(Panel, NevernessToEvernessUIRenderChecker):
 
         OperatorFactory.create(
             sub_layout,
+            "genshin.setup_head_driver",
+            "Set Up Head Driver",
+            "CONSTRAINT",
+            game_type=GameType.NEVERNESS_TO_EVERNESS.name,
+        )
+        OperatorFactory.create(
+            sub_layout,
             "genshin.set_color_management_to_standard",
             "Set Color Mgmt to Standard",
             "COLOR",
