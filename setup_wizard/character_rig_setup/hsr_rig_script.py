@@ -238,12 +238,17 @@ def rig_character(
         if o.name in ("metarig", armature.name):
             o.select_set(True)
 
-    metarm = bpy.data.objects["metarig"].data
+    metarig_obj = bpy.data.objects.get("metarig")
+    if metarig_obj:
+        bpy.context.view_layer.objects.active = metarig_obj
+        metarm = metarig_obj.data
+    else:
+        metarm = bpy.data.objects["metarig"].data
 
     bpy.ops.object.mode_set(mode='EDIT')
     for bone in metarm.edit_bones:
         if "f_" in bone.name or "thumb" in bone.name:
-            bone.roll =  armature.edit_bones["DEF-"+bone.name].roll
+            bone.roll = armature.edit_bones["DEF-" + bone.name].roll
 
     ## Fixes the tiddy bones.  Expykit, why did you neglect them
     bpy.ops.object.mode_set(mode='EDIT')
@@ -547,8 +552,8 @@ def rig_character(
     safe_set_custom_shape("toe_ik.L", None, scale=(0.781, 0.781, 0.350), translation=(0.0, 0.06, 0.00), disable_bone_size=False)
     safe_set_custom_shape("toe_ik.R", None, scale=(0.781, 0.781, 0.350), translation=(0.0, 0.06, 0.00), disable_bone_size=False)
 
-    safe_set_custom_shape("hand_ik.L", "hand", scale=(1.0, 1.0, 1.0), translation=(-0.05, 0.0, 0.0), rotation_euler=(1.5708, 0.0, 0.0), disable_bone_size=True)
-    safe_set_custom_shape("hand_ik.R", "hand", scale=(1.0, 1.0, 1.0), translation=(0.05, 0.0, 0.0), rotation_euler=(-1.5708, 0.0, 0.0), disable_bone_size=True)
+    safe_set_custom_shape("hand_ik.L", "hand", scale=(1.0, 1.0, 1.0), translation=(0.0, 0.0, 0.0), rotation_euler=(0.0, 0.0, 0.0), disable_bone_size=True)
+    safe_set_custom_shape("hand_ik.R", "hand", scale=(1.0, 1.0, 1.0), translation=(0.0, 0.0, 0.0), rotation_euler=(0.0, 0.0, 0.0), disable_bone_size=True)
 
     def add_eye_bone_const(bone_name, to_bone):
         pbone = rigifyr.pose.bones.get(bone_name)
@@ -674,6 +679,10 @@ def rig_character(
                 for target in variable.targets:
                     if ".03" in oDrv.data_path and target.data_path[-7:] == "scale.y":
                         target.data_path = target.data_path[:-1] + "x"
+
+            # Invert scale driver direction for index master R
+            if any(k in oDrv.data_path for k in ["f_index.02_drv.R", "f_index.03_drv.R"]):
+                oDrv.driver.expression = "(sy-1)*pi"
 
     fingerlist = ["thumb.01_master", "f_index.01_master", "f_middle.01_master", "f_ring.01_master", "f_pinky.01_master"]
     for side in [".L", ".R"]:
