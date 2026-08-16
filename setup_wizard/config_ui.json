@@ -309,6 +309,202 @@
       "set_color_management_to_standard",
       "set_up_screen_space_reflections",
       "nte_setup_compositor_nodes"
+    ],
+    "zenless_zone_zero.setup_wizard_ui": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
+      "import_character_model",
+      "delete_empties",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures",
+      "import_outlines",
+      "setup_geometry_nodes",
+      "import_outline_lightmaps",
+      "import_material_data",
+      "fix_transformations",
+      "rig_character",
+      "zzz_setup_head_driver",
+      "set_color_management_to_standard",
+      "delete_specific_objects",
+      "rename_shader_materials",
+      "rename_collection_and_rig",
+      "move_lighting_panel_to_char_collection"
+    ],
+    "zenless_zone_zero.setup_wizard_ui_no_outlines": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
+      "import_character_model",
+      "delete_empties",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures",
+      "fix_transformations",
+      "rig_character",
+      "zzz_setup_head_driver",
+      "set_color_management_to_standard",
+      "delete_specific_objects",
+      "rename_shader_materials",
+      "rename_collection_and_rig",
+      "move_lighting_panel_to_char_collection"
+    ],
+    "zenless_zone_zero.set_up_character": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_character",
+      "import_character_model",
+      "delete_empties"
+    ],
+    "zenless_zone_zero.set_up_materials": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_materials",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures"
+    ],
+    "zenless_zone_zero.set_up_outlines": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_outlines",
+      "import_outlines",
+      "setup_geometry_nodes",
+      "import_outline_lightmaps",
+      "import_material_data"
+    ],
+    "zenless_zone_zero.finish_setup": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_finish_setup",
+      "zzz_setup_head_driver",
+      "set_color_management_to_standard",
+      "rename_shader_materials",
+      "rename_collection_and_rig",
+      "move_lighting_panel_to_char_collection"
+    ],
+    "genshin.setup_wizard_ui": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
+      "import_character_model",
+      "delete_empties",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures",
+      "import_outlines",
+      "setup_geometry_nodes",
+      "import_outline_lightmaps",
+      "import_material_data",
+      "fix_transformations",
+      "rig_character",
+      "setup_head_driver",
+      "set_color_management_to_standard",
+      "delete_specific_objects",
+      "rename_shader_materials",
+      "join_meshes_on_armature",
+      "compositing_node_setup",
+      "post_processing_default_settings"
+    ],
+    "genshin.setup_wizard_ui_no_outlines": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
+      "import_character_model",
+      "delete_empties",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures",
+      "fix_transformations",
+      "rig_character",
+      "setup_head_driver",
+      "set_color_management_to_standard",
+      "delete_specific_objects",
+      "rename_shader_materials",
+      "join_meshes_on_armature",
+      "compositing_node_setup",
+      "post_processing_default_settings"
+    ],
+    "genshin.set_up_character": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_character",
+      "import_character_model",
+      "delete_empties"
+    ],
+    "genshin.set_up_materials": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_materials",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures"
+    ],
+    "genshin.set_up_outlines": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_outlines",
+      "import_outlines",
+      "setup_geometry_nodes",
+      "import_outline_lightmaps",
+      "import_material_data"
+    ],
+    "genshin.finish_setup": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_final_steps",
+      "setup_head_driver",
+      "set_color_management_to_standard",
+      "delete_specific_objects",
+      "rename_shader_materials",
+      "join_meshes_on_armature"
+    ],
+    "honkai_star_rail.setup_wizard_ui": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
+      "import_character_model",
+      "delete_empties",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures",
+      "import_outlines",
+      "setup_geometry_nodes",
+      "import_outline_lightmaps",
+      "import_material_data",
+      "fix_transformations",
+      "rig_character",
+      "setup_head_driver",
+      "set_color_management_to_standard",
+      "set_up_screen_space_reflections",
+      "vertex_paint_face_see_through_effect",
+      "delete_specific_objects",
+      "rename_shader_materials",
+      "set_up_armtwist_bone_constraints",
+      "join_meshes_on_armature"
+    ],
+    "honkai_star_rail.setup_wizard_ui_no_outlines": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
+      "import_character_model",
+      "delete_empties",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures",
+      "fix_transformations",
+      "rig_character",
+      "setup_head_driver",
+      "set_color_management_to_standard",
+      "set_up_screen_space_reflections",
+      "vertex_paint_face_see_through_effect",
+      "delete_specific_objects",
+      "rename_shader_materials",
+      "set_up_armtwist_bone_constraints",
+      "join_meshes_on_armature"
+    ],
+    "honkai_star_rail.set_up_character": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_character",
+      "import_character_model",
+      "delete_empties"
+    ],
+    "honkai_star_rail.set_up_materials": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_materials",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures"
+    ],
+    "honkai_star_rail.set_up_outlines": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_outlines",
+      "import_outlines",
+      "setup_geometry_nodes",
+      "import_outline_lightmaps",
+      "import_material_data"
+    ],
+    "honkai_star_rail.finish_setup": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_finish_setup",
+      "fix_transformations",
+      "setup_head_driver",
+      "set_color_management_to_standard",
+      "set_up_screen_space_reflections",
+      "vertex_paint_face_see_through_effect",
+      "delete_specific_objects",
+      "rename_shader_materials",
+      "set_up_armtwist_bone_constraints",
+      "join_meshes_on_armature"
     ]
   }
 }

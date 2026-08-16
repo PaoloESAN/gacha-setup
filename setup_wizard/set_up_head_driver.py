@@ -237,19 +237,25 @@ class ZZZ_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
     bl_label = "ZZZ: Setup Head Driver"
 
     def execute(self, context):
+        ignore_names = ["lighting", "panel", "direction", "metarig", "wgt"]
         armatures = [
-            obj for obj in bpy.context.selected_objects if obj.type == "ARMATURE"
+            obj for obj in bpy.context.selected_objects
+            if obj.type == "ARMATURE" and not any(ign in obj.name.lower() for ign in ignore_names)
         ]
         if not armatures:
-            armatures = [obj for obj in bpy.data.objects if obj.type == "ARMATURE" and obj.name not in ["metarig", "rig"]]
+            armatures = [
+                obj for obj in bpy.data.objects
+                if obj.type == "ARMATURE" and not any(ign in obj.name.lower() for ign in ignore_names)
+            ]
         if not armatures:
-            armatures = [obj for obj in bpy.data.objects if obj.type == "ARMATURE"]
+            armatures = [obj for obj in bpy.data.objects if obj.type == "ARMATURE" and obj.name != "metarig"]
 
         if not armatures:
             self.report({"ERROR"}, "No armature found")
             return {"CANCELLED"}
 
-        armature = armatures[0]
+        rigify_armatures = [a for a in armatures if a.name == "rig" or "rig" in a.name.lower()]
+        armature = rigify_armatures[0] if rigify_armatures else armatures[0]
         char_name = (
             armature.name.replace("Rig", "").replace("_UI", "")
             if "Rig" in armature.name

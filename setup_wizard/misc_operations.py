@@ -664,18 +664,14 @@ class ZZZ_OT_MoveLightingPanelToCharacterCollection(Operator, CustomOperatorProp
 
 register, unregister = bpy.utils.register_classes_factory([
     GI_OT_SetColorManagementToStandard,
+    HYV_OT_SetUpScreenSpaceReflections,
+    HYV_OT_VertexPaintFaceSeeThroughEffect,
     GI_OT_DeleteSpecificObjects,
+    GI_OT_RenameShaderMaterials,
     GI_OT_SetUpArmTwistBoneConstraints,
+    PGR_OT_PaintVertexColors,
+    PGR_OT_PaintFaceShadowTexture,
+    PGR_OT_PaintVertexEraseFaceAlpha,
     ZZZ_OT_RenameCollectionAndRig,
     ZZZ_OT_MoveLightingPanelToCharacterCollection,
-])
-
-
-
-
-
-register, unregister = bpy.utils.register_classes_factory([
-    GI_OT_SetColorManagementToStandard,
-    GI_OT_DeleteSpecificObjects,
-    GI_OT_SetUpArmTwistBoneConstraints,
 ])

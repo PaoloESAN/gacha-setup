@@ -18,20 +18,20 @@ class ZZZ_PT_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
         layout = self.layout
         window_manager = context.window_manager
 
-        # sub_layout = layout.box()
-        # run_entire_setup_column = sub_layout.column()
-        # OperatorFactory.create(
-        #     run_entire_setup_column,
-        #     "zenless_zone_zero.setup_wizard_ui",
-        #     "Run Entire Setup",
-        #     "PLAY",
-        #     game_type=GameType.ZENLESS_ZONE_ZERO.name,
-        # )
+        sub_layout = layout.box()
+        run_entire_setup_column = sub_layout.column()
+        OperatorFactory.create(
+            run_entire_setup_column,
+            "zenless_zone_zero.setup_wizard_ui",
+            "Run Entire Setup",
+            "PLAY",
+            game_type=GameType.ZENLESS_ZONE_ZERO.name,
+        )
         expy_kit_installed = bpy.context.preferences.addons.get("Expy-Kit-main")
         rigify_installed = bpy.context.preferences.addons.get("rigify")
 
         if not expy_kit_installed or not rigify_installed:
-            layout.label(text="Rigging Disabled", icon="ERROR")
+            sub_layout.label(text="Rigging Disabled", icon="ERROR")
 
 
 class ZZZ_PT_Basic_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):

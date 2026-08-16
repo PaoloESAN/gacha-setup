@@ -60,13 +60,13 @@ class GI_OT_CharacterRiggerOperator(Operator, ImportHelper, CustomOperatorProper
             if 'Bip001-Pelvis' in b_names or 'Bip001-Head' in b_names or 'Bip001-Spine' in b_names:
                 self.game_type = GameType.NEVERNESS_TO_EVERNESS.name
 
-        is_advanced_setup = self.high_level_step_name != 'GENSHIN_OT_setup_wizard_ui' and \
-            self.high_level_step_name != 'GENSHIN_OT_setup_wizard_ui_no_outlines' and \
-            self.high_level_step_name != 'HONKAI_STAR_RAIL_OT_setup_wizard_ui' and \
-            self.high_level_step_name != 'HONKAI_STAR_RAIL_OT_setup_wizard_ui_no_outlines' and \
-            self.high_level_step_name != 'neverness_to_everness.setup_wizard_ui'
+        is_full_setup = any(
+            full_setup_name in (self.high_level_step_name or "").lower()
+            for full_setup_name in ["setup_wizard_ui", "setup_wizard"]
+        )
+        is_advanced_setup = not is_full_setup
         rigging_enabled = is_advanced_setup or \
-            (bpy.context.window_manager.setup_wizard_full_run_rigging_enabled and self.game_type in self.GAME_TYPES_FULL_SETUP_RIGGING_ENABLED)
+            (getattr(bpy.context.window_manager, "setup_wizard_full_run_rigging_enabled", True) and self.game_type in self.GAME_TYPES_FULL_SETUP_RIGGING_ENABLED)
 
         expy_kit_installed = bpy.context.preferences.addons.get('Expy-Kit-main')
         rigify_installed = bpy.context.preferences.addons.get('rigify')
@@ -91,11 +91,14 @@ class GI_OT_CharacterRiggerOperator(Operator, ImportHelper, CustomOperatorProper
         try:
             rigify_character_service = RigifyCharacterService(self.game_type, self, context)
             rigify_character_service.rig_character()
-
-            self.invoke_next_step()
         except Exception as ex:
-            raise ex
+            if self.game_type == GameType.ZENLESS_ZONE_ZERO.name:
+                print(f"[ZZZ Rigging Notice] Rigging skipped or encountered non-fatal issue: {ex}")
+                self.report({'WARNING'}, f'ZZZ Rigging notice: {ex}')
+            else:
+                raise ex
         finally:
+            self.invoke_next_step()
             super().clear_custom_properties()
         return {'FINISHED'}
 

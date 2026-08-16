@@ -112,8 +112,19 @@ def invoke_next_step_ui(
 
     file = open(f'{path_to_setup_wizard_folder}/config_ui.json')
     config = json.load(file)
-    ui_order = config.get(UI_ORDER_CONFIG_KEY)
+    ui_order = config.get(UI_ORDER_CONFIG_KEY, {})
     high_level_step_list = ui_order.get(high_level_step_name)
+
+    if not high_level_step_list and high_level_step_name:
+        if '.' in high_level_step_name:
+            prefix, rest = high_level_step_name.split('.', 1)
+            candidate = f"{prefix.upper()}_OT_{rest}"
+            high_level_step_list = ui_order.get(candidate)
+        elif '_OT_' in high_level_step_name:
+            prefix, rest = high_level_step_name.split('_OT_', 1)
+            candidate = f"{prefix.lower()}.{rest}"
+            high_level_step_list = ui_order.get(candidate)
+
     print(f"[DEBUG] high_level_step_list for '{high_level_step_name}': {high_level_step_list}")
 
     if not high_level_step_list or current_step_index >= len(high_level_step_list) - 1:

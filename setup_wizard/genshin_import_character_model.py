@@ -69,6 +69,57 @@ def _execute_fbx_import(filepath):
     )
 
 
+def apply_spine_rest_pose(armature):
+    """
+    Selects Bip001 Spine and Bip001 Spine1 (and common variants) in pose mode,
+    and applies them as rest pose to fix torso offset / separation issues.
+    """
+    if not armature or armature.type != 'ARMATURE':
+        return
+
+    orig_mode = bpy.context.object.mode if bpy.context.object else 'OBJECT'
+
+    try:
+        if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        armature.hide_viewport = False
+        armature.hide_set(False)
+        armature.select_set(True)
+        bpy.context.view_layer.objects.active = armature
+
+        bpy.ops.object.mode_set(mode='POSE')
+        bpy.ops.pose.select_all(action='DESELECT')
+
+        target_names = {
+            "bip001 spine", "bip001 spine1", "bip001 spine 1",
+            "bip001-spine", "bip001-spine1", "bip001_spine", "bip001_spine1",
+            "bip001 spine.001", "bip001 spine 01",
+            "spine", "spine1", "spine 1", "spine.001"
+        }
+
+        selected_any = False
+        if armature.pose:
+            for pbone in armature.pose.bones:
+                low = pbone.name.lower().strip()
+                low_clean = low.replace("-", " ").replace("_", " ")
+                if low in target_names or low_clean in target_names or ("spine" in low and ("1" in low or low.endswith("spine"))):
+                    pbone.select = True
+                    if hasattr(pbone.bone, "select"):
+                        pbone.bone.select = True
+                    selected_any = True
+
+        if selected_any:
+            bpy.ops.pose.armature_apply(selected=True)
+    except Exception as e:
+        print(f"[APPLY SPINE REST POSE] Notice: {e}")
+    finally:
+        try:
+            bpy.ops.object.mode_set(mode=orig_mode if orig_mode in ('OBJECT', 'EDIT', 'POSE') else 'OBJECT')
+        except Exception:
+            pass
+
+
 def reorient_armature_bones(armature):
     """
     Reorients edit bone tails towards their children's average position
@@ -77,6 +128,9 @@ def reorient_armature_bones(armature):
     """
     if not armature or armature.type != 'ARMATURE':
         return
+
+    # First apply spine rest pose to fix torso offset on models with altered rest pose
+    apply_spine_rest_pose(armature)
 
     orig_mode = bpy.context.object.mode if bpy.context.object else 'OBJECT'
 
@@ -462,37 +516,24 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
         existing_objects = set(bpy.data.objects.keys())
 
         if self.game_type == GameType.ZENLESS_ZONE_ZERO.name:
-            better_fbx_success = False
             try:
-                bpy.ops.import_scene.better_fbx(filepath=character_model_file_path)
-                self.report(
-                    {"INFO"}, "Imported character model using Better FBX Importer"
-                )
-                better_fbx_success = True
-            except AttributeError:
-                pass
+                _execute_fbx_import(character_model_file_path)
             except Exception as e:
-                pass
+                # Clean up newly created objects
+                new_objects = [
+                    bpy.data.objects[name]
+                    for name in bpy.data.objects.keys()
+                    if name not in existing_objects
+                ]
+                for ob in new_objects:
+                    try:
+                        bpy.data.objects.remove(ob)
+                    except Exception:
+                        pass
 
-            if not better_fbx_success:
-                try:
-                    _execute_fbx_import(character_model_file_path)
-                except Exception as e:
-                    # Clean up newly created objects
-                    new_objects = [
-                        bpy.data.objects[name]
-                        for name in bpy.data.objects.keys()
-                        if name not in existing_objects
-                    ]
-                    for ob in new_objects:
-                        try:
-                            bpy.data.objects.remove(ob)
-                        except Exception:
-                            pass
-
-                    error_message = "Please reopen Blender and import the FBX manually."
-                    self.report({"ERROR"}, error_message)
-                    raise RuntimeError(error_message)
+                error_message = "Please reopen Blender and import the FBX manually."
+                self.report({"ERROR"}, error_message)
+                raise RuntimeError(error_message)
 
             obj = None
             new_objects = [
@@ -582,17 +623,7 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                         obj.parent = None
                         obj.matrix_world = mw
 
-                try:
-                    for mesh_obj in bpy.data.objects:
-                        if mesh_obj.type == "MESH" and (
-                            "eyebrow" in mesh_obj.name.lower()
-                            or "brow" in mesh_obj.name.lower()
-                        ):
-                            mesh_obj.parent = obj
-                            mesh_obj.parent_type = "BONE"
-                            mesh_obj.parent_bone = "Bone_Root"
-                except:
-                    pass
+
 
                 if (
                     obj.parent
@@ -807,22 +838,7 @@ class GI_OT_DeleteEmpties(Operator, CustomOperatorProperties):
                 obj = bpy.data.objects.get("Armature")
 
             if obj:
-                try:
-                    for mesh_obj in bpy.data.objects:
-                        if mesh_obj.type == "MESH" and (
-                            "eyebrow" in mesh_obj.name.lower()
-                            or "brow" in mesh_obj.name.lower()
-                        ):
-                            if (
-                                mesh_obj.parent != obj
-                                or mesh_obj.parent_type != "BONE"
-                                or mesh_obj.parent_bone != "Bone_Root"
-                            ):
-                                mesh_obj.parent = obj
-                                mesh_obj.parent_type = "BONE"
-                                mesh_obj.parent_bone = "Bone_Root"
-                except Exception as e:
-                    print("Failed to parent eyebrows:", e)
+
 
                 for object in bpy.data.objects:
                     if object.type == "MESH" and not object.data.uv_layers.get("UV1"):

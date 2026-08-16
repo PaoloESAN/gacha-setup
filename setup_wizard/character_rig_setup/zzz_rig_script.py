@@ -83,30 +83,39 @@ def rig_character(
         
     # Hoyo models have inconsistent head bone shapes. I'm correcting them to my standard. (This stabilizes the head track bone)
     # My logic: Line up the head bone's tail's X & Y to the head bone's head (so that it's straight up), and use the eye bone's head's Z as the height. - Llama    
-    if not no_eyes:
-        if left_eye_exists:
-            eye_bone_head = temp_armature.edit_bones[left_eye_bone_name]
-        elif right_eye_exists:
-            eye_bone_head = temp_armature.edit_bones[right_eye_bone_name]
-        eye_bone_head_z = eye_bone_head.head[2]
+    possible_head = ["Bip001 Head", "Bip001-Head", "Bip001_Head", "Head", "head", "DEF-head", "DEF-spine.006"]
+    head_bone_temp = None
+    for hname in possible_head:
+        if hname in temp_armature.edit_bones:
+            head_bone_temp = temp_armature.edit_bones[hname]
+            break
+    if not head_bone_temp:
+        for b in temp_armature.edit_bones:
+            if "head" in b.name.lower():
+                head_bone_temp = b
+                break
 
-        head_bone_temp = temp_armature.edit_bones['Bip001 Head']
-        head_bone_head_x = head_bone_temp.head[0]
-        head_bone_head_y = head_bone_temp.head[1]
+    if head_bone_temp:
+        if not no_eyes:
+            if left_eye_exists:
+                eye_bone_head = temp_armature.edit_bones[left_eye_bone_name]
+            elif right_eye_exists:
+                eye_bone_head = temp_armature.edit_bones[right_eye_bone_name]
+            eye_bone_head_z = eye_bone_head.head[2]
 
-        head_bone_temp.tail[0] = head_bone_head_x
-        head_bone_temp.tail[1] = head_bone_head_y
-        head_bone_temp.tail[2] = eye_bone_head_z
-        
-    # If they dont have eye bones (Dottore), we can hardcode a reasonable value to use to repair the head.
-    else:
-        head_bone_temp = temp_armature.edit_bones['Bip001 Head']
-        head_bone_head_x = head_bone_temp.head[0]
-        head_bone_head_y = head_bone_temp.head[1]
+            head_bone_head_x = head_bone_temp.head[0]
+            head_bone_head_y = head_bone_temp.head[1]
 
-        head_bone_temp.tail[0] = head_bone_head_x
-        head_bone_temp.tail[1] = head_bone_head_y
-        head_bone_temp.tail[2] = head_bone_temp.head[2] + 0.0538
+            head_bone_temp.tail[0] = head_bone_head_x
+            head_bone_temp.tail[1] = head_bone_head_y
+            head_bone_temp.tail[2] = eye_bone_head_z
+        else:
+            head_bone_head_x = head_bone_temp.head[0]
+            head_bone_head_y = head_bone_temp.head[1]
+
+            head_bone_temp.tail[0] = head_bone_head_x
+            head_bone_temp.tail[1] = head_bone_head_y
+            head_bone_temp.tail[2] = head_bone_temp.head[2] + 0.0538
         
     left_eye_2 = []
     left_eye_1 = []
@@ -276,13 +285,15 @@ def rig_character(
     bpy.ops.object.mode_set(mode='EDIT')
 
     if not toe_bones_exist:
-        r_foot_bone = temp_armature.edit_bones["Bip001 R Foot"]
-        r_foot_bone.tail = (-0.040187,-0.078244,0.005803) # X, Y, Z
-        r_foot_bone.roll = 1.5708
+        r_foot_bone = temp_armature.edit_bones.get("Bip001 R Foot") or temp_armature.edit_bones.get("Bip001-R-Foot") or temp_armature.edit_bones.get("Foot.R") or temp_armature.edit_bones.get("foot.R")
+        if r_foot_bone:
+            r_foot_bone.tail = (-0.040187,-0.078244,0.005803) # X, Y, Z
+            r_foot_bone.roll = 1.5708
         
-        l_foot_bone = temp_armature.edit_bones["Bip001 L Foot"]
-        l_foot_bone.tail = (0.040187,-0.078244,0.005803)
-        l_foot_bone.roll =  1.5708
+        l_foot_bone = temp_armature.edit_bones.get("Bip001 L Foot") or temp_armature.edit_bones.get("Bip001-L-Foot") or temp_armature.edit_bones.get("Foot.L") or temp_armature.edit_bones.get("foot.L")
+        if l_foot_bone:
+            l_foot_bone.tail = (0.040187,-0.078244,0.005803)
+            l_foot_bone.roll =  1.5708
 
     bpy.ops.object.mode_set(mode='OBJECT')
     bpy.context.view_layer.objects.active = head_bone_arm_target
