@@ -3,8 +3,20 @@ title: "Bugs y Soluciones en Honkai: Star Rail"
 description: "Guía de resolución de problemas comunes con modelos, texturas y shaders de Honkai: Star Rail en Blender 5.2+."
 ---
 
+import { Image } from 'astro:assets';
+import sparxieBug from '../../../../assets/content/hsr/bugs/sparxie-bug.png';
+
 :::note
 ¿Encontraste un problema o bug no documentado? Por favor, repórtalo creando una [nueva issue en GitHub](https://github.com/PaoloESAN/gacha-setup/issues/new).
 :::
 
-Próximamente.
+## Sparxie Hoyotoon
+
+Al descargar los assets del modelo de Sparxie desde **HoyoToon**, pueden presentarse problemas con las texturas si se utiliza la variante **Elation**.
+
+### Solución
+
+- Se debe usar la variante de atuendo **Candy-Coated Waves** en lugar de **Elation**.
+- **Nota**: Esto no cambia en nada el modelo 3D, solo arregla los problemas con las texturas.
+
+<Image src={sparxieBug} alt="Selección de assets de Sparxie en HoyoToon - Usar Candy-Coated Waves en lugar de Elation" loading="eager" />
