@@ -304,173 +304,260 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         if not filtered_files:
             filtered_files = files
         
-        groups = {
-            "Body_1": [],
-            "Body_2": [],
-            "Body_3": [],
-            "Face": [],
-            "Hair": [],
-            "Weapon": [],
-            "Weapon_2": [],
-            "Leg": [],
-            "Tail": []
-        }
+        import re
 
-        for filename in filtered_files:
-            lower_name = filename.lower()
-            if "weapon" in lower_name:
-                if "weapon_2" in lower_name or "weapon2" in lower_name or "weapon 2" in lower_name or "weapon_map2" in lower_name or "weaponmap2" in lower_name or "map2" in lower_name or "map_2" in lower_name:
-                    groups["Weapon_2"].append(filename)
-                else:
-                    groups["Weapon"].append(filename)
-            elif "face" in lower_name:
-                groups["Face"].append(filename)
-            elif "hair" in lower_name:
-                groups["Hair"].append(filename)
-            elif "leg" in lower_name:
-                groups["Leg"].append(filename)
-            elif "tail" in lower_name:
-                groups["Tail"].append(filename)
-            elif "body_3" in lower_name or "body3" in lower_name or "body 3" in lower_name or "body_map3" in lower_name or "bodymap3" in lower_name or "map3" in lower_name or "map_3" in lower_name:
-                groups["Body_3"].append(filename)
-            elif "body_2" in lower_name or "body2" in lower_name or "body 2" in lower_name or "body_map2" in lower_name or "bodymap2" in lower_name or "map2" in lower_name or "map_2" in lower_name:
-                groups["Body_2"].append(filename)
-            elif "body" in lower_name:
-                groups["Body_1"].append(filename)
-            elif "map3" in lower_name or "map_3" in lower_name:
-                groups["Body_3"].append(filename)
-            elif "map2" in lower_name or "map_2" in lower_name:
-                groups["Body_2"].append(filename)
-            elif "map1" in lower_name or "map_1" in lower_name:
-                groups["Body_1"].append(filename)
+        def clean_tokens(text):
+            text = re.sub(r'zzz|kythera\'s|kythera|shader|mat|mat_|mesh|object|\+ t', '', text, flags=re.IGNORECASE)
+            tokens = [t.lower() for t in re.split(r'[^a-zA-Z0-9]+', text) if len(t) > 1 and not t.isdigit()]
+            return set(tokens)
 
-        for mat in bpy.data.materials:
-            if not mat.name.startswith("ZZZ Shader") or not mat.node_tree:
-                continue
+        def find_best_texture(mat_name, mesh_names, tex_type, image_files, char_prefix=''):
+            suf = f'_{tex_type.lower()}'
+            candidates = [
+                f for f in image_files 
+                if f.lower().rsplit('.', 1)[0].endswith(suf) or f'_{tex_type.lower()}.' in f.lower()
+            ]
+            if not candidates:
+                candidates = [f for f in image_files if f.lower().rsplit('.', 1)[0].endswith(tex_type.lower())]
+            if not candidates:
+                return None
+            if len(candidates) == 1:
+                return candidates[0]
+
+            combined = mat_name + ' ' + ' '.join(mesh_names)
+            mat_tokens = clean_tokens(combined)
+
+            categories = {
+                'face': ['face', 'eyebrow', 'brow', 'eye', 'cara', 'head', 'rostro', 'pupil', 'iris'],
+                'hair': ['hair', 'pelo', 'cabello', 'bang', 'ponytail', 'twintail', 'ahoge'],
+                'weapon': ['weapon', 'wpn', 'equip', 'sword', 'blade', 'spear', 'gun', 'prop', 'arma', 'katana'],
+                'sticker': ['sticker', 'decal', 'ui', 'logo', 'badge'],
+                'wing': ['wing', 'ala', 'feather', 'pluma'],
+                'body3': ['body3', 'body 3', 'body_3', 'map3', 'map_3', 'leg', 'shoe', 'boot', 'foot', 'sock', 'stocking', 'thigh', 'tail', 'cola'],
+                'body2': ['body2', 'body 2', 'body_2', 'map2', 'map_2', 'wing', 'ala', 'feather', 'dress', 'cape', 'cloak', 'coat', 'jacket', 'acc', 'deco', 'extra', 'outer'],
+                'body1': ['body1', 'body 1', 'body_1', 'map1', 'body', 'torso', 'chest', 'main', 'skin', 'cloth', 'shirt']
+            }
+
+            best_file = candidates[0]
+            best_score = -999999
+
+            for f in candidates:
+                f_clean = f.lower().rsplit('.', 1)[0]
+                for p in ['_d', '_m', '_a', '_n', '_diffuse', '_normal', '_lightmap']:
+                    if f_clean.endswith(p):
+                        f_clean = f_clean[:-len(p)]
+                if char_prefix and f_clean.startswith(char_prefix.lower()):
+                    f_clean = f_clean[len(char_prefix.lower()):].lstrip('_')
+                
+                f_tokens = clean_tokens(f_clean)
+                score = 0
+                
+                # 1. Exact Word/Token matches
+                matched = len(mat_tokens.intersection(f_tokens))
+                extra_in_file = len(f_tokens - mat_tokens)
+                score += matched * 60 - extra_in_file * 10
+                
+                # 2. Sub-keyword matching (e.g. 2, 3, 02, 03)
+                for sub in ['2', '3', '02', '03']:
+                    f_has = sub in f.lower()
+                    m_has = sub in combined.lower()
+                    if f_has and m_has:
+                        score += 35
+                    elif f_has and not m_has:
+                        score -= 35
+                    elif not f_has and m_has:
+                        score -= 20
+
+                # 3. Exact token substring bonus
+                for tok in mat_tokens:
+                    if tok in f_clean or f_clean in tok:
+                        score += 30
+
+                # 4. Category affinity
+                for cat, keywords in categories.items():
+                    mat_in_cat = any(k in combined.lower() for k in keywords)
+                    file_in_cat = any(k in f.lower() for k in keywords)
+                    if mat_in_cat and file_in_cat:
+                        score += 50
+                    elif mat_in_cat and not file_in_cat and any(any(k in other.lower() for k in keywords) for other in candidates):
+                        score -= 35
+
+                if score > best_score:
+                    best_score = score
+                    best_file = f
+
+            return best_file
+
+        def find_best_face_lightmap(mat_name, mesh_names, image_files, char_prefix=''):
+            lm_candidates = [
+                f for f in image_files
+                if 'lightmap' in f.lower() and (f.lower().endswith('.png') or f.lower().endswith('.tga') or f.lower().endswith('.dds'))
+            ]
+            if not lm_candidates:
+                return find_best_texture(mat_name, mesh_names, 'm', image_files, char_prefix)
+            if len(lm_candidates) == 1:
+                return lm_candidates[0]
             
-            matname = mat.name.lower()
-            group_keys = []
-            if "hair" in matname:
-                group_keys = ["Hair"]
-            elif "eyebrow" in matname or "brow" in matname or "眉" in matname:
-                group_keys = ["Face"]
-            elif "face" in matname:
-                group_keys = ["Face"]
-            elif "eye" in matname:
-                group_keys = ["Face"]
-            elif "body" in matname or "leg" in matname or "tail" in matname:
-                if "leg" in matname:
-                    group_keys = ["Leg", "Body_3", "Body_2", "Body_1", "Tail"]
-                elif "tail" in matname:
-                    group_keys = ["Tail", "Body_3", "Body_2", "Body_1", "Leg"]
-                elif "body 3" in matname or "body3" in matname or "body_3" in matname or "map3" in matname or "map_3" in matname or "_3_" in matname or matname.endswith("_3"):
-                    group_keys = ["Body_3", "Leg", "Body_2", "Body_1", "Tail"]
-                elif "body 2" in matname or "body2" in matname or "body_2" in matname or "map2" in matname or "map_2" in matname or "_2_" in matname or matname.endswith("_2"):
-                    group_keys = ["Body_2", "Body_1", "Body_3", "Leg"]
-                else:
-                    group_keys = ["Body_1", "Body_2", "Body_3", "Leg"]
-            elif "weapon" in matname:
-                if "weapon 2" in matname or "weapon2" in matname or "weapon_2" in matname or "map2" in matname or "map_2" in matname or "_2_" in matname or matname.endswith("_2"):
-                    group_keys = ["Weapon_2", "Weapon"]
-                else:
-                    group_keys = ["Weapon", "Weapon_2"]
+            best = lm_candidates[0]
+            best_sc = -9999
+            for f in lm_candidates:
+                sc = 0
+                if any(k in f.lower() for k in ['face', 'head', 'cara']): sc += 50
+                if char_prefix and char_prefix.lower() in f.lower(): sc += 30
+                if sc > best_sc:
+                    best_sc = sc
+                    best = f
+            return best
+
+        def connect_tex_to_socket(mat, group_node, socket_id, socket_names, file_name, is_color=False, y_offset=0):
+            if not file_name:
+                return None
+            img_path = os.path.join(folder, file_name)
+            if not os.path.isfile(img_path):
+                return None
+
+            img = bpy.data.images.load(img_path, check_existing=True)
+            img.colorspace_settings.name = 'sRGB' if is_color else 'Non-Color'
+            img.alpha_mode = 'CHANNEL_PACKED'
 
             nodes = mat.node_tree.nodes
-            for node in nodes:
-                if node.type == 'TEX_IMAGE':
-                    suffix = node.name.split("_")[-1] if "_" in node.name else node.name[-1]
-                    target_suffix = f"_{suffix}.png"
-                    
-                    def get_best_match(target_suf):
-                        candidates = []
-                        for key in group_keys:
-                            key_candidates = [f for f in groups[key] if f.lower().endswith(target_suf.lower())]
-                            if key_candidates:
-                                candidates = key_candidates
+            links = mat.node_tree.links
+
+            if isinstance(socket_names, str):
+                socket_names = [socket_names]
+
+            target_socket = None
+            for sname in socket_names:
+                for inp in group_node.inputs:
+                    if inp.name.lower().strip() == sname.lower().strip():
+                        target_socket = inp
+                        break
+                if target_socket:
+                    break
+
+            if not target_socket:
+                for sname in socket_names:
+                    s_words = set(sname.lower().replace("_", " ").split())
+                    for inp in group_node.inputs:
+                        inp_words = set(inp.name.lower().replace("_", " ").split())
+                        if s_words == inp_words:
+                            target_socket = inp
+                            break
+                    if target_socket:
+                        break
+
+            if not target_socket:
+                return None
+
+            node_tag = f"Texture_{socket_id}"
+            tex_node = None
+            for link in list(links):
+                if link.to_socket == target_socket:
+                    if link.from_node.type == 'TEX_IMAGE' and (link.from_node.name == node_tag or (link.from_node.name.startswith(f"Texture_{socket_id}") and not any(other in link.from_node.name for other in ["_D", "_M", "_A", "_N"] if other != f"_{socket_id}"))):
+                        tex_node = link.from_node
+                    else:
+                        links.remove(link)
+
+            if not tex_node:
+                tex_node = nodes.get(node_tag)
+
+            if not tex_node:
+                tex_node = nodes.new('ShaderNodeTexImage')
+                tex_node.name = node_tag
+                tex_node.label = f"Texture {socket_id}"
+                tex_node.location = (group_node.location.x - 360, group_node.location.y + y_offset)
+
+            tex_node.image = img
+
+            if not any(link.to_socket == target_socket and link.from_node == tex_node for link in links):
+                links.new(tex_node.outputs['Color'], target_socket)
+
+            return tex_node
+
+        for mat in bpy.data.materials:
+            if not mat.node_tree:
+                continue
+
+            matname = mat.name.lower()
+            is_zzz_mat = mat.name.startswith("ZZZ") or mat.name.startswith("Kythera") or \
+                any(n.type == 'GROUP' and n.node_tree and ('kythera' in n.node_tree.name.lower() or 'zzz' in n.node_tree.name.lower()) for n in mat.node_tree.nodes)
+            if not is_zzz_mat:
+                continue
+
+            # Find the primary shader group node
+            shader_group_node = None
+            for node in mat.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree:
+                    nt_low = node.node_tree.name.lower()
+                    if "kythera" in nt_low or "face shader" in nt_low or "shader t" in nt_low or "shader + t" in nt_low or "shader" in nt_low or "zzz" in nt_low:
+                        shader_group_node = node
+                        break
+
+            if not shader_group_node:
+                for node in mat.node_tree.nodes:
+                    if node.type == 'GROUP' and node.node_tree:
+                        shader_group_node = node
+                        break
+
+            if not shader_group_node:
+                continue
+
+            # Combine material name and any mesh names using this material for complete context
+            mesh_names = [obj.name.lower() for obj in bpy.data.objects if obj.type == 'MESH' and any(s.material == mat for s in obj.material_slots)]
+            combined_names = matname + " " + " ".join(mesh_names)
+
+            is_face = any(k in combined_names for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight", "cara", "head", "rostro"]) or \
+                (shader_group_node.node_tree and "face" in shader_group_node.node_tree.name.lower())
+
+            if is_face:
+                # 1. Face D -> _D Map / Diffuse Texture (sRGB)
+                face_d = find_best_texture(matname, mesh_names, "d", filtered_files, main_prefix)
+                if face_d:
+                    connect_tex_to_socket(mat, shader_group_node, "Face_D", ["_D Map", "_D", "Diffuse Texture", "Diffuse"], face_d, is_color=True, y_offset=0)
+
+                # 2. Face Lightmap -> Light Map (Non-Color)
+                face_lm = find_best_face_lightmap(matname, mesh_names, filtered_files, main_prefix)
+                if face_lm:
+                    lm_node = None
+                    for node in mat.node_tree.nodes:
+                        if node.type == 'TEX_IMAGE':
+                            if (node.image and "lightmap" in node.image.name.lower()) or "lightmap" in node.name.lower() or "lightmap" in node.label.lower():
+                                lm_node = node
                                 break
-                        
-                        if len(candidates) > 1:
-                            sub_keywords = ["2", "3", "pro"]
-                            mat_has_sub = [sub for sub in sub_keywords if sub in matname]
-                            filtered_candidates = []
-                            for f in candidates:
-                                f_lower = f.lower()
-                                f_clean = f_lower
-                                if main_prefix and f_lower.startswith(main_prefix.lower()):
-                                    f_clean = f_lower[len(main_prefix):]
-                                
-                                match = True
-                                for sub in sub_keywords:
-                                    if sub in mat_has_sub:
-                                        if sub not in f_clean:
-                                            match = False
-                                            break
-                                    else:
-                                        if sub in f_clean:
-                                            match = False
-                                            break
-                                if match:
-                                    filtered_candidates.append(f)
-                            if filtered_candidates:
-                                list_to_score = filtered_candidates
-                            else:
-                                list_to_score = candidates
-
-                            clean_mat_name = matname.replace("zzz shader", "").strip()
-                            mat_words = [w for w in clean_mat_name.split("_") if w]
-
-                            best_candidate = list_to_score[0]
-                            best_score = -99999
-                            for f in list_to_score:
-                                f_clean = f.lower().rsplit(".", 1)[0]
-                                for suffix_part in ["_d", "_m", "_a", "_n", "_map1", "_map2", "_map3", "_diffuse", "_normal", "_lightmap"]:
-                                    if f_clean.endswith(suffix_part):
-                                        f_clean = f_clean[:-len(suffix_part)]
-                                f_words = [w for w in f_clean.split("_") if w]
-
-                                matched_words = sum(1 for w in f_words if w in mat_words)
-                                extra_words = sum(1 for w in f_words if w not in mat_words)
-                                score = matched_words * 2 - extra_words
-                                if score > best_score:
-                                    best_score = score
-                                    best_candidate = f
-                            return best_candidate
-                        return candidates[0] if candidates else None
-
-                    found_img = get_best_match(target_suffix)
-                    if not found_img:
-                        found_img = get_best_match(f"{suffix}.png")
-
-                    if found_img:
-                        img_path = os.path.join(folder, found_img)
-                        img = bpy.data.images.load(img_path, check_existing=True)
-                        node.image = img
-                        
-                        if suffix.upper() in ["D", "DIFFUSE"]:
-                            img.colorspace_settings.name = 'sRGB'
-                        else:
-                            img.colorspace_settings.name = 'Non-Color'
+                    if lm_node:
+                        img = bpy.data.images.load(os.path.join(folder, face_lm), check_existing=True)
+                        img.colorspace_settings.name = 'Non-Color'
                         img.alpha_mode = 'CHANNEL_PACKED'
+                        lm_node.image = img
+                    else:
+                        connect_tex_to_socket(mat, shader_group_node, "Face_Lightmap", ["Light Map", "LightMap", "_Lightmap"], face_lm, is_color=False, y_offset=-280)
 
-                elif node.type == 'GROUP' and node.node_tree and node.node_tree.name == "Face Lightmap":
-                    face_lightmap_node = node.node_tree.nodes.get("Face_Lightmap")
-                    if face_lightmap_node:
-                        found_lightmap = None
-                        for f in groups["Face"]:
-                            if "lightmap" in f.lower():
-                                found_lightmap = f
-                                break
-                        if found_lightmap:
-                            img_path = os.path.join(folder, found_lightmap)
-                            img = bpy.data.images.load(img_path, check_existing=True)
-                            face_lightmap_node.image = img
-                            img.colorspace_settings.name = 'Non-Color'
-                            img.alpha_mode = 'CHANNEL_PACKED'
+            else:
+                # Body, Hair, Weapon, Dress, Wings, Stickers, Acc, etc. (Kythera's ZZZ Shader)
+                # 1. Texture D -> _D Map / Diffuse (sRGB)
+                tex_d = find_best_texture(matname, mesh_names, "d", filtered_files, main_prefix)
+                if tex_d:
+                    connect_tex_to_socket(mat, shader_group_node, "D", ["_D Map", "_D", "Diffuse", "Diffuse Texture"], tex_d, is_color=True, y_offset=0)
+
+                # 2. Texture M -> _M Map / Metallic (Non-Color)
+                tex_m = find_best_texture(matname, mesh_names, "m", filtered_files, main_prefix)
+                if tex_m:
+                    connect_tex_to_socket(mat, shader_group_node, "M", ["_M Map", "_M", "Metallic"], tex_m, is_color=False, y_offset=-260)
+
+                # 3. Texture A -> _A Map / Ambient (Non-Color)
+                tex_a = find_best_texture(matname, mesh_names, "a", filtered_files, main_prefix)
+                if tex_a:
+                    connect_tex_to_socket(mat, shader_group_node, "A", ["_A Map", "_A", "Ambient"], tex_a, is_color=False, y_offset=-520)
+
+                # 4. Texture N -> _N Map / Normal (Non-Color)
+                tex_n = find_best_texture(matname, mesh_names, "n", filtered_files, main_prefix)
+                if tex_n:
+                    connect_tex_to_socket(mat, shader_group_node, "N", ["_N Map", "_N", "Normal"], tex_n, is_color=False, y_offset=-780)
 
             # If this is a Hair material and no hair texture was found,
             # remove its material slot (Slot 2+) from mesh objects so the hair inherits Slot 1 (only for ZZZ)
             if self.blender_operator.game_type == GameType.ZENLESS_ZONE_ZERO.name and "hair" in matname:
-                has_hair_texture = any(node.type == 'TEX_IMAGE' and node.image for node in nodes)
+                has_hair_texture = any(node.type == 'TEX_IMAGE' and node.image for node in mat.node_tree.nodes)
                 if not has_hair_texture:
                     for obj in bpy.data.objects:
                         if obj.type == 'MESH' and obj.data and hasattr(obj.data, "materials") and hasattr(obj.data, "polygons"):
@@ -482,8 +569,8 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                                     obj.data.materials.pop(index=i)
 
         # Ensure all weapon mesh objects/slots are assigned a valid weapon material (Weapon 1)
-        weapon_mats = [m for m in bpy.data.materials if m.name.startswith("ZZZ Shader") and "weapon" in m.name.lower()]
-        main_weapon_mat = weapon_mats[0] if weapon_mats else bpy.data.materials.get("ZZZ Shader Weapon")
+        weapon_mats = [m for m in bpy.data.materials if (m.name.startswith("ZZZ") or m.name.startswith("Kythera")) and "weapon" in m.name.lower()]
+        main_weapon_mat = weapon_mats[0] if weapon_mats else None
 
         for obj in bpy.data.objects:
             if obj.type == 'MESH':
@@ -500,13 +587,13 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                         if not has_tex and main_weapon_mat and slot.material != main_weapon_mat:
                             slot.material = main_weapon_mat
 
-        # Sync textures from main ZZZ materials to ZZZ Outline materials
+        # Sync textures from main ZZZ materials to ZZZ Outline materials if any
         sync_zzz_outline_textures()
 
 
 def sync_zzz_outline_textures():
     outline_materials = [m for m in bpy.data.materials if "outlines" in m.name.lower() or m.name.endswith("Outlines")]
-    main_materials = [m for m in bpy.data.materials if m.name.startswith("ZZZ Shader") and m.node_tree]
+    main_materials = [m for m in bpy.data.materials if (m.name.startswith("ZZZ") or m.name.startswith("Kythera")) and m.node_tree]
 
     for outline_mat in outline_materials:
         if not outline_mat.node_tree:
@@ -521,14 +608,14 @@ def sync_zzz_outline_textures():
         elif "face" in outline_lower:
             cand = [m for m in main_materials if "face" in m.name.lower()]
             if cand: matched_main_mat = cand[0]
-        elif "body 2" in outline_lower or "body2" in outline_lower or "body_2" in outline_lower or "dress" in outline_lower:
-            cand = [m for m in main_materials if "body 2" in m.name.lower() or "body2" in m.name.lower() or "body_2" in m.name.lower() or "map2" in m.name.lower()]
+        elif any(k in outline_lower for k in ["body 2", "body2", "body_2", "dress"]):
+            cand = [m for m in main_materials if any(k in m.name.lower() for k in ["body 2", "body2", "body_2", "map2"])]
             if cand: matched_main_mat = cand[0]
-        elif "body 3" in outline_lower or "body3" in outline_lower or "body_3" in outline_lower or "leg" in outline_lower:
-            cand = [m for m in main_materials if "body 3" in m.name.lower() or "body3" in m.name.lower() or "body_3" in m.name.lower() or "map3" in m.name.lower() or "leg" in m.name.lower()]
+        elif any(k in outline_lower for k in ["body 3", "body3", "body_3", "leg"]):
+            cand = [m for m in main_materials if any(k in m.name.lower() for k in ["body 3", "body3", "body_3", "map3", "leg"])]
             if cand: matched_main_mat = cand[0]
         elif "body" in outline_lower:
-            cand = [m for m in main_materials if "body_1" in m.name.lower() or "body1" in m.name.lower() or "body 1" in m.name.lower() or ("body" in m.name.lower() and "2" not in m.name.lower() and "3" not in m.name.lower())]
+            cand = [m for m in main_materials if any(k in m.name.lower() for k in ["body_1", "body1", "body 1"]) or ("body" in m.name.lower() and "2" not in m.name.lower() and "3" not in m.name.lower())]
             if cand: matched_main_mat = cand[0]
         elif "weapon" in outline_lower:
             cand = [m for m in main_materials if "weapon" in m.name.lower()]
@@ -539,7 +626,7 @@ def sync_zzz_outline_textures():
             best_match = None
             best_score = 0
             for m in main_materials:
-                m_words = [w for w in m.name.lower().replace("zzz shader", "").split("_") if w]
+                m_words = [w for w in m.name.lower().replace("zzz shader", "").replace("zzz", "").replace("kythera's", "").split("_") if w]
                 score = sum(1 for w in out_words if w in m_words)
                 if score > best_score:
                     best_score = score
@@ -553,15 +640,14 @@ def sync_zzz_outline_textures():
                     suffix = node.name.rsplit("_", 1)[-1].upper() if "_" in node.name else node.name.upper()
                     main_images[suffix] = node.image
                     main_images[node.name] = node.image
-                    if "D" in suffix or "DIFFUSE" in suffix or "MAIN" not in main_images:
-                        main_images["MAIN"] = node.image
 
             for node in outline_mat.node_tree.nodes:
                 if node.type == 'TEX_IMAGE':
-                    suffix = node.name.rsplit("_", 1)[-1].upper() if "_" in node.name else node.name.upper()
-                    assigned_img = main_images.get(node.name) or main_images.get(suffix) or main_images.get("D") or main_images.get("MAIN")
-                    if assigned_img:
-                        node.image = assigned_img
+                    suf = node.name.rsplit("_", 1)[-1].upper() if "_" in node.name else node.name.upper()
+                    if suf in main_images:
+                        node.image = main_images[suf]
+                    elif node.name in main_images:
+                        node.image = main_images[node.name]
 
 
 def create_outline_image_copy(src_image, colorspace_name='Non-Color', suffix='_outline_lightmap'):

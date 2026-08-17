@@ -1357,7 +1357,7 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                                 return mat
                         # 2. Global search across scene materials
                         for mat in bpy.data.materials:
-                            if mat.name.startswith("ZZZ Shader") and mat.name.lower() != fallback_name.lower():
+                            if (mat.name.startswith("ZZZ") or mat.name.startswith("Kythera")) and mat.name.lower() != fallback_name.lower():
                                 m_lower = mat.name.lower()
                                 if any(kw in m_lower for kw in keywords):
                                     return mat

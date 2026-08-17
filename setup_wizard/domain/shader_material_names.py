@@ -209,17 +209,12 @@ class JaredNytsPunishingGrayRavenShaderMaterialNames(ShaderMaterialNames):
 
 
 class ZenlessZoneZeroShaderMaterialNames(ShaderMaterialNames):
-    MATERIAL_PREFIX = 'ZZZ Shader '
-    MATERIAL_PREFIX_AFTER_RENAME = 'ZZZ Shader '
-    BODY = f'{MATERIAL_PREFIX}Body'
-    BODY2 = f'{MATERIAL_PREFIX}Body 2'
-    BODY3 = f'{MATERIAL_PREFIX}Body3/Leg'
-    FACE = f'{MATERIAL_PREFIX}Face'
-    HAIR = f'{MATERIAL_PREFIX}Hair'
-    WEAPON = f'{MATERIAL_PREFIX}Weapon'
-    WEAPON2 = f'{MATERIAL_PREFIX}Weapon 2'
-    EYE = f'{MATERIAL_PREFIX}Eye'
-    EYE_HIGHLIGHTS = f'{MATERIAL_PREFIX}EyeHighlights'
+    MATERIAL_PREFIX = "Kythera's ZZZ "
+    MATERIAL_PREFIX_AFTER_RENAME = "Kythera's ZZZ "
+    FACE = "Kythera's ZZZ Face Shader"
+    BODY = "Kythera's ZZZ Shader"
+    SHADER = "Kythera's ZZZ Shader"
+    SHADER_T = "Kythera's ZZZ Shader"
     
     # Custom outline properties
     BODY_OUTLINE = 'ZZZ Body Outlines'
