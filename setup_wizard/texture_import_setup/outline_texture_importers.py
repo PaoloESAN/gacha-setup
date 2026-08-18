@@ -237,6 +237,9 @@ class OutlineTextureImporterFactory:
     def create(game_type: GameType, blender_operator: Operator, context: Context):
         shader_identifier_service: ShaderIdentifierService = ShaderIdentifierServiceFactory.create(game_type)
         shader = shader_identifier_service.identify_shader(bpy.data.materials, bpy.data.node_groups)
+        if shader is None and game_type == GameType.ZENLESS_ZONE_ZERO.name:
+            from setup_wizard.domain.game_shaders import ZenlessZoneZeroShaders
+            shader = ZenlessZoneZeroShaders.V1_ZENLESS_ZONE_ZERO_SHADER
         shader_node_names = shader_identifier_service.get_shader_node_names(shader)
 
         # Because we inject the GameType via StringProperty, we need to compare using the Enum's name (a string)
@@ -487,8 +490,11 @@ class ZenlessZoneZeroOutlineTextureImporter(OutlineTextureImporter):
         super().__init__(blender_operator, context, None, shader_node_names)
 
     def import_textures(self):
+        from setup_wizard.import_order import get_cache, CHARACTER_MODEL_FOLDER_FILE_PATH
+        cache_enabled = self.context.window_manager.cache_enabled if hasattr(self.context, 'window_manager') and hasattr(self.context.window_manager, 'cache_enabled') else True
+        cached_folder = get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH) or getattr(self.blender_operator, 'file_directory', None)
         from setup_wizard.texture_import_setup.game_texture_importers import sync_zzz_outline_textures
-        sync_zzz_outline_textures()
+        sync_zzz_outline_textures(folder=cached_folder)
 
 
 class NevernessToEvernessOutlineTextureImporter(OutlineTextureImporter):

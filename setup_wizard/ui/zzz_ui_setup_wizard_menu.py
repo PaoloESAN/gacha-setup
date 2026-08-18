@@ -14,6 +14,16 @@ class ZZZ_PT_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
     bl_region_type = "UI"
     bl_category = "Character Setup Wizard"
 
+    bpy.types.Scene.zzz_shader_type = bpy.props.EnumProperty(
+        items=[
+            ("KYTHERA", "Kythera's Shader", "Use Kythera's ZZZ Shader (Face Shader + General Shader)"),
+            ("LEGACY", "Legacy Shader", "Use Legacy ZZZ Setup File V2.0 Shader"),
+        ],
+        name="Shader",
+        description="Select shader setup for Zenless Zone Zero",
+        default="KYTHERA",
+    )
+
     def draw(self, context):
         layout = self.layout
         window_manager = context.window_manager
@@ -32,6 +42,13 @@ class ZZZ_PT_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
 
         if not expy_kit_installed or not rigify_installed:
             sub_layout.label(text="Rigging Disabled", icon="ERROR")
+
+        settings_box = layout.box()
+        settings_header = settings_box.row()
+        settings_header.label(text="Settings", icon="PREFERENCES")
+
+        settings_col = settings_box.column()
+        settings_col.prop(context.scene, "zzz_shader_type", text="Shader")
 
 
 class ZZZ_PT_Basic_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):

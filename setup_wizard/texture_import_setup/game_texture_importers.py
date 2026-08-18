@@ -326,6 +326,18 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
 
             combined = mat_name + ' ' + ' '.join(mesh_names)
             mat_tokens = clean_tokens(combined)
+            combined_lower = combined.lower()
+
+            # Determine target body level / category
+            is_body3 = any(k in combined_lower for k in ['body 3', 'body3', 'body_3', 'map3', 'map_3', 'leg', 'shoe', 'boot', 'foot', 'sock', 'stocking', 'thigh', 'tail', 'cola'])
+            is_body2 = any(k in combined_lower for k in ['body 2', 'body2', 'body_2', 'map2', 'map_2', 'wing', 'ala', 'feather', 'dress', 'cape', 'cloak', 'coat', 'jacket', 'acc', 'deco', 'extra', 'outer'])
+            is_face = any(k in combined_lower for k in ['face', 'eyebrow', 'brow', 'eye', 'cara', 'head', 'rostro', 'pupil', 'iris'])
+            is_hair = any(k in combined_lower for k in ['hair', 'pelo', 'cabello', 'bang', 'ponytail', 'twintail', 'ahoge'])
+            is_sticker = any(k in combined_lower for k in ['sticker', 'decal', 'ui', 'logo', 'badge'])
+            is_weapon = any(k in combined_lower for k in ['weapon', 'wpn', 'equip', 'sword', 'blade', 'spear', 'gun', 'prop', 'arma', 'katana'])
+
+            has_b3_files = any(any(k in f.lower() for k in ['body_3', 'body3', 'body 3', 'map3', 'map_3', 'leg', 'tail', '_3.']) for f in candidates)
+            has_b2_files = any(any(k in f.lower() for k in ['body_2', 'body2', 'body 2', 'map2', 'map_2', '_2.']) for f in candidates)
 
             categories = {
                 'face': ['face', 'eyebrow', 'brow', 'eye', 'cara', 'head', 'rostro', 'pupil', 'iris'],
@@ -342,7 +354,8 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
             best_score = -999999
 
             for f in candidates:
-                f_clean = f.lower().rsplit('.', 1)[0]
+                f_lower = f.lower()
+                f_clean = f_lower.rsplit('.', 1)[0]
                 for p in ['_d', '_m', '_a', '_n', '_diffuse', '_normal', '_lightmap']:
                     if f_clean.endswith(p):
                         f_clean = f_clean[:-len(p)]
@@ -357,26 +370,55 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                 extra_in_file = len(f_tokens - mat_tokens)
                 score += matched * 60 - extra_in_file * 10
                 
-                # 2. Sub-keyword matching (e.g. 2, 3, 02, 03)
-                for sub in ['2', '3', '02', '03']:
-                    f_has = sub in f.lower()
-                    m_has = sub in combined.lower()
-                    if f_has and m_has:
-                        score += 35
-                    elif f_has and not m_has:
-                        score -= 35
-                    elif not f_has and m_has:
-                        score -= 20
+                # 2. Sub-keyword matching & Tiered Fallback:
+                if is_body3:
+                    f_is_3 = any(k in f_lower for k in ['body_3', 'body3', 'body 3', 'map3', 'map_3', 'leg', 'tail', '_3.'])
+                    f_is_2 = any(k in f_lower for k in ['body_2', 'body2', 'body 2', 'map2', 'map_2', '_2.'])
+                    f_is_1 = 'body' in f_lower and not (f_is_3 or f_is_2)
+                    if f_is_3:
+                        score += 100
+                    elif f_is_2:
+                        # Fallback tier: if no body3 exists in folder, use highest body tier (body2)
+                        score += 70 if not has_b3_files else -20
+                    elif f_is_1:
+                        # If neither body3 nor body2 exists, fallback to body1
+                        score += 40 if (not has_b3_files and not has_b2_files) else -40
+
+                elif is_body2:
+                    f_is_2 = any(k in f_lower for k in ['body_2', 'body2', 'body 2', 'map2', 'map_2', 'wing', 'dress', 'cape', '_2.'])
+                    f_is_1 = 'body' in f_lower and not f_is_2
+                    if f_is_2:
+                        score += 100
+                    elif f_is_1:
+                        score += 50 if not has_b2_files else -30
+
+                elif not (is_face or is_hair or is_sticker or is_weapon):
+                    f_is_1 = 'body' in f_lower and not any(k in f_lower for k in ['body_2', 'body2', 'body 2', 'body_3', 'body3', 'body 3', '_2.', '_3.'])
+                    f_is_2 = any(k in f_lower for k in ['body_2', 'body2', 'body 2', '_2.'])
+                    if f_is_1:
+                        score += 100
+                    elif f_is_2:
+                        score += 30
+
+                else:
+                    for sub in ['2', '3', '02', '03']:
+                        f_has = sub in f_lower
+                        m_has = sub in combined_lower
+                        if f_has and m_has:
+                            score += 35
+                        elif f_has and not m_has:
+                            score -= 35
 
                 # 3. Exact token substring bonus
                 for tok in mat_tokens:
                     if tok in f_clean or f_clean in tok:
                         score += 30
 
-                # 4. Category affinity
-                for cat, keywords in categories.items():
-                    mat_in_cat = any(k in combined.lower() for k in keywords)
-                    file_in_cat = any(k in f.lower() for k in keywords)
+                # 4. Category affinity (face, hair, weapon, sticker)
+                for cat in ['face', 'hair', 'weapon', 'sticker']:
+                    keywords = categories[cat]
+                    mat_in_cat = any(k in combined_lower for k in keywords)
+                    file_in_cat = any(k in f_lower for k in keywords)
                     if mat_in_cat and file_in_cat:
                         score += 50
                     elif mat_in_cat and not file_in_cat and any(any(k in other.lower() for k in keywords) for other in candidates):
@@ -506,53 +548,149 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
             mesh_names = [obj.name.lower() for obj in bpy.data.objects if obj.type == 'MESH' and any(s.material == mat for s in obj.material_slots)]
             combined_names = matname + " " + " ".join(mesh_names)
 
-            is_face = any(k in combined_names for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight", "cara", "head", "rostro"]) or \
-                (shader_group_node.node_tree and "face" in shader_group_node.node_tree.name.lower())
+            # Check if this is a Kythera shader material
+            kythera_group_node = None
+            for node in mat.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree:
+                    nt_low = node.node_tree.name.lower()
+                    if "kythera" in nt_low:
+                        kythera_group_node = node
+                        break
 
-            if is_face:
-                # 1. Face D -> _D Map / Diffuse Texture (sRGB)
-                face_d = find_best_texture(matname, mesh_names, "d", filtered_files, main_prefix)
-                if face_d:
-                    connect_tex_to_socket(mat, shader_group_node, "Face_D", ["_D Map", "_D", "Diffuse Texture", "Diffuse"], face_d, is_color=True, y_offset=0)
+            if kythera_group_node:
+                # --- KYTHERA SHADER TEXTURE CONNECTION ---
+                is_face = any(k in combined_names for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight", "cara", "head", "rostro"]) or \
+                    (kythera_group_node.node_tree and "face" in kythera_group_node.node_tree.name.lower())
 
-                # 2. Face Lightmap -> Light Map (Non-Color)
-                face_lm = find_best_face_lightmap(matname, mesh_names, filtered_files, main_prefix)
-                if face_lm:
-                    lm_node = None
-                    for node in mat.node_tree.nodes:
-                        if node.type == 'TEX_IMAGE':
-                            if (node.image and "lightmap" in node.image.name.lower()) or "lightmap" in node.name.lower() or "lightmap" in node.label.lower():
-                                lm_node = node
-                                break
-                    if lm_node:
-                        img = bpy.data.images.load(os.path.join(folder, face_lm), check_existing=True)
-                        img.colorspace_settings.name = 'Non-Color'
-                        img.alpha_mode = 'CHANNEL_PACKED'
-                        lm_node.image = img
-                    else:
-                        connect_tex_to_socket(mat, shader_group_node, "Face_Lightmap", ["Light Map", "LightMap", "_Lightmap"], face_lm, is_color=False, y_offset=-280)
+                if is_face:
+                    # 1. Face D -> _D Map / Diffuse Texture (sRGB)
+                    face_d = find_best_texture(matname, mesh_names, "d", filtered_files, main_prefix)
+                    if face_d:
+                        connect_tex_to_socket(mat, kythera_group_node, "Face_D", ["_D Map", "_D", "Diffuse Texture", "Diffuse"], face_d, is_color=True, y_offset=0)
+
+                    # 2. Face Lightmap -> Light Map (Non-Color)
+                    face_lm = find_best_face_lightmap(matname, mesh_names, filtered_files, main_prefix)
+                    if face_lm:
+                        lm_node = None
+                        for node in mat.node_tree.nodes:
+                            if node.type == 'TEX_IMAGE':
+                                if (node.image and "lightmap" in node.image.name.lower()) or "lightmap" in node.name.lower() or "lightmap" in node.label.lower():
+                                    lm_node = node
+                                    break
+                        if lm_node:
+                            img = bpy.data.images.load(os.path.join(folder, face_lm), check_existing=True)
+                            img.colorspace_settings.name = 'Non-Color'
+                            img.alpha_mode = 'CHANNEL_PACKED'
+                            lm_node.image = img
+                        else:
+                            connect_tex_to_socket(mat, kythera_group_node, "Face_Lightmap", ["Light Map", "LightMap", "_Lightmap"], face_lm, is_color=False, y_offset=-280)
+
+                else:
+                    # Body, Hair, Weapon, Dress, Wings, Stickers, Acc, etc. (Kythera's ZZZ Shader)
+                    # 1. Texture D -> _D Map / Diffuse (sRGB)
+                    tex_d = find_best_texture(matname, mesh_names, "d", filtered_files, main_prefix)
+                    if tex_d:
+                        connect_tex_to_socket(mat, kythera_group_node, "D", ["_D Map", "_D", "Diffuse", "Diffuse Texture"], tex_d, is_color=True, y_offset=0)
+
+                    # 2. Texture M -> _M Map / Metallic (Non-Color)
+                    tex_m = find_best_texture(matname, mesh_names, "m", filtered_files, main_prefix)
+                    if tex_m:
+                        connect_tex_to_socket(mat, kythera_group_node, "M", ["_M Map", "_M", "Metallic"], tex_m, is_color=False, y_offset=-260)
+
+                    # 3. Texture A -> _A Map / Ambient (Non-Color)
+                    tex_a = find_best_texture(matname, mesh_names, "a", filtered_files, main_prefix)
+                    if tex_a:
+                        connect_tex_to_socket(mat, kythera_group_node, "A", ["_A Map", "_A", "Ambient"], tex_a, is_color=False, y_offset=-520)
+
+                    # 4. Texture N -> _N Map / Normal (Non-Color)
+                    tex_n = find_best_texture(matname, mesh_names, "n", filtered_files, main_prefix)
+                    if tex_n:
+                        connect_tex_to_socket(mat, kythera_group_node, "N", ["_N Map", "_N", "Normal"], tex_n, is_color=False, y_offset=-780)
 
             else:
-                # Body, Hair, Weapon, Dress, Wings, Stickers, Acc, etc. (Kythera's ZZZ Shader)
-                # 1. Texture D -> _D Map / Diffuse (sRGB)
-                tex_d = find_best_texture(matname, mesh_names, "d", filtered_files, main_prefix)
-                if tex_d:
-                    connect_tex_to_socket(mat, shader_group_node, "D", ["_D Map", "_D", "Diffuse", "Diffuse Texture"], tex_d, is_color=True, y_offset=0)
+                # --- LEGACY SHADER TEXTURE CONNECTION ---
+                is_face = any(k in combined_names for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight", "cara", "head", "rostro"])
 
-                # 2. Texture M -> _M Map / Metallic (Non-Color)
-                tex_m = find_best_texture(matname, mesh_names, "m", filtered_files, main_prefix)
-                if tex_m:
-                    connect_tex_to_socket(mat, shader_group_node, "M", ["_M Map", "_M", "Metallic"], tex_m, is_color=False, y_offset=-260)
+                if is_face:
+                    face_d = find_best_texture(matname, mesh_names, "d", filtered_files, main_prefix)
+                    if face_d:
+                        img_path = os.path.join(folder, face_d)
+                        if os.path.isfile(img_path):
+                            img = bpy.data.images.load(img_path, check_existing=True)
+                            img.colorspace_settings.name = 'sRGB'
+                            img.alpha_mode = 'CHANNEL_PACKED'
+                            for node in mat.node_tree.nodes:
+                                if node.type == 'TEX_IMAGE':
+                                    n_low = node.name.lower()
+                                    if any(k in n_low for k in ["face_d", "texture_d", "_d", "diffuse"]):
+                                        node.image = img
+                                    elif not node.image and "lightmap" not in n_low and "shadow" not in n_low:
+                                        node.image = img
 
-                # 3. Texture A -> _A Map / Ambient (Non-Color)
-                tex_a = find_best_texture(matname, mesh_names, "a", filtered_files, main_prefix)
-                if tex_a:
-                    connect_tex_to_socket(mat, shader_group_node, "A", ["_A Map", "_A", "Ambient"], tex_a, is_color=False, y_offset=-520)
+                    face_lm = find_best_face_lightmap(matname, mesh_names, filtered_files, main_prefix)
+                    if face_lm:
+                        img_path = os.path.join(folder, face_lm)
+                        if os.path.isfile(img_path):
+                            img_lm = bpy.data.images.load(img_path, check_existing=True)
+                            img_lm.colorspace_settings.name = 'Non-Color'
+                            img_lm.alpha_mode = 'CHANNEL_PACKED'
+                            for node in mat.node_tree.nodes:
+                                if node.type == 'TEX_IMAGE' and "lightmap" in node.name.lower():
+                                    node.image = img_lm
+                                elif node.type == 'GROUP' and node.node_tree and 'face lightmap' in node.node_tree.name.lower():
+                                    for sub_node in node.node_tree.nodes:
+                                        if sub_node.type == 'TEX_IMAGE':
+                                            sub_node.image = img_lm
 
-                # 4. Texture N -> _N Map / Normal (Non-Color)
-                tex_n = find_best_texture(matname, mesh_names, "n", filtered_files, main_prefix)
-                if tex_n:
-                    connect_tex_to_socket(mat, shader_group_node, "N", ["_N Map", "_N", "Normal"], tex_n, is_color=False, y_offset=-780)
+                for node in mat.node_tree.nodes:
+                    if node.type == 'TEX_IMAGE':
+                        node_name_lower = node.name.lower()
+                        if node.image and (is_face and any(k in node_name_lower for k in ["face_d", "texture_d", "lightmap"])):
+                            continue
+                        
+                        suffix = None
+                        for s in ["d", "m", "a", "n"]:
+                            if node_name_lower.endswith(f"_{s}") or node_name_lower.endswith(s) or f"_{s}_" in node_name_lower or f"_{s}." in node_name_lower or f"texture_{s}" in node_name_lower:
+                                suffix = s
+                                break
+                        if not suffix:
+                            if any(k in node_name_lower for k in ["face_d", "diffuse", "base_color", "color"]):
+                                suffix = "d"
+                            elif any(k in node_name_lower for k in ["metallic", "metal"]):
+                                suffix = "m"
+                            elif any(k in node_name_lower for k in ["ambient", "ao"]):
+                                suffix = "a"
+                            elif any(k in node_name_lower for k in ["normal", "nor"]):
+                                suffix = "n"
+                            elif "lightmap" in node_name_lower:
+                                suffix = "lightmap"
+
+                        if suffix == "lightmap":
+                            best_tex = find_best_face_lightmap(matname, mesh_names, filtered_files, main_prefix)
+                        elif suffix:
+                            best_tex = find_best_texture(matname, mesh_names, suffix, filtered_files, main_prefix)
+                        else:
+                            best_tex = None
+
+                        if best_tex:
+                            img_path = os.path.join(folder, best_tex)
+                            if os.path.isfile(img_path):
+                                img = bpy.data.images.load(img_path, check_existing=True)
+                                img.colorspace_settings.name = 'sRGB' if suffix == 'd' else 'Non-Color'
+                                img.alpha_mode = 'CHANNEL_PACKED'
+                                node.image = img
+
+                    elif node.type == 'GROUP' and node.node_tree and 'face lightmap' in node.node_tree.name.lower():
+                        face_lm = find_best_face_lightmap(matname, mesh_names, filtered_files, main_prefix)
+                        if face_lm:
+                            img_path = os.path.join(folder, face_lm)
+                            if os.path.isfile(img_path):
+                                img = bpy.data.images.load(img_path, check_existing=True)
+                                img.colorspace_settings.name = 'Non-Color'
+                                img.alpha_mode = 'CHANNEL_PACKED'
+                                for sub_node in node.node_tree.nodes:
+                                    if sub_node.type == 'TEX_IMAGE':
+                                        sub_node.image = img
 
             # If this is a Hair material and no hair texture was found,
             # remove its material slot (Slot 2+) from mesh objects so the hair inherits Slot 1 (only for ZZZ)
@@ -588,12 +726,23 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                             slot.material = main_weapon_mat
 
         # Sync textures from main ZZZ materials to ZZZ Outline materials if any
-        sync_zzz_outline_textures()
+        sync_zzz_outline_textures(folder=folder, filtered_files=filtered_files, main_prefix=main_prefix)
 
 
-def sync_zzz_outline_textures():
-    outline_materials = [m for m in bpy.data.materials if "outlines" in m.name.lower() or m.name.endswith("Outlines")]
-    main_materials = [m for m in bpy.data.materials if (m.name.startswith("ZZZ") or m.name.startswith("Kythera")) and m.node_tree]
+def sync_zzz_outline_textures(folder=None, filtered_files=None, main_prefix=None):
+    if not folder:
+        from setup_wizard.import_order import get_cache, CHARACTER_MODEL_FOLDER_FILE_PATH
+        cache_enabled = bpy.context.window_manager.cache_enabled if hasattr(bpy.context, 'window_manager') and hasattr(bpy.context.window_manager, 'cache_enabled') else True
+        folder = get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH)
+
+    if folder and not filtered_files:
+        try:
+            filtered_files = os.listdir(folder)
+        except Exception:
+            filtered_files = []
+
+    outline_materials = [m for m in bpy.data.materials if "outlines" in m.name.lower() or m.name.endswith("Outlines") or "outline" in m.name.lower()]
+    main_materials = [m for m in bpy.data.materials if (m.name.startswith("ZZZ") or m.name.startswith("Kythera")) and m.node_tree and "outline" not in m.name.lower()]
 
     for outline_mat in outline_materials:
         if not outline_mat.node_tree:
@@ -622,7 +771,7 @@ def sync_zzz_outline_textures():
             if cand: matched_main_mat = cand[0]
 
         if not matched_main_mat:
-            out_words = [w for w in outline_lower.replace("zzz", "").replace("outlines", "").split("_") if w]
+            out_words = [w for w in outline_lower.replace("zzz", "").replace("outlines", "").replace("outline", "").split("_") if w]
             best_match = None
             best_score = 0
             for m in main_materials:
@@ -633,6 +782,7 @@ def sync_zzz_outline_textures():
                     best_match = m
             matched_main_mat = best_match
 
+        # 1. Sync from matched main material
         if matched_main_mat and matched_main_mat.node_tree:
             main_images = {}
             for node in matched_main_mat.node_tree.nodes:
@@ -640,6 +790,11 @@ def sync_zzz_outline_textures():
                     suffix = node.name.rsplit("_", 1)[-1].upper() if "_" in node.name else node.name.upper()
                     main_images[suffix] = node.image
                     main_images[node.name] = node.image
+                    if "face_d" in node.name.lower() or suffix == "D":
+                        main_images["FACE_D"] = node.image
+                        main_images["D"] = node.image
+                    if "lightmap" in node.name.lower():
+                        main_images["LIGHTMAP"] = node.image
 
             for node in outline_mat.node_tree.nodes:
                 if node.type == 'TEX_IMAGE':
@@ -648,6 +803,45 @@ def sync_zzz_outline_textures():
                         node.image = main_images[suf]
                     elif node.name in main_images:
                         node.image = main_images[node.name]
+                    elif "lightmap" in node.name.lower() and "LIGHTMAP" in main_images:
+                        node.image = main_images["LIGHTMAP"]
+                    elif (suf == "D" or "d" in node.name.lower()) and "D" in main_images:
+                        node.image = main_images["D"]
+
+        # 2. Direct folder assignment if still unassigned and folder files are available
+        if folder and filtered_files:
+            import re
+            def clean_tok(text):
+                text = re.sub(r'zzz|kythera\'s|kythera|shader|mat|mat_|mesh|object|\+ t', '', text, flags=re.IGNORECASE)
+                return set([t.lower() for t in re.split(r'[^a-zA-Z0-9]+', text) if len(t) > 1 and not t.isdigit()])
+
+            for node in outline_mat.node_tree.nodes:
+                if node.type == 'TEX_IMAGE' and not node.image:
+                    n_low = node.name.lower()
+                    if any(k in n_low for k in ["lightmap", "lm"]):
+                        target_lm = None
+                        if "face" in outline_lower:
+                            cand_lm = [f for f in filtered_files if "lightmap" in f.lower() and any(k in f.lower() for k in ["face", "head"])]
+                            if cand_lm: target_lm = cand_lm[0]
+                        if not target_lm:
+                            cand_lm = [f for f in filtered_files if "lightmap" in f.lower()]
+                            if cand_lm: target_lm = cand_lm[0]
+                        if target_lm:
+                            img = bpy.data.images.load(os.path.join(folder, target_lm), check_existing=True)
+                            img.colorspace_settings.name = 'Non-Color'
+                            img.alpha_mode = 'CHANNEL_PACKED'
+                            node.image = img
+                    else:
+                        # Diffuse / D image
+                        cat_tag = "face" if "face" in outline_lower else ("hair" if "hair" in outline_lower else ("body_2" if "2" in outline_lower else "body"))
+                        cand_d = [f for f in filtered_files if f.lower().rsplit(".", 1)[0].endswith("_d") and cat_tag in f.lower()]
+                        if not cand_d and cat_tag == "body":
+                            cand_d = [f for f in filtered_files if f.lower().rsplit(".", 1)[0].endswith("_d") and "body" in f.lower() and "2" not in f.lower() and "3" not in f.lower()]
+                        if cand_d:
+                            img = bpy.data.images.load(os.path.join(folder, cand_d[0]), check_existing=True)
+                            img.colorspace_settings.name = 'sRGB'
+                            img.alpha_mode = 'CHANNEL_PACKED'
+                            node.image = img
 
 
 def create_outline_image_copy(src_image, colorspace_name='Non-Color', suffix='_outline_lightmap'):

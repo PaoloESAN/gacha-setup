@@ -675,77 +675,150 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         self.context = context
 
     def replace_default_materials(self):
+        selected_shader = getattr(bpy.context.scene, 'zzz_shader_type', 'KYTHERA') if hasattr(bpy, 'context') and hasattr(bpy.context, 'scene') else 'KYTHERA'
         meshes = [mesh for mesh in bpy.context.scene.objects if mesh.type == 'MESH']
 
-        # Find Kythera template materials
-        face_template = None
-        for mat in bpy.data.materials:
-            m_low = mat.name.lower()
-            if "face" in m_low and ("kythera" in m_low or "zzz" in m_low):
-                face_template = mat
-                break
-        if not face_template:
-            face_template = bpy.data.materials.get("Kythera's ZZZ Face Shader") \
-                or bpy.data.materials.get("Kythera's ZZZ Face Shader V1.0") \
-                or bpy.data.materials.get("F Kythera's ZZZ Face Shader")
+        if selected_shader == 'LEGACY':
+            # --- LEGACY ZZZ SHADER REPLACEMENT ---
+            for mesh in meshes:
+                if len(mesh.material_slots) == 0:
+                    mesh.data.materials.append(None)
 
-        shader_template = None
-        for mat in bpy.data.materials:
-            m_low = mat.name.lower()
-            if "shader" in m_low and "face" not in m_low and ("kythera" in m_low or "zzz" in m_low):
-                shader_template = mat
-                break
-        if not shader_template:
-            shader_template = bpy.data.materials.get("Kythera's ZZZ Shader") \
-                or bpy.data.materials.get("Kythera's ZZZ Shader V1.0") \
-                or bpy.data.materials.get("Kythera's ZZZ Shader + T") \
-                or bpy.data.materials.get("F Kythera's ZZZ Shader") \
-                or bpy.data.materials.get("F Kythera's ZZZ Shader + T")
+                for slot in mesh.material_slots:
+                    mat = slot.material
+                    matname = mat.name.lower() if mat else mesh.name.lower()
 
-        for mesh in meshes:
-            if len(mesh.material_slots) == 0:
-                mesh.data.materials.append(None)
+                    if mat and mat.name.startswith("ZZZ Shader"):
+                        continue
 
-            for slot in mesh.material_slots:
-                mat = slot.material
-                matname = mat.name.lower() if mat else mesh.name.lower()
-
-                # If already replaced with a cloned Kythera ZZZ material, skip
-                if mat and (mat.name.startswith("ZZZ ") or mat.name.startswith("Kythera")):
-                    continue
-
-                is_face = any(k in matname for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight"])
-                template_mat = face_template if is_face else shader_template
-
-                if template_mat:
-                    new_mat = template_mat.copy()
-                    
-                    # Ensure meaningful name preserving mesh context (e.g. Wing, Dress, Leg, Hair, Body)
-                    if mat and mat.name and not mat.name.lower().startswith(("material", "default", "node", "untitled")):
-                        if any(k in mesh.name.lower() for k in ["wing", "ala", "feather", "dress", "cape", "coat", "jacket", "tail", "leg", "shoe", "boot", "weapon", "wpn"]) and mesh.name.lower() not in mat.name.lower():
-                            name_base = f"{mesh.name}_{mat.name}"
+                    target_mat_name = None
+                    if "hair" in matname:
+                        target_mat_name = "ZZZ Shader Hair"
+                    elif "eyebrow" in matname or "brow" in matname or "眉" in matname:
+                        target_mat_name = "ZZZ Shader Face"
+                    elif "eyehighlight" in matname or "highlight" in matname:
+                        target_mat_name = "ZZZ Shader EyeHighlights" if bpy.data.materials.get("ZZZ Shader EyeHighlights") else "ZZZ Shader Face"
+                    elif "eye" in matname and matname != "eye transparent":
+                        target_mat_name = "ZZZ Shader Eye" if bpy.data.materials.get("ZZZ Shader Eye") else "ZZZ Shader Face"
+                    elif "face" in matname:
+                        target_mat_name = "ZZZ Shader Face"
+                    elif any(k in matname for k in ["body 2", "body2", "body_2", "wing", "ala", "feather", "dress", "cape", "coat", "jacket"]):
+                        target_mat_name = "ZZZ Shader Body 2"
+                    elif any(k in matname for k in ["body 3", "body3", "body_3", "leg", "tail", "shoe", "boot", "foot"]):
+                        target_mat_name = "ZZZ Shader Body3/Leg"
+                    elif any(k in matname for k in ["weapon", "wpn", "equip", "sword", "blade", "spear", "lance", "gun", "prop"]):
+                        if any(k in matname for k in ["weapon 2", "weapon2", "weapon_2", "map2"]):
+                            target_mat_name = "ZZZ Shader Weapon 2" if bpy.data.materials.get("ZZZ Shader Weapon 2") else "ZZZ Shader Weapon"
                         else:
-                            name_base = mat.name
+                            target_mat_name = "ZZZ Shader Weapon"
+                    elif "body" in matname:
+                        target_mat_name = "ZZZ Shader Body"
                     else:
-                        name_base = mesh.name
+                        mesh_lower = mesh.name.lower()
+                        if "hair" in mesh_lower:
+                            target_mat_name = "ZZZ Shader Hair"
+                        elif "face" in mesh_lower:
+                            target_mat_name = "ZZZ Shader Face"
+                        elif any(k in mesh_lower for k in ["wing", "ala", "body2", "body 2", "dress", "cape"]):
+                            target_mat_name = "ZZZ Shader Body 2"
+                        elif any(k in mesh_lower for k in ["leg", "tail", "body3", "body 3"]):
+                            target_mat_name = "ZZZ Shader Body3/Leg"
+                        elif any(k in mesh_lower for k in ["weapon", "wpn", "sword"]):
+                            target_mat_name = "ZZZ Shader Weapon"
+                        else:
+                            target_mat_name = "ZZZ Shader Body"
 
-                    new_mat.name = f"ZZZ {name_base}"
-                    new_mat.use_fake_user = True
-                    slot.material = new_mat
+                    if target_mat_name:
+                        template_mat = bpy.data.materials.get(target_mat_name)
+                        if template_mat:
+                            new_mat = template_mat.copy()
+                            name_base = mat.name if mat else mesh.name
+                            new_mat.name = f"ZZZ Shader {name_base}"
+                            new_mat.use_fake_user = True
+                            slot.material = new_mat
 
-        # Fallback for any meshes with empty material slots
-        for mesh in meshes:
-            m_lower = mesh.name.lower()
-            is_face_mesh = any(k in m_lower for k in ["face", "eyebrow", "brow", "eye"])
-            fallback_template = face_template if is_face_mesh else shader_template
-            for slot in mesh.material_slots:
-                if not slot.material and fallback_template:
-                    new_mat = fallback_template.copy()
-                    new_mat.name = f"ZZZ {mesh.name}"
-                    new_mat.use_fake_user = True
-                    slot.material = new_mat
+            weapon_mats = [m for m in bpy.data.materials if m.name.startswith("ZZZ Shader") and "weapon" in m.name.lower()]
+            main_weapon_mat = weapon_mats[0] if weapon_mats else bpy.data.materials.get("ZZZ Shader Weapon")
+            for mesh in meshes:
+                m_lower = mesh.name.lower()
+                if any(k in m_lower for k in ["weapon", "wpn", "equip", "sword", "blade", "spear", "lance", "gun", "prop"]):
+                    for slot in mesh.material_slots:
+                        if not slot.material and main_weapon_mat:
+                            slot.material = main_weapon_mat
 
-        self.blender_operator.report({'INFO'}, "Replaced default materials with Kythera's ZZZ Shader materials...")
+            self.blender_operator.report({'INFO'}, "Replaced default materials with Legacy ZZZ Shader materials...")
+
+        else:
+            # --- KYTHERA SHADER REPLACEMENT ---
+            # Find Kythera template materials
+            face_template = None
+            for mat in bpy.data.materials:
+                m_low = mat.name.lower()
+                if "face" in m_low and ("kythera" in m_low or "zzz" in m_low):
+                    face_template = mat
+                    break
+            if not face_template:
+                face_template = bpy.data.materials.get("Kythera's ZZZ Face Shader") \
+                    or bpy.data.materials.get("Kythera's ZZZ Face Shader V1.0") \
+                    or bpy.data.materials.get("F Kythera's ZZZ Face Shader")
+
+            shader_template = None
+            for mat in bpy.data.materials:
+                m_low = mat.name.lower()
+                if "shader" in m_low and "face" not in m_low and ("kythera" in m_low or "zzz" in m_low):
+                    shader_template = mat
+                    break
+            if not shader_template:
+                shader_template = bpy.data.materials.get("Kythera's ZZZ Shader") \
+                    or bpy.data.materials.get("Kythera's ZZZ Shader V1.0") \
+                    or bpy.data.materials.get("Kythera's ZZZ Shader + T") \
+                    or bpy.data.materials.get("F Kythera's ZZZ Shader") \
+                    or bpy.data.materials.get("F Kythera's ZZZ Shader + T")
+
+            for mesh in meshes:
+                if len(mesh.material_slots) == 0:
+                    mesh.data.materials.append(None)
+
+                for slot in mesh.material_slots:
+                    mat = slot.material
+                    matname = mat.name.lower() if mat else mesh.name.lower()
+
+                    # If already replaced with a cloned Kythera ZZZ material, skip
+                    if mat and (mat.name.startswith("ZZZ ") or mat.name.startswith("Kythera")):
+                        continue
+
+                    is_face = any(k in matname for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight"])
+                    template_mat = face_template if is_face else shader_template
+
+                    if template_mat:
+                        new_mat = template_mat.copy()
+                        
+                        # Ensure meaningful name preserving mesh context (e.g. Wing, Dress, Leg, Hair, Body)
+                        if mat and mat.name and not mat.name.lower().startswith(("material", "default", "node", "untitled")):
+                            if any(k in mesh.name.lower() for k in ["wing", "ala", "feather", "dress", "cape", "coat", "jacket", "tail", "leg", "shoe", "boot", "weapon", "wpn", "sticker"]) and mesh.name.lower() not in mat.name.lower():
+                                name_base = f"{mesh.name}_{mat.name}"
+                            else:
+                                name_base = mat.name
+                        else:
+                            name_base = mesh.name
+
+                        new_mat.name = f"ZZZ {name_base}"
+                        new_mat.use_fake_user = True
+                        slot.material = new_mat
+
+            # Fallback for any meshes with empty material slots
+            for mesh in meshes:
+                m_lower = mesh.name.lower()
+                is_face_mesh = any(k in m_lower for k in ["face", "eyebrow", "brow", "eye"])
+                fallback_template = face_template if is_face_mesh else shader_template
+                for slot in mesh.material_slots:
+                    if not slot.material and fallback_template:
+                        new_mat = fallback_template.copy()
+                        new_mat.name = f"ZZZ {mesh.name}"
+                        new_mat.use_fake_user = True
+                        slot.material = new_mat
+
+            self.blender_operator.report({'INFO'}, "Replaced default materials with Kythera's ZZZ Shader materials...")
 
 
 def find_nte_texture_for_material(mat_name, tex_type, image_files):

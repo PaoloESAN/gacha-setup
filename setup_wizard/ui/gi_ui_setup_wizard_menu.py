@@ -33,6 +33,16 @@ class UI_Properties:
             default = True
         )
 
+        bpy.types.Scene.zzz_shader_type = bpy.props.EnumProperty(
+            items=[
+                ("KYTHERA", "Kythera's Shader", "Use Kythera's ZZZ Shader (Face Shader + General Shader)"),
+                ("LEGACY", "Legacy Shader", "Use Legacy ZZZ Setup File V2.0 Shader"),
+            ],
+            name="Shader",
+            description="Select shader setup for Zenless Zone Zero",
+            default="KYTHERA",
+        )
+
 
 class GI_PT_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
     bl_label = "Genshin Impact Setup Wizard"
