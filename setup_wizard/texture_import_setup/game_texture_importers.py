@@ -547,6 +547,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
             # Combine material name and any mesh names using this material for complete context
             mesh_names = [obj.name.lower() for obj in bpy.data.objects if obj.type == 'MESH' and any(s.material == mat for s in obj.material_slots)]
             combined_names = matname + " " + " ".join(mesh_names)
+            is_alice_pingmu = "alice" in combined_names and "pingmu" in combined_names
 
             # Check if this is a Kythera shader material
             kythera_group_node = None
@@ -559,6 +560,38 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
 
             if kythera_group_node:
                 # --- KYTHERA SHADER TEXTURE CONNECTION ---
+                if is_alice_pingmu:
+                    belt_path = get_belt_texture_path()
+                    if belt_path and os.path.isfile(belt_path):
+                        belt_img = bpy.data.images.load(belt_path, check_existing=True)
+                        belt_img.colorspace_settings.name = 'sRGB'
+                        belt_img.alpha_mode = 'CHANNEL_PACKED'
+                        
+                        target_socket = None
+                        for inp in kythera_group_node.inputs:
+                            if inp.name.lower().strip() in ["_d map", "_d", "diffuse", "diffuse texture"]:
+                                target_socket = inp
+                                break
+                        if target_socket:
+                            tex_node = mat.node_tree.nodes.get("Texture_D")
+                            if not tex_node:
+                                tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
+                                tex_node.name = "Texture_D"
+                                tex_node.label = "Texture D"
+                                tex_node.location = (kythera_group_node.location.x - 360, kythera_group_node.location.y)
+                            tex_node.image = belt_img
+                            if not any(l.to_socket == target_socket and l.from_node == tex_node for l in mat.node_tree.links):
+                                mat.node_tree.links.new(tex_node.outputs['Color'], target_socket)
+
+                        # Leave M, A, N empty / disconnected
+                        for other_tag in ["Texture_M", "Texture_A", "Texture_N", "Texture_Lightmap"]:
+                            old_n = mat.node_tree.nodes.get(other_tag)
+                            if old_n:
+                                for l in list(mat.node_tree.links):
+                                    if l.from_node == old_n:
+                                        mat.node_tree.links.remove(l)
+                    continue
+
                 is_face = any(k in combined_names for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight", "cara", "head", "rostro"]) or \
                     (kythera_group_node.node_tree and "face" in kythera_group_node.node_tree.name.lower())
 
@@ -609,6 +642,43 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
 
             else:
                 # --- LEGACY SHADER TEXTURE CONNECTION ---
+                if is_alice_pingmu:
+                    belt_path = get_belt_texture_path()
+                    if belt_path and os.path.isfile(belt_path):
+                        belt_img = bpy.data.images.load(belt_path, check_existing=True)
+                        belt_img.colorspace_settings.name = 'sRGB'
+                        belt_img.alpha_mode = 'CHANNEL_PACKED'
+
+                        gmp_node = None
+                        for node in mat.node_tree.nodes:
+                            if "global material properties" in node.name.lower() or (node.type == 'GROUP' and node.node_tree and "global material properties" in node.node_tree.name.lower()):
+                                gmp_node = node
+                                break
+
+                        if gmp_node:
+                            target_socket = None
+                            for inp in gmp_node.inputs:
+                                if "plug shader output" in inp.name.lower():
+                                    target_socket = inp
+                                    break
+
+                            if target_socket:
+                                # Remove any previous links into Plug Shader Output
+                                for l in list(mat.node_tree.links):
+                                    if l.to_socket == target_socket:
+                                        mat.node_tree.links.remove(l)
+
+                                # Create or reuse image texture node for Belt.png
+                                tex_node = mat.node_tree.nodes.get("Texture_Belt") or mat.node_tree.nodes.get("Face_D") or mat.node_tree.nodes.get("Texture_D")
+                                if not tex_node:
+                                    tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
+                                    tex_node.name = "Texture_Belt"
+                                    tex_node.label = "Belt Texture"
+                                tex_node.image = belt_img
+                                tex_node.location = (gmp_node.location.x - 320, gmp_node.location.y - 100)
+                                mat.node_tree.links.new(tex_node.outputs['Color'], target_socket)
+                    continue
+
                 is_face = any(k in combined_names for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight", "cara", "head", "rostro"])
 
                 if is_face:
@@ -727,6 +797,20 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
 
         # Sync textures from main ZZZ materials to ZZZ Outline materials if any
         sync_zzz_outline_textures(folder=folder, filtered_files=filtered_files, main_prefix=main_prefix)
+
+
+def get_belt_texture_path():
+    current_dir = os.path.dirname(os.path.realpath(__file__))
+    candidates = [
+        os.path.normpath(os.path.join(current_dir, "..", "shaders", "zzz", "Belt.png")),
+        os.path.normpath(os.path.join(current_dir, "shaders", "zzz", "Belt.png")),
+        os.path.normpath(os.path.join(os.path.dirname(current_dir), "shaders", "zzz", "Belt.png")),
+        os.path.normpath(os.path.join(os.path.dirname(os.path.dirname(current_dir)), "shaders", "zzz", "Belt.png")),
+    ]
+    for p in candidates:
+        if os.path.isfile(p):
+            return p
+    return ""
 
 
 def sync_zzz_outline_textures(folder=None, filtered_files=None, main_prefix=None):
