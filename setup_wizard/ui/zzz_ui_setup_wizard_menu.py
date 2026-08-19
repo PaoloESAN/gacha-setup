@@ -49,6 +49,13 @@ class ZZZ_PT_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
 
         settings_col = settings_box.column()
         settings_col.prop(context.scene, "zzz_shader_type", text="Shader")
+        props = context.scene.character_rigger_props
+        enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
+        settings_col.prop(props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")
+        sliders_col = settings_col.column()
+        sliders_col.active = enable_physics
+        sliders_col.prop(props, "hair_physics_influence", text="Hair", slider=True)
+        sliders_col.prop(props, "clothes_physics_influence", text="Clothes", slider=True)
 
 
 class ZZZ_PT_Basic_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
@@ -303,6 +310,12 @@ class ZZZ_PT_UI_Character_Rig_Setup_Menu(Panel, ZenlessZoneZeroUIRenderChecker):
             game_type=GameType.ZENLESS_ZONE_ZERO.name,
         )
         OperatorFactory.create_rig_character_ui(sub_layout)
+        OperatorFactory.create(
+            sub_layout,
+            "hoyoverse.apply_hair_clothes_physics",
+            "Apply Hair & Clothes Physics",
+            "PHYSICS",
+        )
 
 
 class OperatorFactory:

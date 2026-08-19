@@ -165,7 +165,46 @@ class ZZZ_OT_FixBoneChains(Operator):
         return {'FINISHED'}
 
 
+class GI_OT_ApplyHairClothesPhysicsOperator(Operator):
+    """Apply Damped Track physics to Hair (0.7) and Clothes (0.4) bone chains"""
+    bl_idname = "hoyoverse.apply_hair_clothes_physics"
+    bl_label = "Apply Hair & Clothes Physics"
+    bl_description = "Applies Damped Track constraints to hair (influence 0.7) and clothes (influence 0.4) bones"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
+        armature = None
+        for obj in context.selected_objects:
+            if obj.type == 'ARMATURE' and not obj.name.startswith("WGT"):
+                armature = obj
+                break
+        if not armature and context.active_object and context.active_object.type == 'ARMATURE':
+            armature = context.active_object
+        if not armature:
+            for obj in context.scene.objects:
+                if obj.type == 'ARMATURE' and not obj.name.startswith("WGT"):
+                    armature = obj
+                    break
+
+        if not armature:
+            self.report({'ERROR'}, "No active or selected armature found")
+            return {'CANCELLED'}
+
+        count = apply_hair_and_clothes_physics(armature, context)
+        self.report({'INFO'}, f"Applied Hair & Clothes Physics constraints ({count} bones affected)")
+        return {'FINISHED'}
+
+
+class GI_OT_ApplyHairDressPhysicsOperator(GI_OT_ApplyHairClothesPhysicsOperator):
+    """Compatibility alias for apply_hair_dress_physics"""
+    bl_idname = "hoyoverse.apply_hair_dress_physics"
+    bl_label = "Apply Hair & Clothes Physics"
+
+
 register, unregister = bpy.utils.register_classes_factory([
     GI_OT_CharacterRiggerOperator,
     ZZZ_OT_FixBoneChains,
+    GI_OT_ApplyHairClothesPhysicsOperator,
+    GI_OT_ApplyHairDressPhysicsOperator,
 ])

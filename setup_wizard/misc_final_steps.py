@@ -540,6 +540,12 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
         return None
 
     def execute(self, context):
+        if context.object and context.object.mode != "OBJECT":
+            try:
+                bpy.ops.object.mode_set(mode="OBJECT")
+            except Exception:
+                pass
+
         armature = self._find_target_armature(context)
 
         if not armature:
@@ -548,7 +554,12 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
             )
             return {"CANCELLED"}
 
-        bpy.ops.object.select_all(action="DESELECT")
+        for obj in context.selected_objects:
+            try:
+                obj.select_set(False)
+            except Exception:
+                pass
+
         try:
             armature.select_set(True)
             context.view_layer.objects.active = armature
@@ -561,47 +572,43 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
         if "Dehya" in armature.name and armature.animation_data:
             self.clean_character(armature)
 
-        # HSR models are typically already oriented correctly; forcing +90° X here breaks Finish Setup.
+        # HSR and ZZZ models are typically already oriented correctly; forcing +90° X here breaks Finish Setup.
         should_force_upright_rotation = self.game_type not in [
             GameType.ZENLESS_ZONE_ZERO.name,
             GameType.HONKAI_STAR_RAIL.name,
         ]
 
-        if should_force_upright_rotation:
-            bpy.ops.object.scale_clear()
-            bpy.ops.object.rotation_clear()
-            armature.rotation_euler[0] = 1.5708  # x-axis, 90 degrees
+        try:
+            if should_force_upright_rotation:
+                bpy.ops.object.scale_clear()
+                bpy.ops.object.rotation_clear()
+                armature.rotation_euler[0] = 1.5708  # x-axis, 90 degrees
 
-        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+            bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+        except Exception as e:
+            print(f"Warning in transform_apply: {e}")
 
-        # clean rotation
-        # bpy.ops.transform.rotate(
-        #     value=1.5708,
-        #     orient_axis='X',
-        #     orient_type='GLOBAL',
-        #     orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)),
-        #     orient_matrix_type='GLOBAL',
-        #     constraint_axis=(True, False, False),
-        #     mirror=False,
-        #     use_proportional_edit=False,
-        #     proportional_edit_falloff='SMOOTH',
-        #     proportional_size=0.1,
-        #     use_proportional_connected=False,
-        #     use_proportional_projected=False
-        # )  # from @M4urlcl0
+        for obj in context.selected_objects:
+            try:
+                obj.select_set(False)
+            except Exception:
+                pass
 
-        bpy.ops.object.select_all(action="DESELECT")
         is_aranara = [
             material for material in bpy.data.materials if "Aranara" in material.name
         ]
         if is_aranara:
             hat_object: bpy.types.Object = bpy.data.objects.get("Hat")
-            hat_object.select_set(True)
-            bpy.ops.transform.rotate(
-                value=-1.5708,
-                orient_axis="X",
-                orient_type="GLOBAL",
-            )  # Could not seem to rotate the Mesh using transform_apply()
+            if hat_object:
+                hat_object.select_set(True)
+                try:
+                    bpy.ops.transform.rotate(
+                        value=-1.5708,
+                        orient_axis="X",
+                        orient_type="GLOBAL",
+                    )
+                except Exception as e:
+                    print(f"Warning rotating Aranara hat: {e}")
 
         if self.next_step_idx:
             NextStepInvoker().invoke(

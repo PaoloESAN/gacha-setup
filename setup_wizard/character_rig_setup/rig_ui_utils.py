@@ -1,6 +1,7 @@
 # Authors: enthralpy, Llama.jpg, michael-gh1
 # Standardized Rig UI Utilities for Gacha Setup across all games (Genshin, HSR, ZZZ, NTE, NPC)
 
+import os
 import re
 import bpy
 import addon_utils
@@ -798,3 +799,258 @@ def modify_and_run_rig_ui_script(
     except Exception as ex:
         print(f"[RIG UI] Notice running updated UI script: {ex}")
         return False
+
+
+def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influence=None, clothes_influence=None, dress_influence=None):
+    """
+    Applies Damped Track constraints along bone chains for Hair and Clothes bones:
+    - Parent bone tracks child bone along each strand/chain.
+    - Hair bones: influence = hair_influence (default 0.7)
+    - Clothes bones: influence = clothes_influence (default 0.4)
+    - Tip bones (end of chain with no children) have no constraints.
+    - Ignores eyes, teeth, twist bones, limbs, fingers, and deform controls.
+    Ensures hair and clothes collections/layers and bones are visible so constraints are properly applied.
+    """
+    context = context or bpy.context
+
+    if not armature_obj:
+        for obj in context.selected_objects:
+            if obj.type == "ARMATURE" and not obj.name.startswith("WGT"):
+                armature_obj = obj
+                break
+        if not armature_obj and context.active_object and context.active_object.type == "ARMATURE":
+            armature_obj = context.active_object
+        if not armature_obj:
+            for obj in context.scene.objects:
+                if obj.type == "ARMATURE" and not obj.name.startswith("WGT"):
+                    armature_obj = obj
+                    break
+
+    if not armature_obj:
+        print("[PHYSICS] No armature found to apply hair & clothes physics.")
+        return 0
+
+    # Read influences from scene properties if not explicitly provided
+    if hair_influence is None:
+        if hasattr(context, "scene") and hasattr(context.scene, "character_rigger_props") and hasattr(context.scene.character_rigger_props, "hair_physics_influence"):
+            hair_influence = context.scene.character_rigger_props.hair_physics_influence
+        elif hasattr(context, "scene") and hasattr(context.scene, "hair_physics_influence"):
+            hair_influence = context.scene.hair_physics_influence
+        else:
+            hair_influence = 0.7
+
+    if clothes_influence is None:
+        clothes_influence = dress_influence
+
+    if clothes_influence is None:
+        if hasattr(context, "scene") and hasattr(context.scene, "character_rigger_props"):
+            props = context.scene.character_rigger_props
+            if hasattr(props, "clothes_physics_influence"):
+                clothes_influence = props.clothes_physics_influence
+            elif hasattr(props, "dress_physics_influence"):
+                clothes_influence = props.dress_physics_influence
+        elif hasattr(context, "scene"):
+            if hasattr(context.scene, "clothes_physics_influence"):
+                clothes_influence = context.scene.clothes_physics_influence
+            elif hasattr(context.scene, "dress_physics_influence"):
+                clothes_influence = context.scene.dress_physics_influence
+
+    if clothes_influence is None:
+        clothes_influence = 0.4
+
+    # Ensure armature is active and in POSE mode
+    context.view_layer.objects.active = armature_obj
+    try:
+        bpy.ops.object.mode_set(mode="POSE")
+    except Exception:
+        pass
+
+    is_v4 = bpy.app.version >= (4, 0, 0)
+    arm_data = armature_obj.data
+
+    # Make Hair and Clothes collections / layers visible
+    if is_v4:
+        for coll_name in ["Hair", "Clothes"]:
+            if coll_name in arm_data.collections:
+                arm_data.collections[coll_name].is_visible = True
+    else:
+        if len(arm_data.layers) > 22:
+            arm_data.layers[20] = True
+            arm_data.layers[22] = True
+
+    physics_ignore_list = {
+        "+UpperArmTwistA02.L", "+UpperArmTwistA01.L", "+UpperArmTwistA01.R", "+UpperArmTwistA02.R",
+        "eye.R", "eye.L", "+ToothBone D A01", "+ToothBone U A01", "+ToothBone A A01",
+        "+EyeBone L A01", "+EyeBoneA02.L", "+EyeBone R A01", "+EyeBoneA02.R",
+        "+EyeBone R A01.001", "+EyeBone L A01.001", "+PelvisTwist CF A01",
+        "+ForeArmTwistSA01.R", "+ForeArmTwistSA01.L", "+ShoulderSA01.L", "+ShoulderSA01.R",
+        "+ElbowSA01.R", "+ElbowSA01.L", "+KneeFA01.R", "+KneeFA01.L", "+SkirtAllF CF A01",
+        "+ForearmTwistSA01.R", "+ForearmTwistSA01.L", "+ThighTwistSA01.R", "+ThighTwistSA01.L"
+    }
+
+    def is_physics_ignored(name):
+        if name in physics_ignore_list:
+            return True
+        low = name.lower()
+        if any(k in low for k in [
+            "eyebone", "eye", "tooth", "teeth", "tongue", "mouth", "jaw", "brow", "lip", "nose",
+            "cheek", "plate", "twist", "sa01", "sa02", "fa01", "skirtallf", "prop", "light"
+        ]):
+            return True
+        if (
+            name.startswith("DEF-")
+            or name.startswith("ORG-")
+            or name.startswith("MCH-")
+            or name.startswith("Bon_")
+            or name.startswith("BON_")
+            or name.startswith("Bone-")
+            or name.startswith("Bip")
+            or name.startswith("joint_")
+            or name.startswith("skn_")
+            or name.startswith("WGT")
+        ):
+            return True
+        return False
+
+    hair_bone_names = set()
+    clothes_bone_names = set()
+
+    if is_v4 and hasattr(arm_data, "collections"):
+        if "Hair" in arm_data.collections:
+            hair_bone_names.update(b.name for b in arm_data.collections["Hair"].bones if not is_physics_ignored(b.name))
+        if "Clothes" in arm_data.collections:
+            clothes_bone_names.update(b.name for b in arm_data.collections["Clothes"].bones if not is_physics_ignored(b.name))
+
+    # Fallback or additional keyword detection if collections are empty
+    hair_keywords = [
+        "hair", "eardrop", "headline", "ahoge", "bangs", "ponytail", "twintail", "bone00"
+    ]
+    clothes_keywords = [
+        "ribbon", "sleeve", "strap", "skirt", "button", "belt", "cloth", "dress",
+        "cape", "coat", "hem", "scarf", "tassel", "string", "chain", "acc",
+        "qun", "xiu", "sce", "tail", "amice", "pants", "sock", "shoe",
+        "necklace", "earring", "pendant", "badge", "breast", "overcoat"
+    ]
+
+    for b in arm_data.bones:
+        b_name = b.name
+        if is_physics_ignored(b_name):
+            continue
+        b_low = b_name.lower()
+
+        if b_name not in hair_bone_names and b_name not in clothes_bone_names:
+            if any(k in b_low for k in hair_keywords) or "+Hair" in b_name or "+hair" in b_name:
+                hair_bone_names.add(b_name)
+            elif any(k in b_low for k in clothes_keywords) or (
+                b_name.startswith("+") and "+Hair" not in b_name and "+hair" not in b_name
+            ):
+                clothes_bone_names.add(b_name)
+            elif "amice" in b_low:
+                clothes_bone_names.add(b_name)
+
+    # Double check all bones are not in ignore list
+    hair_bone_names = {b for b in hair_bone_names if not is_physics_ignored(b)}
+    clothes_bone_names = {b for b in clothes_bone_names if not is_physics_ignored(b)}
+
+    # Remove previous Damped Track physics constraints to prevent duplicates
+    for b_name in (hair_bone_names | clothes_bone_names):
+        pb = armature_obj.pose.bones.get(b_name)
+        if pb:
+            try:
+                arm_data.bones[b_name].hide = False
+                pb.bone.hide = False
+            except Exception:
+                pass
+            for c in list(pb.constraints):
+                if c.type == "DAMPED_TRACK" and (
+                    "physics" in c.name.lower()
+                    or c.name in ["Damped Track", "Hair_Physics_DampedTrack", "Clothes_Physics_DampedTrack"]
+                ):
+                    pb.constraints.remove(c)
+
+    def is_contiguous_chain_child(parent_bone_name, child_bone_name):
+        p_bone = arm_data.bones.get(parent_bone_name)
+        c_bone = arm_data.bones.get(child_bone_name)
+        if not p_bone or not c_bone:
+            return False
+        if c_bone.use_connect:
+            return True
+        gap = (c_bone.head_local - p_bone.tail_local).length
+        # In a contiguous chain/strand, child head is placed directly at parent tail.
+        # Separated hub/root bones have a large spatial gap to strand heads.
+        allowed_gap = max(0.02, 0.15 * p_bone.length)
+        return gap <= allowed_gap
+
+    def pick_best_child(parent_name, children_list):
+        if not children_list:
+            return None
+        if len(children_list) == 1:
+            return children_list[0]
+        def common_prefix_len(s1, s2):
+            count = 0
+            for a, b in zip(s1, s2):
+                if a == b:
+                    count += 1
+                else:
+                    break
+            return count
+        return max(children_list, key=lambda c: common_prefix_len(parent_name, c.name))
+
+    applied_count = 0
+
+    # 1. Apply Damped Track to Hair parent bones pointing to their contiguous child bone
+    for b_name in hair_bone_names:
+        pb = armature_obj.pose.bones.get(b_name)
+        if not pb:
+            continue
+
+        hair_children = [
+            c for c in pb.children 
+            if c.name in hair_bone_names and is_contiguous_chain_child(b_name, c.name)
+        ]
+        if hair_children:
+            child_pb = pick_best_child(b_name, hair_children)
+            if child_pb:
+                dt = pb.constraints.new("DAMPED_TRACK")
+                dt.name = "Damped Track"
+                dt.target = armature_obj
+                dt.subtarget = child_pb.name
+                dt.influence = hair_influence
+                applied_count += 1
+
+    # 2. Apply Damped Track to Clothes / Dress parent bones pointing to their contiguous child bone
+    for b_name in clothes_bone_names:
+        pb = armature_obj.pose.bones.get(b_name)
+        if not pb:
+            continue
+
+        clothes_children = [
+            c for c in pb.children 
+            if (c.name in clothes_bone_names or c.name in hair_bone_names) and is_contiguous_chain_child(b_name, c.name)
+        ]
+        if clothes_children:
+            child_pb = pick_best_child(b_name, clothes_children)
+            if child_pb:
+                dt = pb.constraints.new("DAMPED_TRACK")
+                dt.name = "Damped Track"
+                dt.target = armature_obj
+                dt.subtarget = child_pb.name
+                dt.influence = clothes_influence
+                applied_count += 1
+
+    # Hide Hair and Clothes collections / layers after applying constraints
+    if is_v4 and hasattr(arm_data, "collections"):
+        for coll_name in ["Hair", "Clothes", "Dress"]:
+            if coll_name in arm_data.collections:
+                arm_data.collections[coll_name].is_visible = False
+    else:
+        if len(arm_data.layers) > 22:
+            arm_data.layers[20] = False
+            arm_data.layers[22] = False
+
+    print(f"[PHYSICS] Applied Damped Track physics to {applied_count} Hair & Clothes bones (Hair: {hair_influence}, Clothes: {clothes_influence}) and hidden physics collections.")
+    return applied_count
+
+
+# Compatibility alias
+apply_hair_and_dress_physics = apply_hair_and_clothes_physics

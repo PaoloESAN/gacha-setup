@@ -43,6 +43,30 @@ class UI_Properties:
             default="KYTHERA",
         )
 
+        bpy.types.Scene.enable_hair_clothes_physics = bpy.props.BoolProperty(
+            name="Hair & Clothes Physics",
+            description="Apply Damped Track physics to Hair and Clothes bone chains",
+            default=False,
+        )
+
+        bpy.types.Scene.hair_physics_influence = bpy.props.FloatProperty(
+            name="Hair Influence",
+            description="Damped Track influence for hair bone chains",
+            min=0.0,
+            max=1.0,
+            default=0.7,
+            precision=2,
+        )
+
+        bpy.types.Scene.clothes_physics_influence = bpy.props.FloatProperty(
+            name="Clothes Influence",
+            description="Damped Track influence for clothes bone chains",
+            min=0.0,
+            max=1.0,
+            default=0.4,
+            precision=2,
+        )
+
 
 class GI_PT_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
     bl_label = "Genshin Impact Setup Wizard"
@@ -69,6 +93,20 @@ class GI_PT_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
 
         if not expy_kit_installed or not rigify_installed:
             sub_layout.label(text='Rigging Disabled', icon='ERROR')
+
+        settings_box = layout.box()
+        settings_header = settings_box.row()
+        settings_header.label(text="Settings", icon="PREFERENCES")
+
+        settings_col = settings_box.column()
+        props = context.scene.character_rigger_props
+        enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
+        settings_col.prop(props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")
+        sliders_col = settings_col.column()
+        sliders_col.active = enable_physics
+        sliders_col.prop(props, "hair_physics_influence", text="Hair", slider=True)
+        sliders_col.prop(props, "clothes_physics_influence", text="Clothes", slider=True)
+
 
 class GI_PT_Basic_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
     bl_label = 'Basic Setup'
@@ -306,6 +344,12 @@ class GI_PT_UI_Character_Rig_Setup_Menu(Panel, GenshinImpactUIRenderChecker):
         character_rigger_props = context.scene.character_rigger_props
 
         OperatorFactory.create_rig_character_ui(box)
+        OperatorFactory.create(
+            box,
+            'hoyoverse.apply_hair_clothes_physics',
+            'Apply Hair & Clothes Physics',
+            'PHYSICS',
+        )
 
         box = sub_layout.box()        
         box.label(text='Settings')
@@ -327,6 +371,12 @@ class GI_PT_UI_Character_Rig_Setup_Menu(Panel, GenshinImpactUIRenderChecker):
         col.prop(character_rigger_props, 'use_leg_ik_poles')
         col.prop(character_rigger_props, 'add_children_of_constraints')
         col.prop(character_rigger_props, 'use_head_tracker')
+        enable_physics = getattr(character_rigger_props, "enable_hair_clothes_physics", getattr(character_rigger_props, "enable_hair_dress_physics", False))
+        col.prop(character_rigger_props, 'enable_hair_clothes_physics', text="Hair & Clothes Physics")
+        sliders_col = col.column()
+        sliders_col.active = enable_physics
+        sliders_col.prop(character_rigger_props, 'hair_physics_influence', text='Hair', slider=True)
+        sliders_col.prop(character_rigger_props, 'clothes_physics_influence', text='Clothes', slider=True)
 
 
 class GI_PT_UI_Post_Processing_Setup_Menu(Panel, GenshinImpactUIRenderChecker):

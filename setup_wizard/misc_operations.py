@@ -82,9 +82,10 @@ class HYV_OT_VertexPaintFaceSeeThroughEffect(Operator, CustomOperatorProperties)
         face_object = bpy.data.objects.get('Face')
         face_mesh: bpy.types.Mesh = bpy.data.meshes.get('Face')
 
-        if shader is HonkaiStarRailShaders.STELLARTOON_HONKAI_STAR_RAIL_SHADER and face_mesh:
+        if shader is HonkaiStarRailShaders.STELLARTOON_HONKAI_STAR_RAIL_SHADER and face_mesh and face_object:
             color_color_attribute = face_mesh.color_attributes.get('Color')
-            start_mode = bpy.context.object.mode
+            orig_active_obj = bpy.context.active_object
+            orig_mode = orig_active_obj.mode if orig_active_obj else 'OBJECT'
 
             if not color_color_attribute:
                 color_color_attribute = face_mesh.color_attributes.new(
@@ -97,25 +98,46 @@ class HYV_OT_VertexPaintFaceSeeThroughEffect(Operator, CustomOperatorProperties)
             face_mesh.attributes.active_color = color_color_attribute
 
             col_color_attribute = face_mesh.vertex_colors.get('Col')
-            col_color_attribute.active_render = True
+            if col_color_attribute:
+                col_color_attribute.active_render = True
 
-            bpy.context.view_layer.objects.active = face_object
-            bpy.ops.object.mode_set(mode='EDIT')
-            bpy.ops.mesh.select_mode(type='FACE')
+            try:
+                bpy.context.view_layer.objects.active = face_object
+                bpy.ops.object.mode_set(mode='EDIT')
+                bpy.ops.mesh.select_mode(type='FACE')
 
-            # Try first slot as a best guess (Screwllum has Body1 material in Face mesh)
-            face_material_slot = face_object.material_slots.get(self.shader_material_names.FACE) or face_object.material_slots[0]
-            face_object.active_material_index = face_material_slot.slot_index
+                # Try first slot as a best guess (Screwllum has Body1 material in Face mesh)
+                face_material_slot = face_object.material_slots.get(self.shader_material_names.FACE) or (
+                    face_object.material_slots[0] if face_object.material_slots else None
+                )
+                if face_material_slot:
+                    face_object.active_material_index = face_material_slot.slot_index
 
-            bpy.ops.mesh.select_all(action='DESELECT')
-            bpy.ops.object.material_slot_select()
+                bpy.ops.mesh.select_all(action='DESELECT')
+                if face_material_slot:
+                    bpy.ops.object.material_slot_select()
 
-            bpy.ops.paint.vertex_paint_toggle()
-            face_mesh.use_paint_mask = True
-            bpy.data.brushes["Draw"].color = (1, 1, 1)
-            bpy.ops.paint.vertex_color_set()
+                bpy.ops.paint.vertex_paint_toggle()
+                face_mesh.use_paint_mask = True
+                if "Draw" in bpy.data.brushes:
+                    bpy.data.brushes["Draw"].color = (1, 1, 1)
+                bpy.ops.paint.vertex_color_set()
+            except Exception as e:
+                print(f"[HSR] Vertex paint face see through error: {e}")
+            finally:
+                try:
+                    bpy.ops.object.mode_set(mode='OBJECT')
+                except Exception:
+                    pass
 
-            bpy.ops.object.mode_set(mode=start_mode)
+            if orig_active_obj and orig_active_obj.name in bpy.data.objects:
+                try:
+                    bpy.context.view_layer.objects.active = orig_active_obj
+                    if orig_mode in ('POSE', 'EDIT', 'OBJECT'):
+                        bpy.ops.object.mode_set(mode=orig_mode)
+                except Exception:
+                    pass
+
             self.__replace_eyeshadow_material()
 
         if self.next_step_idx:

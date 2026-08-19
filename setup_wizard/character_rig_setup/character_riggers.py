@@ -196,6 +196,10 @@ class GenshinImpactCharacterRigger(CharacterRigger):
 
         refresh_light_vectors_modifiers()
 
+        if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):
+            from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
+            apply_hair_and_clothes_physics(armature, self.context)
+
         cache_enabled = self.context.window_manager.cache_enabled
         if cache_enabled and filepath:
             cache_using_cache_key(get_cache(cache_enabled), self.rigify_bone_shapes_file_path, filepath)
@@ -455,6 +459,10 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
 
         refresh_light_vectors_modifiers()
 
+        if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):
+            from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
+            apply_hair_and_clothes_physics(armature, self.context)
+
         cache_enabled = self.context.window_manager.cache_enabled
         if cache_enabled and filepath:
             cache_using_cache_key(get_cache(cache_enabled), self.rigify_bone_shapes_file_path, filepath)
@@ -549,6 +557,10 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
 
         refresh_light_vectors_modifiers()
 
+        if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):
+            from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
+            apply_hair_and_clothes_physics(armature, self.context)
+
         cache_enabled = self.context.window_manager.cache_enabled
         if cache_enabled and filepath:
             cache_using_cache_key(get_cache(cache_enabled), self.rigify_bone_shapes_file_path, filepath)
@@ -589,6 +601,11 @@ class NevernessToEvernessCharacterRigger(CharacterRigger):
             nte_face_rig_main()
         except Exception as e:
             print(f"NTE face rig skipped/notice: {e}")
+
+        character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
+        if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):
+            from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
+            apply_hair_and_clothes_physics(armature, self.context)
 
         cache_enabled = self.context.window_manager.cache_enabled
         if cache_enabled and filepath:
