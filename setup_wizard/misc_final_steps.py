@@ -55,10 +55,32 @@ class HSR_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorPropertie
     def execute(self, context):
         result = BasicSetupUIOperator.execute(self, context)
         try:
+            self._join_hsr_facerig_armature(context)
+        except Exception as err:
+            self.report({"WARNING"}, f"HSR join facerig skipped: {err}")
+        try:
             self._rename_hsr_character_collection_and_rig(context)
         except Exception as err:
             self.report({"WARNING"}, f"HSR rename pass skipped: {err}")
         return result
+
+    def _join_hsr_facerig_armature(self, context):
+        main_rig = self._find_target_armature(context)
+        if not main_rig:
+            return
+
+        facerig_obj = bpy.data.objects.get("isaac FaceRig")
+        if not facerig_obj:
+            for obj in bpy.data.objects:
+                if obj.type == "ARMATURE" and obj != main_rig and any(k in obj.name.lower() for k in ["facerig", "isaac"]):
+                    facerig_obj = obj
+                    break
+
+        if not facerig_obj or facerig_obj == main_rig:
+            return
+
+        from setup_wizard.join_meshes_on_armature.join_meshes_operator import GI_OT_JoinMeshesOnArmature
+        GI_OT_JoinMeshesOnArmature.safe_merge_armatures(main_rig, facerig_obj, context)
 
     def _rename_hsr_character_collection_and_rig(self, context):
         armature = self._find_target_armature(context)
