@@ -1002,13 +1002,169 @@ def find_nte_body_texture_by_material_name(mat_name_lower, type_keys, image_file
     return best_file if best_score > 0 else None
 
 
-def replace_template_image_node(tex_node, image_files, folder, slot_mat_name=""):
+def ensure_hair_white_texture(folder=None, image_files=None):
+    if not folder and not image_files:
+        return
+
+    if not image_files and folder and os.path.isdir(folder):
+        image_files = [f for f in os.listdir(folder) if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
+
+    white_file = None
+    if image_files:
+        white_file = next((f for f in image_files if 'linear_white' in f.lower() or 't_linear_white' in f.lower()), None) \
+            or next((f for f in image_files if 'srgb_white' in f.lower() or 't_srgb_white' in f.lower()), None) \
+            or next((f for f in image_files if 'white' in f.lower() and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))), None)
+
+    if not white_file or not folder:
+        return
+
+    img_path = os.path.join(folder, white_file)
+    if not os.path.isfile(img_path):
+        return
+
+    img = bpy.data.images.load(img_path, check_existing=True)
+
+    # 1. Process all node groups matching 异环-头发
+    for ng in bpy.data.node_groups:
+        ng_name_low = ng.name.lower()
+        if '异环-头发' in ng.name or 'hair' in ng_name_low or '前发' in ng.name or '后发' in ng.name:
+            for node in ng.nodes:
+                if node.type == 'TEX_IMAGE':
+                    is_vector_input_connected = any(
+                        link.from_node.type == 'COMBINE_XYZ' or 'Combine' in getattr(link.from_node, 'name', '') 
+                        for link in ng.links if link.to_node == node and getattr(link.to_socket, 'name', '') == 'Vector'
+                    )
+                    is_white_node = node.image is None or any(wk in (node.image.name.lower() if node.image else '') for wk in ['white', 'linear', 'srgb', 'anisotropic'])
+                    is_not_main_diff_mask = not (node.image and any(k in node.image.name.lower() for k in ['_d.', '_d_', '_diff', '_m.', '_m_', '_mask']))
+
+                    if is_vector_input_connected or is_white_node or is_not_main_diff_mask:
+                        node.image = img
+
+    # 2. Process all hair materials in bpy.data.materials
+    for mat in bpy.data.materials:
+        if not mat.use_nodes or not mat.node_tree:
+            continue
+        mat_name_low = mat.name.lower()
+        if any(k in mat_name_low for k in ['hair', 'pelo', '前发', '后发', 'toufa']):
+            for node in mat.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree:
+                    sub_tree = node.node_tree
+                    if '异环-头发' in sub_tree.name or 'hair' in sub_tree.name.lower() or '前发' in sub_tree.name or '后发' in sub_tree.name:
+                        for sub_node in sub_tree.nodes:
+                            if sub_node.type == 'TEX_IMAGE':
+                                is_vector_input_connected = any(
+                                    link.from_node.type == 'COMBINE_XYZ' or 'Combine' in getattr(link.from_node, 'name', '') 
+                                    for link in sub_tree.links if link.to_node == sub_node and getattr(link.to_socket, 'name', '') == 'Vector'
+                                )
+                                is_white_node = sub_node.image is None or any(wk in (sub_node.image.name.lower() if sub_node.image else '') for wk in ['white', 'linear', 'srgb', 'anisotropic'])
+                                is_not_main_diff_mask = not (sub_node.image and any(k in sub_node.image.name.lower() for k in ['_d.', '_d_', '_diff', '_m.', '_m_', '_mask']))
+
+                                if is_vector_input_connected or is_white_node or is_not_main_diff_mask:
+                                    sub_node.image = img
+
+
+def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="", json_database=None):
     if not tex_node.image:
+        is_inside_hair = any(k in slot_mat_name.lower() for k in ['异环-头发', 'hair', '前发', '后发', 'toufa'])
+        is_combine_xyz = any(
+            link.from_node.type == 'COMBINE_XYZ' or 'Combine' in getattr(link.from_node, 'name', '')
+            for link in getattr(getattr(tex_node, 'id_data', None), 'links', [])
+            if link.to_node == tex_node and getattr(link.to_socket, 'name', '') == 'Vector'
+        )
+        if is_inside_hair or is_combine_xyz:
+            white_file = next((f for f in image_files if 'linear_white' in f.lower() or 't_linear_white' in f.lower()), None) \
+                or next((f for f in image_files if 'srgb_white' in f.lower() or 't_srgb_white' in f.lower()), None) \
+                or next((f for f in image_files if 'white' in f.lower() and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))), None)
+            if white_file and folder:
+                img_path = os.path.join(folder, white_file)
+                if os.path.isfile(img_path):
+                    img = bpy.data.images.load(img_path, check_existing=True)
+                    tex_node.image = img
         return
 
     old_img_name = tex_node.image.name.lower()
     mat_name_lower = slot_mat_name.lower()
     replacement_file = None
+
+    # Material 'gaoguang' always gets face_d texture assigned
+    if 'gaoguang' in mat_name_lower:
+        candidates = [f for f in image_files if 'face' in f.lower() and any(dk in f.lower() for dk in ['_d.', '_d_', '_diff', 'face_d', 'd_01', 'd_02'])]
+        specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
+        face_d_file = specific_candidates[0] if specific_candidates else (candidates[0] if candidates else None)
+        if not face_d_file:
+            candidates = [f for f in image_files if 'face' in f.lower()]
+            specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
+            face_d_file = specific_candidates[0] if specific_candidates else (candidates[0] if candidates else None)
+        if face_d_file and folder:
+            img_path = os.path.join(folder, face_d_file)
+            if os.path.isfile(img_path):
+                img = bpy.data.images.load(img_path, check_existing=True)
+                try:
+                    img.alpha_mode = 'CHANNEL_PACKED'
+                except Exception:
+                    pass
+                tex_node.image = img
+                return
+
+    # 1. First priority: Check exact JSON texture mapping for this material
+    if json_database:
+        from setup_wizard.utils.nte_json_parser import get_nte_material_data
+        mat_info = get_nte_material_data(slot_mat_name, json_database)
+        if mat_info:
+            textures = mat_info.get("textures", {})
+            handled_slot = False
+
+            if any(dk in old_img_name for dk in ['_d.', '_d_', '_diff', 'd_0', 'd_1', 'd_2', 'mint_01_d', 'mint_02_d', 'hair_01_d', 'hair_02_d', 'hair_d']) or 'diffuse' in old_img_name or 'basecolor' in old_img_name or '基础色' in old_img_name:
+                handled_slot = True
+                replacement_file = textures.get("diffuse")
+
+            elif any(mk in old_img_name for mk in ['_m.', '_m_', '_mask', 'm_0', 'm_1', 'm_2', 'mint_01_m', 'mint_02_m', 'hair_01_m', 'hair_02_m', 'hair_m']) or 'lightmap' in old_img_name or 'mask' in old_img_name:
+                handled_slot = True
+                replacement_file = textures.get("lightmap")
+
+            elif any(nk in old_img_name for nk in ['_n.', '_n_', '_norm', 'n_0', 'n_1', 'n_2', 'mint_01_n', 'mint_02_n', 'defaultnormal']) or 'normal' in old_img_name:
+                handled_slot = True
+                replacement_file = textures.get("normal")
+
+            elif any(ik in old_img_name for ik in ['_id.', '_id_', 'id_0', 'id_1', 'id_2', 'mint_01_id', 'mint_02_id']) or 'id' in old_img_name:
+                handled_slot = True
+                replacement_file = textures.get("id")
+
+            elif any(rk in old_img_name for rk in ['_r.', '_r_', 'face_r', 'blush', 'facelightmask', 'facemask']):
+                handled_slot = True
+                replacement_file = textures.get("face_mask")
+
+            elif any(rk in old_img_name for rk in ['ramp', 'night_dusk', 'curve', 'rampaltas', 'rampatlas']):
+                handled_slot = True
+                replacement_file = textures.get("ramp") or (json_database.get("ramp_atlas_file") if json_database else None)
+
+            elif any(ek in old_img_name for ek in ['emissive', 'noise']):
+                handled_slot = True
+                replacement_file = textures.get("emissive")
+
+            elif any(wk in old_img_name for wk in ['white', 'linear_white', 'srgb_white', 'anisotropic', 't_srgb_white', 't_linear_white']):
+                handled_slot = True
+                replacement_file = textures.get("anisotropic")
+                if not replacement_file and image_files:
+                    replacement_file = next((f for f in image_files if 'linear_white' in f.lower() or 't_linear_white' in f.lower()), None) \
+                        or next((f for f in image_files if 'srgb_white' in f.lower() or 't_srgb_white' in f.lower()), None) \
+                        or next((f for f in image_files if 'white' in f.lower() and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))), None)
+
+            if handled_slot:
+                if replacement_file:
+                    img_path = os.path.join(folder, replacement_file)
+                    if os.path.isfile(img_path):
+                        img = bpy.data.images.load(img_path, check_existing=True)
+                        try:
+                            img.alpha_mode = 'CHANNEL_PACKED'
+                        except Exception:
+                            pass
+                        tex_node.image = img
+                        return
+                else:
+                    # JSON explicitly does NOT have this texture (e.g. No ID mask on Nitsa 03) -> clear template texture
+                    tex_node.image = None
+                    return
 
     hair_sub_idx = '01'
     if any(k in mat_name_lower for k in ['hair_2', 'hair_02', 'hair2', '后发', 'back']):
@@ -1043,19 +1199,22 @@ def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="")
             elif candidates:
                 replacement_file = candidates[0]
 
-    elif any(k in old_img_name for k in ['ramp', 'night_dusk', 'srgb']):
+    elif any(k in old_img_name for k in ['ramp', 'night_dusk']):
         clean_old_base = old_img_name.split('.')[0].replace('.001', '').replace('.002', '').strip()
         exact_match = next((f for f in image_files if clean_old_base in f.lower() or f.lower().split('.')[0] == clean_old_base), None)
         if exact_match:
             replacement_file = exact_match
         else:
-            white_candidate = next((f for f in image_files if 't_srgb_white' in f.lower() or 'srgb_white' in f.lower() or ('srgb' in f.lower() and 'white' in f.lower())), None)
-            if white_candidate:
-                replacement_file = white_candidate
-            else:
-                ramp_candidates = [f for f in image_files if 't_srgb' in f.lower() or 'srgb' in f.lower() or 'ramp' in f.lower()]
-                if ramp_candidates:
-                    replacement_file = ramp_candidates[0]
+            ramp_candidates = [f for f in image_files if 't_srgb' in f.lower() or 'srgb' in f.lower() or 'ramp' in f.lower()]
+            if ramp_candidates:
+                replacement_file = ramp_candidates[0]
+
+    elif any(k in old_img_name for k in ['white', 'linear_white', 'srgb_white', 'anisotropic', 't_srgb_white', 't_linear_white']):
+        white_candidate = next((f for f in image_files if 'linear_white' in f.lower() or 't_linear_white' in f.lower()), None) \
+            or next((f for f in image_files if 'srgb_white' in f.lower() or 't_srgb_white' in f.lower()), None) \
+            or next((f for f in image_files if 'white' in f.lower() and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))), None)
+        if white_candidate:
+            replacement_file = white_candidate
 
     elif any(k in old_img_name for k in ['matcap', 'silk']):
         clean_old_base = old_img_name.split('.')[0].replace('.001', '').replace('.002', '').strip()
@@ -1242,7 +1401,7 @@ def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="")
         tex_node.image = img
 
 
-def process_node_tree(node_tree, image_files, folder, slot_mat_name="", visited=None):
+def process_node_tree(node_tree, image_files, folder, slot_mat_name="", visited=None, json_database=None):
     if visited is None:
         visited = set()
     if not node_tree or node_tree in visited:
@@ -1251,10 +1410,10 @@ def process_node_tree(node_tree, image_files, folder, slot_mat_name="", visited=
 
     for node in node_tree.nodes:
         if node.type == 'TEX_IMAGE':
-            replace_template_image_node(node, image_files, folder, slot_mat_name)
+            replace_template_image_node(node, image_files, folder, slot_mat_name, json_database=json_database)
         elif node.type == 'GROUP' and node.node_tree:
             sub_mat_name = f"{slot_mat_name} / {node.node_tree.name}" if slot_mat_name else node.node_tree.name
-            process_node_tree(node.node_tree, image_files, folder, sub_mat_name, visited)
+            process_node_tree(node.node_tree, image_files, folder, sub_mat_name, visited, json_database=json_database)
 
 
 
@@ -1341,14 +1500,24 @@ class NevernessToEvernessDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         cache_enabled = self.context.window_manager.cache_enabled
         folder = self.blender_operator.file_directory or get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH) or get_active_character_directory()
         image_files = []
+        json_database = None
+
         if folder and os.path.isdir(folder):
+            from setup_wizard.utils.nte_json_parser import load_nte_character_data, get_nte_material_data
             try:
-                for root, dirs, files in os.walk(folder):
-                    for f in files:
-                        if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp', '.hdr', '.png.001', '.tga.001', '.dds.001')):
-                            image_files.append(f)
-            except Exception:
-                image_files = []
+                json_database = load_nte_character_data(folder)
+                image_files = json_database.get("image_files_list", [])
+            except Exception as ex:
+                print(f"[NTE Replace Default Materials] Notice loading JSON database: {ex}")
+
+            if not image_files:
+                try:
+                    for root, dirs, files in os.walk(folder):
+                        for f in files:
+                            if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp', '.hdr', '.png.001', '.tga.001', '.dds.001')):
+                                image_files.append(f)
+                except Exception:
+                    image_files = []
 
         meshes = [mesh for mesh in bpy.context.scene.objects if mesh.type == 'MESH']
 
@@ -1450,13 +1619,42 @@ class NevernessToEvernessDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                                     inp.default_value = is_skin
 
                     if folder and image_files:
-                        process_node_tree(mat.node_tree, image_files, folder, slot.material.name)
+                        process_node_tree(mat.node_tree, image_files, folder, slot.material.name, json_database=json_database)
+
+                    if json_database:
+                        from setup_wizard.utils.nte_json_parser import get_nte_material_data
+                        mat_info = get_nte_material_data(slot.material.name, json_database)
+                        if mat_info:
+                            scalars = mat_info.get("scalars", {})
+                            for n in mat.node_tree.nodes:
+                                if n.type == 'GROUP' and n.node_tree:
+                                    for s_name, s_val in scalars.items():
+                                        if s_name in n.inputs and isinstance(s_val, (int, float)):
+                                            try:
+                                                n.inputs[s_name].default_value = float(s_val)
+                                            except Exception:
+                                                pass
 
         if folder and image_files:
             for ng_name in ['异环-头发', '异环-身体', '异环-面部', 'Matcap采样']:
                 ng = bpy.data.node_groups.get(ng_name)
                 if ng:
-                    process_node_tree(ng, image_files, folder, "NodeGroup_" + ng_name)
+                    process_node_tree(ng, image_files, folder, "NodeGroup_" + ng_name, json_database=json_database)
+
+            ensure_hair_white_texture(folder, image_files)
+
+            face_cands = [f for f in image_files if 'face' in f.lower() and any(dk in f.lower() for dk in ['_d.', '_d_', '_diff', 'face_d', 'd_01', 'd_02'])]
+            face_spec = [f for f in face_cands if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
+            face_d_img_file = face_spec[0] if face_spec else (face_cands[0] if face_cands else None)
+            if face_d_img_file:
+                face_d_path = os.path.join(folder, face_d_img_file)
+                if os.path.isfile(face_d_path):
+                    face_d_img = bpy.data.images.load(face_d_path, check_existing=True)
+                    for mat in bpy.data.materials:
+                        if mat.use_nodes and mat.node_tree and 'gaoguang' in mat.name.lower():
+                            for node in mat.node_tree.nodes:
+                                if node.type == 'TEX_IMAGE':
+                                    node.image = face_d_img
 
         try:
             bpy.ops.neverness_to_everness.set_up_hair_specular()

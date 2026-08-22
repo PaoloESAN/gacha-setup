@@ -1187,20 +1187,12 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
             )
             return {'FINISHED'}
 
-        import json
-        files = os.listdir(folder)
-        image_files = [f for f in files if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
-        json_files = [f for f in files if f.lower().endswith('.json')]
+        from setup_wizard.utils.nte_json_parser import load_nte_character_data, get_nte_material_data
 
-        json_data_map = {}
-        for jf in json_files:
-            try:
-                jpath = os.path.join(folder, jf)
-                with open(jpath, 'r', encoding='utf-8') as f:
-                    jcontent = json.load(f)
-                    json_data_map[jf.lower()] = jcontent
-            except Exception as ex:
-                print(f"Notice: Reading JSON {jf}: {ex}")
+        database = load_nte_character_data(folder)
+        image_files = database.get("image_files_list", [])
+        if not image_files and os.path.isdir(folder):
+            image_files = [f for f in os.listdir(folder) if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
 
         for mat in bpy.data.materials:
             if not mat.use_nodes or not mat.node_tree or mat.name == '材质球' or 'touming' in mat.name.lower():
@@ -1213,6 +1205,37 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
                 setup_common_face_material(mat, folder=folder, image_files=image_files)
                 continue
 
+            if 'gaoguang' in mat_name_lower:
+                candidates = [f for f in image_files if 'face' in f.lower() and any(dk in f.lower() for dk in ['_d.', '_d_', '_diff', 'face_d', 'd_01', 'd_02'])]
+                specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
+                best_diff = specific_candidates[0] if specific_candidates else (candidates[0] if candidates else None)
+                if not best_diff:
+                    candidates = [f for f in image_files if 'face' in f.lower()]
+                    specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
+                    best_diff = specific_candidates[0] if specific_candidates else (candidates[0] if candidates else None)
+                if best_diff:
+                    img_path = os.path.join(folder, best_diff)
+                    if os.path.isfile(img_path):
+                        img = bpy.data.images.load(img_path, check_existing=True)
+                        for node in mat.node_tree.nodes:
+                            if node.type == 'TEX_IMAGE':
+                                node.image = img
+                continue
+
+            mat_info = get_nte_material_data(mat.name, database)
+            tex_data = mat_info.get("textures", {}) if mat_info else {}
+
+            if mat_info:
+                best_diff = tex_data.get("diffuse")
+                best_mask = tex_data.get("lightmap")
+                best_id = tex_data.get("id")
+                best_norm = tex_data.get("normal")
+            else:
+                best_diff = find_nte_texture_for_material(mat.name, 'd', image_files)
+                best_mask = find_nte_texture_for_material(mat.name, 'm', image_files)
+                best_id = find_nte_texture_for_material(mat.name, 'id', image_files)
+                best_norm = find_nte_texture_for_material(mat.name, 'n', image_files)
+
             for node in mat.node_tree.nodes:
                 if node.type == 'GROUP' and node.node_tree:
                     ng_name = node.node_tree.name
@@ -1224,45 +1247,53 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
                         else:
                             target_socket = node.inputs.get('Input') or node.inputs.get('Color') or node.inputs.get('基础色')
 
-                        best_diff = find_nte_texture_for_material(mat.name, 'd', image_files)
-
                         if best_diff and target_socket and not target_socket.is_linked:
                             img_path = os.path.join(folder, best_diff)
-                            img = bpy.data.images.load(img_path, check_existing=True)
-
-                            tex_node = next((n for n in mat.node_tree.nodes if n.type == 'TEX_IMAGE' and n.image == img), None)
-                            if not tex_node:
-                                tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
-                                tex_node.image = img
-                                tex_node.location = (node.location.x - 320, node.location.y)
-
-                            mat.node_tree.links.new(tex_node.outputs['Color'], target_socket)
+                            if os.path.isfile(img_path):
+                                img = bpy.data.images.load(img_path, check_existing=True)
+                                tex_node = next((n for n in mat.node_tree.nodes if n.type == 'TEX_IMAGE' and n.image == img), None)
+                                if not tex_node:
+                                    tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
+                                    tex_node.image = img
+                                    tex_node.location = (node.location.x - 320, node.location.y)
+                                mat.node_tree.links.new(tex_node.outputs['Color'], target_socket)
 
                         mask_socket = node.inputs.get('M') or node.inputs.get('MASK') or node.inputs.get('Mask')
                         if mask_socket and not mask_socket.is_linked:
-                            best_mask = find_nte_texture_for_material(mat.name, 'm', image_files)
                             if best_mask:
                                 img_path = os.path.join(folder, best_mask)
-                                img = bpy.data.images.load(img_path, check_existing=True)
-                                img.colorspace_settings.name = 'Non-Color'
-                                tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
-                                tex_node.image = img
-                                tex_node.location = (node.location.x - 320, node.location.y - 220)
-                                mat.node_tree.links.new(tex_node.outputs['Color'], mask_socket)
+                                if os.path.isfile(img_path):
+                                    img = bpy.data.images.load(img_path, check_existing=True)
+                                    img.colorspace_settings.name = 'Non-Color'
+                                    tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
+                                    tex_node.image = img
+                                    tex_node.location = (node.location.x - 320, node.location.y - 220)
+                                    mat.node_tree.links.new(tex_node.outputs['Color'], mask_socket)
 
                         id_socket = node.inputs.get('ID') or node.inputs.get('Id') or node.inputs.get('id')
                         if id_socket and not id_socket.is_linked:
-                            best_id = find_nte_texture_for_material(mat.name, 'id', image_files)
                             if best_id:
                                 img_path = os.path.join(folder, best_id)
-                                img = bpy.data.images.load(img_path, check_existing=True)
-                                img.colorspace_settings.name = 'Non-Color'
-                                tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
-                                tex_node.image = img
-                                tex_node.location = (node.location.x - 320, node.location.y - 440)
-                                mat.node_tree.links.new(tex_node.outputs['Color'], id_socket)
+                                if os.path.isfile(img_path):
+                                    img = bpy.data.images.load(img_path, check_existing=True)
+                                    img.colorspace_settings.name = 'Non-Color'
+                                    tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
+                                    tex_node.image = img
+                                    tex_node.location = (node.location.x - 320, node.location.y - 440)
+                                    mat.node_tree.links.new(tex_node.outputs['Color'], id_socket)
 
+                        # Apply JSON parameters to group inputs if available
+                        if mat_info:
+                            scalars = mat_info.get("scalars", {})
+                            for s_name, s_val in scalars.items():
+                                if s_name in node.inputs and isinstance(s_val, (int, float)):
+                                    try:
+                                        node.inputs[s_name].default_value = float(s_val)
+                                    except Exception:
+                                        pass
 
+        from setup_wizard.replace_default_materials_setup.game_default_material_replacers import ensure_hair_white_texture
+        ensure_hair_white_texture(folder, image_files)
 
         self.blender_operator.report({'INFO'}, 'Imported Neverness to Everness textures and JSON material data...')
         NextStepInvoker().invoke(

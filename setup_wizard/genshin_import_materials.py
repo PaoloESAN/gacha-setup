@@ -518,6 +518,14 @@ class NTE_OT_SetUpOutlines(Operator, BasicSetupUIOperator, CustomOperatorPropert
         # Copy Geometry Nodes modifiers from shader/template object onto character meshes
         copy_nte_modifiers_to_character_models()
 
+        try:
+            from setup_wizard.replace_default_materials_setup.game_default_material_replacers import ensure_hair_white_texture
+            from setup_wizard.utils.active_character_directory_store import get_active_character_directory
+            folder = get_active_character_directory() or context.scene.get("setup_wizard_imported_model_dir")
+            ensure_hair_white_texture(folder)
+        except Exception as ex:
+            print(f"[NTE Setup Outlines] Notice ensuring hair white texture: {ex}")
+
         self.report({'INFO'}, 'Setup Outlines completed: Hair Specular & Geometry Nodes modifiers assigned.')
 
         next_step = getattr(self, 'next_step_idx', 0)

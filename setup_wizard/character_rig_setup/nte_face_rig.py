@@ -1,4 +1,4 @@
-# Author: michael-gh1 / Antigravity
+# Author: PaoloESAN
 # Face Rig Logic for Neverness to Everness (NTE)
 # Integrates Isaac/ZZZ direct face widgets and controls with HSR-style side panel expression sliders
 
