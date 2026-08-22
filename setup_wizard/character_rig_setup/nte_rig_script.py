@@ -1,7 +1,11 @@
-### IMPORTANT: YOU NEED THE ADDON EXPYKIT AND YOU ALSO NEED TO IMPORT WITH 'Automatic Bone Orientation' TURNED ON UNDER 'Armature' WHEN YOU IMPORT THE FBX.
-
 import bpy
 import mathutils
+from setup_wizard.character_rig_setup.rig_ui_utils import (
+    extract_clean_character_name,
+    setup_standard_bone_collections,
+    distribute_standard_rig_bones,
+    modify_and_run_rig_ui_script,
+)
 
 def rig_character(
     file_path,
@@ -267,6 +271,12 @@ def rig_character(
                 eb_br.tail.y = cy - 0.05
                 eb_br.tail.z = cz
 
+        # Align shoulder.R metarig bone roll so widget is symmetrical and not flipped
+        sh_L = metarig_obj.data.edit_bones.get("shoulder.L")
+        sh_R = metarig_obj.data.edit_bones.get("shoulder.R")
+        if sh_L and sh_R:
+            sh_R.roll = -sh_L.roll
+
         # Align hand.L and hand.R metarig bones straight along forearm vector so hand_ik widget is centered on wrist
         forearm_R = metarig_obj.data.edit_bones.get("forearm.R")
         hand_R = metarig_obj.data.edit_bones.get("hand.R")
@@ -391,9 +401,23 @@ def rig_character(
                 if eb.length > 0.08:
                     eb.tail = eb.head + (eb.tail - eb.head).normalized() * 0.06
 
+        rig_sh_L = rigifyr.data.edit_bones.get("shoulder.L")
+        rig_sh_R = rigifyr.data.edit_bones.get("shoulder.R")
+        if rig_sh_L and rig_sh_R:
+            rig_sh_R.roll = -rig_sh_L.roll
+        org_sh_L = rigifyr.data.edit_bones.get("ORG-shoulder.L")
+        org_sh_R = rigifyr.data.edit_bones.get("ORG-shoulder.R")
+        if org_sh_L and org_sh_R:
+            org_sh_R.roll = -org_sh_L.roll
+
         bpy.ops.object.mode_set(mode='POSE')
         
-        # Scale down custom shape sizes for hand_ik, breast, and finger controls
+        # Scale down custom shape sizes for hand_ik, breast, shoulder, and finger controls
+        for b_name in ["shoulder.L", "shoulder.R"]:
+            pb = rigifyr.pose.bones.get(b_name)
+            if pb:
+                pb.custom_shape_scale_xyz = (1.60, 1.60, 1.60)
+
         for b_name in ["hand_ik.L", "hand_ik.R"]:
             pb = rigifyr.pose.bones.get(b_name)
             if pb:
@@ -504,117 +528,82 @@ def rig_character(
                 if mod.type == 'ARMATURE':
                     mod.object = rigifyr
 
-    if use_bone_collections() and rigifyr:
-        hair_coll = rigifyr.data.collections.get("Hair") or rigifyr.data.collections.new("Hair")
-        skirt_coll = rigifyr.data.collections.get("Skirt") or rigifyr.data.collections.new("Skirt")
-        clothes_coll = rigifyr.data.collections.get("Clothes") or rigifyr.data.collections.new("Clothes")
-        face_coll = rigifyr.data.collections.get("Face & Accessories") or rigifyr.data.collections.new("Face & Accessories")
-        deform_coll = rigifyr.data.collections.get("Deform & Helpers") or rigifyr.data.collections.new("Deform & Helpers")
-        others_coll = rigifyr.data.collections.get("Others") or rigifyr.data.collections.new("Others")
-        torso_coll = rigifyr.data.collections.get("Torso") or rigifyr.data.collections.get("Torso (Primary)") or rigifyr.data.collections.new("Torso")
-        fingers_coll = rigifyr.data.collections.get("Fingers") or rigifyr.data.collections.get("Fingers (Primary)") or rigifyr.data.collections.new("Fingers")
-        fingers_detail_coll = rigifyr.data.collections.get("Fingers (Detail)") or rigifyr.data.collections.new("Fingers (Detail)")
+    is_version_4 = bpy.app.version[0] >= 4
 
-        main_ctrl_keywords = [
-            "root", "torso", "hips", "chest", "neck", "head",
-            "_ik", "_fk", "_tweak", "ctrl", "master", "pitch", "yaw", "roll"
-        ]
+    char_name = extract_clean_character_name(original_name)
+    if rigifyr:
+        try:
+            if rigifyr.users_collection:
+                rigifyr.users_collection[0].name = char_name
+        except Exception:
+            pass
+        rigifyr.name = char_name + "Rig"
 
-        for bone in rigifyr.data.bones:
-            b_name = bone.name
-            b_low = b_name.lower()
+    if is_version_4 and rigifyr:
+        setup_standard_bone_collections(rigifyr, is_version_4)
 
-            # Assign ONLY control breast bones (excluding DEF-, ORG-, MCH-) explicitly to Torso collection
-            if "breast" in b_low and not (b_name.startswith("DEF-") or b_name.startswith("ORG-") or b_name.startswith("MCH-")):
-                try:
-                    torso_coll.assign(bone)
-                except Exception:
-                    pass
-                for c in list(bone.collections):
-                    if c != torso_coll:
-                        try:
-                            c.unassign(bone)
-                        except Exception:
-                            pass
-                bone.hide = False
-                continue
+        def nte_physics_classifier(armature_obj, b2c_func):
+            for bone in armature_obj.data.bones:
+                b_name = bone.name
+                b_low = b_name.lower()
+                # Skip ALL control bones, standard Rigify limbs/fingers, and raw deform/twist/base bones
+                if (
+                    b_name.startswith("DEF-")
+                    or b_name.startswith("ORG-")
+                    or b_name.startswith("MCH-")
+                    or b_name.startswith("CTRL-")
+                    or b_name.startswith("LABEL-")
+                    or b_name.startswith("Bon_")
+                    or b_name.startswith("BON_")
+                    or b_name.startswith("Bone-")
+                    or b_name.startswith("Bip")
+                    or "tweak" in b_low
+                    or "_fk" in b_low
+                    or "_ik" in b_low
+                    or "master" in b_low
+                    or "thumb" in b_low
+                    or "f_index" in b_low
+                    or "f_middle" in b_low
+                    or "f_ring" in b_low
+                    or "f_pinky" in b_low
+                    or "forearm" in b_low
+                    or "upper_arm" in b_low
+                    or "thigh" in b_low
+                    or "shin" in b_low
+                    or "foot" in b_low
+                    or "toe" in b_low
+                    or "hand" in b_low
+                    or "shoulder" in b_low
+                    or "spine" in b_low
+                    or "torso" in b_low
+                    or "head" in b_low
+                    or "neck" in b_low
+                    or "root" in b_low
+                    or "twist" in b_low
+                ):
+                    continue
 
-            # Separate finger master controls (*_master) into Fingers, and detail ring/tweak controls into Fingers (Detail)
-            if any(f in b_low for f in ["thumb", "f_index", "f_middle", "f_ring", "f_pinky"]) and not (b_name.startswith("DEF-") or b_name.startswith("ORG-") or b_name.startswith("MCH-")):
-                if "_master" in b_low:
-                    target_finger_coll = fingers_coll
-                    other_finger_coll = fingers_detail_coll
-                else:
-                    target_finger_coll = fingers_detail_coll
-                    other_finger_coll = fingers_coll
+                if any(k in b_low for k in ["hair", "headline", "bone00", "ahoge"]):
+                    b2c_func(b_name, 20, "Hair")
+                elif any(k in b_low for k in ["qun", "skirt", "tail", "xiu", "sleeve", "cloth", "sce", "ribbon", "belt", "strap", "button", "dress"]):
+                    b2c_func(b_name, 22, "Clothes")
 
-                try:
-                    target_finger_coll.assign(bone)
-                except Exception:
-                    pass
-                try:
-                    other_finger_coll.unassign(bone)
-                except Exception:
-                    pass
-                for c in list(bone.collections):
-                    if c != target_finger_coll:
-                        try:
-                            c.unassign(bone)
-                        except Exception:
-                            pass
-                bone.hide = False
-                continue
-
-            # Check if this bone is a main Rigify UI control widget
-            is_main_ctrl = any(kw in b_low for kw in main_ctrl_keywords) and not (
-                b_name.startswith("DEF-") or b_name.startswith("ORG-") or b_name.startswith("MCH-") or
-                "bip" in b_low or "bn_" in b_low or "bone" in b_low or "wq_" in b_low or "root_" in b_low or "_root" in b_low
-            )
-
-            if is_main_ctrl:
-                continue
-
-            target_coll = others_coll
-            if any(k in b_low for k in ["hair", "headline", "bone00"]):
-                target_coll = hair_coll
-            elif any(k in b_low for k in ["qun", "skirt", "tail"]):
-                target_coll = skirt_coll
-            elif any(k in b_low for k in ["xiu", "sleeve", "cloth", "sce"]):
-                target_coll = clothes_coll
-            elif any(k in b_low for k in ["horn", "ear", "ring", "eye", "joint", "face"]):
-                target_coll = face_coll
-            elif b_name.startswith("DEF-") or b_name.startswith("ORG-") or b_name.startswith("MCH-"):
-                target_coll = deform_coll
-
-            try:
-                target_coll.assign(bone)
-            except Exception:
-                pass
-            for c in list(bone.collections):
-                if c != target_coll and c != fingers_coll and c != fingers_detail_coll:
-                    try:
-                        c.unassign(bone)
-                    except Exception:
-                        pass
-            bone.hide = True
-
-        # Sync active Rig Layers visibility to EXACT requested list: Face, Torso, Fingers, Arm IK, Leg IK, Root
-        exact_visible_names = {
-            "Face", "Torso", "Fingers",
-            "Arm.L (IK)", "Arm.R (IK)", "Leg.L (IK)", "Leg.R (IK)", "Root",
-            "Face (Primary)", "Torso (Primary)", "Fingers (Primary)", "Root (Primary)"
-        }
-        for coll in rigifyr.data.collections:
-            if coll.name in exact_visible_names:
-                coll.is_visible = True
-            else:
-                coll.is_visible = False
+        distribute_standard_rig_bones(
+            rigifyr,
+            is_version_4=is_version_4,
+            toe_bones_exist=True,
+            use_arm_ik_poles=use_arm_ik_poles,
+            use_leg_ik_poles=use_leg_ik_poles,
+            has_lighting_panel=False,
+            physics_bone_callback=nte_physics_classifier,
+        )
 
     elif rigifyr:
         for bone in rigifyr.data.bones:
             if bone.name.startswith("DEF-") or bone.name.startswith("ORG-") or bone.name.startswith("MCH-") or "Bn_" in bone.name or "Bone-" in bone.name or "Bip" in bone.name:
                 bone.hide = True
 
+    # Delete unnecessary utility armatures (metarig) so they don't block Finish Setup
     for extra_arm in ["metarig"]:
         m_obj = bpy.data.objects.get(extra_arm)
         if m_obj:
@@ -623,16 +612,41 @@ def rig_character(
             except Exception:
                 pass
 
-    x = original_name.split("_")
-    char_name = x[-2] if len(x) >= 2 else original_name
-    try:
-        if "rigify" in bpy.data.objects:
-            bpy.data.objects["rigify"].users_collection[0].name = char_name
-            bpy.data.objects["rigify"].name = char_name + "Rig"
-    except Exception:
-        pass
+    # Move widget objects (WGT-*) to hidden "wgt" collection
+    widget_keywords = ["head-control-shape", "root plate", "eye circle", "eye controller", "WGT-"]
+    for obj_item in list(bpy.data.objects):
+        if any(keyword in obj_item.name for keyword in widget_keywords):
+            move_into_collection(obj_item.name, "wgt")
+            try:
+                obj_item.hide_viewport = True
+                obj_item.hide_render = True
+            except:
+                pass
+
+    wgt_coll = bpy.data.collections.get("wgt")
+    if wgt_coll:
+        wgt_coll.hide_viewport = True
+        wgt_coll.hide_select = True
+        wgt_coll.hide_render = True
+
+    # Update Rigify UI script to standard Genshin layout with stars and version
+    modify_and_run_rig_ui_script(rigifyr, original_name, char_name=char_name)
+
+
+def move_into_collection(object_name, collection_name):
+    obj = bpy.data.objects.get(object_name)
+    if not obj:
+        return
+    coll = bpy.data.collections.get(collection_name)
+    if not coll:
+        coll = bpy.data.collections.new(collection_name)
+        bpy.context.scene.collection.children.link(coll)
+    for ucoll in list(obj.users_collection):
+        ucoll.objects.unlink(obj)
+    coll.objects.link(obj)
 
 
 def use_bone_collections():
     version_tuple = bpy.app.version
     return version_tuple[0] >= 4
+

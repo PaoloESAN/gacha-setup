@@ -196,15 +196,15 @@ class GenshinImpactCharacterRigger(CharacterRigger):
 
         refresh_light_vectors_modifiers()
 
-        self.blender_operator.report({'INFO'}, 'Successfully rigged character')
+        if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):
+            from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
+            apply_hair_and_clothes_physics(armature, self.context)
 
-        NextStepInvoker().invoke(
-            self.blender_operator.next_step_idx,
-            self.blender_operator.invoker_type,
-            file_path_to_cache=filepath,
-            high_level_step_name=self.blender_operator.high_level_step_name,
-            game_type=GameType.GENSHIN_IMPACT.name
-        )
+        cache_enabled = self.context.window_manager.cache_enabled
+        if cache_enabled and filepath:
+            cache_using_cache_key(get_cache(cache_enabled), self.rigify_bone_shapes_file_path, filepath)
+
+        self.blender_operator.report({'INFO'}, 'Successfully rigged character')
 
     def __get_body_diffuse_texture_name(self):
         body_material = self.__get_body_material()
@@ -459,15 +459,15 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
 
         refresh_light_vectors_modifiers()
 
-        self.blender_operator.report({'INFO'}, 'Successfully rigged HSR character')
+        if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):
+            from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
+            apply_hair_and_clothes_physics(armature, self.context)
 
-        NextStepInvoker().invoke(
-            self.blender_operator.next_step_idx,
-            self.blender_operator.invoker_type,
-            file_path_to_cache=filepath,
-            high_level_step_name=self.blender_operator.high_level_step_name,
-            game_type=GameType.HONKAI_STAR_RAIL.name
-        )
+        cache_enabled = self.context.window_manager.cache_enabled
+        if cache_enabled and filepath:
+            cache_using_cache_key(get_cache(cache_enabled), self.rigify_bone_shapes_file_path, filepath)
+
+        self.blender_operator.report({'INFO'}, 'Successfully rigged HSR character')
 
 
 class PunishingGrayRavenCharacterRigger(CharacterRigger):
@@ -501,6 +501,11 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
         character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
         meshes_joined = not (bpy.data.objects.get('Body') and bpy.data.objects.get('Face'))
 
+        try:
+            bpy.ops.object.mode_set(mode='OBJECT')
+        except RuntimeError:
+            pass
+
         bpy.ops.object.select_all(action='DESELECT')
         try:
             armature.hide_set(False)
@@ -509,17 +514,20 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
         self.context.view_layer.objects.active = armature
         armature.select_set(True)
 
-        zzz_rig_character(
-            filepath,
-            0, # lighting_panel_version
-            not character_rigger_props.allow_arm_ik_stretch,
-            not character_rigger_props.allow_leg_ik_stretch,
-            character_rigger_props.use_arm_ik_poles,
-            character_rigger_props.use_leg_ik_poles,
-            character_rigger_props.add_children_of_constraints,
-            character_rigger_props.use_head_tracker,
-            meshes_joined=meshes_joined
-        )
+        try:
+            zzz_rig_character(
+                filepath,
+                0, # lighting_panel_version
+                not character_rigger_props.allow_arm_ik_stretch,
+                not character_rigger_props.allow_leg_ik_stretch,
+                character_rigger_props.use_arm_ik_poles,
+                character_rigger_props.use_leg_ik_poles,
+                character_rigger_props.add_children_of_constraints,
+                character_rigger_props.use_head_tracker,
+                meshes_joined=meshes_joined
+            )
+        except Exception as e:
+            print(f"[ZZZ Rig Warning] zzz_rig_character skipped/error: {e}")
 
         try:
             zzz_face_rig_main()
@@ -549,15 +557,15 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
 
         refresh_light_vectors_modifiers()
 
-        self.blender_operator.report({'INFO'}, 'Successfully rigged ZZZ character')
+        if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):
+            from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
+            apply_hair_and_clothes_physics(armature, self.context)
 
-        NextStepInvoker().invoke(
-            self.blender_operator.next_step_idx,
-            self.blender_operator.invoker_type,
-            file_path_to_cache=filepath,
-            high_level_step_name=self.blender_operator.high_level_step_name,
-            game_type=GameType.ZENLESS_ZONE_ZERO.name
-        )
+        cache_enabled = self.context.window_manager.cache_enabled
+        if cache_enabled and filepath:
+            cache_using_cache_key(get_cache(cache_enabled), self.rigify_bone_shapes_file_path, filepath)
+
+        self.blender_operator.report({'INFO'}, 'Successfully rigged ZZZ character')
 
 
 class NevernessToEvernessCharacterRigger(CharacterRigger):
@@ -588,14 +596,22 @@ class NevernessToEvernessCharacterRigger(CharacterRigger):
             except Exception as ex:
                 self.blender_operator.report({'ERROR'}, f"Failed to rig NTE character: {ex}")
 
+        try:
+            from setup_wizard.character_rig_setup.nte_face_rig import nte_face_rig_main
+            nte_face_rig_main()
+        except Exception as e:
+            print(f"NTE face rig skipped/notice: {e}")
+
+        character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
+        if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):
+            from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
+            apply_hair_and_clothes_physics(armature, self.context)
+
+        cache_enabled = self.context.window_manager.cache_enabled
+        if cache_enabled and filepath:
+            cache_using_cache_key(get_cache(cache_enabled), GENSHIN_RIGIFY_BONE_SHAPES_FILE_PATH, filepath)
+
         self.blender_operator.report({'INFO'}, 'Successfully rigged NTE character')
 
-        NextStepInvoker().invoke(
-            self.blender_operator.next_step_idx,
-            self.blender_operator.invoker_type,
-            file_path_to_cache=filepath,
-            high_level_step_name=self.blender_operator.high_level_step_name,
-            game_type=GameType.NEVERNESS_TO_EVERNESS.name
-        )
 
 

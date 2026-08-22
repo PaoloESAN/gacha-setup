@@ -19,16 +19,29 @@ class NTE_PT_Setup_Wizard_UI_Layout(Panel, NevernessToEvernessUIRenderChecker):
         layout = self.layout
         window_manager = context.window_manager
 
-        # sub_layout = layout.box()
-        # run_entire_setup_column = sub_layout.column()
-        # OperatorFactory.create(
-        #     run_entire_setup_column,
-        #     "neverness_to_everness.setup_wizard_ui",
-        #     "Run Entire Setup",
-        #     "PLAY",
-        #     game_type=GameType.NEVERNESS_TO_EVERNESS.name,
-        #     operator_context="INVOKE_DEFAULT",
-        # )
+        sub_layout = layout.box()
+        run_entire_setup_column = sub_layout.column()
+        OperatorFactory.create(
+            run_entire_setup_column,
+            "neverness_to_everness.setup_wizard_ui",
+            "Run Entire Setup",
+            "PLAY",
+            game_type=GameType.NEVERNESS_TO_EVERNESS.name,
+            operator_context="INVOKE_DEFAULT",
+        )
+
+        settings_box = layout.box()
+        settings_header = settings_box.row()
+        settings_header.label(text="Setup Settings", icon="PREFERENCES")
+
+        settings_col = settings_box.column()
+        props = context.scene.character_rigger_props
+        enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
+        settings_col.prop(props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")
+        sliders_col = settings_col.column()
+        sliders_col.active = enable_physics
+        sliders_col.prop(props, "hair_physics_influence", text="Hair", slider=True)
+        sliders_col.prop(props, "clothes_physics_influence", text="Clothes", slider=True)
 
 
 class NTE_PT_Basic_Setup_Wizard_UI_Layout(Panel, NevernessToEvernessUIRenderChecker):
@@ -37,6 +50,7 @@ class NTE_PT_Basic_Setup_Wizard_UI_Layout(Panel, NevernessToEvernessUIRenderChec
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Character Setup Wizard"
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -179,6 +193,12 @@ class NTE_PT_UI_Rig_Character_Menu(Panel, NevernessToEvernessUIRenderChecker):
         sub_layout = layout.column(align=True)
 
         OperatorFactory.create_rig_character_ui(sub_layout)
+        OperatorFactory.create(
+            sub_layout,
+            "hoyoverse.apply_hair_clothes_physics",
+            "Apply Hair & Clothes Physics",
+            "PHYSICS",
+        )
 
 
 class NTE_PT_UI_Finish_Setup_Menu(Panel, NevernessToEvernessUIRenderChecker):
@@ -192,6 +212,13 @@ class NTE_PT_UI_Finish_Setup_Menu(Panel, NevernessToEvernessUIRenderChecker):
         layout = self.layout
         sub_layout = layout.column(align=True)
 
+        OperatorFactory.create(
+            sub_layout,
+            "genshin.setup_head_driver",
+            "Set Up Head Driver",
+            "CONSTRAINT",
+            game_type=GameType.NEVERNESS_TO_EVERNESS.name,
+        )
         OperatorFactory.create(
             sub_layout,
             "genshin.set_color_management_to_standard",

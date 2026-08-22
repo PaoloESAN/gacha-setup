@@ -112,8 +112,19 @@ def invoke_next_step_ui(
 
     file = open(f'{path_to_setup_wizard_folder}/config_ui.json')
     config = json.load(file)
-    ui_order = config.get(UI_ORDER_CONFIG_KEY)
+    ui_order = config.get(UI_ORDER_CONFIG_KEY, {})
     high_level_step_list = ui_order.get(high_level_step_name)
+
+    if not high_level_step_list and high_level_step_name:
+        if '.' in high_level_step_name:
+            prefix, rest = high_level_step_name.split('.', 1)
+            candidate = f"{prefix.upper()}_OT_{rest}"
+            high_level_step_list = ui_order.get(candidate)
+        elif '_OT_' in high_level_step_name:
+            prefix, rest = high_level_step_name.split('_OT_', 1)
+            candidate = f"{prefix.lower()}.{rest}"
+            high_level_step_list = ui_order.get(candidate)
+
     print(f"[DEBUG] high_level_step_list for '{high_level_step_name}': {high_level_step_list}")
 
     if not high_level_step_list or current_step_index >= len(high_level_step_list) - 1:
@@ -180,9 +191,27 @@ def get_shader_file_path(game_type: str, file_type: str = "main") -> str:
             return p
 
     elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
-        p = os.path.join(shaders_dir, 'zzz', 'ZZZ Setup File V2.0.blend')
-        if os.path.isfile(p):
-            return p
+        if file_type == 'outlines':
+            p_outlines = os.path.join(shaders_dir, 'zzz', 'ZZZ Setup File V2.0.blend')
+            if os.path.isfile(p_outlines):
+                return p_outlines
+        
+        selected_shader = getattr(bpy.context.scene, 'zzz_shader_type', 'KYTHERA') if hasattr(bpy, 'context') and hasattr(bpy.context, 'scene') else 'KYTHERA'
+
+        if selected_shader == 'LEGACY':
+            p_legacy = os.path.join(shaders_dir, 'zzz', 'ZZZ Setup File V2.0.blend')
+            if os.path.isfile(p_legacy):
+                return p_legacy
+        else:
+            p_v1 = os.path.join(shaders_dir, 'zzz', "Kythera's ZZZ Shader V1.0.blend")
+            if os.path.isfile(p_v1):
+                return p_v1
+            p_ge = os.path.join(shaders_dir, 'zzz', "Kythera's ZZZ Shader GE432.blend")
+            if os.path.isfile(p_ge):
+                return p_ge
+            p_legacy = os.path.join(shaders_dir, 'zzz', 'ZZZ Setup File V2.0.blend')
+            if os.path.isfile(p_legacy):
+                return p_legacy
 
     elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
         p = os.path.join(shaders_dir, 'nte', 'YH Shader.blend')

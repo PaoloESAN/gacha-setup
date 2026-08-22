@@ -465,42 +465,114 @@ class V3_GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
         set_modifier_property(modifier, 'Vertex Colors_attribute_name', 'Col')
         set_modifier_property(modifier, 'Vertex Color_attribute_name', 'Col')
 
-        for input_name, (material_input_accessor, outline_material_input_accessor) in self.outline_to_material_mapping.items():
-            material_name = f'{self.material_names.MATERIAL_PREFIX}{input_name}'
-            outline_material_name = f'{self.material_names.MATERIAL_PREFIX}{input_name} Outlines'
+        self.assign_all_genshin_outline_modifier_slots(modifier, mesh)
 
-            if bpy.data.materials.get(material_name) and bpy.data.materials.get(outline_material_name):
-                set_modifier_property(modifier, material_input_accessor, bpy.data.materials.get(material_name))
-                set_modifier_property(modifier, outline_material_input_accessor, bpy.data.materials.get(outline_material_name))
+    def assign_all_genshin_outline_modifier_slots(self, modifier, mesh=None):
+        def find_outline_mat(base_mat):
+            if base_mat:
+                for suffix in [' Outlines', ' Outline', 'Outlines', 'Outline']:
+                    ol = bpy.data.materials.get(f'{base_mat.name}{suffix}')
+                    if ol:
+                        return ol
+                b_name_low = base_mat.name.lower()
+                for m in bpy.data.materials:
+                    m_l = m.name.lower()
+                    if 'outline' in m_l:
+                        words = [w for w in b_name_low.split() if w not in ['hoyoverse', 'mihoyo', '-', 'genshin', 'outlines', 'outline', 'mat']]
+                        if words and all(w in m_l for w in words):
+                            return m
+            return None
 
-        is_npc = [material for material in bpy.data.materials if 'NPC' in material.name]
-        if is_npc:
-            for input_name, (material_input_accessor, outline_material_input_accessor) in self.npc_outline_to_material_mapping.items():
-                shader_materials = [
-                    material for material_name, material in bpy.data.materials.items() if \
-                        input_name in material_name and 
-                        self.material_names.MATERIAL_PREFIX in material_name and 
-                        not ' Outlines' in material_name
-                ]
-                outline_materials = [
-                    material for material_name, material in bpy.data.materials.items() if \
-                        input_name in material_name and 
-                        self.material_names.MATERIAL_PREFIX in material_name and 
-                        ' Outlines' in material_name
-                ]
-                # If outlines could not be found, the material name may be too long.
-                # Try searching for the outlines material by specific settings in it.
-                if not outline_materials:
-                    outline_materials = [
-                        material for material_name, material in bpy.data.materials.items() if \
-                            input_name in material_name and 
-                            self.material_names.MATERIAL_PREFIX in material_name and 
-                            ShaderMaterial(material, self.shader_node_names).is_outlines_material()
-                    ]
+        # Reset all outline material inputs on the modifier first
+        for mask_sock, ol_sock in available_outline_mask_to_material_mapping.items():
+            set_modifier_property(modifier, mask_sock, None)
+            set_modifier_property(modifier, ol_sock, None)
 
-                if shader_materials and outline_materials:
-                    set_modifier_property(modifier, material_input_accessor, shader_materials[0])
-                    set_modifier_property(modifier, outline_material_input_accessor, outline_materials[0])
+        if not mesh:
+            return
+
+        # Get list of material slots on this specific mesh
+        slots = []
+        if hasattr(mesh, 'material_slots'):
+            slots = [s.material for s in mesh.material_slots if s.material]
+        elif hasattr(mesh, 'materials'):
+            slots = [m for m in mesh.materials if m]
+
+        valid_prefixes = [
+            getattr(self.material_names, 'MATERIAL_PREFIX', 'HoYoverse -').lower(),
+            getattr(self.material_names, 'MATERIAL_PREFIX_AFTER_RENAME', 'HoYoverse -').lower(),
+            'hoyoverse',
+            'mihoyo',
+        ]
+
+        assigned_pairs = set()
+
+        for slot_mat in slots:
+            mat = slot_mat
+            m_low = mat.name.lower()
+
+            # If the slot is an FBX raw import (Avatar_... / Monster_...), find its converted HoYoverse shader material
+            if m_low.startswith(('avatar_', 'monster_', 'npc_', 'mat_')) or not any(m_low.startswith(pfx) or pfx in m_low for pfx in valid_prefixes):
+                suffix_part = mat.name.split('_')[-1].lower()
+                found_shader_mat = None
+                for m in bpy.data.materials:
+                    cand_low = m.name.lower()
+                    if 'outline' in cand_low:
+                        continue
+                    if any(cand_low.startswith(pfx) or pfx in cand_low for pfx in valid_prefixes):
+                        if suffix_part in cand_low:
+                            found_shader_mat = m
+                            break
+                if found_shader_mat:
+                    mat = found_shader_mat
+                    m_low = mat.name.lower()
+
+            if 'outline' in m_low:
+                continue
+
+            outline_mat = find_outline_mat(mat)
+            if not outline_mat:
+                # Create outline material if not existing
+                outline_template = bpy.data.materials.get(getattr(self.material_names, 'OUTLINES', 'HoYoverse - Outlines'))
+                if outline_template:
+                    new_ol_name = f'{mat.name} Outlines'
+                    outline_mat = bpy.data.materials.get(new_ol_name)
+                    if not outline_mat:
+                        outline_mat = outline_template.copy()
+                        outline_mat.name = new_ol_name
+                        outline_mat.use_fake_user = True
+
+            # Determine best socket pair for this material
+            pair = None
+            if 'hair' in m_low and 'effecthair' not in m_low:
+                pair = (NAME_OF_OUTLINE_1_MASK_INPUT, NAME_OF_OUTLINE_1_MATERIAL_INPUT)
+            elif 'face' in m_low and 'face_eye' not in m_low:
+                pair = (NAME_OF_OUTLINE_3_MASK_INPUT, NAME_OF_OUTLINE_3_MATERIAL_INPUT)
+            elif 'dress' in m_low and not any(k in m_low for k in ['dress01', 'dress1', 'dress_01', 'dress2', 'dress_02', 'dress02', 'dress 2', 'dress 1']):
+                pair = (NAME_OF_OUTLINE_4_MASK_INPUT, NAME_OF_OUTLINE_4_MATERIAL_INPUT)
+            elif any(k in m_low for k in ['dress01', 'dress_01', 'dress 2', 'dress2', 'dress1', 'helmet', 'hat', 'crown']):
+                pair = (NAME_OF_DRESS2_MASK_INPUT, NAME_OF_DRESS2_MATERIAL_INPUT)
+            elif 'body' in m_low and not any(k in m_low for k in ['body01', 'body1', 'body_01', 'body2', 'body_02', 'body02', 'body 2', 'body 1']):
+                pair = (NAME_OF_OUTLINE_2_MASK_INPUT, NAME_OF_OUTLINE_2_MATERIAL_INPUT)
+            elif 'leather' in m_low:
+                pair = (NAME_OF_LEATHER_MASK_INPUT, NAME_OF_LEATHER_MATERIAL_INPUT)
+            elif any(k in m_low for k in ['starcloak', 'glass_eff', 'vfx']):
+                pair = (NAME_OF_VFX_MASK_INPUT, NAME_OF_VFX_MATERIAL_INPUT)
+            else:
+                pair = (NAME_OF_OUTLINE_OTHER_MASK_INPUT, NAME_OF_OUTLINE_OTHER_MATERIAL_INPUT)
+
+            mask_sock, ol_sock = pair
+            # If the preferred pair is already taken on this mesh, find the first unused pair
+            if mask_sock in assigned_pairs:
+                for avail_mask, avail_ol in available_outline_mask_to_material_mapping.items():
+                    if avail_mask not in assigned_pairs:
+                        mask_sock, ol_sock = avail_mask, avail_ol
+                        break
+
+            assigned_pairs.add(mask_sock)
+            set_modifier_property(modifier, mask_sock, mat)
+            if outline_mat:
+                set_modifier_property(modifier, ol_sock, outline_mat)
 
 
 class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
@@ -599,7 +671,6 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
 
     def set_up_modifier_default_values(self, modifier, mesh):
         super().set_up_modifier_default_values(modifier, mesh)
-        self.assign_materials_to_empty_modifier_slots(mesh, modifier)
         self.assign_night_soul_outlines_material(mesh, modifier)
         self.assign_face_lightmap_texture(modifier)
         self.__disable_outlines(mesh, modifier, ['Paimon'])
@@ -613,11 +684,13 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
             material = material_slot.material
             if not material:
                 continue
+            m_low = material.name.lower()
+            if m_low.startswith(('avatar_', 'monster_', 'npc_', 'mat_')) or 'outline' in m_low:
+                continue
             is_valid_mat = (
                 (prefix and material.name.startswith(prefix)) or
                 (prefix_renamed and material.name.startswith(prefix_renamed)) or
-                'HoYoverse' in material.name or 'miHoYo' in material.name or
-                any(p in material.name for p in ['Body', 'Hair', 'Face', 'Eye', 'Dress', 'Helmet', 'Gauntlet', 'Leather', 'Skirt'])
+                'HoYoverse' in material.name or 'miHoYo' in material.name
             )
             if not is_valid_mat:
                 continue
@@ -1357,7 +1430,7 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                                 return mat
                         # 2. Global search across scene materials
                         for mat in bpy.data.materials:
-                            if mat.name.startswith("ZZZ Shader") and mat.name.lower() != fallback_name.lower():
+                            if (mat.name.startswith("ZZZ") or mat.name.startswith("Kythera")) and mat.name.lower() != fallback_name.lower():
                                 m_lower = mat.name.lower()
                                 if any(kw in m_lower for kw in keywords):
                                     return mat

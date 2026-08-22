@@ -42,6 +42,43 @@ class CharacterRiggerPropertyGroup(PropertyGroup):
         description='Use Head Tracker',
         default=False
     )
+    enable_hair_clothes_physics: BoolProperty(
+        name=' Hair & Clothes Physics',
+        description='Apply Damped Track physics to Hair and Clothes bone chains',
+        default=False
+    )
+    enable_hair_dress_physics: BoolProperty(
+        name=' Hair & Clothes Physics',
+        description='Apply Damped Track physics to Hair and Clothes bone chains',
+        default=False
+    )
+    hair_physics_influence: FloatProperty(
+        name=' Hair Influence',
+        description='Damped Track influence for hair bone chains',
+        min=0.0,
+        max=1.0,
+        default=0.7,
+        step=5,
+        precision=2
+    )
+    clothes_physics_influence: FloatProperty(
+        name=' Clothes Influence',
+        description='Damped Track influence for clothes bone chains',
+        min=0.0,
+        max=1.0,
+        default=0.4,
+        step=5,
+        precision=2
+    )
+    dress_physics_influence: FloatProperty(
+        name=' Clothes Influence',
+        description='Damped Track influence for clothes bone chains',
+        min=0.0,
+        max=1.0,
+        default=0.4,
+        step=5,
+        precision=2
+    )
 
     @staticmethod
     def get_prop(context, prop_name):

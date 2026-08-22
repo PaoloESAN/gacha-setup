@@ -500,5 +500,29 @@ class NevernessToEvernessMaterialDataImporter(GameMaterialDataImporter):
         self.shader_node_names = shader_node_names
 
     def import_material_data(self):
+        if self.material and self.material.use_nodes and self.material.node_tree:
+            cache_enabled = self.context.window_manager.cache_enabled
+            folder = (
+                getattr(self.blender_operator, 'file_directory', None)
+                or get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH)
+                or get_active_character_directory()
+            )
+            if folder and os.path.isdir(folder):
+                from setup_wizard.utils.nte_json_parser import load_nte_character_data, get_nte_material_data
+                try:
+                    database = load_nte_character_data(folder)
+                    mat_info = get_nte_material_data(self.material.name, database)
+                    if mat_info:
+                        scalars = mat_info.get("scalars", {})
+                        for n in self.material.node_tree.nodes:
+                            if n.type == 'GROUP' and n.node_tree:
+                                for s_name, s_val in scalars.items():
+                                    if s_name in n.inputs and isinstance(s_val, (int, float)):
+                                        try:
+                                            n.inputs[s_name].default_value = float(s_val)
+                                        except Exception:
+                                            pass
+                except Exception as ex:
+                    print(f"[NTE Material Data Importer] Notice: {ex}")
         return {'FINISHED'}
 

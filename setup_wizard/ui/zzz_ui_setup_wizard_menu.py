@@ -14,24 +14,48 @@ class ZZZ_PT_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
     bl_region_type = "UI"
     bl_category = "Character Setup Wizard"
 
+    bpy.types.Scene.zzz_shader_type = bpy.props.EnumProperty(
+        items=[
+            ("KYTHERA", "Kythera's Shader", "Use Kythera's ZZZ Shader (Face Shader + General Shader)"),
+            ("LEGACY", "Legacy Shader", "Use Legacy ZZZ Setup File V2.0 Shader"),
+        ],
+        name="Shader",
+        description="Select shader setup for Zenless Zone Zero",
+        default="KYTHERA",
+    )
+
     def draw(self, context):
         layout = self.layout
         window_manager = context.window_manager
 
-        # sub_layout = layout.box()
-        # run_entire_setup_column = sub_layout.column()
-        # OperatorFactory.create(
-        #     run_entire_setup_column,
-        #     "zenless_zone_zero.setup_wizard_ui",
-        #     "Run Entire Setup",
-        #     "PLAY",
-        #     game_type=GameType.ZENLESS_ZONE_ZERO.name,
-        # )
+        sub_layout = layout.box()
+        run_entire_setup_column = sub_layout.column()
+        OperatorFactory.create(
+            run_entire_setup_column,
+            "zenless_zone_zero.setup_wizard_ui",
+            "Run Entire Setup",
+            "PLAY",
+            game_type=GameType.ZENLESS_ZONE_ZERO.name,
+        )
         expy_kit_installed = bpy.context.preferences.addons.get("Expy-Kit-main")
         rigify_installed = bpy.context.preferences.addons.get("rigify")
 
         if not expy_kit_installed or not rigify_installed:
-            layout.label(text="Rigging Disabled", icon="ERROR")
+            sub_layout.label(text="Rigging Disabled", icon="ERROR")
+
+        settings_box = layout.box()
+        settings_header = settings_box.row()
+        settings_header.label(text="Setup Settings", icon="PREFERENCES")
+
+        settings_col = settings_box.column()
+        settings_col.prop(context.scene, "zzz_shader_type", text="Shader")
+        props = context.scene.character_rigger_props
+        enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
+        settings_col.prop(props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")
+        sliders_col = settings_col.column()
+        sliders_col.active = enable_physics
+        sliders_col.prop(props, "hair_physics_influence", text="Hair", slider=True)
+        sliders_col.prop(props, "clothes_physics_influence", text="Clothes", slider=True)
 
 
 class ZZZ_PT_Basic_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
@@ -40,6 +64,7 @@ class ZZZ_PT_Basic_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker)
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
     bl_category = "Character Setup Wizard"
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -286,6 +311,12 @@ class ZZZ_PT_UI_Character_Rig_Setup_Menu(Panel, ZenlessZoneZeroUIRenderChecker):
             game_type=GameType.ZENLESS_ZONE_ZERO.name,
         )
         OperatorFactory.create_rig_character_ui(sub_layout)
+        OperatorFactory.create(
+            sub_layout,
+            "hoyoverse.apply_hair_clothes_physics",
+            "Apply Hair & Clothes Physics",
+            "PHYSICS",
+        )
 
 
 class OperatorFactory:
