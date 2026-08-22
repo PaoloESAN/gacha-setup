@@ -125,51 +125,34 @@ class HSR_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorPropertie
         return None
 
     def _derive_model_name(self, context, armature):
-        # 1) Prefer the exact FBX directory captured at model import time.
-        model_dir = ""
+        from setup_wizard.character_rig_setup.rig_ui_utils import extract_clean_character_name
+        # 1) Prefer the exact FBX file path captured at model import time
         scene = context.scene
+        fbx_path = scene.get("setup_wizard_imported_fbx_path") or ""
+        if fbx_path:
+            base_name = os.path.splitext(os.path.basename(fbx_path))[0]
+            clean = extract_clean_character_name(base_name)
+            if clean and clean.lower() not in ["character", "eye", "eyes", "lighting", "panel", "wgt", "lights"]:
+                return clean
+
+        # 2) Fallback to FBX directory
         fbx_dir = scene.get("setup_wizard_imported_model_dir") or ""
-        if fbx_dir:
-            model_dir = fbx_dir
-        else:
-            # 2) Fallback to cache value (may sometimes point to Textures in some flows).
+        if not fbx_dir:
             cache = get_cache(context.window_manager.cache_enabled)
-            model_dir = cache.get(CHARACTER_MODEL_FOLDER_FILE_PATH, "")
+            fbx_dir = cache.get(CHARACTER_MODEL_FOLDER_FILE_PATH, "")
 
-        raw_name = os.path.basename(os.path.normpath(model_dir)) if model_dir else ""
+        if fbx_dir:
+            raw_name = os.path.basename(os.path.normpath(fbx_dir))
+            clean = extract_clean_character_name(raw_name)
+            if clean and clean.lower() not in ["character", "eye", "eyes", "lighting", "panel", "wgt", "lights"]:
+                return clean
 
-        # If we landed on a generic asset folder, step one directory up.
-        generic_dirs = {
-            "textures",
-            "texture",
-            "materials",
-            "material",
-            "maps",
-            "images",
-        }
-        if raw_name.lower() in generic_dirs and model_dir:
-            parent_dir = os.path.dirname(os.path.normpath(model_dir))
-            if parent_dir:
-                raw_name = os.path.basename(parent_dir)
+        if armature:
+            clean = extract_clean_character_name(armature.name)
+            if clean and clean.lower() not in ["character", "eye", "eyes", "lighting", "panel", "wgt", "lights"]:
+                return clean
 
-        if not raw_name:
-            raw_name = armature.name.replace("Rig", "")
-
-        # Normalize names such as Art_Sparxie_01 -> Sparxie
-        normalized = raw_name.replace("-", "_").replace(" ", "_")
-        normalized = re.sub(
-            r"^(Avatar|Art|Player)_", "", normalized, flags=re.IGNORECASE
-        )
-        normalized = re.sub(r"_?\d+$", "", normalized)
-        normalized = re.sub(r"^[^A-Za-z]+", "", normalized)
-
-        if "_" in normalized:
-            parts = [p for p in normalized.split("_") if p and not p.isdigit()]
-            if parts:
-                normalized = parts[0]
-
-        normalized = normalized.strip("_")
-        return normalized or "Character"
+        return "Character"
 
     def _find_parent_collection_for_object(self, obj):
         scene_root = bpy.context.scene.collection
@@ -206,6 +189,73 @@ class ZZZ_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorPropertie
 
     bl_idname = "zenless_zone_zero.finish_setup"
     bl_label = "Zenless Zone Zero: Finish Setup (UI)"
+
+    def execute(self, context):
+        result = BasicSetupUIOperator.execute(self, context)
+        try:
+            self._join_zzz_secondary_armatures(context)
+        except Exception as err:
+            self.report({"WARNING"}, f"ZZZ join armatures skipped: {err}")
+        try:
+            self._rename_zzz_character_collection_and_rig(context)
+        except Exception as err:
+            self.report({"WARNING"}, f"ZZZ rename pass skipped: {err}")
+        return result
+
+    def _join_zzz_secondary_armatures(self, context):
+        main_rig = self._find_target_armature(context)
+        if not main_rig:
+            return
+
+        from setup_wizard.join_meshes_on_armature.join_meshes_operator import GI_OT_JoinMeshesOnArmature
+
+        # 1. Eye / Face armature
+        eye_armature = None
+        for obj in list(bpy.data.objects):
+            if obj.type == "ARMATURE" and obj != main_rig:
+                o_l = obj.name.lower()
+                if any(k in o_l for k in ["eye", "facerig", "face", "isaac"]) and "lighting" not in o_l and "panel" not in o_l:
+                    eye_armature = obj
+                    break
+
+        if eye_armature and eye_armature != main_rig:
+            GI_OT_JoinMeshesOnArmature.safe_merge_armatures(main_rig, eye_armature, context, collection_name="Face", parent_to_head=True)
+
+        # 2. Lighting Panel armature
+        lighting_panel_armature = None
+        for obj in list(bpy.data.objects):
+            if obj.type == "ARMATURE" and obj != main_rig:
+                o_l = obj.name.lower()
+                if any(k in o_l for k in ["lighting panel", "light panel", "lighting", "panel"]):
+                    lighting_panel_armature = obj
+                    break
+
+        if lighting_panel_armature and lighting_panel_armature != main_rig:
+            GI_OT_JoinMeshesOnArmature.safe_merge_armatures(main_rig, lighting_panel_armature, context, collection_name="Lighting", parent_to_head=False)
+
+    def _rename_zzz_character_collection_and_rig(self, context):
+        from setup_wizard.misc_operations import get_clean_character_name, unlink_all_wgt_and_lights_from_scene
+        model_name = get_clean_character_name()
+        if not model_name or model_name.lower() in ["eye", "eyes", "character", "wgt", "lights"]:
+            armature = self._find_target_armature(context)
+            if armature:
+                model_name = self._derive_model_name(context, armature)
+
+        if not model_name or model_name.lower() in ["eye", "eyes", "character", "wgt", "lights"]:
+            model_name = "Character"
+
+        armature = self._find_target_armature(context)
+        if armature:
+            new_rig_name = f"{model_name}Rig"
+            armature.name = self._unique_object_name(new_rig_name)
+            if armature.data:
+                armature.data.name = armature.name
+
+            parent_collection = self._find_parent_collection_for_object(armature)
+            if parent_collection and parent_collection.name != model_name:
+                parent_collection.name = self._unique_collection_name(model_name)
+
+        unlink_all_wgt_and_lights_from_scene()
 
 
 class NTE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):

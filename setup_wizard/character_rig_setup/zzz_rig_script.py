@@ -2993,16 +2993,18 @@ def rig_character(
     # DONE MODIFYING ui.py FILE --------------------------------------------
     
     
-    # if using lighting panel, tie the visiblity of the RGB circle meshes to the visibility of the lighting layer.
-    if lighting_panel_rig_obj:
-        def drive_visibility_with_prop(obj, path):
-            driver_obj = bpy.context.scene.objects[obj]
+    # Tie the visibility of the RGB circle meshes to the visibility of the lighting layer/collection
+    def drive_visibility_with_prop(obj_name, path):
+        driver_obj = bpy.data.objects.get(obj_name)
+        if not driver_obj:
+            return
+        try:
             driver = driver_obj.driver_add("hide_viewport").driver
             
             driver.type = 'SCRIPTED'
             driver.expression = 'not is_visible'
             
-            var = driver.variables.new()
+            var = driver.variables.new() if not driver.variables else driver.variables[0]
             var.name = "is_visible"
             var.type = "SINGLE_PROP"
             var.targets[0].id_type = "ARMATURE"
@@ -3011,15 +3013,17 @@ def rig_character(
                 var.targets[0].data_path = path
             else:
                 var.targets[0].data_path = "layers[1]"
-            
-        drive_visibility_with_prop("ColorWheel-Ambient","collections[\"Lighting\"].is_visible")
-        drive_visibility_with_prop("ColorWheel-Fresnel","collections[\"Lighting\"].is_visible")
-        drive_visibility_with_prop("ColorWheel-Lit","collections[\"Lighting\"].is_visible")
-        drive_visibility_with_prop("ColorWheel-RimLit","collections[\"Lighting\"].is_visible")
-        drive_visibility_with_prop("ColorWheel-RimShadow","collections[\"Lighting\"].is_visible")
-        drive_visibility_with_prop("ColorWheel-Shadow","collections[\"Lighting\"].is_visible")
-        drive_visibility_with_prop("ColorWheel-SoftLit","collections[\"Lighting\"].is_visible")
-        drive_visibility_with_prop("ColorWheel-SoftShadow","collections[\"Lighting\"].is_visible")
+        except Exception as ex:
+            print(f"[ZZZ] drive_visibility_with_prop notice for {obj_name}: {ex}")
+        
+    drive_visibility_with_prop("ColorWheel-Ambient", "collections[\"Lighting\"].is_visible")
+    drive_visibility_with_prop("ColorWheel-Fresnel", "collections[\"Lighting\"].is_visible")
+    drive_visibility_with_prop("ColorWheel-Lit", "collections[\"Lighting\"].is_visible")
+    drive_visibility_with_prop("ColorWheel-RimLit", "collections[\"Lighting\"].is_visible")
+    drive_visibility_with_prop("ColorWheel-RimShadow", "collections[\"Lighting\"].is_visible")
+    drive_visibility_with_prop("ColorWheel-Shadow", "collections[\"Lighting\"].is_visible")
+    drive_visibility_with_prop("ColorWheel-SoftLit", "collections[\"Lighting\"].is_visible")
+    drive_visibility_with_prop("ColorWheel-SoftShadow", "collections[\"Lighting\"].is_visible")
   
     
     # Post modification, Adjustment of bone layers/collections.

@@ -363,9 +363,11 @@ def move_lighting_and_head_driver_to_lights(main_obj=None):
 
     target_objs = set()
     if main_obj:
-        target_objs.add(main_obj)
+        if "colorwheel" not in main_obj.name.lower():
+            target_objs.add(main_obj)
         for child in get_all_children(main_obj):
-            target_objs.add(child)
+            if "colorwheel" not in child.name.lower():
+                target_objs.add(child)
 
     target_names = [
         "head direction", "head driver", "head origin",
@@ -374,17 +376,17 @@ def move_lighting_and_head_driver_to_lights(main_obj=None):
 
     for obj in bpy.data.objects:
         o_lower = obj.name.lower()
-        if "light direction" in o_lower:
+        if "light direction" in o_lower or "colorwheel" in o_lower:
             continue
         for t_name in target_names:
             if t_name in o_lower:
                 target_objs.add(obj)
                 for child in get_all_children(obj):
-                    if "light direction" not in child.name.lower():
+                    if "light direction" not in child.name.lower() and "colorwheel" not in child.name.lower():
                         target_objs.add(child)
                 break
 
-    target_objs = {obj for obj in target_objs if "light direction" not in obj.name.lower()}
+    target_objs = {obj for obj in target_objs if "light direction" not in obj.name.lower() and "colorwheel" not in obj.name.lower()}
 
     for obj in target_objs:
         if obj.name not in lights_coll.objects:
@@ -393,6 +395,15 @@ def move_lighting_and_head_driver_to_lights(main_obj=None):
             if coll != lights_coll:
                 try:
                     coll.objects.unlink(obj)
+                except Exception:
+                    pass
+
+    # Explicitly ensure NO ColorWheel meshes remain linked to lights collection
+    if lights_coll:
+        for obj in list(lights_coll.objects):
+            if "colorwheel" in obj.name.lower():
+                try:
+                    lights_coll.objects.unlink(obj)
                 except Exception:
                     pass
 

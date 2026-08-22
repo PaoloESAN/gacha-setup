@@ -1,6 +1,8 @@
 # Author: michael-gh1
 # With modified scripts for PGR Operators from JaredNyts and SilentNightSound
 
+import os
+import re
 import bpy
 from bpy.types import Material, Operator
 
@@ -519,18 +521,30 @@ class ZZZ_OT_RenameCollectionAndRig(Operator, CustomOperatorProperties):
     bl_idname = 'zenless_zone_zero.rename_collection_and_rig'
     bl_label = 'ZZZ: Rename Collection & Rig'
 
+    def _get_character_name(self):
+        return get_clean_character_name()
+
+    def _find_character_collection(self):
+        return find_zzz_character_collection()
+
+    def _find_character_armature(self):
+        return find_zzz_character_armature()
+
     def execute(self, context):
         char_name = self._get_character_name()
-        if char_name:
+        if char_name and char_name.lower() not in ["character", "eye", "eyes", "wgt", "lights"]:
             target_coll = self._find_character_collection()
             if target_coll:
                 target_coll.name = char_name
 
             arm_obj = self._find_character_armature()
             if arm_obj:
-                arm_obj.name = char_name
+                arm_obj.name = f"{char_name}Rig"
                 if arm_obj.data:
-                    arm_obj.data.name = char_name
+                    arm_obj.data.name = f"{char_name}Rig"
+
+        # Unlink wgt and lights collections from scene
+        unlink_all_wgt_and_lights_from_scene()
 
         if self.next_step_idx:
             NextStepInvoker().invoke(
@@ -541,76 +555,123 @@ class ZZZ_OT_RenameCollectionAndRig(Operator, CustomOperatorProperties):
             )
         return {'FINISHED'}
 
-    def _get_character_name(self):
-        ignore_words = {
-            "avatar", "female", "male", "size01", "size02", "size03", "ui",
-            "rig", "mesh", "bdy", "skn", "body", "hair", "face", "lighting",
-            "panel", "wgt", "dress", "mat", "shader"
-        }
 
-        # 1. Check materials (e.g. "ZZZ Shader Alice_Body_2" -> "Alice")
-        for mat in bpy.data.materials:
-            if "Shader" in mat.name and not mat.name.startswith("Shader"):
-                clean = mat.name.split("Shader")[-1].strip()
-                parts = clean.split("_")
-                if parts and parts[0] and parts[0].lower() not in ignore_words:
-                    return parts[0]
+def get_clean_character_name():
+    from setup_wizard.character_rig_setup.rig_ui_utils import extract_clean_character_name
+    from setup_wizard.import_order import CHARACTER_MODEL_FOLDER_FILE_PATH, get_cache
 
-        # 2. Check Armature objects (excluding Lighting Panel / metarig / rig)
-        for obj in bpy.data.objects:
-            if obj.type == 'ARMATURE':
-                o_lower = obj.name.lower()
-                if "lighting" in o_lower or "panel" in o_lower or "direction" in o_lower or o_lower in ["metarig", "rig", "wgt"]:
-                    continue
-                parts = obj.name.replace("_UI", "").replace("Costume", "").split("_")
-                for p in reversed(parts):
-                    if p.lower() not in ignore_words:
-                        return p
+    # 1. From FBX file path stored in scene or cache
+    fbx_path = (
+        bpy.context.scene.get("setup_wizard_imported_fbx_path")
+        or bpy.context.scene.get("setup_wizard_imported_model_dir")
+        or get_cache(True).get(CHARACTER_MODEL_FOLDER_FILE_PATH)
+        or ""
+    )
+    if fbx_path:
+        base_name = os.path.splitext(os.path.basename(fbx_path))[0]
+        extracted = extract_clean_character_name(base_name)
+        if extracted and extracted.lower() not in ["character", "eye", "eyes", "lighting", "panel", "wgt", "lights"]:
+            return extracted
 
-        # 3. Check Mesh objects
-        for obj in bpy.data.objects:
-            if obj.type == 'MESH' and ("Avatar_" in obj.name or "Bdy_" in obj.name or "Skn_" in obj.name):
-                parts = obj.name.replace("_UI", "").split("_")
-                for p in reversed(parts):
-                    if p.lower() not in ignore_words:
-                        return p
+    # 2. From Mesh objects (e.g. Avatar_Female_Size02_Alice_UI)
+    for obj in bpy.data.objects:
+        if obj.type == 'MESH':
+            o_name = obj.name
+            if any(k in o_name for k in ["Avatar_", "Size0", "Bdy_", "Skn_", "Face_", "Hair_"]):
+                extracted = extract_clean_character_name(o_name)
+                if extracted and extracted.lower() not in ["character", "eye", "eyes", "lighting", "panel", "wgt", "lights"]:
+                    return extracted
 
-        # 4. Check Collections
-        for coll in bpy.data.collections:
-            if coll.name not in ["lights", "wgt", "WGTS", "Collection", "Master Collection"]:
-                parts = coll.name.replace("_UI", "").split("_")
-                for p in reversed(parts):
-                    if p.lower() not in ignore_words:
-                        return p
+    # 3. From Materials (e.g. "ZZZ Shader Alice_Body_2" -> "Alice")
+    for mat in bpy.data.materials:
+        if "Shader" in mat.name and not mat.name.startswith("Shader"):
+            clean = mat.name.split("Shader")[-1].strip()
+            extracted = extract_clean_character_name(clean)
+            if extracted and extracted.lower() not in ["character", "eye", "eyes", "lighting", "panel", "wgt", "lights"]:
+                return extracted
 
-        if bpy.context.active_object:
-            p = bpy.context.active_object.name.split("_")[0]
-            if p.lower() not in ignore_words:
-                return p
+    # 4. From Armature objects (excluding Eye, Lighting Panel, metarig, rig)
+    ignore_arm = {"lighting panel", "light panel", "panel", "light direction", "head direction", "metarig", "wgt", "eyerig", "facerig", "eye", "eyes", "lights"}
+    for obj in bpy.data.objects:
+        if obj.type == 'ARMATURE':
+            o_lower = obj.name.lower()
+            if any(ign in o_lower for ign in ignore_arm):
+                continue
+            extracted = extract_clean_character_name(obj.name)
+            if extracted and extracted.lower() not in ["character", "eye", "eyes", "lighting", "panel", "wgt", "lights"]:
+                return extracted
 
-        return "Character"
+    # 5. From Collections
+    for coll in bpy.data.collections:
+        if coll.name.lower() not in ["lights", "wgt", "wgts", "collection", "master collection", "eye", "eyes"]:
+            extracted = extract_clean_character_name(coll.name)
+            if extracted and extracted.lower() not in ["character", "eye", "eyes", "lighting", "panel", "wgt", "lights"]:
+                return extracted
 
-    def _find_character_collection(self):
-        for coll in bpy.data.collections:
-            if coll.name not in ["lights", "wgt", "WGTS", "Collection", "Master Collection"] and ("Avatar_" in coll.name or "Size" in coll.name):
-                return coll
-        for coll in bpy.data.collections:
-            if coll.name not in ["lights", "wgt", "WGTS", "Collection", "Master Collection"]:
-                return coll
-        for coll in bpy.data.collections:
-            if coll.name not in ["lights", "wgt", "WGTS"]:
-                return coll
-        return None
+    return "Character"
 
-    def _find_character_armature(self):
-        ignore_names = {"lighting panel", "panel", "light direction", "head direction", "metarig", "wgt"}
-        for obj in bpy.data.objects:
-            if obj.type == 'ARMATURE':
-                o_lower = obj.name.lower()
-                if any(ign in o_lower for ign in ignore_names):
-                    continue
+
+def unlink_all_wgt_and_lights_from_scene():
+    target_names = {"wgt", "wgts", "lights", "lighting panel wgt"}
+    for coll in list(bpy.data.collections):
+        c_low = coll.name.lower()
+        if c_low in target_names or c_low.startswith("wgt") or c_low.endswith("wgt"):
+            # Unlink from scene root collection
+            if coll.name in bpy.context.scene.collection.children:
+                try:
+                    bpy.context.scene.collection.children.unlink(coll)
+                except Exception:
+                    pass
+            # Unlink from all parent collections in the scene
+            for parent in list(bpy.data.collections):
+                if parent != coll and coll.name in parent.children:
+                    try:
+                        parent.children.unlink(coll)
+                    except Exception:
+                        pass
+
+
+def find_zzz_character_armature():
+    ignore_names = {"lighting panel", "light panel", "panel", "light direction", "head direction", "metarig", "wgt", "eyerig", "facerig", "eye", "eyes", "lights"}
+    # 1. Look for rig ending with 'Rig' or named with character name
+    for obj in bpy.data.objects:
+        if obj.type == 'ARMATURE':
+            o_lower = obj.name.lower()
+            if any(ign in o_lower for ign in ignore_names):
+                continue
+            if obj.name.endswith("Rig") or "rig" in o_lower:
                 return obj
-        return None
+
+    # 2. Look for armature containing main body bones
+    for obj in bpy.data.objects:
+        if obj.type == 'ARMATURE':
+            o_lower = obj.name.lower()
+            if any(ign in o_lower for ign in ignore_names):
+                continue
+            if obj.data and any(b in obj.data.bones for b in ["head", "spine", "hips", "root", "DEF-spine.006"]):
+                return obj
+
+    # 3. Fallback
+    for obj in bpy.data.objects:
+        if obj.type == 'ARMATURE':
+            o_lower = obj.name.lower()
+            if any(ign in o_lower for ign in ignore_names):
+                continue
+            return obj
+    return None
+
+
+def find_zzz_character_collection():
+    for coll in bpy.data.collections:
+        if coll.name.lower() not in ["lights", "wgt", "wgts", "collection", "master collection", "eye", "eyes"] and ("Avatar_" in coll.name or "Size" in coll.name):
+            return coll
+    for coll in bpy.data.collections:
+        if coll.name.lower() not in ["lights", "wgt", "wgts", "collection", "master collection", "eye", "eyes"]:
+            return coll
+    for coll in bpy.data.collections:
+        if coll.name.lower() not in ["lights", "wgt", "wgts", "eye", "eyes"]:
+            return coll
+    return None
 
 
 class ZZZ_OT_MoveLightingPanelToCharacterCollection(Operator, CustomOperatorProperties):
@@ -618,34 +679,60 @@ class ZZZ_OT_MoveLightingPanelToCharacterCollection(Operator, CustomOperatorProp
     bl_idname = 'zenless_zone_zero.move_lighting_panel_to_char_collection'
     bl_label = 'ZZZ: Move Lighting Panel to Character Collection'
 
+    def _find_character_armature(self):
+        return find_zzz_character_armature()
+
+    def _find_character_collection(self):
+        return find_zzz_character_collection()
+
     def execute(self, context):
-        target_coll = self._find_target_collection()
+        # 1. Merge secondary armatures (Eye -> 'Face', Lighting Panel -> 'Lighting') into main character rig
+        main_rig = find_zzz_character_armature()
+        if main_rig:
+            from setup_wizard.join_meshes_on_armature.join_meshes_operator import GI_OT_JoinMeshesOnArmature
+
+            # Merge Eye / Face rig
+            for obj in list(bpy.data.objects):
+                if obj.type == 'ARMATURE' and obj != main_rig:
+                    o_l = obj.name.lower()
+                    if any(k in o_l for k in ["eye", "facerig", "face", "isaac"]) and "lighting" not in o_l and "panel" not in o_l:
+                        try:
+                            GI_OT_JoinMeshesOnArmature.safe_merge_armatures(main_rig, obj, context, collection_name="Face", parent_to_head=True)
+                        except Exception as ex:
+                            print(f"[ZZZ] Eye rig merge warning: {ex}")
+                        break
+
+            # Merge Lighting Panel rig
+            for obj in list(bpy.data.objects):
+                if obj.type == 'ARMATURE' and obj != main_rig:
+                    o_l = obj.name.lower()
+                    if any(k in o_l for k in ["lighting panel", "light panel", "lighting", "panel"]):
+                        try:
+                            GI_OT_JoinMeshesOnArmature.safe_merge_armatures(main_rig, obj, context, collection_name="Lighting", parent_to_head=False)
+                        except Exception as ex:
+                            print(f"[ZZZ] Lighting Panel merge warning: {ex}")
+                        break
+
+        # 2. Ensure all ColorWheel meshes are ONLY in character collection and not in lights/wgt
+        target_coll = self._find_character_collection() or self._find_target_collection()
         if target_coll:
-            # Find ONLY the Lighting Panel armature object
-            lighting_panel_obj = None
             for obj in bpy.data.objects:
-                o_lower = obj.name.lower()
-                if ("lighting panel" in o_lower or o_lower == "panel") and "selector" not in o_lower and "plane" not in o_lower and "wgt" not in o_lower:
-                    lighting_panel_obj = obj
-                    break
-                elif obj.type == 'ARMATURE' and ("panel" in o_lower or "lighting" in o_lower):
-                    lighting_panel_obj = obj
-                    break
-
-            if lighting_panel_obj:
-                def get_all_children(obj):
-                    children = []
-                    for child in obj.children:
-                        children.append(child)
-                        children.extend(get_all_children(child))
-                    return children
-
-                panel_objects = [lighting_panel_obj] + get_all_children(lighting_panel_obj)
-                for obj in panel_objects:
+                if "colorwheel" in obj.name.lower():
                     if obj.name not in target_coll.objects:
                         target_coll.objects.link(obj)
                     for coll in list(obj.users_collection):
                         if coll != target_coll:
+                            try:
+                                coll.objects.unlink(obj)
+                            except Exception:
+                                pass
+                    obj.hide_viewport = False
+                    obj.hide_render = False
+
+            for coll in bpy.data.collections:
+                if coll != target_coll:
+                    for obj in list(coll.objects):
+                        if "colorwheel" in obj.name.lower():
                             try:
                                 coll.objects.unlink(obj)
                             except Exception:

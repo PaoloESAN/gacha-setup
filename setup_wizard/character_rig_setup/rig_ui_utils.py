@@ -29,7 +29,8 @@ def extract_clean_character_name(raw_name):
         "avatar", "armature", "model", "mesh", "ui", "costume", "root", "fbx", "pmx",
         "00", "01", "02", "03", "04", "000", "grp", "skin", "joint", "rig", "char",
         "female", "male", "lady", "girl", "boy", "loli", "size01", "size02", "size03",
-        "size04", "npc", "base", "body", "face", "hair"
+        "size04", "npc", "base", "body", "face", "hair", "eye", "eyes", "eyerig", "facerig",
+        "lighting", "panel", "wgt", "lights", "light", "character"
     }
 
     parts = [p for p in name.split("_") if p]
