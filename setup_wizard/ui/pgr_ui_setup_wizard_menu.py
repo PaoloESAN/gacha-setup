@@ -53,7 +53,7 @@ class PGR_PT_Setup_Wizard_UI_Layout(Panel, PunishingGrayRavenUIRenderChecker):
 
         settings_box = layout.box()
         settings_header = settings_box.row()
-        settings_header.label(text="Settings", icon="PREFERENCES")
+        settings_header.label(text="Setup Settings", icon="PREFERENCES")
 
         settings_col = settings_box.column()
         props = context.scene.character_rigger_props
@@ -71,6 +71,7 @@ class PGR_PT_Basic_Setup_Wizard_UI_Layout(Panel, PunishingGrayRavenUIRenderCheck
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = "Character Setup Wizard"
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
