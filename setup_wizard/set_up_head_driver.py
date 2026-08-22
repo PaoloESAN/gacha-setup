@@ -37,50 +37,71 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
             else armature.name
         )
 
-        head_driver_object = (
-            bpy.data.objects.get(f"{HEAD_DRIVER_OBJECT_NAME}_{char_name}")
-            or bpy.data.objects.get(f"{HEAD_ORIGIN_OBJECT_NAME}_{char_name}")
-            or bpy.data.objects.get(f"Head Direction_{char_name}")
-            or bpy.data.objects.get(f"{char_name}Head Direction")
-            or bpy.data.objects.get(f"{char_name} Head Direction")
-            or bpy.data.objects.get(HEAD_DRIVER_OBJECT_NAME)
-            or bpy.data.objects.get(HEAD_ORIGIN_OBJECT_NAME)
-            or bpy.data.objects.get("Head Direction")
-        )
+        head_driver_candidates = [
+            f"{HEAD_DRIVER_OBJECT_NAME}_{char_name}",
+            f"{HEAD_ORIGIN_OBJECT_NAME}_{char_name}",
+            f"Head Direction_{char_name}",
+            f"{char_name}Head Direction",
+            f"{char_name} Head Direction",
+            HEAD_DRIVER_OBJECT_NAME,
+            HEAD_ORIGIN_OBJECT_NAME,
+            "Head Direction",
+            "Head Origin",
+            "Head Driver",
+            "head origin",
+            "head driver",
+        ]
+        head_driver_object = None
+        for cand in head_driver_candidates:
+            obj = bpy.data.objects.get(cand)
+            if obj:
+                head_driver_object = obj
+                break
 
         if not head_driver_object:
-            self.report({"ERROR"}, "Head Driver / Head Direction not found")
+            # Fallback search by prefix
+            for obj in bpy.data.objects:
+                if obj.type == "EMPTY" and (
+                    obj.name.startswith("Head Origin")
+                    or obj.name.startswith("Head Driver")
+                    or obj.name.startswith("Head Direction")
+                ):
+                    head_driver_object = obj
+                    break
+
+        if not head_driver_object:
+            self.report({"ERROR"}, "Head Driver / Head Origin not found")
             return {"CANCELLED"}
 
         child_of_constraint = self._get_child_of_constraint(head_driver_object)
-
         if not child_of_constraint:
-            self.report(
-                {"WARNING"},
-                f"No Child Of constraint found on '{head_driver_object.name}'. Skipping head-driver inverse setup.",
-            )
-        else:
-            armature_bones = armature.data.bones
-            head_bone_names = [
-                b for b in ["head", "Head", "DEF-head", "DEF-spine.006"]
-                if b in armature_bones
-            ] or [
-                bone_name
-                for bone_name in armature_bones.keys()
-                if "Head" in bone_name or "head" in bone_name or bone_name == "DEF-spine.006"
-            ]
-            if head_bone_names:
-                head_bone_name = head_bone_names[0]  # expecting 1 Head bone
-                saved_matrix = head_driver_object.matrix_world.copy()
-                self.set_contraint_target_and_bone(
-                    child_of_constraint, armature, head_bone_name
-                )
-                self.set_inverse(head_driver_object, child_of_constraint.name)
-                head_driver_object.matrix_world = saved_matrix
-            else:
-                self.report({"WARNING"}, "No head bone found for head-driver setup.")
+            child_of_constraint = head_driver_object.constraints.new("CHILD_OF")
 
-        # Mover Head Direction, Lighting Panel y widgets a 'lights' solo si es ZZZ, si no a 'wgt'
+        armature_bones = armature.data.bones
+        head_bone_names = [
+            b for b in [
+                "head", "Head", "DEF-head", "DEF-spine.006", "spine.006", "Head_M", "head_M",
+                "Bip001-Head", "Bip001 Head", "Bip001_Head", "Bip001Head", "Bip001 头", "頭", "头"
+            ]
+            if b in armature_bones
+        ] or [
+            bone_name
+            for bone_name in armature_bones.keys()
+            if "Head" in bone_name or "head" in bone_name or bone_name == "DEF-spine.006" or bone_name == "spine.006"
+        ]
+
+        if head_bone_names:
+            head_bone_name = head_bone_names[0]  # expecting 1 Head bone
+            saved_matrix = head_driver_object.matrix_world.copy()
+            self.set_contraint_target_and_bone(
+                child_of_constraint, armature, head_bone_name
+            )
+            self.set_inverse(head_driver_object, child_of_constraint.name)
+            head_driver_object.matrix_world = saved_matrix
+        else:
+            self.report({"WARNING"}, "No head bone found for head-driver setup.")
+
+        # Mover Head Direction, Lighting Panel y widgets a 'lights' solo si es ZZZ, si no a 'wgt' / 'WGTS'
         if self.game_type == "ZENLESS_ZONE_ZERO":
             self._move_head_driver_system_to_lights(head_driver_object)
         else:
@@ -106,9 +127,15 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
         constraint.subtarget = bone_name
 
     def _move_head_driver_system_to_wgt(self, main_obj):
-        wgt_coll = bpy.data.collections.get("wgt")
+        wgt_coll = None
+        for c in bpy.data.collections:
+            if c.name.startswith("WGTS") or c.name.lower() == "wgt":
+                wgt_coll = c
+                break
         if not wgt_coll:
-            wgt_coll = bpy.data.collections.new("wgt")
+            wgt_coll = bpy.data.collections.get("wgt") or bpy.data.collections.get("WGTS")
+        if not wgt_coll:
+            wgt_coll = bpy.data.collections.new("WGTS")
             bpy.context.scene.collection.children.link(wgt_coll)
 
         def get_all_children(obj):
@@ -210,19 +237,25 @@ class ZZZ_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
     bl_label = "ZZZ: Setup Head Driver"
 
     def execute(self, context):
+        ignore_names = ["lighting", "panel", "direction", "metarig", "wgt"]
         armatures = [
-            obj for obj in bpy.context.selected_objects if obj.type == "ARMATURE"
+            obj for obj in bpy.context.selected_objects
+            if obj.type == "ARMATURE" and not any(ign in obj.name.lower() for ign in ignore_names)
         ]
         if not armatures:
-            armatures = [obj for obj in bpy.data.objects if obj.type == "ARMATURE" and obj.name not in ["metarig", "rig"]]
+            armatures = [
+                obj for obj in bpy.data.objects
+                if obj.type == "ARMATURE" and not any(ign in obj.name.lower() for ign in ignore_names)
+            ]
         if not armatures:
-            armatures = [obj for obj in bpy.data.objects if obj.type == "ARMATURE"]
+            armatures = [obj for obj in bpy.data.objects if obj.type == "ARMATURE" and obj.name != "metarig"]
 
         if not armatures:
             self.report({"ERROR"}, "No armature found")
             return {"CANCELLED"}
 
-        armature = armatures[0]
+        rigify_armatures = [a for a in armatures if a.name == "rig" or "rig" in a.name.lower()]
+        armature = rigify_armatures[0] if rigify_armatures else armatures[0]
         char_name = (
             armature.name.replace("Rig", "").replace("_UI", "")
             if "Rig" in armature.name
@@ -330,9 +363,11 @@ def move_lighting_and_head_driver_to_lights(main_obj=None):
 
     target_objs = set()
     if main_obj:
-        target_objs.add(main_obj)
+        if "colorwheel" not in main_obj.name.lower():
+            target_objs.add(main_obj)
         for child in get_all_children(main_obj):
-            target_objs.add(child)
+            if "colorwheel" not in child.name.lower():
+                target_objs.add(child)
 
     target_names = [
         "head direction", "head driver", "head origin",
@@ -341,17 +376,17 @@ def move_lighting_and_head_driver_to_lights(main_obj=None):
 
     for obj in bpy.data.objects:
         o_lower = obj.name.lower()
-        if "light direction" in o_lower:
+        if "light direction" in o_lower or "colorwheel" in o_lower:
             continue
         for t_name in target_names:
             if t_name in o_lower:
                 target_objs.add(obj)
                 for child in get_all_children(obj):
-                    if "light direction" not in child.name.lower():
+                    if "light direction" not in child.name.lower() and "colorwheel" not in child.name.lower():
                         target_objs.add(child)
                 break
 
-    target_objs = {obj for obj in target_objs if "light direction" not in obj.name.lower()}
+    target_objs = {obj for obj in target_objs if "light direction" not in obj.name.lower() and "colorwheel" not in obj.name.lower()}
 
     for obj in target_objs:
         if obj.name not in lights_coll.objects:
@@ -360,6 +395,15 @@ def move_lighting_and_head_driver_to_lights(main_obj=None):
             if coll != lights_coll:
                 try:
                     coll.objects.unlink(obj)
+                except Exception:
+                    pass
+
+    # Explicitly ensure NO ColorWheel meshes remain linked to lights collection
+    if lights_coll:
+        for obj in list(lights_coll.objects):
+            if "colorwheel" in obj.name.lower():
+                try:
+                    lights_coll.objects.unlink(obj)
                 except Exception:
                     pass
 

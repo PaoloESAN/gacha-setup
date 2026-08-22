@@ -266,9 +266,23 @@ class HonkaiStarRailMaterialImporterFacade(GameMaterialImporter):
         # Set 'Use Nodes' because shader does not have that by default
         # It's important this runs BEFORE the next step is invoked because Replace Default Materials clones materials
         for material_dictionary in self.NAMES_OF_HONKAI_STAR_RAIL_MATERIALS:
-            material: bpy.types.Material = bpy.data.materials.get(material_dictionary.get('name'))
+            mat_name = material_dictionary.get('name')
+            material: bpy.types.Material = bpy.data.materials.get(mat_name)
             if material:
                 material.use_nodes = True
+                if material.node_tree:
+                    m_low = mat_name.lower()
+                    is_trans = ('_trans' in m_low or 
+                                'transparent' in m_low or 
+                                'eyespecular' in m_low or 
+                                'eye_specular' in m_low or 
+                                'eyeshadow' in m_low or 
+                                'eyestar' in m_low)
+                    val = 1.0 if is_trans else 0.0
+                    for node in material.node_tree.nodes:
+                        inp = node.inputs.get('Enable Transparency')
+                        if inp:
+                            inp.default_value = val
 
 
         cache_enabled = self.context.window_manager.cache_enabled
@@ -336,34 +350,63 @@ class ZenlessZoneZeroMaterialImporterFacade(GameMaterialImporter):
             context=context,
             game_shader_cache_file_path=ZENLESS_ZONE_ZERO_SHADER_FILE_PATH,
             game_shader_cache_folder_path=ZENLESS_ZONE_ZERO_ROOT_FOLDER_FILE_PATH,
-            game_default_blend_file_with_materials='ZZZ_Shader.blend',
+            game_default_blend_file_with_materials="Kythera's ZZZ Shader V1.0.blend",
             names_of_game_materials=[
-                {'name': ZenlessZoneZeroShaderMaterialNames.BODY},
-                {'name': ZenlessZoneZeroShaderMaterialNames.BODY2},
-                {'name': ZenlessZoneZeroShaderMaterialNames.BODY3},
-                {'name': ZenlessZoneZeroShaderMaterialNames.FACE},
-                {'name': ZenlessZoneZeroShaderMaterialNames.HAIR},
-                {'name': ZenlessZoneZeroShaderMaterialNames.WEAPON},
-                {'name': ZenlessZoneZeroShaderMaterialNames.WEAPON2},
-                {'name': ZenlessZoneZeroShaderMaterialNames.EYE},
-                {'name': ZenlessZoneZeroShaderMaterialNames.EYE_HIGHLIGHTS},
-                {'name': ZenlessZoneZeroShaderMaterialNames.BODY_OUTLINE},
-                {'name': ZenlessZoneZeroShaderMaterialNames.BODY2_OUTLINE},
-                {'name': ZenlessZoneZeroShaderMaterialNames.BODY3_OUTLINE},
-                {'name': ZenlessZoneZeroShaderMaterialNames.FACE_OUTLINE},
-                {'name': ZenlessZoneZeroShaderMaterialNames.FACE_OUTLINES},
-                {'name': ZenlessZoneZeroShaderMaterialNames.HAIR_OUTLINE},
-                {'name': ZenlessZoneZeroShaderMaterialNames.WEAPON_OUTLINE},
-                {'name': 'Transp OL'},
-                {'name': 'Eye Transparent'},
+                {'name': "Kythera's ZZZ Face Shader"},
+                {'name': "Kythera's ZZZ Shader"},
+                {'name': "Kythera's ZZZ Face Shader V1.0"},
+                {'name': "Kythera's ZZZ Shader V1.0"},
+                {'name': "F Kythera's ZZZ Face Shader"},
+                {'name': "F Kythera's ZZZ Shader"},
             ]
         )
 
     def import_materials(self):
-        status = super().import_materials()
+        target_blend_file = get_shader_file_path(self.blender_operator.game_type, 'main')
+        if target_blend_file and os.path.isfile(target_blend_file):
+            try:
+                with bpy.data.libraries.load(target_blend_file, link=False) as (data_from, data_to):
+                    data_to.materials = data_from.materials
+                    data_to.node_groups = data_from.node_groups
 
-        if status == {'FINISHED'}:
-            return status
+                for mat in data_to.materials:
+                    if mat:
+                        mat.use_fake_user = True
+                for ng in data_to.node_groups:
+                    if ng:
+                        ng.use_fake_user = True
+                self.blender_operator.report({'INFO'}, f"Imported Kythera ZZZ Shader Materials from `{target_blend_file}`")
+            except Exception as ex:
+                print(f"[ZZZ Material Importer Notice] libraries.load fallback: {ex}")
+                super().import_materials()
+        else:
+            super().import_materials()
+
+        # Load outline materials from the previous ZZZ Setup File V2.0.blend
+        outlines_blend_file = get_shader_file_path(self.blender_operator.game_type, 'outlines')
+        if outlines_blend_file and os.path.isfile(outlines_blend_file):
+            try:
+                outline_mat_names = {
+                    ZenlessZoneZeroShaderMaterialNames.BODY_OUTLINE,
+                    ZenlessZoneZeroShaderMaterialNames.BODY2_OUTLINE,
+                    ZenlessZoneZeroShaderMaterialNames.BODY3_OUTLINE,
+                    ZenlessZoneZeroShaderMaterialNames.FACE_OUTLINE,
+                    ZenlessZoneZeroShaderMaterialNames.FACE_OUTLINES,
+                    ZenlessZoneZeroShaderMaterialNames.HAIR_OUTLINE,
+                    ZenlessZoneZeroShaderMaterialNames.WEAPON_OUTLINE,
+                    'Transp OL',
+                    'Eye Transparent',
+                }
+                with bpy.data.libraries.load(outlines_blend_file, link=False) as (data_from, data_to):
+                    data_to.materials = [
+                        m for m in data_from.materials
+                        if m in outline_mat_names or 'outline' in m.lower() or 'transp' in m.lower()
+                    ]
+                for mat in data_to.materials:
+                    if mat:
+                        mat.use_fake_user = True
+            except Exception as ex:
+                print(f"[ZZZ Outline Material Import Notice]: {ex}")
 
         cache_enabled = self.context.window_manager.cache_enabled
         user_selected_shader_blend_file_path = self.blender_operator.filepath if \

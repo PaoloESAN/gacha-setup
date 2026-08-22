@@ -20,7 +20,7 @@ from setup_wizard.domain.shader_identifier_service import GenshinImpactShaders, 
 from setup_wizard.domain.shader_material_names import StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, V2_FestivityGenshinImpactMaterialNames, \
     ShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, JaredNytsPunishingGrayRavenShaderMaterialNames, V4_PrimoToonGenshinImpactMaterialNames, \
     ZenlessZoneZeroShaderMaterialNames
-from setup_wizard.texture_import_setup.texture_importer_types import TextureImporterType
+from setup_wizard.texture_import_setup.texture_importer_types import TextureImporterType, find_all_image_nodes_by_category
 from setup_wizard.domain.shader_material_name_keywords import ShaderMaterialNameKeywords
 from setup_wizard.utils.genshin_body_part_deducer import get_monster_body_part_name, \
     get_npc_mesh_body_part_name
@@ -77,9 +77,7 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         self.shader_node_names = shader_node_names
 
     def replace_default_materials(self):
-        mesh_ignore_list = [
-            'Dress',  # Scaramouche
-        ]
+        mesh_ignore_list = []
         meshes = [mesh for mesh in bpy.context.scene.objects if mesh.type == 'MESH' and mesh.name not in mesh_ignore_list]
 
         for mesh in meshes:
@@ -196,12 +194,23 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         self.blender_operator.report({'INFO'}, 'Replaced default materials with Genshin shader materials...')
 
     def create_shader_material_if_unique_mesh(self, mesh, mesh_body_part_name, material_name):
-        if mesh_body_part_name == 'Body1':  # >= GI v5.7
-            body_material = self.create_body_material(self.material_names, self.material_names.BODY1)
+        if not mesh_body_part_name:
+            return material_name
+        m_low = mesh_body_part_name.lower()
+        if m_low in ['body1', 'body01', 'body_01']:
+            body_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
             material_name = body_material.name
-        elif mesh_body_part_name == 'Body2':  # >= GI v5.7
-            body_material = self.create_body_material(self.material_names, self.material_names.BODY2)
+        elif m_low in ['body2', 'body02', 'body_02']:
+            body_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
             material_name = body_material.name
+        elif m_low in ['dress1', 'dress01', 'dress_01', 'dress2', 'dress02', 'dress_02']:
+            dress_template = bpy.data.materials.get(self.material_names.DRESS) or bpy.data.materials.get(self.material_names.BODY)
+            new_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
+            if not new_material and dress_template:
+                new_material = dress_template.copy()
+                new_material.name = f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}'
+                new_material.use_fake_user = True
+            material_name = new_material.name if new_material else material_name
         elif mesh_body_part_name == 'EffectHair':  # Furina
             hair_material = self.create_hair_material(self.material_names, self.material_names.EFFECT_HAIR)
             material_name = hair_material.name
@@ -289,16 +298,9 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         if not old_image:
             return
             
-        target_tree = new_material.node_tree
-        group = target_tree.nodes.get('Shader Textures')
-        if group and group.node_tree:
-            target_tree = group.node_tree
-            
-        for name in ['Main_Diffuse', 'Outline_Diffuse', 'Body_Diffuse_UV0']:
-            img_node = target_tree.nodes.get(name)
-            if img_node and img_node.type == 'TEX_IMAGE':
-                img_node.image = old_image
-                return
+        diffuse_nodes = find_all_image_nodes_by_category(new_material.node_tree, 'diffuse')
+        for node in diffuse_nodes:
+            node.image = old_image
 
     def __set_glass_star_cloak_toggle(self, material, value):
         vfx_shader_node = material.node_tree.nodes.get(self.shader_node_names.VFX_SHADER)
@@ -366,6 +368,29 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         self.context: Context = context
         self.shader_material_names = material_names
 
+    def __transfer_diffuse_texture(self, old_material, new_material):
+        if not old_material or not old_material.use_nodes or not new_material or not new_material.use_nodes:
+            return
+            
+        old_image = None
+        for node in old_material.node_tree.nodes:
+            if node.type == 'TEX_IMAGE' and node.image:
+                old_image = node.image
+                break
+                
+        if not old_image:
+            return
+            
+        diffuse_nodes = find_all_image_nodes_by_category(new_material.node_tree, 'diffuse')
+        if not diffuse_nodes:
+            for node in new_material.node_tree.nodes:
+                if node.type == 'TEX_IMAGE':
+                    n_low = (node.name + " " + (node.label or "")).lower()
+                    if any(k in n_low for k in ['diffuse', 'color', 'srgb']) and not any(k in n_low for k in ['lightmap', 'ramp', 'normal', 'mask']):
+                        diffuse_nodes.append(node)
+        for node in diffuse_nodes:
+            node.image = old_image
+
     def replace_default_materials(self):
         meshes = [mesh for mesh in bpy.context.scene.objects if mesh.type == 'MESH' and mesh.name not in self.MESH_IGNORE_LIST]
 
@@ -405,8 +430,8 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 elif mesh_body_part_name ==  'Body2_Trans':
                     body_material = self.create_body_trans_material(mesh, self.shader_material_names.BODY2_TRANS) 
                     material_name = body_material.name
-                elif mesh_body_part_name == 'EyeShadow':
-                    eyeshadow_material = self.create_body_material(mesh, self.shader_material_names.EYESHADOW)
+                elif mesh_body_part_name in ['EyeShadow', 'EyeSpecular', 'Eye_Specular', 'EyeStar']:
+                    eyeshadow_material = self.create_body_material(mesh, f'{self.shader_material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
                     material_name = eyeshadow_material.name
                 elif mesh_body_part_name == 'Face':
                     face_material = self.create_body_material(mesh, self.shader_material_names.FACE)
@@ -427,11 +452,10 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     material_name = f'{self.shader_material_names.MATERIAL_PREFIX}{mesh_body_part_name}'
                     self.create_body_material(mesh, material_name)
 
-                honkai_star_rail_material = bpy.data.materials.get(
-                    f'{self.shader_material_names.MATERIAL_PREFIX}{mesh_body_part_name}'
-                )
+                honkai_star_rail_material = bpy.data.materials.get(material_name)
 
                 if honkai_star_rail_material:
+                    self.__transfer_diffuse_texture(material_slot.material, honkai_star_rail_material)
                     material_slot.material = honkai_star_rail_material
                 else:
                     self.blender_operator.report({'WARNING'}, f'Ignoring unknown mesh body part in character model: {mesh_body_part_name} / Material: {material_name}')
@@ -439,6 +463,12 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         self.blender_operator.report({'INFO'}, 'Replaced default materials with Genshin shader materials...')
 
     def find_body_part_name(self, material_name):
+        if '_Mat_' in material_name:
+            suffix = material_name.split('_Mat_')[1]
+            if suffix.endswith('_D') or suffix.endswith('_S'):
+                return suffix[:-2]
+            return suffix
+
         expected_format_body_part_name = self.__expected_format_body_part_name_search(material_name)
         naive_search_body_part_name = self.__naive_body_part_name_search(material_name)
         body_part_name = ''
@@ -475,6 +505,9 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             'Body_Trans',
             'Mat_Trans',
             'EyeShadow',
+            'EyeSpecular',
+            'Eye_Specular',
+            'EyeStar',
             'Face',
             'Weapon_Trans',
             'Body',  # Important this is last in the list because it could interfere with Body1 and Body2
@@ -534,12 +567,41 @@ class StellarToonDefaultMaterialReplacer(HonkaiStarRailDefaultMaterialReplacer):
     def replace_default_materials(self):
         super().replace_default_materials()
 
+    def _is_trans_material(self, name: str) -> bool:
+        n_low = name.lower()
+        return ('_trans' in n_low or 
+                'transparent' in n_low or 
+                'eyespecular' in n_low or 
+                'eye_specular' in n_low or 
+                'eyeshadow' in n_low or
+                'eyestar' in n_low or
+                'body_d1' in n_low or
+                '_d1' in n_low or
+                'body1_d1' in n_low or
+                ('robin' in n_low and 'd1' in n_low))
+
+    def _set_transparency(self, material, enabled: bool):
+        if not material or not material.node_tree:
+            return
+        val = 1.0 if enabled else 0.0
+        for node in material.node_tree.nodes:
+            inp = node.inputs.get(self.ENABLE_TRANSPARENCY)
+            if inp:
+                inp.default_value = val
+            if node.type == 'GROUP' and node.node_tree:
+                for sub_node in node.node_tree.nodes:
+                    sub_inp = sub_node.inputs.get(self.ENABLE_TRANSPARENCY)
+                    if sub_inp:
+                        sub_inp.default_value = val
+
     def create_body_material(self, mesh, material_name):
         body_material = bpy.data.materials.get(material_name)
         if not body_material:
             body_material = bpy.data.materials.get(self.shader_material_names.BASE).copy()
             body_material.name = material_name
             body_material.use_fake_user = True
+        is_trans = self._is_trans_material(material_name)
+        self._set_transparency(body_material, is_trans)
         return body_material
 
     def create_body_trans_material(self, mesh, material_name):
@@ -548,13 +610,13 @@ class StellarToonDefaultMaterialReplacer(HonkaiStarRailDefaultMaterialReplacer):
             body_material = bpy.data.materials.get(self.shader_material_names.BASE).copy()
             body_material.name = material_name
             body_material.use_fake_user = True
-        body_material.node_tree.nodes.get(StellarToonShaderNodeNames.BODY_SHADER).inputs.get(self.ENABLE_TRANSPARENCY).default_value = 1.0
+        self._set_transparency(body_material, True)
         return body_material
 
     def create_weapon_materials(self, mesh_body_part_name):
         weapon_material = super().create_weapon_materials(mesh_body_part_name)
-        if self.shader_material_names.WEAPON_TRANS in weapon_material.name:
-            weapon_material.node_tree.nodes.get(StellarToonShaderNodeNames.MAIN_SHADER).inputs.get(self.ENABLE_TRANSPARENCY).default_value = 1.0
+        is_trans = self.shader_material_names.WEAPON_TRANS in weapon_material.name or '_Trans' in weapon_material.name or '_trans' in weapon_material.name
+        self._set_transparency(weapon_material, is_trans)
         return weapon_material
 
 
@@ -675,66 +737,150 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         self.context = context
 
     def replace_default_materials(self):
+        selected_shader = getattr(bpy.context.scene, 'zzz_shader_type', 'KYTHERA') if hasattr(bpy, 'context') and hasattr(bpy.context, 'scene') else 'KYTHERA'
         meshes = [mesh for mesh in bpy.context.scene.objects if mesh.type == 'MESH']
 
-        for mesh in meshes:
-            if len(mesh.material_slots) == 0:
-                mesh.data.materials.append(None)
+        if selected_shader == 'LEGACY':
+            # --- LEGACY ZZZ SHADER REPLACEMENT ---
+            for mesh in meshes:
+                if len(mesh.material_slots) == 0:
+                    mesh.data.materials.append(None)
 
-            for slot in mesh.material_slots:
-                mat = slot.material
-                matname = mat.name.lower() if mat else mesh.name.lower()
+                for slot in mesh.material_slots:
+                    mat = slot.material
+                    matname = mat.name.lower() if mat else mesh.name.lower()
 
-                if mat and mat.name.startswith("ZZZ Shader"):
-                    continue
+                    if mat and mat.name.startswith("ZZZ Shader"):
+                        continue
 
-                target_mat_name = None
-                if "hair" in matname:
-                    target_mat_name = "ZZZ Shader Hair"
-                elif "eyebrow" in matname or "brow" in matname or "眉" in matname:
-                    target_mat_name = "ZZZ Shader Face"
-                elif "eyehighlight" in matname or "highlight" in matname:
-                    target_mat_name = "ZZZ Shader EyeHighlights" if bpy.data.materials.get("ZZZ Shader EyeHighlights") else "ZZZ Shader Face"
-                elif "eye" in matname and matname != "eye transparent":
-                    target_mat_name = "ZZZ Shader Eye" if bpy.data.materials.get("ZZZ Shader Eye") else "ZZZ Shader Face"
-                elif "face" in matname:
-                    target_mat_name = "ZZZ Shader Face"
-                elif "body" in matname or "leg" in matname or "tail" in matname:
-                    if "leg" in matname or "tail" in matname:
-                        target_mat_name = "ZZZ Shader Body3/Leg"
-                    elif "body 2" in matname or "body2" in matname or "body_2" in matname:
+                    target_mat_name = None
+                    if "hair" in matname:
+                        target_mat_name = "ZZZ Shader Hair"
+                    elif "eyebrow" in matname or "brow" in matname or "眉" in matname:
+                        target_mat_name = "ZZZ Shader Face"
+                    elif "eyehighlight" in matname or "highlight" in matname:
+                        target_mat_name = "ZZZ Shader EyeHighlights" if bpy.data.materials.get("ZZZ Shader EyeHighlights") else "ZZZ Shader Face"
+                    elif "eye" in matname and matname != "eye transparent":
+                        target_mat_name = "ZZZ Shader Eye" if bpy.data.materials.get("ZZZ Shader Eye") else "ZZZ Shader Face"
+                    elif "face" in matname:
+                        target_mat_name = "ZZZ Shader Face"
+                    elif any(k in matname for k in ["body 2", "body2", "body_2", "wing", "ala", "feather", "dress", "cape", "coat", "jacket"]):
                         target_mat_name = "ZZZ Shader Body 2"
-                    elif "body3" in matname or "body3/leg" in matname or "body_3" in matname or "body 3" in matname:
+                    elif any(k in matname for k in ["body 3", "body3", "body_3", "leg", "tail", "shoe", "boot", "foot"]):
                         target_mat_name = "ZZZ Shader Body3/Leg"
-                    else:
+                    elif any(k in matname for k in ["weapon", "wpn", "equip", "sword", "blade", "spear", "lance", "gun", "prop"]):
+                        if any(k in matname for k in ["weapon 2", "weapon2", "weapon_2", "map2"]):
+                            target_mat_name = "ZZZ Shader Weapon 2" if bpy.data.materials.get("ZZZ Shader Weapon 2") else "ZZZ Shader Weapon"
+                        else:
+                            target_mat_name = "ZZZ Shader Weapon"
+                    elif "body" in matname:
                         target_mat_name = "ZZZ Shader Body"
-                elif "weapon" in matname or "wpn" in matname or "equip" in matname or "sword" in matname or "blade" in matname or "spear" in matname or "lance" in matname or "gun" in matname or "prop" in matname:
-                    if "weapon 2" in matname or "weapon2" in matname or "weapon_2" in matname or "map2" in matname:
-                        target_mat_name = "ZZZ Shader Weapon 2" if bpy.data.materials.get("ZZZ Shader Weapon 2") else "ZZZ Shader Weapon"
                     else:
-                        target_mat_name = "ZZZ Shader Weapon"
+                        mesh_lower = mesh.name.lower()
+                        if "hair" in mesh_lower:
+                            target_mat_name = "ZZZ Shader Hair"
+                        elif "face" in mesh_lower:
+                            target_mat_name = "ZZZ Shader Face"
+                        elif any(k in mesh_lower for k in ["wing", "ala", "body2", "body 2", "dress", "cape"]):
+                            target_mat_name = "ZZZ Shader Body 2"
+                        elif any(k in mesh_lower for k in ["leg", "tail", "body3", "body 3"]):
+                            target_mat_name = "ZZZ Shader Body3/Leg"
+                        elif any(k in mesh_lower for k in ["weapon", "wpn", "sword"]):
+                            target_mat_name = "ZZZ Shader Weapon"
+                        else:
+                            target_mat_name = "ZZZ Shader Body"
 
-                if target_mat_name:
-                    template_mat = bpy.data.materials.get(target_mat_name)
+                    if target_mat_name:
+                        template_mat = bpy.data.materials.get(target_mat_name)
+                        if template_mat:
+                            new_mat = template_mat.copy()
+                            name_base = mat.name if mat else mesh.name
+                            new_mat.name = f"ZZZ Shader {name_base}"
+                            new_mat.use_fake_user = True
+                            slot.material = new_mat
+
+            weapon_mats = [m for m in bpy.data.materials if m.name.startswith("ZZZ Shader") and "weapon" in m.name.lower()]
+            main_weapon_mat = weapon_mats[0] if weapon_mats else bpy.data.materials.get("ZZZ Shader Weapon")
+            for mesh in meshes:
+                m_lower = mesh.name.lower()
+                if any(k in m_lower for k in ["weapon", "wpn", "equip", "sword", "blade", "spear", "lance", "gun", "prop"]):
+                    for slot in mesh.material_slots:
+                        if not slot.material and main_weapon_mat:
+                            slot.material = main_weapon_mat
+
+            self.blender_operator.report({'INFO'}, "Replaced default materials with Legacy ZZZ Shader materials...")
+
+        else:
+            # --- KYTHERA SHADER REPLACEMENT ---
+            # Find Kythera template materials
+            face_template = None
+            for mat in bpy.data.materials:
+                m_low = mat.name.lower()
+                if "face" in m_low and ("kythera" in m_low or "zzz" in m_low):
+                    face_template = mat
+                    break
+            if not face_template:
+                face_template = bpy.data.materials.get("Kythera's ZZZ Face Shader") \
+                    or bpy.data.materials.get("Kythera's ZZZ Face Shader V1.0") \
+                    or bpy.data.materials.get("F Kythera's ZZZ Face Shader")
+
+            shader_template = None
+            for mat in bpy.data.materials:
+                m_low = mat.name.lower()
+                if "shader" in m_low and "face" not in m_low and ("kythera" in m_low or "zzz" in m_low):
+                    shader_template = mat
+                    break
+            if not shader_template:
+                shader_template = bpy.data.materials.get("Kythera's ZZZ Shader") \
+                    or bpy.data.materials.get("Kythera's ZZZ Shader V1.0") \
+                    or bpy.data.materials.get("Kythera's ZZZ Shader + T") \
+                    or bpy.data.materials.get("F Kythera's ZZZ Shader") \
+                    or bpy.data.materials.get("F Kythera's ZZZ Shader + T")
+
+            for mesh in meshes:
+                if len(mesh.material_slots) == 0:
+                    mesh.data.materials.append(None)
+
+                for slot in mesh.material_slots:
+                    mat = slot.material
+                    matname = mat.name.lower() if mat else mesh.name.lower()
+
+                    # If already replaced with a cloned Kythera ZZZ material, skip
+                    if mat and (mat.name.startswith("ZZZ ") or mat.name.startswith("Kythera")):
+                        continue
+
+                    is_face = any(k in matname for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight"])
+                    template_mat = face_template if is_face else shader_template
+
                     if template_mat:
                         new_mat = template_mat.copy()
-                        name_base = mat.name if mat else mesh.name
-                        new_mat.name = f"ZZZ Shader {name_base}"
+                        
+                        # Ensure meaningful name preserving mesh context (e.g. Wing, Dress, Leg, Hair, Body)
+                        if mat and mat.name and not mat.name.lower().startswith(("material", "default", "node", "untitled")):
+                            if any(k in mesh.name.lower() for k in ["wing", "ala", "feather", "dress", "cape", "coat", "jacket", "tail", "leg", "shoe", "boot", "weapon", "wpn", "sticker"]) and mesh.name.lower() not in mat.name.lower():
+                                name_base = f"{mesh.name}_{mat.name}"
+                            else:
+                                name_base = mat.name
+                        else:
+                            name_base = mesh.name
+
+                        new_mat.name = f"ZZZ {name_base}"
                         new_mat.use_fake_user = True
                         slot.material = new_mat
 
-        # Fallback: Ensure any weapon mesh object with empty material slots gets assigned a valid ZZZ Weapon material
-        weapon_mats = [m for m in bpy.data.materials if m.name.startswith("ZZZ Shader") and "weapon" in m.name.lower()]
-        main_weapon_mat = weapon_mats[0] if weapon_mats else bpy.data.materials.get("ZZZ Shader Weapon")
-
-        for mesh in meshes:
-            m_lower = mesh.name.lower()
-            if any(k in m_lower for k in ["weapon", "wpn", "equip", "sword", "blade", "spear", "lance", "gun", "prop"]):
+            # Fallback for any meshes with empty material slots
+            for mesh in meshes:
+                m_lower = mesh.name.lower()
+                is_face_mesh = any(k in m_lower for k in ["face", "eyebrow", "brow", "eye"])
+                fallback_template = face_template if is_face_mesh else shader_template
                 for slot in mesh.material_slots:
-                    if not slot.material and main_weapon_mat:
-                        slot.material = main_weapon_mat
+                    if not slot.material and fallback_template:
+                        new_mat = fallback_template.copy()
+                        new_mat.name = f"ZZZ {mesh.name}"
+                        new_mat.use_fake_user = True
+                        slot.material = new_mat
 
-        self.blender_operator.report({'INFO'}, 'Replaced default materials with ZZZ shader materials...')
+            self.blender_operator.report({'INFO'}, "Replaced default materials with Kythera's ZZZ Shader materials...")
 
 
 def find_nte_texture_for_material(mat_name, tex_type, image_files):
@@ -916,13 +1062,169 @@ def find_nte_body_texture_by_material_name(mat_name_lower, type_keys, image_file
     return best_file if best_score > 0 else None
 
 
-def replace_template_image_node(tex_node, image_files, folder, slot_mat_name=""):
+def ensure_hair_white_texture(folder=None, image_files=None):
+    if not folder and not image_files:
+        return
+
+    if not image_files and folder and os.path.isdir(folder):
+        image_files = [f for f in os.listdir(folder) if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
+
+    white_file = None
+    if image_files:
+        white_file = next((f for f in image_files if 'linear_white' in f.lower() or 't_linear_white' in f.lower()), None) \
+            or next((f for f in image_files if 'srgb_white' in f.lower() or 't_srgb_white' in f.lower()), None) \
+            or next((f for f in image_files if 'white' in f.lower() and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))), None)
+
+    if not white_file or not folder:
+        return
+
+    img_path = os.path.join(folder, white_file)
+    if not os.path.isfile(img_path):
+        return
+
+    img = bpy.data.images.load(img_path, check_existing=True)
+
+    # 1. Process all node groups matching 异环-头发
+    for ng in bpy.data.node_groups:
+        ng_name_low = ng.name.lower()
+        if '异环-头发' in ng.name or 'hair' in ng_name_low or '前发' in ng.name or '后发' in ng.name:
+            for node in ng.nodes:
+                if node.type == 'TEX_IMAGE':
+                    is_vector_input_connected = any(
+                        link.from_node.type == 'COMBINE_XYZ' or 'Combine' in getattr(link.from_node, 'name', '') 
+                        for link in ng.links if link.to_node == node and getattr(link.to_socket, 'name', '') == 'Vector'
+                    )
+                    is_white_node = node.image is None or any(wk in (node.image.name.lower() if node.image else '') for wk in ['white', 'linear', 'srgb', 'anisotropic'])
+                    is_not_main_diff_mask = not (node.image and any(k in node.image.name.lower() for k in ['_d.', '_d_', '_diff', '_m.', '_m_', '_mask']))
+
+                    if is_vector_input_connected or is_white_node or is_not_main_diff_mask:
+                        node.image = img
+
+    # 2. Process all hair materials in bpy.data.materials
+    for mat in bpy.data.materials:
+        if not mat.use_nodes or not mat.node_tree:
+            continue
+        mat_name_low = mat.name.lower()
+        if any(k in mat_name_low for k in ['hair', 'pelo', '前发', '后发', 'toufa']):
+            for node in mat.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree:
+                    sub_tree = node.node_tree
+                    if '异环-头发' in sub_tree.name or 'hair' in sub_tree.name.lower() or '前发' in sub_tree.name or '后发' in sub_tree.name:
+                        for sub_node in sub_tree.nodes:
+                            if sub_node.type == 'TEX_IMAGE':
+                                is_vector_input_connected = any(
+                                    link.from_node.type == 'COMBINE_XYZ' or 'Combine' in getattr(link.from_node, 'name', '') 
+                                    for link in sub_tree.links if link.to_node == sub_node and getattr(link.to_socket, 'name', '') == 'Vector'
+                                )
+                                is_white_node = sub_node.image is None or any(wk in (sub_node.image.name.lower() if sub_node.image else '') for wk in ['white', 'linear', 'srgb', 'anisotropic'])
+                                is_not_main_diff_mask = not (sub_node.image and any(k in sub_node.image.name.lower() for k in ['_d.', '_d_', '_diff', '_m.', '_m_', '_mask']))
+
+                                if is_vector_input_connected or is_white_node or is_not_main_diff_mask:
+                                    sub_node.image = img
+
+
+def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="", json_database=None):
     if not tex_node.image:
+        is_inside_hair = any(k in slot_mat_name.lower() for k in ['异环-头发', 'hair', '前发', '后发', 'toufa'])
+        is_combine_xyz = any(
+            link.from_node.type == 'COMBINE_XYZ' or 'Combine' in getattr(link.from_node, 'name', '')
+            for link in getattr(getattr(tex_node, 'id_data', None), 'links', [])
+            if link.to_node == tex_node and getattr(link.to_socket, 'name', '') == 'Vector'
+        )
+        if is_inside_hair or is_combine_xyz:
+            white_file = next((f for f in image_files if 'linear_white' in f.lower() or 't_linear_white' in f.lower()), None) \
+                or next((f for f in image_files if 'srgb_white' in f.lower() or 't_srgb_white' in f.lower()), None) \
+                or next((f for f in image_files if 'white' in f.lower() and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))), None)
+            if white_file and folder:
+                img_path = os.path.join(folder, white_file)
+                if os.path.isfile(img_path):
+                    img = bpy.data.images.load(img_path, check_existing=True)
+                    tex_node.image = img
         return
 
     old_img_name = tex_node.image.name.lower()
     mat_name_lower = slot_mat_name.lower()
     replacement_file = None
+
+    # Material 'gaoguang' always gets face_d texture assigned
+    if 'gaoguang' in mat_name_lower:
+        candidates = [f for f in image_files if 'face' in f.lower() and any(dk in f.lower() for dk in ['_d.', '_d_', '_diff', 'face_d', 'd_01', 'd_02'])]
+        specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
+        face_d_file = specific_candidates[0] if specific_candidates else (candidates[0] if candidates else None)
+        if not face_d_file:
+            candidates = [f for f in image_files if 'face' in f.lower()]
+            specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
+            face_d_file = specific_candidates[0] if specific_candidates else (candidates[0] if candidates else None)
+        if face_d_file and folder:
+            img_path = os.path.join(folder, face_d_file)
+            if os.path.isfile(img_path):
+                img = bpy.data.images.load(img_path, check_existing=True)
+                try:
+                    img.alpha_mode = 'CHANNEL_PACKED'
+                except Exception:
+                    pass
+                tex_node.image = img
+                return
+
+    # 1. First priority: Check exact JSON texture mapping for this material
+    if json_database:
+        from setup_wizard.utils.nte_json_parser import get_nte_material_data
+        mat_info = get_nte_material_data(slot_mat_name, json_database)
+        if mat_info:
+            textures = mat_info.get("textures", {})
+            handled_slot = False
+
+            if any(dk in old_img_name for dk in ['_d.', '_d_', '_diff', 'd_0', 'd_1', 'd_2', 'mint_01_d', 'mint_02_d', 'hair_01_d', 'hair_02_d', 'hair_d']) or 'diffuse' in old_img_name or 'basecolor' in old_img_name or '基础色' in old_img_name:
+                handled_slot = True
+                replacement_file = textures.get("diffuse")
+
+            elif any(mk in old_img_name for mk in ['_m.', '_m_', '_mask', 'm_0', 'm_1', 'm_2', 'mint_01_m', 'mint_02_m', 'hair_01_m', 'hair_02_m', 'hair_m']) or 'lightmap' in old_img_name or 'mask' in old_img_name:
+                handled_slot = True
+                replacement_file = textures.get("lightmap")
+
+            elif any(nk in old_img_name for nk in ['_n.', '_n_', '_norm', 'n_0', 'n_1', 'n_2', 'mint_01_n', 'mint_02_n', 'defaultnormal']) or 'normal' in old_img_name:
+                handled_slot = True
+                replacement_file = textures.get("normal")
+
+            elif any(ik in old_img_name for ik in ['_id.', '_id_', 'id_0', 'id_1', 'id_2', 'mint_01_id', 'mint_02_id']) or 'id' in old_img_name:
+                handled_slot = True
+                replacement_file = textures.get("id")
+
+            elif any(rk in old_img_name for rk in ['_r.', '_r_', 'face_r', 'blush', 'facelightmask', 'facemask']):
+                handled_slot = True
+                replacement_file = textures.get("face_mask")
+
+            elif any(rk in old_img_name for rk in ['ramp', 'night_dusk', 'curve', 'rampaltas', 'rampatlas']):
+                handled_slot = True
+                replacement_file = textures.get("ramp") or (json_database.get("ramp_atlas_file") if json_database else None)
+
+            elif any(ek in old_img_name for ek in ['emissive', 'noise']):
+                handled_slot = True
+                replacement_file = textures.get("emissive")
+
+            elif any(wk in old_img_name for wk in ['white', 'linear_white', 'srgb_white', 'anisotropic', 't_srgb_white', 't_linear_white']):
+                handled_slot = True
+                replacement_file = textures.get("anisotropic")
+                if not replacement_file and image_files:
+                    replacement_file = next((f for f in image_files if 'linear_white' in f.lower() or 't_linear_white' in f.lower()), None) \
+                        or next((f for f in image_files if 'srgb_white' in f.lower() or 't_srgb_white' in f.lower()), None) \
+                        or next((f for f in image_files if 'white' in f.lower() and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))), None)
+
+            if handled_slot:
+                if replacement_file:
+                    img_path = os.path.join(folder, replacement_file)
+                    if os.path.isfile(img_path):
+                        img = bpy.data.images.load(img_path, check_existing=True)
+                        try:
+                            img.alpha_mode = 'CHANNEL_PACKED'
+                        except Exception:
+                            pass
+                        tex_node.image = img
+                        return
+                else:
+                    # JSON explicitly does NOT have this texture (e.g. No ID mask on Nitsa 03) -> clear template texture
+                    tex_node.image = None
+                    return
 
     hair_sub_idx = '01'
     if any(k in mat_name_lower for k in ['hair_2', 'hair_02', 'hair2', '后发', 'back']):
@@ -957,19 +1259,22 @@ def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="")
             elif candidates:
                 replacement_file = candidates[0]
 
-    elif any(k in old_img_name for k in ['ramp', 'night_dusk', 'srgb']):
+    elif any(k in old_img_name for k in ['ramp', 'night_dusk']):
         clean_old_base = old_img_name.split('.')[0].replace('.001', '').replace('.002', '').strip()
         exact_match = next((f for f in image_files if clean_old_base in f.lower() or f.lower().split('.')[0] == clean_old_base), None)
         if exact_match:
             replacement_file = exact_match
         else:
-            white_candidate = next((f for f in image_files if 't_srgb_white' in f.lower() or 'srgb_white' in f.lower() or ('srgb' in f.lower() and 'white' in f.lower())), None)
-            if white_candidate:
-                replacement_file = white_candidate
-            else:
-                ramp_candidates = [f for f in image_files if 't_srgb' in f.lower() or 'srgb' in f.lower() or 'ramp' in f.lower()]
-                if ramp_candidates:
-                    replacement_file = ramp_candidates[0]
+            ramp_candidates = [f for f in image_files if 't_srgb' in f.lower() or 'srgb' in f.lower() or 'ramp' in f.lower()]
+            if ramp_candidates:
+                replacement_file = ramp_candidates[0]
+
+    elif any(k in old_img_name for k in ['white', 'linear_white', 'srgb_white', 'anisotropic', 't_srgb_white', 't_linear_white']):
+        white_candidate = next((f for f in image_files if 'linear_white' in f.lower() or 't_linear_white' in f.lower()), None) \
+            or next((f for f in image_files if 'srgb_white' in f.lower() or 't_srgb_white' in f.lower()), None) \
+            or next((f for f in image_files if 'white' in f.lower() and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))), None)
+        if white_candidate:
+            replacement_file = white_candidate
 
     elif any(k in old_img_name for k in ['matcap', 'silk']):
         clean_old_base = old_img_name.split('.')[0].replace('.001', '').replace('.002', '').strip()
@@ -1156,7 +1461,7 @@ def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="")
         tex_node.image = img
 
 
-def process_node_tree(node_tree, image_files, folder, slot_mat_name="", visited=None):
+def process_node_tree(node_tree, image_files, folder, slot_mat_name="", visited=None, json_database=None):
     if visited is None:
         visited = set()
     if not node_tree or node_tree in visited:
@@ -1165,11 +1470,85 @@ def process_node_tree(node_tree, image_files, folder, slot_mat_name="", visited=
 
     for node in node_tree.nodes:
         if node.type == 'TEX_IMAGE':
-            replace_template_image_node(node, image_files, folder, slot_mat_name)
+            replace_template_image_node(node, image_files, folder, slot_mat_name, json_database=json_database)
         elif node.type == 'GROUP' and node.node_tree:
             sub_mat_name = f"{slot_mat_name} / {node.node_tree.name}" if slot_mat_name else node.node_tree.name
-            process_node_tree(node.node_tree, image_files, folder, sub_mat_name, visited)
+            process_node_tree(node.node_tree, image_files, folder, sub_mat_name, visited, json_database=json_database)
 
+
+
+def setup_common_face_material(mat, folder=None, image_files=None):
+    if not mat:
+        return
+    mat.use_nodes = True
+    nt = mat.node_tree
+    if not nt:
+        return
+    nodes = nt.nodes
+    links = nt.links
+    nodes.clear()
+
+    out_node = nodes.new('ShaderNodeOutputMaterial')
+    out_node.location = (350, 0)
+
+    mix_node = nodes.new('ShaderNodeMixShader')
+    mix_node.location = (100, 50)
+
+    trans_node = nodes.new('ShaderNodeBsdfTransparent')
+    trans_node.location = (-120, 180)
+    try:
+        trans_node.inputs['Color'].default_value = (1.0, 1.0, 1.0, 1.0)
+    except Exception:
+        pass
+
+    tex_node = nodes.new('ShaderNodeTexImage')
+    tex_node.location = (-400, -50)
+
+    img = None
+    for im in bpy.data.images:
+        if 'common_face' in im.name.lower():
+            img = im
+            break
+
+    if not img and folder:
+        cands = []
+        if image_files:
+            cands = [f for f in image_files if 'common_face' in f.lower()]
+        elif os.path.isdir(folder):
+            cands = [f for f in os.listdir(folder) if 'common_face' in f.lower() and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
+        if cands:
+            diff_cands = [f for f in cands if '_d.' in f.lower() or '_d_' in f.lower() or 'face_d' in f.lower()]
+            picked = diff_cands[0] if diff_cands else cands[0]
+            try:
+                img_path = os.path.join(folder, picked)
+                img = bpy.data.images.load(img_path, check_existing=True)
+            except Exception as ex:
+                print(f"Notice: Loading common_face texture: {ex}")
+
+    if img:
+        tex_node.image = img
+
+    links.new(tex_node.outputs['Alpha'], mix_node.inputs[0])
+    links.new(trans_node.outputs['BSDF'], mix_node.inputs[1])
+    links.new(tex_node.outputs['Color'], mix_node.inputs[2])
+    links.new(mix_node.outputs['Shader'], out_node.inputs['Surface'])
+
+    try:
+        mat.blend_method = 'BLEND'
+    except Exception:
+        pass
+    try:
+        mat.surface_render_method = 'BLENDED'
+    except Exception:
+        pass
+    try:
+        mat.shadow_method = 'NONE'
+    except Exception:
+        pass
+    try:
+        mat.show_transparent_back = False
+    except Exception:
+        pass
 
 
 class NevernessToEvernessDefaultMaterialReplacer(GameDefaultMaterialReplacer):
@@ -1181,14 +1560,24 @@ class NevernessToEvernessDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         cache_enabled = self.context.window_manager.cache_enabled
         folder = self.blender_operator.file_directory or get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH) or get_active_character_directory()
         image_files = []
+        json_database = None
+
         if folder and os.path.isdir(folder):
+            from setup_wizard.utils.nte_json_parser import load_nte_character_data, get_nte_material_data
             try:
-                for root, dirs, files in os.walk(folder):
-                    for f in files:
-                        if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp', '.hdr', '.png.001', '.tga.001', '.dds.001')):
-                            image_files.append(f)
-            except Exception:
-                image_files = []
+                json_database = load_nte_character_data(folder)
+                image_files = json_database.get("image_files_list", [])
+            except Exception as ex:
+                print(f"[NTE Replace Default Materials] Notice loading JSON database: {ex}")
+
+            if not image_files:
+                try:
+                    for root, dirs, files in os.walk(folder):
+                        for f in files:
+                            if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp', '.hdr', '.png.001', '.tga.001', '.dds.001')):
+                                image_files.append(f)
+                except Exception:
+                    image_files = []
 
         meshes = [mesh for mesh in bpy.context.scene.objects if mesh.type == 'MESH']
 
@@ -1223,6 +1612,10 @@ class NevernessToEvernessDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         mat.blend_method = 'BLEND'
                     except Exception:
                         pass
+                    continue
+
+                if any(k in matname for k in ["common_face", "common_face_mask", "face_mask", "facemask"]):
+                    setup_common_face_material(mat, folder=folder, image_files=image_files)
                     continue
 
                 if mat.name in template_names or mat.name == '材质球':
@@ -1286,13 +1679,42 @@ class NevernessToEvernessDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                                     inp.default_value = is_skin
 
                     if folder and image_files:
-                        process_node_tree(mat.node_tree, image_files, folder, slot.material.name)
+                        process_node_tree(mat.node_tree, image_files, folder, slot.material.name, json_database=json_database)
+
+                    if json_database:
+                        from setup_wizard.utils.nte_json_parser import get_nte_material_data
+                        mat_info = get_nte_material_data(slot.material.name, json_database)
+                        if mat_info:
+                            scalars = mat_info.get("scalars", {})
+                            for n in mat.node_tree.nodes:
+                                if n.type == 'GROUP' and n.node_tree:
+                                    for s_name, s_val in scalars.items():
+                                        if s_name in n.inputs and isinstance(s_val, (int, float)):
+                                            try:
+                                                n.inputs[s_name].default_value = float(s_val)
+                                            except Exception:
+                                                pass
 
         if folder and image_files:
             for ng_name in ['异环-头发', '异环-身体', '异环-面部', 'Matcap采样']:
                 ng = bpy.data.node_groups.get(ng_name)
                 if ng:
-                    process_node_tree(ng, image_files, folder, "NodeGroup_" + ng_name)
+                    process_node_tree(ng, image_files, folder, "NodeGroup_" + ng_name, json_database=json_database)
+
+            ensure_hair_white_texture(folder, image_files)
+
+            face_cands = [f for f in image_files if 'face' in f.lower() and any(dk in f.lower() for dk in ['_d.', '_d_', '_diff', 'face_d', 'd_01', 'd_02'])]
+            face_spec = [f for f in face_cands if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
+            face_d_img_file = face_spec[0] if face_spec else (face_cands[0] if face_cands else None)
+            if face_d_img_file:
+                face_d_path = os.path.join(folder, face_d_img_file)
+                if os.path.isfile(face_d_path):
+                    face_d_img = bpy.data.images.load(face_d_path, check_existing=True)
+                    for mat in bpy.data.materials:
+                        if mat.use_nodes and mat.node_tree and 'gaoguang' in mat.name.lower():
+                            for node in mat.node_tree.nodes:
+                                if node.type == 'TEX_IMAGE':
+                                    node.image = face_d_img
 
         try:
             bpy.ops.neverness_to_everness.set_up_hair_specular()

@@ -10,7 +10,7 @@
 - [FAQ](https://gacha-setup.pages.dev/faq/): Frequently asked questions about Blender compatibility, shaders, and community.
 - [Changelog](https://gacha-setup.pages.dev/changelog/): Release history, version updates, and bug fixes.
 - [Roadmap](https://gacha-setup.pages.dev/roadmap/): Upcoming features and planned updates.
-- [Credits](https://gacha-setup.pages.dev/credits/): Credits and contributors (BonnyAnimations, Enthralpy, Aiko, jideeh, Just_ScaasI).
+- [Credits](https://gacha-setup.pages.dev/credits/): Credits and contributors (BonnyAnimations, Enthralpy, Aiko, jideeh, Kytherity, Just_ScaasI, thewindlead, Hiragara, HoyoToon).
 
 ## Supported Games & Features
 

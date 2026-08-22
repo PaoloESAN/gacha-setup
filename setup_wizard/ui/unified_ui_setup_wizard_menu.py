@@ -42,4 +42,4 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
 
         sub_layout = layout.box()
         sub_layout.prop(context.scene, 'game_type_dropdown')
-        sub_layout.prop(context.scene, 'character_setup_wizard_logging_enabled')
+        # sub_layout.prop(context.scene, 'character_setup_wizard_logging_enabled')

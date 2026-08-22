@@ -21,11 +21,14 @@ description: Acknowledgements, contributors, and assets credits.
 - **M4urlcl0**
 - **Modder4869**
 - **[@jideeh](https://github.com/Jideeh1)** — ZZZ Face Rig · [GitHub](https://github.com/Jideeh1)
+- **Kytherity** — ZZZ Shader
 - **Just_ScaasI** — ZZZ Shader
 - **Isaac** — HSR Face Rig
 - **Stormz67** — Supervision
 - **Omatsuri** — NTE Shader · [Discord](https://discord.gg/omatsuri)
 - **矩阵映画** — NTE Rig
+- **[thewindlead](https://www.youtube.com/@thewindlead)** — Hair & Clothes physics · [YouTube](https://www.youtube.com/@thewindlead)
+- **Hiragara** — Character assets
 - **HoyoToon** — Assets · [Discord](https://discord.com/invite/hoyotoon)
 - **Logo Icon** — <a href="https://www.flaticon.com/free-icons/star" title="star icons">Star icons created by Magnific - Flaticon</a>
 

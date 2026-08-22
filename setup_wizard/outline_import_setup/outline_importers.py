@@ -136,13 +136,16 @@ class ZenlessZoneZeroOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
         self.outlines_node_group_names = OutlineNodeGroupNames.ZENLESS_ZONE_ZERO_OUTLINES
 
     def import_outline_node_group(self):
-        filepath = get_shader_file_path(GameType.ZENLESS_ZONE_ZERO.name, 'main')
+        # Outlines and Lighting Panel come specifically from the previous setup file (ZZZ Setup File V2.0.blend)
+        filepath = get_shader_file_path(GameType.ZENLESS_ZONE_ZERO.name, 'outlines')
+        if not filepath or not os.path.isfile(filepath):
+            addon_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            filepath = os.path.join(addon_dir, 'shaders', 'zzz', 'ZZZ Setup File V2.0.blend')
 
         if filepath and os.path.isfile(filepath):
             for outline_node_group_name in self.outlines_node_group_names:
                 if not bpy.data.node_groups.get(outline_node_group_name):
                     inner_path = 'NodeTree'
-
                     try:
                         bpy.ops.wm.append(
                             filepath=os.path.join(filepath, inner_path, outline_node_group_name),
@@ -152,7 +155,7 @@ class ZenlessZoneZeroOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
                     except Exception as e:
                         print(f"Failed to append {outline_node_group_name} from {filepath}: {e}")
 
-            # Import strictly the Lighting Panel UI & Direction Objects / Collections
+            # Import strictly the Lighting Panel UI & Direction Objects / Collections from ZZZ Setup File V2.0.blend
             try:
                 with bpy.data.libraries.load(filepath, link=False) as (data_from, data_to):
                     excluded_kw = ["face", "phoneme", "mouth", "eyebrow", "expression", "facrig"]

@@ -8,6 +8,7 @@ from bpy_extras.io_utils import ImportHelper
 from bpy.props import StringProperty
 from bpy.types import Operator
 
+from setup_wizard.import_order import NextStepInvoker
 from setup_wizard.material_import_setup.game_material_importers import GameMaterialImporterFactory
 from setup_wizard.material_import_setup.material_importer_service import MaterialImporterService
 from setup_wizard.setup_wizard_operator_base_classes import BasicSetupUIOperator, CustomOperatorProperties
@@ -334,47 +335,49 @@ def copy_nte_modifiers_to_character_models():
         next((m for m in bpy.data.materials if "mrim" in m.name.lower()), None)
     )
 
-    # 3. Search for template object in scene
-    src_obj = None
-    for o in bpy.data.objects:
-        if o.type == 'MESH' and ("球体" in o.name or "template" in o.name.lower() or "shader" in o.name.lower()):
-            if len(o.modifiers) > 0:
-                src_obj = o
-                break
-
-    if not src_obj:
-        for o in bpy.data.objects:
-            if o.type == 'MESH' and any("Light Vectors" in m.name or "描边" in m.name or "Outline" in m.name for m in o.modifiers):
-                src_obj = o
-                break
-
-    # Character mesh objects: all mesh objects including template object
-    char_meshes = [
-        o for o in bpy.context.scene.objects
-        if o.type == 'MESH' and not o.name.startswith("append_")
-    ]
-
-    # Find node groups for Light Vectors and Outlines
+    # 3. Find node groups for Light Vectors and Outlines
     ng_light = next((ng for ng in bpy.data.node_groups if any(k in ng.name for k in ["Light Vectors", "灯光矢量"])), None)
     ng_outline = next((ng for ng in bpy.data.node_groups if any(k in ng.name for k in ["几何节点描边", "描边", "Outline", "Outlines"])), None)
 
-    for mesh_obj in char_meshes:
-        # Replicate template modifiers from src_obj if present
-        if src_obj and src_obj != mesh_obj and src_obj.modifiers:
-            for src_mod in src_obj.modifiers:
-                if src_mod.type == 'NODES' and src_mod.node_group:
-                    existing = next((m for m in mesh_obj.modifiers if m.type == 'NODES' and m.node_group == src_mod.node_group), None)
-                    if not existing:
-                        new_mod = mesh_obj.modifiers.new(name=src_mod.name, type='NODES')
-                        new_mod.node_group = src_mod.node_group
+    # Character mesh objects: all character meshes, excluding temp template/sphere meshes
+    temp_mesh_names = ["球体", "sphere", "template", "shader"]
+    char_meshes = [
+        o for o in bpy.context.scene.objects
+        if o.type == 'MESH' and not o.name.startswith("append_") and not any(t in o.name.lower() for t in temp_mesh_names)
+    ]
 
-        # Get or add Light Vectors modifier
-        mod_l = next((m for m in mesh_obj.modifiers if m.type == 'NODES' and (m.name == "Light Vectors - 灯光矢量" or (m.node_group and ("Light Vectors" in m.node_group.name or "灯光矢量" in m.node_group.name)))), None)
-        if not mod_l and ng_light:
+    for mesh_obj in char_meshes:
+        # Collect all existing Light Vectors and Outlines modifiers on this mesh
+        light_mods = []
+        outline_mods = []
+        for m in list(mesh_obj.modifiers):
+            if m.type == 'NODES':
+                gname = m.node_group.name if m.node_group else ""
+                if "Light Vectors" in m.name or "灯光矢量" in m.name or "Light Vectors" in gname or "灯光矢量" in gname:
+                    light_mods.append(m)
+                elif "描边" in m.name or "Outline" in m.name or "描边" in gname or "Outline" in gname:
+                    outline_mods.append(m)
+
+        # Ensure only 1 Light Vectors modifier remains
+        if light_mods:
+            mod_l = light_mods[0]
+            # Remove duplicate copies (.001, etc.)
+            for extra_m in light_mods[1:]:
+                try:
+                    mesh_obj.modifiers.remove(extra_m)
+                except Exception:
+                    pass
+        elif ng_light:
             mod_l = mesh_obj.modifiers.new(name="Light Vectors - 灯光矢量", type='NODES')
             mod_l.node_group = ng_light
+        else:
+            mod_l = None
 
+        # Configure Light Vectors modifier
         if mod_l:
+            if not mod_l.node_group and ng_light:
+                mod_l.node_group = ng_light
+            mod_l.name = "Light Vectors - 灯光矢量"
             set_nte_gn_input(mod_l, ["Input_3", "光照方向", "Light Direction"], light_dir)
             set_nte_gn_input(mod_l, ["Input_4", "头部原点", "Head Origin"], head_orig)
             set_nte_gn_input(mod_l, ["Input_5", "头部前向", "Head Forward"], head_fwd)
@@ -383,17 +386,38 @@ def copy_nte_modifiers_to_character_models():
                 set_modifier_property(mod_l, output_attr, output_attr)
                 set_modifier_property(mod_l, f"{output_attr}_attribute_name", output_attr)
 
-        # Get or add Outline modifier
-        mod_o = next((m for m in mesh_obj.modifiers if m.type == 'NODES' and (m.name == "几何节点描边" or (m.node_group and ("描边" in m.node_group.name or "Outline" in m.node_group.name)))), None)
-        if not mod_o and ng_outline:
+        # Ensure only 1 Outline modifier remains
+        if outline_mods:
+            mod_o = outline_mods[0]
+            # Remove duplicate copies (.001, etc.)
+            for extra_m in outline_mods[1:]:
+                try:
+                    mesh_obj.modifiers.remove(extra_m)
+                except Exception:
+                    pass
+        elif ng_outline:
             mod_o = mesh_obj.modifiers.new(name="几何节点描边", type='NODES')
             mod_o.node_group = ng_outline
+        else:
+            mod_o = None
 
+        # Configure Outline modifier
         if mod_o:
+            if not mod_o.node_group and ng_outline:
+                mod_o.node_group = ng_outline
+            mod_o.name = "几何节点描边"
             set_nte_gn_input(mod_o, ["Socket_2", "描边宽度", "Outline Width", "Width"], 0.0003)
             set_nte_gn_input(mod_o, ["Socket_3", "描边权重", "Weight"], 1.0)
             if mrim_mat:
                 set_nte_gn_input(mod_o, ["Socket_6", "描边颜色", "Outline Material", "mrim"], mrim_mat)
+
+    # Clean up any leftover template sphere objects
+    for o in list(bpy.data.objects):
+        if o.type == 'MESH' and any(t in o.name.lower() for t in ["球体", "template"]):
+            try:
+                bpy.data.objects.remove(o, do_unlink=True)
+            except Exception:
+                pass
 
 
 
@@ -493,6 +517,14 @@ class NTE_OT_SetUpOutlines(Operator, BasicSetupUIOperator, CustomOperatorPropert
 
         # Copy Geometry Nodes modifiers from shader/template object onto character meshes
         copy_nte_modifiers_to_character_models()
+
+        try:
+            from setup_wizard.replace_default_materials_setup.game_default_material_replacers import ensure_hair_white_texture
+            from setup_wizard.utils.active_character_directory_store import get_active_character_directory
+            folder = get_active_character_directory() or context.scene.get("setup_wizard_imported_model_dir")
+            ensure_hair_white_texture(folder)
+        except Exception as ex:
+            print(f"[NTE Setup Outlines] Notice ensuring hair white texture: {ex}")
 
         self.report({'INFO'}, 'Setup Outlines completed: Hair Specular & Geometry Nodes modifiers assigned.')
 

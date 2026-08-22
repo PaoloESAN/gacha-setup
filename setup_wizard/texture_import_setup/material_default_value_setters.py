@@ -188,7 +188,30 @@ class HonkaiStarRailMaterialDefaultValueSetter(MaterialDefaultValueSetter):
         return
 
     def set_default_values(self):
-        return
+        for material in bpy.data.materials:
+            if not material or not material.node_tree:
+                continue
+            mat_name = material.name.lower()
+            is_trans = ('_trans' in mat_name or 
+                        'transparent' in mat_name or 
+                        'eyespecular' in mat_name or 
+                        'eye_specular' in mat_name or 
+                        'eyeshadow' in mat_name or 
+                        'eyestar' in mat_name or
+                        'body_d1' in mat_name or
+                        '_d1' in mat_name or
+                        'body1_d1' in mat_name or
+                        ('robin' in mat_name and 'd1' in mat_name))
+            val = 1.0 if is_trans else 0.0
+            for node in material.node_tree.nodes:
+                inp = node.inputs.get('Enable Transparency')
+                if inp:
+                    inp.default_value = val
+                if node.type == 'GROUP' and node.node_tree:
+                    for sub_node in node.node_tree.nodes:
+                        sub_inp = sub_node.inputs.get('Enable Transparency')
+                        if sub_inp:
+                            sub_inp.default_value = val
 
 
 class PunishingGrayRavenMaterialDefaultValueSetter(MaterialDefaultValueSetter):

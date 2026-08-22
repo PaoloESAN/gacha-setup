@@ -165,7 +165,7 @@ class ShaderIdentifierService:
             return StellarToonTextureNodeNames
         elif shader is PunishingGrayRavenShaders.V1_JAREDNYTS_PUNISHING_GRAY_RAVEN_SHADER:
             return JaredNytsPunishingGrayRavenTextureNodeNames
-        elif shader is ZenlessZoneZeroShaders.V1_ZENLESS_ZONE_ZERO_SHADER:
+        elif shader is ZenlessZoneZeroShaders.V1_ZENLESS_ZONE_ZERO_SHADER or shader is None:
             return ZenlessZoneZeroTextureNodeNames
         else:
             raise Exception(f'Unknown Shader: {shader}')
@@ -186,7 +186,7 @@ class ShaderIdentifierService:
             return ShaderNodeNames  # Unused, no ShaderNodeName available
         elif shader is PunishingGrayRavenShaders.V1_JAREDNYTS_PUNISHING_GRAY_RAVEN_SHADER:
             return JaredNyts_PunishingGrayRavenNodeNames  # Unused
-        elif shader is ZenlessZoneZeroShaders.V1_ZENLESS_ZONE_ZERO_SHADER:
+        elif shader is ZenlessZoneZeroShaders.V1_ZENLESS_ZONE_ZERO_SHADER or shader is None:
             return ShaderNodeNames  # Unused
         else:
             raise Exception(f'Unknown Shader: {shader}')
@@ -261,7 +261,7 @@ class PunishingGrayRavenShaderIdentifierService(ShaderIdentifierService):
 
 class ZenlessZoneZeroShaderIdentifierService(ShaderIdentifierService):
     V1_NAMES_OF_ZZZ_MATERIALS = [
-        ZenlessZoneZeroShaderMaterialNames.MATERIAL_PREFIX_AFTER_RENAME,
+        "ZZZ",
     ]
     material_lists_to_search_through = {
         ZenlessZoneZeroShaders.V1_ZENLESS_ZONE_ZERO_SHADER: V1_NAMES_OF_ZZZ_MATERIALS
@@ -269,6 +269,24 @@ class ZenlessZoneZeroShaderIdentifierService(ShaderIdentifierService):
 
     def __init__(self):
         super().__init__()
+
+    def identify_shader(self, materials, node_groups):
+        res = super().identify_shader(materials, node_groups)
+        if res is not None:
+            return res
+        for m in materials.values():
+            if m and any(k in m.name.lower() for k in ["zzz", "kythera"]):
+                return ZenlessZoneZeroShaders.V1_ZENLESS_ZONE_ZERO_SHADER
+        for ng in node_groups.values():
+            if ng and any(k in ng.name.lower() for k in ["zzz", "kythera", "outline", "face lightmap"]):
+                return ZenlessZoneZeroShaders.V1_ZENLESS_ZONE_ZERO_SHADER
+        return ZenlessZoneZeroShaders.V1_ZENLESS_ZONE_ZERO_SHADER
+
+    def get_shader_node_names(self, shader):
+        return ShaderNodeNames
+
+    def get_shader_texture_node_names(self, shader):
+        return ZenlessZoneZeroTextureNodeNames
 
 
 class NevernessToEvernessShaderIdentifierService(ShaderIdentifierService):

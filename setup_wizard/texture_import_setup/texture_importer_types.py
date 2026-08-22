@@ -56,9 +56,6 @@ def sync_material_category_textures(material):
     """
     Ensures that for a given material, all Image Texture nodes in each category
     (diffuse, lightmap, normal map) share the active loaded texture for that category.
-    If a material has a Diffuse texture (e.g. Veil_Diffuse.png) but lacks a dedicated Lightmap,
-    it assigns that material's own Diffuse texture to all Lightmap nodes.
-    If no dedicated Normal Map file exists, normal map assignment is omitted (no fallback).
     """
     if not material or not hasattr(material, 'node_tree') or not material.node_tree:
         return
@@ -67,25 +64,21 @@ def sync_material_category_textures(material):
     lightmap_nodes = find_all_image_nodes_by_category(material.node_tree, 'lightmap')
     normal_nodes = find_all_image_nodes_by_category(material.node_tree, 'normal')
 
-    diffuse_img = next((n.image for n in diffuse_nodes if n.image), None)
-    lightmap_img = next((n.image for n in lightmap_nodes if n.image), None)
-    normal_img = next((n.image for n in normal_nodes if n.image), None)
-
-    # Fallback lightmap to material's own diffuse texture if no dedicated lightmap exists
-    if not lightmap_img and diffuse_img:
-        lightmap_img = diffuse_img
-
-    # Omit Normal Map fallback if no dedicated normal map exists
+    diffuse_img = next((n.image for n in diffuse_nodes if n.image and 'lightmap' not in n.image.name.lower() and 'normal' not in n.image.name.lower()), None)
+    lightmap_img = next((n.image for n in lightmap_nodes if n.image and 'diffuse' not in n.image.name.lower() and 'normal' not in n.image.name.lower()), None)
+    normal_img = next((n.image for n in normal_nodes if n.image and 'diffuse' not in n.image.name.lower() and 'lightmap' not in n.image.name.lower()), None)
 
     if diffuse_img:
         for n in diffuse_nodes:
             n.image = diffuse_img
 
     if lightmap_img:
+        lightmap_img.colorspace_settings.name = 'Non-Color'
         for n in lightmap_nodes:
             n.image = lightmap_img
 
     if normal_img:
+        normal_img.colorspace_settings.name = 'Non-Color'
         for n in normal_nodes:
             n.image = normal_img
 
@@ -278,12 +271,6 @@ class GenshinTextureImporter:
             if override or not node.image:
                 node.image = img
 
-            if self.game_type == GameType.GENSHIN_IMPACT:
-                if not self.does_dress_texture_exist_in_directory_files() or \
-                    type(self) is GenshinMonsterTextureImporter or \
-                    type(self) is GenshinNPCTextureImporter:
-                    self.setup_dress_textures(node.name, img, self.character_type)
-
     def set_lightmap_texture(self, texture_type: TextureType, material, img, override=True):
         if not material or not material.use_nodes:
             return
@@ -313,12 +300,6 @@ class GenshinTextureImporter:
             if override or not node.image:
                 node.image = img
 
-            if self.game_type == GameType.GENSHIN_IMPACT:
-                if not self.does_dress_texture_exist_in_directory_files() or \
-                    type(self) is GenshinMonsterTextureImporter or \
-                    type(self) is GenshinNPCTextureImporter:
-                    self.setup_dress_textures(node.name, img, self.character_type)
-
     def set_normalmap_texture(self, type: TextureType, material, img, override=True):
         if not material or not material.use_nodes:
             return
@@ -345,9 +326,6 @@ class GenshinTextureImporter:
         for node in nodes:
             if override or not node.image:
                 node.image = img
-
-            if self.game_type == GameType.GENSHIN_IMPACT:
-                self.setup_dress_textures(node.name, img, self.character_type)
 
         if self.game_type == GameType.GENSHIN_IMPACT:
             body_shader = material.node_tree.nodes.get('Body Shader') or material.node_tree.nodes.get('PrimoToon') or material.node_tree.nodes.get('HoYoToon') or material.node_tree.nodes.get('Group.006')
@@ -552,46 +530,59 @@ class GenshinTextureImporter:
 
     def import_part_texture_to_matching_materials(self, file, img):
         """
-        Dynamically matches textures for Dress, Dress1, Dress2, Dress3, Ribbon, VeilShadow, Stockings, etc.
+        Dynamically matches textures for Body01..04, Body1..4, Dress01..04, Dress1..4, Dress, Tail, Ribbon, VeilShadow, Stockings, Arm, Cloak, Helmet, etc.
         to their corresponding materials and assigns Diffuse, Lightmap, or Normal Map nodes via find_texture_nodes.
         """
-        is_diffuse = 'Diffuse' in file
-        is_lightmap = 'Lightmap' in file or 'LightMap' in file
-        is_normal = 'Normal' in file or 'Normalmap' in file
-        is_shadow_ramp = 'Shadow_Ramp' in file
+        f_lower = file.lower()
+        is_diffuse = 'diffuse' in f_lower
+        is_lightmap = 'lightmap' in f_lower or 'light_map' in f_lower
+        is_normal = 'normal' in f_lower or 'normalmap' in f_lower
+        is_shadow_ramp = 'shadow_ramp' in f_lower
 
         if not (is_diffuse or is_lightmap or is_normal or is_shadow_ramp):
             return False
 
         matched_any = False
-        parts_to_check = ['Dress3', 'Dress2', 'Dress1', 'Dress03', 'Dress02', 'Dress01', 'Dress', 'Ribbon', 'VeilShadow', 'Stockings', 'Arm', 'Cloak', 'Helmet', 'HelmetEmo']
+        parts_to_check = [
+            'body04', 'body03', 'body02', 'body01', 'body_04', 'body_03', 'body_02', 'body_01', 'body4', 'body3', 'body2', 'body1',
+            'dress04', 'dress03', 'dress02', 'dress01', 'dress_04', 'dress_03', 'dress_02', 'dress_01', 'dress4', 'dress3', 'dress2', 'dress1',
+            'tail', 'ribbon', 'veilshadow', 'veil', 'stockings', 'arm', 'cloak', 'helmetemo', 'helmet', 'gauntlet', 'leather', 'skirt',
+            'glass_eff', 'glass', 'starcloak', 'dress'
+        ]
         
         for part in parts_to_check:
-            if part.lower() in file.lower():
+            if part in f_lower:
                 matching_materials = [
                     mat for mat in bpy.data.materials 
-                    if 'Outlines' not in mat.name and (mat.name.endswith(part) or f'Genshin {part}' in mat.name or f'- {part}' in mat.name or mat.name == f'{self.material_names.MATERIAL_PREFIX}{part}' or part in mat.name)
+                    if mat.use_nodes and 'outlines' not in mat.name.lower() and 'outline' not in mat.name.lower() and (
+                        mat.name.lower().endswith(part) or 
+                        f'- {part}' in mat.name.lower() or 
+                        f' {part}' in mat.name.lower() or 
+                        f'_{part}' in mat.name.lower()
+                    )
                 ]
                 
-                if not matching_materials and 'Dress' in part:
+                if not matching_materials and 'dress' in part:
                     matching_materials = [
                         mat for mat in bpy.data.materials
-                        if 'Outlines' not in mat.name and 'Genshin Dress' in mat.name
+                        if mat.use_nodes and 'outlines' not in mat.name.lower() and 'outline' not in mat.name.lower() and 'dress' in mat.name.lower()
                     ]
 
-                for target_mat in matching_materials:
-                    if is_diffuse:
-                        self.set_diffuse_texture(TextureType.BODY, target_mat, img)
-                        matched_any = True
-                    elif is_lightmap:
-                        self.set_lightmap_texture(TextureType.BODY, target_mat, img)
-                        matched_any = True
-                    elif is_normal:
-                        self.set_normalmap_texture(TextureType.BODY, target_mat, img)
-                        matched_any = True
-                    elif is_shadow_ramp:
-                        self.set_shadow_ramp_texture(TextureType.BODY, img)
-                        matched_any = True
+                if matching_materials:
+                    for target_mat in matching_materials:
+                        if is_diffuse:
+                            self.set_diffuse_texture(TextureType.BODY, target_mat, img)
+                            matched_any = True
+                        elif is_lightmap:
+                            self.set_lightmap_texture(TextureType.BODY, target_mat, img)
+                            matched_any = True
+                        elif is_normal:
+                            self.set_normalmap_texture(TextureType.BODY, target_mat, img)
+                            matched_any = True
+                        elif is_shadow_ramp:
+                            self.set_shadow_ramp_texture(TextureType.BODY, img)
+                            matched_any = True
+                    break
 
         return matched_any
 
@@ -840,7 +831,9 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
 
                 # Implement the texture in the correct node
                 print(f'Importing texture {file} using {self.__class__.__name__}')
-                if "Hair_Diffuse" in file and "Eff" not in file:
+                if self.import_part_texture_to_matching_materials(file, img):
+                    pass
+                elif "Hair_Diffuse" in file and "Eff" not in file:
                     self.set_diffuse_texture(TextureType.HAIR, hair_material, img)
                 elif "EffectHair_Diffuse" in file:
                     self.set_diffuse_texture(TextureType.HAIR, effect_hair_material, img)
@@ -1559,26 +1552,21 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
                 elif self.is_texture_identifiers_in_texture_name(['Kendama', 'Lightmap'], file):
                     self.set_lightmap_texture(TextureType.WEAPON, kendama_material, img)
 
-                # Fallback, best guess attempt by assigning the texture to materials containing the texture name
-                elif self.is_texture_identifiers_in_texture_name(['Color'], file):
-                    try:
-                        body_part = file.split('_')[3]
-                        body_part_materials = [material for material in bpy.data.materials if body_part in material.name]
-                        for body_part_material in body_part_materials:
-                            self.set_diffuse_texture(TextureType.BODY, body_part_material, img)
-                    except IndexError:
-                        print(f'WARN: Unexpected format when trying fallback texture assignment on: {file}')
-                elif self.is_texture_identifiers_in_texture_name(['LightMap'], file):
-                    try:
-                        body_part = file.split('_')[3]
-                        body_part_materials = [material for material in bpy.data.materials if body_part in material.name]
-                        for body_part_material in body_part_materials:
-                            self.set_lightmap_texture(TextureType.BODY, body_part_material, img)
-                    except IndexError:
-                        print(f'WARN: Unexpected format when trying fallback texture assignment on: {file}')
-
+                # Dynamic match for any custom/variant materials (e.g. Body_D1, Body_Matcap, etc.)
                 else:
-                    print(f'WARN: Ignoring texture {file}')
+                    matched = False
+                    for mat in bpy.data.materials:
+                        if mat.name.startswith(self.material_names.MATERIAL_PREFIX):
+                            part = mat.name.replace(self.material_names.MATERIAL_PREFIX, '')
+                            if part and len(part) >= 2 and part.lower() in file.lower():
+                                if any(k in file.lower() for k in ['color', 'diffuse']):
+                                    self.set_diffuse_texture(TextureType.BODY, mat, img)
+                                    matched = True
+                                elif 'lightmap' in file.lower():
+                                    self.set_lightmap_texture(TextureType.BODY, mat, img)
+                                    matched = True
+                    if not matched:
+                        print(f'WARN: Ignoring texture {file}')
 
 
 

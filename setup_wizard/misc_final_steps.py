@@ -248,13 +248,15 @@ class NTE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
                         break
 
             source_tree = None
+            temp_scenes = []
             if target_blend and os.path.exists(target_blend):
                 try:
                     with bpy.data.libraries.load(target_blend) as (data_from, data_to):
                         data_to.scenes = list(data_from.scenes)
                         data_to.node_groups = list(data_from.node_groups)
 
-                    for sc in data_to.scenes:
+                    temp_scenes = [sc for sc in data_to.scenes if sc]
+                    for sc in temp_scenes:
                         if sc and hasattr(sc, "node_tree") and sc.node_tree and sc.node_tree.nodes:
                             source_tree = sc.node_tree
                             break
@@ -268,6 +270,10 @@ class NTE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
             if source_tree and source_tree.nodes:
                 node_map = {}
                 for src_node in source_tree.nodes:
+                    # Skip static placeholder image nodes
+                    if getattr(src_node, "type", "") == "IMAGE" or "CompositorNodeImage" in src_node.bl_idname:
+                        continue
+
                     new_node = None
                     candidates = [src_node.bl_idname]
                     if 'Composite' in src_node.bl_idname or src_node.type == 'COMPOSITE':
@@ -286,8 +292,8 @@ class NTE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
                         if hasattr(src_node, "node_tree") and src_node.node_tree:
                             new_node.node_tree = src_node.node_tree
 
-                        # Copy node properties (e.g. data_type='RGBA', blend_type='MIX') BEFORE creating links!
-                        for prop in ("data_type", "blend_type", "mode", "use_clamp", "label"):
+                        # Copy node properties BEFORE creating links
+                        for prop in ("data_type", "blend_type", "mode", "use_clamp", "label", "filter_type", "size_x", "size_y"):
                             if hasattr(src_node, prop) and hasattr(new_node, prop):
                                 try:
                                     setattr(new_node, prop, getattr(src_node, prop))
@@ -404,7 +410,48 @@ class NTE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
                     if rl_img and viewer_in:
                         node_tree.links.new(rl_img, viewer_in)
 
-            # 5. POST-FIX: ENSURE BLENDER 5.x NODE_TREE INTERFACE HAS 'Image' OUTPUT SOCKET FOR Group Output
+            # 5. REMOVE TEMPORARY / DUPLICATE SCENES SO ONLY THE ACTIVE SCENE REMAINS
+            for sc in temp_scenes:
+                if sc and sc != scene and sc.name in bpy.data.scenes:
+                    try:
+                        bpy.data.scenes.remove(sc, do_unlink=True)
+                    except Exception as ex_sc:
+                        print(f"Notice removing temp scene {sc.name}: {ex_sc}")
+
+            for sc in list(bpy.data.scenes):
+                if sc != scene and ("Scene.001" in sc.name or sc.name.startswith("Scene.")):
+                    try:
+                        bpy.data.scenes.remove(sc, do_unlink=True)
+                    except Exception:
+                        pass
+
+            # 6. ENSURE RENDER LAYERS POINTS TO ACTIVE SCENE
+            rl_node = next((n for n in node_tree.nodes if getattr(n, "type", "") in ("R_LAYERS", "RENDER_LAYERS") or "RLayers" in n.bl_idname or "RenderLayers" in n.bl_idname), None)
+            if rl_node:
+                try:
+                    rl_node.scene = scene
+                except Exception:
+                    pass
+
+            # 7. CONNECT RENDER LAYERS IMAGE DIRECTLY TO BLUR IMAGE INPUT
+            blur_node = next((n for n in node_tree.nodes if getattr(n, "type", "") == "BLUR" or "Blur" in n.bl_idname or "blur" in n.name.lower()), None)
+            if rl_node and blur_node:
+                rl_img = rl_node.outputs.get("Image") or (rl_node.outputs[0] if rl_node.outputs else None)
+                blur_in = blur_node.inputs.get("Image") or (blur_node.inputs[0] if blur_node.inputs else None)
+                if rl_img and blur_in:
+                    for l in list(blur_in.links):
+                        node_tree.links.remove(l)
+                    node_tree.links.new(rl_img, blur_in)
+
+            # Clean any remaining standalone image nodes
+            for n in list(node_tree.nodes):
+                if getattr(n, "type", "") == "IMAGE" or "CompositorNodeImage" in n.bl_idname:
+                    try:
+                        node_tree.nodes.remove(n)
+                    except Exception:
+                        pass
+
+            # 8. POST-FIX: ENSURE BLENDER 5.x NODE_TREE INTERFACE HAS 'Image' OUTPUT SOCKET FOR Group Output
             if hasattr(node_tree, "interface"):
                 try:
                     items = getattr(node_tree.interface, "items_tree", None) or getattr(node_tree.interface, "sockets", [])
@@ -493,6 +540,12 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
         return None
 
     def execute(self, context):
+        if context.object and context.object.mode != "OBJECT":
+            try:
+                bpy.ops.object.mode_set(mode="OBJECT")
+            except Exception:
+                pass
+
         armature = self._find_target_armature(context)
 
         if not armature:
@@ -501,7 +554,12 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
             )
             return {"CANCELLED"}
 
-        bpy.ops.object.select_all(action="DESELECT")
+        for obj in context.selected_objects:
+            try:
+                obj.select_set(False)
+            except Exception:
+                pass
+
         try:
             armature.select_set(True)
             context.view_layer.objects.active = armature
@@ -514,47 +572,43 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
         if "Dehya" in armature.name and armature.animation_data:
             self.clean_character(armature)
 
-        # HSR models are typically already oriented correctly; forcing +90° X here breaks Finish Setup.
+        # HSR and ZZZ models are typically already oriented correctly; forcing +90° X here breaks Finish Setup.
         should_force_upright_rotation = self.game_type not in [
             GameType.ZENLESS_ZONE_ZERO.name,
             GameType.HONKAI_STAR_RAIL.name,
         ]
 
-        if should_force_upright_rotation:
-            bpy.ops.object.scale_clear()
-            bpy.ops.object.rotation_clear()
-            armature.rotation_euler[0] = 1.5708  # x-axis, 90 degrees
+        try:
+            if should_force_upright_rotation:
+                bpy.ops.object.scale_clear()
+                bpy.ops.object.rotation_clear()
+                armature.rotation_euler[0] = 1.5708  # x-axis, 90 degrees
 
-        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+            bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+        except Exception as e:
+            print(f"Warning in transform_apply: {e}")
 
-        # clean rotation
-        # bpy.ops.transform.rotate(
-        #     value=1.5708,
-        #     orient_axis='X',
-        #     orient_type='GLOBAL',
-        #     orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)),
-        #     orient_matrix_type='GLOBAL',
-        #     constraint_axis=(True, False, False),
-        #     mirror=False,
-        #     use_proportional_edit=False,
-        #     proportional_edit_falloff='SMOOTH',
-        #     proportional_size=0.1,
-        #     use_proportional_connected=False,
-        #     use_proportional_projected=False
-        # )  # from @M4urlcl0
+        for obj in context.selected_objects:
+            try:
+                obj.select_set(False)
+            except Exception:
+                pass
 
-        bpy.ops.object.select_all(action="DESELECT")
         is_aranara = [
             material for material in bpy.data.materials if "Aranara" in material.name
         ]
         if is_aranara:
             hat_object: bpy.types.Object = bpy.data.objects.get("Hat")
-            hat_object.select_set(True)
-            bpy.ops.transform.rotate(
-                value=-1.5708,
-                orient_axis="X",
-                orient_type="GLOBAL",
-            )  # Could not seem to rotate the Mesh using transform_apply()
+            if hat_object:
+                hat_object.select_set(True)
+                try:
+                    bpy.ops.transform.rotate(
+                        value=-1.5708,
+                        orient_axis="X",
+                        orient_type="GLOBAL",
+                    )
+                except Exception as e:
+                    print(f"Warning rotating Aranara hat: {e}")
 
         if self.next_step_idx:
             NextStepInvoker().invoke(

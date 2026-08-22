@@ -292,6 +292,8 @@ def setup_dependencies():
 
         setup_wizard.join_meshes_on_armature.join_meshes_operator.GI_OT_JoinMeshesOnArmature,
         setup_wizard.character_rig_setup.character_rigger_operator.GI_OT_CharacterRiggerOperator,
+        setup_wizard.character_rig_setup.character_rigger_operator.GI_OT_ApplyHairClothesPhysicsOperator,
+        setup_wizard.character_rig_setup.character_rigger_operator.GI_OT_ApplyHairDressPhysicsOperator,
         setup_wizard.character_rig_setup.rootshape_filepath_setter_operator.GI_OT_RootShape_FilePath_Setter_Operator,
         setup_wizard.optimization.emissive_optimizer.GI_OT_Emissive_Optimizer,
         setup_wizard.genshin_compositing_node_setup.GI_OT_CompositingNodeSetup,
@@ -319,12 +321,17 @@ def unregister():
     from setup_wizard.genshin_import_outline_lightmaps import GI_OT_GenshinImportOutlineLightmaps
     from setup_wizard.genshin_import_material_data import GI_OT_GenshinImportMaterialData
     from setup_wizard.misc_final_steps import GI_OT_FixTransformations
-    from setup_wizard.set_up_head_driver import GI_OT_SetUpHeadDriver
+    from setup_wizard.set_up_head_driver import GI_OT_SetUpHeadDriver, ZZZ_OT_SetUpHeadDriver
     from setup_wizard.misc_operations import GI_OT_SetColorManagementToStandard, HYV_OT_SetUpScreenSpaceReflections, \
         HYV_OT_VertexPaintFaceSeeThroughEffect, GI_OT_DeleteSpecificObjects, GI_OT_SetUpArmTwistBoneConstraints, \
-        GI_OT_RenameShaderMaterials
+        GI_OT_RenameShaderMaterials, ZZZ_OT_RenameCollectionAndRig, ZZZ_OT_MoveLightingPanelToCharacterCollection, \
+        PGR_OT_PaintVertexColors, PGR_OT_PaintFaceShadowTexture, PGR_OT_PaintVertexEraseFaceAlpha
     from setup_wizard.join_meshes_on_armature.join_meshes_operator import GI_OT_JoinMeshesOnArmature
-    from setup_wizard.character_rig_setup.character_rigger_operator import GI_OT_CharacterRiggerOperator
+    from setup_wizard.character_rig_setup.character_rigger_operator import (
+        GI_OT_CharacterRiggerOperator,
+        GI_OT_ApplyHairClothesPhysicsOperator,
+        GI_OT_ApplyHairDressPhysicsOperator,
+    )
     from setup_wizard.character_rig_setup.rootshape_filepath_setter_operator import GI_OT_RootShape_FilePath_Setter_Operator
     from setup_wizard.optimization.emissive_optimizer import GI_OT_Emissive_Optimizer
     from setup_wizard.genshin_compositing_node_setup import GI_OT_CompositingNodeSetup, \
@@ -344,14 +351,22 @@ def unregister():
         GI_OT_GenshinImportMaterialData,
         GI_OT_FixTransformations,
         GI_OT_SetUpHeadDriver,
+        ZZZ_OT_SetUpHeadDriver,
         GI_OT_SetColorManagementToStandard,
         HYV_OT_SetUpScreenSpaceReflections,
         HYV_OT_VertexPaintFaceSeeThroughEffect,
         GI_OT_DeleteSpecificObjects,
         GI_OT_RenameShaderMaterials,
         GI_OT_SetUpArmTwistBoneConstraints,
+        ZZZ_OT_RenameCollectionAndRig,
+        ZZZ_OT_MoveLightingPanelToCharacterCollection,
+        PGR_OT_PaintVertexColors,
+        PGR_OT_PaintFaceShadowTexture,
+        PGR_OT_PaintVertexEraseFaceAlpha,
         GI_OT_JoinMeshesOnArmature,
         GI_OT_CharacterRiggerOperator,
+        GI_OT_ApplyHairClothesPhysicsOperator,
+        GI_OT_ApplyHairDressPhysicsOperator,
         GI_OT_RootShape_FilePath_Setter_Operator,
         GI_OT_Emissive_Optimizer,
         GI_OT_CompositingNodeSetup,
