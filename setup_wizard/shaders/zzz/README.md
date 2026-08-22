@@ -16,6 +16,7 @@ This folder contains the shader and rig setup files for **Zenless Zone Zero (ZZZ
 ## Credits & Acknowledgments
 
 * **Shader Creators**:
+  * **Kytherity**
   * **Just_ScaasI** ([Twitter](https://x.com/Just_ScaasI/))
   * **BonnyAnimations** ([YouTube](https://www.youtube.com/@BonnyAnimations) | [Twitter](https://x.com/BonnyTweetsOFF))
   * **Aiko** ([YouTube](https://www.youtube.com/@AikoDesu) | [Twitter](https://x.com/Aiko__ya))

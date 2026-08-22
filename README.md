@@ -80,7 +80,7 @@ Thanks to all those who collaborated on the original project:
   * **Shader**: [Blender-StellarToon](https://github.com/festivities/Blender-StellarToon) by Festivity
   * **Face Rig**: Isaac / Just_ScaasI
 * **ZZZ**:
-  * **Shader**: Just_ScaasI, BonnyAnimations, Aiko
+  * **Shader**: Kytherity, Just_ScaasI, BonnyAnimations, Aiko
   * **Rigging + Scripting**: Enthralpy
   * **Supervised and made possible by**: Stormz67
   * **Face Rig**: [@jideeh](https://github.com/Jideeh1)
@@ -90,6 +90,11 @@ Thanks to all those who collaborated on the original project:
 * **NTE**:
   * **Shader**: Omatsuri Discord
   * **Rig**: 矩阵映画
+* **Hair & Clothes Physics**:
+  * [thewindlead](https://www.youtube.com/@thewindlead)
+* **Assets**:
+  * **Hiragara**: Character assets
+  * **HoyoToon**: Assets · [Discord](https://discord.com/invite/hoyotoon)
 * **Logo Icon**: <a href="https://www.flaticon.com/free-icons/star" title="star icons">Star icons created by Magnific - Flaticon</a>
 
 ---
