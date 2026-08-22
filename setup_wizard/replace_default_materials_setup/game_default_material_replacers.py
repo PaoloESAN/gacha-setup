@@ -368,6 +368,29 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         self.context: Context = context
         self.shader_material_names = material_names
 
+    def __transfer_diffuse_texture(self, old_material, new_material):
+        if not old_material or not old_material.use_nodes or not new_material or not new_material.use_nodes:
+            return
+            
+        old_image = None
+        for node in old_material.node_tree.nodes:
+            if node.type == 'TEX_IMAGE' and node.image:
+                old_image = node.image
+                break
+                
+        if not old_image:
+            return
+            
+        diffuse_nodes = find_all_image_nodes_by_category(new_material.node_tree, 'diffuse')
+        if not diffuse_nodes:
+            for node in new_material.node_tree.nodes:
+                if node.type == 'TEX_IMAGE':
+                    n_low = (node.name + " " + (node.label or "")).lower()
+                    if any(k in n_low for k in ['diffuse', 'color', 'srgb']) and not any(k in n_low for k in ['lightmap', 'ramp', 'normal', 'mask']):
+                        diffuse_nodes.append(node)
+        for node in diffuse_nodes:
+            node.image = old_image
+
     def replace_default_materials(self):
         meshes = [mesh for mesh in bpy.context.scene.objects if mesh.type == 'MESH' and mesh.name not in self.MESH_IGNORE_LIST]
 
@@ -407,8 +430,8 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 elif mesh_body_part_name ==  'Body2_Trans':
                     body_material = self.create_body_trans_material(mesh, self.shader_material_names.BODY2_TRANS) 
                     material_name = body_material.name
-                elif mesh_body_part_name == 'EyeShadow':
-                    eyeshadow_material = self.create_body_material(mesh, self.shader_material_names.EYESHADOW)
+                elif mesh_body_part_name in ['EyeShadow', 'EyeSpecular', 'Eye_Specular', 'EyeStar']:
+                    eyeshadow_material = self.create_body_material(mesh, f'{self.shader_material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
                     material_name = eyeshadow_material.name
                 elif mesh_body_part_name == 'Face':
                     face_material = self.create_body_material(mesh, self.shader_material_names.FACE)
@@ -429,11 +452,10 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     material_name = f'{self.shader_material_names.MATERIAL_PREFIX}{mesh_body_part_name}'
                     self.create_body_material(mesh, material_name)
 
-                honkai_star_rail_material = bpy.data.materials.get(
-                    f'{self.shader_material_names.MATERIAL_PREFIX}{mesh_body_part_name}'
-                )
+                honkai_star_rail_material = bpy.data.materials.get(material_name)
 
                 if honkai_star_rail_material:
+                    self.__transfer_diffuse_texture(material_slot.material, honkai_star_rail_material)
                     material_slot.material = honkai_star_rail_material
                 else:
                     self.blender_operator.report({'WARNING'}, f'Ignoring unknown mesh body part in character model: {mesh_body_part_name} / Material: {material_name}')
@@ -441,6 +463,12 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         self.blender_operator.report({'INFO'}, 'Replaced default materials with Genshin shader materials...')
 
     def find_body_part_name(self, material_name):
+        if '_Mat_' in material_name:
+            suffix = material_name.split('_Mat_')[1]
+            if suffix.endswith('_D') or suffix.endswith('_S'):
+                return suffix[:-2]
+            return suffix
+
         expected_format_body_part_name = self.__expected_format_body_part_name_search(material_name)
         naive_search_body_part_name = self.__naive_body_part_name_search(material_name)
         body_part_name = ''
@@ -477,6 +505,9 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             'Body_Trans',
             'Mat_Trans',
             'EyeShadow',
+            'EyeSpecular',
+            'Eye_Specular',
+            'EyeStar',
             'Face',
             'Weapon_Trans',
             'Body',  # Important this is last in the list because it could interfere with Body1 and Body2
@@ -536,12 +567,41 @@ class StellarToonDefaultMaterialReplacer(HonkaiStarRailDefaultMaterialReplacer):
     def replace_default_materials(self):
         super().replace_default_materials()
 
+    def _is_trans_material(self, name: str) -> bool:
+        n_low = name.lower()
+        return ('_trans' in n_low or 
+                'transparent' in n_low or 
+                'eyespecular' in n_low or 
+                'eye_specular' in n_low or 
+                'eyeshadow' in n_low or
+                'eyestar' in n_low or
+                'body_d1' in n_low or
+                '_d1' in n_low or
+                'body1_d1' in n_low or
+                ('robin' in n_low and 'd1' in n_low))
+
+    def _set_transparency(self, material, enabled: bool):
+        if not material or not material.node_tree:
+            return
+        val = 1.0 if enabled else 0.0
+        for node in material.node_tree.nodes:
+            inp = node.inputs.get(self.ENABLE_TRANSPARENCY)
+            if inp:
+                inp.default_value = val
+            if node.type == 'GROUP' and node.node_tree:
+                for sub_node in node.node_tree.nodes:
+                    sub_inp = sub_node.inputs.get(self.ENABLE_TRANSPARENCY)
+                    if sub_inp:
+                        sub_inp.default_value = val
+
     def create_body_material(self, mesh, material_name):
         body_material = bpy.data.materials.get(material_name)
         if not body_material:
             body_material = bpy.data.materials.get(self.shader_material_names.BASE).copy()
             body_material.name = material_name
             body_material.use_fake_user = True
+        is_trans = self._is_trans_material(material_name)
+        self._set_transparency(body_material, is_trans)
         return body_material
 
     def create_body_trans_material(self, mesh, material_name):
@@ -550,13 +610,13 @@ class StellarToonDefaultMaterialReplacer(HonkaiStarRailDefaultMaterialReplacer):
             body_material = bpy.data.materials.get(self.shader_material_names.BASE).copy()
             body_material.name = material_name
             body_material.use_fake_user = True
-        body_material.node_tree.nodes.get(StellarToonShaderNodeNames.BODY_SHADER).inputs.get(self.ENABLE_TRANSPARENCY).default_value = 1.0
+        self._set_transparency(body_material, True)
         return body_material
 
     def create_weapon_materials(self, mesh_body_part_name):
         weapon_material = super().create_weapon_materials(mesh_body_part_name)
-        if self.shader_material_names.WEAPON_TRANS in weapon_material.name:
-            weapon_material.node_tree.nodes.get(StellarToonShaderNodeNames.MAIN_SHADER).inputs.get(self.ENABLE_TRANSPARENCY).default_value = 1.0
+        is_trans = self.shader_material_names.WEAPON_TRANS in weapon_material.name or '_Trans' in weapon_material.name or '_trans' in weapon_material.name
+        self._set_transparency(weapon_material, is_trans)
         return weapon_material
 
 

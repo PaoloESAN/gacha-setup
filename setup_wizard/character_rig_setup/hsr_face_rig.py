@@ -32,7 +32,6 @@ COL_VISEME = (0.95, 0.85, 0.20)
 COL_EYELID = (0.90, 0.15, 0.15)
 COL_EYEAIM = (0.20, 0.85, 0.90)
 COL_EXPRESSION = (0.65, 0.35, 0.90)
-COL_LABEL = (0.95, 0.95, 0.95)
 
 HEAD_CANDIDATES = [
     "DEF-spine.006", "spine.006", "head", "Head", "Head_M", "head_M",
@@ -231,8 +230,6 @@ def plan_hsr_controls(mesh_obj, fwd, right, up, face_size, keyblock):
             'drivers': drv_shift
         })
 
-    label_scale = Vector((face_size * 0.045, face_size * 0.045, face_size * 0.045))
-
     # 2. Left-side Panel: Eyebrows and Eyes (A la IZQUIERDA de la cabeza)
     left_panel_origin = fcx - right * (face_size * 0.45) + up * (face_size * 0.45)
     current_left_v = 0.0
@@ -286,26 +283,6 @@ def plan_hsr_controls(mesh_obj, fwd, right, up, face_size, keyblock):
     unhandled_eyes = [k for k in keyblock.keys() if k in eye_keys and k not in handled_keys]
     if unhandled_eyes:
         add_left_panel_grid(unhandled_eyes, 'Face Eye Expressions', COL_EYEAIM)
-
-    # Add Left Panel Header Label (Brows & Eyes)
-    if unhandled_brows or unhandled_eyes:
-        total_left = len(unhandled_brows) + len(unhandled_eyes)
-        num_cols_left = max(1, min(MAX_PER_ROW, total_left))
-        center_h_left = - (num_cols_left - 1) / 2.0 * (face_size * ITEM_SP)
-        controls.append({
-            'name': 'LABEL-Brows_Eyes',
-            'collection': FACERIG_COLLECTION,
-            'color': COL_LABEL,
-            'group': 'Face Labels',
-            'head': place(left_panel_origin, h=center_h_left, v=face_size * 0.075),
-            'widget': 'text:BROWS & EYES',
-            'lim': 0.0,
-            'free': (),
-            'range': 'pos',
-            'shape_scale': label_scale,
-            'is_label': True,
-            'drivers': []
-        })
 
     # 3. Right-side Panel: Mouth, Visemes, Phonemes, Extra (A la DERECHA de la cabeza)
     right_panel_origin = fcx + right * (face_size * 0.45) + up * (face_size * 0.45)
@@ -380,26 +357,6 @@ def plan_hsr_controls(mesh_obj, fwd, right, up, face_size, keyblock):
             mouth_items.append((c_name, [{'key': k, 'axis': 'Z', 'dir': +1}]))
         add_right_panel_grid(mouth_items, 'Face Expressions', COL_EXPRESSION, is_col2=False)
 
-    # Add Right Panel Col 1 Header Label (Mouth)
-    if active_visemes or unhandled_mouth:
-        total_col1 = len(active_visemes) + len(unhandled_mouth)
-        num_cols1 = max(1, min(MAX_PER_ROW, total_col1))
-        center_h_col1 = (num_cols1 - 1) / 2.0 * (face_size * ITEM_SP)
-        controls.append({
-            'name': 'LABEL-Mouth',
-            'collection': FACERIG_COLLECTION,
-            'color': COL_LABEL,
-            'group': 'Face Labels',
-            'head': place(right_panel_origin, h=center_h_col1, v=face_size * 0.075),
-            'widget': 'text:MOUTH',
-            'lim': 0.0,
-            'free': (),
-            'range': 'pos',
-            'shape_scale': label_scale,
-            'is_label': True,
-            'drivers': []
-        })
-
     # C. Phoneme Keys (Fonemas - Panel Derecho, COLUMNA 2 a la Derecha de las expresiones moradas)
     phoneme_keys = [k for k in keyblock.keys() if "phoneme" in k.lower() and k not in handled_keys]
     if phoneme_keys:
@@ -420,36 +377,6 @@ def plan_hsr_controls(mesh_obj, fwd, right, up, face_size, keyblock):
             handled_keys.add(k)
             rem_items.append((f"CTRL-{k}", [{'key': k, 'axis': 'Z', 'dir': +1}]))
         add_right_panel_grid(rem_items, 'Face Extra Keys', (0.25, 0.75, 0.35), is_col2=True)
-
-    # Add Right Panel Col 2 Header Label (Phonemes & Extra)
-    if phoneme_keys or remaining:
-        total_col2 = len(phoneme_keys) + len(remaining)
-        num_cols2 = max(1, min(MAX_PER_ROW, total_col2))
-        center_h_col2 = col2_offset + (num_cols2 - 1) / 2.0 * (face_size * ITEM_SP)
-        if phoneme_keys and remaining:
-            lbl_text = 'PHONEMES & EXTRA'
-            lbl_name = 'LABEL-Phonemes_Extra'
-        elif phoneme_keys:
-            lbl_text = 'PHONEMES'
-            lbl_name = 'LABEL-Phonemes'
-        else:
-            lbl_text = 'EXTRA'
-            lbl_name = 'LABEL-Extra'
-
-        controls.append({
-            'name': lbl_name,
-            'collection': FACERIG_COLLECTION,
-            'color': COL_LABEL,
-            'group': 'Face Labels',
-            'head': place(right_panel_origin, h=center_h_col2, v=face_size * 0.075),
-            'widget': f'text:{lbl_text}',
-            'lim': 0.0,
-            'free': (),
-            'range': 'pos',
-            'shape_scale': label_scale,
-            'is_label': True,
-            'drivers': []
-        })
 
     return controls
 
@@ -487,56 +414,6 @@ def make_widget(kind, coll):
     return obj
 
 
-def make_text_widget(text_string, wgt_coll):
-    safe_name = text_string.replace(' ', '_').replace('&', 'AND').replace('/', '_')
-    name = "WGT-Face_Label_" + safe_name
-    obj = bpy.data.objects.get(name)
-    if obj:
-        return obj
-
-    try:
-        curve_data = bpy.data.curves.new(name=name + "_Curve", type='FONT')
-        curve_data.body = text_string
-        curve_data.size = 1.0
-        curve_data.align_x = 'CENTER'
-        curve_data.align_y = 'CENTER'
-        curve_data.fill_mode = 'NONE'
-
-        temp_obj = bpy.data.objects.new(name + "_Temp", curve_data)
-        bpy.context.scene.collection.objects.link(temp_obj)
-
-        depsgraph = bpy.context.evaluated_depsgraph_get()
-        eval_obj = temp_obj.evaluated_get(depsgraph)
-        mesh_from_eval = bpy.data.meshes.new_from_object(eval_obj)
-        mesh_from_eval.name = name
-
-        # Rotate mesh vertices so text stands upright facing the front camera
-        # Text X (width) -> Bone -X (which is +X in world)
-        # Text Y (height) -> Bone +Z (which is +Z in world)
-        # Text Z (normal) -> Bone Y (0 depth)
-        for v in mesh_from_eval.vertices:
-            v.co = Vector((-v.co.x, 0.0, v.co.y))
-
-        bpy.context.scene.collection.objects.unlink(temp_obj)
-        bpy.data.objects.remove(temp_obj, do_unlink=True)
-        bpy.data.curves.remove(curve_data, do_unlink=True)
-
-        wgt_obj = bpy.data.objects.new(name, mesh_from_eval)
-        wgt_coll.objects.link(wgt_obj)
-        return wgt_obj
-    except Exception as ex:
-        # Fallback wireframe bounding box with center line
-        s_w = max(1.0, len(text_string) * 0.4)
-        s_h = 0.5
-        verts = [(-s_w, 0, -s_h), (s_w, 0, -s_h), (s_w, 0, s_h), (-s_w, 0, s_h)]
-        edges = [(0, 1), (1, 2), (2, 3), (3, 0)]
-        mesh = bpy.data.meshes.new(name)
-        mesh.from_pydata(verts, edges, [])
-        wgt_obj = bpy.data.objects.new(name, mesh)
-        wgt_coll.objects.link(wgt_obj)
-        return wgt_obj
-
-
 def lighten(rgb, amt):
     return tuple(min(1.0, c + amt) for c in rgb)
 
@@ -572,7 +449,7 @@ def purge_previous(armature):
     bpy.ops.object.mode_set(mode='EDIT')
     eb = armature.data.edit_bones
     for b in list(eb):
-        if b.name.startswith("CTRL-") or b.name.startswith("LABEL-") or b.name == "Face-Root":
+        if b.name.startswith("CTRL-") or b.name == "Face-Root":
             eb.remove(b)
     bpy.ops.object.mode_set(mode='OBJECT')
     for o in list(bpy.data.objects):
@@ -581,32 +458,24 @@ def purge_previous(armature):
 
 
 def get_widget_collection(name="WGTS_FaceRig"):
-    for name_candidate in ("WGTS", "wgt", "WGTS_FaceRig"):
-        coll = bpy.data.collections.get(name_candidate)
-        if coll:
-            return coll
+    wgt = bpy.data.collections.get("wgt")
+    if wgt:
+        coll = wgt
+    else:
+        coll = None
+        for c in bpy.data.collections:
+            if "WGTS" in c.name:
+                coll = c
+                break
+        if not coll:
+            coll = bpy.data.collections.get(name) or bpy.data.collections.new(name)
 
-    for c in bpy.data.collections:
-        c_low = c.name.lower()
-        if "wgts" in c_low or "wgt" in c_low:
-            return c
-
-    coll = bpy.data.collections.new(name)
-    return coll
-
-
-def finalize_widget_collection(wgt_coll):
-    if not wgt_coll:
-        return
-    try:
-        wgt_coll.hide_viewport = True
-    except Exception:
-        pass
-    if wgt_coll.name in bpy.context.scene.collection.children:
+    if coll and coll.name in bpy.context.scene.collection.children:
         try:
-            bpy.context.scene.collection.children.unlink(wgt_coll)
+            bpy.context.scene.collection.children.unlink(coll)
         except Exception:
             pass
+    return coll
 
 
 def setup_hsr_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_size, keyblock):
@@ -658,7 +527,7 @@ def setup_hsr_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_si
 
     bpy.ops.object.mode_set(mode='OBJECT')
 
-    coll_names = [c['collection'] for c in controls if c.get('collection')]
+    coll_names = [c['collection'] for c in controls if c['collection']]
     if not is_blender_3() and hasattr(armature.data, "collections"):
         for cn in set(coll_names):
             coll = armature.data.collections.get(cn) or armature.data.collections.new(cn)
@@ -672,7 +541,7 @@ def setup_hsr_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_si
                 pass
         for c in controls:
             bone = armature.data.bones.get(c['name'])
-            coll = armature.data.collections.get(c.get('collection', FACERIG_COLLECTION))
+            coll = armature.data.collections.get(c['collection'])
             if bone and coll:
                 coll.assign(bone)
 
@@ -685,58 +554,43 @@ def setup_hsr_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_si
         if not pb:
             continue
 
-        is_lbl = c.get('is_label', False)
-
-        if is_lbl:
-            # Lock all transforms for header label bones
-            for i in range(3):
-                pb.lock_location[i] = True
-                pb.lock_rotation[i] = True
-                pb.lock_scale[i] = True
-            pb.lock_rotation_w = True
+        lim = c['lim']
+        free = c['free']
+        rng = c['range']
+        if rng == 'both':
+            lo, hi = -lim, lim
+        elif rng == 'neg':
+            lo, hi = -lim, 0.0
         else:
-            lim = c['lim']
-            free = c['free']
-            rng = c['range']
-            if rng == 'both':
-                lo, hi = -lim, lim
-            elif rng == 'neg':
-                lo, hi = -lim, 0.0
-            else:
-                lo, hi = 0.0, lim
+            lo, hi = 0.0, lim
 
-            pb.lock_location[0] = 'X' not in free
-            pb.lock_location[1] = True
-            pb.lock_location[2] = 'Z' not in free
-            for i in range(3):
-                pb.lock_rotation[i] = True
-                pb.lock_scale[i] = True
-            pb.lock_rotation_w = True
+        pb.lock_location[0] = 'X' not in free
+        pb.lock_location[1] = True
+        pb.lock_location[2] = 'Z' not in free
+        for i in range(3):
+            pb.lock_rotation[i] = True
+            pb.lock_scale[i] = True
+        pb.lock_rotation_w = True
 
-            con = pb.constraints.new(type='LIMIT_LOCATION')
-            con.owner_space = 'LOCAL'
-            con.use_transform_limit = True
-            con.use_min_x = con.use_max_x = True
-            con.use_min_y = con.use_max_y = True
-            con.use_min_z = con.use_max_z = True
-            con.min_y = con.max_y = 0.0
-            con.min_x = lo if 'X' in free else 0.0
-            con.max_x = hi if 'X' in free else 0.0
-            con.min_z = lo if 'Z' in free else 0.0
-            con.max_z = hi if 'Z' in free else 0.0
+        con = pb.constraints.new(type='LIMIT_LOCATION')
+        con.owner_space = 'LOCAL'
+        con.use_transform_limit = True
+        con.use_min_x = con.use_max_x = True
+        con.use_min_y = con.use_max_y = True
+        con.use_min_z = con.use_max_z = True
+        con.min_y = con.max_y = 0.0
+        con.min_x = lo if 'X' in free else 0.0
+        con.max_x = hi if 'X' in free else 0.0
+        con.min_z = lo if 'Z' in free else 0.0
+        con.max_z = hi if 'Z' in free else 0.0
 
-        if c['widget'].startswith('text:'):
-            text_str = c['widget'].split(':', 1)[1]
-            pb.custom_shape = make_text_widget(text_str, wgt_coll)
-        else:
-            pb.custom_shape = make_widget(c['widget'], wgt_coll)
-
+        pb.custom_shape = make_widget(c['widget'], wgt_coll)
         try:
             pb.use_custom_shape_bone_size = False
         except Exception:
             pass
         ss = c.get('shape_scale')
-        pb.custom_shape_scale_xyz = ss if ss is not None else Vector((c.get('lim', 0.02) * WIDGET_F,) * 3)
+        pb.custom_shape_scale_xyz = ss if ss is not None else Vector((lim * WIDGET_F,) * 3)
 
         apply_color(armature, pb, c['group'], c['color'], color_cache)
 
@@ -745,7 +599,7 @@ def setup_hsr_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_si
     # Build Drivers on Shape Keys
     agg = {}
     for c in controls:
-        for d in c.get('drivers', []):
+        for d in c['drivers']:
             agg.setdefault(d['key'], []).append(
                 {'bone': c['name'], 'axis': d['axis'], 'dir': d['dir'],
                  'lim': c['lim'], 'bidir': d.get('bidir', False)})
@@ -836,7 +690,7 @@ def setup_hsr_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_si
     for bone in armature.data.bones:
         b_name = bone.name
         b_low = b_name.lower()
-        if b_name.startswith("CTRL-") or b_name.startswith("LABEL-") or b_name in main_ctrls or b_name in eye_ctrl_bone_names:
+        if b_name.startswith("CTRL-") or b_name in main_ctrls or b_name in eye_ctrl_bone_names:
             continue
 
         is_face_bone = any(kw in b_low for kw in face_keywords)
@@ -941,6 +795,7 @@ def setup_dynamic_eye_y_drivers(mesh_obj, armature, max_offset=-0.0040):
         attach_driver(eye_R_pbone, eye_sk_R)
 
 
+
 def hsr_face_rig_main():
     faceobj = None
     for obj in bpy.data.objects:
@@ -970,8 +825,4 @@ def hsr_face_rig_main():
         purge_previous(armature)
 
     setup_hsr_face_rig(faceobj, controls, armature, head_name, fwd, up, face_size, keyblock)
-
-    wgt_coll = get_widget_collection()
-    finalize_widget_collection(wgt_coll)
-
     print(f"\nHSR Face Rig complete: {len(controls)} controls built on '{armature.name}'.\n")

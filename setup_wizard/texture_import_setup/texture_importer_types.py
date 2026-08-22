@@ -1552,26 +1552,21 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
                 elif self.is_texture_identifiers_in_texture_name(['Kendama', 'Lightmap'], file):
                     self.set_lightmap_texture(TextureType.WEAPON, kendama_material, img)
 
-                # Fallback, best guess attempt by assigning the texture to materials containing the texture name
-                elif self.is_texture_identifiers_in_texture_name(['Color'], file):
-                    try:
-                        body_part = file.split('_')[3]
-                        body_part_materials = [material for material in bpy.data.materials if body_part in material.name]
-                        for body_part_material in body_part_materials:
-                            self.set_diffuse_texture(TextureType.BODY, body_part_material, img)
-                    except IndexError:
-                        print(f'WARN: Unexpected format when trying fallback texture assignment on: {file}')
-                elif self.is_texture_identifiers_in_texture_name(['LightMap'], file):
-                    try:
-                        body_part = file.split('_')[3]
-                        body_part_materials = [material for material in bpy.data.materials if body_part in material.name]
-                        for body_part_material in body_part_materials:
-                            self.set_lightmap_texture(TextureType.BODY, body_part_material, img)
-                    except IndexError:
-                        print(f'WARN: Unexpected format when trying fallback texture assignment on: {file}')
-
+                # Dynamic match for any custom/variant materials (e.g. Body_D1, Body_Matcap, etc.)
                 else:
-                    print(f'WARN: Ignoring texture {file}')
+                    matched = False
+                    for mat in bpy.data.materials:
+                        if mat.name.startswith(self.material_names.MATERIAL_PREFIX):
+                            part = mat.name.replace(self.material_names.MATERIAL_PREFIX, '')
+                            if part and len(part) >= 2 and part.lower() in file.lower():
+                                if any(k in file.lower() for k in ['color', 'diffuse']):
+                                    self.set_diffuse_texture(TextureType.BODY, mat, img)
+                                    matched = True
+                                elif 'lightmap' in file.lower():
+                                    self.set_lightmap_texture(TextureType.BODY, mat, img)
+                                    matched = True
+                    if not matched:
+                        print(f'WARN: Ignoring texture {file}')
 
 
 

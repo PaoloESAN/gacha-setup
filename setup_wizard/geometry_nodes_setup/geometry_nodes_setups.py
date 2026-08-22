@@ -205,9 +205,14 @@ class GameGeometryNodesSetup(ABC):
                     new_outline_material = outline_material.copy()
                     new_outline_material.name = new_outline_name
                     new_outline_material.use_fake_user = True
-                if '_Trans' in new_outline_name and type(self) is StellarToonGeometryNodesSetup:
+                if type(self) is StellarToonGeometryNodesSetup:
                     new_outline_material = bpy.data.materials.get(new_outline_name)
-                    new_outline_material.node_tree.nodes.get(StellarToonShaderNodeNames.OUTLINES_SHADER).inputs.get(self.ENABLE_TRANSPARENCY).default_value = 1.0
+                    if new_outline_material and new_outline_material.node_tree:
+                        is_trans = '_Trans' in new_outline_name or '_trans' in new_outline_name
+                        for node in new_outline_material.node_tree.nodes:
+                            inp = node.inputs.get(self.ENABLE_TRANSPARENCY)
+                            if inp:
+                                inp.default_value = 1.0 if is_trans else 0.0
 
     def set_face_outlines_material_default_values(self, game_material_names: ShaderMaterialNames, outlines_shader_node_name: str):
         face_outlines_material = bpy.data.materials.get(f'{game_material_names.FACE} Outlines')

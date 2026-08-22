@@ -266,9 +266,23 @@ class HonkaiStarRailMaterialImporterFacade(GameMaterialImporter):
         # Set 'Use Nodes' because shader does not have that by default
         # It's important this runs BEFORE the next step is invoked because Replace Default Materials clones materials
         for material_dictionary in self.NAMES_OF_HONKAI_STAR_RAIL_MATERIALS:
-            material: bpy.types.Material = bpy.data.materials.get(material_dictionary.get('name'))
+            mat_name = material_dictionary.get('name')
+            material: bpy.types.Material = bpy.data.materials.get(mat_name)
             if material:
                 material.use_nodes = True
+                if material.node_tree:
+                    m_low = mat_name.lower()
+                    is_trans = ('_trans' in m_low or 
+                                'transparent' in m_low or 
+                                'eyespecular' in m_low or 
+                                'eye_specular' in m_low or 
+                                'eyeshadow' in m_low or 
+                                'eyestar' in m_low)
+                    val = 1.0 if is_trans else 0.0
+                    for node in material.node_tree.nodes:
+                        inp = node.inputs.get('Enable Transparency')
+                        if inp:
+                            inp.default_value = val
 
 
         cache_enabled = self.context.window_manager.cache_enabled
