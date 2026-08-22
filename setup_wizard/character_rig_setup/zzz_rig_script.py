@@ -1145,8 +1145,32 @@ def rig_character(
     if new_name: move_into_collection(new_name, "wgt")
 
 
-    # Do NOT modify or affect the Lighting Panel during rig generation
-    lighting_panel_rig_obj = None
+    # remove lighting colls - also move the RGB wheels into the rig obj
+    lighting_panel_rig_obj = bpy.data.objects.get(
+        LightingPanelNames.Objects.LIGHTING_PANEL
+    )
+    if lighting_panel_rig_obj:
+        to_del_coll = bpy.data.collections.get(
+            LightingPanelNames.Collections.WIDGET_COLLECTION
+        )
+        if to_del_coll:
+            for obj in to_del_coll.objects:
+                move_into_collection(obj.name, "wgt")
+        to_del_coll = bpy.data.collections.get(LightingPanelNames.Collections.PICKER)
+        if to_del_coll:
+            for obj in to_del_coll.objects:
+                move_into_collection(obj.name, "wgt")
+        to_del_coll = bpy.data.collections.get(LightingPanelNames.Collections.WHEEL)
+        if to_del_coll:
+            for obj in to_del_coll.objects:
+                move_into_collection(obj.name, char_name)
+        # DO NOT INCLUDE CHILDREN. This will cause ColorPickers to be moved into the rig object.
+        move_into_collection(
+            LightingPanelNames.Objects.LIGHTING_PANEL, char_name, include_children=False
+        )
+        l_coll = bpy.data.collections.get(LightingPanelNames.Collections.LIGHTING_PANEL)
+        if l_coll:
+            bpy.data.collections.remove(l_coll, do_unlink=True)
 
     # If default collection exists and is empty, get rid of it.
     camera_coll = bpy.data.collections.get("Collection")
@@ -1298,8 +1322,12 @@ def rig_character(
     bpy.ops.object.mode_set(mode='OBJECT')
     bpy.ops.object.select_all(action='DESELECT')
 
-    # Do not select or join lighting panel armature
-    lighting_panel_rig_obj = None
+    # Select lighting panel armature
+    lighting_panel_rig_obj = bpy.data.objects.get(
+        LightingPanelNames.Objects.LIGHTING_PANEL
+    )
+    if lighting_panel_rig_obj:
+        lighting_panel_rig_obj.select_set(True)
 
     # Select eye rig    
     eye_rig_obj = bpy.data.objects.get("eyerig")

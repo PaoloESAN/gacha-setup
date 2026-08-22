@@ -1,6 +1,7 @@
 import bpy
 import os
 import re
+import json
 
 from abc import ABC, abstractmethod
 from bpy.types import Operator, Context
@@ -274,8 +275,127 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         )
         return {'FINISHED'}
 
+    def _build_zzz_json_texture_map(self, folder):
+        candidates_dirs = [
+            folder,
+            os.path.join(folder, "Materials"),
+            os.path.join(os.path.dirname(folder), "Materials"),
+        ]
+        
+        materials_dir = None
+        for d in candidates_dirs:
+            if os.path.isdir(d) and any(f.lower().endswith(".json") for f in os.listdir(d)):
+                materials_dir = d
+                break
+                
+        # Find texture directory
+        tex_dir = folder
+        if not any(f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg')) for f in os.listdir(folder)):
+            sub = os.path.join(folder, "Textures")
+            if os.path.isdir(sub):
+                tex_dir = sub
+            else:
+                sub = os.path.join(os.path.dirname(folder), "Textures")
+                if os.path.isdir(sub):
+                    tex_dir = sub
+
+        if not materials_dir:
+            return {}, tex_dir
+
+        image_files = [f for f in os.listdir(tex_dir) if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff'))]
+        
+        def resolve_file(tex_name):
+            if not tex_name:
+                return None
+            t_low = tex_name.lower().strip()
+            for f in image_files:
+                stem = os.path.splitext(f)[0].lower()
+                if stem == t_low:
+                    return f
+            for f in image_files:
+                stem = os.path.splitext(f)[0].lower()
+                if stem.startswith(t_low) or t_low.startswith(stem):
+                    return f
+            for f in image_files:
+                if t_low in f.lower():
+                    return f
+            return None
+
+        mat_map = {}
+        for jf in os.listdir(materials_dir):
+            if not jf.lower().endswith(".json"):
+                continue
+            jpath = os.path.join(materials_dir, jf)
+            try:
+                with open(jpath, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+            except Exception:
+                continue
+                
+            tex_envs = data.get("m_SavedProperties", {}).get("m_TexEnvs", {})
+            mat_key = os.path.splitext(jf)[0].lower()
+            
+            extracted = {}
+            slot_mappings = {
+                '_MainTex': 'd',
+                '_EyeColorMap': 'd',
+                '_OtherDataTex': 'm',
+                '_OtherDataTex2': 'a',
+                '_LightTex': 'n',
+                '_BumpMap': 'n',
+                '_FaceLightMap': 'n',
+                '_MatCapTex': 'matcap',
+                '_MatCapTex2': 'matcap2',
+                '_MatCapTex3': 'matcap3',
+                '_MatCapTex4': 'matcap4',
+                '_MatCapTex5': 'matcap5',
+            }
+            
+            for slot_name, map_key in slot_mappings.items():
+                slot_data = tex_envs.get(slot_name, {})
+                if isinstance(slot_data, dict):
+                    tex_obj = slot_data.get("m_Texture", {})
+                    if isinstance(tex_obj, dict) and not tex_obj.get("IsNull", True):
+                        t_name = tex_obj.get("Name")
+                        if t_name:
+                            resolved = resolve_file(t_name)
+                            if resolved:
+                                extracted[map_key] = resolved
+                                
+            mat_map[mat_key] = extracted
+        return mat_map, tex_dir
+
+    def _find_json_textures_for_material(self, mat_name, json_map):
+        if not json_map:
+            return None
+        m_clean = mat_name.lower().replace("zzz", "").replace("kythera's", "").replace("kythera", "").replace("shader", "").strip(" _-")
+        
+        # 1. Exact / Substring match
+        for j_key, tex_dict in json_map.items():
+            if j_key == m_clean or j_key in m_clean or m_clean in j_key:
+                return tex_dict
+                
+        # 2. Token overlap match
+        m_tokens = set(re.split(r'[^a-zA-Z0-9]+', m_clean)) - {'', 'mat', 'ui'}
+        best_key = None
+        best_overlap = 0
+        for j_key, tex_dict in json_map.items():
+            j_tokens = set(re.split(r'[^a-zA-Z0-9]+', j_key)) - {'', 'mat', 'ui'}
+            overlap = len(m_tokens.intersection(j_tokens))
+            if overlap > best_overlap:
+                best_overlap = overlap
+                best_key = j_key
+                
+        if best_key and best_overlap > 0:
+            return json_map[best_key]
+        return None
+
     def import_textures_from_folder(self, folder):
-        files = os.listdir(folder)
+        json_map, tex_folder = self._build_zzz_json_texture_map(folder)
+        if not tex_folder:
+            tex_folder = folder
+
+        files = os.listdir(tex_folder)
         
         # Try to find a character name prefix to filter the files (prevents importing other characters' textures if in same folder)
         main_prefix = ""
@@ -378,10 +498,8 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                     if f_is_3:
                         score += 100
                     elif f_is_2:
-                        # Fallback tier: if no body3 exists in folder, use highest body tier (body2)
                         score += 70 if not has_b3_files else -20
                     elif f_is_1:
-                        # If neither body3 nor body2 exists, fallback to body1
                         score += 40 if (not has_b3_files and not has_b2_files) else -40
 
                 elif is_body2:
@@ -454,7 +572,9 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         def connect_tex_to_socket(mat, group_node, socket_id, socket_names, file_name, is_color=False, y_offset=0):
             if not file_name:
                 return None
-            img_path = os.path.join(folder, file_name)
+            img_path = os.path.join(tex_folder, file_name)
+            if not os.path.isfile(img_path):
+                img_path = os.path.join(folder, file_name)
             if not os.path.isfile(img_path):
                 return None
 
@@ -549,6 +669,9 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
             combined_names = matname + " " + " ".join(mesh_names)
             is_alice_pingmu = "alice" in combined_names and "pingmu" in combined_names
 
+            # Check if JSON material data contains exact textures
+            json_textures = self._find_json_textures_for_material(mat.name, json_map)
+
             # Check if this is a Kythera shader material
             kythera_group_node = None
             for node in mat.node_tree.nodes:
@@ -597,12 +720,12 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
 
                 if is_face:
                     # 1. Face D -> _D Map / Diffuse Texture (sRGB)
-                    face_d = find_best_texture(matname, mesh_names, "d", filtered_files, main_prefix)
+                    face_d = (json_textures.get('d') if json_textures else None) or find_best_texture(matname, mesh_names, "d", filtered_files, main_prefix)
                     if face_d:
                         connect_tex_to_socket(mat, kythera_group_node, "Face_D", ["_D Map", "_D", "Diffuse Texture", "Diffuse"], face_d, is_color=True, y_offset=0)
 
                     # 2. Face Lightmap -> Light Map (Non-Color)
-                    face_lm = find_best_face_lightmap(matname, mesh_names, filtered_files, main_prefix)
+                    face_lm = (json_textures.get('n') if json_textures else None) or find_best_face_lightmap(matname, mesh_names, filtered_files, main_prefix)
                     if face_lm:
                         lm_node = None
                         for node in mat.node_tree.nodes:
@@ -611,32 +734,34 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                                     lm_node = node
                                     break
                         if lm_node:
-                            img = bpy.data.images.load(os.path.join(folder, face_lm), check_existing=True)
-                            img.colorspace_settings.name = 'Non-Color'
-                            img.alpha_mode = 'CHANNEL_PACKED'
-                            lm_node.image = img
+                            img_path = os.path.join(tex_folder, face_lm) if os.path.isfile(os.path.join(tex_folder, face_lm)) else os.path.join(folder, face_lm)
+                            if os.path.isfile(img_path):
+                                img = bpy.data.images.load(img_path, check_existing=True)
+                                img.colorspace_settings.name = 'Non-Color'
+                                img.alpha_mode = 'CHANNEL_PACKED'
+                                lm_node.image = img
                         else:
                             connect_tex_to_socket(mat, kythera_group_node, "Face_Lightmap", ["Light Map", "LightMap", "_Lightmap"], face_lm, is_color=False, y_offset=-280)
 
                 else:
                     # Body, Hair, Weapon, Dress, Wings, Stickers, Acc, etc. (Kythera's ZZZ Shader)
                     # 1. Texture D -> _D Map / Diffuse (sRGB)
-                    tex_d = find_best_texture(matname, mesh_names, "d", filtered_files, main_prefix)
+                    tex_d = (json_textures.get('d') if json_textures else None) or find_best_texture(matname, mesh_names, "d", filtered_files, main_prefix)
                     if tex_d:
                         connect_tex_to_socket(mat, kythera_group_node, "D", ["_D Map", "_D", "Diffuse", "Diffuse Texture"], tex_d, is_color=True, y_offset=0)
 
                     # 2. Texture M -> _M Map / Metallic (Non-Color)
-                    tex_m = find_best_texture(matname, mesh_names, "m", filtered_files, main_prefix)
+                    tex_m = (json_textures.get('m') if json_textures else None) or find_best_texture(matname, mesh_names, "m", filtered_files, main_prefix)
                     if tex_m:
                         connect_tex_to_socket(mat, kythera_group_node, "M", ["_M Map", "_M", "Metallic"], tex_m, is_color=False, y_offset=-260)
 
                     # 3. Texture A -> _A Map / Ambient (Non-Color)
-                    tex_a = find_best_texture(matname, mesh_names, "a", filtered_files, main_prefix)
+                    tex_a = (json_textures.get('a') if json_textures else None) or find_best_texture(matname, mesh_names, "a", filtered_files, main_prefix)
                     if tex_a:
                         connect_tex_to_socket(mat, kythera_group_node, "A", ["_A Map", "_A", "Ambient"], tex_a, is_color=False, y_offset=-520)
 
                     # 4. Texture N -> _N Map / Normal (Non-Color)
-                    tex_n = find_best_texture(matname, mesh_names, "n", filtered_files, main_prefix)
+                    tex_n = (json_textures.get('n') if json_textures else None) or find_best_texture(matname, mesh_names, "n", filtered_files, main_prefix)
                     if tex_n:
                         connect_tex_to_socket(mat, kythera_group_node, "N", ["_N Map", "_N", "Normal"], tex_n, is_color=False, y_offset=-780)
 
@@ -682,9 +807,9 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                 is_face = any(k in combined_names for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight", "cara", "head", "rostro"])
 
                 if is_face:
-                    face_d = find_best_texture(matname, mesh_names, "d", filtered_files, main_prefix)
+                    face_d = (json_textures.get('d') if json_textures else None) or find_best_texture(matname, mesh_names, "d", filtered_files, main_prefix)
                     if face_d:
-                        img_path = os.path.join(folder, face_d)
+                        img_path = os.path.join(tex_folder, face_d) if os.path.isfile(os.path.join(tex_folder, face_d)) else os.path.join(folder, face_d)
                         if os.path.isfile(img_path):
                             img = bpy.data.images.load(img_path, check_existing=True)
                             img.colorspace_settings.name = 'sRGB'
@@ -697,9 +822,9 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                                     elif not node.image and "lightmap" not in n_low and "shadow" not in n_low:
                                         node.image = img
 
-                    face_lm = find_best_face_lightmap(matname, mesh_names, filtered_files, main_prefix)
+                    face_lm = (json_textures.get('n') if json_textures else None) or find_best_face_lightmap(matname, mesh_names, filtered_files, main_prefix)
                     if face_lm:
-                        img_path = os.path.join(folder, face_lm)
+                        img_path = os.path.join(tex_folder, face_lm) if os.path.isfile(os.path.join(tex_folder, face_lm)) else os.path.join(folder, face_lm)
                         if os.path.isfile(img_path):
                             img_lm = bpy.data.images.load(img_path, check_existing=True)
                             img_lm.colorspace_settings.name = 'Non-Color'
@@ -736,14 +861,14 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                                 suffix = "lightmap"
 
                         if suffix == "lightmap":
-                            best_tex = find_best_face_lightmap(matname, mesh_names, filtered_files, main_prefix)
+                            best_tex = (json_textures.get('n') if json_textures else None) or find_best_face_lightmap(matname, mesh_names, filtered_files, main_prefix)
                         elif suffix:
-                            best_tex = find_best_texture(matname, mesh_names, suffix, filtered_files, main_prefix)
+                            best_tex = (json_textures.get(suffix) if json_textures else None) or find_best_texture(matname, mesh_names, suffix, filtered_files, main_prefix)
                         else:
                             best_tex = None
 
                         if best_tex:
-                            img_path = os.path.join(folder, best_tex)
+                            img_path = os.path.join(tex_folder, best_tex) if os.path.isfile(os.path.join(tex_folder, best_tex)) else os.path.join(folder, best_tex)
                             if os.path.isfile(img_path):
                                 img = bpy.data.images.load(img_path, check_existing=True)
                                 img.colorspace_settings.name = 'sRGB' if suffix == 'd' else 'Non-Color'
@@ -751,9 +876,9 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                                 node.image = img
 
                     elif node.type == 'GROUP' and node.node_tree and 'face lightmap' in node.node_tree.name.lower():
-                        face_lm = find_best_face_lightmap(matname, mesh_names, filtered_files, main_prefix)
+                        face_lm = (json_textures.get('n') if json_textures else None) or find_best_face_lightmap(matname, mesh_names, filtered_files, main_prefix)
                         if face_lm:
-                            img_path = os.path.join(folder, face_lm)
+                            img_path = os.path.join(tex_folder, face_lm) if os.path.isfile(os.path.join(tex_folder, face_lm)) else os.path.join(folder, face_lm)
                             if os.path.isfile(img_path):
                                 img = bpy.data.images.load(img_path, check_existing=True)
                                 img.colorspace_settings.name = 'Non-Color'

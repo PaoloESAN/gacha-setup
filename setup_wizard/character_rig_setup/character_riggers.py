@@ -525,6 +525,15 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
         character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
         meshes_joined = not (bpy.data.objects.get('Body') and bpy.data.objects.get('Face'))
 
+        light_vectors_modifiers = [modifier for obj in bpy.data.objects.values() if 
+                                   obj.type == 'MESH' for modifier in obj.modifiers if 
+                                   'Light Vectors' in modifier.name]
+
+        if character_rigger_props.set_up_lighting_panel:
+            for modifier in light_vectors_modifiers:
+                lp_filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'LightingPanel.blend')
+                LightingPanel(lp_filepath).set_up_lighting_panel(modifier)
+
         try:
             bpy.ops.object.mode_set(mode='OBJECT')
         except RuntimeError:
@@ -541,7 +550,7 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
         try:
             zzz_rig_character(
                 filepath,
-                0, # lighting_panel_version
+                4 if character_rigger_props.set_up_lighting_panel else 0, # lighting_panel_version
                 not character_rigger_props.allow_arm_ik_stretch,
                 not character_rigger_props.allow_leg_ik_stretch,
                 character_rigger_props.use_arm_ik_poles,
@@ -557,6 +566,26 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
             zzz_face_rig_main()
         except Exception as e:
             print(f"Face rig skipped: {e}")
+
+        def join_extra_armatures(body_rig):
+            # Check for any unmerged armatures (Lighting Panel, FaceRig, etc.)
+            for obj in list(bpy.data.objects):
+                if obj.type == 'ARMATURE' and obj != body_rig and obj.name != body_rig.name:
+                    o_low = obj.name.lower()
+                    if any(k in o_low for k in ['lighting', 'panel', 'facerig', 'isaac']):
+                        try:
+                            if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+                                bpy.ops.object.mode_set(mode='OBJECT')
+                        except Exception:
+                            pass
+                        bpy.ops.object.select_all(action='DESELECT')
+                        obj.select_set(True)
+                        body_rig.select_set(True)
+                        bpy.context.view_layer.objects.active = body_rig
+                        bpy.ops.object.join()
+                        print(f"[ZZZ RIG] Joined '{obj.name}' into '{body_rig.name}' with bpy.ops.object.join()")
+
+        join_extra_armatures(armature)
 
         def refresh_light_vectors_modifiers():
             char_name = armature.name.replace("Rig", "")
