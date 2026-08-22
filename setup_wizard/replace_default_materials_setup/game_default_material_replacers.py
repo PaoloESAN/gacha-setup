@@ -20,7 +20,7 @@ from setup_wizard.domain.shader_identifier_service import GenshinImpactShaders, 
 from setup_wizard.domain.shader_material_names import StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, V2_FestivityGenshinImpactMaterialNames, \
     ShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, JaredNytsPunishingGrayRavenShaderMaterialNames, V4_PrimoToonGenshinImpactMaterialNames, \
     ZenlessZoneZeroShaderMaterialNames
-from setup_wizard.texture_import_setup.texture_importer_types import TextureImporterType
+from setup_wizard.texture_import_setup.texture_importer_types import TextureImporterType, find_all_image_nodes_by_category
 from setup_wizard.domain.shader_material_name_keywords import ShaderMaterialNameKeywords
 from setup_wizard.utils.genshin_body_part_deducer import get_monster_body_part_name, \
     get_npc_mesh_body_part_name
@@ -77,9 +77,7 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         self.shader_node_names = shader_node_names
 
     def replace_default_materials(self):
-        mesh_ignore_list = [
-            'Dress',  # Scaramouche
-        ]
+        mesh_ignore_list = []
         meshes = [mesh for mesh in bpy.context.scene.objects if mesh.type == 'MESH' and mesh.name not in mesh_ignore_list]
 
         for mesh in meshes:
@@ -196,12 +194,23 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         self.blender_operator.report({'INFO'}, 'Replaced default materials with Genshin shader materials...')
 
     def create_shader_material_if_unique_mesh(self, mesh, mesh_body_part_name, material_name):
-        if mesh_body_part_name == 'Body1':  # >= GI v5.7
-            body_material = self.create_body_material(self.material_names, self.material_names.BODY1)
+        if not mesh_body_part_name:
+            return material_name
+        m_low = mesh_body_part_name.lower()
+        if m_low in ['body1', 'body01', 'body_01']:
+            body_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
             material_name = body_material.name
-        elif mesh_body_part_name == 'Body2':  # >= GI v5.7
-            body_material = self.create_body_material(self.material_names, self.material_names.BODY2)
+        elif m_low in ['body2', 'body02', 'body_02']:
+            body_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
             material_name = body_material.name
+        elif m_low in ['dress1', 'dress01', 'dress_01', 'dress2', 'dress02', 'dress_02']:
+            dress_template = bpy.data.materials.get(self.material_names.DRESS) or bpy.data.materials.get(self.material_names.BODY)
+            new_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
+            if not new_material and dress_template:
+                new_material = dress_template.copy()
+                new_material.name = f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}'
+                new_material.use_fake_user = True
+            material_name = new_material.name if new_material else material_name
         elif mesh_body_part_name == 'EffectHair':  # Furina
             hair_material = self.create_hair_material(self.material_names, self.material_names.EFFECT_HAIR)
             material_name = hair_material.name
@@ -289,16 +298,9 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         if not old_image:
             return
             
-        target_tree = new_material.node_tree
-        group = target_tree.nodes.get('Shader Textures')
-        if group and group.node_tree:
-            target_tree = group.node_tree
-            
-        for name in ['Main_Diffuse', 'Outline_Diffuse', 'Body_Diffuse_UV0']:
-            img_node = target_tree.nodes.get(name)
-            if img_node and img_node.type == 'TEX_IMAGE':
-                img_node.image = old_image
-                return
+        diffuse_nodes = find_all_image_nodes_by_category(new_material.node_tree, 'diffuse')
+        for node in diffuse_nodes:
+            node.image = old_image
 
     def __set_glass_star_cloak_toggle(self, material, value):
         vfx_shader_node = material.node_tree.nodes.get(self.shader_node_names.VFX_SHADER)
