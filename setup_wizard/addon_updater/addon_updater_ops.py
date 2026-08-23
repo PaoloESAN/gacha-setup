@@ -238,7 +238,7 @@ class AddonUpdaterInstallPopup(bpy.types.Operator):
 
 # User preference check-now operator
 class AddonUpdaterCheckNow(bpy.types.Operator):
-    bl_label = "Check now for " + updater.addon + " update"
+    bl_label = "Check for Updates"
     bl_idname = updater.addon + ".updater_check_now"
     bl_description = "Check now for an update to the {} addon".format(
         updater.addon)
@@ -1109,18 +1109,18 @@ def update_settings_ui(self, context, element=None):
 
     row = box.row()
     row.scale_y = 0.7
-    last_check = updater.json["last_check"]
+    last_check = updater.json.get("last_check", "")
     if updater.error is not None and updater.error_msg is not None:
         row.label(text=updater.error_msg)
     elif last_check:
-        last_check = last_check[0: last_check.index(".")]
-        row.label(text="Last update check: " + last_check)
+        date_only = last_check.split(" ")[0].split("T")[0]
+        row.label(text="Last update check: " + date_only)
     else:
         row.label(text="Last update check: Never")
 
 
 def update_settings_ui_condensed(self, context, element=None):
-    """Preferences - Condensed drawing within preferences.
+    """Preferences - Condensed drawing within preferences or panels.
 
     Alternate draw for user preferences or other places, does not draw a box.
     """
@@ -1158,7 +1158,7 @@ def update_settings_ui_condensed(self, context, element=None):
         sub_col = col.row(align=True)
         sub_col.scale_y = 1
         split = sub_col.split(align=True)
-        split.scale_y = 2
+        split.scale_y = 1.8
         if "ssl" in updater.error_msg.lower():
             split.enabled = True
             split.operator(AddonUpdaterInstallManually.bl_idname,
@@ -1168,22 +1168,22 @@ def update_settings_ui_condensed(self, context, element=None):
             split.operator(AddonUpdaterCheckNow.bl_idname,
                            text=updater.error)
         split = sub_col.split(align=True)
-        split.scale_y = 2
+        split.scale_y = 1.8
         split.operator(AddonUpdaterCheckNow.bl_idname,
                        text="", icon="FILE_REFRESH")
 
     elif updater.update_ready is None and not updater.async_checking:
-        col.scale_y = 2
-        col.operator(AddonUpdaterCheckNow.bl_idname)
+        col.scale_y = 1.8
+        col.operator(AddonUpdaterCheckNow.bl_idname, text="Check for Updates")
     elif updater.update_ready is None:  # Async is running.
         sub_col = col.row(align=True)
         sub_col.scale_y = 1
         split = sub_col.split(align=True)
         split.enabled = False
-        split.scale_y = 2
+        split.scale_y = 1.8
         split.operator(AddonUpdaterCheckNow.bl_idname, text="Checking...")
         split = sub_col.split(align=True)
-        split.scale_y = 2
+        split.scale_y = 1.8
         split.operator(AddonUpdaterEndBackground.bl_idname, text="", icon="X")
 
     elif updater.include_branches and \
@@ -1193,11 +1193,11 @@ def update_settings_ui_condensed(self, context, element=None):
         sub_col = col.row(align=True)
         sub_col.scale_y = 1
         split = sub_col.split(align=True)
-        split.scale_y = 2
+        split.scale_y = 1.8
         now_txt = "Update directly to " + str(updater.include_branch_list[0])
         split.operator(AddonUpdaterUpdateNow.bl_idname, text=now_txt)
         split = sub_col.split(align=True)
-        split.scale_y = 2
+        split.scale_y = 1.8
         split.operator(AddonUpdaterCheckNow.bl_idname,
                        text="", icon="FILE_REFRESH")
 
@@ -1205,16 +1205,17 @@ def update_settings_ui_condensed(self, context, element=None):
         sub_col = col.row(align=True)
         sub_col.scale_y = 1
         split = sub_col.split(align=True)
-        split.scale_y = 2
+        split.scale_y = 1.8
         split.operator(AddonUpdaterUpdateNow.bl_idname,
-                       text=iface_("Update now to {}").format(str(updater.update_version)))
+                       text=iface_("Update to {}").format(str(updater.update_version)),
+                       icon="LOOP_FORWARDS")
         split = sub_col.split(align=True)
-        split.scale_y = 2
+        split.scale_y = 1.8
         split.operator(AddonUpdaterCheckNow.bl_idname,
                        text="", icon="FILE_REFRESH")
 
     elif updater.update_ready and updater.manual_only:
-        col.scale_y = 2
+        col.scale_y = 1.8
         dl_txt = "Download " + str(updater.update_version)
         col.operator("wm.url_open", text=dl_txt).url = updater.website
     else:  # i.e. that updater.update_ready == False.
@@ -1222,11 +1223,11 @@ def update_settings_ui_condensed(self, context, element=None):
         sub_col.scale_y = 1
         split = sub_col.split(align=True)
         split.enabled = False
-        split.scale_y = 2
+        split.scale_y = 1.8
         split.operator(AddonUpdaterCheckNow.bl_idname,
                        text="Addon is up to date")
         split = sub_col.split(align=True)
-        split.scale_y = 2
+        split.scale_y = 1.8
         split.operator(AddonUpdaterCheckNow.bl_idname,
                        text="", icon="FILE_REFRESH")
 
@@ -1235,12 +1236,12 @@ def update_settings_ui_condensed(self, context, element=None):
 
     row = element.row()
     row.scale_y = 0.7
-    last_check = updater.json["last_check"]
+    last_check = updater.json.get("last_check", "")
     if updater.error is not None and updater.error_msg is not None:
         row.label(text=updater.error_msg)
-    elif last_check != "" and last_check is not None:
-        last_check = last_check[0: last_check.index(".")]
-        row.label(text="Last check: " + last_check)
+    elif last_check:
+        date_only = last_check.split(" ")[0].split("T")[0]
+        row.label(text="Last check: " + date_only)
     else:
         row.label(text="Last check: Never")
 
@@ -1305,27 +1306,13 @@ def select_link_function(self, tag):
     A way to select from one or multiple attached downloadable files from the
     server, instead of downloading the default release/tag source code.
     """
-
-    # -- Default, universal case (and is the only option for GitLab/Bitbucket)
-    link = tag["assets"][0]["browser_download_url"]
-
-    # -- Example: select the first (or only) asset instead source code --
-    # if "assets" in tag and "browser_download_url" in tag["assets"][0]:
-    # 	link = tag["assets"][0]["browser_download_url"]
-
-    # -- Example: select asset based on OS, where multiple builds exist --
-    # # not tested/no error checking, modify to fit your own needs!
-    # # assume each release has three attached builds:
-    # #		release_windows.zip, release_OSX.zip, release_linux.zip
-    # # This also would logically not be used with "branches" enabled
-    # if platform.system() == "Darwin": # ie OSX
-    # 	link = [asset for asset in tag["assets"] if 'OSX' in asset][0]
-    # elif platform.system() == "Windows":
-    # 	link = [asset for asset in tag["assets"] if 'windows' in asset][0]
-    # elif platform.system() == "Linux":
-    # 	link = [asset for asset in tag["assets"] if 'linux' in asset][0]
-
-    return link
+    if "assets" in tag and isinstance(tag["assets"], list) and len(tag["assets"]) > 0:
+        asset = tag["assets"][0]
+        if isinstance(asset, dict) and "browser_download_url" in asset:
+            return asset["browser_download_url"]
+    if "zipball_url" in tag:
+        return tag["zipball_url"]
+    return tag.get("browser_download_url", "")
 
 
 # -----------------------------------------------------------------------------
@@ -1365,21 +1352,21 @@ def register(bl_info):
     updater.private_token = None  # "tokenstring"
 
     # Choose your own username, must match website (not needed for GitLab).
-    updater.user = "michael-gh1"
+    updater.user = "PaoloESAN"
 
-    # Choose your own repository, must match git name for GitHUb and Bitbucket,
+    # Choose your own repository, must match git name for GitHub and Bitbucket,
     # for GitLab use project ID (numbers only).
-    updater.repo = "Addons-And-Tools-For-Blender-miHoYo-Shaders"
+    updater.repo = "gacha-setup"
 
     # updater.addon = # define at top of module, MUST be done first
 
     # Website for manual addon download, optional but recommended to set.
-    updater.website = "https://github.com/michael-gh1/Addons-And-Tools-For-Blender-miHoYo-Shaders/"
+    updater.website = "https://github.com/PaoloESAN/gacha-setup"
 
     # Addon subfolder path.
     # "sample/path/to/addon"
     # default is "" or None, meaning root
-    updater.subfolder_path = None
+    updater.subfolder_path = "setup_wizard"
 
     # Used to check/compare versions.
     updater.current_version = bl_info["version"]
@@ -1390,7 +1377,7 @@ def register(bl_info):
 
     # Optional, consider turning off for production or allow as an option
     # This will print out additional debugging info to the console
-    updater.verbose = True  # make False for production default
+    updater.verbose = False  # make False for production default
 
     # Optional, customize where the addon updater processing subfolder is,
     # essentially a staging folder used by the updater on its own
@@ -1417,21 +1404,7 @@ def register(bl_info):
     # update. If a pattern file is not found in new update, no action is taken
     # NOTE: This does NOT delete anything proactively, rather only defines what
     # is allowed to be overwritten during an update execution.
-    updater.overwrite_patterns = ["*.png", "*.jpg", "*.blend", "README.md", "LICENSE"]
-    # updater.overwrite_patterns = []
-    # other examples:
-    # ["*"] means ALL files/folders will be overwritten by update, was the
-    #    behavior pre updater v1.0.4.
-    # [] or ["*.py","*.pyc"] matches default blender behavior, ie same effect
-    #    if user installs update manually without deleting the existing addon
-    #    first e.g. if existing install and update both have a resource.blend
-    #    file, the existing installed one will remain.
-    # ["some.py"] means if some.py is found in addon update, it will overwrite
-    #    any existing some.py in current addon install, if any.
-    # ["*.json"] means all json files found in addon update will overwrite
-    #    those of same name in current install.
-    # ["*.png","README.md","LICENSE.txt"] means the readme, license, and all
-    #    pngs will be overwritten by update.
+    updater.overwrite_patterns = ["*.png", "*.jpg", "*.blend", "*.json", "README.md", "LICENSE*"]
 
     # Patterns for files to actively remove prior to running update.
     # Useful if wanting to remove old code due to changes in filenames
@@ -1441,20 +1414,8 @@ def register(bl_info):
     # is placed in the overwrite_patterns property. Note this is effectively
     # ignored if clean=True in the run_update method.
     updater.remove_pre_update_patterns = ["*.py", "*.pyc"]
-    # Note setting ["*"] here is equivalent to always running updates with
-    # clean = True in the run_update method, ie the equivalent of a fresh,
-    # new install. This would also delete any resources or user-made/modified
-    # files setting ["__pycache__"] ensures the pycache folder always removed.
-    # The configuration of ["*.py", "*.pyc"] is a safe option as this
-    # will ensure no old python files/caches remain in event different addon
-    # versions have different filenames or structures.
 
-    # Allow branches like 'master' as an option to update to, regardless
-    # of release or version.
-    # Default behavior: releases will still be used for auto check (popup),
-    # but the user has the option from user preferences to directly
-    # update to the master branch or any other branches specified using
-    # the "install {branch}/older version" operator.
+    # Disallow branch updates to only use official releases/tags
     updater.include_branches = False
 
     # (GitHub only) This options allows using "releases" instead of "tags",
@@ -1462,17 +1423,9 @@ def register(bl_info):
     # from release-attached zips (instead of the auto-packaged code generated
     # with a release/tag). Setting has no impact on BitBucket or GitLab repos.
     updater.use_releases = True
-    # Note: Releases always have a tag, but a tag may not always be a release.
-    # Therefore, setting True above will filter out any non-annotated tags.
-    # Note 2: Using this option will also display (and filter by) the release
-    # name instead of the tag name, bear this in mind given the
-    # skip_tag_function filtering above.
 
     # Populate if using "include_branches" option above.
-    # Note: updater.include_branch_list defaults to ['master'] branch if set to
-    # none. Example targeting another multiple branches allowed to pull from:
-    # updater.include_branch_list = ['master', 'dev']
-    updater.include_branch_list = None  # None is the equivalent = ['master']
+    updater.include_branch_list = None
 
     # Only allow manual install, thus prompting the user to open
     # the addon's web page to download, specifically: updater.website

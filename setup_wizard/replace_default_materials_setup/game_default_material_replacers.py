@@ -97,6 +97,9 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 elif material_name.startswith('Monster'):
                     mesh_body_part_name = get_monster_body_part_name(material_name)
                     character_type = TextureImporterType.MONSTER
+                elif material_name.startswith(('Equip_', 'EquipSkin_')) or (mesh and mesh.name.startswith(('Equip_', 'EquipSkin_'))):
+                    mesh_body_part_name = 'Body'
+                    character_type = TextureImporterType.AVATAR
                 else:
                     mesh_body_part_name = material_name.split('_')[-1]
                     character_type = TextureImporterType.AVATAR
@@ -111,32 +114,57 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 elif material_name.endswith('Hand_Eff_Mat'):  # Asmoday
                     mesh_body_part_name = 'StarCloak'
 
-                is_numbered_pupil = any(f'pupil{k}' in material_name.lower() or f'pupil_{k}' in material_name.lower() or f'pupil 0{k}' in material_name.lower() or f'pupila{k}' in material_name.lower() or f'pupila_{k}' in material_name.lower() for k in ['01', '1', '02', '2', '03', '3', '04', '4'])
-                if not is_numbered_pupil and ('pupil' in material_name.lower() or 'pupila' in material_name.lower()):
-                    for img in bpy.data.images:
-                        img_lower = img.name.lower()
-                        if 'pupil' in img_lower and 'diffuse' in img_lower:
+                is_sandrone = any(
+                    'sandrone' in s.lower() or 'marionettenew' in s.lower() or 'marionette_new' in s.lower() or 'newmarionette' in s.lower()
+                    for s in [material_name, mesh.name] + ([mesh.parent.name] if mesh.parent else [])
+                )
+
+                is_numbered_pupil = any(
+                    f'pupil{k}' in s.lower() or f'pupil_{k}' in s.lower() or f'pupil 0{k}' in s.lower() or f'pupila{k}' in s.lower() or f'pupila_{k}' in s.lower()
+                    for s in [material_name, mesh.name]
+                    for k in ['01', '1', '02', '2', '03', '3', '04', '4']
+                )
+                if not is_numbered_pupil and material_slot.material and material_slot.material.use_nodes:
+                    for n in material_slot.material.node_tree.nodes:
+                        if n.type == 'TEX_IMAGE' and n.image:
+                            img_lower = n.image.name.lower()
                             if any(f'pupil{k}' in img_lower or f'pupil_{k}' in img_lower or f'pupil 0{k}' in img_lower or f'pupila{k}' in img_lower for k in ['01', '1', '02', '2', '03', '3', '04', '4']):
                                 is_numbered_pupil = True
                                 break
 
+                is_pupil_part = ('pupil' in material_name.lower() or 'pupila' in material_name.lower()) or (mesh_body_part_name and ('pupil' in mesh_body_part_name.lower() or 'pupila' in mesh_body_part_name.lower()))
+
                 if mesh_body_part_name in ['Eye', 'EyeStar', 'Eyes', 'EyeShadow']:
                     mesh_body_part_name = 'Face'
-                elif is_numbered_pupil:
-                    mesh_body_part_name = 'New Pupil'
-                elif mesh_body_part_name and ('pupil' in mesh_body_part_name.lower() or 'pupila' in mesh_body_part_name.lower()):
-                    mesh_body_part_name = 'Pupil'
+                elif is_pupil_part:
+                    if is_sandrone:
+                        mesh_body_part_name = 'Sandrone pupil'
+                    elif is_numbered_pupil:
+                        mesh_body_part_name = 'New Pupil'
+                    else:
+                        mesh_body_part_name = 'Pupil'
 
                 # If material_name is ever 'Dress', 'Arm' or 'Cloak', there could be issues with get_actual_material_name_for_dress()
                 material_name = self.create_shader_material_if_unique_mesh(mesh, mesh_body_part_name, material_name)
-                genshin_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
-                if not genshin_material and mesh_body_part_name in ['Eye', 'EyeStar', 'Eyes', 'EyeShadow', 'Brow', 'Pupil', 'Pupila', 'New Pupil']:
+                genshin_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}') or \
+                                   bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX_AFTER_RENAME}{mesh_body_part_name}') or \
+                                   bpy.data.materials.get(f'HoYoverse - Genshin {mesh_body_part_name}')
+                if not genshin_material and mesh_body_part_name in ['Eye', 'EyeStar', 'Eyes', 'EyeShadow', 'Brow', 'Pupil', 'Pupila', 'New Pupil', 'Sandrone pupil']:
                     genshin_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}Face') or \
                                        bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}Brow')
 
                 if genshin_material:
                     self.__transfer_diffuse_texture(material_slot.material, genshin_material)
                     material_slot.material = genshin_material
+                    is_equip_mat = material_name.startswith(('Equip_', 'EquipSkin_')) or (mesh and mesh.name.startswith(('Equip_', 'EquipSkin_'))) or ('equip' in material_name.lower())
+                    if is_equip_mat and genshin_material.use_nodes:
+                        for n in genshin_material.node_tree.nodes:
+                            if 'Use Alpha' in n.inputs:
+                                n.inputs['Use Alpha'].default_value = 1.0
+                            if n.type == 'GROUP' and n.node_tree:
+                                for sub_node in n.node_tree.nodes:
+                                    if 'Use Alpha' in sub_node.inputs:
+                                        sub_node.inputs['Use Alpha'].default_value = 1.0
                 elif mesh_body_part_name and ('Dress' in mesh_body_part_name or 'Arm' in mesh_body_part_name or 'Cloak' in mesh_body_part_name):
                     # Xiao is the only character with an Arm material
                     # Dainsleif and Paimon are the only characters with Cloak materials
@@ -202,7 +230,6 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             material_name = body_material.name
         elif m_low in ['body2', 'body02', 'body_02']:
             body_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
-            material_name = body_material.name
         elif m_low in ['dress1', 'dress01', 'dress_01', 'dress2', 'dress02', 'dress_02']:
             dress_template = bpy.data.materials.get(self.material_names.DRESS) or bpy.data.materials.get(self.material_names.BODY)
             new_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
@@ -210,6 +237,7 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 new_material = dress_template.copy()
                 new_material.name = f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}'
                 new_material.use_fake_user = True
+                self.__clear_material_images(new_material)
             material_name = new_material.name if new_material else material_name
         elif mesh_body_part_name == 'EffectHair':  # Furina
             hair_material = self.create_hair_material(self.material_names, self.material_names.EFFECT_HAIR)
@@ -257,6 +285,11 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             pupil_material = self.create_body_material(self.material_names, new_pupil_name)
             if pupil_material:
                 material_name = pupil_material.name
+        elif mesh_body_part_name == 'Sandrone pupil':
+            sandrone_name = getattr(self.material_names, 'SANDRONE_PUPIL', f'{self.material_names.MATERIAL_PREFIX}Sandrone pupil')
+            sandrone_material = bpy.data.materials.get(sandrone_name) or bpy.data.materials.get('HoYoverse - Genshin Sandrone pupil')
+            if sandrone_material:
+                material_name = sandrone_material.name
         elif mesh_body_part_name and 'Item' in mesh_body_part_name:  # NPCs
             item_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
             material_name = item_material.name
@@ -266,7 +299,10 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         elif mesh_body_part_name and 'Others' in mesh_body_part_name:  # NPCs, Frem Penguins
             new_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
             material_name = new_material.name
-        elif mesh_body_part_name and mesh_body_part_name not in ['Face', 'Body', 'Hair', 'Eye', 'Dress', 'Arm', 'Cloak', 'VFX', 'StarCloak', 'Pupil', 'Pupila', 'New Pupil']:
+        elif mesh_body_part_name and 'crystal' in mesh_body_part_name.lower():
+            crystal_material = self.create_crystal_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
+            material_name = crystal_material.name
+        elif mesh_body_part_name and mesh_body_part_name not in ['Face', 'Body', 'Hair', 'Eye', 'Dress', 'Arm', 'Cloak', 'VFX', 'StarCloak', 'Pupil', 'Pupila', 'New Pupil', 'Sandrone pupil']:
             # Fallback for completely unknown materials (like 'Stockings', 'Wings', etc)
             new_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
             material_name = new_material.name
@@ -322,20 +358,33 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 face_material.use_fake_user = True
         return face_material
 
+    def __clear_material_images(self, material):
+        if not material or not material.use_nodes or not material.node_tree:
+            return
+        for node in material.node_tree.nodes:
+            if node.type == 'TEX_IMAGE':
+                node.image = None
+
     def create_body_material(self, shader_material_names: ShaderMaterialNames, material_name):
         body_material = bpy.data.materials.get(material_name)
         if not body_material:
-            body_material = bpy.data.materials.get(shader_material_names.BODY).copy()
-            body_material.name = material_name
-            body_material.use_fake_user = True
+            body_template = bpy.data.materials.get(shader_material_names.BODY)
+            if body_template:
+                body_material = body_template.copy()
+                body_material.name = material_name
+                body_material.use_fake_user = True
+                self.__clear_material_images(body_material)
         return body_material
 
     def create_hair_material(self, shader_material_names: ShaderMaterialNames, material_name):
         hair_material = bpy.data.materials.get(material_name)
         if not hair_material:
-            hair_material = bpy.data.materials.get(shader_material_names.HAIR).copy()
-            hair_material.name = material_name
-            hair_material.use_fake_user = True
+            hair_template = bpy.data.materials.get(shader_material_names.HAIR)
+            if hair_template:
+                hair_material = hair_template.copy()
+                hair_material.name = material_name
+                hair_material.use_fake_user = True
+                self.__clear_material_images(hair_material)
         return hair_material
 
     def create_glass_material(self, shader_material_names: ShaderMaterialNames, material_name):
@@ -345,7 +394,141 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             glass_material = vfx_template_material.copy()
             glass_material.name = material_name
             glass_material.use_fake_user = True
+            self.__clear_material_images(glass_material)
         return glass_material
+
+    def setup_crystal_material_nodes(self, crystal_material):
+        """
+        Applies the Crystal transparency shader setup:
+        (Lightmap Color if present, else Diffuse Color) -> Separate Color (Red) -> Greater Than (0.5) -> Mix Shader (Factor)
+        with Transparent BSDF (Shader 1) and Body Shader BSDF (Shader 2) -> Material Output (Surface).
+        """
+        if not crystal_material or not crystal_material.use_nodes or not crystal_material.node_tree:
+            return
+
+        tree = crystal_material.node_tree
+
+        output_node = next((n for n in tree.nodes if n.type == 'OUTPUT_MATERIAL'), None)
+        if not output_node:
+            return
+
+        body_shader = tree.nodes.get('Body Shader') or \
+                      tree.nodes.get('PrimoToon') or \
+                      tree.nodes.get('HoYoToon') or \
+                      tree.nodes.get('Group.001') or \
+                      next((n for n in tree.nodes if n.type == 'GROUP' and 'BSDF' in n.outputs), None)
+
+        lightmap_img_nodes = [n for n in tree.nodes if n.type == 'TEX_IMAGE' and 'lightmap' in (n.name + " " + (n.label or "")).lower()]
+        has_lightmap_image = any(n.image is not None for n in lightmap_img_nodes)
+
+        color_source_socket = None
+        # 1. Try Lightmap if an image is loaded
+        if has_lightmap_image:
+            if body_shader and 'Lightmap Color' in body_shader.inputs and body_shader.inputs['Lightmap Color'].links:
+                color_source_socket = body_shader.inputs['Lightmap Color'].links[0].from_socket
+            elif tree.nodes.get('Lightmap Lerp') and 'Color' in tree.nodes['Lightmap Lerp'].outputs:
+                color_source_socket = tree.nodes['Lightmap Lerp'].outputs['Color']
+            elif lightmap_img_nodes:
+                for n in lightmap_img_nodes:
+                    if n.image and 'Color' in n.outputs:
+                        color_source_socket = n.outputs['Color']
+                        break
+
+        # 2. Fallback to Diffuse Lerp / Diffuse Color
+        if not color_source_socket:
+            if body_shader and 'Diffuse Color' in body_shader.inputs and body_shader.inputs['Diffuse Color'].links:
+                color_source_socket = body_shader.inputs['Diffuse Color'].links[0].from_socket
+            elif tree.nodes.get('Diffuse Lerp') and 'Color' in tree.nodes['Diffuse Lerp'].outputs:
+                color_source_socket = tree.nodes['Diffuse Lerp'].outputs['Color']
+            else:
+                diffuse_nodes = [n for n in tree.nodes if n.type == 'TEX_IMAGE' and 'diffuse' in (n.name + " " + (n.label or "")).lower()]
+                if diffuse_nodes and 'Color' in diffuse_nodes[0].outputs:
+                    color_source_socket = diffuse_nodes[0].outputs['Color']
+
+        bsdf_loc_x = body_shader.location.x if body_shader else 0
+        bsdf_loc_y = body_shader.location.y if body_shader else 0
+
+        mix_node = next((n for n in tree.nodes if n.type == 'MIX_SHADER'), None)
+        trans_node = next((n for n in tree.nodes if n.type == 'BSDF_TRANSPARENT'), None)
+        math_node = next((n for n in tree.nodes if n.type == 'MATH' and getattr(n, 'operation', '') == 'GREATER_THAN'), None)
+        sep_node = next((n for n in tree.nodes if n.type in ('SEPARATE_COLOR', 'SEPARATE_RGB')), None)
+
+        if not mix_node:
+            mix_node = tree.nodes.new('ShaderNodeMixShader')
+            mix_node.location = (bsdf_loc_x + 300, bsdf_loc_y)
+
+        if not trans_node:
+            trans_node = tree.nodes.new('ShaderNodeBsdfTransparent')
+            trans_node.location = (bsdf_loc_x + 300, bsdf_loc_y - 150)
+            if 'Color' in trans_node.inputs:
+                trans_node.inputs['Color'].default_value = (1.0, 1.0, 1.0, 1.0)
+
+        if not math_node:
+            math_node = tree.nodes.new('ShaderNodeMath')
+            math_node.location = (bsdf_loc_x + 100, bsdf_loc_y - 300)
+            math_node.operation = 'GREATER_THAN'
+            math_node.inputs[1].default_value = 0.5
+            math_node.use_clamp = False
+
+        if not sep_node:
+            if hasattr(bpy.types, "ShaderNodeSeparateColor"):
+                sep_node = tree.nodes.new('ShaderNodeSeparateColor')
+                if hasattr(sep_node, "mode"):
+                    sep_node.mode = 'RGB'
+            else:
+                sep_node = tree.nodes.new('ShaderNodeSeparateRGB')
+            sep_node.location = (bsdf_loc_x - 100, bsdf_loc_y - 300)
+
+        if color_source_socket:
+            if sep_node.inputs[0].links:
+                for l in list(sep_node.inputs[0].links):
+                    tree.links.remove(l)
+            tree.links.new(color_source_socket, sep_node.inputs[0])
+
+        red_socket = sep_node.outputs.get('Red') or sep_node.outputs.get('R') or sep_node.outputs[0]
+        if not math_node.inputs[0].links:
+            tree.links.new(red_socket, math_node.inputs[0])
+
+        if not mix_node.inputs[0].links:
+            tree.links.new(math_node.outputs[0], mix_node.inputs[0])
+
+        if not mix_node.inputs[1].links:
+            tree.links.new(trans_node.outputs[0], mix_node.inputs[1])
+
+        if body_shader and 'BSDF' in body_shader.outputs and not mix_node.inputs[2].links:
+            tree.links.new(body_shader.outputs['BSDF'], mix_node.inputs[2])
+
+        if not output_node.inputs['Surface'].links or output_node.inputs['Surface'].links[0].from_node != mix_node:
+            tree.links.new(mix_node.outputs[0], output_node.inputs['Surface'])
+
+        try:
+            crystal_material.blend_method = 'BLEND'
+        except Exception:
+            pass
+
+        try:
+            crystal_material.shadow_method = 'NONE'
+        except Exception:
+            pass
+
+        try:
+            crystal_material.show_transparent_back = False
+        except Exception:
+            pass
+
+    def create_crystal_material(self, shader_material_names: ShaderMaterialNames, material_name):
+        crystal_material = bpy.data.materials.get(material_name)
+        if not crystal_material:
+            body_template = bpy.data.materials.get(shader_material_names.BODY)
+            if body_template:
+                crystal_material = body_template.copy()
+                crystal_material.name = material_name
+                crystal_material.use_fake_user = True
+                self.__clear_material_images(crystal_material)
+                self.setup_crystal_material_nodes(crystal_material)
+        else:
+            self.setup_crystal_material_nodes(crystal_material)
+        return crystal_material
 
     '''
     This method was used for V1 shader and should NOT be used for V2 shader because the group name is different.

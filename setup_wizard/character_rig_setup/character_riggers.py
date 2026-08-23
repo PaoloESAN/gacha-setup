@@ -95,6 +95,12 @@ class GenshinImpactCharacterRigger(CharacterRigger):
         self.lighting_panel_file_names: LightingPanelFileNames = LightingPanelFileNamesFactory.create(shader)
 
     def rig_character(self):
+        fbx_path = self.context.scene.get("setup_wizard_imported_fbx_path", "")
+        fbx_name = os.path.basename(fbx_path) if fbx_path else ""
+        if fbx_name and not fbx_name.startswith("Avatar_") and (fbx_name.startswith(("Equip_", "EquipSkin_")) or "equip" in fbx_name.lower()):
+            self.blender_operator.report({'INFO'}, 'Rigging skipped for weapon / equipment (Equip_ / EquipSkin_ detected).')
+            return
+
         cache_enabled = self.context.window_manager.cache_enabled
         filepath = get_cache(cache_enabled).get(self.rigify_bone_shapes_file_path) or self.blender_operator.filepath
 

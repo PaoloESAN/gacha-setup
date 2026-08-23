@@ -28,6 +28,8 @@ description: Acknowledgements, contributors, and assets credits.
 - **Omatsuri** — NTE Shader · [Discord](https://discord.gg/omatsuri)
 - **矩阵映画** — NTE Rig
 - **[thewindlead](https://www.youtube.com/@thewindlead)** — Hair & Clothes physics · [YouTube](https://www.youtube.com/@thewindlead)
+- **VANS** — Sandrone Pupil
+- **nedarb183** — Genshin pupil highlight
 - **Hiragara** — Character assets
 - **HoyoToon** — Assets · [Discord](https://discord.com/invite/hoyotoon)
 - **Logo Icon** — <a href="https://www.flaticon.com/free-icons/star" title="star icons">Star icons created by Magnific - Flaticon</a>

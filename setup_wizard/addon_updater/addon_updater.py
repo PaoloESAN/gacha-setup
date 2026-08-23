@@ -89,7 +89,7 @@ class SingletonUpdater:
         # Settings for the frequency of automated background checks.
         self._check_interval_enabled = False
         self._check_interval_months = 0
-        self._check_interval_days = 7
+        self._check_interval_days = 1
         self._check_interval_hours = 0
         self._check_interval_minutes = 0
 
@@ -107,11 +107,12 @@ class SingletonUpdater:
         self.skip_tag = None
 
         # Get data from the running blender module (addon).
-        self._addon = __package__.lower()
-        self._addon_package = __package__  # Must not change.
+        pkg = __package__.split('.')[0] if __package__ else "setup_wizard"
+        self._addon = pkg.lower()
+        self._addon_package = pkg  # Must not change.
+        self._addon_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
         self._updater_path = os.path.join(
-            os.path.dirname(__file__), self._addon + "_updater")
-        self._addon_root = os.path.dirname(__file__)
+            os.path.dirname(__file__), self._addon + "_updater_staging")
         self._json = dict()
         self._error = None
         self._error_msg = None
@@ -150,6 +151,22 @@ class SingletonUpdater:
     @addon.setter
     def addon(self, value):
         self._addon = str(value)
+
+    @property
+    def addon_package(self):
+        return self._addon_package
+
+    @addon_package.setter
+    def addon_package(self, value):
+        self._addon_package = str(value)
+
+    @property
+    def addon_root(self):
+        return self._addon_root
+
+    @addon_root.setter
+    def addon_root(self, value):
+        self._addon_root = str(value)
 
     @property
     def api_url(self):

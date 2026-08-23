@@ -142,6 +142,7 @@ class GenshinImpactMaterialImporterFacade(GameMaterialImporter):
         {'name': V3_BonnyFestivityGenshinImpactMaterialNames.OUTLINES},
         {'name': V3_BonnyFestivityGenshinImpactMaterialNames.PUPIL},
         {'name': V3_BonnyFestivityGenshinImpactMaterialNames.NEW_PUPIL},
+        {'name': V3_BonnyFestivityGenshinImpactMaterialNames.SANDRONE_PUPIL},
         {'name': V4_PrimoToonGenshinImpactMaterialNames.VFX},
     ]
     OUTLINES_FILE_PATH = GENSHIN_IMPACT_OUTLINES_FILE_PATH
@@ -165,6 +166,35 @@ class GenshinImpactMaterialImporterFacade(GameMaterialImporter):
         self.move_required_scene_objects()
         self.update_vfx_shader_scene_dependency()
         self.clean_up_unused_objects()
+
+        # If weapon / equipment, delete Head Origin hierarchy
+        fbx_path = self.context.scene.get("setup_wizard_imported_fbx_path", "")
+        fbx_name = os.path.basename(fbx_path) if fbx_path else ""
+        is_equip = False
+        if fbx_name and not fbx_name.startswith("Avatar_") and (fbx_name.startswith(("Equip_", "EquipSkin_")) or "equip" in fbx_name.lower()):
+            is_equip = True
+        elif not any(obj.name.startswith("Avatar_") for obj in bpy.data.objects):
+            if any(obj.name.startswith(("Equip_", "EquipSkin_")) for obj in bpy.data.objects):
+                is_equip = True
+
+        if is_equip:
+            def _delete_hierarchy_by_name(obj_name):
+                target = bpy.data.objects.get(obj_name)
+                if not target:
+                    return
+                child_names = [c.name for c in bpy.data.objects if getattr(c, "parent", None) and c.parent.name == obj_name]
+                for child_name in child_names:
+                    _delete_hierarchy_by_name(child_name)
+                obj_to_remove = bpy.data.objects.get(obj_name)
+                if obj_to_remove:
+                    try:
+                        bpy.data.objects.remove(obj_to_remove, do_unlink=True)
+                    except Exception:
+                        pass
+
+            matching_names = [o.name for o in bpy.data.objects if "head origin" in o.name.lower()]
+            for name in matching_names:
+                _delete_hierarchy_by_name(name)
 
         if self.is_create_hair_material_from_body():  # Genshin Shader >= v4.0
             self.create_hair_material()

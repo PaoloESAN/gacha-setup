@@ -82,6 +82,8 @@ Thanks to all those who collaborated on the original project:
 
 * **Genshin Impact**:
   * **Shader**: [Blender-miHoYo-Shaders](https://github.com/festivize/Blender-miHoYo-Shaders) by Festivity
+  * **Sandrone Pupil**: VANS
+  * **Pupil Highlight**: nedarb183
 * **HSR**:
   * **Shader**: [Blender-StellarToon](https://github.com/festivities/Blender-StellarToon) by Festivity
   * **Face Rig**: Isaac / Just_ScaasI

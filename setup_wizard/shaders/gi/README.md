@@ -28,6 +28,8 @@ Original shader development created by **Festivity** and contributors:
 * **Enthralpy** ([YouTube](https://www.youtube.com/@Enthralpy))
 * **Llama** ([Twitter](https://x.com/Llama3D))
 * **JTAOO**
+* **VANS** — Sandrone Pupil Shader
+* **nedarb183** — Genshin Pupil Highlight
 
 ---
 

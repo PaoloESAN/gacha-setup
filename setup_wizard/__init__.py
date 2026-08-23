@@ -3,7 +3,7 @@ import os
 bl_info = {
     "name": "Gacha Setup",
     "author": "Mken, OctavoPE, Enthralpy, PaoloESAN",
-    "version": (3, 3, 0),
+    "version": (3, 3, 1),
     "blender": (5, 2, 0),
     "location": "3D View > Sidebar > Genshin Impact / Honkai Star Rail / Zenless Zone Zero / Neverness to Everness",
     "description": "An addon to streamline the character model setup process for Gacha games in Blender 5.2+",
@@ -28,6 +28,7 @@ else:
 
     import bpy
 
+    import setup_wizard.addon_updater.addon_updater_ops as addon_updater_ops
     import setup_wizard.genshin_setup_wizard
     import setup_wizard.ui.gi_ui_setup_wizard_menu
     from setup_wizard.character_rig_setup.character_rigger_operator import (
@@ -115,6 +116,7 @@ else:
     )
 
     from setup_wizard.ui.unified_ui_setup_wizard_menu import (
+        CSW_PT_Updater_UI_Layout,
         CSW_PT_Unified_Character_Setup_Wizard_UI_Layout,
     )
 
@@ -138,12 +140,14 @@ else:
         setup_wizard.ui.zzz_ui_setup_wizard_menu,
         setup_wizard.ui.nte_ui_setup_wizard_menu,
         setup_wizard.genshin_setup_wizard,
+        addon_updater_ops,
     ]
 
     classes = [
         CharacterRiggerPropertyGroup,
         CharacterRiggerPropertyManager,
         CharacterSetupWizardAddonPreferences,
+        CSW_PT_Updater_UI_Layout,
         CSW_PT_Unified_Character_Setup_Wizard_UI_Layout,
         GI_PT_Setup_Wizard_UI_Layout,
         GI_PT_Basic_Setup_Wizard_UI_Layout,
@@ -217,8 +221,18 @@ else:
         except ModuleNotFoundError:
             pass  # likely new class
 
-    register, unregister = bpy.utils.register_classes_factory(classes)
+    _register_classes, _unregister_classes = bpy.utils.register_classes_factory(classes)
     UI_Properties.create_custom_ui_properties()
+
+
+    def register():
+        _register_classes()
+        addon_updater_ops.register(bl_info)
+
+
+    def unregister():
+        addon_updater_ops.unregister()
+        _unregister_classes()
 
     """
     For auto_loading, but right now we're doing simple loading to have

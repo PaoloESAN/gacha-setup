@@ -988,8 +988,28 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
         c_bone = arm_data.bones.get(child_bone_name)
         if not p_bone or not c_bone:
             return False
+
+        # 1. Ignore near-zero length degenerate bones
+        if p_bone.length < 0.001 or c_bone.length < 0.001:
+            return False
+
+        # 2. Check if parent and child are co-located / overlapping inside one another
+        # (e.g. child head is placed right at parent head, or both bones occupy the same position)
+        head_to_head_dist = (c_bone.head_local - p_bone.head_local).length
+        tail_to_tail_dist = (c_bone.tail_local - p_bone.tail_local).length
+
+        # If child head is sitting at/near parent head (coincident root / duplicate / parallel inside)
+        if head_to_head_dist < 0.005 or head_to_head_dist < 0.35 * p_bone.length:
+            return False
+
+        # If child and parent share the exact same tail or are overlapping duplicate bones
+        if tail_to_tail_dist < 0.005:
+            return False
+
+        # 3. Check contiguous connectivity (child head placed at parent tail)
         if c_bone.use_connect:
             return True
+
         gap = (c_bone.head_local - p_bone.tail_local).length
         # In a contiguous chain/strand, child head is placed directly at parent tail.
         # Separated hub/root bones have a large spatial gap to strand heads.
