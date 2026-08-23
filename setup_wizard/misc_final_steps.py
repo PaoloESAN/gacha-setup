@@ -548,11 +548,35 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
 
         armature = self._find_target_armature(context)
 
-        if not armature:
-            self.report(
-                {"ERROR"}, "No armature found. Please import or select a character."
-            )
-            return {"CANCELLED"}
+        # Check if weapon / equipment
+        fbx_path = context.scene.get("setup_wizard_imported_fbx_path", "")
+        fbx_name = os.path.basename(fbx_path) if fbx_path else ""
+        is_equip = False
+        if fbx_name and not fbx_name.startswith("Avatar_") and (fbx_name.startswith(("Equip_", "EquipSkin_")) or "equip" in fbx_name.lower()):
+            is_equip = True
+        elif not any(obj.name.startswith("Avatar_") for obj in (context.selected_objects or context.scene.objects)):
+            if any(obj.name.startswith(("Equip_", "EquipSkin_")) for obj in (context.selected_objects or context.scene.objects)):
+                is_equip = True
+
+        if is_equip or not armature:
+            for obj in (context.selected_objects or context.scene.objects):
+                if obj.type == 'MESH':
+                    try:
+                        context.view_layer.objects.active = obj
+                        obj.select_set(True)
+                        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+                    except Exception:
+                        pass
+            self.report({"INFO"}, "Transformations handled for weapon / model without armature.")
+            if self.next_step_idx:
+                NextStepInvoker().invoke(
+                    self.next_step_idx,
+                    self.invoker_type,
+                    high_level_step_name=self.high_level_step_name,
+                    game_type=self.game_type,
+                )
+            super().clear_custom_properties()
+            return {"FINISHED"}
 
         for obj in context.selected_objects:
             try:

@@ -97,6 +97,9 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 elif material_name.startswith('Monster'):
                     mesh_body_part_name = get_monster_body_part_name(material_name)
                     character_type = TextureImporterType.MONSTER
+                elif material_name.startswith(('Equip_', 'EquipSkin_')) or (mesh and mesh.name.startswith(('Equip_', 'EquipSkin_'))):
+                    mesh_body_part_name = 'Body'
+                    character_type = TextureImporterType.AVATAR
                 else:
                     mesh_body_part_name = material_name.split('_')[-1]
                     character_type = TextureImporterType.AVATAR
@@ -153,6 +156,15 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 if genshin_material:
                     self.__transfer_diffuse_texture(material_slot.material, genshin_material)
                     material_slot.material = genshin_material
+                    is_equip_mat = material_name.startswith(('Equip_', 'EquipSkin_')) or (mesh and mesh.name.startswith(('Equip_', 'EquipSkin_'))) or ('equip' in material_name.lower())
+                    if is_equip_mat and genshin_material.use_nodes:
+                        for n in genshin_material.node_tree.nodes:
+                            if 'Use Alpha' in n.inputs:
+                                n.inputs['Use Alpha'].default_value = 1.0
+                            if n.type == 'GROUP' and n.node_tree:
+                                for sub_node in n.node_tree.nodes:
+                                    if 'Use Alpha' in sub_node.inputs:
+                                        sub_node.inputs['Use Alpha'].default_value = 1.0
                 elif mesh_body_part_name and ('Dress' in mesh_body_part_name or 'Arm' in mesh_body_part_name or 'Cloak' in mesh_body_part_name):
                     # Xiao is the only character with an Arm material
                     # Dainsleif and Paimon are the only characters with Cloak materials
@@ -352,10 +364,6 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         for node in material.node_tree.nodes:
             if node.type == 'TEX_IMAGE':
                 node.image = None
-            elif node.type == 'GROUP' and node.node_tree:
-                for sub_node in node.node_tree.nodes:
-                    if sub_node.type == 'TEX_IMAGE':
-                        sub_node.image = None
 
     def create_body_material(self, shader_material_names: ShaderMaterialNames, material_name):
         body_material = bpy.data.materials.get(material_name)

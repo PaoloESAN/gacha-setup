@@ -1,5 +1,6 @@
 # Author: michael-gh1
 
+import os
 import bpy
 from bpy.types import Operator
 
@@ -17,6 +18,16 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
     bl_label = "Genshin: Setup Head Driver"
 
     def execute(self, context):
+        # Check if weapon / equipment
+        fbx_path = context.scene.get("setup_wizard_imported_fbx_path", "")
+        fbx_name = os.path.basename(fbx_path) if fbx_path else ""
+        is_equip = False
+        if fbx_name and not fbx_name.startswith("Avatar_") and (fbx_name.startswith(("Equip_", "EquipSkin_")) or "equip" in fbx_name.lower()):
+            is_equip = True
+        elif not any(obj.name.startswith("Avatar_") for obj in (context.selected_objects or context.scene.objects)):
+            if any(obj.name.startswith(("Equip_", "EquipSkin_")) for obj in (context.selected_objects or context.scene.objects)):
+                is_equip = True
+
         # Try to find the correct armature
         armatures = [
             obj for obj in bpy.context.selected_objects if obj.type == "ARMATURE"
@@ -24,9 +35,17 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
         if not armatures:
             armatures = [obj for obj in bpy.data.objects if obj.type == "ARMATURE"]
 
-        if not armatures:
-            self.report({"ERROR"}, "No armature found")
-            return {"CANCELLED"}
+        if is_equip or not armatures:
+            self.report({"INFO"}, "Head driver skipped for weapon / equipment.")
+            if self.next_step_idx:
+                NextStepInvoker().invoke(
+                    self.next_step_idx,
+                    self.invoker_type,
+                    high_level_step_name=self.high_level_step_name,
+                    game_type=self.game_type,
+                )
+            super().clear_custom_properties()
+            return {"FINISHED"}
 
         # Prioritize Rigify character rig (named 'rig' or containing 'rig') if present
         rigify_armatures = [a for a in armatures if a.name == "rig" or "rig" in a.name.lower()]

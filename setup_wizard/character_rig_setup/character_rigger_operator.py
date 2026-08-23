@@ -1,5 +1,6 @@
 # Author: michael-gh1
 
+import os
 import bpy
 
 # ImportHelper is a helper class, defines filename and
@@ -50,6 +51,33 @@ class GI_OT_CharacterRiggerOperator(Operator, ImportHelper, CustomOperatorProper
     ]
 
     def execute(self, context):
+        # Check if the imported model is a Weapon / Equipment (Equip_ / EquipSkin_ and not Avatar_)
+        fbx_path = context.scene.get("setup_wizard_imported_fbx_path", "")
+        fbx_name = os.path.basename(fbx_path) if fbx_path else ""
+        is_equip = False
+        if fbx_name:
+            if not fbx_name.startswith("Avatar_") and (fbx_name.startswith("Equip_") or fbx_name.startswith("EquipSkin_") or "equip" in fbx_name.lower()):
+                is_equip = True
+        
+        if not is_equip:
+            objects_to_check = context.selected_objects if context.selected_objects else list(context.scene.objects)
+            has_avatar = any(obj.name.startswith("Avatar_") for obj in objects_to_check)
+            if not has_avatar:
+                is_equip = any(
+                    obj.name.startswith(("Equip_", "EquipSkin_")) or 
+                    any(slot.material.name.startswith(("Equip_", "EquipSkin_")) for slot in getattr(obj, "material_slots", []) if slot.material)
+                    for obj in objects_to_check
+                )
+
+        if is_equip:
+            self.report(
+                {'INFO'},
+                'Rigging skipped for weapon / equipment (Equip_ / EquipSkin_ detected).'
+            )
+            self.invoke_next_step()
+            super().clear_custom_properties()
+            return {'FINISHED'}
+
         selected_armatures = [obj for obj in context.selected_objects if obj.type == 'ARMATURE']
         if not selected_armatures:
             selected_armatures = [obj for obj in context.scene.objects if obj.type == 'ARMATURE']

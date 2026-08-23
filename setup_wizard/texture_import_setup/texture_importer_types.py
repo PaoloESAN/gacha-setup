@@ -19,6 +19,36 @@ from setup_wizard.texture_import_setup.texture_node_names import JaredNytsPunish
 from setup_wizard.texture_import_setup.original_texture_locator_utils import OriginalTextureLocatorUtils
 
 
+def get_or_create_white_texture(name="White_Shadow_Ramp"):
+    img = bpy.data.images.get(name)
+    if not img:
+        img = bpy.data.images.new(name, width=16, height=16, alpha=True)
+    try:
+        img.generated_color = (1.0, 1.0, 1.0, 1.0)
+    except Exception:
+        pass
+    try:
+        pixels = [1.0] * (len(img.pixels) if len(img.pixels) > 0 else 16 * 16 * 4)
+        img.pixels[:] = pixels
+    except Exception:
+        pass
+    img.colorspace_settings.name = 'sRGB'
+    img.update()
+    return img
+
+
+def set_use_alpha_on_material(material, value=1.0):
+    if not material or not material.use_nodes:
+        return
+    for node in material.node_tree.nodes:
+        if 'Use Alpha' in node.inputs:
+            node.inputs['Use Alpha'].default_value = value
+        if node.type == 'GROUP' and node.node_tree:
+            for sub_node in node.node_tree.nodes:
+                if 'Use Alpha' in sub_node.inputs:
+                    sub_node.inputs['Use Alpha'].default_value = value
+
+
 def is_mat_part_match(mat_name, part):
     """
     Checks if a material name matches a body/dress part token exactly.
@@ -37,7 +67,7 @@ def is_mat_part_match(mat_name, part):
 def find_all_image_nodes_by_category(node_tree, category):
     """
     Recursively finds ALL Image Texture nodes in node_tree and nested GROUP node_trees (e.g. Textures)
-    belonging to a category ('diffuse', 'lightmap', 'normal').
+    belonging to a category ('diffuse', 'lightmap', 'normal', 'ramp').
     """
     found = []
     if not node_tree:
@@ -58,9 +88,17 @@ def find_all_image_nodes_by_category(node_tree, category):
                 if 'normal' in node_id or 'main_normal' in node_id:
                     if not any(k in node_id for k in ['diffuse', 'lightmap', 'ramp', 'mask']):
                         found.append(node)
+            elif category in ['ramp', 'shadow_ramp']:
+                if 'ramp' in node_id or 'shadow' in node_id:
+                    if not any(k in node_id for k in ['diffuse', 'lightmap', 'normal']):
+                        found.append(node)
 
     for node in node_tree.nodes:
         if node.type == 'GROUP' and node.node_tree:
+            ng_name = node.node_tree.name.lower()
+            # NEVER recurse into Face Factor, Face Shader, or internal calculation node groups
+            if any(ign in ng_name for ign in ['face factor', 'face shader', 'eyeshadow', 'gi face', 'primotoon', 'hoyotoon', 'outline']):
+                continue
             sub_found = find_all_image_nodes_by_category(node.node_tree, category)
             for sub_node in sub_found:
                 if sub_node not in found:
@@ -77,9 +115,9 @@ def sync_material_category_textures(material):
     if not material or not hasattr(material, 'node_tree') or not material.node_tree:
         return
 
-    # Multi-diffuse materials like Pupil / Sandrone pupil / New Pupil must NEVER be synced to a single texture
     m_low = material.name.lower()
-    if 'pupil' in m_low or 'pupila' in m_low:
+    # Face, Pupil, Eye, Brow, Outlines must NEVER have their internal category textures synced
+    if any(k in m_low for k in ['pupil', 'pupila', 'face', 'brow', 'eye', 'outlines', 'outline']):
         return
 
     diffuse_nodes = find_all_image_nodes_by_category(material.node_tree, 'diffuse')
@@ -388,6 +426,9 @@ class GenshinTextureImporter:
         if not material or not material.use_nodes:
             return
 
+        if img:
+            img.colorspace_settings.name = 'sRGB'
+
         nodes = find_all_image_nodes_by_category(material.node_tree, 'diffuse')
         if not nodes:
             possible_texture_node_names = [
@@ -420,7 +461,8 @@ class GenshinTextureImporter:
         if not material or not material.use_nodes:
             return
 
-        img.colorspace_settings.name = 'Non-Color'
+        if img and 'diffuse' not in img.name.lower():
+            img.colorspace_settings.name = 'Non-Color'
         nodes = find_all_image_nodes_by_category(material.node_tree, 'lightmap')
         if not nodes:
             possible_texture_node_names = [
@@ -493,14 +535,31 @@ class GenshinTextureImporter:
         self.plug_normal_map('miHoYo - Genshin Dress2', 'MUTE IF ONLY 1 UV MAP EXISTS')
 
     def set_shadow_ramp_texture(self, type: TextureType, img):
+        if not img:
+            return
+        img.colorspace_settings.name = 'Non-Color'
         possible_shadow_ramp_node_group_names = [
             f'{type.value} Shadow Ramp',
+            f'{type.value}_Shadow_Ramp',
+            'Body Shadow Ramp',
+            'Hair Shadow Ramp',
             V4_GenshinImpactTextureNodeNames.SHADER_TEXTURES_NODE_GROUP,
         ]
         for shadow_ramp_node_name in possible_shadow_ramp_node_group_names:
             shadow_ramp_node_group = bpy.data.node_groups.get(shadow_ramp_node_name)
-            if shadow_ramp_node_group:
-                shadow_ramp_node_group.nodes[f'{type.value}_Shadow_Ramp'].image = img
+            if shadow_ramp_node_group and hasattr(shadow_ramp_node_group, 'nodes'):
+                for n in shadow_ramp_node_group.nodes:
+                    if n.type == 'TEX_IMAGE':
+                        n.image = img
+
+        for mat in bpy.data.materials:
+            if mat.use_nodes and mat.node_tree:
+                for n in mat.node_tree.nodes:
+                    if n.type == 'TEX_IMAGE':
+                        n_id = (n.name + " " + (n.label or "")).lower()
+                        if 'shadow' in n_id or 'ramp' in n_id:
+                            if not any(k in n_id for k in ['diffuse', 'lightmap', 'normal', 'mask']):
+                                n.image = img
 
     def set_specular_ramp_texture(self, type: TextureType, img):
         specular_ramp_node_exists = bpy.data.node_groups.get(f'{type.value} Specular Ramp')
@@ -828,17 +887,25 @@ class GenshinTextureImporter:
                         self.set_diffuse_texture(tex_type, target_mat, diffuse_img)
                     imported_any = True
                 else:
-                    if mat_part.lower() not in ['pupil', 'pupila', 'sandrone pupil'] and ('pupil' not in target_mat.name.lower()):
+                    if mat_part.lower() not in ['face', 'pupil', 'pupila', 'sandrone pupil'] and not any(k in target_mat.name.lower() for k in ['face', 'pupil', 'pupila']):
                         for node in find_all_image_nodes_by_category(target_mat.node_tree, 'diffuse'):
                             node.image = None
             else:
-                if mat_part.lower() not in ['pupil', 'pupila', 'sandrone pupil'] and ('pupil' not in target_mat.name.lower()):
+                if mat_part.lower() not in ['face', 'pupil', 'pupila', 'sandrone pupil'] and not any(k in target_mat.name.lower() for k in ['face', 'pupil', 'pupila']):
                     for node in find_all_image_nodes_by_category(target_mat.node_tree, 'diffuse'):
                         node.image = None
 
-            lightmap_tex_name = tex_envs.get('_LightMapTex', {}).get('m_Texture', {}).get('Name')
-            if lightmap_tex_name:
-                lightmap_img = resolve_img(lightmap_tex_name)
+            if mat_part.lower() not in ['face', 'pupil', 'pupila', 'sandrone pupil'] and not any(k in target_mat.name.lower() for k in ['face', 'pupil', 'pupila']):
+                lightmap_tex_name = tex_envs.get('_LightMapTex', {}).get('m_Texture', {}).get('Name')
+                if lightmap_tex_name:
+                    lightmap_img = resolve_img(lightmap_tex_name)
+                else:
+                    lightmap_img = None
+
+                # If no lightmap exists, fallback to diffuse image
+                if not lightmap_img and diffuse_img:
+                    lightmap_img = diffuse_img
+
                 if lightmap_img:
                     tex_type = TextureType.HAIR if mat_part.lower() in ['hair', 'effecthair', 'helmet', 'helmetemo'] else TextureType.BODY
                     self.set_lightmap_texture(tex_type, target_mat, lightmap_img)
@@ -846,32 +913,34 @@ class GenshinTextureImporter:
                 else:
                     for node in find_all_image_nodes_by_category(target_mat.node_tree, 'lightmap'):
                         node.image = None
-            else:
-                for node in find_all_image_nodes_by_category(target_mat.node_tree, 'lightmap'):
-                    node.image = None
 
-            bump_tex_name = tex_envs.get('_BumpMap', {}).get('m_Texture', {}).get('Name')
-            if bump_tex_name:
-                bump_img = resolve_img(bump_tex_name)
-                if bump_img:
-                    tex_type = TextureType.HAIR if mat_part.lower() in ['hair', 'effecthair', 'helmet', 'helmetemo'] else TextureType.BODY
-                    self.set_normalmap_texture(tex_type, target_mat, bump_img)
-                    imported_any = True
+                bump_tex_name = tex_envs.get('_BumpMap', {}).get('m_Texture', {}).get('Name')
+                if bump_tex_name:
+                    bump_img = resolve_img(bump_tex_name)
+                    if bump_img:
+                        tex_type = TextureType.HAIR if mat_part.lower() in ['hair', 'effecthair', 'helmet', 'helmetemo'] else TextureType.BODY
+                        self.set_normalmap_texture(tex_type, target_mat, bump_img)
+                        imported_any = True
                 else:
                     for node in find_all_image_nodes_by_category(target_mat.node_tree, 'normal'):
                         node.image = None
-            else:
-                for node in find_all_image_nodes_by_category(target_mat.node_tree, 'normal'):
-                    node.image = None
 
-            shadow_ramp_name = tex_envs.get('_PackedShadowRampTex', {}).get('m_Texture', {}).get('Name') or \
-                               tex_envs.get('_ShadowRampTex', {}).get('m_Texture', {}).get('Name')
-            if shadow_ramp_name:
-                shadow_ramp_img = resolve_img(shadow_ramp_name)
-                if shadow_ramp_img:
-                    tex_type = TextureType.HAIR if mat_part.lower() in ['hair', 'effecthair', 'helmet', 'helmetemo'] else TextureType.BODY
-                    self.set_shadow_ramp_texture(tex_type, shadow_ramp_img)
-                    imported_any = True
+                shadow_ramp_name = tex_envs.get('_PackedShadowRampTex', {}).get('m_Texture', {}).get('Name') or \
+                                   tex_envs.get('_ShadowRampTex', {}).get('m_Texture', {}).get('Name')
+                if shadow_ramp_name:
+                    shadow_ramp_img = resolve_img(shadow_ramp_name)
+                    if shadow_ramp_img:
+                        tex_type = TextureType.HAIR if mat_part.lower() in ['hair', 'effecthair', 'helmet', 'helmetemo'] else TextureType.BODY
+                        self.set_shadow_ramp_texture(tex_type, shadow_ramp_img)
+                        imported_any = True
+
+            # If equipment, assign white shadow ramp and set Use Alpha = 1
+            is_mat_equip = target_mat.name.lower().startswith(('equip_', 'equipskin_')) or \
+                           any(obj.name.startswith(('Equip_', 'EquipSkin_')) for obj in bpy.data.objects)
+            if is_mat_equip:
+                white_ramp = get_or_create_white_texture("White_Shadow_Ramp")
+                self.set_shadow_ramp_texture(TextureType.BODY, white_ramp)
+                set_use_alpha_on_material(target_mat, 1.0)
 
             # Pupil diffuse textures (for Pupil, New Pupil, and Sandrone pupil)
             if mat_part.lower() in ['pupil', 'pupila', 'sandrone pupil'] or ('pupil' in target_mat.name.lower() and 'outlines' not in target_mat.name.lower()):
@@ -954,6 +1023,34 @@ class GenshinTextureImporter:
             return False
 
         matched_any = False
+
+        # Match equipment / weapon textures directly
+        if f_lower.startswith(('equip_', 'equipskin_')) or 'equip' in f_lower:
+            equip_materials = [
+                mat for mat in bpy.data.materials 
+                if mat.use_nodes and 'outlines' not in mat.name.lower() and 'outline' not in mat.name.lower() and ('body' in mat.name.lower() or 'equip' in mat.name.lower())
+            ]
+            if not equip_materials:
+                equip_materials = [
+                    mat for mat in bpy.data.materials 
+                    if mat.use_nodes and 'outlines' not in mat.name.lower() and 'pupil' not in mat.name.lower() and 'face' not in mat.name.lower()
+                ]
+            for target_mat in equip_materials:
+                if is_diffuse:
+                    self.set_diffuse_texture(TextureType.BODY, target_mat, img)
+                    matched_any = True
+                elif is_lightmap:
+                    self.set_lightmap_texture(TextureType.BODY, target_mat, img)
+                    matched_any = True
+                elif is_normal:
+                    self.set_normalmap_texture(TextureType.BODY, target_mat, img)
+                    matched_any = True
+                elif is_shadow_ramp:
+                    self.set_shadow_ramp_texture(TextureType.BODY, img)
+                    matched_any = True
+            if matched_any:
+                return True
+
         parts_to_check = [
             'body04', 'body03', 'body02', 'body01', 'body_04', 'body_03', 'body_02', 'body_01', 'body4', 'body3', 'body2', 'body1',
             'dress04', 'dress03', 'dress02', 'dress01', 'dress_04', 'dress_03', 'dress_02', 'dress_01', 'dress4', 'dress3', 'dress2', 'dress1',
@@ -1125,12 +1222,19 @@ class GenshinTextureImporter:
         if not material or not material.use_nodes or not material.node_tree:
             return
 
+        m_low = material.name.lower()
+        if any(k in m_low for k in ['face', 'body', 'hair', 'dress', 'arm', 'cloak', 'glass', 'tail', 'wing', 'skirt', 'gauntlet', 'leather', 'outlines']):
+            return
+
         def get_all_tex_nodes(tree):
             nodes = []
             for n in tree.nodes:
                 if n.type == 'TEX_IMAGE':
                     nodes.append(n)
                 elif n.type == 'GROUP' and n.node_tree:
+                    ng_name = n.node_tree.name.lower()
+                    if any(ign in ng_name for ign in ['face factor', 'face shader', 'gi face', 'eyeshadow', 'body shader', 'gi body', 'gi hair', 'primotoon', 'hoyotoon', 'outline']):
+                        continue
                     nodes.extend(get_all_tex_nodes(n.node_tree))
             return nodes
 
@@ -1146,12 +1250,19 @@ class GenshinTextureImporter:
         if not material or not material.use_nodes or not material.node_tree:
             return
 
+        m_low = material.name.lower()
+        if any(k in m_low for k in ['face', 'body', 'hair', 'dress', 'arm', 'cloak', 'glass', 'tail', 'wing', 'skirt', 'gauntlet', 'leather', 'outlines']):
+            return
+
         def get_all_tex_nodes(tree):
             nodes = []
             for n in tree.nodes:
                 if n.type == 'TEX_IMAGE':
                     nodes.append(n)
                 elif n.type == 'GROUP' and n.node_tree:
+                    ng_name = n.node_tree.name.lower()
+                    if any(ign in ng_name for ign in ['face factor', 'face shader', 'gi face', 'eyeshadow', 'body shader', 'gi body', 'gi hair', 'primotoon', 'hoyotoon', 'outline']):
+                        continue
                     nodes.extend(get_all_tex_nodes(n.node_tree))
             return nodes
 
@@ -1159,7 +1270,7 @@ class GenshinTextureImporter:
 
         diffuse_nodes = [
             n for n in tex_nodes
-            if not any(k in (n.name + " " + (n.label or "")).lower() for k in ['blend', 'ramp', 'highlight', 'mask'])
+            if not any(k in (n.name + " " + (n.label or "")).lower() for k in ['blend', 'ramp', 'highlight', 'mask', 'lightmap', 'normal'])
         ]
         diffuse_nodes.sort(key=lambda n: n.location.y, reverse=True)
 
@@ -1215,6 +1326,9 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
             ) or any(
                 k in dir_lower for k in ['sandrone', 'marionettenew', 'marionette_new', 'newmarionette']
             )
+            is_equip = any(f.lower().startswith(('equip_', 'equipskin_')) for f in files) or \
+                       any(k in dir_lower for k in ['equip_', 'equipskin_']) or \
+                       any(obj.name.startswith(('Equip_', 'EquipSkin_')) for obj in bpy.data.objects)
 
             pupil_diffuse_images = {}
             highlight_img = None
@@ -1372,6 +1486,15 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                         body1_material if ShaderMaterialNameKeywords.BODY1_DIFFUSE in file else \
                         body2_material if ShaderMaterialNameKeywords.BODY2_DIFFUSE in file else body_material
                     self.set_diffuse_texture(TextureType.BODY, selected_body_material, img)
+                    # If no lightmap exists in files, fallback to diffuse image for lightmap
+                    has_body_lightmap = any(
+                        self.is_one_texture_identifier_in_texture_name(
+                            [ShaderMaterialNameKeywords.BODY_LIGHTMAP, ShaderMaterialNameKeywords.BODY1_LIGHTMAP, ShaderMaterialNameKeywords.BODY2_LIGHTMAP], f
+                        ) or 'lightmap' in f.lower()
+                        for f in files
+                    )
+                    if not has_body_lightmap:
+                        self.set_lightmap_texture(TextureType.BODY, selected_body_material, img)
                     # Set Face Id in Body_Diffuse because not all Face Diffuse filenames have the full costume name
                     # Ex. Diluc's costume does not have DilucCostumeFlamme, but just Diluc
                     self.set_face_material_id(face_material, img)
@@ -1480,14 +1603,70 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                         self.set_up_night_soul_mask_texture(material, img)
                 elif self.is_texture_identifiers_in_texture_name([ShaderMaterialNameKeywords.STOCKINGS_DETAILMAP], file):
                     self.set_stocking_texture(img)
+                elif f_lower.startswith(('equip_', 'equipskin_')) or (is_equip and ('diffuse' in f_lower or 'lightmap' in f_lower or 'normal' in f_lower or 'shadow_ramp' in f_lower)):
+                    weapon_materials = [
+                        mat for mat in bpy.data.materials
+                        if mat.use_nodes and 'outlines' not in mat.name.lower() and ('body' in mat.name.lower() or 'equip' in mat.name.lower())
+                    ] or [body_material or selected_body_material]
+                    if 'lightmap' in f_lower:
+                        for mat in weapon_materials:
+                            if mat:
+                                self.set_lightmap_texture(TextureType.BODY, mat, img)
+                    elif 'diffuse' in f_lower:
+                        for mat in weapon_materials:
+                            if mat:
+                                self.set_diffuse_texture(TextureType.BODY, mat, img)
+                    elif 'normal' in f_lower:
+                        for mat in weapon_materials:
+                            if mat:
+                                self.set_normalmap_texture(TextureType.BODY, mat, img)
+                    elif 'shadow_ramp' in f_lower:
+                        self.set_shadow_ramp_texture(TextureType.BODY, img)
                 elif self.import_part_texture_to_matching_materials(file, img):
                     pass
                 else:
                     print(f'WARN: Ignoring texture {file}')
 
+        # Fallback: for any material with unassigned lightmaps, assign the diffuse texture
         for mat in bpy.data.materials:
-            if mat.use_nodes and 'Outlines' not in mat.name and 'Pupil' not in mat.name and 'pupil' not in mat.name:
+            if mat.use_nodes and not any(k in mat.name.lower() for k in ['outlines', 'outline', 'face', 'pupil', 'brow', 'eye']):
+                lm_nodes = find_all_image_nodes_by_category(mat.node_tree, 'lightmap')
+                unassigned_lm = [n for n in lm_nodes if not n.image]
+                if unassigned_lm:
+                    diff_nodes = find_all_image_nodes_by_category(mat.node_tree, 'diffuse')
+                    diff_img = next((n.image for n in diff_nodes if n.image), None)
+                    if diff_img:
+                        for n in unassigned_lm:
+                            n.image = diff_img
+
+        for mat in bpy.data.materials:
+            if mat.use_nodes and not any(k in mat.name.lower() for k in ['outlines', 'outline', 'face', 'pupil', 'brow', 'eye']):
                 sync_material_category_textures(mat)
+
+        if is_equip:
+            white_ramp = get_or_create_white_texture("White_Shadow_Ramp")
+            self.set_shadow_ramp_texture(TextureType.BODY, white_ramp)
+            for mat in bpy.data.materials:
+                if mat.use_nodes and 'outlines' not in mat.name.lower():
+                    set_use_alpha_on_material(mat, 1.0)
+
+            def _delete_hierarchy_by_name(obj_name):
+                target = bpy.data.objects.get(obj_name)
+                if not target:
+                    return
+                child_names = [c.name for c in bpy.data.objects if getattr(c, "parent", None) and c.parent.name == obj_name]
+                for child_name in child_names:
+                    _delete_hierarchy_by_name(child_name)
+                obj_to_remove = bpy.data.objects.get(obj_name)
+                if obj_to_remove:
+                    try:
+                        bpy.data.objects.remove(obj_to_remove, do_unlink=True)
+                    except Exception:
+                        pass
+
+            matching_names = [o.name for o in bpy.data.objects if "head origin" in o.name.lower()]
+            for name in matching_names:
+                _delete_hierarchy_by_name(name)
 
 
 class GenshinNPCTextureImporter(GenshinTextureImporter):

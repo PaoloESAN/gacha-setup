@@ -751,23 +751,22 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                     pass
 
     def reset_pose_location_and_rotation(self):
+        armatures = [
+            object for object in bpy.data.objects if object.type == "ARMATURE"
+        ]
+        if not armatures:
+            return  # No armature found (e.g. for static meshes, weapons, etc.), skip gracefully
+        armature = armatures[0]
         try:
-            armature = [
-                object for object in bpy.data.objects if object.type == "ARMATURE"
-            ][0]  # expecting 1 armature
-        except IndexError as err:
-            self.report(
-                {"ERROR"},
-                "Attempted to import model, but no armature found after import. Likely failed to import from FBX file.\n"
-                "- Try renaming and removing any special characters (like star symbols) from any folders in the filepath",
-            )
-            raise err
-        bpy.context.view_layer.objects.active = armature
-
-        bpy.ops.object.mode_set(mode="POSE")
-        bpy.ops.pose.loc_clear()
-        bpy.ops.pose.rot_clear()
-        bpy.ops.object.mode_set(mode="OBJECT")
+            bpy.context.view_layer.objects.active = armature
+            if armature.mode != "OBJECT" and bpy.ops.object.mode_set.poll():
+                bpy.ops.object.mode_set(mode="OBJECT")
+            bpy.ops.object.mode_set(mode="POSE")
+            bpy.ops.pose.loc_clear()
+            bpy.ops.pose.rot_clear()
+            bpy.ops.object.mode_set(mode="OBJECT")
+        except Exception as e:
+            print(f"Notice: reset_pose_location_and_rotation skipped ({e})")
 
     """
         NOTE: This will rename the Color Attributes for ALL meshes

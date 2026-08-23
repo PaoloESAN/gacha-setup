@@ -346,6 +346,17 @@ class V2_MaterialDataApplier(MaterialDataApplier):
                     Skipped.')
                 continue  # This used to be raise ex, but we're setting to Continue for NPCs using V3 Shader
 
+        # If equipment / weapon, always force Use Alpha = 1
+        is_equip = getattr(self, 'material', None) and (
+            self.material.name.lower().startswith(('equip_', 'equipskin_')) or
+            'equip' in self.material.name.lower() or
+            any(obj.name.startswith(('Equip_', 'EquipSkin_')) for obj in bpy.data.objects)
+        )
+        if is_equip:
+            node_input = node_inputs.get("Use Alpha")
+            if node_input:
+                node_input.default_value = 1.0
+
 
 class V3_MaterialDataApplier(V2_MaterialDataApplier):
     face_material_mapping = {
