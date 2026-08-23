@@ -4,7 +4,21 @@ from bpy.props import EnumProperty
 from bpy.types import Panel
 
 from setup_wizard import bl_info
+from setup_wizard.addon_updater import addon_updater_ops
 from setup_wizard.domain.game_types import GameType
+
+
+class CSW_PT_Updater_UI_Layout(Panel):
+    bl_label = "Add-on Updater"
+    bl_idname = 'CSW_PT_Updater_UI_Layout'
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Character Setup Wizard"
+
+    def draw(self, context):
+        layout = self.layout
+        addon_updater_ops.check_for_update_background()
+        addon_updater_ops.update_settings_ui_condensed(self, context, element=layout)
 
 
 class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
@@ -20,8 +34,6 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
             (GameType.HONKAI_STAR_RAIL.name, 'Honkai Star Rail', 'Honkai Star Rail Setup'),
             (GameType.ZENLESS_ZONE_ZERO.name, 'Zenless Zone Zero', 'Zenless Zone Zero Setup'),
             (GameType.NEVERNESS_TO_EVERNESS.name, 'Neverness to Everness', 'Neverness to Everness Setup'),
-
-
         ],
         name='Game',
         description='Setup for the selected game',
