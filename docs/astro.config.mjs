@@ -63,7 +63,6 @@ export default defineConfig({
 						{ label: 'Character Assets', slug: 'character-models', translations: { es: 'Assets de Personajes' } },
 						{ label: 'FAQ', slug: 'faq', translations: { es: 'Preguntas Frecuentes' } },
 						{ label: 'Changelog', slug: 'changelog', translations: { es: 'Registro de Cambios' } },
-						{ label: 'Roadmap', slug: 'roadmap', translations: { es: 'Ruta de Desarrollo' } },
 						{ label: 'Credits', slug: 'credits', translations: { es: 'Créditos' } },
 					],
 				},

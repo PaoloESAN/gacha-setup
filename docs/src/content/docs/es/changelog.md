@@ -5,7 +5,48 @@ description: Historial de versiones y actualizaciones para Gacha Setup.
 
 ## Historial de Versiones
 
-### v3.2.2 — Última
+### v3.3.1 — Última
+
+**General**
+- Añadido actualizador automático del addon (addon updater).
+
+**Genshin Impact**
+- **Novedades:** Soporte para armas añadido.
+- **Novedades:** Nueva pupila y brillo de ojos para Sandrone (gracias VANS & nedarb183).
+- **Correcciones y Mejoras:** Mejor mapeo de texturas.
+- **Correcciones y Mejoras:** El sistema de físicas ahora verifica mejor los huesos a los que se deben aplicar físicas.
+- **Correcciones y Mejoras:** Corregida la transparencia de materiales en vodya.
+
+[Changelog completo: #6](https://github.com/PaoloESAN/gacha-setup/pull/6)
+
+### v3.3.0
+
+**Todos los Juegos / General**
+- **Físicas:** Añadido soporte para físicas de pelo y ropa.
+- **Rigging:** Corregidas las colecciones de huesos (bone collections).
+- **UI:** Setup básico colapsado por defecto, casilla de depuración eliminada.
+
+**Zenless Zone Zero (ZZZ)**
+- **Shaders:** El shader ZZZ de Kythera ahora es el predeterminado (opción para cambiar al shader heredado disponible).
+- **Novedades:** Añadido soporte para el cinturón de Alice.
+- **Correcciones:** Corregidas texturas, rig unificado y unión de armaduras.
+- **Correcciones:** Corregido "run entire setup" y otros errores.
+
+**Honkai: Star Rail (HSR)**
+- Corregida la unión de armaduras y nombres de shape keys.
+- Resueltos problemas de transparencia de materiales.
+
+**Genshin Impact**
+- Corregidos problemas de materiales con nuevos modelos.
+
+**Neverness to Everness (NTE)**
+- Soporte para "Run Entire Setup".
+- Añadido soporte para facerig (basado en el facerig ZZZ de Jideeh).
+- Mejor asignación y mapeo de texturas.
+
+[Changelog completo: #5](https://github.com/PaoloESAN/gacha-setup/pull/5)
+
+### v3.2.2
 
 - **ZZZ:** Integración del nuevo facial rig v6 por jideeh.
 - **NTE:** Corregidas las texturas de los personajes y problemas en el rigging de los dedos (tamaño, rotación y huesos de las puntas).

@@ -5,7 +5,48 @@ description: Release history and version updates for Gacha Setup.
 
 ## Version History
 
-### v3.2.2 — Latest
+### v3.3.1 — Latest
+
+**General**
+- Added addon updater.
+
+**Genshin Impact**
+- **Features:** Added weapons support.
+- **Features:** Added new Sandrone pupil and eye highlight. (thanks VANS & nedarb183)
+- **Fixes & Improvements:** Better texture mapping.
+- **Fixes & Improvements:** Physics system now better verifies the bones to which physics should be applied.
+- **Fixes & Improvements:** Fixed material transparency in vodya.
+
+[Full Changelog: #6](https://github.com/PaoloESAN/gacha-setup/pull/6)
+
+### v3.3.0
+
+**All Games / General**
+- **Physics:** Added hair & clothes physics support.
+- **Rigging:** Fixed bone collections.
+- **UI:** Basic setup collapsed, debug checkbox removed.
+
+**Zenless Zone Zero (ZZZ)**
+- **Shaders:** Kythera's ZZZ shader is now set as default (option to switch to legacy shader is available).
+- **Features:** Added Alice belt support.
+- **Fixes:** Fixed textures, unified rig, and armature merging.
+- **Fixes:** Fixed "run entire setup" and other bugs.
+
+**Honkai: Star Rail (HSR)**
+- Fixed armature merging and shape key names.
+- Resolved material transparency issues.
+
+**Genshin Impact**
+- Fixed material issues with new models.
+
+**Neverness to Everness (NTE)**
+- Added "Run Entire Setup" support.
+- Added facerig support (based on Jideeh's ZZZ facerig).
+- Better texture assignment / mapping.
+
+[Full Changelog: #5](https://github.com/PaoloESAN/gacha-setup/pull/5)
+
+### v3.2.2
 
 - **ZZZ:** Integrated new facial rig v6 by jideeh.
 - **NTE:** Fixed character textures and finger rigging issues (size, rotation, and fingertip bones).
