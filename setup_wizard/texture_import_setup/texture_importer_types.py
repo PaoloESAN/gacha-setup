@@ -3,6 +3,8 @@ from typing import List
 import bpy
 
 import os
+import re
+import json
 from setup_wizard.domain.material_identifier_service import PunishingGrayRavenMaterialIdentifierService
 from setup_wizard.domain.game_types import GameType
 from setup_wizard.domain.shader_identifier_service import GenshinImpactShaders, HonkaiStarRailShaders, ShaderIdentifierService, \
@@ -15,6 +17,21 @@ from setup_wizard.domain.shader_material_name_keywords import ShaderMaterialName
 from setup_wizard.import_order import get_actual_material_name_for_dress
 from setup_wizard.texture_import_setup.texture_node_names import JaredNytsPunishingGrayRavenTextureNodeNames, Nya222HonkaiStarRailTextureNodeNames, StellarToonTextureNodeNames, TextureNodeNames, V4_GenshinImpactTextureNodeNames
 from setup_wizard.texture_import_setup.original_texture_locator_utils import OriginalTextureLocatorUtils
+
+
+def is_mat_part_match(mat_name, part):
+    """
+    Checks if a material name matches a body/dress part token exactly.
+    Ensures 'dress' matches 'HoYoverse - Genshin Dress' but NOT 'HoYoverse - Genshin Dress01'.
+    """
+    m_low = mat_name.lower()
+    part_clean = part.lower().replace('_', '')
+    if bool(re.search(rf'(?:^|[\s\-_]){re.escape(part)}$', m_low)):
+        return True
+    m_tokens = re.split(r'[\s\-_]+', m_low)
+    if m_tokens and m_tokens[-1].replace('_', '') == part_clean:
+        return True
+    return False
 
 
 def find_all_image_nodes_by_category(node_tree, category):
@@ -528,6 +545,194 @@ class GenshinTextureImporter:
                     for n in nodes:
                         n.image = texture_img
 
+    def import_textures_from_json(self, directory):
+        """
+        Reads material JSON files from 'Materials/' subfolder or directory if present,
+        and assigns textures with 100% precision based on the game's shader property mappings.
+        """
+        candidates = [
+            os.path.join(directory, "Materials"),
+            os.path.join(os.path.dirname(directory), "Materials"),
+            directory
+        ]
+        materials_dir = None
+        for d in candidates:
+            if os.path.isdir(d) and any(f.lower().endswith('.json') and not f.startswith('Avatar_Default_Mat') for f in os.listdir(d)):
+                materials_dir = d
+                break
+
+        if not materials_dir:
+            return False
+
+        image_files = []
+        for root, _, files in os.walk(directory):
+            for f in files:
+                if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff')):
+                    image_files.append((f, os.path.join(root, f)))
+
+        def resolve_img(tex_name):
+            if not tex_name:
+                return None
+            t_low = tex_name.lower().strip()
+            for fname, fpath in image_files:
+                stem = os.path.splitext(fname)[0].lower()
+                if stem == t_low:
+                    img = bpy.data.images.get(fname) or bpy.data.images.load(filepath=os.path.normpath(fpath), check_existing=True)
+                    img.alpha_mode = 'CHANNEL_PACKED'
+                    return img
+            for fname, fpath in image_files:
+                stem = os.path.splitext(fname)[0].lower()
+                if stem.startswith(t_low) or t_low.startswith(stem):
+                    img = bpy.data.images.get(fname) or bpy.data.images.load(filepath=os.path.normpath(fpath), check_existing=True)
+                    img.alpha_mode = 'CHANNEL_PACKED'
+                    return img
+            for fname, fpath in image_files:
+                if t_low in fname.lower():
+                    img = bpy.data.images.get(fname) or bpy.data.images.load(filepath=os.path.normpath(fpath), check_existing=True)
+                    img.alpha_mode = 'CHANNEL_PACKED'
+                    return img
+            return None
+
+        imported_any = False
+        for jf in os.listdir(materials_dir):
+            if not jf.lower().endswith('.json') or jf.startswith('Avatar_Default_Mat'):
+                continue
+            jpath = os.path.join(materials_dir, jf)
+            try:
+                with open(jpath, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            except Exception:
+                continue
+
+            tex_envs = data.get('m_SavedProperties', {}).get('m_TexEnvs', {})
+            raw_name = os.path.splitext(jf)[0]
+            mat_part = raw_name.split('_')[-1]
+
+            target_mat = None
+            if hasattr(self, 'material_names') and hasattr(self.material_names, 'MATERIAL_PREFIX'):
+                target_mat = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{mat_part}')
+
+            if not target_mat:
+                for mat in bpy.data.materials:
+                    if mat.use_nodes and 'outlines' not in mat.name.lower() and 'outline' not in mat.name.lower():
+                        if is_mat_part_match(mat.name, mat_part):
+                            target_mat = mat
+                            break
+
+            if not target_mat and mat_part.lower() == 'pupil':
+                target_mat = bpy.data.materials.get(getattr(self.material_names, 'NEW_PUPIL', f'{self.material_names.MATERIAL_PREFIX}New Pupil')) or \
+                             bpy.data.materials.get('HoYoverse - Genshin New Pupil') or \
+                             bpy.data.materials.get('miHoYo - Genshin New Pupil') or \
+                             bpy.data.materials.get(getattr(self.material_names, 'PUPIL', f'{self.material_names.MATERIAL_PREFIX}Pupil')) or \
+                             next((m for m in bpy.data.materials if 'pupil' in m.name.lower() and 'outlines' not in m.name.lower()), None)
+
+            if not target_mat and mat_part.lower() == 'brow':
+                target_mat = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}Brow') or \
+                             bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}Face')
+
+            if not target_mat:
+                for mat in bpy.data.materials:
+                    if mat.use_nodes and 'outlines' not in mat.name.lower() and 'outline' not in mat.name.lower():
+                        if raw_name.lower() in mat.name.lower():
+                            target_mat = mat
+                            break
+
+            if not target_mat:
+                target_mat = bpy.data.materials.get(raw_name)
+
+            if not target_mat:
+                continue
+
+            diffuse_tex_name = tex_envs.get('_MainTex', {}).get('m_Texture', {}).get('Name') or \
+                               tex_envs.get('_BaseTexV2', {}).get('m_Texture', {}).get('Name') or \
+                               tex_envs.get('_BaseTex', {}).get('m_Texture', {}).get('Name')
+            if diffuse_tex_name:
+                diffuse_img = resolve_img(diffuse_tex_name)
+                if diffuse_img:
+                    tex_type = TextureType.HAIR if mat_part.lower() in ['hair', 'effecthair', 'helmet', 'helmetemo'] else TextureType.BODY
+                    if mat_part.lower() == 'face':
+                        self.set_face_diffuse_texture(target_mat, diffuse_img)
+                    else:
+                        self.set_diffuse_texture(tex_type, target_mat, diffuse_img)
+                    imported_any = True
+                else:
+                    for node in find_all_image_nodes_by_category(target_mat.node_tree, 'diffuse'):
+                        node.image = None
+            else:
+                for node in find_all_image_nodes_by_category(target_mat.node_tree, 'diffuse'):
+                    node.image = None
+
+            lightmap_tex_name = tex_envs.get('_LightMapTex', {}).get('m_Texture', {}).get('Name')
+            if lightmap_tex_name:
+                lightmap_img = resolve_img(lightmap_tex_name)
+                if lightmap_img:
+                    tex_type = TextureType.HAIR if mat_part.lower() in ['hair', 'effecthair', 'helmet', 'helmetemo'] else TextureType.BODY
+                    self.set_lightmap_texture(tex_type, target_mat, lightmap_img)
+                    imported_any = True
+                else:
+                    for node in find_all_image_nodes_by_category(target_mat.node_tree, 'lightmap'):
+                        node.image = None
+            else:
+                for node in find_all_image_nodes_by_category(target_mat.node_tree, 'lightmap'):
+                    node.image = None
+
+            bump_tex_name = tex_envs.get('_BumpMap', {}).get('m_Texture', {}).get('Name')
+            if bump_tex_name:
+                bump_img = resolve_img(bump_tex_name)
+                if bump_img:
+                    tex_type = TextureType.HAIR if mat_part.lower() in ['hair', 'effecthair', 'helmet', 'helmetemo'] else TextureType.BODY
+                    self.set_normalmap_texture(tex_type, target_mat, bump_img)
+                    imported_any = True
+                else:
+                    for node in find_all_image_nodes_by_category(target_mat.node_tree, 'normal'):
+                        node.image = None
+            else:
+                for node in find_all_image_nodes_by_category(target_mat.node_tree, 'normal'):
+                    node.image = None
+
+            shadow_ramp_name = tex_envs.get('_PackedShadowRampTex', {}).get('m_Texture', {}).get('Name') or \
+                               tex_envs.get('_ShadowRampTex', {}).get('m_Texture', {}).get('Name')
+            if shadow_ramp_name:
+                shadow_ramp_img = resolve_img(shadow_ramp_name)
+                if shadow_ramp_img:
+                    tex_type = TextureType.HAIR if mat_part.lower() in ['hair', 'effecthair', 'helmet', 'helmetemo'] else TextureType.BODY
+                    self.set_shadow_ramp_texture(tex_type, shadow_ramp_img)
+                    imported_any = True
+
+            p2_name = tex_envs.get('_ParallaxLayer1Tex', {}).get('m_Texture', {}).get('Name')
+            p3_name = tex_envs.get('_ParallaxLayer2Tex', {}).get('m_Texture', {}).get('Name')
+            matcap_mask_name = tex_envs.get('_EyeMaskWithMatcap', {}).get('m_Texture', {}).get('Name')
+
+            if p2_name or p3_name or matcap_mask_name:
+                pupil_imgs = {}
+                if diffuse_tex_name:
+                    p1_img = resolve_img(diffuse_tex_name)
+                    if p1_img:
+                        pupil_imgs['01'] = p1_img
+                        pupil_imgs['1'] = p1_img
+                if p2_name:
+                    p2_img = resolve_img(p2_name)
+                    if p2_img:
+                        pupil_imgs['02'] = p2_img
+                        pupil_imgs['2'] = p2_img
+                if p3_name:
+                    p3_img = resolve_img(p3_name)
+                    if p3_img:
+                        pupil_imgs['03'] = p3_img
+                        pupil_imgs['3'] = p3_img
+                if pupil_imgs:
+                    self.set_multi_pupil_textures(target_mat, pupil_imgs)
+                    imported_any = True
+
+            stockings_name = tex_envs.get('_ShiningCustomIDMask_V2', {}).get('m_Texture', {}).get('Name')
+            if stockings_name:
+                stock_img = resolve_img(stockings_name)
+                if stock_img:
+                    self.set_stocking_texture(stock_img)
+                    imported_any = True
+
+        return imported_any
+
     def import_part_texture_to_matching_materials(self, file, img):
         """
         Dynamically matches textures for Body01..04, Body1..4, Dress01..04, Dress1..4, Dress, Tail, Ribbon, VeilShadow, Stockings, Arm, Cloak, Helmet, etc.
@@ -547,26 +752,15 @@ class GenshinTextureImporter:
             'body04', 'body03', 'body02', 'body01', 'body_04', 'body_03', 'body_02', 'body_01', 'body4', 'body3', 'body2', 'body1',
             'dress04', 'dress03', 'dress02', 'dress01', 'dress_04', 'dress_03', 'dress_02', 'dress_01', 'dress4', 'dress3', 'dress2', 'dress1',
             'tail', 'ribbon', 'veilshadow', 'veil', 'stockings', 'arm', 'cloak', 'helmetemo', 'helmet', 'gauntlet', 'leather', 'skirt',
-            'glass_eff', 'glass', 'starcloak', 'dress'
+            'glass_eff', 'glass', 'starcloak', 'wing', 'wings', 'dress', 'body'
         ]
-        
+
         for part in parts_to_check:
             if part in f_lower:
                 matching_materials = [
                     mat for mat in bpy.data.materials 
-                    if mat.use_nodes and 'outlines' not in mat.name.lower() and 'outline' not in mat.name.lower() and (
-                        mat.name.lower().endswith(part) or 
-                        f'- {part}' in mat.name.lower() or 
-                        f' {part}' in mat.name.lower() or 
-                        f'_{part}' in mat.name.lower()
-                    )
+                    if mat.use_nodes and 'outlines' not in mat.name.lower() and 'outline' not in mat.name.lower() and is_mat_part_match(mat.name, part)
                 ]
-                
-                if not matching_materials and 'dress' in part:
-                    matching_materials = [
-                        mat for mat in bpy.data.materials
-                        if mat.use_nodes and 'outlines' not in mat.name.lower() and 'outline' not in mat.name.lower() and 'dress' in mat.name.lower()
-                    ]
 
                 if matching_materials:
                     for target_mat in matching_materials:
@@ -758,6 +952,8 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
         self.genshin_shader_version = self.shader_identifier_service.identify_shader(bpy.data.materials, bpy.data.node_groups)
 
     def import_textures(self, directory):
+        self.import_textures_from_json(directory)
+
         for name, folder, files in os.walk(directory):
             self.files = files
 
@@ -983,6 +1179,8 @@ class GenshinNPCTextureImporter(GenshinTextureImporter):
         self.shader_material_names = self.shader_identifier_service.get_shader_material_names_using_shader(self.genshin_shader_version)
 
     def import_textures(self, directory):
+        self.import_textures_from_json(directory)
+
         for name, folder, files in os.walk(directory):
             self.files = files
             for file in files:
@@ -1116,6 +1314,8 @@ class GenshinMonsterTextureImporter(GenshinTextureImporter):
         self.genshin_shader_version = self.shader_identifier_service.identify_shader(bpy.data.materials, bpy.data.node_groups)
 
     def import_textures(self, directory):
+        self.import_textures_from_json(directory)
+
         for name, folder, files in os.walk(directory):
             self.files = files
             for file in files:

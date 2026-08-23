@@ -202,7 +202,6 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             material_name = body_material.name
         elif m_low in ['body2', 'body02', 'body_02']:
             body_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
-            material_name = body_material.name
         elif m_low in ['dress1', 'dress01', 'dress_01', 'dress2', 'dress02', 'dress_02']:
             dress_template = bpy.data.materials.get(self.material_names.DRESS) or bpy.data.materials.get(self.material_names.BODY)
             new_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
@@ -210,6 +209,7 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 new_material = dress_template.copy()
                 new_material.name = f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}'
                 new_material.use_fake_user = True
+                self.__clear_material_images(new_material)
             material_name = new_material.name if new_material else material_name
         elif mesh_body_part_name == 'EffectHair':  # Furina
             hair_material = self.create_hair_material(self.material_names, self.material_names.EFFECT_HAIR)
@@ -322,20 +322,37 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 face_material.use_fake_user = True
         return face_material
 
+    def __clear_material_images(self, material):
+        if not material or not material.use_nodes or not material.node_tree:
+            return
+        for node in material.node_tree.nodes:
+            if node.type == 'TEX_IMAGE':
+                node.image = None
+            elif node.type == 'GROUP' and node.node_tree:
+                for sub_node in node.node_tree.nodes:
+                    if sub_node.type == 'TEX_IMAGE':
+                        sub_node.image = None
+
     def create_body_material(self, shader_material_names: ShaderMaterialNames, material_name):
         body_material = bpy.data.materials.get(material_name)
         if not body_material:
-            body_material = bpy.data.materials.get(shader_material_names.BODY).copy()
-            body_material.name = material_name
-            body_material.use_fake_user = True
+            body_template = bpy.data.materials.get(shader_material_names.BODY)
+            if body_template:
+                body_material = body_template.copy()
+                body_material.name = material_name
+                body_material.use_fake_user = True
+                self.__clear_material_images(body_material)
         return body_material
 
     def create_hair_material(self, shader_material_names: ShaderMaterialNames, material_name):
         hair_material = bpy.data.materials.get(material_name)
         if not hair_material:
-            hair_material = bpy.data.materials.get(shader_material_names.HAIR).copy()
-            hair_material.name = material_name
-            hair_material.use_fake_user = True
+            hair_template = bpy.data.materials.get(shader_material_names.HAIR)
+            if hair_template:
+                hair_material = hair_template.copy()
+                hair_material.name = material_name
+                hair_material.use_fake_user = True
+                self.__clear_material_images(hair_material)
         return hair_material
 
     def create_glass_material(self, shader_material_names: ShaderMaterialNames, material_name):
@@ -345,6 +362,7 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             glass_material = vfx_template_material.copy()
             glass_material.name = material_name
             glass_material.use_fake_user = True
+            self.__clear_material_images(glass_material)
         return glass_material
 
     '''
