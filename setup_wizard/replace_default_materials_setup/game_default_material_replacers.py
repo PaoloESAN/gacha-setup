@@ -266,6 +266,9 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         elif mesh_body_part_name and 'Others' in mesh_body_part_name:  # NPCs, Frem Penguins
             new_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
             material_name = new_material.name
+        elif mesh_body_part_name and 'crystal' in mesh_body_part_name.lower():
+            crystal_material = self.create_crystal_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
+            material_name = crystal_material.name
         elif mesh_body_part_name and mesh_body_part_name not in ['Face', 'Body', 'Hair', 'Eye', 'Dress', 'Arm', 'Cloak', 'VFX', 'StarCloak', 'Pupil', 'Pupila', 'New Pupil']:
             # Fallback for completely unknown materials (like 'Stockings', 'Wings', etc)
             new_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
@@ -364,6 +367,139 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             glass_material.use_fake_user = True
             self.__clear_material_images(glass_material)
         return glass_material
+
+    def setup_crystal_material_nodes(self, crystal_material):
+        """
+        Applies the Crystal transparency shader setup:
+        (Lightmap Color if present, else Diffuse Color) -> Separate Color (Red) -> Greater Than (0.5) -> Mix Shader (Factor)
+        with Transparent BSDF (Shader 1) and Body Shader BSDF (Shader 2) -> Material Output (Surface).
+        """
+        if not crystal_material or not crystal_material.use_nodes or not crystal_material.node_tree:
+            return
+
+        tree = crystal_material.node_tree
+
+        output_node = next((n for n in tree.nodes if n.type == 'OUTPUT_MATERIAL'), None)
+        if not output_node:
+            return
+
+        body_shader = tree.nodes.get('Body Shader') or \
+                      tree.nodes.get('PrimoToon') or \
+                      tree.nodes.get('HoYoToon') or \
+                      tree.nodes.get('Group.001') or \
+                      next((n for n in tree.nodes if n.type == 'GROUP' and 'BSDF' in n.outputs), None)
+
+        lightmap_img_nodes = [n for n in tree.nodes if n.type == 'TEX_IMAGE' and 'lightmap' in (n.name + " " + (n.label or "")).lower()]
+        has_lightmap_image = any(n.image is not None for n in lightmap_img_nodes)
+
+        color_source_socket = None
+        # 1. Try Lightmap if an image is loaded
+        if has_lightmap_image:
+            if body_shader and 'Lightmap Color' in body_shader.inputs and body_shader.inputs['Lightmap Color'].links:
+                color_source_socket = body_shader.inputs['Lightmap Color'].links[0].from_socket
+            elif tree.nodes.get('Lightmap Lerp') and 'Color' in tree.nodes['Lightmap Lerp'].outputs:
+                color_source_socket = tree.nodes['Lightmap Lerp'].outputs['Color']
+            elif lightmap_img_nodes:
+                for n in lightmap_img_nodes:
+                    if n.image and 'Color' in n.outputs:
+                        color_source_socket = n.outputs['Color']
+                        break
+
+        # 2. Fallback to Diffuse Lerp / Diffuse Color
+        if not color_source_socket:
+            if body_shader and 'Diffuse Color' in body_shader.inputs and body_shader.inputs['Diffuse Color'].links:
+                color_source_socket = body_shader.inputs['Diffuse Color'].links[0].from_socket
+            elif tree.nodes.get('Diffuse Lerp') and 'Color' in tree.nodes['Diffuse Lerp'].outputs:
+                color_source_socket = tree.nodes['Diffuse Lerp'].outputs['Color']
+            else:
+                diffuse_nodes = [n for n in tree.nodes if n.type == 'TEX_IMAGE' and 'diffuse' in (n.name + " " + (n.label or "")).lower()]
+                if diffuse_nodes and 'Color' in diffuse_nodes[0].outputs:
+                    color_source_socket = diffuse_nodes[0].outputs['Color']
+
+        bsdf_loc_x = body_shader.location.x if body_shader else 0
+        bsdf_loc_y = body_shader.location.y if body_shader else 0
+
+        mix_node = next((n for n in tree.nodes if n.type == 'MIX_SHADER'), None)
+        trans_node = next((n for n in tree.nodes if n.type == 'BSDF_TRANSPARENT'), None)
+        math_node = next((n for n in tree.nodes if n.type == 'MATH' and getattr(n, 'operation', '') == 'GREATER_THAN'), None)
+        sep_node = next((n for n in tree.nodes if n.type in ('SEPARATE_COLOR', 'SEPARATE_RGB')), None)
+
+        if not mix_node:
+            mix_node = tree.nodes.new('ShaderNodeMixShader')
+            mix_node.location = (bsdf_loc_x + 300, bsdf_loc_y)
+
+        if not trans_node:
+            trans_node = tree.nodes.new('ShaderNodeBsdfTransparent')
+            trans_node.location = (bsdf_loc_x + 300, bsdf_loc_y - 150)
+            if 'Color' in trans_node.inputs:
+                trans_node.inputs['Color'].default_value = (1.0, 1.0, 1.0, 1.0)
+
+        if not math_node:
+            math_node = tree.nodes.new('ShaderNodeMath')
+            math_node.location = (bsdf_loc_x + 100, bsdf_loc_y - 300)
+            math_node.operation = 'GREATER_THAN'
+            math_node.inputs[1].default_value = 0.5
+            math_node.use_clamp = False
+
+        if not sep_node:
+            if hasattr(bpy.types, "ShaderNodeSeparateColor"):
+                sep_node = tree.nodes.new('ShaderNodeSeparateColor')
+                if hasattr(sep_node, "mode"):
+                    sep_node.mode = 'RGB'
+            else:
+                sep_node = tree.nodes.new('ShaderNodeSeparateRGB')
+            sep_node.location = (bsdf_loc_x - 100, bsdf_loc_y - 300)
+
+        if color_source_socket:
+            if sep_node.inputs[0].links:
+                for l in list(sep_node.inputs[0].links):
+                    tree.links.remove(l)
+            tree.links.new(color_source_socket, sep_node.inputs[0])
+
+        red_socket = sep_node.outputs.get('Red') or sep_node.outputs.get('R') or sep_node.outputs[0]
+        if not math_node.inputs[0].links:
+            tree.links.new(red_socket, math_node.inputs[0])
+
+        if not mix_node.inputs[0].links:
+            tree.links.new(math_node.outputs[0], mix_node.inputs[0])
+
+        if not mix_node.inputs[1].links:
+            tree.links.new(trans_node.outputs[0], mix_node.inputs[1])
+
+        if body_shader and 'BSDF' in body_shader.outputs and not mix_node.inputs[2].links:
+            tree.links.new(body_shader.outputs['BSDF'], mix_node.inputs[2])
+
+        if not output_node.inputs['Surface'].links or output_node.inputs['Surface'].links[0].from_node != mix_node:
+            tree.links.new(mix_node.outputs[0], output_node.inputs['Surface'])
+
+        try:
+            crystal_material.blend_method = 'BLEND'
+        except Exception:
+            pass
+
+        try:
+            crystal_material.shadow_method = 'NONE'
+        except Exception:
+            pass
+
+        try:
+            crystal_material.show_transparent_back = False
+        except Exception:
+            pass
+
+    def create_crystal_material(self, shader_material_names: ShaderMaterialNames, material_name):
+        crystal_material = bpy.data.materials.get(material_name)
+        if not crystal_material:
+            body_template = bpy.data.materials.get(shader_material_names.BODY)
+            if body_template:
+                crystal_material = body_template.copy()
+                crystal_material.name = material_name
+                crystal_material.use_fake_user = True
+                self.__clear_material_images(crystal_material)
+                self.setup_crystal_material_nodes(crystal_material)
+        else:
+            self.setup_crystal_material_nodes(crystal_material)
+        return crystal_material
 
     '''
     This method was used for V1 shader and should NOT be used for V2 shader because the group name is different.

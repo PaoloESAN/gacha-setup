@@ -138,6 +138,126 @@ def find_texture_nodes(node_tree, possible_names):
     return found_nodes
 
 
+def setup_crystal_material_nodes(crystal_material):
+    """
+    Applies the Crystal transparency shader setup:
+    (Lightmap Color if present, else Diffuse Color) -> Separate Color (Red) -> Greater Than (0.5) -> Mix Shader (Factor)
+    with Transparent BSDF (Shader 1) and Body Shader BSDF (Shader 2) -> Material Output (Surface).
+    """
+    if not crystal_material or not crystal_material.use_nodes or not crystal_material.node_tree:
+        return
+
+    tree = crystal_material.node_tree
+
+    output_node = next((n for n in tree.nodes if n.type == 'OUTPUT_MATERIAL'), None)
+    if not output_node:
+        return
+
+    body_shader = tree.nodes.get('Body Shader') or \
+                  tree.nodes.get('PrimoToon') or \
+                  tree.nodes.get('HoYoToon') or \
+                  tree.nodes.get('Group.001') or \
+                  next((n for n in tree.nodes if n.type == 'GROUP' and 'BSDF' in n.outputs), None)
+
+    lightmap_img_nodes = [n for n in tree.nodes if n.type == 'TEX_IMAGE' and 'lightmap' in (n.name + " " + (n.label or "")).lower()]
+    has_lightmap_image = any(n.image is not None for n in lightmap_img_nodes)
+
+    color_source_socket = None
+    # 1. Try Lightmap if an image is loaded
+    if has_lightmap_image:
+        if body_shader and 'Lightmap Color' in body_shader.inputs and body_shader.inputs['Lightmap Color'].links:
+            color_source_socket = body_shader.inputs['Lightmap Color'].links[0].from_socket
+        elif tree.nodes.get('Lightmap Lerp') and 'Color' in tree.nodes['Lightmap Lerp'].outputs:
+            color_source_socket = tree.nodes['Lightmap Lerp'].outputs['Color']
+        elif lightmap_img_nodes:
+            for n in lightmap_img_nodes:
+                if n.image and 'Color' in n.outputs:
+                    color_source_socket = n.outputs['Color']
+                    break
+
+    # 2. Fallback to Diffuse Lerp / Diffuse Color
+    if not color_source_socket:
+        if body_shader and 'Diffuse Color' in body_shader.inputs and body_shader.inputs['Diffuse Color'].links:
+            color_source_socket = body_shader.inputs['Diffuse Color'].links[0].from_socket
+        elif tree.nodes.get('Diffuse Lerp') and 'Color' in tree.nodes['Diffuse Lerp'].outputs:
+            color_source_socket = tree.nodes['Diffuse Lerp'].outputs['Color']
+        else:
+            diffuse_nodes = [n for n in tree.nodes if n.type == 'TEX_IMAGE' and 'diffuse' in (n.name + " " + (n.label or "")).lower()]
+            if diffuse_nodes and 'Color' in diffuse_nodes[0].outputs:
+                color_source_socket = diffuse_nodes[0].outputs['Color']
+
+    mix_node = next((n for n in tree.nodes if n.type == 'MIX_SHADER'), None)
+    trans_node = next((n for n in tree.nodes if n.type == 'BSDF_TRANSPARENT'), None)
+    math_node = next((n for n in tree.nodes if n.type == 'MATH' and getattr(n, 'operation', '') == 'GREATER_THAN'), None)
+    sep_node = next((n for n in tree.nodes if n.type in ('SEPARATE_COLOR', 'SEPARATE_RGB')), None)
+
+    bsdf_loc_x = body_shader.location.x if body_shader else 0
+    bsdf_loc_y = body_shader.location.y if body_shader else 0
+
+    if not mix_node:
+        mix_node = tree.nodes.new('ShaderNodeMixShader')
+        mix_node.location = (bsdf_loc_x + 300, bsdf_loc_y)
+
+    if not trans_node:
+        trans_node = tree.nodes.new('ShaderNodeBsdfTransparent')
+        trans_node.location = (bsdf_loc_x + 300, bsdf_loc_y - 150)
+        if 'Color' in trans_node.inputs:
+            trans_node.inputs['Color'].default_value = (1.0, 1.0, 1.0, 1.0)
+
+    if not math_node:
+        math_node = tree.nodes.new('ShaderNodeMath')
+        math_node.location = (bsdf_loc_x + 100, bsdf_loc_y - 300)
+        math_node.operation = 'GREATER_THAN'
+        math_node.inputs[1].default_value = 0.5
+        math_node.use_clamp = False
+
+    if not sep_node:
+        if hasattr(bpy.types, "ShaderNodeSeparateColor"):
+            sep_node = tree.nodes.new('ShaderNodeSeparateColor')
+            if hasattr(sep_node, "mode"):
+                sep_node.mode = 'RGB'
+        else:
+            sep_node = tree.nodes.new('ShaderNodeSeparateRGB')
+        sep_node.location = (bsdf_loc_x - 100, bsdf_loc_y - 300)
+
+    if color_source_socket:
+        if sep_node.inputs[0].links:
+            for l in list(sep_node.inputs[0].links):
+                tree.links.remove(l)
+        tree.links.new(color_source_socket, sep_node.inputs[0])
+
+    red_socket = sep_node.outputs.get('Red') or sep_node.outputs.get('R') or sep_node.outputs[0]
+    if not math_node.inputs[0].links:
+        tree.links.new(red_socket, math_node.inputs[0])
+
+    if not mix_node.inputs[0].links:
+        tree.links.new(math_node.outputs[0], mix_node.inputs[0])
+
+    if not mix_node.inputs[1].links:
+        tree.links.new(trans_node.outputs[0], mix_node.inputs[1])
+
+    if body_shader and 'BSDF' in body_shader.outputs and not mix_node.inputs[2].links:
+        tree.links.new(body_shader.outputs['BSDF'], mix_node.inputs[2])
+
+    if not output_node.inputs['Surface'].links or output_node.inputs['Surface'].links[0].from_node != mix_node:
+        tree.links.new(mix_node.outputs[0], output_node.inputs['Surface'])
+
+    try:
+        crystal_material.blend_method = 'BLEND'
+    except Exception:
+        pass
+
+    try:
+        crystal_material.shadow_method = 'NONE'
+    except Exception:
+        pass
+
+    try:
+        crystal_material.show_transparent_back = False
+    except Exception:
+        pass
+
+
 class TextureImporterType(Enum):
     AVATAR = auto()
     MONSTER = auto()
@@ -288,6 +408,9 @@ class GenshinTextureImporter:
             if override or not node.image:
                 node.image = img
 
+        if material and 'crystal' in material.name.lower():
+            setup_crystal_material_nodes(material)
+
     def set_lightmap_texture(self, texture_type: TextureType, material, img, override=True):
         if not material or not material.use_nodes:
             return
@@ -316,6 +439,9 @@ class GenshinTextureImporter:
         for node in nodes:
             if override or not node.image:
                 node.image = img
+
+        if material and 'crystal' in material.name.lower():
+            setup_crystal_material_nodes(material)
 
     def set_normalmap_texture(self, type: TextureType, material, img, override=True):
         if not material or not material.use_nodes:
@@ -570,27 +696,66 @@ class GenshinTextureImporter:
                 if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff')):
                     image_files.append((f, os.path.join(root, f)))
 
+        def is_generic_tex(fname):
+            f_low = fname.lower()
+            return f_low.startswith('avatar_tex_') or f_low.startswith('tex_')
+
+        # Prioritize character-specific textures over generic ones
+        image_files.sort(key=lambda item: 1 if is_generic_tex(item[0]) else 0)
+
         def resolve_img(tex_name):
             if not tex_name:
                 return None
             t_low = tex_name.lower().strip()
+
+            core_part = None
+            if is_generic_tex(t_low):
+                core_part = t_low.replace('avatar_tex_', '').replace('tex_', '')
+
+            # 1. Exact match with non-generic (character-specific) files first
+            for fname, fpath in image_files:
+                if is_generic_tex(fname):
+                    continue
+                stem = os.path.splitext(fname)[0].lower()
+                if stem == t_low:
+                    img = bpy.data.images.get(fname) or bpy.data.images.load(filepath=os.path.normpath(fpath), check_existing=True)
+                    img.alpha_mode = 'CHANNEL_PACKED'
+                    return img
+
+            # 2. Check if a character-specific texture matches the core part suffix (e.g. Crystal_Diffuse)
+            if core_part:
+                for fname, fpath in image_files:
+                    if is_generic_tex(fname):
+                        continue
+                    stem = os.path.splitext(fname)[0].lower()
+                    if stem.endswith(core_part) or f'_{core_part}' in stem or core_part in stem:
+                        img = bpy.data.images.get(fname) or bpy.data.images.load(filepath=os.path.normpath(fpath), check_existing=True)
+                        img.alpha_mode = 'CHANNEL_PACKED'
+                        return img
+
+            # 3. Exact stem match across all files
             for fname, fpath in image_files:
                 stem = os.path.splitext(fname)[0].lower()
                 if stem == t_low:
                     img = bpy.data.images.get(fname) or bpy.data.images.load(filepath=os.path.normpath(fpath), check_existing=True)
                     img.alpha_mode = 'CHANNEL_PACKED'
                     return img
+
+            # 4. Prefix / suffix match across all files
             for fname, fpath in image_files:
                 stem = os.path.splitext(fname)[0].lower()
                 if stem.startswith(t_low) or t_low.startswith(stem):
                     img = bpy.data.images.get(fname) or bpy.data.images.load(filepath=os.path.normpath(fpath), check_existing=True)
                     img.alpha_mode = 'CHANNEL_PACKED'
                     return img
+
+            # 5. Substring match across all files
             for fname, fpath in image_files:
                 if t_low in fname.lower():
                     img = bpy.data.images.get(fname) or bpy.data.images.load(filepath=os.path.normpath(fpath), check_existing=True)
                     img.alpha_mode = 'CHANNEL_PACKED'
                     return img
+
             return None
 
         imported_any = False
@@ -752,11 +917,22 @@ class GenshinTextureImporter:
             'body04', 'body03', 'body02', 'body01', 'body_04', 'body_03', 'body_02', 'body_01', 'body4', 'body3', 'body2', 'body1',
             'dress04', 'dress03', 'dress02', 'dress01', 'dress_04', 'dress_03', 'dress_02', 'dress_01', 'dress4', 'dress3', 'dress2', 'dress1',
             'tail', 'ribbon', 'veilshadow', 'veil', 'stockings', 'arm', 'cloak', 'helmetemo', 'helmet', 'gauntlet', 'leather', 'skirt',
-            'glass_eff', 'glass', 'starcloak', 'wing', 'wings', 'dress', 'body'
+            'glass_eff', 'glass', 'starcloak', 'wing', 'wings', 'crystal', 'dress', 'body'
         ]
 
         for part in parts_to_check:
             if part in f_lower:
+                # If this file is generic (e.g. Avatar_Tex_Crystal_Diffuse.png) and a character-specific file exists in the directory, skip it
+                if f_lower.startswith('avatar_tex_') or f_lower.startswith('tex_'):
+                    if hasattr(self, 'files') and self.files:
+                        category_key = 'diffuse' if is_diffuse else 'lightmap' if is_lightmap else 'normal' if is_normal else 'shadow_ramp'
+                        has_character_specific = any(
+                            part in f.lower() and category_key in f.lower() and not f.lower().startswith('avatar_tex_') and not f.lower().startswith('tex_')
+                            for f in self.files
+                        )
+                        if has_character_specific:
+                            return False
+
                 matching_materials = [
                     mat for mat in bpy.data.materials 
                     if mat.use_nodes and 'outlines' not in mat.name.lower() and 'outline' not in mat.name.lower() and is_mat_part_match(mat.name, part)

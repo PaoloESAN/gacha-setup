@@ -606,6 +606,7 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
         'Glass': (NAME_OF_OUTLINE_OTHER_MASK_INPUT, NAME_OF_OUTLINE_OTHER_MATERIAL_INPUT),
         'Glass_Eff': (NAME_OF_VFX_MASK_INPUT, NAME_OF_VFX_MATERIAL_INPUT),
         'StarCloak': (NAME_OF_VFX_MASK_INPUT, NAME_OF_VFX_MATERIAL_INPUT),
+        'Crystal': (NAME_OF_OUTLINE_OTHER_MASK_INPUT, NAME_OF_OUTLINE_OTHER_MATERIAL_INPUT),
     }
 
     def __init__(self, blender_operator, context):
@@ -639,7 +640,7 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
                  material_slot.material.name.startswith(self.material_names.MATERIAL_PREFIX) or
                  'outlines' in material_slot.material.name.lower() or
                  ShaderMaterial(material_slot.material, self.shader_node_names).is_outlines_material() or
-                 any(part in material_slot.material.name for part in ['Body', 'Hair', 'Dress', 'Face', 'Eye', 'Helmet', 'Gauntlet', 'Leather', 'Skirt', 'Pupil', 'Brow'])) and
+                 any(part in material_slot.material.name for part in ['Body', 'Hair', 'Dress', 'Face', 'Eye', 'Helmet', 'Gauntlet', 'Leather', 'Skirt', 'Pupil', 'Brow', 'Crystal'])) and
                 not any(keyword in material_slot.material.name for keyword in material_keywords_to_not_create_outlines_on)
             ]  # Only create Outlines on meshes with Shader materials and not in the ignore list (e.g. 'Eff' materials)
             if create_outlines:
