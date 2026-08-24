@@ -110,6 +110,9 @@ def rig_character(
         ("f_pinky", 4),
     ]
 
+    bones_to_remove_from_armature = set()
+    vgroups_to_merge_into_hand = []
+
     for side in ["L", "R"]:
         s_suffix = f".{side}"
 
@@ -140,6 +143,10 @@ def rig_character(
         if t2 in existing_bone_names: abadidea[t2] = f"DEF-thumb.02{s_suffix}"
         if t3 in existing_bone_names: abadidea[t3] = f"DEF-thumb.03{s_suffix}"
 
+        if b03_key in existing_bone_names and b03_key not in [t1, t2, t3]:
+            vgroups_to_merge_into_hand.append((b03_key, f"DEF-thumb.03{s_suffix}"))
+            bones_to_remove_from_armature.add(b03_key)
+
         # 2. Map Index, Middle, Ring, Pinky
         for fname, f_idx in finger_names_map:
             b1_key = f"Bip001{sep_found}{side}{sep_found}Finger{f_idx}"
@@ -148,14 +155,19 @@ def rig_character(
             b12_key = f"Bip001{sep_found}{side}{sep_found}Finger{f_idx}2"
             b13_key = f"Bip001{sep_found}{side}{sep_found}Finger{f_idx}3"
 
-            # Check if FingerX3 (fingertip bone) is present in the model
             if b13_key in existing_bone_names:
-                # If FingerX3 is present: FingerX1 -> .01, FingerX2 -> .02, FingerX3 -> .03 (covers down to fingertip!)
+                # 4-bone finger chain (e.g. Finger1 = palm, Finger11 = proximal, Finger12 = middle, Finger13 = tip)
                 if b11_key in existing_bone_names: abadidea[b11_key] = f"DEF-{fname}.01{s_suffix}"
                 if b12_key in existing_bone_names: abadidea[b12_key] = f"DEF-{fname}.02{s_suffix}"
                 if b13_key in existing_bone_names: abadidea[b13_key] = f"DEF-{fname}.03{s_suffix}"
+
+                # Metacarpal/palm bone: merge weights into DEF-hand and remove bone from armature
+                palm_bone = b1_key if b1_key in existing_bone_names else (b10_key if b10_key in existing_bone_names else None)
+                if palm_bone:
+                    vgroups_to_merge_into_hand.append((palm_bone, f"DEF-hand{s_suffix}"))
+                    bones_to_remove_from_armature.add(palm_bone)
             else:
-                # If FingerX3 is NOT present: 3-bone chain (FingerX -> .01, FingerX1 -> .02, FingerX2 -> .03)
+                # 3-bone finger chain:
                 d1 = b1_key if b1_key in existing_bone_names else (b10_key if b10_key in existing_bone_names else b11_key)
                 d2 = b11_key if (d1 != b11_key and b11_key in existing_bone_names) else b12_key
                 d3 = b12_key if (d2 != b12_key and d2 != b13_key and b12_key in existing_bone_names) else b13_key
@@ -164,22 +176,69 @@ def rig_character(
                 if d2 in existing_bone_names: abadidea[d2] = f"DEF-{fname}.02{s_suffix}"
                 if d3 in existing_bone_names: abadidea[d3] = f"DEF-{fname}.03{s_suffix}"
 
+    def merge_vgroup(mesh_obj, src_vg_name, dst_vg_name):
+        src_vg = mesh_obj.vertex_groups.get(src_vg_name)
+        dst_vg = mesh_obj.vertex_groups.get(dst_vg_name)
+        if not src_vg or not dst_vg or src_vg == dst_vg:
+            return
+        for v in mesh_obj.data.vertices:
+            try:
+                w_src = src_vg.weight(v.index)
+            except RuntimeError:
+                w_src = 0.0
+            if w_src > 0.0:
+                try:
+                    w_dst = dst_vg.weight(v.index)
+                except RuntimeError:
+                    w_dst = 0.0
+                dst_vg.add([v.index], w_src + w_dst, 'REPLACE')
+        mesh_obj.vertex_groups.remove(src_vg)
+
+    # Merge palm/metacarpal vertex groups into DEF-hand (or destination group)
+    for m in meshes:
+        for src_name, dst_name in vgroups_to_merge_into_hand:
+            if dst_name not in m.vertex_groups and dst_name.startswith("DEF-"):
+                alt_hand = dst_name[4:]
+                if alt_hand in m.vertex_groups:
+                    merge_vgroup(m, src_name, alt_hand)
+                else:
+                    m.vertex_groups.new(name=dst_name)
+                    merge_vgroup(m, src_name, dst_name)
+            else:
+                merge_vgroup(m, src_name, dst_name)
+
     # Rename bones FIRST so Blender updates linked vertex groups automatically
     for pb in obj.pose.bones:
         if pb.name in abadidea:
-            pb.name = abadidea[pb.name]
+            target_name = abadidea[pb.name]
+            if target_name != pb.name:
+                pb.name = target_name
 
-    # Rename any leftover vertex groups on meshes
+    # Rename any leftover vertex groups on meshes and merge if target already exists
     for m in meshes:
-        for vg in m.vertex_groups:
-            if vg.name in abadidea:
-                target_def = abadidea[vg.name]
-                if target_def not in m.vertex_groups:
+        for orig_vg_name, target_def in abadidea.items():
+            vg = m.vertex_groups.get(orig_vg_name)
+            if vg:
+                target_vg = m.vertex_groups.get(target_def)
+                if target_vg and target_vg != vg:
+                    merge_vgroup(m, orig_vg_name, target_def)
+                else:
                     vg.name = target_def
 
-    # Switch to Edit mode to sanitize finger hierarchy, head/tail vectors, and connections
+        # Cleanup any duplicate .001 vertex groups by merging into base group
+        for vg in list(m.vertex_groups):
+            if vg.name.endswith(".001"):
+                base_name = vg.name[:-4]
+                if base_name in m.vertex_groups:
+                    merge_vgroup(m, vg.name, base_name)
+
+    # Switch to Edit mode to remove metacarpals and sanitize finger hierarchy, head/tail vectors, and connections
     bpy.ops.object.mode_set(mode='EDIT')
     ebs = obj.data.edit_bones
+
+    for b_del in bones_to_remove_from_armature:
+        if b_del in ebs:
+            ebs.remove(ebs[b_del])
 
     for side in [".L", ".R"]:
         hand_eb = ebs.get("DEF-hand" + side) or ebs.get("hand" + side)
@@ -459,7 +518,7 @@ def rig_character(
         
         sec_bones = []
         for b in backup_arm.data.bones:
-            if b.name not in abadidea:
+            if b.name not in abadidea and b.name not in bones_to_remove_from_armature:
                 p_name = b.parent.name if b.parent else None
                 sec_bones.append({
                     'name': b.name,
