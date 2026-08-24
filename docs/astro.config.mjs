@@ -1,12 +1,71 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import starlightLlmsTxt from 'starlight-llms-txt';
 
 // https://astro.build/config
 export default defineConfig({
 	site: 'https://gacha-setup.pages.dev',
 	integrations: [
 		starlight({
+			plugins: [
+				starlightLlmsTxt({
+					projectName: 'Gacha Setup for Blender',
+					description:
+						'Gacha Setup is an open-source Blender add-on (Blender 5.2+) that automates character model importing, anime toon shading (Festivity, StellarToon, ZZZ Shader, NTE Shader), outline setup, facial driver controls, hair & cloth physics, and rigging for Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, and Neverness to Everness.',
+					details: `
+- **Supported Games:** Genshin Impact (GI), Honkai: Star Rail (HSR), Zenless Zone Zero (ZZZ), Neverness to Everness (NTE).
+- **Blender Compatibility:** Blender 5.2 and newer official releases.
+- **Key Features:** One-click setup wizard, bundled anime toon shaders, hair & cloth physics with Damped Track, 3D facial driver control boards, automated addon dependency installation (ExpyKit, UEFormat), and weapon support.
+`.trim(),
+					optionalLinks: [
+						{
+							label: 'GitHub Repository',
+							url: 'https://github.com/PaoloESAN/gacha-setup',
+							description: 'Source code, releases, and issue tracker.',
+						},
+						{
+							label: 'Latest Release Download',
+							url: 'https://github.com/PaoloESAN/gacha-setup/releases/latest',
+							description: 'Download the latest version of the Gacha Setup Blender add-on.',
+						},
+						{
+							label: 'Omatsuri Discord Community',
+							url: 'https://discord.gg/omatsuri',
+							description: 'Community for anime 3D models and shaders in Blender.',
+						},
+						{
+							label: 'HoyoToon Community',
+							url: 'https://discord.com/invite/hoyotoon',
+							description: 'Assets repository and Unity anime tools community.',
+						},
+					],
+					customSets: [
+						{
+							label: 'Genshin Impact',
+							description: 'Character importing, Festivity toon shader, facial rig, and lights for Genshin Impact.',
+							paths: ['genshin/**', 'es/genshin/**'],
+						},
+						{
+							label: 'Honkai: Star Rail',
+							description: 'Character importing, StellarToon shader, Isaac face rig, and lighting for Honkai: Star Rail.',
+							paths: ['hsr/**', 'es/hsr/**'],
+						},
+						{
+							label: 'Zenless Zone Zero',
+							description: 'Character importing, ZZZ shader, jideeh facial rig v6, and lighting for Zenless Zone Zero.',
+							paths: ['zzz/**', 'es/zzz/**'],
+						},
+						{
+							label: 'Neverness to Everness',
+							description: 'Character importing, NTE toon shader, compositor setup, and rigging for Neverness to Everness.',
+							paths: ['nte/**', 'es/nte/**'],
+						},
+					],
+					promote: ['index*', 'quickstart*', 'es/index*', 'es/quickstart*'],
+					demote: ['credits*', 'es/credits*', 'changelog*', 'es/changelog*'],
+				}),
+			],
 			title: 'Gacha Setup for Blender',
 			logo: {
 				light: '/src/assets/logo-light.svg',
