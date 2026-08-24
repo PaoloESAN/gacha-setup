@@ -7,7 +7,7 @@
 - [Quickstart Guide](https://gacha-setup.pages.dev/quickstart/): Automated setup, compatibility (Blender 5.2+), installation steps, and N-panel wizard guide.
 - [Spanish Quickstart Guide](https://gacha-setup.pages.dev/es/quickstart/): Guía rápida de instalación y configuración de personajes en español.
 - [Character Assets](https://gacha-setup.pages.dev/character-models/): Official asset download links for Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, and Neverness to Everness.
-- [FAQ](https://gacha-setup.pages.dev/faq/): Frequently asked questions about Blender compatibility, shaders, and community.
+- [Utilities](https://gacha-setup.pages.dev/utilities/): Useful tutorials, guides, and resources.
 - [Changelog](https://gacha-setup.pages.dev/changelog/): Release history, version updates, and bug fixes.
 - [Credits](https://gacha-setup.pages.dev/credits/): Credits and contributors (BonnyAnimations, Enthralpy, Aiko, jideeh, Kytherity, Just_ScaasI, thewindlead, VANS, nedarb183, Hiragara, HoyoToon).
 

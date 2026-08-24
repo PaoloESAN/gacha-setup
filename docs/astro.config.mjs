@@ -61,7 +61,7 @@ export default defineConfig({
 					items: [
 						{ label: 'Quickstart', slug: 'quickstart', translations: { es: 'Guía Rápida' } },
 						{ label: 'Character Assets', slug: 'character-models', translations: { es: 'Assets de Personajes' } },
-						{ label: 'FAQ', slug: 'faq', translations: { es: 'Preguntas Frecuentes' } },
+						{ label: 'Utilities', slug: 'utilities', translations: { es: 'Utilidades' } },
 						{ label: 'Changelog', slug: 'changelog', translations: { es: 'Registro de Cambios' } },
 						{ label: 'Credits', slug: 'credits', translations: { es: 'Créditos' } },
 					],
