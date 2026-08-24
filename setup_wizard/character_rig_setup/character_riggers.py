@@ -430,30 +430,6 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
                     if mod.type == 'ARMATURE':
                         mod.object = facerig_obj
                         print(f"[FACE RIG] Re-targeted '{face_obj.name}' armature modifier to '{facerig_obj.name}'")
-
-        def join_isaac_facerig_armature(body_rig):
-            facerig_obj = bpy.data.objects.get("isaac FaceRig")
-            if not facerig_obj:
-                for obj in bpy.data.objects:
-                    if obj.type == 'ARMATURE' and obj != body_rig and any(k in obj.name.lower() for k in ['facerig', 'isaac']):
-                        facerig_obj = obj
-                        break
-            if not facerig_obj or facerig_obj == body_rig:
-                return
-
-            try:
-                if bpy.context.object and bpy.context.object.mode != 'OBJECT':
-                    bpy.ops.object.mode_set(mode='OBJECT')
-            except Exception:
-                pass
-
-            bpy.ops.object.select_all(action='DESELECT')
-            facerig_obj.select_set(True)
-            body_rig.select_set(True)
-            bpy.context.view_layer.objects.active = body_rig
-            bpy.ops.object.join()
-            print(f"[FACE RIG] Joined 'isaac FaceRig' into '{body_rig.name}' with bpy.ops.object.join()")
-
         try:
             from setup_wizard.character_rig_setup.hsr_face_rig import hsr_face_rig_main
             hsr_face_rig_main()
@@ -462,7 +438,6 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
 
         try:
             setup_isaac_face_rig(armature)
-            join_isaac_facerig_armature(armature)
         except Exception as e:
             print(f"Isaac face rig skipped: {e}")
 
