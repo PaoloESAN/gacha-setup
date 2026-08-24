@@ -1,1 +1,4 @@
 setup_wizard.zip
+*_updater_staging/
+__pycache__/
+*.py[cod]
