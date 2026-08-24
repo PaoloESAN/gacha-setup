@@ -5,7 +5,17 @@ description: Release history and version updates for Gacha Setup.
 
 ## Version History
 
-### v3.3.1 — Latest
+### v3.3.2 — Latest
+
+**Honkai: Star Rail (HSR)**
+- Fixed FaceRig not working.
+
+**Neverness to Everness (NTE)**
+- Fixed vertex stretching issues.
+
+[Full Changelog: #7](https://github.com/PaoloESAN/gacha-setup/pull/7)
+
+### v3.3.1
 
 **General**
 - Added addon updater.
