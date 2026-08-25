@@ -35,6 +35,8 @@ class MaterialDefaultValueSetterFactory:
             return ZenlessZoneZeroMaterialDefaultValueSetter()
         elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
             return NevernessToEvernessMaterialDefaultValueSetter()
+        elif game_type == GameType.WUTHERING_WAVES.name:
+            return WutheringWavesMaterialDefaultValueSetter()
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -231,6 +233,14 @@ class ZenlessZoneZeroMaterialDefaultValueSetter(MaterialDefaultValueSetter):
 
 
 class NevernessToEvernessMaterialDefaultValueSetter(MaterialDefaultValueSetter):
+    def __init__(self) -> None:
+        return
+
+    def set_default_values(self):
+        return
+
+
+class WutheringWavesMaterialDefaultValueSetter(MaterialDefaultValueSetter):
     def __init__(self) -> None:
         return
 

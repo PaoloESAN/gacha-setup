@@ -64,6 +64,8 @@ class GameDefaultMaterialReplacerFactory:
             return ZenlessZoneZeroDefaultMaterialReplacer(blender_operator, context)
         elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
             return NevernessToEvernessDefaultMaterialReplacer(blender_operator, context)
+        elif game_type == GameType.WUTHERING_WAVES.name:
+            return WutheringWavesDefaultMaterialReplacer(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -1997,6 +1999,117 @@ def clean_face_mesh_slots():
                     obj.data.update()
                 except Exception:
                     pass
+
+
+class WutheringWavesDefaultMaterialReplacer(GameDefaultMaterialReplacer):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+
+    def replace_default_materials(self):
+        from setup_wizard.utils.wuwa_texture_utils import split_material_name, extract_character_name
+
+        meshes = [obj for obj in self.context.scene.objects if obj.type == 'MESH']
+
+        for mesh in meshes:
+            if "_seethru" in mesh.name.lower():
+                continue
+
+            char_name = extract_character_name(mesh.name)
+
+            for slot in mesh.material_slots:
+                if not slot.material:
+                    continue
+                orig_mat_name = slot.material.name
+                if orig_mat_name.startswith("WW - "):
+                    continue
+
+                base_part, version = split_material_name(orig_mat_name)
+                if not base_part:
+                    base_part = "Main"
+
+                # Determine template in Gustling Waters
+                template_name = "WW - Main"
+                mat_low = orig_mat_name.lower()
+
+                if "face" in mat_low or base_part.lower() == "face":
+                    template_name = "WW - Face"
+                    base_part = "Face"
+                elif ("eye" in mat_low or base_part.lower() in ["eye", "eyes"]) and not any(k in mat_low for k in ["eyebrow", "eyelash"]):
+                    template_name = "WW - Eye"
+                    base_part = "Eye"
+                elif "bang" in mat_low or base_part.lower() in ["bang", "bangs"]:
+                    template_name = "WW - Bangs" if bpy.data.materials.get("WW - Bangs") else "WW - Hair"
+                    base_part = "Bangs"
+                elif "hair" in mat_low or base_part.lower() in ["hair", "toufa"]:
+                    template_name = "WW - Hair"
+                    base_part = "Hair"
+                elif any(k in mat_low for k in ["star", "xingstar", "resonatorstar"]) or base_part.lower() == "resonatorstar":
+                    template_name = "WW - ResonatorStar"
+                    base_part = "ResonatorStar"
+                elif bpy.data.materials.get(f"WW - {base_part}"):
+                    template_name = f"WW - {base_part}"
+                else:
+                    template_name = "WW - Main"
+
+                unique_mat_name = f"WW - {base_part}{version} {char_name}"
+                target_mat = bpy.data.materials.get(unique_mat_name)
+                if not target_mat:
+                    tmpl = bpy.data.materials.get(template_name) or bpy.data.materials.get("WW - Main")
+                    if tmpl:
+                        target_mat = tmpl.copy()
+                        target_mat.name = unique_mat_name
+                        target_mat.use_fake_user = True
+                        if target_mat.use_nodes and target_mat.node_tree:
+                            for n in target_mat.node_tree.nodes:
+                                if n.type == 'TEX_IMAGE':
+                                    n.image = None
+                    else:
+                        target_mat = slot.material
+
+                if target_mat:
+                    target_mat["ww_original_name"] = orig_mat_name
+                    target_mat["ww_base_part"] = base_part
+                    slot.material = target_mat
+
+            # Darken Eye vertex colors if mesh has eye polygons
+            self.darken_eye_colors(mesh)
+
+        self.blender_operator.report({'INFO'}, 'Replaced default materials with Wuthering Waves (Gustling Waters) materials.')
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx, 
+            self.blender_operator.invoker_type, 
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=self.blender_operator.game_type,
+        )
+
+    def darken_eye_colors(self, mesh):
+        if not mesh.data or not hasattr(mesh.data, "polygons"):
+            return
+
+        # Find eye material slots
+        eye_slot_indices = set()
+        for idx, slot in enumerate(mesh.material_slots):
+            if slot.material and "eye" in slot.material.name.lower():
+                eye_slot_indices.add(idx)
+
+        if not eye_slot_indices:
+            return
+
+        color_layer = None
+        if hasattr(mesh.data, "color_attributes") and mesh.data.color_attributes:
+            color_layer = mesh.data.color_attributes.get("COL0") or mesh.data.color_attributes.active_color
+        elif hasattr(mesh.data, "vertex_colors") and mesh.data.vertex_colors:
+            color_layer = mesh.data.vertex_colors.get("COL0") or mesh.data.vertex_colors.active
+
+        if color_layer:
+            try:
+                for poly in mesh.data.polygons:
+                    if poly.material_index in eye_slot_indices:
+                        for loop_idx in poly.loop_indices:
+                            color_layer.data[loop_idx].color = (0.0, 0.0, 0.0, 1.0)
+            except Exception as ex:
+                print(f"Notice darkening eye vertex colors: {ex}")
 
 
 def clean_mesh_slots():

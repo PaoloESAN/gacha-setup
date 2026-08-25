@@ -12,4 +12,5 @@ class GameType(Enum):
     PUNISHING_GRAY_RAVEN = auto()
     ZENLESS_ZONE_ZERO = auto()
     NEVERNESS_TO_EVERNESS = auto()
+    WUTHERING_WAVES = auto()
 

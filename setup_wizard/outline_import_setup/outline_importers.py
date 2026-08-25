@@ -39,6 +39,8 @@ class GameOutlineImporterFactory:
             return ZenlessZoneZeroOutlineNodeGroupImporter(blender_operator, context)
         elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
             return NevernessToEvernessOutlineNodeGroupImporter(blender_operator, context)
+        elif game_type == GameType.WUTHERING_WAVES.name:
+            return WutheringWavesOutlineNodeGroupImporter(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -200,6 +202,20 @@ class ZenlessZoneZeroOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
 
 
 class NevernessToEvernessOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+
+    def import_outline_node_group(self):
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx, 
+            self.blender_operator.invoker_type,
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=self.blender_operator.game_type,
+        )
+
+
+class WutheringWavesOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
     def __init__(self, blender_operator, context):
         self.blender_operator = blender_operator
         self.context = context

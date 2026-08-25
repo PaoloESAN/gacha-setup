@@ -253,3 +253,17 @@ class NevernessToEvernessShaderMaterialNames(ShaderMaterialNames):
     TEETH_TONGUE = '齿舌'
     EXPRESSION = '表情'
 
+
+class WutheringWavesShaderMaterialNames(ShaderMaterialNames):
+    MATERIAL_PREFIX = 'WW - '
+    MATERIAL_PREFIX_AFTER_RENAME = 'WW - '
+    MAIN = 'WW - Main'
+    FACE = 'WW - Face'
+    EYE = 'WW - Eye'
+    HAIR = 'WW - Hair'
+    BANGS = 'WW - Bangs'
+    OUTLINES = 'WW - Outlines'
+    RESONATOR_STAR = 'WW - ResonatorStar'
+    FACE_SEETHRU = 'WW - Face_SEETHRU'
+    EYE_SEETHRU = 'WW - Eye_SEETHRU'
+

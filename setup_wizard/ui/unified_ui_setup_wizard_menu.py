@@ -34,6 +34,7 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
             (GameType.HONKAI_STAR_RAIL.name, 'Honkai Star Rail', 'Honkai Star Rail Setup'),
             (GameType.ZENLESS_ZONE_ZERO.name, 'Zenless Zone Zero', 'Zenless Zone Zero Setup'),
             (GameType.NEVERNESS_TO_EVERNESS.name, 'Neverness to Everness', 'Neverness to Everness Setup'),
+            (GameType.WUTHERING_WAVES.name, 'Wuthering Waves', 'Wuthering Waves Setup'),
         ],
         name='Game',
         description='Setup for the selected game',

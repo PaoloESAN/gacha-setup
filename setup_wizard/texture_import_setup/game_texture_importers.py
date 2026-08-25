@@ -39,6 +39,8 @@ class GameTextureImporterFactory:
             return ZenlessZoneZeroTextureImporterFacade(blender_operator, context)
         elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
             return NevernessToEvernessTextureImporterFacade(blender_operator, context)
+        elif game_type == GameType.WUTHERING_WAVES.name:
+            return WutheringWavesTextureImporterFacade(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -1421,6 +1423,209 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
         ensure_hair_white_texture(folder, image_files)
 
         self.blender_operator.report({'INFO'}, 'Imported Neverness to Everness textures and JSON material data...')
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx, 
+            self.blender_operator.invoker_type, 
+            file_path_to_cache=folder,
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=self.blender_operator.game_type,
+        )
+
+
+class WutheringWavesTextureImporterFacade(GameTextureImporter):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+
+    def import_textures(self):
+        from setup_wizard.utils.wuwa_texture_utils import (
+            split_material_name,
+            extract_character_name,
+            make_texture_patterns,
+            find_texture_for_slot,
+            TEXTURE_TYPE_MAPPINGS_JAREDNYTS,
+        )
+
+        cache_enabled = self.context.window_manager.cache_enabled if hasattr(self.context, 'window_manager') and hasattr(self.context.window_manager, 'cache_enabled') else True
+        folder = getattr(self.blender_operator, 'filepath', None) \
+            or getattr(self.blender_operator, 'file_directory', None) \
+            or get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH) \
+            or get_active_character_directory()
+
+        if folder and os.path.isfile(folder):
+            folder = os.path.dirname(folder)
+
+        if not folder or not os.path.isdir(folder):
+            self.blender_operator.report({'WARNING'}, f"Texture folder not found: {folder}")
+            NextStepInvoker().invoke(
+                self.blender_operator.next_step_idx, 
+                self.blender_operator.invoker_type, 
+                high_level_step_name=self.blender_operator.high_level_step_name,
+                game_type=self.blender_operator.game_type,
+            )
+            return
+
+        set_active_character_directory(folder)
+
+        from setup_wizard.utils.wuwa_texture_utils import (
+            split_material_name,
+            extract_character_name,
+            make_texture_patterns,
+            find_texture_for_slot,
+            load_image_safely,
+            load_wuwa_json_mappings,
+            TEXTURE_TYPE_MAPPINGS_JAREDNYTS,
+        )
+
+        all_texture_files = []
+        for root, _, files in os.walk(folder):
+            for file_name in files:
+                if any(file_name.lower().endswith(ext) for ext in ['.png', '.tga', '.dds', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp']):
+                    all_texture_files.append(file_name)
+
+        if not all_texture_files:
+            self.blender_operator.report({'WARNING'}, f"No texture image files found in: {folder}")
+
+        json_mappings = load_wuwa_json_mappings(folder)
+
+        has_het_any = False
+        has_id_any = False
+        has_rgid_any = False
+
+        # Process each WW - * material in the scene
+        for mat in bpy.data.materials:
+            if not mat.name.startswith("WW - ") or not mat.use_nodes or not mat.node_tree:
+                continue
+
+            orig_name = mat.get("ww_original_name", "")
+            base_part, version = split_material_name(mat.name)
+            if mat.get("ww_base_part"):
+                base_part = mat.get("ww_base_part")
+
+            # Merge JSON mappings: base_part has aggregated entries (like _HET from sub-materials),
+            # while orig_name has specific entries.
+            mat_json_texs = {}
+            if base_part and base_part.lower() in json_mappings:
+                mat_json_texs.update(json_mappings[base_part.lower()])
+            ver_key = f"{base_part}{version}".lower()
+            if ver_key in json_mappings:
+                mat_json_texs.update(json_mappings[ver_key])
+            if orig_name and orig_name.lower() in json_mappings:
+                mat_json_texs.update(json_mappings[orig_name.lower()])
+            if base_part and base_part.lower() in json_mappings and "_HET" in json_mappings[base_part.lower()]:
+                mat_json_texs.setdefault("_HET", json_mappings[base_part.lower()]["_HET"])
+
+            tex_mode_prop = getattr(self.context.scene, "ww_tex_mode", "Default")
+            is_default_mode = (tex_mode_prop == "Default")
+
+            # Map texture slots
+            for suffix, node_names in TEXTURE_TYPE_MAPPINGS_JAREDNYTS.items():
+                img = None
+
+                # In Version mode, check if a switch/damage/version variant exists first
+                if not is_default_mode:
+                    ver_patterns = make_texture_patterns(base_part, version, suffix, orig_name, mode=False)
+                    img = find_texture_for_slot(all_texture_files, ver_patterns, folder, suffix)
+
+                # Check JSON mapping
+                if not img and suffix in mat_json_texs:
+                    json_fname = mat_json_texs[suffix]
+                    full_json_path = os.path.join(folder, json_fname)
+                    img = load_image_safely(full_json_path, suffix)
+
+                # Fallback to pattern matching if not in JSON or image not found
+                if not img:
+                    patterns = make_texture_patterns(base_part, version, suffix, orig_name, mode=is_default_mode)
+                    img = find_texture_for_slot(all_texture_files, patterns, folder, suffix)
+
+                if img:
+                    # Assign to matching Image Texture nodes
+                    for target_node_name in node_names:
+                        target_node = mat.node_tree.nodes.get(target_node_name)
+                        if target_node and target_node.type == 'TEX_IMAGE':
+                            target_node.image = img
+                            if suffix == '_HET':
+                                has_het_any = True
+                            elif suffix == '_ID':
+                                has_id_any = True
+                            elif suffix == '_RGID':
+                                has_rgid_any = True
+
+                    # Fallback match by node label or lowercase node name
+                    for node in mat.node_tree.nodes:
+                        if node.type == 'TEX_IMAGE':
+                            n_label = (node.label or "").lower()
+                            n_name = node.name.lower()
+                            for expected_name in node_names:
+                                if expected_name.lower() in [n_label, n_name]:
+                                    node.image = img
+                                    if suffix == '_HET':
+                                        has_het_any = True
+                                    elif suffix == '_ID':
+                                        has_id_any = True
+                                    elif suffix == '_RGID':
+                                        has_rgid_any = True
+
+            # Fallback for Face ID texture: If no Face ID image was found, use Face Diffuse image
+            if "face" in mat.name.lower() or base_part.lower() in ["face", "head"]:
+                mask_id_node = (
+                    mat.node_tree.nodes.get("Mask ID")
+                    or mat.node_tree.nodes.get("Face ID")
+                    or mat.node_tree.nodes.get("Texture_ID")
+                    or mat.node_tree.nodes.get("Face ID Texture")
+                )
+                if not mask_id_node:
+                    for n in mat.node_tree.nodes:
+                        if n.type == 'TEX_IMAGE':
+                            n_low = (n.name + " " + (n.label or "")).lower()
+                            if any(k in n_low for k in ["mask id", "face id", "texture_id", "face_id"]):
+                                mask_id_node = n
+                                break
+
+                if mask_id_node and not mask_id_node.image:
+                    face_diff_node = (
+                        mat.node_tree.nodes.get("Face Diffuse")
+                        or mat.node_tree.nodes.get("Face_D")
+                        or mat.node_tree.nodes.get("Face Texture")
+                        or mat.node_tree.nodes.get("Base Color")
+                    )
+                    if not face_diff_node:
+                        for n in mat.node_tree.nodes:
+                            if n.type == 'TEX_IMAGE' and n.image:
+                                n_low = (n.name + " " + (n.label or "")).lower()
+                                if any(k in n_low for k in ["face diffuse", "face_d", "face texture", "diffuse"]):
+                                    face_diff_node = n
+                                    break
+                    if face_diff_node and face_diff_node.image:
+                        mask_id_node.image = face_diff_node.image
+                        has_id_any = True
+                        print(f"[WUWA TEXTURES] Fallback: Assigned Face Diffuse ({face_diff_node.image.name}) to {mask_id_node.name} on {mat.name}")
+
+            # Fix Eye UV map
+            if "eye" in mat.name.lower() or base_part.lower() in ["eye", "eyes"]:
+                for node in mat.node_tree.nodes:
+                    if node.type == 'UVMAP':
+                        node.uv_map = "UV2"
+
+        # If HET texture was found, enable See Through node groups
+        if has_het_any:
+            for mat in bpy.data.materials:
+                if mat.use_nodes and mat.node_tree:
+                    for node in mat.node_tree.nodes:
+                        if node.type == 'GROUP' and node.node_tree and "see through" in node.node_tree.name.lower():
+                            node.mute = False
+
+        # Set global switches if ID or RGID textures found
+        g_props = bpy.data.node_groups.get("Global Material Properties Main")
+        if g_props and hasattr(g_props, "nodes"):
+            inp = g_props.nodes.get("Group Input")
+            if inp:
+                if has_id_any and "Use ID Color" in inp.outputs:
+                    inp.outputs["Use ID Color"].default_value = 1.0
+                if has_rgid_any and "Use New Shading" in inp.outputs:
+                    inp.outputs["Use New Shading"].default_value = 1.0
+
+        self.blender_operator.report({'INFO'}, 'Successfully imported and assigned Wuthering Waves textures!')
         NextStepInvoker().invoke(
             self.blender_operator.next_step_idx, 
             self.blender_operator.invoker_type, 

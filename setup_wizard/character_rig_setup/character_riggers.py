@@ -12,6 +12,7 @@ from setup_wizard.character_rig_setup.npc_rig_script import rig_character as rig
 from setup_wizard.character_rig_setup.hsr_rig_script import rig_character as hsr_rig_character
 from setup_wizard.character_rig_setup.zzz_rig_script import rig_character as zzz_rig_character
 from setup_wizard.character_rig_setup.nte_rig_script import rig_character as nte_rig_character
+from setup_wizard.character_rig_setup.wuwa_rig_script import rig_wuthering_waves_character
 from setup_wizard.character_rig_setup.zzz_face_rig import zzz_face_rig_main
 
 
@@ -52,6 +53,8 @@ class CharacterRiggerFactory:
             return ZenlessZoneZeroCharacterRigger(blender_operator, context)
         elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
             return NevernessToEvernessCharacterRigger(blender_operator, context)
+        elif game_type == GameType.WUTHERING_WAVES.name:
+            return WutheringWavesCharacterRigger(blender_operator, context)
         else:
             raise Exception(f'Unexpected input GameType "{game_type}" for CharacterRiggerFactory')
 
@@ -646,6 +649,23 @@ class NevernessToEvernessCharacterRigger(CharacterRigger):
             cache_using_cache_key(get_cache(cache_enabled), GENSHIN_RIGIFY_BONE_SHAPES_FILE_PATH, filepath)
 
         self.blender_operator.report({'INFO'}, 'Successfully rigged NTE character')
+
+
+class WutheringWavesCharacterRigger(CharacterRigger):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+
+    def rig_character(self):
+        try:
+            success = rig_wuthering_waves_character(self.context)
+            if success:
+                self.blender_operator.report({'INFO'}, 'Successfully rigged Wuthering Waves character!')
+            else:
+                self.blender_operator.report({'WARNING'}, 'Rigify generation for Wuthering Waves completed with warnings.')
+        except Exception as ex:
+            self.blender_operator.report({'ERROR'}, f"Failed to rig Wuthering Waves character: {ex}")
+            raise ex
 
 
 

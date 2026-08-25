@@ -3,9 +3,9 @@ import os
 bl_info = {
     "name": "Gacha Setup",
     "author": "Mken, OctavoPE, Enthralpy, PaoloESAN",
-    "version": (3, 3, 2),
+    "version": (3, 4, 0),
     "blender": (5, 2, 0),
-    "location": "3D View > Sidebar > Genshin Impact / Honkai Star Rail / Zenless Zone Zero / Neverness to Everness",
+    "location": "3D View > Sidebar > Genshin Impact / Honkai Star Rail / Zenless Zone Zero / Neverness to Everness / Wuthering Waves",
     "description": "An addon to streamline the character model setup process for Gacha games in Blender 5.2+",
     "warning": "",
     "doc_url": "",
@@ -35,6 +35,9 @@ else:
         GI_OT_RigCharacter,
         ZZZ_OT_FixBoneChains,
     )
+    from setup_wizard.character_rig_setup.wuwa_face_panel import (
+        WW_OT_CreateFacePanel,
+    )
     from setup_wizard.character_rig_setup.character_rigger_props import (
         CharacterRiggerPropertyGroup,
         CharacterRiggerPropertyManager,
@@ -47,6 +50,7 @@ else:
         HSR_OT_SetUpCharacter,
         ZZZ_OT_SetUpCharacter,
         NTE_OT_SetUpCharacter,
+        WW_OT_SetUpCharacter,
         GI_OT_ReorientBones,
     )
     from setup_wizard.genshin_import_materials import (
@@ -56,22 +60,28 @@ else:
         NTE_OT_SetUpMaterials,
         NTE_OT_SetUpOutlines,
         NTE_OT_SetUpHairSpecular,
+        WW_OT_SetUpMaterials,
     )
 
     from setup_wizard.genshin_import_outlines import (
         GI_OT_SetUpOutlines,
         HSR_OT_SetUpOutlines,
         ZZZ_OT_SetUpOutlines,
+        WW_OT_SetUpOutlines,
     )
     from setup_wizard.genshin_setup_wizard import (
         GI_OT_GenshinSetupWizardUI,
         HSR_OT_HonkaiStarRailSetupWizardUI,
         ZZZ_OT_SetupWizardUI,
         NTE_OT_SetupWizardUI,
+        WW_OT_WutheringWavesSetupWizardUI,
         setup_dependencies,
     )
     from setup_wizard.genshin_setup_wizard import (
         register as register_genshin_setup_wizard,
+    )
+    from setup_wizard.set_up_head_driver import (
+        WW_OT_SetUpHeadDriver,
     )
     from setup_wizard.misc_final_steps import (
         GI_OT_FinishSetup,
@@ -79,6 +89,19 @@ else:
         ZZZ_OT_FinishSetup,
         NTE_OT_FinishSetup,
         NTE_OT_SetupCompositorNodes,
+        WW_OT_FinishSetup,
+        WW_OT_SetupCompositorNodes,
+    )
+    from setup_wizard.wuwa_operations import (
+        WW_OT_ToggleAnimateMode,
+        WW_OT_ToggleOutlines,
+        WW_OT_ToggleHairTrans,
+        WW_OT_ToggleStarMotion,
+        WW_OT_FixEyeUV,
+        WW_OT_SeparateMesh,
+        WW_OT_SetPerformanceMode,
+        WW_OT_SetQualityMode,
+        register_wuwa_properties,
     )
     from setup_wizard.preferences import CharacterSetupWizardAddonPreferences
     from setup_wizard.ui.gi_ui_setup_wizard_menu import (
@@ -114,7 +137,19 @@ else:
         NTE_PT_UI_Rig_Character_Menu,
         NTE_PT_UI_Finish_Setup_Menu,
     )
-
+    from setup_wizard.ui.wuwa_ui_setup_wizard_menu import (
+        WW_PT_Setup_Wizard_UI_Layout,
+        WW_PT_Basic_Setup_Wizard_UI_Layout,
+        WW_PT_Advanced_Setup_Wizard_UI_Layout,
+        WW_PT_UI_Character_Model_Menu,
+        WW_PT_UI_Materials_Menu,
+        WW_PT_UI_Outlines_Menu,
+        WW_PT_UI_Rig_Character_Menu,
+        WW_PT_UI_Finish_Setup_Menu,
+        WW_PT_UI_Appearance_Menu,
+        WW_PT_UI_Lighting_Menu,
+        WW_PT_UI_Tools_Menu,
+    )
     from setup_wizard.ui.unified_ui_setup_wizard_menu import (
         CSW_PT_Updater_UI_Layout,
         CSW_PT_Unified_Character_Setup_Wizard_UI_Layout,
@@ -139,6 +174,7 @@ else:
         setup_wizard.ui.gi_ui_setup_wizard_menu,
         setup_wizard.ui.zzz_ui_setup_wizard_menu,
         setup_wizard.ui.nte_ui_setup_wizard_menu,
+        setup_wizard.ui.wuwa_ui_setup_wizard_menu,
         setup_wizard.genshin_setup_wizard,
         addon_updater_ops,
     ]
@@ -210,10 +246,35 @@ else:
         NTE_OT_SetUpHairSpecular,
         NTE_OT_SetupCompositorNodes,
         NTE_OT_FinishSetup,
+        # Wuthering Waves (Gustling Waters)
+        WW_PT_Setup_Wizard_UI_Layout,
+        WW_PT_Basic_Setup_Wizard_UI_Layout,
+        WW_PT_Advanced_Setup_Wizard_UI_Layout,
+        WW_PT_UI_Character_Model_Menu,
+        WW_PT_UI_Materials_Menu,
+        WW_PT_UI_Outlines_Menu,
+        WW_PT_UI_Rig_Character_Menu,
+        WW_PT_UI_Finish_Setup_Menu,
+        WW_PT_UI_Appearance_Menu,
+        WW_PT_UI_Lighting_Menu,
+        WW_PT_UI_Tools_Menu,
+        WW_OT_WutheringWavesSetupWizardUI,
+        WW_OT_SetUpCharacter,
+        WW_OT_SetUpMaterials,
+        WW_OT_SetUpOutlines,
+        WW_OT_SetUpHeadDriver,
+        WW_OT_FinishSetup,
+        WW_OT_SetupCompositorNodes,
+        WW_OT_CreateFacePanel,
+        WW_OT_ToggleAnimateMode,
+        WW_OT_ToggleOutlines,
+        WW_OT_ToggleHairTrans,
+        WW_OT_ToggleStarMotion,
+        WW_OT_FixEyeUV,
+        WW_OT_SeparateMesh,
+        WW_OT_SetPerformanceMode,
+        WW_OT_SetQualityMode,
     ]
-
-
-
 
     for module in modules:
         try:
@@ -227,6 +288,7 @@ else:
 
     def register():
         _register_classes()
+        register_wuwa_properties()
         addon_updater_ops.register(bl_info)
 
 

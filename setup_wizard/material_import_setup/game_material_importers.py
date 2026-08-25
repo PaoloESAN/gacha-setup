@@ -13,7 +13,8 @@ from setup_wizard.import_order import GENSHIN_IMPACT_OUTLINES_FILE_PATH, NextSte
     GENSHIN_IMPACT_ROOT_FOLDER_FILE_PATH, GENSHIN_IMPACT_SHADER_FILE_PATH, HONKAI_STAR_RAIL_ROOT_FOLDER_FILE_PATH, \
     HONKAI_STAR_RAIL_SHADER_FILE_PATH, PUNISHING_GRAY_RAVEN_ROOT_FOLDER_FILE_PATH, PUNISHING_GRAY_RAVEN_SHADER_FILE_PATH, \
     ZENLESS_ZONE_ZERO_ROOT_FOLDER_FILE_PATH, ZENLESS_ZONE_ZERO_SHADER_FILE_PATH, ZENLESS_ZONE_ZERO_OUTLINES_FILE_PATH, \
-    NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH, NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH, NEVERNESS_TO_EVERNESS_OUTLINES_FILE_PATH, get_shader_file_path
+    NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH, NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH, NEVERNESS_TO_EVERNESS_OUTLINES_FILE_PATH, \
+    WUTHERING_WAVES_ROOT_FOLDER_FILE_PATH, WUTHERING_WAVES_SHADER_FILE_PATH, WUTHERING_WAVES_OUTLINES_FILE_PATH, get_shader_file_path
 from setup_wizard.material_import_setup.empty_names import LightDirectionEmptyNames
 from setup_wizard.outline_import_setup.outline_node_groups import OutlineNodeGroupNames
 from setup_wizard.texture_import_setup.material_default_value_setters import MaterialDefaultValueSetter, MaterialDefaultValueSetterFactory
@@ -31,6 +32,8 @@ class GameMaterialImporterFactory:
             return ZenlessZoneZeroMaterialImporterFacade(blender_operator, context)
         elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
             return NevernessToEvernessMaterialImporterFacade(blender_operator, context)
+        elif game_type == GameType.WUTHERING_WAVES.name:
+            return WutheringWavesMaterialImporterFacade(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -608,6 +611,168 @@ class NevernessToEvernessMaterialImporterFacade(GameMaterialImporter):
             high_level_step_name=self.blender_operator.high_level_step_name,
             game_type=self.blender_operator.game_type,
         )
+
+
+class WutheringWavesMaterialImporterFacade(GameMaterialImporter):
+    WUWA_MATERIAL_NAMES = [
+        {'name': 'WW - Main'},
+        {'name': 'WW - Face'},
+        {'name': 'WW - Eye'},
+        {'name': 'WW - Hair'},
+        {'name': 'WW - Bangs'},
+        {'name': 'WW - Outlines'},
+        {'name': 'WW - ResonatorStar'},
+    ]
+
+    WUWA_NODE_GROUPS = [
+        {'name': 'Light Vectors'},
+        {'name': 'WW - Outlines'},
+        {'name': 'WW - Outlines Colors'},
+        {'name': 'WW - Eye'},
+        {'name': 'WW - Hair'},
+        {'name': 'WW - Main'},
+        {'name': 'Global Material Properties Main'},
+        {'name': 'Color Palette'},
+        {'name': 'Face Shader'},
+        {'name': 'Eye Depth'},
+        {'name': 'See Through'},
+        {'name': 'Shadow Mask Converter'},
+        {'name': 'Texture Converter'},
+        {'name': 'Tacet Mark'},
+        {'name': 'WuwaNormals'},
+        {'name': 'Super Color Ramp'},
+        {'name': 'Super-Color-Ramp'},
+        {'name': 'Alpha Transparency'},
+        {'name': 'Fresnel Main'},
+        {'name': 'Emission'},
+        {'name': 'Specular'},
+        {'name': 'Metallic'},
+        {'name': 'Face Blush'},
+        {'name': 'Lighting Main'},
+    ]
+
+    WUWA_CONTROL_OBJECTS = [
+        {'name': 'Light Direction'},
+        {'name': 'Head Origin'},
+        {'name': 'Head Forward'},
+        {'name': 'Head Up'},
+        {'name': 'Highlight Top'},
+        {'name': 'Highlight Bottom'},
+        {'name': 'Sun'},
+        {'name': 'Eye Highlight'},
+    ]
+
+    def __init__(self, blender_operator, context):
+        super().__init__(
+            blender_operator=blender_operator,
+            context=context,
+            game_shader_cache_file_path=WUTHERING_WAVES_SHADER_FILE_PATH,
+            game_shader_cache_folder_path=WUTHERING_WAVES_ROOT_FOLDER_FILE_PATH,
+            game_default_blend_file_with_materials='Gustling Waters.blend',
+            names_of_game_materials=self.WUWA_MATERIAL_NAMES
+        )
+
+    def import_materials(self):
+        target_blend_file = get_shader_file_path(GameType.WUTHERING_WAVES.name, 'main')
+        if not target_blend_file or not os.path.isfile(target_blend_file):
+            addon_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            cand = os.path.join(addon_dir, "shaders", "wuwa", "Gustling Waters.blend")
+            if os.path.isfile(cand):
+                target_blend_file = cand
+
+        if target_blend_file and os.path.isfile(target_blend_file):
+            mat_dir = os.path.join(target_blend_file, "Material")
+            ng_dir = os.path.join(target_blend_file, "NodeTree")
+            obj_dir = os.path.join(target_blend_file, "Object")
+
+            # 1. Append Materials
+            try:
+                bpy.ops.wm.append(
+                    directory=mat_dir,
+                    files=self.WUWA_MATERIAL_NAMES,
+                    set_fake=True
+                )
+            except Exception as e_mat:
+                print(f"Notice appending WuWa materials: {e_mat}")
+
+            # 2. Append Node Groups
+            try:
+                bpy.ops.wm.append(
+                    directory=ng_dir,
+                    files=self.WUWA_NODE_GROUPS,
+                    set_fake=True
+                )
+            except Exception as e_ng:
+                print(f"Notice appending WuWa node groups: {e_ng}")
+
+            # 3. Append Control Objects (Head Origin, Light Direction, Highlight Top/Bottom, etc.)
+            try:
+                for obj_info in self.WUWA_CONTROL_OBJECTS:
+                    obj_name = obj_info['name']
+                    if not bpy.data.objects.get(obj_name):
+                        bpy.ops.wm.append(
+                            filepath=os.path.join(obj_dir, obj_name),
+                            directory=obj_dir,
+                            filename=obj_name
+                        )
+            except Exception as e_obj:
+                print(f"Notice appending WuWa control objects: {e_obj}")
+
+            # Ensure all control objects are linked to current collection
+            coll = self.context.scene.collection
+            for obj_info in self.WUWA_CONTROL_OBJECTS:
+                o = bpy.data.objects.get(obj_info['name'])
+                if o and o.name not in coll.objects and not o.users_collection:
+                    coll.objects.link(o)
+
+            # Parent child controls to Head Origin
+            head_origin = bpy.data.objects.get('Head Origin')
+            if head_origin:
+                for child_name in ['Head Forward', 'Head Up']:
+                    child = bpy.data.objects.get(child_name)
+                    if child and child.parent != head_origin:
+                        child.parent = head_origin
+                        child.matrix_parent_inverse = head_origin.matrix_world.inverted()
+
+            # Parent Highlight Top / Bottom to Eye Highlight
+            eye_highlight = bpy.data.objects.get('Eye Highlight')
+            if eye_highlight:
+                for hl_child_name in ['Highlight Top', 'Highlight Bottom']:
+                    hl_child = bpy.data.objects.get(hl_child_name)
+                    if hl_child and hl_child.parent != eye_highlight:
+                        hl_child.parent = eye_highlight
+                        hl_child.matrix_parent_inverse = eye_highlight.matrix_world.inverted()
+
+        # Clean duplicate empties (.001, .002)
+        orig_head = bpy.data.objects.get('Head Origin')
+        orig_light = bpy.data.objects.get('Light Direction')
+        for obj in list(bpy.data.objects):
+            try:
+                name_low = obj.name.lower()
+                has_suffix = '.00' in obj.name or '.01' in obj.name
+                if has_suffix:
+                    if any(k in name_low for k in ['head origin', 'head forward', 'head up', 'highlight top', 'highlight bottom']):
+                        if orig_head and obj != orig_head:
+                            bpy.data.objects.remove(obj, do_unlink=True)
+                    elif any(k in name_low for k in ['light direction', 'sun']):
+                        if orig_light and obj != orig_light:
+                            bpy.data.objects.remove(obj, do_unlink=True)
+            except Exception:
+                pass
+
+        if self.blender_operator:
+            cache_enabled = self.context.window_manager.cache_enabled
+            project_root_directory_file_path = getattr(self.blender_operator, 'file_directory', None) \
+                or get_cache(cache_enabled).get(self.game_shader_folder_path) \
+                or (os.path.dirname(self.blender_operator.filepath) if getattr(self.blender_operator, 'filepath', None) else None)
+
+            NextStepInvoker().invoke(
+                getattr(self.blender_operator, 'next_step_idx', None), 
+                getattr(self.blender_operator, 'invoker_type', None), 
+                file_path_to_cache=project_root_directory_file_path,
+                high_level_step_name=getattr(self.blender_operator, 'high_level_step_name', None),
+                game_type=getattr(self.blender_operator, 'game_type', GameType.WUTHERING_WAVES.name),
+            )
 
 
 
