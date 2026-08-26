@@ -44,6 +44,47 @@ def update_material_property(node_group_name, input_name, value):
                     pass
 
 
+def update_alpha_transparency(self, context=None):
+    try:
+        enabled = bool(getattr(self, "ww_alpha_transparency", True))
+    except Exception:
+        enabled = True
+
+    for mat in bpy.data.materials:
+        orig_m = mat.get("ww_original_name", "")
+        base_m = mat.get("ww_base_part", "")
+        is_alpha = any(
+            k in orig_m.lower() or k in base_m.lower() or k in mat.name.lower()
+            for k in ["alpha", "touming", "transparency"]
+        )
+        if is_alpha and mat.node_tree:
+            for node in mat.node_tree.nodes:
+                if (node.type == 'GROUP' and node.node_tree and "alpha transparency" in node.node_tree.name.lower()) or "alpha transparency" in node.name.lower():
+                    node.mute = not enabled
+            if enabled:
+                if hasattr(mat, "surface_render_method"):
+                    try:
+                        mat.surface_render_method = 'BLENDED'
+                    except Exception:
+                        pass
+                if hasattr(mat, "blend_method"):
+                    try:
+                        mat.blend_method = 'BLEND'
+                    except Exception:
+                        pass
+            else:
+                if hasattr(mat, "surface_render_method"):
+                    try:
+                        mat.surface_render_method = 'DITHERED'
+                    except Exception:
+                        pass
+                if hasattr(mat, "blend_method"):
+                    try:
+                        mat.blend_method = 'OPAQUE'
+                    except Exception:
+                        pass
+
+
 # Appearance Property Update Callbacks
 def update_blush(self, context=None):
     try:
@@ -297,6 +338,7 @@ def sync_wuwa_shader_properties(scene=None):
     update_metallic(scene, None)
     update_specular(scene, None)
     update_disgust(scene, None)
+    update_alpha_transparency(scene, None)
 
 
 # Animate Mode: Swapping materials for low-poly/simplified fast viewport playback
@@ -834,12 +876,36 @@ def register_wuwa_properties():
         update=update_catch_shadows,
     )
 
+    bpy.types.Scene.ww_alpha_transparency = BoolProperty(
+        name="Alpha Transparency",
+        description="Toggle Alpha Transparency on Alpha materials",
+        default=True,
+        update=update_alpha_transparency,
+    )
+
+
+class WW_OT_ToggleAlphaTransparency(Operator):
+    bl_idname = "wuthering_waves.toggle_alpha_transparency"
+    bl_label = "Toggle Alpha Transparency"
+    bl_description = "Mute or unmute Alpha Transparency on Alpha materials"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        sc = context.scene
+        curr = getattr(sc, "ww_alpha_transparency", True)
+        sc.ww_alpha_transparency = not curr
+        update_alpha_transparency(sc, context)
+        state_str = "ON" if sc.ww_alpha_transparency else "OFF"
+        self.report({'INFO'}, f"Alpha Transparency: {state_str}")
+        return {'FINISHED'}
+
 
 classes = (
     WW_OT_ToggleAnimateMode,
     WW_OT_ToggleOutlines,
     WW_OT_ToggleHairTrans,
     WW_OT_ToggleStarMotion,
+    WW_OT_ToggleAlphaTransparency,
     WW_OT_FixEyeUV,
     WW_OT_SeparateMesh,
     WW_OT_SetPerformanceMode,
@@ -847,12 +913,28 @@ classes = (
 )
 
 
+@bpy.app.handlers.persistent
+def wuwa_frame_change_handler(scene, depsgraph=None):
+    try:
+        sync_wuwa_shader_properties(scene)
+    except Exception:
+        pass
+
+
 def register():
     register_wuwa_properties()
     for cls in classes:
         bpy.utils.register_class(cls)
+    if wuwa_frame_change_handler not in bpy.app.handlers.frame_change_post:
+        bpy.app.handlers.frame_change_post.append(wuwa_frame_change_handler)
+    if wuwa_frame_change_handler not in bpy.app.handlers.render_init:
+        bpy.app.handlers.render_init.append(wuwa_frame_change_handler)
 
 
 def unregister():
+    if wuwa_frame_change_handler in bpy.app.handlers.frame_change_post:
+        bpy.app.handlers.frame_change_post.remove(wuwa_frame_change_handler)
+    if wuwa_frame_change_handler in bpy.app.handlers.render_init:
+        bpy.app.handlers.render_init.remove(wuwa_frame_change_handler)
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)

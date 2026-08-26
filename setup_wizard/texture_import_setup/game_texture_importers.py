@@ -1610,10 +1610,38 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
         # If HET texture was found, enable See Through node groups
         if has_het_any:
             for mat in bpy.data.materials:
-                if mat.use_nodes and mat.node_tree:
+                if mat.node_tree:
                     for node in mat.node_tree.nodes:
                         if node.type == 'GROUP' and node.node_tree and "see through" in node.node_tree.name.lower():
                             node.mute = False
+
+        # Ensure Alpha Transparency is unmuted on all Alpha materials
+        for mat in bpy.data.materials:
+            orig_m = mat.get("ww_original_name", "")
+            base_m = mat.get("ww_base_part", "")
+            is_alpha = any(
+                k in orig_m.lower() or k in base_m.lower() or k in mat.name.lower()
+                for k in ["alpha", "touming", "transparency"]
+            )
+            if is_alpha and mat.node_tree:
+                for node in mat.node_tree.nodes:
+                    if (node.type == 'GROUP' and node.node_tree and "alpha transparency" in node.node_tree.name.lower()) or "alpha transparency" in node.name.lower():
+                        node.mute = False
+                if hasattr(mat, "surface_render_method"):
+                    try:
+                        mat.surface_render_method = 'BLENDED'
+                    except Exception:
+                        pass
+                if hasattr(mat, "blend_method"):
+                    try:
+                        mat.blend_method = 'BLEND'
+                    except Exception:
+                        pass
+                if hasattr(mat, "shadow_method"):
+                    try:
+                        mat.shadow_method = 'HASHED'
+                    except Exception:
+                        pass
 
         # Set global switches if ID or RGID textures found
         g_props = bpy.data.node_groups.get("Global Material Properties Main")

@@ -2072,6 +2072,31 @@ class WutheringWavesDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     target_mat["ww_base_part"] = base_part
                     slot.material = target_mat
 
+                    # If material name or original name contains / ends with 'Alpha', unmute Alpha Transparency node
+                    is_alpha = any(
+                        k in orig_mat_name.lower() or k in base_part.lower() or k in target_mat.name.lower()
+                        for k in ["alpha", "touming", "transparency"]
+                    )
+                    if is_alpha and target_mat.node_tree:
+                        for n in target_mat.node_tree.nodes:
+                            if (n.type == 'GROUP' and n.node_tree and "alpha transparency" in n.node_tree.name.lower()) or "alpha transparency" in n.name.lower():
+                                n.mute = False
+                        if hasattr(target_mat, "surface_render_method"):
+                            try:
+                                target_mat.surface_render_method = 'BLENDED'
+                            except Exception:
+                                pass
+                        if hasattr(target_mat, "blend_method"):
+                            try:
+                                target_mat.blend_method = 'BLEND'
+                            except Exception:
+                                pass
+                        if hasattr(target_mat, "shadow_method"):
+                            try:
+                                target_mat.shadow_method = 'HASHED'
+                            except Exception:
+                                pass
+
             # Darken Eye vertex colors if mesh has eye polygons
             self.darken_eye_colors(mesh)
 

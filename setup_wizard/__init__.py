@@ -97,11 +97,13 @@ else:
         WW_OT_ToggleOutlines,
         WW_OT_ToggleHairTrans,
         WW_OT_ToggleStarMotion,
+        WW_OT_ToggleAlphaTransparency,
         WW_OT_FixEyeUV,
         WW_OT_SeparateMesh,
         WW_OT_SetPerformanceMode,
         WW_OT_SetQualityMode,
         register_wuwa_properties,
+        wuwa_frame_change_handler,
     )
     from setup_wizard.preferences import CharacterSetupWizardAddonPreferences
     from setup_wizard.ui.gi_ui_setup_wizard_menu import (
@@ -266,6 +268,7 @@ else:
         WW_OT_ToggleOutlines,
         WW_OT_ToggleHairTrans,
         WW_OT_ToggleStarMotion,
+        WW_OT_ToggleAlphaTransparency,
         WW_OT_FixEyeUV,
         WW_OT_SeparateMesh,
         WW_OT_SetPerformanceMode,
@@ -285,10 +288,18 @@ else:
     def register():
         _register_classes()
         register_wuwa_properties()
+        if wuwa_frame_change_handler not in bpy.app.handlers.frame_change_post:
+            bpy.app.handlers.frame_change_post.append(wuwa_frame_change_handler)
+        if wuwa_frame_change_handler not in bpy.app.handlers.render_init:
+            bpy.app.handlers.render_init.append(wuwa_frame_change_handler)
         addon_updater_ops.register(bl_info)
 
 
     def unregister():
+        if wuwa_frame_change_handler in bpy.app.handlers.frame_change_post:
+            bpy.app.handlers.frame_change_post.remove(wuwa_frame_change_handler)
+        if wuwa_frame_change_handler in bpy.app.handlers.render_init:
+            bpy.app.handlers.render_init.remove(wuwa_frame_change_handler)
         addon_updater_ops.unregister()
         _unregister_classes()
 

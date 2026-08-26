@@ -297,6 +297,9 @@ class WW_PT_Rig_Character_Settings(Panel):
         # 4. Toggle Resonator Star
         layout.operator("wuthering_waves.toggle_star_motion", text="Toggle Resonator Star", icon="LIGHT_SUN")
 
+        # 5. Alpha Transparency (Animatable checkbox)
+        layout.prop(scene, "ww_alpha_transparency", text="Alpha Transparency")
+
         # --- Other controls commented out ---
         # layout.prop(scene, "ww_metallic_value", text="Metallics", slider=True)
         # layout.prop(scene, "ww_specular_value", text="Specular", slider=True)
