@@ -407,6 +407,21 @@ class WW_OT_CreateFacePanel(Operator):
 
         bpy.ops.object.mode_set(mode='OBJECT')
 
+        # Assign Face panel bones to 'Face' bone collection
+        if hasattr(armature_obj.data, "collections"):
+            face_coll = armature_obj.data.collections.get("Face") or armature_obj.data.collections.new("Face")
+            all_face_bone_names = [
+                "FacePanelRoot", "FacePanel", "Eyebrows", "MouthPanel", "Mouth", "Mouth.L", "Mouth.R",
+                "EyeScale", "Smile.L", "Smile.R", "Anger.L", "Anger.R", "Sad.L", "Sad.R",
+                "Focus.L", "Focus.R", "Insipid.L", "Insipid.R", "B_Anger", "B_Happy", "B_Cheerful",
+                "B_Sad", "B_Flat", "B_Inside_Add", "Aa", "M_OpenSmall", "M_Laugh", "M_Scared",
+                "M_ScaredTooth", "M_Anger", "M_Trapezoid", "M_Nutcracker", "M_O", "M_A"
+            ]
+            for fb_name in all_face_bone_names:
+                b = armature_obj.data.bones.get(fb_name)
+                if b and face_coll:
+                    face_coll.assign(b)
+
         # Constraint for FollowEyeTracker
         if "FacePanel" in armature_obj.pose.bones and "EyeTracker" in armature_obj.pose.bones:
             face_panel_pose = armature_obj.pose.bones["FacePanel"]

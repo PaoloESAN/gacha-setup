@@ -12,6 +12,14 @@ from mathutils import Vector
 from math import pi, cos, sin
 from collections import defaultdict, deque
 
+from setup_wizard.character_rig_setup.rig_ui_utils import (
+    setup_standard_bone_collections,
+    distribute_standard_rig_bones,
+    bone_to_layer_or_collection,
+    modify_and_run_rig_ui_script,
+    extract_clean_character_name,
+)
+
 # Supported model prefixes — order matters for matching
 _MODEL_PREFIX_PATTERNS = [
     ("R2T1", "R2T1"),
@@ -1188,9 +1196,6 @@ def rig_wuthering_waves_character(context=None):
 
             wgts_collection.hide_viewport = True
 
-            # Organize all Bone Collections & Theme Palettes
-            organize_rigify_bone_collections(RigArmatureObj)
-
             # IK Pole property
             ik_pole_targets = ["upper_arm_parent.L", "upper_arm_parent.R", "thigh_parent.L", "thigh_parent.R"]
             for b_name in ik_pole_targets:
@@ -1335,7 +1340,8 @@ def rig_wuthering_waves_character(context=None):
                 m_obj.parent = RigArmatureObj
                 m_obj.matrix_parent_inverse = RigArmatureObj.matrix_world.inverted()
 
-            apply_wuwa_bone_collection_visibilities(RigArmatureObj)
+            clean_name = extract_clean_character_name(OrigArmature)
+            organize_rigify_bone_collections(RigArmatureObj, orig_arm_name=OrigArmature, char_name=clean_name)
 
             orig_arm = bpy.data.objects.get(OrigArmature)
             if orig_arm and orig_arm != RigArmatureObj:
@@ -1347,193 +1353,155 @@ def rig_wuthering_waves_character(context=None):
     return True
 
 
-def organize_rigify_bone_collections(rig_obj):
+def organize_rigify_bone_collections(rig_obj, orig_arm_name=None, char_name=None):
     """
-    Deterministically creates all standard bone collections on a generated Rigify rig
-    and assigns every control, tweak, FK, IK, physics, and deformation bone to its proper collection.
+    Sets up the standard 23 bone collections on a generated Rigify rig for Wuthering Waves,
+    distributes all bones (IK, FK, Tweaks, Fingers, Face, Physics, Hair, Clothes),
+    applies theme color palettes, sets standard visibility, and modifies/runs the Rig UI script
+    with Solo Star (★) buttons matching the other games.
     """
     if not rig_obj or rig_obj.type != 'ARMATURE' or not rig_obj.data:
         return
 
-    arm_data = rig_obj.data
+    is_version_4 = bpy.app.version[0] >= 4
+    clean_char_name = char_name or extract_clean_character_name(orig_arm_name or rig_obj.name)
 
-    # 1. Ensure all standard bone collections exist with Rigify UI row properties
-    coll_definitions = [
-        ("Torso", 1),
-        ("Torso (Tweak)", 2),
-        ("Fingers", 3),
-        ("Fingers (Details)", 4),
-        ("Arm.L (IK)", 5),
-        ("Arm.R (IK)", 5),
-        ("Arm.L (FK)", 6),
-        ("Arm.R (FK)", 6),
-        ("Arm.L (Tweak)", 7),
-        ("Arm.R (Tweak)", 7),
-        ("Leg.L (IK)", 8),
-        ("Leg.R (IK)", 8),
-        ("Leg.L (FK)", 9),
-        ("Leg.R (FK)", 9),
-        ("Leg.L (Tweak)", 10),
-        ("Leg.R (Tweak)", 10),
-        ("Hair 1", 11),
-        ("Hair 2", 11),
-        ("Cloth", 12),
-        ("Skirt", 12),
-        ("Breast / Tail", 13),
-        ("Root", 14),
-        ("Others", 15),
-        ("ORG", 0),
-        ("MCH", 0),
-        ("DEF", 0),
+    # 1. Clear and create the 23 standard bone collections
+    setup_standard_bone_collections(rig_obj, is_version_4)
+
+    # 2. Physics / secondary bone classifier callback for WuWa
+    def wuwa_physics_classifier(armature_obj, b2c_func):
+        waist_bone_names = {"bip001pelvis", "bip001spine", "bip001spine1", "bip001spine2", "pelvis", "spine", "hips", "torso"}
+        for bone in armature_obj.data.bones:
+            b_name = bone.name
+            b_low = b_name.lower()
+            if (
+                b_name.startswith("DEF-")
+                or b_name.startswith("ORG-")
+                or b_name.startswith("MCH-")
+                or b_name.startswith("CTRL-")
+                or b_name.startswith("LABEL-")
+                or "tweak" in b_low
+                or "_fk" in b_low
+                or "_ik" in b_low
+                or "master" in b_low
+                or "thumb" in b_low
+                or "f_index" in b_low
+                or "f_middle" in b_low
+                or "f_ring" in b_low
+                or "f_pinky" in b_low
+                or "forearm" in b_low
+                or "upper_arm" in b_low
+                or "thigh" in b_low
+                or "shin" in b_low
+                or "foot" in b_low
+                or "toe" in b_low
+                or "hand" in b_low
+                or "shoulder" in b_low
+                or "spine" in b_low
+                or "torso" in b_low
+                or "head" in b_low
+                or "neck" in b_low
+                or "root" in b_low
+                or "twist" in b_low
+            ):
+                continue
+
+            if "hair" in b_low or "earrings" in b_low or "ahoge" in b_low or "ponytail" in b_low:
+                b2c_func(b_name, 20, "Hair")
+            elif "piao" in b_low:
+                parent_name = bone.parent.name.lower() if bone.parent else ""
+                if any(w in parent_name for w in waist_bone_names):
+                    b2c_func(b_name, 22, "Clothes")
+                else:
+                    b2c_func(b_name, 22, "Clothes")
+            elif any(k in b_low for k in ["skirt", "trousers", "cloth", "dress", "ribbon", "sleeve", "strap", "button", "belt", "tail", "chest", "breast"]):
+                b2c_func(b_name, 22, "Clothes")
+            elif any(k in b_low for k in ["eyetracker", "facescale", "facepanel", "brow", "smile", "anger", "sad", "focus", "insipid", "aa", "m_a", "m_o"]):
+                b2c_func(b_name, 0, "Face")
+            elif any(k in b_low for k in ["prop", "weapon", "chibang"]):
+                b2c_func(b_name, 21, "Props")
+
+    # 3. Distribute standard bones
+    distribute_standard_rig_bones(
+        rig_obj,
+        is_version_4=is_version_4,
+        toe_bones_exist=True,
+        use_arm_ik_poles=True,
+        use_leg_ik_poles=True,
+        has_lighting_panel=False,
+        physics_bone_callback=wuwa_physics_classifier,
+    )
+
+    # 4. Explicit bone assignments for WuWa specific controls
+    def b2c(b_name, layer_num, coll_name, sec_coll="None"):
+        bone_to_layer_or_collection(rig_obj, b_name, layer_num, coll_name, sec_coll, is_version_4)
+
+    face_bones = [
+        "EyeTracker", "Eye.L", "Eye.R", "EyeScale", "FacePanelRoot", "FacePanel",
+        "Smile.L", "Smile.R", "Anger.L", "Anger.R", "Sad.L", "Sad.R",
+        "Focus.L", "Focus.R", "Insipid.L", "Insipid.R", "Mouth.L", "Mouth.R",
+        "B_Anger", "B_Happy", "B_Cheerful", "B_Sad", "B_Flat", "B_Inside_Add",
+        "Aa", "M_A", "M_O", "M_Open", "M_Laugh", "M_Scared", "M_Trapezoid", "M_Nutcracker"
     ]
-    for cname, row in coll_definitions:
-        coll = arm_data.collections.get(cname) or arm_data.collections.new(cname)
-        try:
-            coll.rigify_ui_row = row
-        except Exception:
-            pass
+    for b in face_bones:
+        b2c(b, 0, "Face")
 
-    # 2. Exact bone to collection mappings
-    exact_bone_map = {
-        # Torso
-        "torso": "Torso", "chest": "Torso", "shoulder.L": "Torso", "shoulder.R": "Torso",
-        "hips": "Torso", "neck": "Torso", "head": "Torso", "EyeTracker": "Torso",
-        "Eye.L": "Torso", "Eye.R": "Torso", "Bip001Neck": "Torso", "Bip001Head": "Torso",
-        "FacePanelRoot": "Torso", "FacePanel": "Torso", "EyeScale": "Torso",
+    b2c("Bip001Neck", 3, "Torso (IK)")
+    b2c("Bip001Head", 3, "Torso (IK)")
+    b2c("Bip001Neck._fk", 4, "Torso (FK)")
+    b2c("Bip001Head._fk", 4, "Torso (FK)")
+    b2c("Spine_fk", 4, "Torso (FK)")
+    b2c("Spine1_fk", 4, "Torso (FK)")
+    b2c("Spine2_fk", 4, "Torso (FK)")
 
-        # Torso (Tweak) / FK
-        "Spine_fk": "Torso (Tweak)", "Spine1_fk": "Torso (Tweak)", "Spine2_fk": "Torso (Tweak)",
-        "tweak_Spine1": "Torso (Tweak)", "tweak_Spine2": "Torso (Tweak)", "tweak_Spine2.001": "Torso (Tweak)",
-        "tweak_Spine": "Torso (Tweak)", "tweak_Pelvis": "Torso (Tweak)", "Pelvis_fk": "Torso (Tweak)",
-        "tweak_neck": "Torso (Tweak)", "Bip001Neck._fk": "Torso (Tweak)", "Bip001Head._fk": "Torso (Tweak)",
+    for b in ["tweak_Spine", "tweak_Spine1", "tweak_Spine2", "tweak_Pelvis", "tweak_neck"]:
+        b2c(b, 2, "Tweaks")
 
-        # Fingers (Master)
-        "thumb.01_master.L": "Fingers", "f_index.01_master.L": "Fingers", "f_middle.01_master.L": "Fingers",
-        "f_ring.01_master.L": "Fingers", "f_pinky.01_master.L": "Fingers",
-        "thumb.01_master.R": "Fingers", "f_index.01_master.R": "Fingers", "f_middle.01_master.R": "Fingers",
-        "f_ring.01_master.R": "Fingers", "f_pinky.01_master.R": "Fingers",
-        "f_index.02_master.L": "Fingers", "f_middle.02_master.L": "Fingers", "f_ring.02_master.L": "Fingers", "f_pinky.02_master.L": "Fingers",
-        "f_index.02_master.R": "Fingers", "f_middle.02_master.R": "Fingers", "f_ring.02_master.R": "Fingers", "f_pinky.02_master.R": "Fingers",
+    b2c("toe_fk.L", 14, "Leg.L (FK)")
+    b2c("toe_fk.R", 17, "Leg.R (FK)")
+    b2c("toe_ik.L", 13, "Leg.L (IK)")
+    b2c("toe_ik.R", 16, "Leg.R (IK)")
 
-        # Fingers (Details)
-        "thumb.02.L": "Fingers (Details)", "thumb.03.L": "Fingers (Details)", "thumb.01.L.001": "Fingers (Details)", "thumb.01.L": "Fingers (Details)",
-        "f_index.01.L": "Fingers (Details)", "f_index.02.L": "Fingers (Details)", "f_index.03.L": "Fingers (Details)", "f_index.01.L.001": "Fingers (Details)", "f_index.02.L.001": "Fingers (Details)",
-        "f_middle.01.L": "Fingers (Details)", "f_middle.02.L": "Fingers (Details)", "f_middle.03.L": "Fingers (Details)", "f_middle.01.L.001": "Fingers (Details)", "f_middle.02.L.001": "Fingers (Details)",
-        "f_ring.01.L": "Fingers (Details)", "f_ring.02.L": "Fingers (Details)", "f_ring.03.L": "Fingers (Details)", "f_ring.01.L.001": "Fingers (Details)", "f_ring.02.L.001": "Fingers (Details)",
-        "f_pinky.01.L": "Fingers (Details)", "f_pinky.02.L": "Fingers (Details)", "f_pinky.03.L": "Fingers (Details)", "f_pinky.01.L.001": "Fingers (Details)", "f_pinky.02.L.001": "Fingers (Details)",
-        "thumb.02.R": "Fingers (Details)", "thumb.03.R": "Fingers (Details)", "thumb.01.R.001": "Fingers (Details)", "thumb.01.R": "Fingers (Details)",
-        "f_index.01.R": "Fingers (Details)", "f_index.02.R": "Fingers (Details)", "f_index.03.R": "Fingers (Details)", "f_index.01.R.001": "Fingers (Details)", "f_index.02.R.001": "Fingers (Details)",
-        "f_middle.01.R": "Fingers (Details)", "f_middle.02.R": "Fingers (Details)", "f_middle.03.R": "Fingers (Details)", "f_middle.01.R.001": "Fingers (Details)", "f_middle.02.R.001": "Fingers (Details)",
-        "f_ring.01.R": "Fingers (Details)", "f_ring.02.R": "Fingers (Details)", "f_ring.03.R": "Fingers (Details)", "f_ring.01.R.001": "Fingers (Details)", "f_ring.02.R.001": "Fingers (Details)",
-        "f_pinky.01.R": "Fingers (Details)", "f_pinky.02.R": "Fingers (Details)", "f_pinky.03.R": "Fingers (Details)", "f_pinky.01.R.001": "Fingers (Details)", "f_pinky.02.R.001": "Fingers (Details)",
-        "Bip001Finger13.L": "Fingers (Details)", "Bip001Finger23.L": "Fingers (Details)", "Bip001Finger33.L": "Fingers (Details)", "Bip001Finger43.L": "Fingers (Details)",
-        "Bip001Finger13.R": "Fingers (Details)", "Bip001Finger23.R": "Fingers (Details)", "Bip001Finger33.R": "Fingers (Details)", "Bip001Finger43.R": "Fingers (Details)",
-
-        # Arm IK
-        "upper_arm_parent.L": "Arm.L (IK)", "upper_arm_ik.L": "Arm.L (IK)", "hand_ik.L": "Arm.L (IK)",
-        "upper_arm_ik_target.L": "Arm.L (IK)", "VIS_upper_arm_ik_pole.L": "Arm.L (IK)",
-        "upper_arm_parent.R": "Arm.R (IK)", "upper_arm_ik.R": "Arm.R (IK)", "hand_ik.R": "Arm.R (IK)",
-        "upper_arm_ik_target.R": "Arm.R (IK)", "VIS_upper_arm_ik_pole.R": "Arm.R (IK)",
-
-        # Arm FK
-        "upper_arm_fk.L": "Arm.L (FK)", "forearm_fk.L": "Arm.L (FK)", "hand_fk.L": "Arm.L (FK)",
-        "upper_arm_fk.R": "Arm.R (FK)", "forearm_fk.R": "Arm.R (FK)", "hand_fk.R": "Arm.R (FK)",
-
-        # Arm Tweak
-        "upper_arm_tweak.L": "Arm.L (Tweak)", "upper_arm_tweak.L.001": "Arm.L (Tweak)",
-        "forearm_tweak.L": "Arm.L (Tweak)", "forearm_tweak.L.001": "Arm.L (Tweak)", "hand_tweak.L": "Arm.L (Tweak)",
-        "upper_arm_tweak.R": "Arm.R (Tweak)", "upper_arm_tweak.R.001": "Arm.R (Tweak)",
-        "forearm_tweak.R": "Arm.R (Tweak)", "forearm_tweak.R.001": "Arm.R (Tweak)", "hand_tweak.R": "Arm.R (Tweak)",
-
-        # Leg IK
-        "thigh_parent.L": "Leg.L (IK)", "thigh_ik.L": "Leg.L (IK)", "foot_heel_ik.L": "Leg.L (IK)",
-        "foot_spin_ik.L": "Leg.L (IK)", "toe_ik.L": "Leg.L (IK)", "foot_ik.L": "Leg.L (IK)",
-        "thigh_ik_target.L": "Leg.L (IK)", "VIS_thigh_ik_pole.L": "Leg.L (IK)",
-        "thigh_parent.R": "Leg.R (IK)", "thigh_ik.R": "Leg.R (IK)", "foot_heel_ik.R": "Leg.R (IK)",
-        "foot_spin_ik.R": "Leg.R (IK)", "toe_ik.R": "Leg.R (IK)", "foot_ik.R": "Leg.R (IK)",
-        "thigh_ik_target.R": "Leg.R (IK)", "VIS_thigh_ik_pole.R": "Leg.R (IK)",
-
-        # Leg FK
-        "thigh_fk.L": "Leg.L (FK)", "shin_fk.L": "Leg.L (FK)", "foot_fk.L": "Leg.L (FK)", "toe_fk.L": "Leg.L (FK)",
-        "thigh_fk.R": "Leg.R (FK)", "shin_fk.R": "Leg.R (FK)", "foot_fk.R": "Leg.R (FK)", "toe_fk.R": "Leg.R (FK)",
-
-        # Leg Tweak
-        "thigh_tweak.L": "Leg.L (Tweak)", "thigh_tweak.L.001": "Leg.L (Tweak)",
-        "shin_tweak.L": "Leg.L (Tweak)", "shin_tweak.L.001": "Leg.L (Tweak)", "foot_tweak.L": "Leg.L (Tweak)",
-        "thigh_tweak.R": "Leg.R (Tweak)", "thigh_tweak.R.001": "Leg.R (Tweak)",
-        "shin_tweak.R": "Leg.R (Tweak)", "shin_tweak.R.001": "Leg.R (Tweak)", "foot_tweak.R": "Leg.R (Tweak)",
-
-        # Root
-        "root": "Root",
-    }
-
-    for bname, cname in exact_bone_map.items():
-        bone = arm_data.bones.get(bname)
-        if bone:
-            assign_bone_to_collection(rig_obj, bone, cname, exclusive=True)
-
-    # 3. Dynamic bone mappings for secondary/physics/cloth/hair/org/def/mch bones
-    waist_bone_names = {"Bip001Pelvis", "Bip001Spine", "Bip001Spine1", "Bip001Spine2", "Pelvis", "Spine", "hips", "torso"}
-    for bone in arm_data.bones:
-        bname = bone.name
-        if bname in exact_bone_map:
-            continue
-
-        if bname.startswith("ORG-"):
-            assign_bone_to_collection(rig_obj, bone, "ORG", exclusive=True)
-        elif bname.startswith("DEF-"):
-            assign_bone_to_collection(rig_obj, bone, "DEF", exclusive=True)
-        elif bname.startswith("MCH-"):
-            assign_bone_to_collection(rig_obj, bone, "MCH", exclusive=True)
-        elif "Hair" in bname:
-            chain_len = get_hair_chain_length(bone)
-            target = "Hair 2" if chain_len >= 4 else "Hair 1"
-            assign_bone_to_collection(rig_obj, bone, target, exclusive=True)
-        elif "Earrings" in bname:
-            assign_bone_to_collection(rig_obj, bone, "Hair 1", exclusive=True)
-        elif "Piao" in bname:
-            parent_name = bone.parent.name if bone.parent else ""
-            if any(w in parent_name for w in waist_bone_names):
-                assign_bone_to_collection(rig_obj, bone, "Skirt", exclusive=True)
-            else:
-                assign_bone_to_collection(rig_obj, bone, "Cloth", exclusive=True)
-        elif any(k in bname for k in ["Skirt", "Trousers"]):
-            assign_bone_to_collection(rig_obj, bone, "Skirt", exclusive=True)
-        elif any(k in bname for k in ["Tail", "Chest", "Bone_Chest", "L_ChestBone", "R_ChestBone", "Breast"]):
-            assign_bone_to_collection(rig_obj, bone, "Breast / Tail", exclusive=True)
-        elif any(k in bname for k in ["Smile", "Anger", "Sad", "Focus", "Insipid", "Mouth", "Eyebrows", "B_Anger", "B_Happy", "B_Cheerful", "B_Sad", "B_Flat", "B_Inside", "M_Open", "M_Laugh", "M_Scared", "M_Trapezoid", "M_Nutcracker", "Aa", "M_A", "M_O"]):
-            assign_bone_to_collection(rig_obj, bone, "Torso", exclusive=True)
-        elif any(k in bname for k in ["Other", "Weapon", "Prop", "Chibang", "neck.001", "head.001", "Bip001Neck.001", "Bip001Head.001"]):
-            assign_bone_to_collection(rig_obj, bone, "Others", exclusive=True)
-
-    # 4. Apply Color Themes to Pose Bones
+    # 5. Apply Color Theme Palettes
     theme_map = {
-        "Torso": "THEME09",
-        "Torso (Tweak)": "THEME04",
+        "Torso (IK)": "THEME09",
+        "Torso (FK)": "THEME04",
+        "Tweaks": "THEME04",
+        "Pivots & Pins": "THEME04",
+        "Offsets": "THEME04",
         "Fingers": "THEME14",
-        "Fingers (Details)": "THEME03",
+        "Fingers (Detail)": "THEME03",
         "Arm.L (IK)": "THEME01",
         "Arm.R (IK)": "THEME01",
         "Arm.L (FK)": "THEME03",
         "Arm.R (FK)": "THEME03",
-        "Arm.L (Tweak)": "THEME04",
-        "Arm.R (Tweak)": "THEME04",
         "Leg.L (IK)": "THEME01",
         "Leg.R (IK)": "THEME01",
         "Leg.L (FK)": "THEME03",
         "Leg.R (FK)": "THEME03",
-        "Leg.L (Tweak)": "THEME04",
-        "Leg.R (Tweak)": "THEME04",
         "Root": "THEME01",
+        "Hair": "THEME09",
+        "Clothes": "THEME09",
+        "Face": "THEME09",
+        "Props": "THEME09",
     }
     for pbone in rig_obj.pose.bones:
-        for coll in pbone.bone.collections:
-            if coll.name in theme_map and hasattr(pbone, "color"):
-                pbone.color.palette = theme_map[coll.name]
-                break
+        if hasattr(pbone, "bone") and hasattr(pbone.bone, "collections"):
+            for coll in pbone.bone.collections:
+                if coll.name in theme_map and hasattr(pbone, "color"):
+                    pbone.color.palette = theme_map[coll.name]
+                    break
 
-    # 5. Set default collection visibility in 3D Viewport
+    # 6. Apply standard visibility
     apply_wuwa_bone_collection_visibilities(rig_obj)
+
+    # 7. Modify and execute the Rig UI script to render the standard Gacha Setup N-panel Rig Layers with stars (★)
+    modify_and_run_rig_ui_script(
+        rig_obj,
+        orig_arm_name or rig_obj.name,
+        char_name=clean_char_name
+    )
 
 
 def apply_wuwa_bone_collection_visibilities(armature):
@@ -1542,17 +1510,16 @@ def apply_wuwa_bone_collection_visibilities(armature):
         return
 
     collections_to_hide = {
-        "Torso (Tweak)", "Torso (FK)", "Tweaks",
-        "Fingers (Details)", "Fingers (Detail)",
+        "Tweaks", "Pivots & Pins", "Offsets", "Props", "Face (Primary)", "Face (Secondary)",
+        "Torso (FK)", "Torso (Tweak)", "Fingers (Detail)", "Fingers (Details)",
         "Arm.L (FK)", "Arm.R (FK)", "Arm.L (Tweak)", "Arm.R (Tweak)",
         "Leg.L (FK)", "Leg.R (FK)", "Leg.L (Tweak)", "Leg.R (Tweak)",
-        "Hair 2", "Cloth", "Skirt", "Breast / Tail", "Others", "Other", "Props",
-        "Pivots & Pins", "Offsets", "Cage", "Clothes", "Extra", "Face (Secondary)",
-        "ORG", "DEF", "MCH", "Deform",
+        "Hair", "Hair 2", "Clothes", "Cloth", "Skirt", "Breast / Tail", "Cage", "Other", "Others",
+        "Extra", "ORG", "DEF", "MCH", "Deform",
     }
     collections_to_show = {
-        "Torso", "Fingers", "Arm.L (IK)", "Arm.R (IK)",
-        "Leg.L (IK)", "Leg.R (IK)", "Hair 1", "Root", "Face", "Head",
+        "Face", "Torso (IK)", "Torso", "Fingers", "Arm.L (IK)", "Arm.R (IK)",
+        "Leg.L (IK)", "Leg.R (IK)", "Root", "Lighting"
     }
 
     if hasattr(armature.data, "collections"):

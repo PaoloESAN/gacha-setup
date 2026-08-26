@@ -35,16 +35,6 @@ class WW_PT_Setup_Wizard_UI_Layout(Panel, WutheringWavesUIRenderChecker):
         if not rigify_installed:
             sub_layout.label(text='Rigify Disabled / Missing', icon='ERROR')
 
-        # Fast Animate Mode Switch
-        anim_box = layout.box()
-        anim_row = anim_box.row(align=True)
-        is_anim = context.scene.get("ww_animate_mode", False)
-        anim_row.operator(
-            "wuthering_waves.toggle_animate_mode",
-            text="Disable Animate Mode" if is_anim else "Enable Animate Mode",
-            icon="SHADING_TEXTURE" if is_anim else "RESTRICT_RENDER_OFF"
-        )
-
 
 class WW_PT_Basic_Setup_Wizard_UI_Layout(Panel, WutheringWavesUIRenderChecker):
     bl_label = "Basic Setup"
@@ -247,61 +237,53 @@ class WW_PT_UI_Finish_Setup_Menu(Panel, WutheringWavesUIRenderChecker):
         )
 
 
-class WW_PT_UI_Appearance_Menu(Panel, WutheringWavesUIRenderChecker):
-    bl_label = "Appearance Settings"
-    bl_idname = "WW_PT_UI_Appearance_Menu"
+class WW_PT_Rig_Character_Settings(Panel):
+    bl_label = "Character Settings"
+    bl_idname = "WW_PT_Rig_Character_Settings"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "Character Setup Wizard"
-    bl_options = {"DEFAULT_CLOSED"}
+    bl_category = "Item"
+    bl_order = 0
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object or context.object
+        if not obj:
+            return False
+
+        is_rig = (obj.type == 'ARMATURE') or (obj.type == 'MESH' and obj.parent and obj.parent.type == 'ARMATURE')
+        if not is_rig:
+            return False
+
+        if getattr(context.scene, "game_type_dropdown", None) == GameType.WUTHERING_WAVES.name:
+            return True
+
+        arm_obj = obj if obj.type == 'ARMATURE' else obj.parent
+        if arm_obj and (arm_obj.get("ww_model_prefix") is not None or "EyeTracker" in getattr(getattr(arm_obj, "data", None), "bones", [])):
+            return True
+
+        return False
 
     def draw(self, context):
         layout = self.layout
         scene = context.scene
 
-        # Shading controls
-        box = layout.box()
-        box.label(text="Shading Adjustments", icon="SHADING_RENDERED")
-        col = box.column(align=True)
-        col.prop(scene, "ww_metallic_value", text="Metallics", slider=True)
-        col.prop(scene, "ww_specular_value", text="Specular", slider=True)
-        col.prop(scene, "ww_blush_value", text="Blush", slider=True)
-        col.prop(scene, "ww_disgust_value", text="Disgust Shadow", slider=True)
+        # 1. Enable / Disable Animate Mode
+        is_anim = scene.get("ww_animate_mode", False)
+        layout.operator(
+            "wuthering_waves.toggle_animate_mode",
+            text="Disable Animate Mode" if is_anim else "Enable Animate Mode",
+            icon="SHADING_TEXTURE" if is_anim else "RESTRICT_RENDER_OFF"
+        )
 
-        # Texture & Visual options
-        box_tex = layout.box()
-        box_tex.label(text="Texture & Effects", icon="TEXTURE")
-        col_tex = box_tex.column(align=True)
-        col_tex.prop(scene, "ww_tex_mode", text="Mode")
-        col_tex.operator("wuthering_waves.fix_eye_uv", text="Fix Eye UV (UV2)", icon="UV")
-        col_tex.separator()
-        col_tex.operator("wuthering_waves.toggle_outlines", text="Toggle Outlines", icon="MOD_EDGESPLIT")
-        col_tex.operator("wuthering_waves.toggle_hair_transparency", text="Toggle Hair Transparency", icon="GHOST_ENABLED")
-        col_tex.operator("wuthering_waves.toggle_star_motion", text="Toggle Resonator Star", icon="LIGHT_SUN")
+        # 2. Lighting Mode (Own row with label on top)
+        col_light = layout.column(align=True)
+        col_light.label(text="Lighting Mode:")
+        col_light.prop(scene, "ww_light_mode", text="")
 
-
-class WW_PT_UI_Lighting_Menu(Panel, WutheringWavesUIRenderChecker):
-    bl_label = "Lighting & Colors"
-    bl_idname = "WW_PT_UI_Lighting_Menu"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "Character Setup Wizard"
-    bl_options = {"DEFAULT_CLOSED"}
-
-    def draw(self, context):
-        layout = self.layout
-        scene = context.scene
-
-        box = layout.box()
-        box.label(text="Lighting Preset", icon="LIGHT")
-        col = box.column(align=True)
-        col.prop(scene, "ww_light_mode", text="Mode")
-        col.prop(scene, "ww_catch_shadows", text="Catch Shadows")
-        col.prop(scene, "ww_shadow_transition_range_value", text="Shadow Range", slider=True)
-        col.prop(scene, "ww_face_shadow_softness_value", text="Face Softness", slider=True)
-
-        if scene.ww_light_mode == "6":
-            box_col = layout.box()
+        # Custom Colors when Lighting Mode is Custom ("6")
+        if getattr(scene, "ww_light_mode", "0") == "6":
+            box_col = col_light.box()
             box_col.label(text="Custom Colors", icon="COLOR")
             col_colors = box_col.column(align=True)
             col_colors.prop(scene, "ww_amb_color", text="Ambient")
@@ -309,27 +291,26 @@ class WW_PT_UI_Lighting_Menu(Panel, WutheringWavesUIRenderChecker):
             col_colors.prop(scene, "ww_shadow_color", text="Shadow")
             col_colors.prop(scene, "ww_rim_color", text="Rim")
 
+        # 3. Blush
+        layout.prop(scene, "ww_blush_value", text="Blush", slider=True)
 
-class WW_PT_UI_Tools_Menu(Panel, WutheringWavesUIRenderChecker):
-    bl_label = "Tools & Optimization"
-    bl_idname = "WW_PT_UI_Tools_Menu"
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "Character Setup Wizard"
-    bl_options = {"DEFAULT_CLOSED"}
+        # 4. Toggle Resonator Star
+        layout.operator("wuthering_waves.toggle_star_motion", text="Toggle Resonator Star", icon="LIGHT_SUN")
 
-    def draw(self, context):
-        layout = self.layout
-
-        box_vp = layout.box()
-        box_vp.label(text="Viewport Presets", icon="RESTRICT_VIEW_OFF")
-        row = box_vp.row(align=True)
-        row.operator("wuthering_waves.set_performance_mode", text="Performance", icon="PREVIEW_RANGE")
-        row.operator("wuthering_waves.set_quality_mode", text="Quality", icon="SCENE")
-
-        box_mesh = layout.box()
-        box_mesh.label(text="Mesh Tools", icon="MESH_DATA")
-        box_mesh.operator("wuthering_waves.separate_mesh", text="Separate Mesh Parts", icon="SELECT_SUBTRACT")
+        # --- Other controls commented out ---
+        # layout.prop(scene, "ww_metallic_value", text="Metallics", slider=True)
+        # layout.prop(scene, "ww_specular_value", text="Specular", slider=True)
+        # layout.prop(scene, "ww_disgust_value", text="Disgust Shadow", slider=True)
+        # layout.prop(scene, "ww_catch_shadows", text="Catch Shadows")
+        # layout.prop(scene, "ww_shadow_transition_range_value", text="Shadow Range", slider=True)
+        # layout.prop(scene, "ww_face_shadow_softness_value", text="Face Softness", slider=True)
+        # layout.prop(scene, "ww_tex_mode", text="Texture Mode")
+        # layout.operator("wuthering_waves.fix_eye_uv", text="Fix Eye UV (UV2)", icon="UV")
+        # layout.operator("wuthering_waves.toggle_outlines", text="Toggle Outlines", icon="MOD_EDGESPLIT")
+        # layout.operator("wuthering_waves.toggle_hair_transparency", text="Toggle Hair Transparency", icon="GHOST_ENABLED")
+        # layout.operator("wuthering_waves.set_performance_mode", text="Performance", icon="PREVIEW_RANGE")
+        # layout.operator("wuthering_waves.set_quality_mode", text="Quality", icon="SCENE")
+        # layout.operator("wuthering_waves.separate_mesh", text="Separate Mesh Parts", icon="SELECT_SUBTRACT")
 
 
 classes = (
@@ -341,9 +322,7 @@ classes = (
     WW_PT_UI_Outlines_Menu,
     WW_PT_UI_Rig_Character_Menu,
     WW_PT_UI_Finish_Setup_Menu,
-    WW_PT_UI_Appearance_Menu,
-    WW_PT_UI_Lighting_Menu,
-    WW_PT_UI_Tools_Menu,
+    WW_PT_Rig_Character_Settings,
 )
 
 

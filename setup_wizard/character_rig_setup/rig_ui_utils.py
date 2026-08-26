@@ -772,12 +772,35 @@ def modify_and_run_rig_ui_script(
                 parts = complete_rig_text.split(divider)
                 complete_rig_text = parts[0] + divider + text + parts[1]
 
-    complete_rig_text = complete_rig_text.replace(
-        'bl_label = "Rig Layers"', 'bl_label = "Rig Layers: " + rig_name'
-    )
-    complete_rig_text = complete_rig_text.replace(
-        'bl_label = "Rig Main Properties"', 'bl_label = "Rig Properties: " + rig_name'
-    )
+    # Set Rig Layers header and order (order 1)
+    if 'bl_label = "Rig Layers"' in complete_rig_text:
+        complete_rig_text = complete_rig_text.replace(
+            'bl_label = "Rig Layers"',
+            'bl_label = "Rig Layers: " + rig_name\n    bl_order = 1'
+        )
+    elif 'bl_label = "Rig Layers: " + rig_name' in complete_rig_text and 'bl_order = 1' not in complete_rig_text:
+        complete_rig_text = complete_rig_text.replace(
+            'bl_label = "Rig Layers: " + rig_name',
+            'bl_label = "Rig Layers: " + rig_name\n    bl_order = 1'
+        )
+
+    # Set Rig Properties header, order (order 2), and collapse by default
+    prop_replacement = 'bl_label = "Rig Properties: " + rig_name\n    bl_order = 2\n    bl_options = {\'DEFAULT_CLOSED\'}'
+    if 'bl_label = "Rig Main Properties"' in complete_rig_text:
+        complete_rig_text = complete_rig_text.replace(
+            'bl_label = "Rig Main Properties"',
+            prop_replacement
+        )
+    elif 'bl_label = "Properties"' in complete_rig_text:
+        complete_rig_text = complete_rig_text.replace(
+            'bl_label = "Properties"',
+            prop_replacement
+        )
+    elif 'bl_label = "Rig Properties: " + rig_name' in complete_rig_text and 'DEFAULT_CLOSED' not in complete_rig_text:
+        complete_rig_text = complete_rig_text.replace(
+            'bl_label = "Rig Properties: " + rig_name',
+            prop_replacement
+        )
 
     # Blender 5.1+ compatibility fix: strip register_usetime_properties
     complete_rig_text = re.sub(

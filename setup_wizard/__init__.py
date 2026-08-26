@@ -146,9 +146,7 @@ else:
         WW_PT_UI_Outlines_Menu,
         WW_PT_UI_Rig_Character_Menu,
         WW_PT_UI_Finish_Setup_Menu,
-        WW_PT_UI_Appearance_Menu,
-        WW_PT_UI_Lighting_Menu,
-        WW_PT_UI_Tools_Menu,
+        WW_PT_Rig_Character_Settings,
     )
     from setup_wizard.ui.unified_ui_setup_wizard_menu import (
         CSW_PT_Updater_UI_Layout,
@@ -255,9 +253,7 @@ else:
         WW_PT_UI_Outlines_Menu,
         WW_PT_UI_Rig_Character_Menu,
         WW_PT_UI_Finish_Setup_Menu,
-        WW_PT_UI_Appearance_Menu,
-        WW_PT_UI_Lighting_Menu,
-        WW_PT_UI_Tools_Menu,
+        WW_PT_Rig_Character_Settings,
         WW_OT_WutheringWavesSetupWizardUI,
         WW_OT_SetUpCharacter,
         WW_OT_SetUpMaterials,
