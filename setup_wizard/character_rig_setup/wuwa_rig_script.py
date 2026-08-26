@@ -358,13 +358,13 @@ def create_circle_widget(name, radius=0.1, location=(0, 0, 0)):
     bm.to_mesh(mesh)
     bm.free()
 
-    obj.location = location
+    obj.location = (0, 0, 0)
     obj.rotation_euler[0] = pi / 2
     obj.name = name
     return obj
 
 
-def create_capsule_path(bm, radius=0.14, spacing=0.6):
+def create_capsule_path(bm, radius=0.030, spacing=0.076):
     segments = 16
     left_x = -spacing / 2
     right_x = spacing / 2
@@ -385,7 +385,7 @@ def create_capsule_path(bm, radius=0.14, spacing=0.6):
     return verts
 
 
-def create_double_capsule_widget(name, inner_radius=0.14, outer_radius=0.17, spacing=0.6):
+def create_double_capsule_widget(name, inner_radius=0.030, outer_radius=0.040, spacing=0.076):
     if name in bpy.data.objects:
         return bpy.data.objects[name]
 
@@ -1092,7 +1092,7 @@ def rig_wuthering_waves_character(context=None):
             if target_bone:
                 new_bone = RigArmatureObj.data.edit_bones.new("EyeTracker")
                 new_bone.head = target_bone.head.copy()
-                new_bone.head.y -= 0.15
+                new_bone.head.y -= 0.10
                 new_bone.head.z += 0.03
                 new_bone.tail = new_bone.head + Vector((0, 0, 0.03))
                 new_bone.parent = target_bone
@@ -1130,7 +1130,7 @@ def rig_wuthering_waves_character(context=None):
                     RigArmatureObj.pose.bones[b_name].custom_shape_scale_xyz = (4.0, 4.0, 4.0)
 
             # Drivers for Pupils
-            if CharacterMesh.data.shape_keys:
+            if CharacterMesh and CharacterMesh.data and CharacterMesh.data.shape_keys:
                 shape_key_names = {
                     "Pupil_L": "LOC_X", "Pupil_R": "LOC_X",
                     "Pupil_Up": "LOC_Y", "Pupil_Down": "LOC_Y"
@@ -1145,6 +1145,10 @@ def rig_wuthering_waves_character(context=None):
                 for shape_key_name, transform_axis in shape_key_names.items():
                     if shape_key_name in CharacterMesh.data.shape_keys.key_blocks:
                         shape_key = CharacterMesh.data.shape_keys.key_blocks[shape_key_name]
+                        try:
+                            shape_key.driver_remove('value')
+                        except Exception:
+                            pass
                         driver = shape_key.driver_add('value').driver
                         driver.type = 'SCRIPTED'
                         var = driver.variables.new()
@@ -1156,22 +1160,65 @@ def rig_wuthering_waves_character(context=None):
                         var.targets[0].transform_space = 'LOCAL_SPACE'
                         driver.expression = expressions[shape_key_name]
 
-                for bone_suffix in ['.L', '.R']:
-                    bone_name = "Eye" + bone_suffix
-                    for shape_key_prefix, transform_axis in shape_key_names.items():
-                        shape_key_name = shape_key_prefix + bone_suffix
-                        if shape_key_name in CharacterMesh.data.shape_keys.key_blocks:
-                            shape_key = CharacterMesh.data.shape_keys.key_blocks[shape_key_name]
-                            driver = shape_key.driver_add('value').driver
-                            driver.type = 'SCRIPTED'
-                            var = driver.variables.new()
-                            var.name = 'bone_' + transform_axis[-1].lower()
-                            var.type = 'TRANSFORMS'
-                            var.targets[0].id = RigArmatureObj
-                            var.targets[0].bone_target = bone_name
-                            var.targets[0].transform_type = transform_axis
-                            var.targets[0].transform_space = 'LOCAL_SPACE'
-                            driver.expression = expressions[shape_key_prefix]
+            # Pupil Scale Driver
+            if CharacterMesh and CharacterMesh.data and CharacterMesh.data.shape_keys and "Pupil_Scale" in CharacterMesh.data.shape_keys.key_blocks:
+                shape_key = CharacterMesh.data.shape_keys.key_blocks["Pupil_Scale"]
+                try:
+                    shape_key.driver_remove('value')
+                except Exception:
+                    pass
+                driver = shape_key.driver_add('value').driver
+                driver.type = 'SCRIPTED'
+                var = driver.variables.new()
+                var.name = 'bone_scale'
+                var.type = 'TRANSFORMS'
+                var.targets[0].id = RigArmatureObj
+                var.targets[0].bone_target = "EyeTracker"
+                var.targets[0].transform_type = 'SCALE_Y'
+                var.targets[0].transform_space = 'LOCAL_SPACE'
+                driver.expression = 'max(min((1.0 - bone_scale), 1.0), -1.0)'
+
+            # Left and Right Eye Independent Combined Drivers
+            if CharacterMesh and CharacterMesh.data and CharacterMesh.data.shape_keys:
+                side_driver_map = {
+                    "Pupil_L.L": ("Eye.L", "+X"),
+                    "Pupil_R.L": ("Eye.L", "-X"),
+                    "Pupil_Up.L": ("Eye.L", "+Y"),
+                    "Pupil_Down.L": ("Eye.L", "-Y"),
+                    "Pupil_L.R": ("Eye.R", "+X"),
+                    "Pupil_R.R": ("Eye.R", "-X"),
+                    "Pupil_Up.R": ("Eye.R", "+Y"),
+                    "Pupil_Down.R": ("Eye.R", "-Y"),
+                }
+                for sk_name, (indep_bone, dir_axis) in side_driver_map.items():
+                    if sk_name in CharacterMesh.data.shape_keys.key_blocks:
+                        shape_key = CharacterMesh.data.shape_keys.key_blocks[sk_name]
+                        try:
+                            shape_key.driver_remove('value')
+                        except Exception:
+                            pass
+                        driver = shape_key.driver_add('value').driver
+                        driver.type = 'SCRIPTED'
+
+                        axis = 'LOC_' + dir_axis[1]
+                        v_master = driver.variables.new()
+                        v_master.name = "v_m"
+                        v_master.type = 'TRANSFORMS'
+                        v_master.targets[0].id = RigArmatureObj
+                        v_master.targets[0].bone_target = "EyeTracker"
+                        v_master.targets[0].transform_type = axis
+                        v_master.targets[0].transform_space = 'LOCAL_SPACE'
+
+                        v_indep = driver.variables.new()
+                        v_indep.name = "v_i"
+                        v_indep.type = 'TRANSFORMS'
+                        v_indep.targets[0].id = RigArmatureObj
+                        v_indep.targets[0].bone_target = indep_bone
+                        v_indep.targets[0].transform_type = axis
+                        v_indep.targets[0].transform_space = 'LOCAL_SPACE'
+
+                        sign = "+" if dir_axis[0] == "+" else "-"
+                        driver.expression = f"max(min(({sign}(v_m + v_i) * 10.0), 1.0), 0.0)"
 
             bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -1202,9 +1249,8 @@ def rig_wuthering_waves_character(context=None):
                 bone = RigArmatureObj.pose.bones.get(b_name)
                 if bone and "pole_vector" in bone:
                     bone["pole_vector"] = True
-
-            # Themes for Eye controls
-            theme_assignments = {"EyeTracker": "THEME01", "Eye.L": "THEME09", "Eye.R": "THEME09"}
+            # Themes for Eye controls (All red THEME01)
+            theme_assignments = {"EyeTracker": "THEME01", "Eye.L": "THEME01", "Eye.R": "THEME01"}
             for b_name, theme in theme_assignments.items():
                 bone = RigArmatureObj.pose.bones.get(b_name)
                 if bone and hasattr(bone, "color"):
@@ -1340,8 +1386,24 @@ def rig_wuthering_waves_character(context=None):
                 m_obj.parent = RigArmatureObj
                 m_obj.matrix_parent_inverse = RigArmatureObj.matrix_world.inverted()
 
+            # First organize Rigify collections and UI
             clean_name = extract_clean_character_name(OrigArmature)
             organize_rigify_bone_collections(RigArmatureObj, orig_arm_name=OrigArmature, char_name=clean_name)
+
+            # Then build Face Rig controls, drivers and widgets
+            try:
+                from setup_wizard.character_rig_setup.wuwa_face_panel import wuwa_face_rig_main
+                wuwa_face_rig_main(RigArmatureObj)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                print(f"[WUWA FACE RIG] Notice: {e}")
+
+            # Ensure Face collection is visible
+            if hasattr(RigArmatureObj.data, "collections"):
+                for fc in ["Face", "Face (Primary)"]:
+                    if fc in RigArmatureObj.data.collections:
+                        RigArmatureObj.data.collections[fc].is_visible = True
 
             orig_arm = bpy.data.objects.get(OrigArmature)
             if orig_arm and orig_arm != RigArmatureObj:
@@ -1358,18 +1420,18 @@ def organize_rigify_bone_collections(rig_obj, orig_arm_name=None, char_name=None
     Sets up the standard 23 bone collections on a generated Rigify rig for Wuthering Waves,
     distributes all bones (IK, FK, Tweaks, Fingers, Face, Physics, Hair, Clothes),
     applies theme color palettes, sets standard visibility, and modifies/runs the Rig UI script
-    with Solo Star (★) buttons matching the other games.
+    to display layer buttons with stars (★) in the N-panel Item tab.
     """
-    if not rig_obj or rig_obj.type != 'ARMATURE' or not rig_obj.data:
+    if not rig_obj or rig_obj.type != 'ARMATURE':
         return
 
-    is_version_4 = bpy.app.version[0] >= 4
-    clean_char_name = char_name or extract_clean_character_name(orig_arm_name or rig_obj.name)
+    is_version_4 = hasattr(rig_obj.data, "collections")
+    clean_char_name = char_name or extract_clean_character_name(rig_obj.name)
 
-    # 1. Clear and create the 23 standard bone collections
+    # 1. Initialize Collections
     setup_standard_bone_collections(rig_obj, is_version_4)
 
-    # 2. Physics / secondary bone classifier callback for WuWa
+    # 2. Physics & Hair/Clothes Classifier Callback for WuWa
     def wuwa_physics_classifier(armature_obj, b2c_func):
         waist_bone_names = {"bip001pelvis", "bip001spine", "bip001spine1", "bip001spine2", "pelvis", "spine", "hips", "torso"}
         for bone in armature_obj.data.bones:
@@ -1407,20 +1469,24 @@ def organize_rigify_bone_collections(rig_obj, orig_arm_name=None, char_name=None
             ):
                 continue
 
-            if "hair" in b_low or "earrings" in b_low or "ahoge" in b_low or "ponytail" in b_low:
-                b2c_func(b_name, 20, "Hair")
+            if "hair" in b_low or "bang" in b_low or "fringe" in b_low or "ahoge" in b_low or "ponytail" in b_low:
+                b2c_func(b_name, 23, "Hair")
             elif "piao" in b_low:
                 parent_name = bone.parent.name.lower() if bone.parent else ""
-                if any(w in parent_name for w in waist_bone_names):
-                    b2c_func(b_name, 22, "Clothes")
+                if any(h in parent_name for h in ["head", "neck", "hair", "bang", "fringe"]):
+                    b2c_func(b_name, 23, "Hair")
                 else:
                     b2c_func(b_name, 22, "Clothes")
             elif any(k in b_low for k in ["skirt", "trousers", "cloth", "dress", "ribbon", "sleeve", "strap", "button", "belt", "tail", "chest", "breast"]):
                 b2c_func(b_name, 22, "Clothes")
-            elif any(k in b_low for k in ["eyetracker", "facescale", "facepanel", "brow", "smile", "anger", "sad", "focus", "insipid", "aa", "m_a", "m_o"]):
-                b2c_func(b_name, 0, "Face")
             elif any(k in b_low for k in ["prop", "weapon", "chibang"]):
                 b2c_func(b_name, 21, "Props")
+            else:
+                parent_name = bone.parent.name.lower() if bone.parent else ""
+                if any(h in parent_name for h in ["head", "neck", "hair", "bang", "fringe"]):
+                    b2c_func(b_name, 23, "Hair")
+                elif any(s in parent_name for s in waist_bone_names):
+                    b2c_func(b_name, 22, "Clothes")
 
     # 3. Distribute standard bones
     distribute_standard_rig_bones(
@@ -1447,6 +1513,13 @@ def organize_rigify_bone_collections(rig_obj, orig_arm_name=None, char_name=None
     for b in face_bones:
         b2c(b, 0, "Face")
 
+    if hasattr(rig_obj.data, "bones"):
+        for b in rig_obj.data.bones:
+            if b.name.startswith("CTRL-") or b.name.startswith("LABEL-"):
+                b2c(b.name, 0, "Face")
+            elif b.name == "Face-Root":
+                b2c(b.name, 0, "Face (Secondary)")
+
     b2c("Bip001Neck", 3, "Torso (IK)")
     b2c("Bip001Head", 3, "Torso (IK)")
     b2c("Bip001Neck._fk", 4, "Torso (FK)")
@@ -1458,15 +1531,11 @@ def organize_rigify_bone_collections(rig_obj, orig_arm_name=None, char_name=None
     for b in ["tweak_Spine", "tweak_Spine1", "tweak_Spine2", "tweak_Pelvis", "tweak_neck"]:
         b2c(b, 2, "Tweaks")
 
-    b2c("toe_fk.L", 14, "Leg.L (FK)")
-    b2c("toe_fk.R", 17, "Leg.R (FK)")
-    b2c("toe_ik.L", 13, "Leg.L (IK)")
-    b2c("toe_ik.R", 16, "Leg.R (IK)")
-
-    # 5. Apply Color Theme Palettes
+    # 5. Apply Standard Theme Color Palettes to Rigify Body Collections
     theme_map = {
         "Torso (IK)": "THEME09",
         "Torso (FK)": "THEME04",
+        "Torso": "THEME09",
         "Tweaks": "THEME04",
         "Pivots & Pins": "THEME04",
         "Offsets": "THEME04",
@@ -1483,13 +1552,14 @@ def organize_rigify_bone_collections(rig_obj, orig_arm_name=None, char_name=None
         "Root": "THEME01",
         "Hair": "THEME09",
         "Clothes": "THEME09",
-        "Face": "THEME09",
         "Props": "THEME09",
     }
     for pbone in rig_obj.pose.bones:
         if hasattr(pbone, "bone") and hasattr(pbone.bone, "collections"):
             for coll in pbone.bone.collections:
                 if coll.name in theme_map and hasattr(pbone, "color"):
+                    if coll.name == "Face" or pbone.name.startswith("CTRL-") or pbone.name.startswith("LABEL-") or pbone.name in ["EyeTracker", "Eye.L", "Eye.R"] or getattr(pbone.color, "palette", None) == 'CUSTOM':
+                        continue
                     pbone.color.palette = theme_map[coll.name]
                     break
 
