@@ -35,6 +35,19 @@ class WW_PT_Setup_Wizard_UI_Layout(Panel, WutheringWavesUIRenderChecker):
         if not rigify_installed:
             sub_layout.label(text='Rigify Disabled / Missing', icon='ERROR')
 
+        settings_box = layout.box()
+        settings_header = settings_box.row()
+        settings_header.label(text="Setup Settings", icon="PREFERENCES")
+
+        settings_col = settings_box.column()
+        props = context.scene.character_rigger_props
+        enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
+        settings_col.prop(props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")
+        sliders_col = settings_col.column()
+        sliders_col.active = enable_physics
+        sliders_col.prop(props, "hair_physics_influence", text="Hair", slider=True)
+        sliders_col.prop(props, "clothes_physics_influence", text="Clothes", slider=True)
+
 
 class WW_PT_Basic_Setup_Wizard_UI_Layout(Panel, WutheringWavesUIRenderChecker):
     bl_label = "Basic Setup"
@@ -189,11 +202,30 @@ class WW_PT_UI_Rig_Character_Menu(Panel, WutheringWavesUIRenderChecker):
 
     def draw(self, context):
         layout = self.layout
-        sub_layout = layout.column(align=True)
+        sub_layout = layout.column()
+        box = sub_layout.box()
 
-        OperatorFactory.create_rig_character_ui(sub_layout, game_type=GameType.WUTHERING_WAVES.name)
-        sub_layout.separator()
-        sub_layout.operator("wuthering_waves.create_face_panel", text="Create Face Rig Panel", icon="FACE_MAPS")
+        character_rigger_props = context.scene.character_rigger_props
+
+        OperatorFactory.create_rig_character_ui(box, game_type=GameType.WUTHERING_WAVES.name)
+        OperatorFactory.create(
+            box,
+            'hoyoverse.apply_hair_clothes_physics',
+            'Apply Hair & Clothes Physics',
+            'PHYSICS',
+        )
+        box.separator()
+        box.operator("wuthering_waves.create_face_panel", text="Create Face Rig Panel", icon="FACE_MAPS")
+
+        box = sub_layout.box()
+        box.label(text='Settings')
+        col = box.column()
+        enable_physics = getattr(character_rigger_props, "enable_hair_clothes_physics", getattr(character_rigger_props, "enable_hair_dress_physics", False))
+        col.prop(character_rigger_props, 'enable_hair_clothes_physics', text="Hair & Clothes Physics")
+        sliders_col = col.column()
+        sliders_col.active = enable_physics
+        sliders_col.prop(character_rigger_props, 'hair_physics_influence', text='Hair', slider=True)
+        sliders_col.prop(character_rigger_props, 'clothes_physics_influence', text='Clothes', slider=True)
 
 
 class WW_PT_UI_Finish_Setup_Menu(Panel, WutheringWavesUIRenderChecker):

@@ -981,28 +981,24 @@ def setup_wuwa_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_s
                         existing_coll.unassign(bone)
                 coll.assign(bone)
 
-        # Place Face-Root into Face (Secondary)
-        sec_coll = None
-        for scn in ["Face (Secondary)", "Face(Secondary)", "Face Secondary"]:
-            if scn in armature.data.collections:
-                sec_coll = armature.data.collections[scn]
+        # Place Face-Root into Other
+        other_coll = None
+        for ocn in ["Other", "Others"]:
+            if ocn in armature.data.collections:
+                other_coll = armature.data.collections[ocn]
                 break
-        if not sec_coll:
-            sec_coll = armature.data.collections.new("Face (Secondary)")
+        if not other_coll:
+            other_coll = armature.data.collections.new("Other")
             try:
-                sec_coll.is_visible = False
-            except Exception:
-                pass
-            try:
-                sec_coll.rigify_ui_row = RIGIFY_UI_ROW
+                other_coll.is_visible = False
             except Exception:
                 pass
 
         root_bone = armature.data.bones.get("Face-Root")
-        if root_bone and sec_coll:
+        if root_bone and other_coll:
             for c in list(root_bone.collections):
                 c.unassign(root_bone)
-            sec_coll.assign(root_bone)
+            other_coll.assign(root_bone)
     elif is_blender_3():
         for c in controls:
             bone = armature.data.bones.get(c['name'])
@@ -1010,7 +1006,7 @@ def setup_wuwa_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_s
                 bone.layers = [i == 0 for i in range(32)]
         root_bone = armature.data.bones.get("Face-Root")
         if root_bone:
-            root_bone.layers = [i == 1 for i in range(32)]
+            root_bone.layers = [i == 25 for i in range(32)]
 
     wgt_coll = get_widget_collection()
     bpy.ops.object.mode_set(mode='POSE')

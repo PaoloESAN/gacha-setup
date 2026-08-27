@@ -1374,7 +1374,7 @@ def rig_wuthering_waves_character(context=None):
 
             # Final cleanups
             bpy.ops.object.mode_set(mode='OBJECT')
-            RigArmatureObj.data.display_type = 'WIRE'
+            RigArmatureObj.data.display_type = 'STICK'
             RigArmatureObj.data.show_bone_custom_shapes = True
             RigArmatureObj.show_in_front = True
 
@@ -1385,6 +1385,9 @@ def rig_wuthering_waves_character(context=None):
                         mod.object = RigArmatureObj
                 m_obj.parent = RigArmatureObj
                 m_obj.matrix_parent_inverse = RigArmatureObj.matrix_world.inverted()
+
+            # Create breast circle controls for character
+            create_wuwa_breast_controls(RigArmatureObj)
 
             # First organize Rigify collections and UI
             clean_name = extract_clean_character_name(OrigArmature)
@@ -1405,6 +1408,18 @@ def rig_wuthering_waves_character(context=None):
                     if fc in RigArmatureObj.data.collections:
                         RigArmatureObj.data.collections[fc].is_visible = True
 
+            # Apply Hair & Clothes physics if enabled in setup settings
+            props = getattr(context.scene, "character_rigger_props", None)
+            enable_physics = False
+            if props:
+                enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
+            if not enable_physics:
+                enable_physics = getattr(context.scene, "enable_hair_clothes_physics", getattr(context.scene, "enable_hair_dress_physics", False))
+
+            if enable_physics and RigArmatureObj:
+                from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
+                apply_hair_and_clothes_physics(RigArmatureObj, context)
+
             orig_arm = bpy.data.objects.get(OrigArmature)
             if orig_arm and orig_arm != RigArmatureObj:
                 try:
@@ -1413,6 +1428,132 @@ def rig_wuthering_waves_character(context=None):
                     pass
 
     return True
+
+
+def create_breast_widget_for_bone(name, bone_matrix, world_center_offset, radius=0.11):
+    if name in bpy.data.objects:
+        bpy.data.objects.remove(bpy.data.objects[name], do_unlink=True)
+
+    mesh = bpy.data.meshes.new(name + "_Mesh")
+    obj = bpy.data.objects.new(name, mesh)
+
+    wgts_coll = get_or_create_wgts_collection()
+    if obj.name not in wgts_coll.objects:
+        wgts_coll.objects.link(obj)
+
+    bm = bmesh.new()
+    segments = 32
+    inv_mat = bone_matrix.inverted()
+
+    for i in range(segments):
+        angle = 2 * pi * i / segments
+        w_x = world_center_offset.x + cos(angle) * radius
+        w_y = world_center_offset.y
+        w_z = world_center_offset.z + sin(angle) * radius
+        local_pos = inv_mat.to_3x3() @ mathutils.Vector((w_x, w_y, w_z))
+        bm.verts.new(local_pos)
+
+    bm.verts.ensure_lookup_table()
+    for i in range(segments):
+        bm.edges.new((bm.verts[i], bm.verts[(i + 1) % segments]))
+    bm.to_mesh(mesh)
+    bm.free()
+    obj.location = (0, 0, 0)
+    return obj
+
+
+def create_wuwa_breast_controls(rig_obj):
+    """
+    Creates circular breast controllers ('breast.L', 'breast.R') on the Torso collection
+    parented to 'chest', with a front-facing circle custom widget (WGT-rig_breast.L / R),
+    and binds the deformation bones (ORG-Bone_Chest001_L / R) to follow them with zero rest shift.
+    """
+    if not rig_obj or rig_obj.type != 'ARMATURE':
+        return
+
+    arm_data = rig_obj.data
+
+    # Detect chest / breast bones on the rig
+    chest_l = None
+    chest_r = None
+    for b in arm_data.bones:
+        b_low = b.name.lower()
+        if "chest" in b_low or "breast" in b_low:
+            if b.name.startswith("ORG-"):
+                if ("001_l" in b_low or "01_l" in b_low or "_l" in b_low or ".l" in b_low) and not chest_l:
+                    chest_l = b.name
+                elif ("001_r" in b_low or "01_r" in b_low or "_r" in b_low or ".r" in b_low) and not chest_r:
+                    chest_r = b.name
+
+    if not chest_l or not chest_r:
+        return
+
+    # 1. Edit mode: Create breast.L and breast.R bones at EXACT rest position of ORG bones
+    bpy.ops.object.mode_set(mode='EDIT')
+    eb = arm_data.edit_bones
+
+    eb_org_l = eb.get(chest_l)
+    eb_org_r = eb.get(chest_r)
+    if not eb_org_l or not eb_org_r:
+        bpy.ops.object.mode_set(mode='OBJECT')
+        return
+
+    chest_parent = eb.get("chest") or eb.get("torso") or eb.get("Spine2_fk") or eb.get("ORG-Spine2")
+
+    for ctrl_name, org_bone in [("breast.L", eb_org_l), ("breast.R", eb_org_r)]:
+        b_ctrl = eb.get(ctrl_name) or eb.new(ctrl_name)
+
+        # Match EXACT head, tail, roll of the org bone so COPY_TRANSFORMS causes 0.000 shift/stretch
+        b_ctrl.head = org_bone.head.copy()
+        b_ctrl.tail = org_bone.tail.copy()
+        b_ctrl.roll = org_bone.roll
+        if chest_parent:
+            b_ctrl.parent = chest_parent
+        b_ctrl.use_connect = False
+
+    mat_l = eb.get("breast.L").matrix.copy()
+    mat_r = eb.get("breast.R").matrix.copy()
+
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # 2. Create Circle Widgets for Breasts (WGT-rig_breast.L, WGT-rig_breast.R)
+    # Circle radius 0.25m positioned in front of the model (offset Y = -0.16m)
+    wgt_l = create_breast_widget_for_bone("WGT-rig_breast.L", mat_l, mathutils.Vector((0.0, -0.16, 0.0)), radius=0.25)
+    wgt_r = create_breast_widget_for_bone("WGT-rig_breast.R", mat_r, mathutils.Vector((0.0, -0.16, 0.0)), radius=0.25)
+
+    # 3. Pose mode: Configure Custom Shape, Theme, and Constraints
+    bpy.ops.object.mode_set(mode='POSE')
+    for ctrl_name, org_name, wgt_obj in [("breast.L", chest_l, wgt_l), ("breast.R", chest_r, wgt_r)]:
+        pb_ctrl = rig_obj.pose.bones.get(ctrl_name)
+        if pb_ctrl:
+            if wgt_obj:
+                pb_ctrl.custom_shape = wgt_obj
+                pb_ctrl.custom_shape_scale_xyz = (1.0, 1.0, 1.0)
+            if hasattr(pb_ctrl, "color"):
+                pb_ctrl.color.palette = 'THEME09'  # Yellow, matching Torso controls
+            lock_bone_transformations(pb_ctrl, rig_obj)
+
+        pb_org = rig_obj.pose.bones.get(org_name)
+        if pb_org:
+            for c in list(pb_org.constraints):
+                if c.name in ["Copy Transforms Breast", "Breast_Follow"]:
+                    pb_org.constraints.remove(c)
+            con = pb_org.constraints.new('COPY_TRANSFORMS')
+            con.name = "Copy Transforms Breast"
+            con.target = rig_obj
+            con.subtarget = ctrl_name
+
+    # 4. Collection Assignments
+    assign_bone_to_collection(rig_obj, 'breast.L', 'Torso (IK)')
+    assign_bone_to_collection(rig_obj, 'breast.R', 'Torso (IK)')
+
+    # Ensure all ORG-Bone_Chest* bones are moved to Other collection and unhidden
+    for b in rig_obj.data.bones:
+        b_low = b.name.lower()
+        if "chest00" in b_low or "chest01" in b_low or "chest02" in b_low or "chest_l" in b_low or "chest_r" in b_low:
+            if b.name not in ["chest", "breast.L", "breast.R"]:
+                assign_bone_to_collection(rig_obj, b.name, 'Other')
+                b.hide = False
 
 
 def organize_rigify_bone_collections(rig_obj, orig_arm_name=None, char_name=None):
@@ -1433,16 +1574,44 @@ def organize_rigify_bone_collections(rig_obj, orig_arm_name=None, char_name=None
 
     # 2. Physics & Hair/Clothes Classifier Callback for WuWa
     def wuwa_physics_classifier(armature_obj, b2c_func):
-        waist_bone_names = {"bip001pelvis", "bip001spine", "bip001spine1", "bip001spine2", "pelvis", "spine", "hips", "torso"}
+        core_biped_org = {
+            "ORG-Pelvis", "ORG-Spine", "ORG-Spine1", "ORG-Spine2",
+            "ORG-neck", "ORG-head",
+            "ORG-shoulder.L", "ORG-shoulder.R",
+            "ORG-upper_arm.L", "ORG-upper_arm.R",
+            "ORG-forearm.L", "ORG-forearm.R",
+            "ORG-hand.L", "ORG-hand.R",
+            "ORG-thigh.L", "ORG-thigh.R",
+            "ORG-shin.L", "ORG-shin.R",
+            "ORG-foot.L", "ORG-foot.R",
+            "ORG-toe_ik.L", "ORG-toe_ik.R",
+            "ORG-Bip001LHeel0", "ORG-Bip001RHeel0",
+            "ORG-Root", "ORG-root", "ORG-Bip001",
+        }
+        for side in [".L", ".R"]:
+            for f in ["thumb", "f_index", "f_middle", "f_ring", "f_pinky"]:
+                for n in ["01", "02", "03"]:
+                    core_biped_org.add(f"ORG-{f}.{n}{side}")
+                    core_biped_org.add(f"ORG-{f}.{n}{side}.001")
+
+        face_control_names = {
+            "EyeTracker", "Eye.L", "Eye.R", "EyeScale", "FacePanelRoot", "FacePanel", "Face-Root",
+            "Smile.L", "Smile.R", "Anger.L", "Anger.R", "Sad.L", "Sad.R",
+            "Focus.L", "Focus.R", "Insipid.L", "Insipid.R", "Mouth.L", "Mouth.R",
+            "B_Anger", "B_Happy", "B_Cheerful", "B_Sad", "B_Flat", "B_Inside_Add",
+            "Aa", "M_A", "M_O", "M_Open", "M_Laugh", "M_Scared", "M_Trapezoid", "M_Nutcracker"
+        }
+
         for bone in armature_obj.data.bones:
             b_name = bone.name
             b_low = b_name.lower()
             if (
                 b_name.startswith("DEF-")
-                or b_name.startswith("ORG-")
                 or b_name.startswith("MCH-")
                 or b_name.startswith("CTRL-")
                 or b_name.startswith("LABEL-")
+                or b_name in core_biped_org
+                or b_name in face_control_names
                 or "tweak" in b_low
                 or "_fk" in b_low
                 or "_ik" in b_low
@@ -1466,27 +1635,37 @@ def organize_rigify_bone_collections(rig_obj, orig_arm_name=None, char_name=None
                 or "neck" in b_low
                 or "root" in b_low
                 or "twist" in b_low
+                or "heel" in b_low
+                or "camera" in b_low
+                or "_elbow_" in b_low
+                or "_knee_" in b_low
+                or "leg_l_" in b_low
+                or "leg_r_" in b_low
+                or b_low in ["chest", "hips", "torso", "head", "neck", "root", "pelvis"]
+                or "chest" in b_low
+                or "breast" in b_low
             ):
                 continue
 
-            if "hair" in b_low or "bang" in b_low or "fringe" in b_low or "ahoge" in b_low or "ponytail" in b_low:
-                b2c_func(b_name, 23, "Hair")
-            elif "piao" in b_low:
-                parent_name = bone.parent.name.lower() if bone.parent else ""
-                if any(h in parent_name for h in ["head", "neck", "hair", "bang", "fringe"]):
-                    b2c_func(b_name, 23, "Hair")
-                else:
-                    b2c_func(b_name, 22, "Clothes")
-            elif any(k in b_low for k in ["skirt", "trousers", "cloth", "dress", "ribbon", "sleeve", "strap", "button", "belt", "tail", "chest", "breast"]):
-                b2c_func(b_name, 22, "Clothes")
-            elif any(k in b_low for k in ["prop", "weapon", "chibang"]):
+            clean_low = b_low.replace("org-", "").replace("bip001_", "")
+
+            if any(k in clean_low for k in ["hair", "toufa", "bang", "fringe", "ahoge", "ponytail", "earring", "eardrop"]):
+                b2c_func(b_name, 20, "Hair")
+                bone.hide = False
+            elif any(k in clean_low for k in ["prop", "weapon", "chibang", "wingcase", "hitcase", "hulu"]):
                 b2c_func(b_name, 21, "Props")
+                bone.hide = False
+            elif any(k in clean_low for k in ["piao", "qunzi", "skirt", "trousers", "cloth", "dress", "ribbon", "sleeve", "strap", "button", "belt", "tail", "shoulder_l_", "shoulder_r_"]):
+                b2c_func(b_name, 22, "Clothes")
+                bone.hide = False
             else:
                 parent_name = bone.parent.name.lower() if bone.parent else ""
-                if any(h in parent_name for h in ["head", "neck", "hair", "bang", "fringe"]):
-                    b2c_func(b_name, 23, "Hair")
-                elif any(s in parent_name for s in waist_bone_names):
+                if any(h in parent_name for h in ["head", "neck", "hair", "toufa", "bang", "fringe"]):
+                    b2c_func(b_name, 20, "Hair")
+                    bone.hide = False
+                elif any(s in parent_name for s in ["pelvis", "spine", "piao", "skirt", "cloth"]):
                     b2c_func(b_name, 22, "Clothes")
+                    bone.hide = False
 
     # 3. Distribute standard bones
     distribute_standard_rig_bones(
@@ -1518,7 +1697,10 @@ def organize_rigify_bone_collections(rig_obj, orig_arm_name=None, char_name=None
             if b.name.startswith("CTRL-") or b.name.startswith("LABEL-"):
                 b2c(b.name, 0, "Face")
             elif b.name == "Face-Root":
-                b2c(b.name, 0, "Face (Secondary)")
+                b2c(b.name, 25, "Other")
+
+    b2c("breast.L", 3, "Torso (IK)")
+    b2c("breast.R", 3, "Torso (IK)")
 
     b2c("Bip001Neck", 3, "Torso (IK)")
     b2c("Bip001Head", 3, "Torso (IK)")
@@ -1550,18 +1732,21 @@ def organize_rigify_bone_collections(rig_obj, orig_arm_name=None, char_name=None
         "Leg.L (FK)": "THEME03",
         "Leg.R (FK)": "THEME03",
         "Root": "THEME01",
-        "Hair": "THEME09",
-        "Clothes": "THEME09",
-        "Props": "THEME09",
     }
     for pbone in rig_obj.pose.bones:
         if hasattr(pbone, "bone") and hasattr(pbone.bone, "collections"):
+            assigned = False
             for coll in pbone.bone.collections:
                 if coll.name in theme_map and hasattr(pbone, "color"):
                     if coll.name == "Face" or pbone.name.startswith("CTRL-") or pbone.name.startswith("LABEL-") or pbone.name in ["EyeTracker", "Eye.L", "Eye.R"] or getattr(pbone.color, "palette", None) == 'CUSTOM':
                         continue
                     pbone.color.palette = theme_map[coll.name]
+                    assigned = True
                     break
+            if not assigned and hasattr(pbone, "color"):
+                coll_names = {c.name for c in pbone.bone.collections}
+                if coll_names.intersection({"Hair", "Clothes", "Props", "Other"}):
+                    pbone.color.palette = 'DEFAULT'
 
     # 6. Apply standard visibility
     apply_wuwa_bone_collection_visibilities(rig_obj)

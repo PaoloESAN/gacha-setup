@@ -660,6 +660,12 @@ class WutheringWavesCharacterRigger(CharacterRigger):
         try:
             success = rig_wuthering_waves_character(self.context)
             if success:
+                character_rigger_props = self.context.scene.character_rigger_props
+                if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):
+                    from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
+                    armature = self.context.active_object
+                    if armature:
+                        apply_hair_and_clothes_physics(armature, self.context)
                 self.blender_operator.report({'INFO'}, 'Successfully rigged Wuthering Waves character!')
             else:
                 self.blender_operator.report({'WARNING'}, 'Rigify generation for Wuthering Waves completed with warnings.')

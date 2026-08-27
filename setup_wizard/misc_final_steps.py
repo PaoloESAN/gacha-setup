@@ -162,7 +162,7 @@ class WW_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties
                 if obj.type == "ARMATURE" and (obj.name.startswith("RIG-") or "rig" in obj.name.lower()):
                     apply_wuwa_bone_collection_visibilities(obj)
                     if hasattr(obj, "data") and obj.data:
-                        obj.data.display_type = 'WIRE'
+                        obj.data.display_type = 'STICK'
                         obj.data.show_bone_custom_shapes = True
                     obj.show_in_front = True
                     target_rig = obj
