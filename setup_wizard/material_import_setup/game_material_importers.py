@@ -378,20 +378,14 @@ class PunishingGrayRavenMaterialImporterFacade(GameMaterialImporter):
 
 class ZenlessZoneZeroMaterialImporterFacade(GameMaterialImporter):
     def __init__(self, blender_operator, context):
+        default_blend = os.path.basename(get_shader_file_path(GameType.ZENLESS_ZONE_ZERO.name, 'main')) or "Kythera's ZZZ Shader.blend"
         super().__init__(
             blender_operator=blender_operator,
             context=context,
             game_shader_cache_file_path=ZENLESS_ZONE_ZERO_SHADER_FILE_PATH,
             game_shader_cache_folder_path=ZENLESS_ZONE_ZERO_ROOT_FOLDER_FILE_PATH,
-            game_default_blend_file_with_materials="Kythera's ZZZ Shader V1.0.blend",
-            names_of_game_materials=[
-                {'name': "Kythera's ZZZ Face Shader"},
-                {'name': "Kythera's ZZZ Shader"},
-                {'name': "Kythera's ZZZ Face Shader V1.0"},
-                {'name': "Kythera's ZZZ Shader V1.0"},
-                {'name': "F Kythera's ZZZ Face Shader"},
-                {'name': "F Kythera's ZZZ Shader"},
-            ]
+            game_default_blend_file_with_materials=default_blend,
+            names_of_game_materials=[]
         )
 
     def import_materials(self):

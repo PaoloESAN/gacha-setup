@@ -213,9 +213,10 @@ class ZenlessZoneZeroShaderMaterialNames(ShaderMaterialNames):
     MATERIAL_PREFIX = "Kythera's ZZZ "
     MATERIAL_PREFIX_AFTER_RENAME = "Kythera's ZZZ "
     FACE = "Kythera's ZZZ Face Shader"
-    BODY = "Kythera's ZZZ Shader"
-    SHADER = "Kythera's ZZZ Shader"
-    SHADER_T = "Kythera's ZZZ Shader"
+    BODY = "Kythera's ZZZ Shader V1.2"
+    BODY_V1_2 = "Kythera's ZZZ Shader V1.2"
+    SHADER = "Kythera's ZZZ Shader V1.2"
+    SHADER_T = "Kythera's ZZZ Shader V1.2"
     
     # Custom outline properties
     BODY_OUTLINE = 'ZZZ Body Outlines'

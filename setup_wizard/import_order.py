@@ -224,13 +224,30 @@ def get_shader_file_path(game_type: str, file_type: str = "main") -> str:
             if os.path.isfile(p_legacy):
                 return p_legacy
         else:
-            p_v1 = os.path.join(shaders_dir, 'zzz', "Kythera's ZZZ Shader V1.0.blend")
-            if os.path.isfile(p_v1):
-                return p_v1
-            p_ge = os.path.join(shaders_dir, 'zzz', "Kythera's ZZZ Shader GE432.blend")
-            if os.path.isfile(p_ge):
-                return p_ge
-            p_legacy = os.path.join(shaders_dir, 'zzz', 'ZZZ Setup File V2.0.blend')
+            zzz_dir = os.path.join(shaders_dir, 'zzz')
+            # Dynamic check for any Kythera / Kyteraz blend file in shaders/zzz (sorted to pick highest version)
+            if os.path.isdir(zzz_dir):
+                kythera_blends = [
+                    f for f in os.listdir(zzz_dir)
+                    if (f.lower().startswith("kythera") or f.lower().startswith("kyteraz") or "kythera" in f.lower() or "kyteraz" in f.lower())
+                    and f.lower().endswith(".blend")
+                ]
+                if kythera_blends:
+                    def extract_ver(filename):
+                        import re
+                        m = re.findall(r'(\d+(?:\.\d+)*)', filename)
+                        if m:
+                            try:
+                                return [int(x) for x in m[-1].split('.')]
+                            except Exception:
+                                pass
+                        return [0]
+                    kythera_blends.sort(key=extract_ver, reverse=True)
+                    p_best = os.path.join(zzz_dir, kythera_blends[0])
+                    if os.path.isfile(p_best):
+                        return p_best
+
+            p_legacy = os.path.join(zzz_dir, 'ZZZ Setup File V2.0.blend')
             if os.path.isfile(p_legacy):
                 return p_legacy
 
