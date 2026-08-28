@@ -513,7 +513,10 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
                                    obj.type == 'MESH' for modifier in obj.modifiers if 
                                    'Light Vectors' in modifier.name]
 
-        if character_rigger_props.set_up_lighting_panel:
+        selected_shader = getattr(self.context.scene, 'zzz_shader_type', 'KYTHERA')
+        use_lighting_panel = character_rigger_props.set_up_lighting_panel and (selected_shader != 'KYTHERA')
+
+        if use_lighting_panel:
             for modifier in light_vectors_modifiers:
                 lp_filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'LightingPanel.blend')
                 LightingPanel(lp_filepath).set_up_lighting_panel(modifier)
@@ -534,7 +537,7 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
         try:
             zzz_rig_character(
                 filepath,
-                4 if character_rigger_props.set_up_lighting_panel else 0, # lighting_panel_version
+                4 if use_lighting_panel else 0, # lighting_panel_version
                 not character_rigger_props.allow_arm_ik_stretch,
                 not character_rigger_props.allow_leg_ik_stretch,
                 character_rigger_props.use_arm_ik_poles,

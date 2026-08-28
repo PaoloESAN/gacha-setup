@@ -464,16 +464,17 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                 
         # Find texture directory
         tex_dir = folder
-        if not any(f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg')) for f in os.listdir(folder)):
-            sub = os.path.join(folder, "Textures")
-            if os.path.isdir(sub):
-                tex_dir = sub
-            else:
-                sub = os.path.join(os.path.dirname(folder), "Textures")
+        if os.path.isdir(folder):
+            if not any(f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg')) for f in os.listdir(folder)):
+                sub = os.path.join(folder, "Textures")
                 if os.path.isdir(sub):
                     tex_dir = sub
+                else:
+                    sub = os.path.join(os.path.dirname(folder), "Textures")
+                    if os.path.isdir(sub):
+                        tex_dir = sub
 
-        if not materials_dir:
+        if not materials_dir or not os.path.isdir(tex_dir):
             return {}, tex_dir
 
         image_files = [f for f in os.listdir(tex_dir) if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff'))]

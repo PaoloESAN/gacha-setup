@@ -165,6 +165,9 @@ else:
         ZZZ_PT_UI_Finish_Setup_Menu,
         ZZZ_PT_UI_Materials_Menu,
         ZZZ_PT_UI_Outlines_Menu,
+        ZZZ_PT_Rig_Character_Settings,
+        register_zzz_properties,
+        unregister_zzz_properties,
     )
 
     register_genshin_setup_wizard()
@@ -225,6 +228,7 @@ else:
         ZZZ_PT_UI_Outlines_Menu,
         ZZZ_PT_UI_Character_Rig_Setup_Menu,
         ZZZ_PT_UI_Finish_Setup_Menu,
+        ZZZ_PT_Rig_Character_Settings,
         ZZZ_OT_SetupWizardUI,
         ZZZ_OT_SetUpCharacter,
         ZZZ_OT_SetUpMaterials,
@@ -288,6 +292,7 @@ else:
     def register():
         _register_classes()
         register_wuwa_properties()
+        register_zzz_properties()
         if wuwa_frame_change_handler not in bpy.app.handlers.frame_change_post:
             bpy.app.handlers.frame_change_post.append(wuwa_frame_change_handler)
         if wuwa_frame_change_handler not in bpy.app.handlers.render_init:
@@ -301,6 +306,7 @@ else:
         if wuwa_frame_change_handler in bpy.app.handlers.render_init:
             bpy.app.handlers.render_init.remove(wuwa_frame_change_handler)
         addon_updater_ops.unregister()
+        unregister_zzz_properties()
         _unregister_classes()
 
     """

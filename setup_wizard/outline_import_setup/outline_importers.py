@@ -157,31 +157,44 @@ class ZenlessZoneZeroOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
                     except Exception as e:
                         print(f"Failed to append {outline_node_group_name} from {filepath}: {e}")
 
-            # Import strictly the Lighting Panel UI & Direction Objects / Collections from ZZZ Setup File V2.0.blend
+            # Import direction objects and optionally Lighting Panel UI from ZZZ Setup File V2.0.blend
+            selected_shader = getattr(bpy.context.scene, 'zzz_shader_type', 'KYTHERA') if hasattr(bpy, 'context') and hasattr(bpy.context, 'scene') else 'KYTHERA'
             try:
                 with bpy.data.libraries.load(filepath, link=False) as (data_from, data_to):
-                    excluded_kw = ["face", "phoneme", "mouth", "eyebrow", "expression", "facrig"]
-                    lighting_keywords = [
+                    direction_keywords = ["light direction", "head direction", "head forward", "head up"]
+                    lighting_panel_keywords = [
                         "colorwheel", "colorpicker", "slider-rim", "origin-rim",
-                        "light direction", "head direction", "head forward", "head up",
-                        "lighting panel", "light panel", "lighting_panel", "light_panel"
+                        "lightpanelwgtplane", "lightpanelselectorwgt", "lighting panel", "light panel"
                     ]
+                    excluded_kw = ["face", "phoneme", "mouth", "eyebrow", "expression", "facrig", "plane", "selector"]
                     
-                    target_colls = [
-                        c for c in data_from.collections 
-                        if not any(kw in c.lower() for kw in excluded_kw) and
-                        ("lighting" in c.lower() or "panel" in c.lower() or "light" in c.lower()) and
-                        c not in bpy.data.collections
-                    ]
-                    data_to.collections = target_colls
+                    if selected_shader == 'KYTHERA':
+                        # Strictly import direction control objects, NO lighting panel
+                        target_objs = [
+                            o for o in data_from.objects
+                            if any(kw == o.lower() or kw in o.lower() for kw in direction_keywords)
+                            and not any(lp in o.lower() for lp in lighting_panel_keywords)
+                            and o not in bpy.data.objects
+                        ]
+                        data_to.objects = target_objs
+                        data_to.collections = []
+                    else:
+                        # LEGACY: Import both direction objects and lighting panel collections/objects
+                        target_colls = [
+                            c for c in data_from.collections 
+                            if not any(kw in c.lower() for kw in excluded_kw) and
+                            ("lighting" in c.lower() or "panel" in c.lower() or "light" in c.lower()) and
+                            c not in bpy.data.collections
+                        ]
+                        data_to.collections = target_colls
 
-                    target_objs = [
-                        o for o in data_from.objects 
-                        if not any(kw in o.lower() for kw in excluded_kw) and
-                        (any(kw in o.lower() for kw in lighting_keywords) or "panel" in o.lower() or "lighting" in o.lower()) and
-                        o not in bpy.data.objects
-                    ]
-                    data_to.objects = target_objs
+                        target_objs = [
+                            o for o in data_from.objects 
+                            if not any(kw in o.lower() for kw in excluded_kw) and
+                            (any(kw in o.lower() for kw in direction_keywords + lighting_panel_keywords) or "panel" in o.lower() or "lighting" in o.lower()) and
+                            o not in bpy.data.objects
+                        ]
+                        data_to.objects = target_objs
 
                 for coll in data_to.collections:
                     if coll and coll.name not in [c.name for c in bpy.context.scene.collection.children]:
@@ -191,7 +204,13 @@ class ZenlessZoneZeroOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
                     if obj and not any(obj.name in c.objects for c in bpy.data.collections.values()):
                         bpy.context.scene.collection.objects.link(obj)
             except Exception as e:
-                print(f"Failed to append lighting objects/collections from {filepath}: {e}")
+                print(f"Failed to append objects/collections from {filepath}: {e}")
+
+            # Ensure Light Direction empty exists as fallback if not in blend
+            if not bpy.data.objects.get("Light Direction"):
+                light_dir_empty = bpy.data.objects.new("Light Direction", None)
+                light_dir_empty.empty_display_type = 'SINGLE_ARROW'
+                bpy.context.scene.collection.objects.link(light_dir_empty)
 
         NextStepInvoker().invoke(
             self.blender_operator.next_step_idx, 
