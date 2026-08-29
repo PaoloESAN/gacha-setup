@@ -391,8 +391,8 @@ class HonkaiStarRailOutlineTextureImporter(OutlineTextureImporter):
             return {'FINISHED'}
 
         for name, folder, files in os.walk(character_model_folder_file_path):
-            color_files = [file for file in files if 'Color'.lower() in file.lower()]
-            lightmap_files = [file for file in files if 'LightMap'.lower() in file.lower() or 'FaceMap' in file.lower() or 'LigthMap'.lower() in file.lower()]  # that Lightmap typo is on purpose
+            color_files = [file for file in files if 'Color'.lower() in file.lower() and 'ramp' not in file.lower() and 'eff' not in file.lower()]
+            lightmap_files = [file for file in files if ('LightMap'.lower() in file.lower() or 'FaceMap' in file.lower() or 'LigthMap'.lower() in file.lower()) and 'eff' not in file.lower()]
             outline_materials = [material for material in bpy.data.materials.values() if 'outlines' in material.name.lower() and material.name != self.shader_material_names.OUTLINES]
 
             for outline_material in outline_materials:

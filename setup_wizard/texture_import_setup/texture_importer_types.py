@@ -2117,20 +2117,26 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
                 print(f'INFO: Importing texture {file} using {self.__class__.__name__}')
 
                 if self.is_texture_identifiers_in_texture_name(['Hair', 'Color'], file) and \
-                    not self.is_texture_identifiers_in_texture_name(['Eff'], file):  # TODO: Review this line
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Ramp'], file):  # TODO: Review this line
                     self.set_diffuse_texture(TextureType.HAIR, hair_material, img)
 
-                elif self.is_texture_identifiers_in_texture_name(['Hair', 'LightMap'], file):
+                elif self.is_texture_identifiers_in_texture_name(['Hair', 'LightMap'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file):
                     self.set_lightmap_texture(TextureType.HAIR, hair_material, img)
 
-                elif self.is_texture_identifiers_in_texture_name(['Hair', 'Warm_Ramp'], file):
+                elif self.is_texture_identifiers_in_texture_name(['Hair', 'Warm_Ramp'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file):
                     self.set_warm_shadow_ramp_texture(TextureType.HAIR, img)
 
-                elif self.is_texture_identifiers_in_texture_name(['Hair', 'Cool_Ramp'], file):
+                elif self.is_texture_identifiers_in_texture_name(['Hair', 'Cool_Ramp'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file):
                     self.set_cool_shadow_ramp_texture(TextureType.HAIR, img)
                 
                 # Character has Body and no Body1 or Body2?
-                elif self.is_texture_identifiers_in_texture_name(['Body_', 'Color'], file):
+                elif self.is_texture_identifiers_in_texture_name(['Body_', 'Color'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Ramp'], file):
                     if body_material:
                         self.set_diffuse_texture(TextureType.BODY, body_material, img)
 
@@ -2146,8 +2152,15 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
                     if body_trans_material:
                         self.set_diffuse_texture(TextureType.BODY, body_trans_material, img)
 
+                    # Also apply to any variant/fallback body materials (e.g. Body_Leather, Body_Tuoma, Body_Stockings, Body_S, Body_D)
+                    for mat in bpy.data.materials:
+                        if mat.name.startswith(self.material_names.MATERIAL_PREFIX + 'Body') and \
+                            'outlines' not in mat.name.lower():
+                            self.set_diffuse_texture(TextureType.BODY, mat, img)
+
                 # Character has Body and no Body1 or Body2?
-                elif self.is_texture_identifiers_in_texture_name(['Body_', 'LightMap'], file):
+                elif self.is_texture_identifiers_in_texture_name(['Body_', 'LightMap'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file):
                     if body_material:
                         self.set_lightmap_texture(TextureType.BODY, body_material, img)
 
@@ -2163,51 +2176,70 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
                     if body_trans_material:
                         self.set_lightmap_texture(TextureType.BODY, body_trans_material, img)
 
-                elif self.is_texture_identifiers_in_texture_name(['Body1', 'Color'], file):
+                    # Also apply to any variant/fallback body materials
+                    for mat in bpy.data.materials:
+                        if mat.name.startswith(self.material_names.MATERIAL_PREFIX + 'Body') and \
+                            'outlines' not in mat.name.lower():
+                            self.set_lightmap_texture(TextureType.BODY, mat, img)
+
+                elif self.is_texture_identifiers_in_texture_name(['Body1', 'Color'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Ramp'], file):
                     self.set_diffuse_texture(TextureType.BODY, body1_material, img)
 
-                elif self.is_texture_identifiers_in_texture_name(['Body1', 'LightMap'], file):
+                elif self.is_texture_identifiers_in_texture_name(['Body1', 'LightMap'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file):
                     self.set_lightmap_texture(TextureType.BODY, body1_material, img)
 
-                elif self.is_texture_identifiers_in_texture_name(['Body2', 'Color'], file):
+                elif self.is_texture_identifiers_in_texture_name(['Body2', 'Color'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Ramp'], file):
                     self.set_diffuse_texture(TextureType.BODY, body2_material, img)
 
                     if body2_trans_material:
                         self.set_diffuse_texture(TextureType.BODY, body2_trans_material, img)
 
-                elif self.is_texture_identifiers_in_texture_name(['Body2', 'LightMap'], file):
+                elif self.is_texture_identifiers_in_texture_name(['Body2', 'LightMap'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file):
                     self.set_lightmap_texture(TextureType.BODY, body2_material, img)
 
                     if body2_trans_material:
                         self.set_lightmap_texture(TextureType.BODY, body2_trans_material, img)
 
-                elif self.is_texture_identifiers_in_texture_name(['Body3', 'Color'], file):
+                elif self.is_texture_identifiers_in_texture_name(['Body3', 'Color'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Ramp'], file):
                     self.set_diffuse_texture(TextureType.BODY, body3_material, img)
 
-                elif self.is_texture_identifiers_in_texture_name(['Body3', 'LightMap'], file):
+                elif self.is_texture_identifiers_in_texture_name(['Body3', 'LightMap'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file):
                     self.set_lightmap_texture(TextureType.BODY, body3_material, img)
 
                 elif (self.is_texture_identifiers_in_texture_name(['Warm_Ramp'], file) or \
                     self.is_texture_identifiers_in_texture_name(['Body_Ramp'], file)) and \
-                        not self.is_texture_identifiers_in_texture_name(['Weapon'], file):  # Not Hair, so ramp must be Body
+                        not self.is_texture_identifiers_in_texture_name(['Weapon'], file) and \
+                        not self.is_texture_identifiers_in_texture_name(['Eff'], file):  # Not Hair, so ramp must be Body
                     self.set_warm_shadow_ramp_texture(TextureType.BODY, img)
                     self.set_weapon_ramp_texture(img)
 
                 # Not Hair, so ramp must be Body
-                elif self.is_texture_identifiers_in_texture_name(['Cool_Ramp'], file):
+                elif self.is_texture_identifiers_in_texture_name(['Cool_Ramp'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file):
                     self.set_cool_shadow_ramp_texture(TextureType.BODY, img)
 
                 # Not Hair, so ramp must be Body. Only one ramp texture exists (no specific Warm or Cool ramp)
                 # TODO: Unknown uses, previously this was to handle Svarog, but was updated)
                 elif self.is_texture_identifiers_in_texture_name(['Ramp'], file) and \
-                    not self.is_texture_identifiers_in_texture_name(['Weapon'], file):
+                    not self.is_texture_identifiers_in_texture_name(['Weapon'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file):
 
                     if self.is_texture_identifiers_in_texture_name(['Warm_Ramp'], file):
                         self.set_warm_shadow_ramp_texture(TextureType.BODY, img)
                     # TODO: RAMPS? Only supporting Warm Ramps for now
                     # self.set_cool_shadow_ramp_texture(TextureType.BODY, img)
 
-                elif self.is_texture_identifiers_in_texture_name(['Stockings'], file):
+                elif self.is_texture_identifiers_in_texture_name(['Stockings'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file):
                     if self.is_texture_identifiers_in_texture_name(['Body1'], file):
                         self.set_stocking_texture(TextureType.BODY, body1_material, img)
                     elif self.is_texture_identifiers_in_texture_name(['Body2'], file):
@@ -2215,67 +2247,86 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
                     elif self.is_texture_identifiers_in_texture_name(['Body'], file):  # Must be AFTER Body1/Body2
                         self.set_stocking_texture(TextureType.BODY, body_material, img)
 
-                elif self.is_texture_identifiers_in_texture_name(['Coat', 'Color'], file):
+                elif self.is_texture_identifiers_in_texture_name(['Coat', 'Color'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Ramp'], file):
                     self.set_diffuse_texture(TextureType.BODY, coat_material, img)
-                elif self.is_texture_identifiers_in_texture_name(['Coat', 'LightMap'], file):
+                elif self.is_texture_identifiers_in_texture_name(['Coat', 'LightMap'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file):
                     self.set_lightmap_texture(TextureType.BODY, coat_material, img)
 
-                elif self.is_texture_identifiers_in_texture_name(['Face', 'Color'], file):
+                elif self.is_texture_identifiers_in_texture_name(['Face', 'Color'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Ramp'], file):
                     self.set_diffuse_texture(TextureType.FACE, face_material, img)
 
                 # TODO: Review this whole block, NPC support is borrowed code from GI
-                elif self.is_texture_identifiers_in_texture_name(['FaceMap'], file) or \
+                elif (self.is_texture_identifiers_in_texture_name(['FaceMap'], file) or \
                     (self.is_texture_identifiers_in_texture_name(['NPC', 'Face', 'LightMap'], file) and
-                        not self.is_texture_identifiers_in_files(['FaceMap'], files)):
+                        not self.is_texture_identifiers_in_files(['FaceMap'], files))) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file):
                     # If Face Shadow exists, use that texture
                     # If Face Shadow does not exist in this folder, use "Face Lightmap" (actually an NPC Face Shadow texture)
                     self.set_facemap_texture(img)
 
-                elif self.is_texture_identifiers_in_texture_name(['Face_ExpressionMap'], file):
+                elif self.is_texture_identifiers_in_texture_name(['Face_ExpressionMap'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file):
                     self.set_face_expression_texture(face_material, img)
 
                 elif self.is_texture_identifiers_in_texture_name(['Weapon', 'Color'], file) and \
-                    not self.is_texture_identifiers_in_texture_name(['Screen'], file):  # Pela, Silverwolf
+                    not self.is_texture_identifiers_in_texture_name(['Screen'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Ramp'], file):  # Pela, Silverwolf
                     for weapon_material in weapon_materials:
                         if weapon_material:
                             self.set_diffuse_texture(TextureType.WEAPON, weapon_material, img)
 
-                elif self.is_texture_identifiers_in_texture_name(['Weapon', 'LightMap'], file) or \
-                    self.is_texture_identifiers_in_texture_name(['Weapon', 'LigthMap'], file):  # Yes, intentional typo (Asta)
+                elif (self.is_texture_identifiers_in_texture_name(['Weapon', 'LightMap'], file) or \
+                    self.is_texture_identifiers_in_texture_name(['Weapon', 'LigthMap'], file)) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file):  # Yes, intentional typo (Asta)
 
                     for weapon_material in weapon_materials:
                         if weapon_material:
                             self.set_lightmap_texture(TextureType.WEAPON, weapon_material, img)
 
-                elif self.is_texture_identifiers_in_texture_name(['Weapon', 'Ramp'], file):
+                elif self.is_texture_identifiers_in_texture_name(['Weapon', 'Ramp'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file):
                     # Set Weapon Ramp, if none exists use Body Ramp
                     self.set_weapon_ramp_texture(img, override=True)
 
-                elif self.is_texture_identifiers_in_texture_name(['Handbag', 'Color'], file):
+                elif self.is_texture_identifiers_in_texture_name(['Handbag', 'Color'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Ramp'], file):
                     self.set_diffuse_texture(TextureType.WEAPON, handbag_material, img)
                 
-                elif self.is_texture_identifiers_in_texture_name(['Handbag', 'Lightmap'], file):
+                elif self.is_texture_identifiers_in_texture_name(['Handbag', 'Lightmap'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file):
                     self.set_lightmap_texture(TextureType.WEAPON, handbag_material, img)
 
-                elif self.is_texture_identifiers_in_texture_name(['Kendama', 'Color'], file):
+                elif self.is_texture_identifiers_in_texture_name(['Kendama', 'Color'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Ramp'], file):
                     self.set_diffuse_texture(TextureType.WEAPON, kendama_material, img)
 
-                elif self.is_texture_identifiers_in_texture_name(['Kendama', 'Lightmap'], file):
+                elif self.is_texture_identifiers_in_texture_name(['Kendama', 'Lightmap'], file) and \
+                    not self.is_texture_identifiers_in_texture_name(['Eff'], file):
                     self.set_lightmap_texture(TextureType.WEAPON, kendama_material, img)
 
                 # Dynamic match for any custom/variant materials (e.g. Body_D1, Body_Matcap, etc.)
                 else:
                     matched = False
-                    for mat in bpy.data.materials:
-                        if mat.name.startswith(self.material_names.MATERIAL_PREFIX):
-                            part = mat.name.replace(self.material_names.MATERIAL_PREFIX, '')
-                            if part and len(part) >= 2 and part.lower() in file.lower():
-                                if any(k in file.lower() for k in ['color', 'diffuse']):
-                                    self.set_diffuse_texture(TextureType.BODY, mat, img)
-                                    matched = True
-                                elif 'lightmap' in file.lower():
-                                    self.set_lightmap_texture(TextureType.BODY, mat, img)
-                                    matched = True
+                    f_lower = file.lower()
+                    if not any(k in f_lower for k in ['eff', 'ramp', 'curve_ramp', 'mask', 'matcap', 'lut']):
+                        for mat in bpy.data.materials:
+                            if mat.name.startswith(self.material_names.MATERIAL_PREFIX):
+                                part = mat.name.replace(self.material_names.MATERIAL_PREFIX, '')
+                                if part and len(part) >= 2 and part.lower() in f_lower:
+                                    if any(k in f_lower for k in ['color', 'diffuse']):
+                                        self.set_diffuse_texture(TextureType.BODY, mat, img)
+                                        matched = True
+                                    elif 'lightmap' in f_lower:
+                                        self.set_lightmap_texture(TextureType.BODY, mat, img)
+                                        matched = True
                     if not matched:
                         print(f'WARN: Ignoring texture {file}')
 
