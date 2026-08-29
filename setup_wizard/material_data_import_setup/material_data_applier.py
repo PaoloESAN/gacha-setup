@@ -53,6 +53,8 @@ class MaterialDataAppliersFactory:
             ]
         elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
             return []
+        elif game_type == GameType.WUTHERING_WAVES.name:
+            return []
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 

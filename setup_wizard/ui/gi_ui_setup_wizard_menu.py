@@ -55,6 +55,7 @@ class UI_Properties:
             min=0.0,
             max=1.0,
             default=0.7,
+            step=10,
             precision=2,
         )
 
@@ -64,6 +65,7 @@ class UI_Properties:
             min=0.0,
             max=1.0,
             default=0.4,
+            step=10,
             precision=2,
         )
 
@@ -468,6 +470,7 @@ class OperatorFactory:
     @staticmethod
     def create_rig_character_ui(
         ui_object: UILayout,
+        game_type: str = GameType.GENSHIN_IMPACT.name,
     ):
         expy_kit_installed = bpy.context.preferences.addons.get('Expy-Kit-main')
         rigify_installed = bpy.context.preferences.addons.get('rigify')
@@ -479,7 +482,7 @@ class OperatorFactory:
             'hoyoverse.set_up_character_rig',
             'Rig Character',
             'OUTLINER_OB_ARMATURE',
-            game_type=GameType.GENSHIN_IMPACT.name,
+            game_type=game_type,
         )
         if not column.enabled:
             column = ui_object.column()

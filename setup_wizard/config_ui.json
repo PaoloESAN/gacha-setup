@@ -505,6 +505,108 @@
       "rename_shader_materials",
       "set_up_armtwist_bone_constraints",
       "join_meshes_on_armature"
+    ],
+    "WUTHERING_WAVES_OT_setup_wizard_ui": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
+      "import_character_model",
+      "delete_empties",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures",
+      "import_outlines",
+      "setup_geometry_nodes",
+      "rig_character",
+      "wuwa_setup_head_driver",
+      "set_color_management_to_standard",
+      "set_up_screen_space_reflections",
+      "wuwa_finish_setup"
+    ],
+    "WUTHERING_WAVES_OT_setup_wizard_ui_no_outlines": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
+      "import_character_model",
+      "delete_empties",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures",
+      "rig_character",
+      "wuwa_setup_head_driver",
+      "set_color_management_to_standard",
+      "set_up_screen_space_reflections",
+      "wuwa_finish_setup"
+    ],
+    "WUTHERING_WAVES_OT_set_up_character": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_character",
+      "import_character_model",
+      "delete_empties"
+    ],
+    "WUTHERING_WAVES_OT_set_up_materials": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_materials",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures"
+    ],
+    "WUTHERING_WAVES_OT_set_up_outlines": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_outlines",
+      "import_outlines",
+      "setup_geometry_nodes"
+    ],
+    "WUTHERING_WAVES_OT_finish_setup": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_finish_setup",
+      "wuwa_setup_head_driver",
+      "set_color_management_to_standard",
+      "set_up_screen_space_reflections",
+      "wuwa_finish_setup"
+    ],
+    "wuthering_waves.setup_wizard_ui": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
+      "import_character_model",
+      "delete_empties",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures",
+      "import_outlines",
+      "setup_geometry_nodes",
+      "rig_character",
+      "wuwa_setup_head_driver",
+      "set_color_management_to_standard",
+      "set_up_screen_space_reflections",
+      "wuwa_finish_setup"
+    ],
+    "wuthering_waves.setup_wizard_ui_no_outlines": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
+      "import_character_model",
+      "delete_empties",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures",
+      "rig_character",
+      "wuwa_setup_head_driver",
+      "set_color_management_to_standard",
+      "set_up_screen_space_reflections",
+      "wuwa_finish_setup"
+    ],
+    "wuthering_waves.set_up_character": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_character",
+      "import_character_model",
+      "delete_empties"
+    ],
+    "wuthering_waves.set_up_materials": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_materials",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures"
+    ],
+    "wuthering_waves.set_up_outlines": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_outlines",
+      "import_outlines",
+      "setup_geometry_nodes"
+    ],
+    "wuthering_waves.finish_setup": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_finish_setup",
+      "wuwa_setup_head_driver",
+      "set_color_management_to_standard",
+      "set_up_screen_space_reflections",
+      "wuwa_finish_setup"
     ]
   }
 }

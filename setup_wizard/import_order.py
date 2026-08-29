@@ -42,6 +42,10 @@ NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH = 'neverness_to_everness_folder_file
 NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH = 'neverness_to_everness_shader_file_path'
 NEVERNESS_TO_EVERNESS_OUTLINES_FILE_PATH = 'neverness_to_everness_outlines_file_path'
 
+WUTHERING_WAVES_ROOT_FOLDER_FILE_PATH = 'wuthering_waves_folder_file_path'
+WUTHERING_WAVES_SHADER_FILE_PATH = 'wuthering_waves_shader_file_path'
+WUTHERING_WAVES_OUTLINES_FILE_PATH = 'wuthering_waves_outlines_file_path'
+
 
 
 class NextStepInvoker:
@@ -107,6 +111,23 @@ def invoke_next_step_ui(
         current_step_index, 
         game_type: str=GameType.GENSHIN_IMPACT.name,
         file_directory=None):
+    if not game_type:
+        hl_low = (high_level_step_name or "").lower()
+        if 'wuthering_waves' in hl_low or 'wuwa' in hl_low:
+            game_type = GameType.WUTHERING_WAVES.name
+        elif 'neverness' in hl_low or 'nte' in hl_low:
+            game_type = GameType.NEVERNESS_TO_EVERNESS.name
+        elif 'zenless' in hl_low or 'zzz' in hl_low:
+            game_type = GameType.ZENLESS_ZONE_ZERO.name
+        elif 'honkai' in hl_low or 'hsr' in hl_low:
+            game_type = GameType.HONKAI_STAR_RAIL.name
+        elif 'punishing' in hl_low or 'pgr' in hl_low:
+            game_type = GameType.PUNISHING_GRAY_RAVEN.name
+        elif hasattr(bpy.context, 'scene') and hasattr(bpy.context.scene, 'game_type_dropdown') and bpy.context.scene.game_type_dropdown:
+            game_type = bpy.context.scene.game_type_dropdown
+        else:
+            game_type = GameType.GENSHIN_IMPACT.name
+
     print(f"[DEBUG] invoke_next_step_ui called: high_level_step_name='{high_level_step_name}', current_step_index={current_step_index}, game_type='{game_type}', file_directory='{file_directory}'")
     path_to_setup_wizard_folder = os.path.dirname(os.path.abspath(__file__))
 
@@ -203,18 +224,40 @@ def get_shader_file_path(game_type: str, file_type: str = "main") -> str:
             if os.path.isfile(p_legacy):
                 return p_legacy
         else:
-            p_v1 = os.path.join(shaders_dir, 'zzz', "Kythera's ZZZ Shader V1.0.blend")
-            if os.path.isfile(p_v1):
-                return p_v1
-            p_ge = os.path.join(shaders_dir, 'zzz', "Kythera's ZZZ Shader GE432.blend")
-            if os.path.isfile(p_ge):
-                return p_ge
-            p_legacy = os.path.join(shaders_dir, 'zzz', 'ZZZ Setup File V2.0.blend')
+            zzz_dir = os.path.join(shaders_dir, 'zzz')
+            # Dynamic check for any Kythera / Kyteraz blend file in shaders/zzz (sorted to pick highest version)
+            if os.path.isdir(zzz_dir):
+                kythera_blends = [
+                    f for f in os.listdir(zzz_dir)
+                    if (f.lower().startswith("kythera") or f.lower().startswith("kyteraz") or "kythera" in f.lower() or "kyteraz" in f.lower())
+                    and f.lower().endswith(".blend")
+                ]
+                if kythera_blends:
+                    def extract_ver(filename):
+                        import re
+                        m = re.findall(r'(\d+(?:\.\d+)*)', filename)
+                        if m:
+                            try:
+                                return [int(x) for x in m[-1].split('.')]
+                            except Exception:
+                                pass
+                        return [0]
+                    kythera_blends.sort(key=extract_ver, reverse=True)
+                    p_best = os.path.join(zzz_dir, kythera_blends[0])
+                    if os.path.isfile(p_best):
+                        return p_best
+
+            p_legacy = os.path.join(zzz_dir, 'ZZZ Setup File V2.0.blend')
             if os.path.isfile(p_legacy):
                 return p_legacy
 
     elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
         p = os.path.join(shaders_dir, 'nte', 'YH Shader.blend')
+        if os.path.isfile(p):
+            return p
+
+    elif game_type == GameType.WUTHERING_WAVES.name:
+        p = os.path.join(shaders_dir, 'wuwa', 'Gustling Waters.blend')
         if os.path.isfile(p):
             return p
 
@@ -240,6 +283,8 @@ def get_cache(cache_enabled=True):
             ZENLESS_ZONE_ZERO_SHADER_FILE_PATH: active_dir,
             NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH: active_dir,
             NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH: active_dir,
+            WUTHERING_WAVES_ROOT_FOLDER_FILE_PATH: active_dir,
+            WUTHERING_WAVES_SHADER_FILE_PATH: active_dir,
         }
     return {}
 
@@ -412,6 +457,10 @@ class ComponentFunctionFactory:
             return bpy.ops.neverness_to_everness.setup_compositor_nodes
         elif component_name == 'nte_finish_setup':
             return bpy.ops.neverness_to_everness.finish_setup
+        elif component_name == 'wuwa_setup_head_driver':
+            return bpy.ops.wuthering_waves.setup_head_driver
+        elif component_name == 'wuwa_finish_setup':
+            return bpy.ops.wuthering_waves.finish_setup
         else:
             raise Exception(f'Unknown component name passed into {__name__}: {component_name}')
 

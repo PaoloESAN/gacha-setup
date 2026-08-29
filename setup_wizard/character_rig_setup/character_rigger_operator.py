@@ -48,6 +48,7 @@ class GI_OT_CharacterRiggerOperator(Operator, ImportHelper, CustomOperatorProper
         GameType.HONKAI_STAR_RAIL.name,
         GameType.ZENLESS_ZONE_ZERO.name,
         GameType.NEVERNESS_TO_EVERNESS.name,
+        GameType.WUTHERING_WAVES.name,
     ]
 
     def execute(self, context):
@@ -78,15 +79,37 @@ class GI_OT_CharacterRiggerOperator(Operator, ImportHelper, CustomOperatorProper
             super().clear_custom_properties()
             return {'FINISHED'}
 
-        selected_armatures = [obj for obj in context.selected_objects if obj.type == 'ARMATURE']
+        selected_armatures = [obj for obj in context.selected_objects if obj.type == 'ARMATURE' and not obj.name.startswith('RIG-')]
+        if not selected_armatures:
+            for obj in context.scene.objects:
+                if obj.type == 'MESH':
+                    for mod in obj.modifiers:
+                        if mod.type == 'ARMATURE' and mod.object and not mod.object.name.startswith('RIG-'):
+                            selected_armatures.append(mod.object)
+                            break
+                    if selected_armatures:
+                        break
+        if not selected_armatures:
+            selected_armatures = [obj for obj in context.scene.objects if obj.type == 'ARMATURE' and not obj.name.startswith('RIG-')]
         if not selected_armatures:
             selected_armatures = [obj for obj in context.scene.objects if obj.type == 'ARMATURE']
 
         if selected_armatures:
             arm_obj = selected_armatures[0]
-            b_names = set(arm_obj.data.bones.keys())
-            if 'Bip001-Pelvis' in b_names or 'Bip001-Head' in b_names or 'Bip001-Spine' in b_names:
-                self.game_type = GameType.NEVERNESS_TO_EVERNESS.name
+            context.view_layer.objects.active = arm_obj
+            arm_obj.select_set(True)
+            if not self.game_type:
+                b_names = set(arm_obj.data.bones.keys())
+                if 'Bip001-Pelvis' in b_names or 'Bip001-Head' in b_names or 'Bip001-Spine' in b_names:
+                    self.game_type = GameType.NEVERNESS_TO_EVERNESS.name
+                elif 'Bip001Pelvis' in b_names or 'Bip001Head' in b_names or 'Bip001Neck' in b_names or 'Bip001LUpperArm' in b_names:
+                    self.game_type = GameType.WUTHERING_WAVES.name
+        
+        if not self.game_type:
+            if getattr(context.scene, "game_type_dropdown", None):
+                self.game_type = context.scene.game_type_dropdown
+            else:
+                self.game_type = GameType.GENSHIN_IMPACT.name
 
         is_full_setup = any(
             full_setup_name in (self.high_level_step_name or "").lower()
@@ -96,8 +119,12 @@ class GI_OT_CharacterRiggerOperator(Operator, ImportHelper, CustomOperatorProper
         rigging_enabled = is_advanced_setup or \
             (getattr(bpy.context.window_manager, "setup_wizard_full_run_rigging_enabled", True) and self.game_type in self.GAME_TYPES_FULL_SETUP_RIGGING_ENABLED)
 
-        expy_kit_installed = bpy.context.preferences.addons.get('Expy-Kit-main')
-        rigify_installed = bpy.context.preferences.addons.get('rigify')
+        rigify_installed = bool(bpy.context.preferences.addons.get('rigify'))
+        expy_kit_installed = bool(
+            bpy.context.preferences.addons.get('Expy-Kit-main') or
+            bpy.context.preferences.addons.get('expy_kit') or
+            bpy.context.preferences.addons.get('Expy-Kit')
+        )
 
         if not rigging_enabled:
             self.report(
@@ -106,15 +133,25 @@ class GI_OT_CharacterRiggerOperator(Operator, ImportHelper, CustomOperatorProper
             )
             self.invoke_next_step()
             return {'FINISHED'}
-        if not expy_kit_installed or not rigify_installed:
-            self.report(
-                {'WARNING'},
-                'Rigging skipped. ExpyKit and Rigify are required.\n'
-                f'ExpyKit: {"Installed" if expy_kit_installed else "Missing"}\n'
-                f'Rigify: {"Installed" if rigify_installed else "Missing"}'
-            )
-            self.invoke_next_step()
-            return {'FINISHED'}
+
+        if self.game_type in (GameType.WUTHERING_WAVES.name, GameType.NEVERNESS_TO_EVERNESS.name):
+            if not rigify_installed:
+                self.report(
+                    {'WARNING'},
+                    'Rigging skipped. Rigify add-on is required.'
+                )
+                self.invoke_next_step()
+                return {'FINISHED'}
+        else:
+            if not expy_kit_installed or not rigify_installed:
+                self.report(
+                    {'WARNING'},
+                    'Rigging skipped. ExpyKit and Rigify are required.\n'
+                    f'ExpyKit: {"Installed" if expy_kit_installed else "Missing"}\n'
+                    f'Rigify: {"Installed" if rigify_installed else "Missing"}'
+                )
+                self.invoke_next_step()
+                return {'FINISHED'}
 
         try:
             rigify_character_service = RigifyCharacterService(self.game_type, self, context)

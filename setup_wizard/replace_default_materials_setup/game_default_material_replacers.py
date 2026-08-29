@@ -64,6 +64,8 @@ class GameDefaultMaterialReplacerFactory:
             return ZenlessZoneZeroDefaultMaterialReplacer(blender_operator, context)
         elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
             return NevernessToEvernessDefaultMaterialReplacer(blender_operator, context)
+        elif game_type == GameType.WUTHERING_WAVES.name:
+            return WutheringWavesDefaultMaterialReplacer(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -923,6 +925,50 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         selected_shader = getattr(bpy.context.scene, 'zzz_shader_type', 'KYTHERA') if hasattr(bpy, 'context') and hasattr(bpy.context, 'scene') else 'KYTHERA'
         meshes = [mesh for mesh in bpy.context.scene.objects if mesh.type == 'MESH']
 
+        # Locate Materials folder to check JSON definitions
+        char_folder = self.blender_operator.file_directory if hasattr(self.blender_operator, "file_directory") and self.blender_operator.file_directory else ""
+        if not char_folder and hasattr(self.blender_operator, "filepath") and self.blender_operator.filepath:
+            char_folder = os.path.dirname(self.blender_operator.filepath)
+        if not char_folder:
+            char_folder = bpy.path.abspath("//")
+
+        materials_dirs = [
+            char_folder,
+            os.path.join(char_folder, "Materials"),
+            os.path.join(os.path.dirname(char_folder), "Materials") if char_folder else ""
+        ]
+        mat_dir = None
+        for d in materials_dirs:
+            if d and os.path.isdir(d) and any(f.lower().endswith(".json") for f in os.listdir(d)):
+                mat_dir = d
+                break
+
+        def is_untextured_material_json(name):
+            if not mat_dir or not name:
+                return False
+            import re, json
+            m_raw = re.sub(r'\.\d+$', '', name.strip())
+            clean_key = lambda k: re.sub(r'\.\d+$', '', k.lower().replace("mat_", "").replace("_ui", "")).strip(" _-")
+            target_clean = clean_key(m_raw)
+            for jf in os.listdir(mat_dir):
+                if not jf.lower().endswith(".json"):
+                    continue
+                j_stem = os.path.splitext(jf)[0]
+                if j_stem.lower() == m_raw.lower() or clean_key(j_stem) == target_clean:
+                    try:
+                        with open(os.path.join(mat_dir, jf), 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                        tex_envs = data.get("m_SavedProperties", {}).get("m_TexEnvs", {})
+                        for slot, val in tex_envs.items():
+                            if isinstance(val, dict):
+                                tex_info = val.get("m_Texture", {})
+                                if isinstance(tex_info, dict) and not tex_info.get("IsNull", True):
+                                    return False  # has at least one valid texture
+                        return True  # JSON exists and all textures are null
+                    except Exception:
+                        pass
+            return False
+
         if selected_shader == 'LEGACY':
             # --- LEGACY ZZZ SHADER REPLACEMENT ---
             for mesh in meshes:
@@ -932,6 +978,9 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 for slot in mesh.material_slots:
                     mat = slot.material
                     matname = mat.name.lower() if mat else mesh.name.lower()
+
+                    if mat and is_untextured_material_json(mat.name):
+                        continue
 
                     if mat and mat.name.startswith("ZZZ Shader"):
                         continue
@@ -995,30 +1044,44 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 
         else:
             # --- KYTHERA SHADER REPLACEMENT ---
-            # Find Kythera template materials
+            # Find Kythera face and main shader template materials dynamically
             face_template = None
             for mat in bpy.data.materials:
+                if not mat.node_tree:
+                    continue
                 m_low = mat.name.lower()
-                if "face" in m_low and ("kythera" in m_low or "zzz" in m_low):
+                if ("face" in m_low or "cara" in m_low or "head" in m_low) and \
+                   ("kythera" in m_low or "kyteraz" in m_low or "zzz" in m_low) and \
+                   not mat.name.startswith("ZZZ MAT_") and not mat.name.startswith("ZZZ Shader") and not mat.name.endswith("Outlines"):
                     face_template = mat
                     break
+
             if not face_template:
-                face_template = bpy.data.materials.get("Kythera's ZZZ Face Shader") \
-                    or bpy.data.materials.get("Kythera's ZZZ Face Shader V1.0") \
-                    or bpy.data.materials.get("F Kythera's ZZZ Face Shader")
+                for mat in bpy.data.materials:
+                    if not mat.node_tree or mat.name.startswith("ZZZ MAT_") or mat.name.endswith("Outlines"):
+                        continue
+                    if any(n.type == 'GROUP' and n.node_tree and "face" in n.node_tree.name.lower() and ("kythera" in n.node_tree.name.lower() or "kyteraz" in n.node_tree.name.lower() or "zzz" in n.node_tree.name.lower()) for n in mat.node_tree.nodes):
+                        face_template = mat
+                        break
 
             shader_template = None
             for mat in bpy.data.materials:
+                if not mat.node_tree:
+                    continue
                 m_low = mat.name.lower()
-                if "shader" in m_low and "face" not in m_low and ("kythera" in m_low or "zzz" in m_low):
+                if ("kythera" in m_low or "kyteraz" in m_low) and \
+                   ("face" not in m_low and "cara" not in m_low and "head" not in m_low) and \
+                   not mat.name.startswith("ZZZ MAT_") and not mat.name.startswith("ZZZ Shader") and not mat.name.endswith("Outlines"):
                     shader_template = mat
                     break
+
             if not shader_template:
-                shader_template = bpy.data.materials.get("Kythera's ZZZ Shader") \
-                    or bpy.data.materials.get("Kythera's ZZZ Shader V1.0") \
-                    or bpy.data.materials.get("Kythera's ZZZ Shader + T") \
-                    or bpy.data.materials.get("F Kythera's ZZZ Shader") \
-                    or bpy.data.materials.get("F Kythera's ZZZ Shader + T")
+                for mat in bpy.data.materials:
+                    if not mat.node_tree or mat.name.startswith("ZZZ MAT_") or mat.name.endswith("Outlines"):
+                        continue
+                    if any(n.type == 'GROUP' and n.node_tree and "face" not in n.node_tree.name.lower() and ("kythera" in n.node_tree.name.lower() or "kyteraz" in n.node_tree.name.lower() or "zzz" in n.node_tree.name.lower()) for n in mat.node_tree.nodes):
+                        shader_template = mat
+                        break
 
             for mesh in meshes:
                 if len(mesh.material_slots) == 0:
@@ -1027,6 +1090,17 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 for slot in mesh.material_slots:
                     mat = slot.material
                     matname = mat.name.lower() if mat else mesh.name.lower()
+
+                    # Handle hair shadow mesh / material
+                    if "hairshadow" in matname or "hairshadow" in mesh.name.lower():
+                        transp_mat = bpy.data.materials.get("Transp OL")
+                        if transp_mat:
+                            slot.material = transp_mat
+                        continue
+
+                    # If the JSON explicitly defines that this material has no textures, keep the base FBX material intact
+                    if mat and is_untextured_material_json(mat.name):
+                        continue
 
                     # If already replaced with a cloned Kythera ZZZ material, skip
                     if mat and (mat.name.startswith("ZZZ ") or mat.name.startswith("Kythera")):
@@ -1997,6 +2071,148 @@ def clean_face_mesh_slots():
                     obj.data.update()
                 except Exception:
                     pass
+
+
+class WutheringWavesDefaultMaterialReplacer(GameDefaultMaterialReplacer):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+
+    def replace_default_materials(self):
+        from setup_wizard.utils.wuwa_texture_utils import split_material_name, extract_character_name
+
+        meshes = [obj for obj in self.context.scene.objects if obj.type == 'MESH']
+
+        for mesh in meshes:
+            if "_seethru" in mesh.name.lower():
+                continue
+
+            char_name = extract_character_name(mesh.name)
+
+            for slot in mesh.material_slots:
+                if not slot.material:
+                    continue
+                orig_mat_name = slot.material.name
+                if orig_mat_name.startswith("WW - "):
+                    continue
+
+                base_part, version = split_material_name(orig_mat_name)
+                if not base_part:
+                    base_part = "Main"
+
+                # Determine template in Gustling Waters
+                template_name = "WW - Main"
+                mat_low = orig_mat_name.lower()
+
+                if "face" in mat_low or base_part.lower() == "face":
+                    template_name = "WW - Face"
+                    base_part = "Face"
+                elif ("eye" in mat_low or base_part.lower() in ["eye", "eyes"]) and not any(k in mat_low for k in ["eyebrow", "eyelash"]):
+                    template_name = "WW - Eye"
+                    base_part = "Eye"
+                elif "bang" in mat_low or base_part.lower() in ["bang", "bangs"]:
+                    template_name = "WW - Bangs" if bpy.data.materials.get("WW - Bangs") else "WW - Hair"
+                    base_part = "Bangs"
+                elif "hair" in mat_low or base_part.lower() in ["hair", "toufa"]:
+                    template_name = "WW - Hair"
+                    base_part = "Hair"
+                elif any(k in mat_low for k in ["star", "xingstar", "resonatorstar"]) or base_part.lower() == "resonatorstar":
+                    template_name = "WW - ResonatorStar"
+                    base_part = "ResonatorStar"
+                elif bpy.data.materials.get(f"WW - {base_part}"):
+                    template_name = f"WW - {base_part}"
+                else:
+                    template_name = "WW - Main"
+
+                unique_mat_name = f"WW - {base_part}{version} {char_name}"
+                target_mat = bpy.data.materials.get(unique_mat_name)
+                if not target_mat:
+                    tmpl = bpy.data.materials.get(template_name) or bpy.data.materials.get("WW - Main")
+                    if tmpl:
+                        target_mat = tmpl.copy()
+                        target_mat.name = unique_mat_name
+                        target_mat.use_fake_user = True
+                        if target_mat.use_nodes and target_mat.node_tree:
+                            for n in target_mat.node_tree.nodes:
+                                if n.type == 'TEX_IMAGE':
+                                    n.image = None
+                    else:
+                        target_mat = slot.material
+
+                if target_mat:
+                    target_mat["ww_original_name"] = orig_mat_name
+                    target_mat["ww_base_part"] = base_part
+                    slot.material = target_mat
+
+                    # If material name or original name contains / ends with 'Alpha', unmute Alpha Transparency node
+                    is_alpha = any(
+                        k in orig_mat_name.lower() or k in base_part.lower() or k in target_mat.name.lower()
+                        for k in ["alpha", "touming", "transparency"]
+                    )
+                    if is_alpha and target_mat.node_tree:
+                        for n in target_mat.node_tree.nodes:
+                            if (n.type == 'GROUP' and n.node_tree and "alpha transparency" in n.node_tree.name.lower()) or "alpha transparency" in n.name.lower():
+                                n.mute = False
+                        if hasattr(target_mat, "surface_render_method"):
+                            try:
+                                target_mat.surface_render_method = 'BLENDED'
+                            except Exception:
+                                pass
+                        if hasattr(target_mat, "blend_method"):
+                            try:
+                                target_mat.blend_method = 'BLEND'
+                            except Exception:
+                                pass
+                        if hasattr(target_mat, "shadow_method"):
+                            try:
+                                target_mat.shadow_method = 'HASHED'
+                            except Exception:
+                                pass
+
+            # Darken Eye vertex colors if mesh has eye polygons
+            self.darken_eye_colors(mesh)
+
+        try:
+            from setup_wizard.wuwa_operations import sync_wuwa_shader_properties
+            sync_wuwa_shader_properties(self.context.scene)
+        except Exception as e:
+            print(f"[WUWA] Notice syncing shader properties: {e}")
+
+        self.blender_operator.report({'INFO'}, 'Replaced default materials with Wuthering Waves (Gustling Waters) materials.')
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx, 
+            self.blender_operator.invoker_type, 
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=self.blender_operator.game_type,
+        )
+
+    def darken_eye_colors(self, mesh):
+        if not mesh.data or not hasattr(mesh.data, "polygons"):
+            return
+
+        # Find eye material slots
+        eye_slot_indices = set()
+        for idx, slot in enumerate(mesh.material_slots):
+            if slot.material and "eye" in slot.material.name.lower():
+                eye_slot_indices.add(idx)
+
+        if not eye_slot_indices:
+            return
+
+        color_layer = None
+        if hasattr(mesh.data, "color_attributes") and mesh.data.color_attributes:
+            color_layer = mesh.data.color_attributes.get("COL0") or mesh.data.color_attributes.active_color
+        elif hasattr(mesh.data, "vertex_colors") and mesh.data.vertex_colors:
+            color_layer = mesh.data.vertex_colors.get("COL0") or mesh.data.vertex_colors.active
+
+        if color_layer:
+            try:
+                for poly in mesh.data.polygons:
+                    if poly.material_index in eye_slot_indices:
+                        for loop_idx in poly.loop_indices:
+                            color_layer.data[loop_idx].color = (0.0, 0.0, 0.0, 1.0)
+            except Exception as ex:
+                print(f"Notice darkening eye vertex colors: {ex}")
 
 
 def clean_mesh_slots():

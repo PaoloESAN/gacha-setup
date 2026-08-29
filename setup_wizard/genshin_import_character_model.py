@@ -19,6 +19,8 @@ from setup_wizard.import_order import (
     CHARACTER_MODEL_FOLDER_FILE_PATH,
     NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH,
     NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH,
+    WUTHERING_WAVES_ROOT_FOLDER_FILE_PATH,
+    WUTHERING_WAVES_SHADER_FILE_PATH,
     NextStepInvoker,
     cache_using_cache_key,
     get_cache,
@@ -311,6 +313,136 @@ class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
         return {"FINISHED"}
 
 
+class WW_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
+    """Sets Up Character for Wuthering Waves"""
+
+    bl_idname = "wuthering_waves.set_up_character"
+    bl_label = "Select WuWa Character Folder, .uemodel, or .fbx"
+
+    filename_ext = "*.*"
+    filter_glob: StringProperty(
+        default="*.*",
+        options={'HIDDEN'},
+        maxlen=255,
+    )
+
+    def execute(self, context):
+        if not self.filepath:
+            return {"CANCELLED"}
+
+        folder = self.filepath if os.path.isdir(self.filepath) else os.path.dirname(self.filepath)
+        uemodel_path = find_largest_uemodel_file(self.filepath)
+
+        fbx_path = None
+        if not uemodel_path:
+            if not os.path.isdir(self.filepath) and self.filepath.lower().endswith(".fbx"):
+                fbx_path = self.filepath
+            elif os.path.isdir(self.filepath):
+                for root, _, files in os.walk(self.filepath):
+                    for f in files:
+                        if f.lower().endswith(".fbx"):
+                            fbx_path = os.path.join(root, f)
+                            break
+                    if fbx_path:
+                        break
+
+        from setup_wizard.import_order import (
+            WUTHERING_WAVES_ROOT_FOLDER_FILE_PATH,
+            WUTHERING_WAVES_SHADER_FILE_PATH,
+        )
+
+        set_active_character_directory(folder)
+        cache_using_cache_key(get_cache(True), CHARACTER_MODEL_FOLDER_FILE_PATH, folder)
+        cache_using_cache_key(get_cache(True), WUTHERING_WAVES_ROOT_FOLDER_FILE_PATH, folder)
+        cache_using_cache_key(get_cache(True), WUTHERING_WAVES_SHADER_FILE_PATH, folder)
+
+        existing_objects = set(context.scene.objects)
+
+        if uemodel_path and hasattr(bpy.ops, 'uf') and hasattr(bpy.ops.uf, 'import_uemodel'):
+            filename = os.path.basename(uemodel_path)
+            if hasattr(context.scene, 'uf_settings'):
+                try:
+                    context.scene.uf_settings.import_collision = False
+                    context.scene.uf_settings.import_morph_targets = True
+                    context.scene.uf_settings.import_sockets = True
+                    context.scene.uf_settings.import_virtual_bones = False
+                    context.scene.uf_settings.reorient_bones = True
+                    context.scene.uf_settings.bone_length = 4.0
+                except Exception as e_set:
+                    print(f"Notice setting uf_settings: {e_set}")
+
+            try:
+                bpy.ops.uf.import_uemodel(
+                    filepath=uemodel_path,
+                    directory=os.path.dirname(uemodel_path),
+                    files=[{"name": filename}]
+                )
+            except Exception:
+                try:
+                    bpy.ops.uf.import_uemodel(filepath=uemodel_path)
+                except Exception as e_uf:
+                    self.report({"ERROR"}, f"Error importing .uemodel: {e_uf}")
+                    return {"CANCELLED"}
+        elif fbx_path and os.path.isfile(fbx_path):
+            _execute_fbx_import(fbx_path)
+        else:
+            self.report({"ERROR"}, f"No valid .uemodel or .fbx found in {self.filepath}")
+            return {"CANCELLED"}
+
+        # Organize imported objects
+        new_objects = [obj for obj in context.scene.objects if obj not in existing_objects]
+        armatures = [o for o in new_objects if o.type == 'ARMATURE']
+        meshes = [o for o in new_objects if o.type == 'MESH']
+
+        from setup_wizard.character_rig_setup.wuwa_rig_script import (
+            extract_clean_character_name,
+            get_model_prefix,
+        )
+
+        char_name = None
+        if armatures:
+            arm = armatures[0]
+            prefix = get_model_prefix(arm.name)
+            if prefix:
+                arm["ww_model_prefix"] = prefix
+            char_name = extract_clean_character_name(arm.name)
+            arm.name = f"{char_name}_Skeleton"
+
+        if not char_name and meshes:
+            char_name = extract_clean_character_name(meshes[0].name)
+
+        char_name = char_name or "Character"
+
+        for m in meshes:
+            if not m.name.startswith(char_name):
+                m.name = f"{char_name}_{m.name}"
+
+        # Create character collection
+        char_col = bpy.data.collections.get(char_name)
+        if not char_col:
+            char_col = bpy.data.collections.new(char_name)
+            context.scene.collection.children.link(char_col)
+
+        for obj in new_objects:
+            if obj.name not in char_col.objects:
+                char_col.objects.link(obj)
+            for col in list(obj.users_collection):
+                if col != char_col:
+                    col.objects.unlink(obj)
+
+        self.report({"INFO"}, f"Imported Wuthering Waves character: {char_name}")
+        if self.next_step_idx:
+            NextStepInvoker().invoke(
+                self.next_step_idx,
+                self.invoker_type,
+                file_path_to_cache=folder,
+                high_level_step_name=self.high_level_step_name,
+                game_type=self.game_type or GameType.WUTHERING_WAVES.name,
+            )
+        super().clear_custom_properties()
+        return {"FINISHED"}
+
+
 class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties):
     """Select the folder with the desired model to import"""
 
@@ -372,7 +504,10 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
             self.import_character_model(
                 character_model_file_path_or_directory, is_character_model_file
             )
-            if self.game_type != GameType.NEVERNESS_TO_EVERNESS.name:
+            if self.game_type not in (
+                GameType.NEVERNESS_TO_EVERNESS.name,
+                GameType.WUTHERING_WAVES.name,
+            ):
                 self.reset_pose_location_and_rotation()
 
             if self.game_type in (
@@ -486,11 +621,145 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                 self.report({"ERROR"}, "UEFormat add-on is not enabled or available.")
                 raise RuntimeError("UEFormat add-on is not enabled or available.")
 
+        if self.game_type == GameType.WUTHERING_WAVES.name:
+            uemodel_path = find_largest_uemodel_file(character_model_file_path_or_directory)
+            fbx_path = None
+            if not uemodel_path:
+                if is_character_model_file and character_model_file_path_or_directory.lower().endswith(".fbx"):
+                    fbx_path = character_model_file_path_or_directory
+                else:
+                    fbx_path = self.__find_fbx_file(character_model_file_path_or_directory)
+
+            if not uemodel_path and not fbx_path:
+                self.report({"ERROR"}, f"No .uemodel or .fbx file found in: {character_model_file_path_or_directory}")
+                raise RuntimeError(f"No .uemodel or .fbx file found in: {character_model_file_path_or_directory}")
+
+            folder = os.path.dirname(uemodel_path or fbx_path)
+            set_active_character_directory(folder)
+            cache_using_cache_key(get_cache(True), CHARACTER_MODEL_FOLDER_FILE_PATH, folder)
+            cache_using_cache_key(get_cache(True), WUTHERING_WAVES_ROOT_FOLDER_FILE_PATH, folder)
+            cache_using_cache_key(get_cache(True), WUTHERING_WAVES_SHADER_FILE_PATH, folder)
+            try:
+                bpy.context.scene["setup_wizard_imported_model_dir"] = folder
+                if uemodel_path:
+                    bpy.context.scene["setup_wizard_imported_uemodel_path"] = uemodel_path
+                if fbx_path:
+                    bpy.context.scene["setup_wizard_imported_fbx_path"] = fbx_path
+            except Exception:
+                pass
+
+            existing_objects = set(bpy.context.scene.objects)
+
+            if uemodel_path:
+                if hasattr(bpy.context.scene, 'uf_settings'):
+                    try:
+                        bpy.context.scene.uf_settings.import_collision = False
+                        bpy.context.scene.uf_settings.import_morph_targets = True
+                        bpy.context.scene.uf_settings.import_sockets = True
+                        bpy.context.scene.uf_settings.import_virtual_bones = False
+                        bpy.context.scene.uf_settings.reorient_bones = True
+                        bpy.context.scene.uf_settings.bone_length = 4.0
+                    except Exception:
+                        pass
+
+                if hasattr(bpy.ops, 'uf') and hasattr(bpy.ops.uf, 'import_uemodel'):
+                    filename = os.path.basename(uemodel_path)
+                    imported_ok = False
+                    try:
+                        bpy.ops.uf.import_uemodel(
+                            filepath=uemodel_path,
+                            directory=folder,
+                            files=[{"name": filename}]
+                        )
+                        imported_ok = True
+                    except Exception:
+                        pass
+
+                    if not imported_ok:
+                        try:
+                            bpy.ops.uf.import_uemodel('EXEC_DEFAULT', filepath=uemodel_path, directory=folder, files=[{"name": filename}])
+                            imported_ok = True
+                        except Exception:
+                            pass
+
+                    if not imported_ok:
+                        try:
+                            bpy.ops.uf.import_uemodel(filepath=uemodel_path)
+                            imported_ok = True
+                        except Exception:
+                            pass
+
+                    if not imported_ok:
+                        try:
+                            bpy.ops.uf.import_uemodel('EXEC_DEFAULT', filepath=uemodel_path)
+                            imported_ok = True
+                        except Exception as e:
+                            self.report({"ERROR"}, f"UEFormat import error: {e}")
+                            raise RuntimeError(f"UEFormat import error: {e}")
+                else:
+                    self.report({"ERROR"}, "UEFormat add-on is not enabled or available.")
+                    raise RuntimeError("UEFormat add-on is not enabled or available.")
+            elif fbx_path:
+                _execute_fbx_import(fbx_path)
+
+            # Organize imported objects
+            new_objects = [obj for obj in bpy.context.scene.objects if obj not in existing_objects]
+            armatures = [o for o in new_objects if o.type == 'ARMATURE']
+            meshes = [o for o in new_objects if o.type == 'MESH']
+
+            from setup_wizard.character_rig_setup.wuwa_rig_script import (
+                extract_clean_character_name,
+                get_model_prefix,
+            )
+
+            char_name = None
+            if armatures:
+                arm = armatures[0]
+                prefix = get_model_prefix(arm.name)
+                if prefix:
+                    arm["ww_model_prefix"] = prefix
+                char_name = extract_clean_character_name(arm.name)
+                arm.name = f"{char_name}_Skeleton"
+
+            if not char_name and meshes:
+                char_name = extract_clean_character_name(meshes[0].name)
+
+            char_name = char_name or "Character"
+
+            for m in meshes:
+                if not m.name.startswith(char_name):
+                    m.name = f"{char_name}_{m.name}"
+
+            # Create character collection
+            char_col = bpy.data.collections.get(char_name)
+            if not char_col:
+                char_col = bpy.data.collections.new(char_name)
+                bpy.context.scene.collection.children.link(char_col)
+
+            for obj in new_objects:
+                if obj.name not in char_col.objects:
+                    char_col.objects.link(obj)
+                for col in list(obj.users_collection):
+                    if col != char_col:
+                        col.objects.unlink(obj)
+
+            self.report({"INFO"}, f"Imported Wuthering Waves character: {char_name}")
+            return
+
         character_model_file_path = (
             character_model_file_path_or_directory
             if is_character_model_file
             else self.__find_fbx_file(character_model_file_path_or_directory)
         )
+
+        if not character_model_file_path:
+            self.report(
+                {"ERROR"},
+                f"No FBX file found in: {character_model_file_path_or_directory}",
+            )
+            raise RuntimeError(
+                f"No FBX file found in: {character_model_file_path_or_directory}"
+            )
 
         # Persist the real FBX path for later steps (e.g. Finish Setup renaming)
         try:
@@ -928,5 +1197,6 @@ register, unregister = bpy.utils.register_classes_factory(
         HSR_OT_SetUpCharacter,
         ZZZ_OT_SetUpCharacter,
         NTE_OT_SetUpCharacter,
+        WW_OT_SetUpCharacter,
     ]
 )

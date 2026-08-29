@@ -141,7 +141,14 @@ def bone_to_layer_or_collection(armature_obj, bone_name, layer_idx, collection_n
             target_coll.assign(bone)
 
         other_coll = arm_data.collections.get("Other")
-        if collection_name != "Other" and other_coll:
+        if collection_name == "Other":
+            for c in list(bone.collections):
+                if c.name not in ["Other", "Others"]:
+                    try:
+                        c.unassign(bone)
+                    except Exception:
+                        pass
+        elif other_coll:
             try:
                 other_coll.unassign(bone)
             except Exception:
@@ -341,13 +348,14 @@ def distribute_standard_rig_bones(
         b2c("root", 28, "Root")
 
     # 20 & 21. Hair & Clothes & Breasts
-    fast_move(["breast.L", "breast.R", "DEF-breast.L", "DEF-breast.R"], 22, "Clothes")
+    fast_move(["breast.L", "breast.R"], 3, "Torso (IK)")
+    fast_move(["DEF-breast.L", "DEF-breast.R"], 25, "Other")
 
     clothes_keywords = [
         "ribbon", "sleeve", "strap", "skirt", "button", "belt", "cloth", "dress",
         "cape", "coat", "hem", "scarf", "tassel", "string", "chain", "acc",
         "qun", "xiu", "sce", "tail", "amice", "pants", "sock", "shoe",
-        "necklace", "earring", "pendant", "badge", "prop", "breast"
+        "necklace", "earring", "pendant", "badge", "prop"
     ]
     hair_keywords = [
         "hair", "eardrop", "headline", "ahoge", "bangs", "ponytail", "twintail", "bone00"
@@ -392,6 +400,12 @@ def distribute_standard_rig_bones(
     # 23. Ensure all deform, mechanism, base, and helper bones strictly remain in Other & hidden
     for b in arm_data.bones:
         b_name = b.name
+        # If the bone has already been explicitly placed in an active collection (e.g. Hair, Clothes, Props, Face), do not demote to Other
+        if is_version_4 and hasattr(b, "collections"):
+            assigned_colls = {c.name for c in b.collections if c.name != "Other"}
+            if assigned_colls:
+                continue
+
         if (
             b_name.startswith("DEF-")
             or b_name.startswith("MCH-")
@@ -772,12 +786,35 @@ def modify_and_run_rig_ui_script(
                 parts = complete_rig_text.split(divider)
                 complete_rig_text = parts[0] + divider + text + parts[1]
 
-    complete_rig_text = complete_rig_text.replace(
-        'bl_label = "Rig Layers"', 'bl_label = "Rig Layers: " + rig_name'
-    )
-    complete_rig_text = complete_rig_text.replace(
-        'bl_label = "Rig Main Properties"', 'bl_label = "Rig Properties: " + rig_name'
-    )
+    # Set Rig Layers header and order (order 1)
+    if 'bl_label = "Rig Layers"' in complete_rig_text:
+        complete_rig_text = complete_rig_text.replace(
+            'bl_label = "Rig Layers"',
+            'bl_label = "Rig Layers: " + rig_name\n    bl_order = 1'
+        )
+    elif 'bl_label = "Rig Layers: " + rig_name' in complete_rig_text and 'bl_order = 1' not in complete_rig_text:
+        complete_rig_text = complete_rig_text.replace(
+            'bl_label = "Rig Layers: " + rig_name',
+            'bl_label = "Rig Layers: " + rig_name\n    bl_order = 1'
+        )
+
+    # Set Rig Properties header, order (order 2), and collapse by default
+    prop_replacement = 'bl_label = "Rig Properties: " + rig_name\n    bl_order = 2\n    bl_options = {\'DEFAULT_CLOSED\'}'
+    if 'bl_label = "Rig Main Properties"' in complete_rig_text:
+        complete_rig_text = complete_rig_text.replace(
+            'bl_label = "Rig Main Properties"',
+            prop_replacement
+        )
+    elif 'bl_label = "Properties"' in complete_rig_text:
+        complete_rig_text = complete_rig_text.replace(
+            'bl_label = "Properties"',
+            prop_replacement
+        )
+    elif 'bl_label = "Rig Properties: " + rig_name' in complete_rig_text and 'DEFAULT_CLOSED' not in complete_rig_text:
+        complete_rig_text = complete_rig_text.replace(
+            'bl_label = "Rig Properties: " + rig_name',
+            prop_replacement
+        )
 
     # Blender 5.1+ compatibility fix: strip register_usetime_properties
     complete_rig_text = re.sub(
@@ -903,23 +940,43 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
         "+ForearmTwistSA01.R", "+ForearmTwistSA01.L", "+ThighTwistSA01.R", "+ThighTwistSA01.L"
     }
 
+    core_biped_org = {
+        "ORG-Pelvis", "ORG-Spine", "ORG-Spine1", "ORG-Spine2",
+        "ORG-neck", "ORG-head",
+        "ORG-shoulder.L", "ORG-shoulder.R",
+        "ORG-upper_arm.L", "ORG-upper_arm.R",
+        "ORG-forearm.L", "ORG-forearm.R",
+        "ORG-hand.L", "ORG-hand.R",
+        "ORG-thigh.L", "ORG-thigh.R",
+        "ORG-shin.L", "ORG-shin.R",
+        "ORG-foot.L", "ORG-foot.R",
+        "ORG-toe_ik.L", "ORG-toe_ik.R",
+        "ORG-Bip001LHeel0", "ORG-Bip001RHeel0",
+        "ORG-Root", "ORG-root", "ORG-Bip001",
+    }
+    for side in [".L", ".R"]:
+        for f in ["thumb", "f_index", "f_middle", "f_ring", "f_pinky"]:
+            for n in ["01", "02", "03"]:
+                core_biped_org.add(f"ORG-{f}.{n}{side}")
+                core_biped_org.add(f"ORG-{f}.{n}{side}.001")
+
     def is_physics_ignored(name):
-        if name in physics_ignore_list:
+        if name in physics_ignore_list or name in core_biped_org:
             return True
         low = name.lower()
         if any(k in low for k in [
             "eyebone", "eye", "tooth", "teeth", "tongue", "mouth", "jaw", "brow", "lip", "nose",
-            "cheek", "plate", "twist", "sa01", "sa02", "fa01", "skirtallf", "prop", "light"
+            "cheek", "plate", "twist", "sa01", "sa02", "fa01", "skirtallf", "prop", "light",
+            "finger", "thumb", "heel", "camera", "case", "chest", "breast"
         ]):
             return True
         if (
             name.startswith("DEF-")
-            or name.startswith("ORG-")
             or name.startswith("MCH-")
             or name.startswith("Bon_")
             or name.startswith("BON_")
             or name.startswith("Bone-")
-            or name.startswith("Bip")
+            or name.startswith("Bip001")
             or name.startswith("joint_")
             or name.startswith("skn_")
             or name.startswith("WGT")
@@ -1006,30 +1063,57 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
         if tail_to_tail_dist < 0.005:
             return False
 
-        # 3. Check contiguous connectivity (child head placed at parent tail)
-        if c_bone.use_connect:
+        # 3. Check direct parentage or contiguous connectivity
+        if c_bone.parent == p_bone or c_bone.use_connect:
             return True
 
         gap = (c_bone.head_local - p_bone.tail_local).length
-        # In a contiguous chain/strand, child head is placed directly at parent tail.
-        # Separated hub/root bones have a large spatial gap to strand heads.
-        allowed_gap = max(0.02, 0.15 * p_bone.length)
+        allowed_gap = max(0.10, 1.5 * p_bone.length)
         return gap <= allowed_gap
+
+    def common_prefix_len(s1, s2):
+        count = 0
+        for a, b in zip(s1, s2):
+            if a == b:
+                count += 1
+            else:
+                break
+        return count
 
     def pick_best_child(parent_name, children_list):
         if not children_list:
             return None
         if len(children_list) == 1:
             return children_list[0]
-        def common_prefix_len(s1, s2):
-            count = 0
-            for a, b in zip(s1, s2):
-                if a == b:
-                    count += 1
-                else:
-                    break
-            return count
         return max(children_list, key=lambda c: common_prefix_len(parent_name, c.name))
+
+    # Align edit bone tails to point directly to child bones so Damped Track does not distort rest pose
+    try:
+        context.view_layer.objects.active = armature_obj
+        bpy.ops.object.mode_set(mode="EDIT")
+        edit_bones = armature_obj.data.edit_bones
+        for b_name in (hair_bone_names | clothes_bone_names):
+            eb = edit_bones.get(b_name)
+            if not eb:
+                continue
+            chain_children = [c for c in eb.children if c.name in (hair_bone_names | clothes_bone_names)]
+            if chain_children:
+                best_c = pick_best_child(eb.name, chain_children)
+                vec = best_c.head - eb.head
+                if vec.length > 0.001:
+                    eb.tail = best_c.head
+            elif eb.parent and eb.parent.name in (hair_bone_names | clothes_bone_names):
+                parent_eb = eb.parent
+                dir_vec = (eb.head - parent_eb.head).normalized()
+                if dir_vec.length > 0.5:
+                    eb.tail = eb.head + dir_vec * max(0.02, min(eb.length, 0.05))
+    except Exception as e_align:
+        print(f"[PHYSICS] Notice aligning bone tails: {e_align}")
+    finally:
+        try:
+            bpy.ops.object.mode_set(mode="POSE")
+        except Exception:
+            pass
 
     applied_count = 0
 

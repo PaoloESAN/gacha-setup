@@ -12,6 +12,7 @@ from setup_wizard.character_rig_setup.npc_rig_script import rig_character as rig
 from setup_wizard.character_rig_setup.hsr_rig_script import rig_character as hsr_rig_character
 from setup_wizard.character_rig_setup.zzz_rig_script import rig_character as zzz_rig_character
 from setup_wizard.character_rig_setup.nte_rig_script import rig_character as nte_rig_character
+from setup_wizard.character_rig_setup.wuwa_rig_script import rig_wuthering_waves_character
 from setup_wizard.character_rig_setup.zzz_face_rig import zzz_face_rig_main
 
 
@@ -52,6 +53,8 @@ class CharacterRiggerFactory:
             return ZenlessZoneZeroCharacterRigger(blender_operator, context)
         elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
             return NevernessToEvernessCharacterRigger(blender_operator, context)
+        elif game_type == GameType.WUTHERING_WAVES.name:
+            return WutheringWavesCharacterRigger(blender_operator, context)
         else:
             raise Exception(f'Unexpected input GameType "{game_type}" for CharacterRiggerFactory')
 
@@ -510,7 +513,10 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
                                    obj.type == 'MESH' for modifier in obj.modifiers if 
                                    'Light Vectors' in modifier.name]
 
-        if character_rigger_props.set_up_lighting_panel:
+        selected_shader = getattr(self.context.scene, 'zzz_shader_type', 'KYTHERA')
+        use_lighting_panel = character_rigger_props.set_up_lighting_panel and (selected_shader != 'KYTHERA')
+
+        if use_lighting_panel:
             for modifier in light_vectors_modifiers:
                 lp_filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'LightingPanel.blend')
                 LightingPanel(lp_filepath).set_up_lighting_panel(modifier)
@@ -531,7 +537,7 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
         try:
             zzz_rig_character(
                 filepath,
-                4 if character_rigger_props.set_up_lighting_panel else 0, # lighting_panel_version
+                4 if use_lighting_panel else 0, # lighting_panel_version
                 not character_rigger_props.allow_arm_ik_stretch,
                 not character_rigger_props.allow_leg_ik_stretch,
                 character_rigger_props.use_arm_ik_poles,
@@ -646,6 +652,29 @@ class NevernessToEvernessCharacterRigger(CharacterRigger):
             cache_using_cache_key(get_cache(cache_enabled), GENSHIN_RIGIFY_BONE_SHAPES_FILE_PATH, filepath)
 
         self.blender_operator.report({'INFO'}, 'Successfully rigged NTE character')
+
+
+class WutheringWavesCharacterRigger(CharacterRigger):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+
+    def rig_character(self):
+        try:
+            success = rig_wuthering_waves_character(self.context)
+            if success:
+                character_rigger_props = self.context.scene.character_rigger_props
+                if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):
+                    from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
+                    armature = self.context.active_object
+                    if armature:
+                        apply_hair_and_clothes_physics(armature, self.context)
+                self.blender_operator.report({'INFO'}, 'Successfully rigged Wuthering Waves character!')
+            else:
+                self.blender_operator.report({'WARNING'}, 'Rigify generation for Wuthering Waves completed with warnings.')
+        except Exception as ex:
+            self.blender_operator.report({'ERROR'}, f"Failed to rig Wuthering Waves character: {ex}")
+            raise ex
 
 
 

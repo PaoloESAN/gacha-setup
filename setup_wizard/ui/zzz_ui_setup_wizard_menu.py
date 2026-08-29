@@ -284,13 +284,14 @@ class ZZZ_PT_UI_Finish_Setup_Menu(Panel, ZenlessZoneZeroUIRenderChecker):
             "OUTLINER_COLLECTION",
             game_type=GameType.ZENLESS_ZONE_ZERO.name,
         )
-        OperatorFactory.create(
-            sub_layout,
-            "zenless_zone_zero.move_lighting_panel_to_char_collection",
-            "Move Lighting Panel to Collection",
-            "LIGHT",
-            game_type=GameType.ZENLESS_ZONE_ZERO.name,
-        )
+        if getattr(context.scene, "zzz_shader_type", "KYTHERA") == "LEGACY":
+            OperatorFactory.create(
+                sub_layout,
+                "zenless_zone_zero.move_lighting_panel_to_char_collection",
+                "Move Lighting Panel to Collection",
+                "LIGHT",
+                game_type=GameType.ZENLESS_ZONE_ZERO.name,
+            )
 
 
 class ZZZ_PT_UI_Character_Rig_Setup_Menu(Panel, ZenlessZoneZeroUIRenderChecker):
@@ -362,3 +363,463 @@ class OperatorFactory:
                 column.label(text="ExpyKit required", icon="ERROR")
             if not rigify_installed:
                 column.label(text="Rigify required", icon="ERROR")
+
+
+ZZZ_LIGHT_PRESETS = {
+    "0": { # Default
+        "ambient": (1.0, 1.0, 1.0),
+        "lit_tint": (1.0, 1.0, 1.0),
+        "lit_brightness": 0.0,
+        "shadow_tint": (1.0, 1.0, 1.0),
+        "shadow_intensity": 1.0,
+        "fake_sss_intensity": 1.0,
+        "enable_rim": True,
+        "rim_color": (1.0, 1.0, 1.0),
+        "coverage": 1.0,
+        "brightness": 1.0,
+        "left_right": 0.5,
+        "up_down": 0.1,
+    },
+    "1": { # Sunrise
+        "ambient": (0.95, 0.85, 0.8),
+        "lit_tint": (1.0, 0.88, 0.75),
+        "lit_brightness": 0.1,
+        "shadow_tint": (0.65, 0.65, 0.85),
+        "shadow_intensity": 1.0,
+        "fake_sss_intensity": 1.0,
+        "enable_rim": True,
+        "rim_color": (1.0, 0.85, 0.6),
+        "coverage": 1.0,
+        "brightness": 1.0,
+        "left_right": 0.6,
+        "up_down": 0.05,
+    },
+    "2": { # Day
+        "ambient": (1.0, 1.0, 1.0),
+        "lit_tint": (1.0, 1.0, 1.0),
+        "lit_brightness": 0.2,
+        "shadow_tint": (1.0, 1.0, 1.0),
+        "shadow_intensity": 1.0,
+        "fake_sss_intensity": 1.0,
+        "enable_rim": True,
+        "rim_color": (1.0, 1.0, 1.0),
+        "coverage": 1.0,
+        "brightness": 1.0,
+        "left_right": 0.5,
+        "up_down": 0.3,
+    },
+    "3": { # Sunset
+        "ambient": (0.9, 0.75, 0.7),
+        "lit_tint": (1.0, 0.65, 0.45),
+        "lit_brightness": 0.1,
+        "shadow_tint": (0.5, 0.45, 0.7),
+        "shadow_intensity": 1.0,
+        "fake_sss_intensity": 1.0,
+        "enable_rim": True,
+        "rim_color": (1.0, 0.6, 0.3),
+        "coverage": 1.0,
+        "brightness": 1.0,
+        "left_right": 0.7,
+        "up_down": 0.0,
+    },
+    "4": { # Night
+        "ambient": (0.4, 0.45, 0.6),
+        "lit_tint": (0.6, 0.7, 0.9),
+        "lit_brightness": 0.0,
+        "shadow_tint": (0.25, 0.3, 0.5),
+        "shadow_intensity": 1.0,
+        "fake_sss_intensity": 0.5,
+        "enable_rim": True,
+        "rim_color": (0.5, 0.7, 1.0),
+        "coverage": 0.9,
+        "brightness": 0.8,
+        "left_right": 0.4,
+        "up_down": 0.1,
+    },
+    "5": { # Rainy
+        "ambient": (0.6, 0.65, 0.7),
+        "lit_tint": (0.75, 0.8, 0.85),
+        "lit_brightness": 0.0,
+        "shadow_tint": (0.45, 0.5, 0.6),
+        "shadow_intensity": 0.8,
+        "fake_sss_intensity": 0.5,
+        "enable_rim": True,
+        "rim_color": (0.7, 0.8, 0.9),
+        "coverage": 0.8,
+        "brightness": 0.7,
+        "left_right": 0.5,
+        "up_down": 0.4,
+    },
+}
+
+_is_updating_zzz_props = False
+
+def update_zzz_light_mode(self, context=None):
+    global _is_updating_zzz_props
+    if _is_updating_zzz_props:
+        return
+    mode = getattr(self, "zzz_light_mode", "0")
+    if mode in ZZZ_LIGHT_PRESETS:
+        preset = ZZZ_LIGHT_PRESETS[mode]
+        _is_updating_zzz_props = True
+        try:
+            self.zzz_ambient_tint = preset["ambient"]
+            self.zzz_lit_tint = preset["lit_tint"]
+            self.zzz_lit_brightness = preset["lit_brightness"]
+            self.zzz_shadow_tint = preset["shadow_tint"]
+            self.zzz_shadow_intensity = preset.get("shadow_intensity", 1.0)
+            self.zzz_fake_sss_intensity = preset.get("fake_sss_intensity", 1.0)
+            self.zzz_enable_rim_light = preset["enable_rim"]
+            self.zzz_rim_light_color = preset["rim_color"]
+            self.zzz_rim_coverage = preset["coverage"]
+            self.zzz_rim_brightness = preset["brightness"]
+            self.zzz_rim_left_right = preset["left_right"]
+            self.zzz_rim_up_down = preset["up_down"]
+        finally:
+            _is_updating_zzz_props = False
+    update_zzz_kythera_props(self, context)
+
+
+def update_zzz_kythera_props(self, context=None):
+    global _is_updating_zzz_props
+    if _is_updating_zzz_props:
+        return
+    scene = bpy.context.scene if context is None else getattr(context, "scene", bpy.context.scene)
+    if not scene:
+        return
+
+    _is_updating_zzz_props = True
+    try:
+        # Snap float sliders to 1 decimal place (steps of 0.1) and clamp near-zero
+        raw_lb = getattr(scene, "zzz_lit_brightness", 0.0)
+        raw_si = getattr(scene, "zzz_shadow_intensity", 1.0)
+        raw_sss = getattr(scene, "zzz_fake_sss_intensity", 1.0)
+        raw_rc = getattr(scene, "zzz_rim_coverage", 1.0)
+        raw_rb = getattr(scene, "zzz_rim_brightness", 1.0)
+        raw_lr = getattr(scene, "zzz_rim_left_right", 0.5)
+        raw_ud = getattr(scene, "zzz_rim_up_down", 0.1)
+
+        lit_brightness = 0.0 if raw_lb < 0.05 else round(raw_lb, 1)
+        shadow_intensity = 0.0 if raw_si < 0.05 else round(raw_si, 1)
+        fake_sss_intensity = 0.0 if raw_sss < 0.05 else round(raw_sss, 1)
+        rim_coverage = 0.0 if raw_rc < 0.05 else round(raw_rc, 1)
+        rim_brightness = 0.0 if raw_rb < 0.05 else round(raw_rb, 1)
+        rim_left_right = 0.0 if raw_lr < 0.05 else round(raw_lr, 1)
+        rim_up_down = 0.0 if raw_ud < 0.05 else round(raw_ud, 1)
+
+        if scene.zzz_lit_brightness != lit_brightness:
+            scene.zzz_lit_brightness = lit_brightness
+        if scene.zzz_shadow_intensity != shadow_intensity:
+            scene.zzz_shadow_intensity = shadow_intensity
+        if scene.zzz_fake_sss_intensity != fake_sss_intensity:
+            scene.zzz_fake_sss_intensity = fake_sss_intensity
+        if scene.zzz_rim_coverage != rim_coverage:
+            scene.zzz_rim_coverage = rim_coverage
+        if scene.zzz_rim_brightness != rim_brightness:
+            scene.zzz_rim_brightness = rim_brightness
+        if scene.zzz_rim_left_right != rim_left_right:
+            scene.zzz_rim_left_right = rim_left_right
+        if scene.zzz_rim_up_down != rim_up_down:
+            scene.zzz_rim_up_down = rim_up_down
+    finally:
+        _is_updating_zzz_props = False
+
+    ambient_tint = list(getattr(scene, "zzz_ambient_tint", (1.0, 1.0, 1.0)))
+    if len(ambient_tint) == 3: ambient_tint.append(1.0)
+    
+    lit_tint = list(getattr(scene, "zzz_lit_tint", (1.0, 1.0, 1.0)))
+    if len(lit_tint) == 3: lit_tint.append(1.0)
+    
+    shadow_tint = list(getattr(scene, "zzz_shadow_tint", (1.0, 1.0, 1.0)))
+    if len(shadow_tint) == 3: shadow_tint.append(1.0)
+    
+    enable_rim = getattr(scene, "zzz_enable_rim_light", True)
+    
+    rim_color = list(getattr(scene, "zzz_rim_light_color", (1.0, 1.0, 1.0)))
+    if len(rim_color) == 3: rim_color.append(1.0)
+
+    prop_map = {
+        "Ambient Tint": ambient_tint,
+        "Lit Tint": lit_tint,
+        "Lit Brightness": lit_brightness,
+        "Shadow Tint": shadow_tint,
+        "Shadow Intensity": shadow_intensity,
+        "Fake SSS Intensity": fake_sss_intensity,
+        "Enable Rim Light": enable_rim,
+        "Rim Light Color": rim_color,
+        "Coverage": rim_coverage,
+        "Brightness": rim_brightness,
+        "Left/Right": rim_left_right,
+        "Up/Down": rim_up_down,
+    }
+
+    # 1. Update in node groups definitions
+    for ng in bpy.data.node_groups:
+        ng_low = ng.name.lower()
+        if "kythera" in ng_low or "rim light" in ng_low or "lit/shadow" in ng_low or "face shader" in ng_low:
+            if hasattr(ng, "interface"):
+                for item in ng.interface.items_tree:
+                    if item.item_type == 'SOCKET' and item.in_out == 'INPUT' and item.name in prop_map:
+                        try:
+                            item.default_value = prop_map[item.name]
+                        except Exception:
+                            pass
+            elif hasattr(ng, "inputs"):
+                for inp in ng.inputs:
+                    if inp.name in prop_map:
+                        try:
+                            inp.default_value = prop_map[inp.name]
+                        except Exception:
+                            pass
+
+    # 2. Update in all material nodes
+    for m in bpy.data.materials:
+        if m.node_tree:
+            for node in m.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree:
+                    nt_low = node.node_tree.name.lower()
+                    if "kythera" in nt_low or "rim light" in nt_low or "lit/shadow" in nt_low or "face shader" in nt_low:
+                        for inp_name, val in prop_map.items():
+                            if inp_name in node.inputs:
+                                try:
+                                    node.inputs[inp_name].default_value = val
+                                except Exception:
+                                    pass
+
+
+class ZZZ_PT_Rig_Character_Settings(Panel):
+    bl_label = "Character Settings"
+    bl_idname = "ZZZ_PT_Rig_Character_Settings"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Item"
+    bl_order = 0
+
+    @classmethod
+    def poll(cls, context):
+        # Only show when using Kythera's shader
+        if getattr(context.scene, "zzz_shader_type", "KYTHERA") != "KYTHERA":
+            return False
+
+        obj = context.active_object or context.object
+        if not obj:
+            return False
+
+        is_rig = (obj.type == 'ARMATURE') or (obj.type == 'MESH' and obj.parent and obj.parent.type == 'ARMATURE')
+        if not is_rig:
+            is_zzz_mesh = obj.type == 'MESH' and any(s.material and ("zzz" in s.material.name.lower() or "kythera" in s.material.name.lower()) for s in obj.material_slots)
+            if not is_zzz_mesh:
+                return False
+
+        if getattr(context.scene, "game_type_dropdown", None) == GameType.ZENLESS_ZONE_ZERO.name:
+            return True
+
+        if any(m.name.startswith("ZZZ ") or "kythera" in m.name.lower() for m in bpy.data.materials):
+            return True
+
+        return False
+
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+
+        # 1. Lighting Mode / Presets
+        col_light = layout.column(align=True)
+        col_light.label(text="Lighting Mode:")
+        col_light.prop(scene, "zzz_light_mode", text="")
+
+        # Only show Shading & Tints and Rim Light when in Custom mode ("6")
+        if getattr(scene, "zzz_light_mode", "0") == "6":
+            # 2. Shading & Tints
+            box_shading = layout.box()
+            box_shading.label(text="Shading & Tints", icon="COLOR")
+            col_shading = box_shading.column(align=True)
+            col_shading.prop(scene, "zzz_ambient_tint", text="Ambient")
+            col_shading.prop(scene, "zzz_lit_tint", text="Lit Tint")
+            col_shading.prop(scene, "zzz_lit_brightness", text="Lit Brightness", slider=True)
+            col_shading.prop(scene, "zzz_shadow_tint", text="Shadow Tint")
+            col_shading.prop(scene, "zzz_shadow_intensity", text="Shadow Intensity", slider=True)
+            col_shading.prop(scene, "zzz_fake_sss_intensity", text="Fake SSS Intensity", slider=True)
+
+            # 3. Rim Light Settings
+            box_rim = layout.box()
+            box_rim.label(text="Rim Light", icon="LIGHT_SUN")
+            box_rim.prop(scene, "zzz_enable_rim_light", text="Enable Rim Light")
+
+            col_rim = box_rim.column(align=True)
+            col_rim.active = scene.zzz_enable_rim_light
+            col_rim.prop(scene, "zzz_rim_light_color", text="Color")
+            col_rim.prop(scene, "zzz_rim_coverage", text="Coverage", slider=True)
+            col_rim.prop(scene, "zzz_rim_brightness", text="Brightness", slider=True)
+            col_rim.prop(scene, "zzz_rim_left_right", text="Left / Right", slider=True)
+            col_rim.prop(scene, "zzz_rim_up_down", text="Up / Down", slider=True)
+
+
+def register_zzz_properties():
+    from bpy.props import EnumProperty, FloatProperty, FloatVectorProperty, BoolProperty
+
+    bpy.types.Scene.zzz_light_mode = EnumProperty(
+        name="Light Mode",
+        description="Lighting preset mode for Kythera ZZZ shader",
+        items=[
+            ("0", "Default", "Default Game Lighting"),
+            ("1", "Sunrise", "Sunrise Tone"),
+            ("2", "Day", "Bright Daylight"),
+            ("3", "Sunset", "Warm Sunset"),
+            ("4", "Night", "Cool Night"),
+            ("5", "Rainy", "Overcast / Rainy"),
+            ("6", "Custom", "Custom User Colors"),
+        ],
+        default="0",
+        update=update_zzz_light_mode,
+    )
+
+    bpy.types.Scene.zzz_ambient_tint = FloatVectorProperty(
+        name="Ambient Tint",
+        description="Ambient color tint for Kythera ZZZ shader",
+        subtype='COLOR',
+        size=3,
+        min=0.0,
+        max=1.0,
+        default=(1.0, 1.0, 1.0),
+        update=update_zzz_kythera_props,
+    )
+
+    bpy.types.Scene.zzz_lit_tint = FloatVectorProperty(
+        name="Lit Tint",
+        description="Lit color tint for Kythera ZZZ shader",
+        subtype='COLOR',
+        size=3,
+        min=0.0,
+        max=1.0,
+        default=(1.0, 1.0, 1.0),
+        update=update_zzz_kythera_props,
+    )
+
+    bpy.types.Scene.zzz_lit_brightness = FloatProperty(
+        name="Lit Brightness",
+        description="Lit brightness offset for Kythera ZZZ shader",
+        min=0.0,
+        max=1.0,
+        default=0.0,
+        step=10,
+        precision=1,
+        update=update_zzz_kythera_props,
+    )
+
+    bpy.types.Scene.zzz_shadow_tint = FloatVectorProperty(
+        name="Shadow Tint",
+        description="Shadow color tint for Kythera ZZZ shader",
+        subtype='COLOR',
+        size=3,
+        min=0.0,
+        max=1.0,
+        default=(1.0, 1.0, 1.0),
+        update=update_zzz_kythera_props,
+    )
+
+    bpy.types.Scene.zzz_shadow_intensity = FloatProperty(
+        name="Shadow Intensity",
+        description="Shadow intensity for Kythera ZZZ shader",
+        min=0.0,
+        max=1.0,
+        default=1.0,
+        step=10,
+        precision=1,
+        update=update_zzz_kythera_props,
+    )
+
+    bpy.types.Scene.zzz_fake_sss_intensity = FloatProperty(
+        name="Fake SSS Intensity",
+        description="Fake SSS intensity for Kythera ZZZ shader",
+        min=0.0,
+        max=1.0,
+        default=1.0,
+        step=10,
+        precision=1,
+        update=update_zzz_kythera_props,
+    )
+
+    bpy.types.Scene.zzz_enable_rim_light = BoolProperty(
+        name="Enable Rim Light",
+        description="Enable or disable rim light on Kythera ZZZ shader",
+        default=True,
+        update=update_zzz_kythera_props,
+    )
+
+    bpy.types.Scene.zzz_rim_light_color = FloatVectorProperty(
+        name="Rim Light Color",
+        description="Rim light color tint for Kythera ZZZ shader",
+        subtype='COLOR',
+        size=3,
+        min=0.0,
+        max=1.0,
+        default=(1.0, 1.0, 1.0),
+        update=update_zzz_kythera_props,
+    )
+
+    bpy.types.Scene.zzz_rim_coverage = FloatProperty(
+        name="Coverage",
+        description="Rim light coverage for Kythera ZZZ shader",
+        min=0.0,
+        max=1.0,
+        default=1.0,
+        step=10,
+        precision=1,
+        update=update_zzz_kythera_props,
+    )
+
+    bpy.types.Scene.zzz_rim_brightness = FloatProperty(
+        name="Brightness",
+        description="Rim light brightness for Kythera ZZZ shader",
+        min=0.0,
+        max=1.0,
+        default=1.0,
+        step=10,
+        precision=1,
+        update=update_zzz_kythera_props,
+    )
+
+    bpy.types.Scene.zzz_rim_left_right = FloatProperty(
+        name="Left / Right",
+        description="Rim light horizontal direction offset",
+        min=0.0,
+        max=1.0,
+        default=0.5,
+        step=10,
+        precision=1,
+        update=update_zzz_kythera_props,
+    )
+
+    bpy.types.Scene.zzz_rim_up_down = FloatProperty(
+        name="Up / Down",
+        description="Rim light vertical direction offset",
+        min=0.0,
+        max=1.0,
+        default=0.1,
+        step=10,
+        precision=1,
+        update=update_zzz_kythera_props,
+    )
+
+
+def unregister_zzz_properties():
+    props = [
+        "zzz_light_mode",
+        "zzz_ambient_tint",
+        "zzz_lit_tint",
+        "zzz_lit_brightness",
+        "zzz_shadow_tint",
+        "zzz_shadow_intensity",
+        "zzz_fake_sss_intensity",
+        "zzz_enable_rim_light",
+        "zzz_rim_light_color",
+        "zzz_rim_coverage",
+        "zzz_rim_brightness",
+        "zzz_rim_left_right",
+        "zzz_rim_up_down",
+    ]
+    for p in props:
+        if hasattr(bpy.types.Scene, p):
+            delattr(bpy.types.Scene, p)
+

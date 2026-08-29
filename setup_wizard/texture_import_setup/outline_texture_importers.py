@@ -262,6 +262,8 @@ class OutlineTextureImporterFactory:
             return ZenlessZoneZeroOutlineTextureImporter(blender_operator, context, shader_node_names)
         elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
             return NevernessToEvernessOutlineTextureImporter(blender_operator, context, shader_node_names)
+        elif game_type == GameType.WUTHERING_WAVES.name:
+            return WutheringWavesOutlineTextureImporter(blender_operator, context, shader_node_names)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -498,6 +500,14 @@ class ZenlessZoneZeroOutlineTextureImporter(OutlineTextureImporter):
 
 
 class NevernessToEvernessOutlineTextureImporter(OutlineTextureImporter):
+    def __init__(self, blender_operator, context, shader_node_names: ShaderNodeNames):
+        super().__init__(blender_operator, context, None, shader_node_names)
+
+    def import_textures(self):
+        return
+
+
+class WutheringWavesOutlineTextureImporter(OutlineTextureImporter):
     def __init__(self, blender_operator, context, shader_node_names: ShaderNodeNames):
         super().__init__(blender_operator, context, None, shader_node_names)
 

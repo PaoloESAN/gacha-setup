@@ -39,6 +39,12 @@ class NTE_OT_SetUpMaterials(Operator, BasicSetupUIOperator):
     bl_label = 'Neverness to Everness: Set Up Materials (UI)'
 
 
+class WW_OT_SetUpMaterials(Operator, BasicSetupUIOperator):
+    '''Sets Up Materials'''
+    bl_idname = 'wuthering_waves.set_up_materials'
+    bl_label = 'Wuthering Waves: Set Up Materials (UI)'
+
+
 def build_anisotropic_hair_spec_group():
     GROUP_NAME = "KK_Anisotropic_HairSpec"
     group = bpy.data.node_groups.get(GROUP_NAME)
@@ -609,6 +615,7 @@ register, unregister = bpy.utils.register_classes_factory([
     ZZZ_OT_SetUpMaterials,
     NTE_OT_SetUpMaterials,
     NTE_OT_SetUpHairSpecular,
+    WW_OT_SetUpMaterials,
 ])
 
 

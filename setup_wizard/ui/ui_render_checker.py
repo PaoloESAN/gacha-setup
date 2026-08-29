@@ -26,3 +26,7 @@ class ZenlessZoneZeroUIRenderChecker(UIRenderChecker):
 class NevernessToEvernessUIRenderChecker(UIRenderChecker):
     GAME_TYPE = GameType.NEVERNESS_TO_EVERNESS.name
 
+
+class WutheringWavesUIRenderChecker(UIRenderChecker):
+    GAME_TYPE = GameType.WUTHERING_WAVES.name
+

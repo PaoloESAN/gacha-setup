@@ -427,7 +427,169 @@ def move_lighting_and_head_driver_to_lights(main_obj=None):
                     pass
 
 
+class WW_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
+    """Sets up Head Driver for Wuthering Waves (following GI/ZZZ pattern)"""
+
+    bl_idname = "wuthering_waves.setup_head_driver"
+    bl_label = "Wuthering Waves: Setup Head Driver"
+
+    def execute(self, context):
+        armatures = [obj for obj in context.selected_objects if obj.type == "ARMATURE"]
+        if not armatures:
+            armatures = [obj for obj in context.scene.objects if obj.type == "ARMATURE"]
+
+        if not armatures:
+            self.report({"INFO"}, "No armature found to attach Head Driver.")
+            NextStepInvoker().invoke(
+                self.next_step_idx,
+                self.invoker_type,
+                high_level_step_name=self.high_level_step_name,
+                game_type=self.game_type,
+            )
+            return {"FINISHED"}
+
+        rigify_armatures = [a for a in armatures if a.name.startswith("RIG-") or "rig" in a.name.lower()]
+        armature = rigify_armatures[0] if rigify_armatures else armatures[0]
+
+        # 1. Ensure Highlight Top / Bottom are children of Eye Highlight, not Head Origin
+        eye_highlight = bpy.data.objects.get("Eye Highlight")
+        if eye_highlight:
+            for hl_name in ["Highlight Top", "Highlight Bottom"]:
+                hl_obj = bpy.data.objects.get(hl_name)
+                if hl_obj and hl_obj.parent != eye_highlight:
+                    orig_mat = hl_obj.matrix_world.copy()
+                    hl_obj.parent = eye_highlight
+                    hl_obj.matrix_parent_inverse = eye_highlight.matrix_world.inverted()
+                    hl_obj.matrix_world = orig_mat
+
+        # 2. Setup Head Origin
+        head_origin = bpy.data.objects.get("Head Origin") or bpy.data.objects.get("Head Driver") or bpy.data.objects.get("Head Controller")
+        if head_origin:
+            child_of_con = None
+            for con in head_origin.constraints:
+                if con.type == "CHILD_OF":
+                    child_of_con = con
+                    break
+            if not child_of_con:
+                child_of_con = head_origin.constraints.new("CHILD_OF")
+                child_of_con.name = "Child Of"
+
+            head_bones = ["head", "Bip001Head", "ORG-head", "DEF-head", "c_head.x", "Head"]
+            matched_bone = None
+            for b in head_bones:
+                if b in armature.data.bones:
+                    matched_bone = b
+                    break
+            if not matched_bone:
+                for b_name in armature.data.bones.keys():
+                    if "head" in b_name.lower():
+                        matched_bone = b_name
+                        break
+
+            if matched_bone:
+                saved_matrix = head_origin.matrix_world.copy()
+                child_of_con.target = armature
+                child_of_con.subtarget = matched_bone
+                self.set_inverse(head_origin, child_of_con.name)
+                head_origin.matrix_world = saved_matrix
+
+        # 3. Ensure Light Direction has no constraints (pure world sun direction)
+        light_dir = bpy.data.objects.get("Light Direction")
+        if light_dir:
+            for con in list(light_dir.constraints):
+                if con.type == "CHILD_OF":
+                    light_dir.constraints.remove(con)
+
+        # 4. Move Head Origin system (Head Origin, Head Forward, Head Up) to WGTS collection and deactivate/hide
+        if head_origin:
+            self._move_head_driver_system_to_wgt(head_origin)
+
+        self.report({"INFO"}, "Configured Wuthering Waves Head Driver.")
+        NextStepInvoker().invoke(
+            self.next_step_idx,
+            self.invoker_type,
+            high_level_step_name=self.high_level_step_name,
+            game_type=self.game_type,
+        )
+        return {"FINISHED"}
+
+    def _move_head_driver_system_to_wgt(self, main_obj):
+        wgt_coll = None
+        for c in bpy.data.collections:
+            if c.name.startswith("WGTS") or c.name.lower() == "wgt":
+                wgt_coll = c
+                break
+        if not wgt_coll:
+            wgt_coll = bpy.data.collections.get("wgt") or bpy.data.collections.get("WGTS")
+        if not wgt_coll:
+            wgt_coll = bpy.data.collections.new("WGTS")
+            bpy.context.scene.collection.children.link(wgt_coll)
+
+        def get_all_children(obj):
+            children = []
+            for child in obj.children:
+                children.append(child)
+                children.extend(get_all_children(child))
+            return children
+
+        all_objects = [main_obj] + get_all_children(main_obj)
+        for obj in all_objects:
+            if obj.name not in wgt_coll.objects:
+                wgt_coll.objects.link(obj)
+            for coll in list(obj.users_collection):
+                if coll != wgt_coll:
+                    try:
+                        coll.objects.unlink(obj)
+                    except Exception:
+                        pass
+            try:
+                obj.hide_viewport = True
+                obj.hide_render = True
+            except Exception:
+                pass
+
+        try:
+            wgt_coll.hide_viewport = True
+            wgt_coll.hide_render = True
+        except Exception:
+            pass
+
+    def set_inverse(self, obj, constraint_name):
+        previous_hide_viewport = getattr(obj, "hide_viewport", False)
+        obj.hide_viewport = False
+
+        previous_active = bpy.context.view_layer.objects.active
+        previous_selected = list(bpy.context.selected_objects)
+
+        try:
+            bpy.ops.object.select_all(action="DESELECT")
+            obj.select_set(True)
+            bpy.context.view_layer.objects.active = obj
+            bpy.ops.constraint.childof_set_inverse(
+                constraint=constraint_name, owner="OBJECT"
+            )
+        except Exception as err:
+            self.report(
+                {"WARNING"}, f"Could not set Child Of inverse on '{obj.name}': {err}"
+            )
+        finally:
+            try:
+                bpy.ops.object.select_all(action="DESELECT")
+                for selected in previous_selected:
+                    if selected and selected.name in bpy.context.view_layer.objects:
+                        selected.select_set(True)
+                if previous_active and previous_active.name in bpy.context.view_layer.objects:
+                    bpy.context.view_layer.objects.active = previous_active
+            except Exception:
+                pass
+            try:
+                obj.hide_viewport = previous_hide_viewport
+            except Exception:
+                pass
+
+
 register, unregister = bpy.utils.register_classes_factory([
     GI_OT_SetUpHeadDriver,
     ZZZ_OT_SetUpHeadDriver,
+    WW_OT_SetUpHeadDriver,
 ])

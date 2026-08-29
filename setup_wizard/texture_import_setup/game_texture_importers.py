@@ -39,6 +39,8 @@ class GameTextureImporterFactory:
             return ZenlessZoneZeroTextureImporterFacade(blender_operator, context)
         elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
             return NevernessToEvernessTextureImporterFacade(blender_operator, context)
+        elif game_type == GameType.WUTHERING_WAVES.name:
+            return WutheringWavesTextureImporterFacade(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -273,7 +275,179 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
             high_level_step_name=self.blender_operator.high_level_step_name,
             game_type=GameType.ZENLESS_ZONE_ZERO.name
         )
-        return {'FINISHED'}
+    def _clean_tokens(self, text):
+        import re
+        text = re.sub(r'\.\d+$', '', text)
+        text = re.sub(r'zzz|kythera\'s|kythera|shader|mat|mat_|mesh|object|\+ t', '', text, flags=re.IGNORECASE)
+        raw_tokens = [t.lower() for t in re.split(r'[^a-zA-Z0-9]+', text) if t]
+        tokens = set()
+        for t in raw_tokens:
+            if len(t) > 1 or t.isdigit():
+                tokens.add(t)
+                m = re.match(r'^(body|map)(\d+)$', t)
+                if m:
+                    tokens.add(m.group(1))
+                    tokens.add(m.group(2))
+                    tokens.add(f"map{m.group(2)}")
+                    tokens.add(f"body{m.group(2)}")
+                for sub in ['player', 'phone', 'swimwear', 'hair', 'shadow', 'face', 'body', 'eye', 'clip', 'head', 'arm']:
+                    if sub in t and t != sub:
+                        tokens.add(sub)
+        return tokens
+
+    def _find_best_texture(self, mat_name, mesh_names, tex_type, image_files, char_prefix=''):
+        suf = f'_{tex_type.lower()}'
+        candidates = [
+            f for f in image_files 
+            if f.lower().rsplit('.', 1)[0].endswith(suf) or f'_{tex_type.lower()}.' in f.lower()
+        ]
+        if not candidates:
+            candidates = [f for f in image_files if f.lower().rsplit('.', 1)[0].endswith(tex_type.lower())]
+        if not candidates:
+            return None
+        if len(candidates) == 1:
+            return candidates[0]
+
+        import re
+        mat_raw = re.sub(r'\.\d+$', '', mat_name.strip())
+        mat_clean = mat_raw.lower().replace("zzz", "").replace("kythera's", "").replace("kythera", "").replace("shader", "").strip(" _-")
+        mat_tokens = self._clean_tokens(mat_clean)
+        mesh_tokens = self._clean_tokens(" ".join(mesh_names))
+        combined_lower = (mat_name + ' ' + ' '.join(mesh_names)).lower()
+
+        is_weapon = any(k in combined_lower for k in ['weapon', 'wpn', 'equip', 'sword', 'blade', 'spear', 'gun', 'prop', 'arma', 'katana'])
+        is_body3 = (any(k in combined_lower for k in ['body 3', 'body3', 'body 3', 'map3', 'map_3', 'leg', 'shoe', 'boot', 'foot', 'sock', 'stocking', 'thigh', 'tail', 'cola']) or '3' in mat_tokens) and not is_weapon
+        is_body2 = ((any(k in combined_lower for k in ['body 2', 'body2', 'body 2', 'map2', 'map_2', 'wing', 'ala', 'feather', 'dress', 'cape', 'cloak', 'coat', 'jacket', 'acc', 'deco', 'extra', 'outer']) or '2' in mat_tokens) and not (is_body3 or is_weapon))
+        is_body1 = ((any(k in combined_lower for k in ['body 1', 'body1', 'body 1', 'map1', 'torso', 'chest', 'main', 'skin', 'cloth', 'shirt']) or '1' in mat_tokens) and not (is_body2 or is_body3 or is_weapon))
+        is_face = any(k in combined_lower for k in ['face', 'eyebrow', 'brow', 'eye', 'cara', 'head', 'rostro', 'pupil', 'iris'])
+        is_hair = any(k in combined_lower for k in ['hair', 'pelo', 'cabello', 'bang', 'ponytail', 'twintail', 'ahoge'])
+        is_sticker = any(k in combined_lower for k in ['sticker', 'decal', 'ui', 'logo', 'badge'])
+        is_swimwear = 'swimwear' in mat_clean
+
+        has_b3_files = any(any(k in f.lower() for k in ['body_3', 'body3', 'body 3', 'map3', 'map_3', 'leg', 'tail', '_3.']) for f in candidates)
+        has_b2_files = any(any(k in f.lower() for k in ['body_2', 'body2', 'body 2', 'map2', 'map_2', '_2.']) for f in candidates)
+
+        categories = {
+            'face': ['face', 'eyebrow', 'brow', 'eye', 'cara', 'head', 'rostro', 'pupil', 'iris'],
+            'hair': ['hair', 'pelo', 'cabello', 'bang', 'ponytail', 'twintail', 'ahoge'],
+            'weapon': ['weapon', 'wpn', 'equip', 'sword', 'blade', 'spear', 'gun', 'prop', 'arma', 'katana'],
+            'sticker': ['sticker', 'decal', 'ui', 'logo', 'badge'],
+            'wing': ['wing', 'ala', 'feather', 'pluma'],
+            'body3': ['body3', 'body 3', 'body_3', 'map3', 'map_3', 'leg', 'shoe', 'boot', 'foot', 'sock', 'stocking', 'thigh', 'tail', 'cola'],
+            'body2': ['body2', 'body 2', 'body_2', 'map2', 'map_2', 'wing', 'ala', 'feather', 'dress', 'cape', 'cloak', 'coat', 'jacket', 'acc', 'deco', 'extra', 'outer'],
+            'body1': ['body1', 'body 1', 'body_1', 'map1', 'body', 'torso', 'chest', 'main', 'skin', 'cloth', 'shirt']
+        }
+
+        best_file = candidates[0]
+        best_score = -999999
+
+        for f in candidates:
+            f_lower = f.lower()
+            f_clean = f_lower.rsplit('.', 1)[0]
+            for p in ['_d', '_m', '_a', '_n', '_diffuse', '_normal', '_lightmap']:
+                if f_clean.endswith(p):
+                    f_clean = f_clean[:-len(p)]
+            if char_prefix and f_clean.startswith(char_prefix.lower()):
+                f_clean = f_clean[len(char_prefix.lower()):].lstrip('_')
+            
+            f_tokens = self._clean_tokens(f_clean)
+            score = 0
+            
+            # 1. Primary Word/Token matches from material name (high weight)
+            mat_matched = len(mat_tokens.intersection(f_tokens))
+            mat_extra = len(f_tokens - mat_tokens)
+            score += mat_matched * 80 - mat_extra * 10
+
+            # Secondary Word/Token matches from mesh names (moderate weight)
+            mesh_matched = len(mesh_tokens.intersection(f_tokens))
+            score += mesh_matched * 20
+
+            # 2. Weapon exclusivity (Top Priority)
+            f_is_weapon = any(k in f_lower for k in ['weapon', 'wpn', 'equip', 'sword', 'blade', 'spear', 'gun', 'prop', 'arma', 'katana'])
+            if is_weapon:
+                if f_is_weapon:
+                    score += 500
+                else:
+                    score -= 500
+            else:
+                if f_is_weapon:
+                    score -= 500
+
+            # 3. Specific keyword exclusivity (swimwear, item)
+            f_is_swimwear = 'swimwear' in f_lower
+            if is_swimwear:
+                if f_is_swimwear:
+                    score += 200
+                else:
+                    score -= 200
+            else:
+                if f_is_swimwear:
+                    score -= 200
+
+            # 4. Body Tier & Number Resolution:
+            f_is_3 = any(k in f_lower for k in ['body_3', 'body3', 'body 3', 'map3', 'map_3', 'leg', 'tail', '_3.'])
+            f_is_2 = any(k in f_lower for k in ['body_2', 'body2', 'body 2', 'map2', 'map_2', '_2.'])
+            f_is_1 = ('body_1' in f_lower or 'body1' in f_lower or 'body 1' in f_lower or 'map1' in f_lower or '_1.' in f_lower) or ('body' in f_lower and not (f_is_2 or f_is_3))
+
+            if is_body3:
+                if f_is_3:
+                    score += 250
+                elif not has_b3_files:
+                    if f_is_2:
+                        score += 180  # Fallback Body 3 to Body 2 when no Body 3 textures exist
+                    elif f_is_1:
+                        score -= 50
+                else:
+                    score -= 100
+
+            elif is_body2:
+                if f_is_2:
+                    score += 250
+                elif f_is_1:
+                    score -= 150
+
+            elif is_body1:
+                if f_is_1:
+                    score += 250
+                elif f_is_2:
+                    score -= 150
+
+            # Category affinity (face, hair, sticker)
+            for cat in ['face', 'hair', 'sticker']:
+                keywords = categories[cat]
+                mat_in_cat = any(k in combined_lower for k in keywords)
+                file_in_cat = any(k in f_lower for k in keywords)
+                if mat_in_cat and file_in_cat:
+                    score += 150
+                elif mat_in_cat and not file_in_cat and any(any(k in other.lower() for k in keywords) for other in candidates):
+                    score -= 150
+
+            if score > best_score:
+                best_score = score
+                best_file = f
+
+        return best_file
+
+    def _find_best_face_lightmap(self, mat_name, mesh_names, image_files, char_prefix=''):
+        lm_candidates = [
+            f for f in image_files
+            if 'lightmap' in f.lower() and (f.lower().endswith('.png') or f.lower().endswith('.tga') or f.lower().endswith('.dds'))
+        ]
+        if not lm_candidates:
+            return self._find_best_texture(mat_name, mesh_names, 'm', image_files, char_prefix)
+        if len(lm_candidates) == 1:
+            return lm_candidates[0]
+        
+        best = lm_candidates[0]
+        best_sc = -9999
+        for f in lm_candidates:
+            sc = 0
+            if any(k in f.lower() for k in ['face', 'head', 'cara']): sc += 50
+            if char_prefix and char_prefix.lower() in f.lower(): sc += 30
+            if sc > best_sc:
+                best_sc = sc
+                best = f
+        return best
 
     def _build_zzz_json_texture_map(self, folder):
         candidates_dirs = [
@@ -290,16 +464,17 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                 
         # Find texture directory
         tex_dir = folder
-        if not any(f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg')) for f in os.listdir(folder)):
-            sub = os.path.join(folder, "Textures")
-            if os.path.isdir(sub):
-                tex_dir = sub
-            else:
-                sub = os.path.join(os.path.dirname(folder), "Textures")
+        if os.path.isdir(folder):
+            if not any(f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg')) for f in os.listdir(folder)):
+                sub = os.path.join(folder, "Textures")
                 if os.path.isdir(sub):
                     tex_dir = sub
+                else:
+                    sub = os.path.join(os.path.dirname(folder), "Textures")
+                    if os.path.isdir(sub):
+                        tex_dir = sub
 
-        if not materials_dir:
+        if not materials_dir or not os.path.isdir(tex_dir):
             return {}, tex_dir
 
         image_files = [f for f in os.listdir(tex_dir) if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff'))]
@@ -361,6 +536,24 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                             resolved = resolve_file(t_name)
                             if resolved:
                                 extracted[map_key] = resolved
+
+            if not extracted:
+                # If Name is empty in JSON (Unity dump), infer from active slots and JSON name
+                is_mat_face = any(k in mat_key for k in ['face', 'eye', 'head', 'cara', 'eyebrow', 'brow'])
+                for slot_name, map_key in slot_mappings.items():
+                    slot_data = tex_envs.get(slot_name, {})
+                    if isinstance(slot_data, dict):
+                        tex_obj = slot_data.get("m_Texture", {})
+                        if isinstance(tex_obj, dict) and not tex_obj.get("IsNull", True):
+                            if is_mat_face and slot_name in ['_LightTex', '_FaceLightMap', '_BumpMap']:
+                                matched_tex = self._find_best_face_lightmap(mat_key, [], image_files)
+                                if matched_tex:
+                                    extracted['lightmap'] = matched_tex
+                                    extracted['n'] = matched_tex
+                            else:
+                                matched_tex = self._find_best_texture(mat_key, [], map_key, image_files)
+                                if matched_tex:
+                                    extracted[map_key] = matched_tex
                                 
             mat_map[mat_key] = extracted
         return mat_map, tex_dir
@@ -368,25 +561,73 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
     def _find_json_textures_for_material(self, mat_name, json_map):
         if not json_map:
             return None
-        m_clean = mat_name.lower().replace("zzz", "").replace("kythera's", "").replace("kythera", "").replace("shader", "").strip(" _-")
-        
-        # 1. Exact / Substring match
+        import re
+        m_raw = re.sub(r'\.\d+$', '', mat_name.strip())
+        m_clean = re.sub(r'^(zzz|kythera\'s|kythera|shader)\s*', '', m_raw, flags=re.IGNORECASE).strip(" _-").lower()
+        clean_key = lambda k: re.sub(r'\.\d+$', '', k.lower().replace("mat_", "").replace("_ui", "")).strip(" _-")
+
+        # 1. Exact match
         for j_key, tex_dict in json_map.items():
-            if j_key == m_clean or j_key in m_clean or m_clean in j_key:
+            if j_key.lower() == m_clean or clean_key(j_key) == clean_key(m_clean):
                 return tex_dict
-                
-        # 2. Token overlap match
-        m_tokens = set(re.split(r'[^a-zA-Z0-9]+', m_clean)) - {'', 'mat', 'ui'}
+
+        # 2. Category & Index Match
+        m_tokens = set(re.split(r'[^a-zA-Z0-9]+', clean_key(m_clean))) - {'', 'mat', 'ui'}
+        is_weapon = any(k in m_clean for k in ['weapon', 'wpn', 'equip', 'sword', 'gun', 'blade', 'spear', 'prop', 'arma', 'katana'])
+        is_face = any(k in m_clean for k in ['face', 'eyebrow', 'brow', 'eye', 'cara', 'head', 'rostro', 'pupil', 'iris'])
+        is_hair = any(k in m_clean for k in ['hair', 'pelo', 'cabello', 'bang', 'ponytail', 'twintail', 'ahoge'])
+        is_body3 = (any(k in m_clean for k in ['body_3', 'body3', 'body 3', 'map3', 'map_3', 'leg', 'shoe', 'boot', 'foot', 'sock', 'stocking', 'thigh', 'tail', 'cola']) or '3' in m_tokens) and not is_weapon
+        is_body2 = ((any(k in m_clean for k in ['body_2', 'body2', 'body 2', 'map2', 'map_2', 'wing', 'ala', 'feather', 'dress', 'cape', 'cloak', 'coat', 'jacket', 'acc', 'deco', 'extra', 'outer']) or '2' in m_tokens) and not (is_body3 or is_weapon))
+        is_body1 = ((any(k in m_clean for k in ['body_1', 'body1', 'body 1', 'map1']) or '1' in m_tokens) and not (is_body2 or is_body3 or is_weapon))
+
         best_key = None
-        best_overlap = 0
+        best_score = -999999
+
         for j_key, tex_dict in json_map.items():
-            j_tokens = set(re.split(r'[^a-zA-Z0-9]+', j_key)) - {'', 'mat', 'ui'}
-            overlap = len(m_tokens.intersection(j_tokens))
-            if overlap > best_overlap:
-                best_overlap = overlap
+            j_clean = clean_key(j_key)
+            j_tokens = set(re.split(r'[^a-zA-Z0-9]+', j_clean)) - {'', 'mat', 'ui'}
+            score = 0
+
+            j_is_weapon = any(k in j_clean for k in ['weapon', 'wpn', 'equip', 'sword', 'gun', 'blade', 'spear', 'prop', 'arma', 'katana'])
+            j_is_face = any(k in j_clean for k in ['face', 'eyebrow', 'brow', 'eye', 'cara', 'head', 'rostro', 'pupil', 'iris'])
+            j_is_hair = any(k in j_clean for k in ['hair', 'pelo', 'cabello', 'bang', 'ponytail', 'twintail', 'ahoge'])
+            j_is_body3 = any(k in j_clean for k in ['body_3', 'body3', 'body 3', 'map3', 'map_3']) or '3' in j_tokens
+            j_is_body2 = (any(k in j_clean for k in ['body_2', 'body2', 'body 2', 'map2', 'map_2']) or '2' in j_tokens) and not j_is_body3
+            j_is_body1 = (any(k in j_clean for k in ['body_1', 'body1', 'body 1', 'map1']) or '1' in j_tokens) and not (j_is_body2 or j_is_body3)
+
+            if is_weapon:
+                if j_is_weapon: score += 500
+                else: score -= 500
+            elif is_face:
+                if j_is_face: score += 500
+                else: score -= 500
+            elif is_hair:
+                if j_is_hair: score += 300
+                elif j_is_body2: score += 100
+                else: score -= 200
+            elif is_body3:
+                if j_is_body3: score += 400
+                elif j_is_body2: score += 250
+                elif j_is_body1: score += 50
+                else: score -= 200
+            elif is_body2:
+                if j_is_body2: score += 400
+                elif j_is_hair: score += 100
+                else: score -= 200
+            elif is_body1:
+                if j_is_body1: score += 400
+                else: score -= 200
+
+            matched = len(m_tokens.intersection(j_tokens))
+            extra_in_j = len(j_tokens - m_tokens)
+            extra_in_m = len(m_tokens - j_tokens)
+            score += matched * 60 - extra_in_j * 40 - extra_in_m * 20
+
+            if score > best_score:
+                best_score = score
                 best_key = j_key
-                
-        if best_key and best_overlap > 0:
+
+        if best_key and best_score > 0:
             return json_map[best_key]
         return None
 
@@ -424,150 +665,8 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         if not filtered_files:
             filtered_files = files
         
-        import re
-
-        def clean_tokens(text):
-            text = re.sub(r'zzz|kythera\'s|kythera|shader|mat|mat_|mesh|object|\+ t', '', text, flags=re.IGNORECASE)
-            tokens = [t.lower() for t in re.split(r'[^a-zA-Z0-9]+', text) if len(t) > 1 and not t.isdigit()]
-            return set(tokens)
-
-        def find_best_texture(mat_name, mesh_names, tex_type, image_files, char_prefix=''):
-            suf = f'_{tex_type.lower()}'
-            candidates = [
-                f for f in image_files 
-                if f.lower().rsplit('.', 1)[0].endswith(suf) or f'_{tex_type.lower()}.' in f.lower()
-            ]
-            if not candidates:
-                candidates = [f for f in image_files if f.lower().rsplit('.', 1)[0].endswith(tex_type.lower())]
-            if not candidates:
-                return None
-            if len(candidates) == 1:
-                return candidates[0]
-
-            combined = mat_name + ' ' + ' '.join(mesh_names)
-            mat_tokens = clean_tokens(combined)
-            combined_lower = combined.lower()
-
-            # Determine target body level / category
-            is_body3 = any(k in combined_lower for k in ['body 3', 'body3', 'body_3', 'map3', 'map_3', 'leg', 'shoe', 'boot', 'foot', 'sock', 'stocking', 'thigh', 'tail', 'cola'])
-            is_body2 = any(k in combined_lower for k in ['body 2', 'body2', 'body_2', 'map2', 'map_2', 'wing', 'ala', 'feather', 'dress', 'cape', 'cloak', 'coat', 'jacket', 'acc', 'deco', 'extra', 'outer'])
-            is_face = any(k in combined_lower for k in ['face', 'eyebrow', 'brow', 'eye', 'cara', 'head', 'rostro', 'pupil', 'iris'])
-            is_hair = any(k in combined_lower for k in ['hair', 'pelo', 'cabello', 'bang', 'ponytail', 'twintail', 'ahoge'])
-            is_sticker = any(k in combined_lower for k in ['sticker', 'decal', 'ui', 'logo', 'badge'])
-            is_weapon = any(k in combined_lower for k in ['weapon', 'wpn', 'equip', 'sword', 'blade', 'spear', 'gun', 'prop', 'arma', 'katana'])
-
-            has_b3_files = any(any(k in f.lower() for k in ['body_3', 'body3', 'body 3', 'map3', 'map_3', 'leg', 'tail', '_3.']) for f in candidates)
-            has_b2_files = any(any(k in f.lower() for k in ['body_2', 'body2', 'body 2', 'map2', 'map_2', '_2.']) for f in candidates)
-
-            categories = {
-                'face': ['face', 'eyebrow', 'brow', 'eye', 'cara', 'head', 'rostro', 'pupil', 'iris'],
-                'hair': ['hair', 'pelo', 'cabello', 'bang', 'ponytail', 'twintail', 'ahoge'],
-                'weapon': ['weapon', 'wpn', 'equip', 'sword', 'blade', 'spear', 'gun', 'prop', 'arma', 'katana'],
-                'sticker': ['sticker', 'decal', 'ui', 'logo', 'badge'],
-                'wing': ['wing', 'ala', 'feather', 'pluma'],
-                'body3': ['body3', 'body 3', 'body_3', 'map3', 'map_3', 'leg', 'shoe', 'boot', 'foot', 'sock', 'stocking', 'thigh', 'tail', 'cola'],
-                'body2': ['body2', 'body 2', 'body_2', 'map2', 'map_2', 'wing', 'ala', 'feather', 'dress', 'cape', 'cloak', 'coat', 'jacket', 'acc', 'deco', 'extra', 'outer'],
-                'body1': ['body1', 'body 1', 'body_1', 'map1', 'body', 'torso', 'chest', 'main', 'skin', 'cloth', 'shirt']
-            }
-
-            best_file = candidates[0]
-            best_score = -999999
-
-            for f in candidates:
-                f_lower = f.lower()
-                f_clean = f_lower.rsplit('.', 1)[0]
-                for p in ['_d', '_m', '_a', '_n', '_diffuse', '_normal', '_lightmap']:
-                    if f_clean.endswith(p):
-                        f_clean = f_clean[:-len(p)]
-                if char_prefix and f_clean.startswith(char_prefix.lower()):
-                    f_clean = f_clean[len(char_prefix.lower()):].lstrip('_')
-                
-                f_tokens = clean_tokens(f_clean)
-                score = 0
-                
-                # 1. Exact Word/Token matches
-                matched = len(mat_tokens.intersection(f_tokens))
-                extra_in_file = len(f_tokens - mat_tokens)
-                score += matched * 60 - extra_in_file * 10
-                
-                # 2. Sub-keyword matching & Tiered Fallback:
-                if is_body3:
-                    f_is_3 = any(k in f_lower for k in ['body_3', 'body3', 'body 3', 'map3', 'map_3', 'leg', 'tail', '_3.'])
-                    f_is_2 = any(k in f_lower for k in ['body_2', 'body2', 'body 2', 'map2', 'map_2', '_2.'])
-                    f_is_1 = 'body' in f_lower and not (f_is_3 or f_is_2)
-                    if f_is_3:
-                        score += 100
-                    elif f_is_2:
-                        score += 70 if not has_b3_files else -20
-                    elif f_is_1:
-                        score += 40 if (not has_b3_files and not has_b2_files) else -40
-
-                elif is_body2:
-                    f_is_2 = any(k in f_lower for k in ['body_2', 'body2', 'body 2', 'map2', 'map_2', 'wing', 'dress', 'cape', '_2.'])
-                    f_is_1 = 'body' in f_lower and not f_is_2
-                    if f_is_2:
-                        score += 100
-                    elif f_is_1:
-                        score += 50 if not has_b2_files else -30
-
-                elif not (is_face or is_hair or is_sticker or is_weapon):
-                    f_is_1 = 'body' in f_lower and not any(k in f_lower for k in ['body_2', 'body2', 'body 2', 'body_3', 'body3', 'body 3', '_2.', '_3.'])
-                    f_is_2 = any(k in f_lower for k in ['body_2', 'body2', 'body 2', '_2.'])
-                    if f_is_1:
-                        score += 100
-                    elif f_is_2:
-                        score += 30
-
-                else:
-                    for sub in ['2', '3', '02', '03']:
-                        f_has = sub in f_lower
-                        m_has = sub in combined_lower
-                        if f_has and m_has:
-                            score += 35
-                        elif f_has and not m_has:
-                            score -= 35
-
-                # 3. Exact token substring bonus
-                for tok in mat_tokens:
-                    if tok in f_clean or f_clean in tok:
-                        score += 30
-
-                # 4. Category affinity (face, hair, weapon, sticker)
-                for cat in ['face', 'hair', 'weapon', 'sticker']:
-                    keywords = categories[cat]
-                    mat_in_cat = any(k in combined_lower for k in keywords)
-                    file_in_cat = any(k in f_lower for k in keywords)
-                    if mat_in_cat and file_in_cat:
-                        score += 50
-                    elif mat_in_cat and not file_in_cat and any(any(k in other.lower() for k in keywords) for other in candidates):
-                        score -= 35
-
-                if score > best_score:
-                    best_score = score
-                    best_file = f
-
-            return best_file
-
-        def find_best_face_lightmap(mat_name, mesh_names, image_files, char_prefix=''):
-            lm_candidates = [
-                f for f in image_files
-                if 'lightmap' in f.lower() and (f.lower().endswith('.png') or f.lower().endswith('.tga') or f.lower().endswith('.dds'))
-            ]
-            if not lm_candidates:
-                return find_best_texture(mat_name, mesh_names, 'm', image_files, char_prefix)
-            if len(lm_candidates) == 1:
-                return lm_candidates[0]
-            
-            best = lm_candidates[0]
-            best_sc = -9999
-            for f in lm_candidates:
-                sc = 0
-                if any(k in f.lower() for k in ['face', 'head', 'cara']): sc += 50
-                if char_prefix and char_prefix.lower() in f.lower(): sc += 30
-                if sc > best_sc:
-                    best_sc = sc
-                    best = f
-            return best
+        find_best_texture = self._find_best_texture
+        find_best_face_lightmap = self._find_best_face_lightmap
 
         def connect_tex_to_socket(mat, group_node, socket_id, socket_names, file_name, is_color=False, y_offset=0):
             if not file_name:
@@ -636,11 +735,33 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
 
             return tex_node
 
+        def disconnect_tex_socket(mat, group_node, socket_id, socket_names):
+            nodes = mat.node_tree.nodes
+            links = mat.node_tree.links
+            if isinstance(socket_names, str):
+                socket_names = [socket_names]
+            for sname in socket_names:
+                for inp in group_node.inputs:
+                    if inp.name.lower().strip() == sname.lower().strip():
+                        for link in list(links):
+                            if link.to_socket == inp:
+                                links.remove(link)
+            node_tag = f"Texture_{socket_id}"
+            tex_node = nodes.get(node_tag)
+            if tex_node:
+                tex_node.image = None
+                for link in list(links):
+                    if link.from_node == tex_node:
+                        links.remove(link)
+
         for mat in bpy.data.materials:
             if not mat.node_tree:
                 continue
 
             matname = mat.name.lower()
+            if "hairshadow" in matname:
+                continue
+
             is_zzz_mat = mat.name.startswith("ZZZ") or mat.name.startswith("Kythera") or \
                 any(n.type == 'GROUP' and n.node_tree and ('kythera' in n.node_tree.name.lower() or 'zzz' in n.node_tree.name.lower()) for n in mat.node_tree.nodes)
             if not is_zzz_mat:
@@ -719,13 +840,20 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                     (kythera_group_node.node_tree and "face" in kythera_group_node.node_tree.name.lower())
 
                 if is_face:
+                    if json_textures is not None:
+                        face_d = json_textures.get('d')
+                        face_lm = json_textures.get('lightmap') or json_textures.get('n')
+                    else:
+                        face_d = find_best_texture(matname, mesh_names, "d", filtered_files, main_prefix)
+                        face_lm = find_best_face_lightmap(matname, mesh_names, filtered_files, main_prefix)
+
                     # 1. Face D -> _D Map / Diffuse Texture (sRGB)
-                    face_d = (json_textures.get('d') if json_textures else None) or find_best_texture(matname, mesh_names, "d", filtered_files, main_prefix)
                     if face_d:
                         connect_tex_to_socket(mat, kythera_group_node, "Face_D", ["_D Map", "_D", "Diffuse Texture", "Diffuse"], face_d, is_color=True, y_offset=0)
+                    else:
+                        disconnect_tex_socket(mat, kythera_group_node, "Face_D", ["_D Map", "_D", "Diffuse Texture", "Diffuse"])
 
                     # 2. Face Lightmap -> Light Map (Non-Color)
-                    face_lm = (json_textures.get('n') if json_textures else None) or find_best_face_lightmap(matname, mesh_names, filtered_files, main_prefix)
                     if face_lm:
                         lm_node = None
                         for node in mat.node_tree.nodes:
@@ -744,26 +872,41 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                             connect_tex_to_socket(mat, kythera_group_node, "Face_Lightmap", ["Light Map", "LightMap", "_Lightmap"], face_lm, is_color=False, y_offset=-280)
 
                 else:
-                    # Body, Hair, Weapon, Dress, Wings, Stickers, Acc, etc. (Kythera's ZZZ Shader)
+                    # Body, Hair, Weapon, Dress, Wings, Stickers, Acc, Jiao, etc. (Kythera's ZZZ Shader)
+                    if json_textures is not None:
+                        tex_d = json_textures.get('d')
+                        tex_m = json_textures.get('m')
+                        tex_a = json_textures.get('a')
+                        tex_n = json_textures.get('n')
+                    else:
+                        tex_d = find_best_texture(matname, mesh_names, "d", filtered_files, main_prefix)
+                        tex_m = find_best_texture(matname, mesh_names, "m", filtered_files, main_prefix)
+                        tex_a = find_best_texture(matname, mesh_names, "a", filtered_files, main_prefix)
+                        tex_n = find_best_texture(matname, mesh_names, "n", filtered_files, main_prefix)
+
                     # 1. Texture D -> _D Map / Diffuse (sRGB)
-                    tex_d = (json_textures.get('d') if json_textures else None) or find_best_texture(matname, mesh_names, "d", filtered_files, main_prefix)
                     if tex_d:
                         connect_tex_to_socket(mat, kythera_group_node, "D", ["_D Map", "_D", "Diffuse", "Diffuse Texture"], tex_d, is_color=True, y_offset=0)
+                    else:
+                        disconnect_tex_socket(mat, kythera_group_node, "D", ["_D Map", "_D", "Diffuse", "Diffuse Texture"])
 
                     # 2. Texture M -> _M Map / Metallic (Non-Color)
-                    tex_m = (json_textures.get('m') if json_textures else None) or find_best_texture(matname, mesh_names, "m", filtered_files, main_prefix)
                     if tex_m:
                         connect_tex_to_socket(mat, kythera_group_node, "M", ["_M Map", "_M", "Metallic"], tex_m, is_color=False, y_offset=-260)
+                    else:
+                        disconnect_tex_socket(mat, kythera_group_node, "M", ["_M Map", "_M", "Metallic"])
 
                     # 3. Texture A -> _A Map / Ambient (Non-Color)
-                    tex_a = (json_textures.get('a') if json_textures else None) or find_best_texture(matname, mesh_names, "a", filtered_files, main_prefix)
                     if tex_a:
                         connect_tex_to_socket(mat, kythera_group_node, "A", ["_A Map", "_A", "Ambient"], tex_a, is_color=False, y_offset=-520)
+                    else:
+                        disconnect_tex_socket(mat, kythera_group_node, "A", ["_A Map", "_A", "Ambient"])
 
                     # 4. Texture N -> _N Map / Normal (Non-Color)
-                    tex_n = (json_textures.get('n') if json_textures else None) or find_best_texture(matname, mesh_names, "n", filtered_files, main_prefix)
                     if tex_n:
                         connect_tex_to_socket(mat, kythera_group_node, "N", ["_N Map", "_N", "Normal"], tex_n, is_color=False, y_offset=-780)
+                    else:
+                        disconnect_tex_socket(mat, kythera_group_node, "N", ["_N Map", "_N", "Normal"])
 
             else:
                 # --- LEGACY SHADER TEXTURE CONNECTION ---
@@ -1421,6 +1564,237 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
         ensure_hair_white_texture(folder, image_files)
 
         self.blender_operator.report({'INFO'}, 'Imported Neverness to Everness textures and JSON material data...')
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx, 
+            self.blender_operator.invoker_type, 
+            file_path_to_cache=folder,
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=self.blender_operator.game_type,
+        )
+
+
+class WutheringWavesTextureImporterFacade(GameTextureImporter):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+
+    def import_textures(self):
+        from setup_wizard.utils.wuwa_texture_utils import (
+            split_material_name,
+            extract_character_name,
+            make_texture_patterns,
+            find_texture_for_slot,
+            TEXTURE_TYPE_MAPPINGS_JAREDNYTS,
+        )
+
+        cache_enabled = self.context.window_manager.cache_enabled if hasattr(self.context, 'window_manager') and hasattr(self.context.window_manager, 'cache_enabled') else True
+        folder = getattr(self.blender_operator, 'filepath', None) \
+            or getattr(self.blender_operator, 'file_directory', None) \
+            or get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH) \
+            or get_active_character_directory()
+
+        if folder and os.path.isfile(folder):
+            folder = os.path.dirname(folder)
+
+        if not folder or not os.path.isdir(folder):
+            self.blender_operator.report({'WARNING'}, f"Texture folder not found: {folder}")
+            NextStepInvoker().invoke(
+                self.blender_operator.next_step_idx, 
+                self.blender_operator.invoker_type, 
+                high_level_step_name=self.blender_operator.high_level_step_name,
+                game_type=self.blender_operator.game_type,
+            )
+            return
+
+        set_active_character_directory(folder)
+
+        from setup_wizard.utils.wuwa_texture_utils import (
+            split_material_name,
+            extract_character_name,
+            make_texture_patterns,
+            find_texture_for_slot,
+            load_image_safely,
+            load_wuwa_json_mappings,
+            TEXTURE_TYPE_MAPPINGS_JAREDNYTS,
+        )
+
+        all_texture_files = []
+        for root, _, files in os.walk(folder):
+            for file_name in files:
+                if any(file_name.lower().endswith(ext) for ext in ['.png', '.tga', '.dds', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp']):
+                    all_texture_files.append(file_name)
+
+        if not all_texture_files:
+            self.blender_operator.report({'WARNING'}, f"No texture image files found in: {folder}")
+
+        json_mappings = load_wuwa_json_mappings(folder)
+
+        has_het_any = False
+        has_id_any = False
+        has_rgid_any = False
+
+        # Process each WW - * material in the scene
+        for mat in bpy.data.materials:
+            if not mat.name.startswith("WW - ") or not mat.use_nodes or not mat.node_tree:
+                continue
+
+            orig_name = mat.get("ww_original_name", "")
+            base_part, version = split_material_name(mat.name)
+            if mat.get("ww_base_part"):
+                base_part = mat.get("ww_base_part")
+
+            # Merge JSON mappings: base_part has aggregated entries (like _HET from sub-materials),
+            # while orig_name has specific entries.
+            mat_json_texs = {}
+            if base_part and base_part.lower() in json_mappings:
+                mat_json_texs.update(json_mappings[base_part.lower()])
+            ver_key = f"{base_part}{version}".lower()
+            if ver_key in json_mappings:
+                mat_json_texs.update(json_mappings[ver_key])
+            if orig_name and orig_name.lower() in json_mappings:
+                mat_json_texs.update(json_mappings[orig_name.lower()])
+            if base_part and base_part.lower() in json_mappings and "_HET" in json_mappings[base_part.lower()]:
+                mat_json_texs.setdefault("_HET", json_mappings[base_part.lower()]["_HET"])
+
+            tex_mode_prop = getattr(self.context.scene, "ww_tex_mode", "Default")
+            is_default_mode = (tex_mode_prop == "Default")
+
+            # Map texture slots
+            for suffix, node_names in TEXTURE_TYPE_MAPPINGS_JAREDNYTS.items():
+                img = None
+
+                # In Version mode, check if a switch/damage/version variant exists first
+                if not is_default_mode:
+                    ver_patterns = make_texture_patterns(base_part, version, suffix, orig_name, mode=False)
+                    img = find_texture_for_slot(all_texture_files, ver_patterns, folder, suffix)
+
+                # Check JSON mapping
+                if not img and suffix in mat_json_texs:
+                    json_fname = mat_json_texs[suffix]
+                    full_json_path = os.path.join(folder, json_fname)
+                    img = load_image_safely(full_json_path, suffix)
+
+                # Fallback to pattern matching if not in JSON or image not found
+                if not img:
+                    patterns = make_texture_patterns(base_part, version, suffix, orig_name, mode=is_default_mode)
+                    img = find_texture_for_slot(all_texture_files, patterns, folder, suffix)
+
+                if img:
+                    # Assign to matching Image Texture nodes
+                    for target_node_name in node_names:
+                        target_node = mat.node_tree.nodes.get(target_node_name)
+                        if target_node and target_node.type == 'TEX_IMAGE':
+                            target_node.image = img
+                            if suffix == '_HET':
+                                has_het_any = True
+                            elif suffix == '_ID':
+                                has_id_any = True
+                            elif suffix == '_RGID':
+                                has_rgid_any = True
+
+                    # Fallback match by node label or lowercase node name
+                    for node in mat.node_tree.nodes:
+                        if node.type == 'TEX_IMAGE':
+                            n_label = (node.label or "").lower()
+                            n_name = node.name.lower()
+                            for expected_name in node_names:
+                                if expected_name.lower() in [n_label, n_name]:
+                                    node.image = img
+                                    if suffix == '_HET':
+                                        has_het_any = True
+                                    elif suffix == '_ID':
+                                        has_id_any = True
+                                    elif suffix == '_RGID':
+                                        has_rgid_any = True
+
+            # Fallback for Face ID texture: If no Face ID image was found, use Face Diffuse image
+            if "face" in mat.name.lower() or base_part.lower() in ["face", "head"]:
+                mask_id_node = (
+                    mat.node_tree.nodes.get("Mask ID")
+                    or mat.node_tree.nodes.get("Face ID")
+                    or mat.node_tree.nodes.get("Texture_ID")
+                    or mat.node_tree.nodes.get("Face ID Texture")
+                )
+                if not mask_id_node:
+                    for n in mat.node_tree.nodes:
+                        if n.type == 'TEX_IMAGE':
+                            n_low = (n.name + " " + (n.label or "")).lower()
+                            if any(k in n_low for k in ["mask id", "face id", "texture_id", "face_id"]):
+                                mask_id_node = n
+                                break
+
+                if mask_id_node and not mask_id_node.image:
+                    face_diff_node = (
+                        mat.node_tree.nodes.get("Face Diffuse")
+                        or mat.node_tree.nodes.get("Face_D")
+                        or mat.node_tree.nodes.get("Face Texture")
+                        or mat.node_tree.nodes.get("Base Color")
+                    )
+                    if not face_diff_node:
+                        for n in mat.node_tree.nodes:
+                            if n.type == 'TEX_IMAGE' and n.image:
+                                n_low = (n.name + " " + (n.label or "")).lower()
+                                if any(k in n_low for k in ["face diffuse", "face_d", "face texture", "diffuse"]):
+                                    face_diff_node = n
+                                    break
+                    if face_diff_node and face_diff_node.image:
+                        mask_id_node.image = face_diff_node.image
+                        has_id_any = True
+                        print(f"[WUWA TEXTURES] Fallback: Assigned Face Diffuse ({face_diff_node.image.name}) to {mask_id_node.name} on {mat.name}")
+
+            # Fix Eye UV map
+            if "eye" in mat.name.lower() or base_part.lower() in ["eye", "eyes"]:
+                for node in mat.node_tree.nodes:
+                    if node.type == 'UVMAP':
+                        node.uv_map = "UV2"
+
+        # If HET texture was found, enable See Through node groups
+        if has_het_any:
+            for mat in bpy.data.materials:
+                if mat.node_tree:
+                    for node in mat.node_tree.nodes:
+                        if node.type == 'GROUP' and node.node_tree and "see through" in node.node_tree.name.lower():
+                            node.mute = False
+
+        # Ensure Alpha Transparency is unmuted on all Alpha materials
+        for mat in bpy.data.materials:
+            orig_m = mat.get("ww_original_name", "")
+            base_m = mat.get("ww_base_part", "")
+            is_alpha = any(
+                k in orig_m.lower() or k in base_m.lower() or k in mat.name.lower()
+                for k in ["alpha", "touming", "transparency"]
+            )
+            if is_alpha and mat.node_tree:
+                for node in mat.node_tree.nodes:
+                    if (node.type == 'GROUP' and node.node_tree and "alpha transparency" in node.node_tree.name.lower()) or "alpha transparency" in node.name.lower():
+                        node.mute = False
+                if hasattr(mat, "surface_render_method"):
+                    try:
+                        mat.surface_render_method = 'BLENDED'
+                    except Exception:
+                        pass
+                if hasattr(mat, "blend_method"):
+                    try:
+                        mat.blend_method = 'BLEND'
+                    except Exception:
+                        pass
+                if hasattr(mat, "shadow_method"):
+                    try:
+                        mat.shadow_method = 'HASHED'
+                    except Exception:
+                        pass
+
+        # Set global switches if ID or RGID textures found
+        g_props = bpy.data.node_groups.get("Global Material Properties Main")
+        if g_props and hasattr(g_props, "nodes"):
+            inp = g_props.nodes.get("Group Input")
+            if inp:
+                if has_id_any and "Use ID Color" in inp.outputs:
+                    inp.outputs["Use ID Color"].default_value = 1.0
+                if has_rgid_any and "Use New Shading" in inp.outputs:
+                    inp.outputs["Use New Shading"].default_value = 1.0
+
+        self.blender_operator.report({'INFO'}, 'Successfully imported and assigned Wuthering Waves textures!')
         NextStepInvoker().invoke(
             self.blender_operator.next_step_idx, 
             self.blender_operator.invoker_type, 

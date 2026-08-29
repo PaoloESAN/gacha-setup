@@ -100,6 +100,24 @@ class NTE_OT_SetupWizardUI(Operator, BasicSetupUIOperator):
         return {'FINISHED'}
 
 
+class WW_OT_WutheringWavesSetupWizardUI(Operator, BasicSetupUIOperator):
+    '''Runs through entire setup process for Wuthering Waves'''
+    bl_idname = 'wuthering_waves.setup_wizard_ui'
+    bl_label = 'Wuthering Waves: Setup Wizard (UI)'
+
+    def execute(self, context):
+        next_step_index = 0
+
+        NextStepInvoker().invoke(
+            next_step_index,
+            'invoke_next_step_ui', 
+            high_level_step_name=self.bl_idname if bpy.app.version >= (3,3,0) \
+                else self.bl_idname + '_no_outlines',
+            game_type=self.game_type,
+        )
+        return {'FINISHED'}
+
+
 
 class GI_OT_GenshinSetupWizard(Operator):
     """Setup Wizard Process"""
@@ -278,6 +296,7 @@ def setup_dependencies():
         setup_wizard.misc_final_steps.GI_OT_FixTransformations,
         setup_wizard.set_up_head_driver.GI_OT_SetUpHeadDriver,
         setup_wizard.set_up_head_driver.ZZZ_OT_SetUpHeadDriver,
+        setup_wizard.set_up_head_driver.WW_OT_SetUpHeadDriver,
         setup_wizard.misc_operations.GI_OT_SetColorManagementToStandard,
         setup_wizard.misc_operations.HYV_OT_SetUpScreenSpaceReflections,
         setup_wizard.misc_operations.HYV_OT_VertexPaintFaceSeeThroughEffect,
@@ -321,7 +340,7 @@ def unregister():
     from setup_wizard.genshin_import_outline_lightmaps import GI_OT_GenshinImportOutlineLightmaps
     from setup_wizard.genshin_import_material_data import GI_OT_GenshinImportMaterialData
     from setup_wizard.misc_final_steps import GI_OT_FixTransformations
-    from setup_wizard.set_up_head_driver import GI_OT_SetUpHeadDriver, ZZZ_OT_SetUpHeadDriver
+    from setup_wizard.set_up_head_driver import GI_OT_SetUpHeadDriver, ZZZ_OT_SetUpHeadDriver, WW_OT_SetUpHeadDriver
     from setup_wizard.misc_operations import GI_OT_SetColorManagementToStandard, HYV_OT_SetUpScreenSpaceReflections, \
         HYV_OT_VertexPaintFaceSeeThroughEffect, GI_OT_DeleteSpecificObjects, GI_OT_SetUpArmTwistBoneConstraints, \
         GI_OT_RenameShaderMaterials, ZZZ_OT_RenameCollectionAndRig, ZZZ_OT_MoveLightingPanelToCharacterCollection, \
@@ -352,6 +371,7 @@ def unregister():
         GI_OT_FixTransformations,
         GI_OT_SetUpHeadDriver,
         ZZZ_OT_SetUpHeadDriver,
+        WW_OT_SetUpHeadDriver,
         GI_OT_SetColorManagementToStandard,
         HYV_OT_SetUpScreenSpaceReflections,
         HYV_OT_VertexPaintFaceSeeThroughEffect,

@@ -213,9 +213,10 @@ class ZenlessZoneZeroShaderMaterialNames(ShaderMaterialNames):
     MATERIAL_PREFIX = "Kythera's ZZZ "
     MATERIAL_PREFIX_AFTER_RENAME = "Kythera's ZZZ "
     FACE = "Kythera's ZZZ Face Shader"
-    BODY = "Kythera's ZZZ Shader"
-    SHADER = "Kythera's ZZZ Shader"
-    SHADER_T = "Kythera's ZZZ Shader"
+    BODY = "Kythera's ZZZ Shader V1.2"
+    BODY_V1_2 = "Kythera's ZZZ Shader V1.2"
+    SHADER = "Kythera's ZZZ Shader V1.2"
+    SHADER_T = "Kythera's ZZZ Shader V1.2"
     
     # Custom outline properties
     BODY_OUTLINE = 'ZZZ Body Outlines'
@@ -252,4 +253,18 @@ class NevernessToEvernessShaderMaterialNames(ShaderMaterialNames):
     MOUTH = '口'
     TEETH_TONGUE = '齿舌'
     EXPRESSION = '表情'
+
+
+class WutheringWavesShaderMaterialNames(ShaderMaterialNames):
+    MATERIAL_PREFIX = 'WW - '
+    MATERIAL_PREFIX_AFTER_RENAME = 'WW - '
+    MAIN = 'WW - Main'
+    FACE = 'WW - Face'
+    EYE = 'WW - Eye'
+    HAIR = 'WW - Hair'
+    BANGS = 'WW - Bangs'
+    OUTLINES = 'WW - Outlines'
+    RESONATOR_STAR = 'WW - ResonatorStar'
+    FACE_SEETHRU = 'WW - Face_SEETHRU'
+    EYE_SEETHRU = 'WW - Eye_SEETHRU'
 

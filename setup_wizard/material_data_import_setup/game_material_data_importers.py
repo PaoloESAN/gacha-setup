@@ -22,7 +22,7 @@ from setup_wizard.domain.shader_material_name_keywords import ShaderMaterialName
 from setup_wizard.domain.game_types import GameType
 from setup_wizard.domain.outline_material_data import OutlineMaterialGroup
 from setup_wizard.exceptions import UnsupportedMaterialDataJsonFormatException, UserInputException
-from setup_wizard.import_order import CHARACTER_MODEL_FOLDER_FILE_PATH, get_cache
+from setup_wizard.import_order import CHARACTER_MODEL_FOLDER_FILE_PATH, get_cache, get_active_character_directory
 from setup_wizard.material_data_import_setup.material_data_applier import MaterialDataApplier, MaterialDataAppliersFactory
 from setup_wizard.parsers.material_data_json_parsers import MaterialDataJsonParser, HoyoStudioMaterialDataJsonParser, \
     UABEMaterialDataJsonParser, UnknownHoyoStudioMaterialDataJsonParser
@@ -226,6 +226,8 @@ class GameMaterialDataImporterFactory:
             return ZenlessZoneZeroMaterialDataImporter(blender_operator, context, outline_material_group, material_names, shader_node_names)
         elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
             return NevernessToEvernessMaterialDataImporter(blender_operator, context, outline_material_group, material_names, shader_node_names)
+        elif game_type == GameType.WUTHERING_WAVES.name:
+            return WutheringWavesMaterialDataImporter(blender_operator, context, outline_material_group, material_names, shader_node_names)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -524,5 +526,19 @@ class NevernessToEvernessMaterialDataImporter(GameMaterialDataImporter):
                                             pass
                 except Exception as ex:
                     print(f"[NTE Material Data Importer] Notice: {ex}")
+        return {'FINISHED'}
+
+
+class WutheringWavesMaterialDataImporter(GameMaterialDataImporter):
+    def __init__(self, blender_operator, context, outline_material_group: OutlineMaterialGroup, material_names, shader_node_names):
+        self.blender_operator: Operator = blender_operator
+        self.context: Context = context
+        self.parsers = []
+        self.material = None
+        self.outline_material_group = outline_material_group
+        self.material_names = material_names
+        self.shader_node_names = shader_node_names
+
+    def import_material_data(self):
         return {'FINISHED'}
 

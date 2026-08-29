@@ -92,3 +92,50 @@ class PunishingGrayRavenMaterialIdentifierService:
 
         body_part_name = base_color_texture_image_name[last_index_of_first_group_of_numbers + 1:]
         return body_part_name
+
+
+class WutheringWavesMaterialIdentifierService:
+    @staticmethod
+    def split_material_name(mat_name: str):
+        """Extracts (base_part, version) from WuWa material name (MI_...)."""
+        if mat_name.endswith("_SEETHRU"):
+            mat_name = mat_name[:-8]
+        elif " " in mat_name and mat_name.split(" ")[0].endswith("_SEETHRU"):
+            parts_space = mat_name.split(" ")
+            parts_space[0] = parts_space[0][:-8]
+            mat_name = " ".join(parts_space)
+
+        parts = mat_name.split("_", 2)
+        if len(parts) < 2:
+            return "", ""
+
+        category_part = parts[1]
+
+        if category_part in ["Npc", "NH", "NPC"]:
+            if len(parts) > 2:
+                remaining = parts[2]
+                if "_" in remaining:
+                    suffix = remaining.rsplit("_", 1)[-1]
+                    if re.match(r"^\d+[A-Za-z]", suffix):
+                        suffix = re.sub(r"^\d+", "", suffix)
+                    return suffix, ""
+                if re.match(r"^\d+[A-Za-z]", remaining):
+                    return re.sub(r"^\d+", "", remaining), ""
+                return remaining, ""
+            base_part = category_part
+            version = "_" + parts[2] if len(parts) > 2 else ""
+            return base_part, version
+
+        words = re.findall(r"[A-Z][a-z]*", category_part)
+        if not words:
+            return "", category_part if len(parts) <= 2 else "_" + parts[2]
+
+        base_part = words[-1]
+        try:
+            version_start = category_part.rindex(base_part) + len(base_part)
+            version = category_part[version_start:]
+            if len(parts) > 2:
+                version += "_" + parts[2]
+        except ValueError:
+            version = ""
+        return base_part, version

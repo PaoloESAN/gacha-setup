@@ -46,6 +46,157 @@ class GI_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties
         return result
 
 
+def setup_wuwa_compositor_nodes(context):
+    """Sets up the Compositor post-processing node tree for Wuthering Waves using GranTurismoWrapper."""
+    scene = context.scene
+    addon_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    target_blend = os.path.join(addon_dir, "setup_wizard", "shaders", "wuwa", "Gustling Waters.blend")
+    if not os.path.exists(target_blend):
+        target_blend = os.path.join(addon_dir, "shaders", "wuwa", "Gustling Waters.blend")
+
+    # Load GranTurismoWrapper and its dependency node groups from blend if not already in data
+    if os.path.exists(target_blend):
+        try:
+            with bpy.data.libraries.load(target_blend, link=False) as (data_from, data_to):
+                data_to.node_groups = [
+                    g for g in data_from.node_groups
+                    if g not in bpy.data.node_groups and ('GranTurismo' in g or 'Compositing' in g or g in ('H_f', 'W_f', 'smoothstep'))
+                ]
+        except Exception as e_load:
+            print(f"[WUWA COMPOSITING] Notice loading node groups: {e_load}")
+
+    # Access or create compositor tree
+    tree = None
+    if hasattr(scene, "compositing_node_group"):
+        if not scene.compositing_node_group:
+            scene.compositing_node_group = bpy.data.node_groups.new("Compositing Nodetree", "CompositorNodeTree")
+        tree = scene.compositing_node_group
+    else:
+        scene.use_nodes = True
+        tree = getattr(scene, "node_tree", None)
+
+    if not tree:
+        return
+
+    tree.nodes.clear()
+
+    rl = tree.nodes.new(type="CompositorNodeRLayers")
+    rl.location = (-300, 0)
+
+    gt_group = bpy.data.node_groups.get("GranTurismoWrapper [APPEND]")
+    if gt_group:
+        grp_node = tree.nodes.new(type="CompositorNodeGroup")
+        grp_node.node_tree = gt_group
+        grp_node.location = (0, 0)
+        tree.links.new(rl.outputs["Image"], grp_node.inputs["Image"])
+
+        out_type = "NodeGroupOutput" if bpy.app.version >= (5, 0, 0) else "CompositorNodeComposite"
+        comp = tree.nodes.new(type=out_type)
+        comp.location = (300, 100)
+
+        if hasattr(tree, "interface") and not tree.interface.items_tree:
+            try:
+                tree.interface.new_socket(name="Image", in_out="OUTPUT", socket_type="NodeSocketColor")
+            except Exception:
+                pass
+
+        out_socket = comp.inputs.get("Image") or (comp.inputs[0] if comp.inputs else None)
+        if out_socket:
+            tree.links.new(grp_node.outputs["Result"], out_socket)
+
+        try:
+            viewer = tree.nodes.new(type="CompositorNodeViewer")
+            viewer.location = (300, -100)
+            tree.links.new(grp_node.outputs["Result"], viewer.inputs["Image"])
+        except Exception:
+            pass
+
+    # Clean up any duplicate or leftover scenes so only the active scene remains
+    current_scene = context.scene
+    for sc in list(bpy.data.scenes):
+        if sc != current_scene and (sc.name.startswith("Scene.") or "Scene.001" in sc.name or sc.name in ["Scene.001", "Scene.002", "Preview"]):
+            try:
+                bpy.data.scenes.remove(sc, do_unlink=True)
+            except Exception:
+                pass
+
+
+class WW_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
+    """Setup Wuthering Waves Compositor Post-Processing Nodes"""
+
+    bl_idname = "wuthering_waves.setup_compositor_nodes"
+    bl_label = "Wuthering Waves: Setup Compositor Nodes"
+
+    def execute(self, context):
+        try:
+            setup_wuwa_compositor_nodes(context)
+            self.report({'INFO'}, "Wuthering Waves compositor nodes configured.")
+        except Exception as ex:
+            self.report({'WARNING'}, f"Compositor setup notice: {ex}")
+        return {'FINISHED'}
+
+
+class WW_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties):
+    """Finish Setup for Wuthering Waves"""
+
+    bl_idname = "wuthering_waves.finish_setup"
+    bl_label = "Wuthering Waves: Finish Setup (UI)"
+
+    def execute(self, context):
+        result = BasicSetupUIOperator.execute(self, context)
+        context.scene.display_settings.display_device = 'sRGB'
+        context.scene.view_settings.view_transform = 'Standard'
+        context.scene.render.fps = 60
+
+        if hasattr(context.scene, "eevee"):
+            if hasattr(context.scene.eevee, "use_ssr"):
+                context.scene.eevee.use_ssr = True
+            if hasattr(context.scene.eevee, "use_shadows"):
+                context.scene.eevee.use_shadows = True
+
+        # Apply bone collection visibility and viewport display settings on rigs
+        target_rig = None
+        try:
+            from setup_wizard.character_rig_setup.wuwa_rig_script import apply_wuwa_bone_collection_visibilities
+            for obj in context.scene.objects:
+                if obj.type == "ARMATURE" and (obj.name.startswith("RIG-") or "rig" in obj.name.lower()):
+                    apply_wuwa_bone_collection_visibilities(obj)
+                    if hasattr(obj, "data") and obj.data:
+                        obj.data.display_type = 'STICK'
+                        obj.data.show_bone_custom_shapes = True
+                    obj.show_in_front = True
+                    target_rig = obj
+        except Exception as e_vis:
+            print(f"[WUWA FINISH] Notice applying bone collection visibility: {e_vis}")
+
+        if target_rig:
+            try:
+                bpy.ops.object.select_all(action='DESELECT')
+                target_rig.select_set(True)
+                context.view_layer.objects.active = target_rig
+                bpy.ops.object.mode_set(mode='POSE')
+            except Exception as e_mode:
+                print(f"[WUWA FINISH] Notice entering pose mode: {e_mode}")
+
+        # Setup Compositor post-processing nodes
+        try:
+            setup_wuwa_compositor_nodes(context)
+        except Exception as e_comp:
+            print(f"[WUWA FINISH] Notice setting up compositor nodes: {e_comp}")
+
+        # Remove any extra scenes created during append or setup
+        current_scene = context.scene
+        for sc in list(bpy.data.scenes):
+            if sc != current_scene and (sc.name.startswith("Scene.") or "Scene.001" in sc.name or sc.name in ["Scene.001", "Scene.002", "Preview"]):
+                try:
+                    bpy.data.scenes.remove(sc, do_unlink=True)
+                except Exception:
+                    pass
+
+        self.report({'INFO'}, "Finished Wuthering Waves setup successfully!")
+        return result
+
+
 class HSR_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties):
     """Finish Setup"""
 
@@ -596,10 +747,12 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
         if "Dehya" in armature.name and armature.animation_data:
             self.clean_character(armature)
 
-        # HSR and ZZZ models are typically already oriented correctly; forcing +90° X here breaks Finish Setup.
+        # HSR, ZZZ, NTE, and WuWa models are typically already oriented correctly; forcing +90° X here breaks them.
         should_force_upright_rotation = self.game_type not in [
             GameType.ZENLESS_ZONE_ZERO.name,
             GameType.HONKAI_STAR_RAIL.name,
+            GameType.NEVERNESS_TO_EVERNESS.name,
+            GameType.WUTHERING_WAVES.name,
         ]
 
         try:
@@ -655,4 +808,4 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
             bone.matrix_basis.identity()
 
 
-register, unregister = bpy.utils.register_classes_factory(GI_OT_FixTransformations)
+register, unregister = bpy.utils.register_classes_factory([GI_OT_FixTransformations])

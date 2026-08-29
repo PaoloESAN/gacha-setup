@@ -173,6 +173,8 @@ class GameGeometryNodesSetupFactory:
             return ZenlessZoneZeroGeometryNodesSetup(blender_operator, context)
         elif game_type == GameType.NEVERNESS_TO_EVERNESS.name:
             return NevernessToEvernessGeometryNodesSetup(blender_operator, context)
+        elif game_type == GameType.WUTHERING_WAVES.name:
+            return WutheringWavesGeometryNodesSetup(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -1683,10 +1685,126 @@ class NevernessToEvernessGeometryNodesSetup(GameGeometryNodesSetup):
         super().__init__(blender_operator, context)
 
     def setup_geometry_nodes(self):
-        NextStepInvoker().invoke(
-            self.blender_operator.next_step_idx, 
-            self.blender_operator.invoker_type,
-            high_level_step_name=self.blender_operator.high_level_step_name,
-            game_type=self.blender_operator.game_type,
-        )
+        pass
+
+
+class WutheringWavesGeometryNodesSetup(GameGeometryNodesSetup):
+    def __init__(self, blender_operator, context):
+        super().__init__(blender_operator, context)
+
+    def setup_geometry_nodes(self):
+        meshes = [obj for obj in self.context.scene.objects if obj.type == 'MESH']
+
+        lv_group = bpy.data.node_groups.get("Light Vectors")
+        outlines_group = bpy.data.node_groups.get("WW - Outlines")
+        star_group = bpy.data.node_groups.get("ResonatorStar Move")
+
+        head_origin = bpy.data.objects.get("Head Origin")
+        head_forward = bpy.data.objects.get("Head Forward")
+        head_up = bpy.data.objects.get("Head Up")
+        light_dir = bpy.data.objects.get("Light Direction")
+        highlight_top = bpy.data.objects.get("Highlight Top")
+        highlight_bottom = bpy.data.objects.get("Highlight Bottom")
+
+        controls = {
+            'Light Direction': light_dir,
+            'Head Origin': head_origin,
+            'Head Forward': head_forward,
+            'Head Up': head_up,
+            'Highlight Top': highlight_top,
+            'Highlight Bottom': highlight_bottom,
+        }
+
+        helper_names = ['highlight top', 'highlight bottom', 'eye highlight', 'sun', 'circle', 'cube', 'light direction', 'head origin', 'head forward', 'head up', 'wgt', 'rootshape', 'isaacfacerig', 'lightingpanel']
+
+        for mesh in meshes:
+            name_low = mesh.name.lower()
+            if "_seethru" in name_low or any(h in name_low for h in helper_names):
+                continue
+            if any(c.name.startswith("WGTS") or c.name.lower() == "wgt" for c in mesh.users_collection):
+                continue
+
+            # 1. Add Light Vectors Geometry Nodes Modifier
+            if lv_group:
+                mod_name = f"Light Vectors {mesh.name}"
+                mod = mesh.modifiers.get(mod_name) or mesh.modifiers.get("Light Vectors")
+                if not mod:
+                    mod = mesh.modifiers.new(name=mod_name, type='NODES')
+                mod.node_group = lv_group
+
+                # Assign object inputs using Blender 5.2 sock.value and dictionary fallbacks
+                if hasattr(lv_group, "interface") and hasattr(lv_group.interface, "items_tree"):
+                    for item in lv_group.interface.items_tree:
+                        if getattr(item, 'item_type', '') == 'SOCKET' and getattr(item, 'in_out', '') == 'INPUT':
+                            ident = getattr(item, 'identifier', '')
+                            name = item.name
+                            target = controls.get(name)
+                            if target:
+                                if hasattr(mod, 'properties') and hasattr(mod.properties, 'inputs'):
+                                    sock = getattr(mod.properties.inputs, ident, None)
+                                    if sock and hasattr(sock, 'value'):
+                                        try:
+                                            sock.value = target
+                                        except Exception:
+                                            pass
+                                try:
+                                    mod[ident] = target
+                                except Exception:
+                                    pass
+
+            # 2. Add WW - Outlines Geometry Nodes Modifier
+            if outlines_group:
+                mod_name = f"WW - Outlines {mesh.name}"
+                mod = mesh.modifiers.get(mod_name) or mesh.modifiers.get("WW - Outlines") or mesh.modifiers.get("Outlines")
+                if not mod:
+                    mod = mesh.modifiers.new(name=mod_name, type='NODES')
+                mod.node_group = outlines_group
+
+                # Assign camera and outline materials
+                outline_mat = bpy.data.materials.get("WW - Outlines")
+                char_materials = []
+                for slot in mesh.material_slots:
+                    if slot.material and slot.material not in char_materials:
+                        mat_low = slot.material.name.lower()
+                        if not any(ign in mat_low for ign in ["eye", "star", "highlight", "outline"]):
+                            char_materials.append(slot.material)
+
+                def _set_outline_input(socket_name, val):
+                    if hasattr(outlines_group, "interface") and hasattr(outlines_group.interface, "items_tree"):
+                        for item in outlines_group.interface.items_tree:
+                            if getattr(item, 'item_type', '') == 'SOCKET' and getattr(item, 'in_out', '') == 'INPUT':
+                                if item.name == socket_name:
+                                    ident = item.identifier
+                                    if hasattr(mod, 'properties') and hasattr(mod.properties, 'inputs'):
+                                        sock = getattr(mod.properties.inputs, ident, None)
+                                        if sock and hasattr(sock, 'value'):
+                                            try:
+                                                sock.value = val
+                                                break
+                                            except Exception:
+                                                pass
+                                    try:
+                                        mod[ident] = val
+                                    except Exception:
+                                        pass
+                                    break
+
+                if bpy.context.scene.camera:
+                    _set_outline_input("Camera", bpy.context.scene.camera)
+
+                for idx, c_mat in enumerate(char_materials[:7], start=1):
+                    _set_outline_input(f"Outline {idx} Mask", c_mat)
+                    if outline_mat:
+                        _set_outline_input(f"Outline {idx} Material", outline_mat)
+
+            # 3. Add ResonatorStar Move if mesh has ResonatorStar material
+            has_star = any(s.material and "star" in s.material.name.lower() for s in mesh.material_slots)
+            if has_star and star_group:
+                mod_name = f"ResonatorStar Move {mesh.name}"
+                mod = mesh.modifiers.get(mod_name) or mesh.modifiers.get("ResonatorStar Move")
+                if not mod:
+                    mod = mesh.modifiers.new(name=mod_name, type='NODES')
+                mod.node_group = star_group
+
+        self.blender_operator.report({'INFO'}, 'Configured Geometry Nodes and Outlines for Wuthering Waves.')
 

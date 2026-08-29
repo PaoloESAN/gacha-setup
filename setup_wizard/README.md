@@ -7,6 +7,7 @@
 * Festivity's Honkai: Star Rail Shader: https://github.com/festivities/Blender-StellarToon
 * Nya222's Honkai: Star Rail Shader (Omatsuri Discord Server)
 * Zenless Zone Zero (ZZZ) & Neverness to Everness (NTE) Shaders
+* JaredNyts's Gustling Waters Shader for Wuthering Waves (WuWa)
 
 **Compatibility**: Designed specifically for official **Blender 5.2+**. Using older versions of Blender or Goo Blender is **NOT recommended**.
 
@@ -74,7 +75,7 @@ Thanks to all those who collaborated on the original project:
 * [@BonnyAnimations](https://github.com/BonnyAnimations) — [YouTube](https://www.youtube.com/@BonnyAnimations) | [Twitter](https://x.com/BonnyTweetsOFF)
 * Enthralpy — [YouTube](https://www.youtube.com/@Enthralpy) | [Twitter](https://x.com/Enthralpy)
 * [@OctavoPE](https://github.com/OctavoPE) — [Twitter](https://x.com/Llama3D)
-* JaredNyts — [Twitter](https://twitter.com/jared_nyts)
+* [@nytsjared](https://github.com/nytsjared)
 * SubutaiProduction — [YouTube](https://www.youtube.com/@SubutaiProduction) | [Twitter](https://twitter.com/SubutaiEdits)
 * Aiko — [YouTube](https://www.youtube.com/@AikoDesu) | [Twitter](https://x.com/Aiko__ya)
 
@@ -98,6 +99,9 @@ Thanks to all those who collaborated on the original project:
 * **NTE**:
   * **Shader**: Omatsuri Discord
   * **Rig**: 矩阵映画
+* **WuWa / Wuthering Waves**:
+  * **Shader**: [Gustling Waters](https://github.com/nytsjared/Gustling-Waters) by [@nytsjared](https://github.com/nytsjared)
+  * **Base Addon & Rigging**: [Blender-WuWa-Character-Setup](https://github.com/fnoji/Blender-WuWa-Character-Setup) by [@fnoji](https://github.com/fnoji)
 * **Hair & Clothes Physics**:
   * [thewindlead](https://www.youtube.com/@thewindlead)
 * **Assets**:

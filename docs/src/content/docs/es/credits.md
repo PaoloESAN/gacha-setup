@@ -13,7 +13,8 @@ description: Agradecimientos, colaboradores y créditos de recursos.
 - **[@BonnyAnimations](https://github.com/BonnyAnimations)** — Shader de ZZZ · [GitHub](https://github.com/BonnyAnimations) · [YouTube](https://www.youtube.com/@BonnyAnimations) · [X](https://x.com/BonnyAnimations)
 - **Enthralpy** — Rigging y scripting de ZZZ · [YouTube](https://www.youtube.com/@Enthralpy) · [X](https://x.com/Enthralpy)
 - **[@OctavoPE](https://github.com/OctavoPE)** — [GitHub](https://github.com/OctavoPE) · [X](https://x.com/Llama3D)
-- **JaredNyts** — [X](https://twitter.com/jared_nyts)
+- **[@fnoji](https://github.com/fnoji)** — Setup base y rigging de WuWa · [GitHub](https://github.com/fnoji)
+- **[@nytsjared](https://github.com/nytsjared)** — Shader Gustling Waters de WuWa · [GitHub](https://github.com/nytsjared)
 - **SubutaiProduction** — [YouTube](https://www.youtube.com/@SubutaiProduction) · [X](https://twitter.com/SubutaiEdits)
 - **Aiko** — Shader de ZZZ · [YouTube](https://www.youtube.com/@AikoDesu) · [X](https://x.com/Aiko__ya)
 - **TheyCallMeSpy**
