@@ -1025,7 +1025,17 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     if target_mat_name:
                         template_mat = bpy.data.materials.get(target_mat_name)
                         if template_mat:
+                            orig_tex_name = None
+                            if mat and mat.node_tree:
+                                for n in mat.node_tree.nodes:
+                                    if n.type == 'TEX_IMAGE' and n.image and n.image.name:
+                                        orig_tex_name = n.image.name
+                                        break
                             new_mat = template_mat.copy()
+                            if orig_tex_name:
+                                new_mat["_original_fbx_texture"] = orig_tex_name
+                            if mat and mat.name:
+                                new_mat["_original_material_name"] = mat.name
                             name_base = mat.name if mat else mesh.name
                             new_mat.name = f"ZZZ Shader {name_base}"
                             new_mat.use_fake_user = True
@@ -1038,9 +1048,12 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 if any(k in m_lower for k in ["weapon", "wpn", "equip", "sword", "blade", "spear", "lance", "gun", "prop"]):
                     for slot in mesh.material_slots:
                         if not slot.material and main_weapon_mat:
-                            slot.material = main_weapon_mat
+                            new_mat = main_weapon_mat.copy()
+                            new_mat.name = f"ZZZ Shader {mesh.name}"
+                            new_mat.use_fake_user = True
+                            slot.material = new_mat
 
-            self.blender_operator.report({'INFO'}, "Replaced default materials with Legacy ZZZ Shader materials...")
+            self.blender_operator.report({'INFO'}, "Replaced default materials with ZZZ Shader materials...")
 
         else:
             # --- KYTHERA SHADER REPLACEMENT ---
@@ -1110,7 +1123,18 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     template_mat = face_template if is_face else shader_template
 
                     if template_mat:
+                        orig_tex_name = None
+                        if mat and mat.node_tree:
+                            for n in mat.node_tree.nodes:
+                                if n.type == 'TEX_IMAGE' and n.image and n.image.name:
+                                    orig_tex_name = n.image.name
+                                    break
+
                         new_mat = template_mat.copy()
+                        if orig_tex_name:
+                            new_mat["_original_fbx_texture"] = orig_tex_name
+                        if mat and mat.name:
+                            new_mat["_original_material_name"] = mat.name
                         
                         # Ensure meaningful name preserving mesh context (e.g. Wing, Dress, Leg, Hair, Body)
                         if mat and mat.name and not mat.name.lower().startswith(("material", "default", "node", "untitled")):

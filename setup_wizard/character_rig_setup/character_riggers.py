@@ -548,11 +548,27 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
             )
         except Exception as e:
             print(f"[ZZZ Rig Warning] zzz_rig_character skipped/error: {e}")
+        finally:
+            try:
+                if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+                    bpy.ops.object.mode_set(mode='OBJECT')
+            except Exception:
+                pass
 
         try:
             zzz_face_rig_main()
         except Exception as e:
-            print(f"Face rig skipped: {e}")
+            print(f"[ZZZ Rig Warning] Face rig skipped: {e}")
+            try:
+                setup_isaac_face_rig(armature)
+            except Exception as e_isaac:
+                print(f"[ZZZ Rig Warning] Isaac face rig fallback skipped: {e_isaac}")
+        finally:
+            try:
+                if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+                    bpy.ops.object.mode_set(mode='OBJECT')
+            except Exception:
+                pass
 
         def join_extra_armatures(body_rig):
             # Check for any unmerged armatures (Lighting Panel, FaceRig, etc.)
@@ -565,12 +581,15 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
                                 bpy.ops.object.mode_set(mode='OBJECT')
                         except Exception:
                             pass
-                        bpy.ops.object.select_all(action='DESELECT')
-                        obj.select_set(True)
-                        body_rig.select_set(True)
-                        bpy.context.view_layer.objects.active = body_rig
-                        bpy.ops.object.join()
-                        print(f"[ZZZ RIG] Joined '{obj.name}' into '{body_rig.name}' with bpy.ops.object.join()")
+                        try:
+                            bpy.ops.object.select_all(action='DESELECT')
+                            obj.select_set(True)
+                            body_rig.select_set(True)
+                            bpy.context.view_layer.objects.active = body_rig
+                            bpy.ops.object.join()
+                            print(f"[ZZZ RIG] Joined '{obj.name}' into '{body_rig.name}' with bpy.ops.object.join()")
+                        except Exception as join_err:
+                            print(f"[ZZZ RIG Warning] Failed to join '{obj.name}' into '{body_rig.name}': {join_err}")
 
         join_extra_armatures(armature)
 
@@ -595,15 +614,28 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
                             assign_empty('Input_5', 'Head Forward')
                             assign_empty('Input_6', 'Head Up')
 
-        refresh_light_vectors_modifiers()
+        try:
+            refresh_light_vectors_modifiers()
+        except Exception as e_light:
+            print(f"[ZZZ Rig Warning] refresh_light_vectors_modifiers error: {e_light}")
 
         if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):
-            from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
-            apply_hair_and_clothes_physics(armature, self.context)
+            try:
+                from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
+                apply_hair_and_clothes_physics(armature, self.context)
+            except Exception as e_phys:
+                print(f"[ZZZ Rig Warning] apply_hair_and_clothes_physics error: {e_phys}")
 
         cache_enabled = self.context.window_manager.cache_enabled
         if cache_enabled and filepath:
             cache_using_cache_key(get_cache(cache_enabled), self.rigify_bone_shapes_file_path, filepath)
+
+        try:
+            if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+                bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.select_all(action='DESELECT')
+        except Exception:
+            pass
 
         self.blender_operator.report({'INFO'}, 'Successfully rigged ZZZ character')
 

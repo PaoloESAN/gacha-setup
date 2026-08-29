@@ -686,32 +686,31 @@ class ZZZ_OT_MoveLightingPanelToCharacterCollection(Operator, CustomOperatorProp
         return find_zzz_character_collection()
 
     def execute(self, context):
-        # 1. Merge secondary armatures (Eye -> 'Face', Lighting Panel -> 'Lighting') into main character rig
+        # 1. Merge secondary armatures (Eye / FaceRig, Lighting Panel) into main character rig
         main_rig = find_zzz_character_armature()
         if main_rig:
-            from setup_wizard.join_meshes_on_armature.join_meshes_operator import GI_OT_JoinMeshesOnArmature
+            try:
+                if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+                    bpy.ops.object.mode_set(mode='OBJECT')
+            except Exception:
+                pass
 
-            # Merge Eye / Face rig
+            # Merge Eye / Face rig and Lighting Panel rig
             for obj in list(bpy.data.objects):
-                if obj.type == 'ARMATURE' and obj != main_rig:
+                if obj.type == 'ARMATURE' and obj != main_rig and obj.name != main_rig.name:
                     o_l = obj.name.lower()
-                    if any(k in o_l for k in ["eye", "facerig", "face", "isaac"]) and "lighting" not in o_l and "panel" not in o_l:
+                    if any(k in o_l for k in ["lighting", "panel", "facerig", "isaac", "eye", "face"]):
                         try:
-                            GI_OT_JoinMeshesOnArmature.safe_merge_armatures(main_rig, obj, context, collection_name="Face", parent_to_head=True)
+                            if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+                                bpy.ops.object.mode_set(mode='OBJECT')
+                            bpy.ops.object.select_all(action='DESELECT')
+                            obj.select_set(True)
+                            main_rig.select_set(True)
+                            bpy.context.view_layer.objects.active = main_rig
+                            bpy.ops.object.join()
+                            print(f"[ZZZ] Joined '{obj.name}' into '{main_rig.name}'")
                         except Exception as ex:
-                            print(f"[ZZZ] Eye rig merge warning: {ex}")
-                        break
-
-            # Merge Lighting Panel rig
-            for obj in list(bpy.data.objects):
-                if obj.type == 'ARMATURE' and obj != main_rig:
-                    o_l = obj.name.lower()
-                    if any(k in o_l for k in ["lighting panel", "light panel", "lighting", "panel"]):
-                        try:
-                            GI_OT_JoinMeshesOnArmature.safe_merge_armatures(main_rig, obj, context, collection_name="Lighting", parent_to_head=False)
-                        except Exception as ex:
-                            print(f"[ZZZ] Lighting Panel merge warning: {ex}")
-                        break
+                            print(f"[ZZZ] Armature merge warning: {ex}")
 
         # 2. Ensure all ColorWheel meshes are ONLY in character collection and not in lights/wgt
         target_coll = self._find_character_collection() or self._find_target_collection()

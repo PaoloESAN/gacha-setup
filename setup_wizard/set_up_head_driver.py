@@ -133,6 +133,13 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
                 high_level_step_name=self.high_level_step_name,
                 game_type=self.game_type,
             )
+        else:
+            try:
+                if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+                    bpy.ops.object.mode_set(mode='OBJECT')
+                bpy.ops.object.select_all(action='DESELECT')
+            except Exception:
+                pass
         return {"FINISHED"}
 
     def _get_child_of_constraint(self, obj):

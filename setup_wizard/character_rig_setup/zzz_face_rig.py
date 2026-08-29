@@ -140,10 +140,17 @@ def shapekeyrename(keyblock):
 
 def find_armature_and_head(mesh_obj):
     armature = None
-    for m in mesh_obj.modifiers:
-        if m.type == 'ARMATURE' and m.object:
-            armature = m.object
-            break
+    if mesh_obj:
+        for m in mesh_obj.modifiers:
+            if m.type == 'ARMATURE' and m.object:
+                armature = m.object
+                break
+    if armature is None:
+        for o in bpy.data.objects:
+            if o.type == 'ARMATURE' and o.name in bpy.context.view_layer.objects:
+                if not any(ign in o.name.lower() for ign in ['metarig', 'backup']):
+                    armature = o
+                    break
     if armature is None:
         for o in bpy.data.objects:
             if o.type == 'ARMATURE':
@@ -161,13 +168,11 @@ def find_armature_and_head(mesh_obj):
             break
     if head_name is None:
         for b in armature.data.bones:
-            if 'head' in b.name.lower():
+            if 'head' in b.name.lower() or 'spine.006' in b.name.lower():
                 head_name = b.name
                 break
-    if head_name is None:
-        raise Exception(
-            "Couldn't find a head bone. Set HEAD_BONE_NAME at the top of the "
-            "script. Looked for: " + ", ".join(c for c in names if c))
+    if head_name is None and len(armature.data.bones) > 0:
+        head_name = armature.data.bones[0].name
     return armature, head_name
 
 
@@ -175,13 +180,118 @@ def find_eyebrow_bones(armature):
     out = []
     for b in armature.data.bones:
         low = b.name.strip().lower()
-        if low.startswith("ctrl-") or low.startswith("face-root"):
+        if low.startswith("ctrl-") or low.startswith("face-root") or low.startswith("mch-") or low.startswith("def-") or low.startswith("org-"):
             continue
-        if low.startswith("skneyebrow_") or "eyebrow" in low:
+        if low.startswith("skneyebrow_") or "eyebrow" in low or (low.startswith("ctr_") and "hair" not in low and "eyebrow" in low):
             out.append(b.name)
         elif (low.startswith("ebr_") or low.startswith("ebr ")) and low.endswith("bone"):
             out.append(b.name)
     return out
+
+
+def find_mouth_bones(armature):
+    out = []
+    for b in armature.data.bones:
+        low = b.name.strip().lower()
+        if low.startswith("ctrl-") or low.startswith("face-root") or low.startswith("mch-") or low.startswith("def-") or low.startswith("org-"):
+            continue
+        if any(k in low for k in ["skn_l_mouth", "skn_r_mouth", "skn_m_mouth", "bdymouth", "bdy_m_mouth", "ptmouth", "pt_m_mouth", "bn_mouthcontrol", "mouth_a", "mouth_b", "mouth_c", "ctr_up_teeth", "ctr_down_teeth"]):
+            out.append(b.name)
+    return out
+
+
+def find_extra_face_bones(armature):
+    out = []
+    for b in armature.data.bones:
+        low = b.name.strip().lower()
+        if low.startswith("ctrl-") or low.startswith("face-root") or low.startswith("mch-") or low.startswith("def-") or low.startswith("org-"):
+            continue
+        if any(k in low for k in ["highlight", "remimk", "facemark", "face_mark", "mole", "tear"]):
+            out.append(b.name)
+    return out
+
+
+def build_mouth_bone_controls(armature, fwd, up, right, face_size):
+    controls = []
+    mouth_bones = find_mouth_bones(armature)
+    if not mouth_bones:
+        return controls
+
+    positions = [armature.matrix_world @ armature.data.bones[bn].head_local for bn in mouth_bones]
+    center = sum(positions, Vector((0.0, 0.0, 0.0))) / len(positions)
+    master_name = 'CTRL-Mouth_Master'
+    controls.append({
+        'name': master_name,
+        'collection': FACERIG_COLLECTION,
+        'color': COL_MOUTH,
+        'group': 'Face Mouth',
+        'head': center + fwd * (face_size * 0.15),
+        'widget': 'lipsmaster',
+        'lim': face_size * TRAVEL_F,
+        'free': ('X', 'Y', 'Z'),
+        'range': 'both',
+        'shape_scale': Vector((face_size * 0.08,) * 3),
+        'kind': 'master',
+        'drivers': []
+    })
+
+    for bn in mouth_bones:
+        head_world = armature.matrix_world @ armature.data.bones[bn].head_local
+        front = center + (head_world - center) * 0.85 + fwd * (face_size * 0.12)
+        ctrl_name = 'CTRL-' + bn.strip().replace(' ', '_')
+        low = bn.lower()
+        if '_l' in low or '.l' in low:
+            wgt = 'lip00.L'
+        elif '_r' in low or '.r' in low:
+            wgt = 'lip00.R'
+        else:
+            wgt = 'eyeblink'
+        controls.append({
+            'name': ctrl_name,
+            'collection': FACERIG_COLLECTION,
+            'color': COL_CORNER,
+            'group': 'Face Mouth',
+            'head': front,
+            'widget': wgt,
+            'lim': face_size * TRAVEL_F,
+            'free': ('X', 'Y', 'Z'),
+            'range': 'both',
+            'shape_scale': Vector((face_size * 0.035,) * 3),
+            'kind': 'fk',
+            'target_bone': bn,
+            'parent': master_name,
+            'hook_name': ctrl_name + '_Hook',
+            'hook_head': head_world,
+            'drivers': []
+        })
+    return controls
+
+
+def build_extra_face_bone_controls(armature, fwd, up, right, face_size):
+    controls = []
+    extra_bones = find_extra_face_bones(armature)
+    for bn in extra_bones:
+        head_world = armature.matrix_world @ armature.data.bones[bn].head_local
+        front = head_world + fwd * (face_size * 0.10)
+        ctrl_name = 'CTRL-' + bn.strip().replace(' ', '_')
+        controls.append({
+            'name': ctrl_name,
+            'collection': FACERIG_COLLECTION,
+            'color': COL_EYEAIM,
+            'group': 'Face Extra',
+            'head': front,
+            'widget': 'ring' if 'highlight' in bn.lower() else 'diamond',
+            'lim': face_size * TRAVEL_F,
+            'free': ('X', 'Y', 'Z'),
+            'range': 'both',
+            'shape_scale': Vector((face_size * 0.030,) * 3),
+            'kind': 'fk',
+            'target_bone': bn,
+            'hook_name': ctrl_name + '_Hook',
+            'hook_head': head_world,
+            'drivers': []
+        })
+    return controls
 
 
 def eyebrow_side(name):
@@ -209,6 +319,8 @@ def skneyebrow_pos(armature, seg, side):
 
 
 def build_brow_shapekey_controls(mesh_obj, armature, fwd, up, face_size):
+    if not mesh_obj or not mesh_obj.data or not mesh_obj.data.shape_keys:
+        return []
     kb = mesh_obj.data.shape_keys.key_blocks
     right = up.cross(fwd).normalized()
     OFFSET = face_size * OFFSET_F
@@ -319,6 +431,8 @@ def build_brow_shapekey_controls(mesh_obj, armature, fwd, up, face_size):
 
 
 def feature_centroid(mesh_obj, key_names, side=None):
+    if not mesh_obj or not mesh_obj.data or not mesh_obj.data.shape_keys:
+        return None
     kb = mesh_obj.data.shape_keys.key_blocks
     basis = kb.get("Basis")
     if basis is None:
@@ -363,6 +477,8 @@ def feature_centroid(mesh_obj, key_names, side=None):
 
 
 def feature_extent(mesh_obj, key_names, right, up):
+    if not mesh_obj or not mesh_obj.data or not mesh_obj.data.shape_keys:
+        return None
     kb = mesh_obj.data.shape_keys.key_blocks
     basis = kb.get("Basis")
     if basis is None:
@@ -390,6 +506,8 @@ def feature_extent(mesh_obj, key_names, right, up):
 
 
 def feature_extreme(mesh_obj, key_names, axis):
+    if not mesh_obj or not mesh_obj.data or not mesh_obj.data.shape_keys:
+        return None
     kb = mesh_obj.data.shape_keys.key_blocks
     basis = kb.get("Basis")
     if basis is None:
@@ -416,31 +534,40 @@ def feature_extreme(mesh_obj, key_names, axis):
     return (pmax, pmin)
 
 
-def face_frame(mesh_obj):
-    me = mesh_obj.data
+def face_frame(mesh_obj, armature=None):
     mw = mesh_obj.matrix_world
-    fwd = Vector((0.0, 0.0, 0.0))
-    for v in me.vertices:
-        fwd += v.normal
-    fwd = mw.to_3x3() @ fwd
-    if fwd.length < 1e-6:
-        fwd = Vector((0.0, -1.0, 0.0))
-    fwd.normalize()
+    fwd = Vector((0.0, -1.0, 0.0))
+    right = Vector((1.0, 0.0, 0.0))
+    up = Vector((0.0, 0.0, 1.0))
 
-    world_up = Vector((0.0, 0.0, 1.0))
-    if abs(fwd.dot(world_up)) > 0.95:
-        world_up = Vector((0.0, 1.0, 0.0))
-    right = world_up.cross(fwd).normalized()
-    up = fwd.cross(right).normalized()
+    face_size = 0.20
+    if armature:
+        eb_L = armature.data.bones.get("eye.L") or armature.data.bones.get("DEF-eye.L") or armature.data.bones.get("Skn_L_Eye")
+        eb_R = armature.data.bones.get("eye.R") or armature.data.bones.get("DEF-eye.R") or armature.data.bones.get("Skn_R_Eye")
+        if eb_L and eb_R:
+            sep = (eb_L.head_local - eb_R.head_local).length
+            if 0.01 < sep < 0.3:
+                face_size = sep * 3.5
+        else:
+            head_b = armature.data.bones.get("Head") or armature.data.bones.get("head") or armature.data.bones.get("spine.006")
+            if head_b and 0.05 < head_b.length < 0.5:
+                face_size = head_b.length * 1.2
+    else:
+        corners = [mw @ Vector(c) for c in mesh_obj.bound_box]
+        mn = Vector((min(c.x for c in corners), min(c.y for c in corners), min(c.z for c in corners)))
+        mx = Vector((max(c.x for c in corners), max(c.y for c in corners), max(c.z for c in corners)))
+        bb_size = (mx - mn).length
+        if 0.05 < bb_size < 0.45:
+            face_size = bb_size
 
-    corners = [mw @ Vector(c) for c in mesh_obj.bound_box]
-    mn = Vector((min(c.x for c in corners), min(c.y for c in corners), min(c.z for c in corners)))
-    mx = Vector((max(c.x for c in corners), max(c.y for c in corners), max(c.z for c in corners)))
-    face_size = (mx - mn).length
+    if face_size < 1e-4 or face_size > 0.35:
+        face_size = 0.20
     return fwd, right, up, face_size
 
 
 def plan_controls(mesh_obj, fwd, right, up, face_size):
+    if not mesh_obj or not mesh_obj.data or not mesh_obj.data.shape_keys:
+        return []
     keyblock = mesh_obj.data.shape_keys.key_blocks
     OFFSET  = face_size * OFFSET_F
     LIM     = face_size * TRAVEL_F
@@ -904,7 +1031,7 @@ def purge_previous(armature):
 
 
 def setup_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_size):
-    keyblock = mesh_obj.data.shape_keys.key_blocks
+    keyblock = mesh_obj.data.shape_keys.key_blocks if (mesh_obj and mesh_obj.data and mesh_obj.data.shape_keys) else None
     amw_inv = armature.matrix_world.inverted()
     bone_len = face_size * BONE_LEN_F
 
@@ -917,9 +1044,9 @@ def setup_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_size):
     fwd_arm = to_arm_vec(fwd).normalized()
     up_arm = to_arm_vec(up).normalized()
 
-    has_ebrow_sk = any(is_eyebrow_key(sk.name) for sk in keyblock)
+    has_ebrow_sk = any(is_eyebrow_key(sk.name) for sk in keyblock) if keyblock else False
     ebrow_bones = [] if has_ebrow_sk else find_eyebrow_bones(armature)
-    if has_ebrow_sk:
+    if has_ebrow_sk and keyblock:
         controls.extend(build_brow_shapekey_controls(mesh_obj, armature, fwd, up, face_size))
     elif ebrow_bones:
         pass
@@ -1145,48 +1272,49 @@ def setup_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_size):
 
     bpy.ops.object.mode_set(mode='OBJECT')
 
-    agg = {}
-    for c in controls:
-        for d in c['drivers']:
-            agg.setdefault(d['key'], []).append(
-                {'bone': c['name'], 'axis': d['axis'], 'dir': d['dir'],
-                 'lim': c['lim'], 'bidir': d.get('bidir', False),
-                 'gain': d.get('gain', 1.0)})
+    if keyblock is not None:
+        agg = {}
+        for c in controls:
+            for d in c.get('drivers', []):
+                agg.setdefault(d['key'], []).append(
+                    {'bone': c['name'], 'axis': d['axis'], 'dir': d['dir'],
+                     'lim': c['lim'], 'bidir': d.get('bidir', False),
+                     'gain': d.get('gain', 1.0)})
 
-    for key, entries in agg.items():
-        sk = keyblock.get(key)
-        if sk is None:
-            continue
-        sk.slider_min = -1.0 if any(e['bidir'] for e in entries) else 0.0
-        try:
-            sk.driver_remove("value")
-        except Exception:
-            pass
-        drv = sk.driver_add("value").driver
-        drv.type = 'SCRIPTED'
-        terms = []
-        for i, e in enumerate(entries):
-            vn = "v%d" % i
-            var = drv.variables.new()
-            var.name = vn
-            var.type = 'TRANSFORMS'
-            tgt = var.targets[0]
-            tgt.id = armature
-            tgt.bone_target = e['bone']
-            tgt.transform_type = 'LOC_' + e['axis']
-            tgt.transform_space = 'LOCAL_SPACE'
-            sign = '' if e['dir'] > 0 else '-'
-            g = e.get('gain', 1.0)
-            if e['bidir']:
-                base = "%s%s / %r" % (sign, vn, e['lim'])
-            else:
-                base = "max(0.0, %s%s / %r)" % (sign, vn, e['lim'])
-            terms.append(base if g == 1.0 else "%r * (%s)" % (g, base))
-        drv.expression = terms[0] if len(terms) == 1 else "max(" + ", ".join(terms) + ")"
+        for key, entries in agg.items():
+            sk = keyblock.get(key)
+            if sk is None:
+                continue
+            sk.slider_min = -1.0 if any(e['bidir'] for e in entries) else 0.0
+            try:
+                sk.driver_remove("value")
+            except Exception:
+                pass
+            drv = sk.driver_add("value").driver
+            drv.type = 'SCRIPTED'
+            terms = []
+            for i, e in enumerate(entries):
+                vn = "v%d" % i
+                var = drv.variables.new()
+                var.name = vn
+                var.type = 'TRANSFORMS'
+                tgt = var.targets[0]
+                tgt.id = armature
+                tgt.bone_target = e['bone']
+                tgt.transform_type = 'LOC_' + e['axis']
+                tgt.transform_space = 'LOCAL_SPACE'
+                sign = '' if e['dir'] > 0 else '-'
+                g = e.get('gain', 1.0)
+                if e['bidir']:
+                    base = "%s%s / %r" % (sign, vn, e['lim'])
+                else:
+                    base = "max(0.0, %s%s / %r)" % (sign, vn, e['lim'])
+                terms.append(base if g == 1.0 else "%r * (%s)" % (g, base))
+            drv.expression = terms[0] if len(terms) == 1 else "max(" + ", ".join(terms) + ")"
 
-    _ang = keyblock.get("Fac_Ebr_Angry")
-    if _ang is not None:
-        _ang.slider_min = 0.0
+        _ang = keyblock.get("Fac_Ebr_Angry")
+        if _ang is not None:
+            _ang.slider_min = 0.0
 
 
 def assign_bones_to_other_collection(armature, bone_names):
@@ -1233,14 +1361,18 @@ def remove_eyetrack_bones(armature):
 
 
 def hide_mechanism_bones(armature):
-    HIDE_PREFIXES = ("CtrEyebrow", "SknEyebrow", "SknEyeLight", "SknMouth", "Face-Root")
+    HIDE_PREFIXES = (
+        "CtrEyebrow", "SknEyebrow", "SknEyeLight", "SknMouth", "Face-Root",
+        "Skn_L_Mouth", "Skn_R_Mouth", "Skn_M_Mouth", "Skn_L_Highlights",
+        "Skn_R_Highlights", "Skn_RemiMk_", "BdyMouth", "PTMouth"
+    )
 
     if bpy.context.object and bpy.context.object.mode != 'OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
     bpy.context.view_layer.objects.active = armature
     hidden = 0
     for b in armature.data.bones:
-        if b.name.startswith(HIDE_PREFIXES):
+        if any(b.name.startswith(p) for p in HIDE_PREFIXES):
             b.hide = True
             hidden += 1
 
@@ -1262,7 +1394,19 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
     if bpy.context.object and bpy.context.object.mode != 'OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
     bpy.context.view_layer.objects.active = armature
-    if "eye.L" not in armature.data.bones or "eye.R" not in armature.data.bones:
+
+    eye_L_name = None
+    for cand in ("eye.L", "DEF-eye.L", "Skn_L_Eye", "+EyeBone L A01", "+EyeBone L A02", "EYE_L", "Eye_L", "PT_L_Eye", "Bn_Eye_L"):
+        if cand in armature.data.bones:
+            eye_L_name = cand
+            break
+    eye_R_name = None
+    for cand in ("eye.R", "DEF-eye.R", "Skn_R_Eye", "+EyeBone R A01", "+EyeBone R A02", "EYE_R", "Eye_R", "PT_R_Eye", "Bn_Eye_R"):
+        if cand in armature.data.bones:
+            eye_R_name = cand
+            break
+
+    if not eye_L_name or not eye_R_name:
         return
 
     amw_inv = armature.matrix_world.inverted()
@@ -1270,7 +1414,7 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
     up_arm = (amw_inv.to_3x3() @ up).normalized()
 
     MASTER = "CTRL-Eye_Master"
-    PAIRS = (("eye.L", "CTRL-Eye.L", "MCH-EyeAim.L"), ("eye.R", "CTRL-Eye.R", "MCH-EyeAim.R"))
+    PAIRS = ((eye_L_name, "CTRL-Eye.L", "MCH-EyeAim.L"), (eye_R_name, "CTRL-Eye.R", "MCH-EyeAim.R"))
 
     bpy.ops.object.mode_set(mode='EDIT')
     eb = armature.data.edit_bones
@@ -1283,7 +1427,9 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
     gaze_dirs = {}
     track_axes = {}
     for eye_name, ctl_name, mch_name in PAIRS:
-        e = eb[eye_name]
+        e = eb.get(eye_name)
+        if not e:
+            continue
         m = e.matrix
         cand = [(m.col[0].to_3d(), 'TRACK_X', 'TRACK_NEGATIVE_X'),
                 (m.col[1].to_3d(), 'TRACK_Y', 'TRACK_NEGATIVE_Y'),
@@ -1309,7 +1455,11 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
                 track_axes[eye_name] = nax
         e_heads[eye_name] = e.head.copy()
 
-    sep = (e_heads["eye.L"] - e_heads["eye.R"]).length
+    if eye_L_name not in e_heads or eye_R_name not in e_heads:
+        bpy.ops.object.mode_set(mode='OBJECT')
+        return
+
+    sep = (e_heads[eye_L_name] - e_heads[eye_R_name]).length
     if sep < 1e-6:
         sep = face_size * 0.1
     blen = max(sep * 0.5, face_size * BONE_LEN_F * 2.0)
@@ -1317,13 +1467,13 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
     offv = fwd_arm * offset
 
     parent_bone = eb.get(head_name) if head_name else None
-    if parent_bone is None:
-        parent_bone = eb["eye.L"].parent
+    if parent_bone is None and eye_L_name in eb:
+        parent_bone = eb[eye_L_name].parent
 
     heads = {
-        MASTER: (e_heads["eye.L"] + e_heads["eye.R"]) * 0.5 + offv,
-        "CTRL-Eye.L": e_heads["eye.L"] + offv,
-        "CTRL-Eye.R": e_heads["eye.R"] + offv,
+        MASTER: (e_heads[eye_L_name] + e_heads[eye_R_name]) * 0.5 + offv,
+        "CTRL-Eye.L": e_heads[eye_L_name] + offv,
+        "CTRL-Eye.R": e_heads[eye_R_name] + offv,
     }
     mb = eb.new(MASTER)
     mb.head = heads[MASTER]
@@ -1335,10 +1485,14 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
     mb.use_deform = False
     mb.parent = parent_bone
     mb.use_connect = False
+
     for eye_name, ctl_name, mch_name in PAIRS:
+        gd = gaze_dirs[eye_name]
+        ch = heads[ctl_name]
+        ah = e_heads[eye_name] + gd * offset
         cb = eb.new(ctl_name)
-        cb.head = heads[ctl_name]
-        cb.tail = heads[ctl_name] + fwd_arm * blen
+        cb.head = ch
+        cb.tail = ch + fwd_arm * blen
         try:
             cb.align_roll(up_arm)
         except Exception:
@@ -1346,11 +1500,13 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
         cb.use_deform = False
         cb.parent = mb
         cb.use_connect = False
-        gd = gaze_dirs[eye_name]
-        ah = e_heads[eye_name] + gd * offset
         ab = eb.new(mch_name)
         ab.head = ah
         ab.tail = ah + gd * blen
+        try:
+            ab.align_roll(up_arm)
+        except Exception:
+            pass
         ab.use_deform = False
         ab.parent = cb
         ab.use_connect = False
@@ -1365,10 +1521,10 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
             pbm.use_custom_shape_bone_size = False
         except Exception:
             pass
-        sm = max(sep * 1.2, face_size * 0.02)
+        sm = max(sep / 0.9, face_size * 0.28)
         pbm.custom_shape_scale_xyz = Vector((sm, sm, sm))
         apply_color(armature, pbm, 'Face Eye-Aim', COL_EYEGREEN, {})
-    se = max(sep * 0.5, face_size * 0.01)
+    se = max(sep * 0.45, face_size * 0.12)
     for eye_name, ctl_name, mch_name in PAIRS:
         pbc = armature.pose.bones.get(ctl_name)
         if pbc:
@@ -1411,208 +1567,115 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
             b.hide = True
 
 
-def apply_position_overrides(armature):
-    exact = {
-        "CTRL-Master-Eyebrow.L": (None, -0.061795, 1.43368),
-        "CTRL-Master-Eyebrow.L": (None, -0.061795, None),
-        "CTRL-Master-Eyebrow.R": (None, -0.061795, None),
-        "CTRL-SknEyebrow_01.L": (0.024106, -0.067089, None),
-        "CTRL-SknEyebrow_01.R": (-0.024106, -0.067089, None),
-        "CTRL-SknEyebrow_02.L": (None, -0.062502, None),
-        "CTRL-SknEyebrow_02.R": (None, -0.062502, None),
-        "CTRL-SknEyebrow_03.L": (None, -0.055875, None),
-        "CTRL-SknEyebrow_03.R": (None, -0.055875, None),
-        "CTRL-Eye_Wink.L": (None, -0.049393, None),
-        "CTRL-Eye_Wink.R": (None, -0.049393, None),
-        "CTRL-Eye_Open.L": (None, -0.049393, None),
-        "CTRL-Eye_Open.R": (None, -0.049393, None),
-        "CTRL-Mouth-Shift": (None, -0.064528, None),
-        "CTRL-Mouth-Viseme-Pad": (None, -0.062256, None),
-        "CTRL-Mouth-Corner.L": (0.017711, -0.060101, None),
-        "CTRL-Mouth-Corner.R": (-0.017711, -0.060101, None),
-        "CTRL-Eyebrow-Viseme-Pad": (None, -0.067089, None),
-        "CTRL-Eyebrow-Viseme-Pad.L": (0.047873, None, None),
-        "CTRL-Eyebrow-Viseme-Pad.R": (-0.047873, None, None),
-        "CTRL-Brow-R_Up": (-0.008817, -0.067089, None),
-        "CTRL-Brow-L_Up": (0.008817, -0.067089, None),
-    }
-    group_jaw_y = -0.053571
-    group_eyes_y = -0.059066
-    between = ("CTRL-Eye-Viseme-Pad", "CTRL-Eye_MidUp", "CTRL-Eye_Sad", "CTRL-O_O")
-
-    if bpy.context.object and bpy.context.object.mode != 'OBJECT':
-        bpy.ops.object.mode_set(mode='OBJECT')
-    bpy.context.view_layer.objects.active = armature
-    amw = armature.matrix_world
-    amw_inv = amw.inverted()
-    z_adjust = 0.0
-    _sp = armature.data.bones.get("ORG-spine.005")
-    if _sp is not None:
-        _spz = (amw @ _sp.head_local).z
-        if SPINE_REF_Z is not None:
-            z_adjust = _spz - SPINE_REF_Z
-        else:
-            _reff = os.path.join(tempfile.gettempdir(), "facerig_spine005_ref.txt")
-            _ref = None
-            try:
-                if os.path.exists(_reff):
-                    with open(_reff) as _f:
-                        _ref = float(_f.read().strip())
-            except Exception:
-                _ref = None
-            if _ref is None:
-                try:
-                    with open(_reff, "w") as _f:
-                        _f.write(repr(_spz))
-                except Exception:
-                    pass
-            else:
-                z_adjust = _spz - _ref
-    bpy.ops.object.mode_set(mode='EDIT')
-    eb = armature.data.edit_bones
-
-    def move(bone, tx, ty, tz):
-        hw = amw @ bone.head
-        tw = amw @ bone.tail
-        new_hw = Vector((hw.x if tx is None else tx,
-                         hw.y if ty is None else ty,
-                         hw.z if tz is None else tz))
-        delta = new_hw - hw
-        bone.head = amw_inv @ new_hw
-        bone.tail = amw_inv @ (tw + delta)
-
-    for nm, (tx, ty, tz) in exact.items():
-        b = eb.get(nm)
-        if b:
-            move(b, tx, ty, None if tz is None else tz + z_adjust)
-    for b in eb:
-        if b.name.startswith("CTRL-Mth_"):
-            move(b, None, group_jaw_y, None)
-    for nm in between:
-        b = eb.get(nm)
-        if b:
-            move(b, None, group_eyes_y, None)
-
-    # Align mouth controls (CTRL-Mouth-Viseme-Pad, CTRL-Mouth-Corner.L/R) to the height of CTRL-Mouth-Shift
-    m_shift = eb.get("CTRL-Mouth-Shift")
-    if m_shift:
-        m_shift_z = (amw @ m_shift.head).z
-        for m_name in ("CTRL-Mouth-Viseme-Pad", "CTRL-Mouth-Corner.L", "CTRL-Mouth-Corner.R"):
-            mbone = eb.get(m_name)
-            if mbone:
-                move(mbone, None, None, m_shift_z)
-
-    # Align CTRL-Master-Eyebrow.L and R to the height of eyebrow tweak controls (CTRL-Skn_L_Eyebrow_01,02,03 etc)
-    def is_side(bname, side):
-        bn = bname.lower()
-        if side == 'L':
-            return '.l' in bn or '_l' in bn or 'l_' in bn
-        else:
-            return '.r' in bn or '_r' in bn or 'r_' in bn
-
-    for side in ("L", "R"):
-        master_brow = eb.get(f"CTRL-Master-Eyebrow.{side}")
-        if master_brow:
-            tweak_bones = [
-                b for b in eb
-                if b.name.startswith("CTRL-")
-                and ("eyebrow" in b.name.lower() or "ebr" in b.name.lower())
-                and b != master_brow
-                and is_side(b.name, side)
-            ]
-            if tweak_bones:
-                avg_z = sum((amw @ b.head).z for b in tweak_bones) / len(tweak_bones)
-                move(master_brow, None, None, avg_z)
-
-    bpy.ops.object.mode_set(mode='OBJECT')
-
-
 def zzz_face_rig_main():
-    faceobj = None
-    for obj in bpy.data.objects:
-        n = obj.name.lower()
-        if obj.type != 'MESH' or "_face" not in n or "weapon_" in n or "gun_" in n:
-            continue
-        if obj.data.shape_keys is not None:
-            faceobj = obj
-            break
-        if faceobj is None:
-            faceobj = obj
-
-    if faceobj is None:
-        raise Exception("Couldn't find a '*_face' mesh in the scene.")
-
-    _ebrow_meshes = [o for o in bpy.data.objects
-                     if o.type == 'MESH' and o is not faceobj and "_eyebrow" in o.name.lower()]
-    if _ebrow_meshes:
+    try:
         if bpy.context.object and bpy.context.object.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
+
+        faceobj = None
+        for obj in bpy.data.objects:
+            if obj.type != 'MESH':
+                continue
+            n = obj.name.lower()
+            if any(ign in n for ign in ["weapon_", "gun_", "sword_"]):
+                continue
+            if "face" in n or "_face" in n or "head" in n:
+                if obj.data and obj.data.shape_keys is not None:
+                    faceobj = obj
+                    break
+                if faceobj is None:
+                    faceobj = obj
+
+        if faceobj is None:
+            for obj in bpy.data.objects:
+                if obj.type == 'MESH' and ('face' in obj.name.lower() or 'head' in obj.name.lower()):
+                    faceobj = obj
+                    break
+
+        if faceobj is None:
+            print("[ZZZ Face Rig] No face mesh found in the scene.")
+            return
+
+        has_shapekeys = faceobj.data and faceobj.data.shape_keys is not None
+        keyblock = faceobj.data.shape_keys.key_blocks if has_shapekeys else None
+
+        if keyblock:
+            shapekeyrename(keyblock)
+
+        armature, head_name = find_armature_and_head(faceobj)
+        for _hn in (
+            "eye.L", "eye.R", "eye.L.001", "eye.R.001", "SknEyeStar.L", "SknEyeStar.R", "Eye Control",
+            "Skn_M_Mouth", "BdyMouth.L", "BdyMouth.R", "Bdy_M_Mouth", "PTMouth.L", "PTMouth.R", "PT_M_Mouth",
+            "Mouth_A", "Mouth_B", "Mouth_C", "Ctr_Up_Teeth", "Ctr_Down_Teeth", "Bn_MouthControl_L",
+            "Bn_MouthControl_R", "Bn_MouthControl_M", "SknEyebrow_01.L", "SknEyebrow_02.L", "SknEyebrow_03.L",
+            "SknEyebrow_01.R", "SknEyebrow_02.R", "SknEyebrow_03.R", "SknMouth.R", "SknMouth.L",
+            "eyetrack", "eyetrack_L", "eyetrack_R", "EyeTrack", "EyeTrack_L", "EyeTrack_R",
+            "eyetrack.L", "eyetrack.R", "EyeTrack.L", "EyeTrack.R"
+        ):
+            _hb = armature.data.bones.get(_hn)
+            if _hb:
+                _hb.hide = True
+
+        fwd, right, up, face_size = face_frame(faceobj, armature)
+        controls = []
+        if keyblock:
+            controls = plan_controls(faceobj, fwd, right, up, face_size)
+
+        # Also add bone-based mouth controls if no mouth shapekeys present
+        has_mouth_sk = keyblock and any(k.startswith("Fac_Mth_") for k in keyblock.keys())
+        if not has_mouth_sk:
+            controls.extend(build_mouth_bone_controls(armature, fwd, up, right, face_size))
+
+        # Add extra facial bone controls (highlights, face marks)
+        controls.extend(build_extra_face_bone_controls(armature, fwd, up, right, face_size))
+
+        if any(armature.data.bones.get(_bn) for _bn in ("Mouth_A", "Mouth_B", "Mouth_C", "Bn_MouthControl_L", "Bn_MouthControl_R", "Bn_MouthControl_M")):
+            controls = [c for c in controls if not c['name'].startswith("CTRL-Mouth-Corner")]
+
+        if any(any(_p in _b.name.lower() for _p in ("bdymouth", "bdy_m_mouth", "ptmouth", "pt_m_mouth")) for _b in armature.data.bones):
+            for _cn, _frm, _to in (("CTRL-Mouth-Corner.L", "_L_", "_R_"),
+                                   ("CTRL-Mouth-Corner.R", "_R_", "_L_")):
+                _c = next((x for x in controls if x['name'] == _cn), None)
+                if _c is not None:
+                    for _d in _c['drivers']:
+                        _d['key'] = _d['key'].replace(_frm, _to)
+            _ms = next((x for x in controls if x['name'] == 'CTRL-Mouth-Shift'), None)
+            if _ms is not None:
+                for _d in _ms['drivers']:
+                    if _d['axis'] == 'X':
+                        _d['dir'] = -_d['dir']
+
+        has_eye_bones = any(cand in armature.data.bones for cand in ("eye.L", "DEF-eye.L", "Skn_L_Eye", "+EyeBone L A01", "EYE_L", "Eye_L", "PT_L_Eye", "Bn_Eye_L"))
+
+        if not controls and not has_eye_bones:
+            print("[ZZZ Face Rig] No drivable shape keys or facial bones found.")
+            return
+
+        if CLEAN_REBUILD:
+            purge_previous(armature)
+
+        remove_eyetrack_bones(armature)
+        if controls:
+            setup_face_rig(faceobj, controls, armature, head_name, fwd, up, face_size)
+        setup_lookat_eyes(armature, head_name, fwd, up, face_size)
+        hide_mechanism_bones(armature)
+
+        wgt_coll = get_widget_collection()
+        finalize_widget_collection(wgt_coll)
+        old_facerig_wgt = bpy.data.collections.get("WGTS_FaceRig")
+        if old_facerig_wgt:
+            finalize_widget_collection(old_facerig_wgt)
+
+        print("\nZZZ Face Rig complete. %d controls built on '%s'.\n"
+              % (len(controls), armature.name))
+
+    finally:
         try:
+            if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+                bpy.ops.object.mode_set(mode='OBJECT')
             bpy.ops.object.select_all(action='DESELECT')
-            for _e in _ebrow_meshes:
-                try:
-                    _e.hide_set(False)
-                except Exception:
-                    pass
-                _e.hide_viewport = False
-                _e.select_set(True)
-            faceobj.hide_viewport = False
-            faceobj.select_set(True)
-            bpy.context.view_layer.objects.active = faceobj
-            bpy.ops.object.join()
         except Exception:
             pass
-
-    if faceobj.data.shape_keys is None:
-        raise Exception("The face mesh has no shape keys to drive.")
-
-    keyblock = faceobj.data.shape_keys.key_blocks
-
-    shapekeyrename(keyblock)
-    armature, head_name = find_armature_and_head(faceobj)
-    for _hn in ("eye.L", "eye.R", "eye.L.001", "eye.R.001", "SknEyeStar.L", "SknEyeStar.R", "Eye Control", "Skn_M_Mouth", "BdyMouth.L", "BdyMouth.R", "Bdy_M_Mouth", "PTMouth.L", "PTMouth.R", "PT_M_Mouth", "Mouth_A", "Mouth_B", "Mouth_C", "Ctr_Up_Teeth", "Ctr_Down_Teeth", "Bn_MouthControl_L", "Bn_MouthControl_R", "Bn_MouthControl_M", "SknEyebrow_01.L", "SknEyebrow_02.L", "SknEyebrow_03.L", "SknEyebrow_01.R", "SknEyebrow_02.R", "SknEyebrow_03.R", "SknMouth.R", "SknMouth.L","Skn_M_Mouth", "eyetrack", "eyetrack_L", "eyetrack_R", "EyeTrack", "EyeTrack_L", "EyeTrack_R", "eyetrack.L", "eyetrack.R", "EyeTrack.L", "EyeTrack.R"):
-        _hb = armature.data.bones.get(_hn)
-        if _hb:
-            _hb.hide = True
-    fwd, right, up, face_size = face_frame(faceobj)
-    controls = plan_controls(faceobj, fwd, right, up, face_size)
-
-    if any(armature.data.bones.get(_bn) for _bn in ("Mouth_A", "Mouth_B", "Mouth_C", "Bn_MouthControl_L", "Bn_MouthControl_R", "Bn_MouthControl_M")):
-        controls = [c for c in controls if not c['name'].startswith("CTRL-Mouth-Corner")]
-
-    if any(any(_p in _b.name.lower() for _p in ("bdymouth", "bdy_m_mouth", "ptmouth", "pt_m_mouth")) for _b in armature.data.bones):
-        for _cn, _frm, _to in (("CTRL-Mouth-Corner.L", "_L_", "_R_"),
-                               ("CTRL-Mouth-Corner.R", "_R_", "_L_")):
-            _c = next((x for x in controls if x['name'] == _cn), None)
-            if _c is not None:
-                for _d in _c['drivers']:
-                    _d['key'] = _d['key'].replace(_frm, _to)
-        _ms = next((x for x in controls if x['name'] == 'CTRL-Mouth-Shift'), None)
-        if _ms is not None:
-            for _d in _ms['drivers']:
-                if _d['axis'] == 'X':
-                    _d['dir'] = -_d['dir']
-
-    if not controls:
-        raise Exception("No drivable face shape keys were found after renaming.")
-
-    if CLEAN_REBUILD:
-        purge_previous(armature)
-
-    remove_eyetrack_bones(armature)
-    setup_face_rig(faceobj, controls, armature, head_name, fwd, up, face_size)
-    setup_lookat_eyes(armature, head_name, fwd, up, face_size)
-    apply_position_overrides(armature)
-    hide_mechanism_bones(armature)
-
-    wgt_coll = get_widget_collection()
-    finalize_widget_collection(wgt_coll)
-    old_facerig_wgt = bpy.data.collections.get("WGTS_FaceRig")
-    if old_facerig_wgt:
-        finalize_widget_collection(old_facerig_wgt)
-
-    print("\nZZZ Isaac-style face rig v6 done. %d controls built on '%s'.\n"
-          % (len(controls), armature.name))
 
 
 if __name__ == "__main__":
