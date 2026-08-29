@@ -781,6 +781,8 @@ def register_wuwa_properties():
         min=0.0,
         max=2.0,
         default=0.0,
+        step=10,
+        precision=1,
         update=update_blush,
     )
 
@@ -790,6 +792,8 @@ def register_wuwa_properties():
         min=0.0,
         max=2.0,
         default=0.0,
+        step=10,
+        precision=1,
         update=update_disgust,
     )
 
@@ -799,6 +803,8 @@ def register_wuwa_properties():
         min=0.0,
         max=2.0,
         default=1.0,
+        step=10,
+        precision=1,
         update=update_metallic,
     )
 
@@ -808,6 +814,8 @@ def register_wuwa_properties():
         min=0.0,
         max=2.0,
         default=1.0,
+        step=10,
+        precision=1,
         update=update_specular,
     )
 
@@ -857,6 +865,8 @@ def register_wuwa_properties():
         min=0.0,
         max=1.0,
         default=0.05,
+        step=10,
+        precision=2,
         update=update_shadow_range,
     )
 
@@ -866,6 +876,8 @@ def register_wuwa_properties():
         min=0.0,
         max=1.0,
         default=0.05,
+        step=10,
+        precision=2,
         update=update_face_shadow_softness,
     )
 

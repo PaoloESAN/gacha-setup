@@ -856,12 +856,12 @@ def rig_character(
     modify_and_run_rig_ui_script(rigifyr, original_name, char_name=char_name)
 
     lis = ["Body", "Face", "Hair"]
-    for obj in lis:
-        try:
-            mod = bpy.context.scene.objects[obj].modifiers[2]
-            mod.show_viewport = False
-        except:
-            pass
+    for obj_name in lis:
+        obj = bpy.data.objects.get(obj_name) or bpy.context.scene.objects.get(obj_name)
+        if obj:
+            for mod in obj.modifiers:
+                if 'outline' in mod.name.lower() or (mod.type == 'NODES' and mod.node_group and 'outline' in mod.node_group.name.lower()):
+                    mod.show_viewport = True
 
 
 def move_into_collection(object_name, collection_name):

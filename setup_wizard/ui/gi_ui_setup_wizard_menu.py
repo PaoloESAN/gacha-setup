@@ -55,6 +55,7 @@ class UI_Properties:
             min=0.0,
             max=1.0,
             default=0.7,
+            step=10,
             precision=2,
         )
 
@@ -64,6 +65,7 @@ class UI_Properties:
             min=0.0,
             max=1.0,
             default=0.4,
+            step=10,
             precision=2,
         )
 

@@ -128,6 +128,9 @@ else:
         HSR_PT_UI_Finish_Setup_Menu,
         HSR_PT_UI_Materials_Menu,
         HSR_PT_UI_Outlines_Menu,
+        HSR_PT_Rig_Character_Settings,
+        register_hsr_properties,
+        unregister_hsr_properties,
     )
     from setup_wizard.ui.nte_ui_setup_wizard_menu import (
         NTE_PT_Setup_Wizard_UI_Layout,
@@ -175,6 +178,7 @@ else:
 
     modules = [
         setup_wizard.ui.gi_ui_setup_wizard_menu,
+        setup_wizard.ui.hsr_ui_setup_wizard_menu,
         setup_wizard.ui.zzz_ui_setup_wizard_menu,
         setup_wizard.ui.nte_ui_setup_wizard_menu,
         setup_wizard.ui.wuwa_ui_setup_wizard_menu,
@@ -214,6 +218,7 @@ else:
         HSR_PT_UI_Outlines_Menu,
         HSR_PT_UI_Finish_Setup_Menu,
         HSR_PT_UI_Character_Rig_Setup_Menu,
+        HSR_PT_Rig_Character_Settings,
         # HSR_PT_UI_Compositing_Panel_Post_Processing_UI_Layout,
         HSR_OT_HonkaiStarRailSetupWizardUI,
         HSR_OT_SetUpCharacter,
@@ -293,6 +298,7 @@ else:
         _register_classes()
         register_wuwa_properties()
         register_zzz_properties()
+        register_hsr_properties()
         if wuwa_frame_change_handler not in bpy.app.handlers.frame_change_post:
             bpy.app.handlers.frame_change_post.append(wuwa_frame_change_handler)
         if wuwa_frame_change_handler not in bpy.app.handlers.render_init:
@@ -306,6 +312,7 @@ else:
         if wuwa_frame_change_handler in bpy.app.handlers.render_init:
             bpy.app.handlers.render_init.remove(wuwa_frame_change_handler)
         addon_updater_ops.unregister()
+        unregister_hsr_properties()
         unregister_zzz_properties()
         _unregister_classes()
 

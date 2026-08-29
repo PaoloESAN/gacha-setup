@@ -371,6 +371,8 @@ ZZZ_LIGHT_PRESETS = {
         "lit_tint": (1.0, 1.0, 1.0),
         "lit_brightness": 0.0,
         "shadow_tint": (1.0, 1.0, 1.0),
+        "shadow_intensity": 1.0,
+        "fake_sss_intensity": 1.0,
         "enable_rim": True,
         "rim_color": (1.0, 1.0, 1.0),
         "coverage": 1.0,
@@ -383,6 +385,8 @@ ZZZ_LIGHT_PRESETS = {
         "lit_tint": (1.0, 0.88, 0.75),
         "lit_brightness": 0.1,
         "shadow_tint": (0.65, 0.65, 0.85),
+        "shadow_intensity": 1.0,
+        "fake_sss_intensity": 1.0,
         "enable_rim": True,
         "rim_color": (1.0, 0.85, 0.6),
         "coverage": 1.0,
@@ -395,6 +399,8 @@ ZZZ_LIGHT_PRESETS = {
         "lit_tint": (1.0, 1.0, 1.0),
         "lit_brightness": 0.2,
         "shadow_tint": (1.0, 1.0, 1.0),
+        "shadow_intensity": 1.0,
+        "fake_sss_intensity": 1.0,
         "enable_rim": True,
         "rim_color": (1.0, 1.0, 1.0),
         "coverage": 1.0,
@@ -407,6 +413,8 @@ ZZZ_LIGHT_PRESETS = {
         "lit_tint": (1.0, 0.65, 0.45),
         "lit_brightness": 0.1,
         "shadow_tint": (0.5, 0.45, 0.7),
+        "shadow_intensity": 1.0,
+        "fake_sss_intensity": 1.0,
         "enable_rim": True,
         "rim_color": (1.0, 0.6, 0.3),
         "coverage": 1.0,
@@ -419,6 +427,8 @@ ZZZ_LIGHT_PRESETS = {
         "lit_tint": (0.6, 0.7, 0.9),
         "lit_brightness": 0.0,
         "shadow_tint": (0.25, 0.3, 0.5),
+        "shadow_intensity": 1.0,
+        "fake_sss_intensity": 0.5,
         "enable_rim": True,
         "rim_color": (0.5, 0.7, 1.0),
         "coverage": 0.9,
@@ -431,6 +441,8 @@ ZZZ_LIGHT_PRESETS = {
         "lit_tint": (0.75, 0.8, 0.85),
         "lit_brightness": 0.0,
         "shadow_tint": (0.45, 0.5, 0.6),
+        "shadow_intensity": 0.8,
+        "fake_sss_intensity": 0.5,
         "enable_rim": True,
         "rim_color": (0.7, 0.8, 0.9),
         "coverage": 0.8,
@@ -455,6 +467,8 @@ def update_zzz_light_mode(self, context=None):
             self.zzz_lit_tint = preset["lit_tint"]
             self.zzz_lit_brightness = preset["lit_brightness"]
             self.zzz_shadow_tint = preset["shadow_tint"]
+            self.zzz_shadow_intensity = preset.get("shadow_intensity", 1.0)
+            self.zzz_fake_sss_intensity = preset.get("fake_sss_intensity", 1.0)
             self.zzz_enable_rim_light = preset["enable_rim"]
             self.zzz_rim_light_color = preset["rim_color"]
             self.zzz_rim_coverage = preset["coverage"]
@@ -467,17 +481,54 @@ def update_zzz_light_mode(self, context=None):
 
 
 def update_zzz_kythera_props(self, context=None):
+    global _is_updating_zzz_props
+    if _is_updating_zzz_props:
+        return
     scene = bpy.context.scene if context is None else getattr(context, "scene", bpy.context.scene)
     if not scene:
         return
+
+    _is_updating_zzz_props = True
+    try:
+        # Snap float sliders to 1 decimal place (steps of 0.1) and clamp near-zero
+        raw_lb = getattr(scene, "zzz_lit_brightness", 0.0)
+        raw_si = getattr(scene, "zzz_shadow_intensity", 1.0)
+        raw_sss = getattr(scene, "zzz_fake_sss_intensity", 1.0)
+        raw_rc = getattr(scene, "zzz_rim_coverage", 1.0)
+        raw_rb = getattr(scene, "zzz_rim_brightness", 1.0)
+        raw_lr = getattr(scene, "zzz_rim_left_right", 0.5)
+        raw_ud = getattr(scene, "zzz_rim_up_down", 0.1)
+
+        lit_brightness = 0.0 if raw_lb < 0.05 else round(raw_lb, 1)
+        shadow_intensity = 0.0 if raw_si < 0.05 else round(raw_si, 1)
+        fake_sss_intensity = 0.0 if raw_sss < 0.05 else round(raw_sss, 1)
+        rim_coverage = 0.0 if raw_rc < 0.05 else round(raw_rc, 1)
+        rim_brightness = 0.0 if raw_rb < 0.05 else round(raw_rb, 1)
+        rim_left_right = 0.0 if raw_lr < 0.05 else round(raw_lr, 1)
+        rim_up_down = 0.0 if raw_ud < 0.05 else round(raw_ud, 1)
+
+        if scene.zzz_lit_brightness != lit_brightness:
+            scene.zzz_lit_brightness = lit_brightness
+        if scene.zzz_shadow_intensity != shadow_intensity:
+            scene.zzz_shadow_intensity = shadow_intensity
+        if scene.zzz_fake_sss_intensity != fake_sss_intensity:
+            scene.zzz_fake_sss_intensity = fake_sss_intensity
+        if scene.zzz_rim_coverage != rim_coverage:
+            scene.zzz_rim_coverage = rim_coverage
+        if scene.zzz_rim_brightness != rim_brightness:
+            scene.zzz_rim_brightness = rim_brightness
+        if scene.zzz_rim_left_right != rim_left_right:
+            scene.zzz_rim_left_right = rim_left_right
+        if scene.zzz_rim_up_down != rim_up_down:
+            scene.zzz_rim_up_down = rim_up_down
+    finally:
+        _is_updating_zzz_props = False
 
     ambient_tint = list(getattr(scene, "zzz_ambient_tint", (1.0, 1.0, 1.0)))
     if len(ambient_tint) == 3: ambient_tint.append(1.0)
     
     lit_tint = list(getattr(scene, "zzz_lit_tint", (1.0, 1.0, 1.0)))
     if len(lit_tint) == 3: lit_tint.append(1.0)
-    
-    lit_brightness = getattr(scene, "zzz_lit_brightness", 0.0)
     
     shadow_tint = list(getattr(scene, "zzz_shadow_tint", (1.0, 1.0, 1.0)))
     if len(shadow_tint) == 3: shadow_tint.append(1.0)
@@ -486,17 +537,14 @@ def update_zzz_kythera_props(self, context=None):
     
     rim_color = list(getattr(scene, "zzz_rim_light_color", (1.0, 1.0, 1.0)))
     if len(rim_color) == 3: rim_color.append(1.0)
-    
-    rim_coverage = getattr(scene, "zzz_rim_coverage", 1.0)
-    rim_brightness = getattr(scene, "zzz_rim_brightness", 1.0)
-    rim_left_right = getattr(scene, "zzz_rim_left_right", 0.5)
-    rim_up_down = getattr(scene, "zzz_rim_up_down", 0.1)
 
     prop_map = {
         "Ambient Tint": ambient_tint,
         "Lit Tint": lit_tint,
         "Lit Brightness": lit_brightness,
         "Shadow Tint": shadow_tint,
+        "Shadow Intensity": shadow_intensity,
+        "Fake SSS Intensity": fake_sss_intensity,
         "Enable Rim Light": enable_rim,
         "Rim Light Color": rim_color,
         "Coverage": rim_coverage,
@@ -590,6 +638,8 @@ class ZZZ_PT_Rig_Character_Settings(Panel):
             col_shading.prop(scene, "zzz_lit_tint", text="Lit Tint")
             col_shading.prop(scene, "zzz_lit_brightness", text="Lit Brightness", slider=True)
             col_shading.prop(scene, "zzz_shadow_tint", text="Shadow Tint")
+            col_shading.prop(scene, "zzz_shadow_intensity", text="Shadow Intensity", slider=True)
+            col_shading.prop(scene, "zzz_fake_sss_intensity", text="Fake SSS Intensity", slider=True)
 
             # 3. Rim Light Settings
             box_rim = layout.box()
@@ -652,6 +702,8 @@ def register_zzz_properties():
         min=0.0,
         max=1.0,
         default=0.0,
+        step=10,
+        precision=1,
         update=update_zzz_kythera_props,
     )
 
@@ -663,6 +715,28 @@ def register_zzz_properties():
         min=0.0,
         max=1.0,
         default=(1.0, 1.0, 1.0),
+        update=update_zzz_kythera_props,
+    )
+
+    bpy.types.Scene.zzz_shadow_intensity = FloatProperty(
+        name="Shadow Intensity",
+        description="Shadow intensity for Kythera ZZZ shader",
+        min=0.0,
+        max=1.0,
+        default=1.0,
+        step=10,
+        precision=1,
+        update=update_zzz_kythera_props,
+    )
+
+    bpy.types.Scene.zzz_fake_sss_intensity = FloatProperty(
+        name="Fake SSS Intensity",
+        description="Fake SSS intensity for Kythera ZZZ shader",
+        min=0.0,
+        max=1.0,
+        default=1.0,
+        step=10,
+        precision=1,
         update=update_zzz_kythera_props,
     )
 
@@ -690,6 +764,8 @@ def register_zzz_properties():
         min=0.0,
         max=1.0,
         default=1.0,
+        step=10,
+        precision=1,
         update=update_zzz_kythera_props,
     )
 
@@ -699,6 +775,8 @@ def register_zzz_properties():
         min=0.0,
         max=1.0,
         default=1.0,
+        step=10,
+        precision=1,
         update=update_zzz_kythera_props,
     )
 
@@ -708,6 +786,8 @@ def register_zzz_properties():
         min=0.0,
         max=1.0,
         default=0.5,
+        step=10,
+        precision=1,
         update=update_zzz_kythera_props,
     )
 
@@ -717,6 +797,8 @@ def register_zzz_properties():
         min=0.0,
         max=1.0,
         default=0.1,
+        step=10,
+        precision=1,
         update=update_zzz_kythera_props,
     )
 
@@ -728,6 +810,8 @@ def unregister_zzz_properties():
         "zzz_lit_tint",
         "zzz_lit_brightness",
         "zzz_shadow_tint",
+        "zzz_shadow_intensity",
+        "zzz_fake_sss_intensity",
         "zzz_enable_rim_light",
         "zzz_rim_light_color",
         "zzz_rim_coverage",
