@@ -1,7 +1,7 @@
 # Gacha Setup for Blender
 
 ![Gacha Setup](image.jpg)
-*Reference: Kaguya-sama: Love Is War*
+*Reference: The Quintessential Quintuplets*
 
 **Official Website & Documentation:** [https://gacha-setup.pages.dev/](https://gacha-setup.pages.dev/)
 
