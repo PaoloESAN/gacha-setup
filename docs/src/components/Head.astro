@@ -25,6 +25,16 @@ const isHomepage = Astro.props.slug === '' || Astro.props.slug === 'es' || Astro
 	import { pagefindUserConfig } from 'virtual:starlight/pagefind-config';
 
 	document.addEventListener('astro:page-load', () => {
+		// Initialize and load video elements after View Transitions DOM swap
+		document.querySelectorAll<HTMLVideoElement>('video').forEach((video) => {
+			video.load();
+			if (video.hasAttribute('autoplay')) {
+				video.muted = true;
+				video.defaultMuted = true;
+				video.play().catch(() => {});
+			}
+		});
+
 		const siteSearch = document.querySelector('site-search');
 		if (!siteSearch) return;
 
