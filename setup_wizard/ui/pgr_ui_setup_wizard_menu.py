@@ -63,6 +63,7 @@ class PGR_PT_Setup_Wizard_UI_Layout(Panel, PunishingGrayRavenUIRenderChecker):
         sliders_col.active = enable_physics
         sliders_col.prop(props, "hair_physics_influence", text="Hair", slider=True)
         sliders_col.prop(props, "clothes_physics_influence", text="Clothes", slider=True)
+        settings_col.prop(props, "disable_rigging", text="Disable Rigging")
 
 
 class PGR_PT_Basic_Setup_Wizard_UI_Layout(Panel, PunishingGrayRavenUIRenderChecker):

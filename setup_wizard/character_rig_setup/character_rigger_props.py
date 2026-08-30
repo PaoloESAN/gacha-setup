@@ -79,6 +79,11 @@ class CharacterRiggerPropertyGroup(PropertyGroup):
         step=5,
         precision=2
     )
+    disable_rigging: BoolProperty(
+        name=' Disable Rigging',
+        description='Skip the entire character rigging step during setup',
+        default=False
+    )
 
     @staticmethod
     def get_prop(context, prop_name):

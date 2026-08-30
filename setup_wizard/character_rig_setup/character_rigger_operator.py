@@ -52,6 +52,17 @@ class GI_OT_CharacterRiggerOperator(Operator, ImportHelper, CustomOperatorProper
     ]
 
     def execute(self, context):
+        props = getattr(context.scene, "character_rigger_props", None)
+        disable_rigging = getattr(props, "disable_rigging", getattr(context.scene, "disable_rigging", False))
+        if disable_rigging:
+            self.report(
+                {'INFO'},
+                'Rigging skipped. Disable Rigging is enabled in Setup Settings.'
+            )
+            self.invoke_next_step()
+            super().clear_custom_properties()
+            return {'FINISHED'}
+
         # Check if the imported model is a Weapon / Equipment (Equip_ / EquipSkin_ and not Avatar_)
         fbx_path = context.scene.get("setup_wizard_imported_fbx_path", "")
         fbx_name = os.path.basename(fbx_path) if fbx_path else ""
