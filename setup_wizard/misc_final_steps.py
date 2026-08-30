@@ -184,6 +184,52 @@ class WW_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties
         except Exception as e_comp:
             print(f"[WUWA FINISH] Notice setting up compositor nodes: {e_comp}")
 
+        # Consolidate collection and rename to character name
+        char_name = "Character"
+        for obj in context.scene.objects:
+            if obj.type == "ARMATURE" and (obj.name.startswith("RIG-") or "rig" in obj.name.lower()):
+                cn = obj.name.replace("RIG-", "").strip()
+                if cn and cn != "Character":
+                    char_name = cn
+                    break
+            elif obj.type == "MESH":
+                from setup_wizard.utils.wuwa_texture_utils import extract_character_name
+                cn = extract_character_name(obj.name)
+                if cn and cn != "Character":
+                    char_name = cn
+                    break
+
+        main_coll = bpy.data.collections.get("Collection")
+        extra_coll = bpy.data.collections.get(char_name)
+        if main_coll and extra_coll and main_coll != extra_coll:
+            for obj_c in list(extra_coll.objects):
+                if obj_c.name not in main_coll.objects:
+                    main_coll.objects.link(obj_c)
+                try:
+                    extra_coll.objects.unlink(obj_c)
+                except Exception:
+                    pass
+            try:
+                bpy.data.collections.remove(extra_coll, do_unlink=True)
+            except Exception:
+                pass
+            main_coll.name = char_name
+        elif main_coll:
+            main_coll.name = char_name
+
+        char_coll = bpy.data.collections.get(char_name)
+        if char_coll:
+            for obj in context.scene.objects:
+                if obj.type == "ARMATURE" and (obj.name.startswith("RIG-") or "rig" in obj.name.lower()):
+                    if obj.name not in char_coll.objects:
+                        char_coll.objects.link(obj)
+                    for c in list(obj.users_collection):
+                        if c != char_coll and not c.name.startswith("WGTS"):
+                            try:
+                                c.objects.unlink(obj)
+                            except Exception:
+                                pass
+
         # Remove any extra scenes created during append or setup
         current_scene = context.scene
         for sc in list(bpy.data.scenes):

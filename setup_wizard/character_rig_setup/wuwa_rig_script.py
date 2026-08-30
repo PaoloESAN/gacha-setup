@@ -838,19 +838,31 @@ def rig_wuthering_waves_character(context=None):
         if RigArmatureObj.data:
             RigArmatureObj.data.name = RigArmature
 
-        # Link RigArmatureObj to character's collection (e.g. Chun) and remove from base Collection
-        orig_arm_obj = bpy.data.objects.get(OrigArmature) or armature
-        char_collection = None
-        if orig_arm_obj:
-            for coll in orig_arm_obj.users_collection:
-                if coll.name not in ("Collection", "Master Collection", "Scene Collection"):
-                    char_collection = coll
-                    break
+        # Consolidate and rename main collection to character name (e.g. Chun), merging rig and removing duplicate collections
+        main_coll = bpy.data.collections.get("Collection")
+        extra_coll = bpy.data.collections.get(char_base_name)
+        if main_coll and extra_coll and main_coll != extra_coll:
+            for obj_c in list(extra_coll.objects):
+                if obj_c.name not in main_coll.objects:
+                    main_coll.objects.link(obj_c)
+                try:
+                    extra_coll.objects.unlink(obj_c)
+                except Exception:
+                    pass
+            try:
+                bpy.data.collections.remove(extra_coll, do_unlink=True)
+            except Exception:
+                pass
+            main_coll.name = char_base_name
+        elif main_coll:
+            main_coll.name = char_base_name
+
+        char_collection = bpy.data.collections.get(char_base_name)
         if char_collection:
             if RigArmatureObj.name not in char_collection.objects:
                 char_collection.objects.link(RigArmatureObj)
             for c in list(RigArmatureObj.users_collection):
-                if c != char_collection:
+                if c != char_collection and not c.name.startswith("WGTS"):
                     try:
                         c.objects.unlink(RigArmatureObj)
                     except Exception:
