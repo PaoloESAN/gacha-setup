@@ -571,7 +571,7 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             for node in new_material.node_tree.nodes:
                 if node.type == 'TEX_IMAGE':
                     n_low = (node.name + " " + (node.label or "")).lower()
-                    if any(k in n_low for k in ['diffuse', 'color', 'srgb']) and not any(k in n_low for k in ['lightmap', 'ramp', 'normal', 'mask']):
+                    if any(k in n_low for k in ['diffuse', 'color', 'srgb', '画像テクスチャ']) and not any(k in n_low for k in ['lightmap', 'ramp', 'normal', 'mask']):
                         diffuse_nodes.append(node)
         for node in diffuse_nodes:
             node.image = old_image
@@ -640,6 +640,13 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 honkai_star_rail_material = bpy.data.materials.get(material_name)
 
                 if honkai_star_rail_material:
+                    if material_slot.material:
+                        honkai_star_rail_material["_original_material_name"] = material_slot.material.name
+                        if material_slot.material.use_nodes and material_slot.material.node_tree:
+                            for node in material_slot.material.node_tree.nodes:
+                                if node.type == 'TEX_IMAGE' and node.image and node.image.name:
+                                    honkai_star_rail_material["_original_fbx_texture"] = node.image.name
+                                    break
                     self.__transfer_diffuse_texture(material_slot.material, honkai_star_rail_material)
                     material_slot.material = honkai_star_rail_material
                 else:
@@ -648,10 +655,11 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         self.blender_operator.report({'INFO'}, 'Replaced default materials with Genshin shader materials...')
 
     def find_body_part_name(self, material_name):
+        if material_name.startswith('Eff_') or 'Eff_' in material_name or material_name.startswith('Effect_'):
+            return material_name
+
         if '_Mat_' in material_name:
             suffix = material_name.split('_Mat_')[1]
-            if suffix.endswith('_D') or suffix.endswith('_S'):
-                return suffix[:-2]
             return suffix
 
         expected_format_body_part_name = self.__expected_format_body_part_name_search(material_name)
