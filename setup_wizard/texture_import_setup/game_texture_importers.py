@@ -1953,6 +1953,233 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
                 if has_rgid_any and "Use New Shading" in inp.outputs:
                     inp.outputs["Use New Shading"].default_value = 1.0
 
+        # Setup WuWa Outlines Materials and LD Textures
+        base_outline_mat = bpy.data.materials.get("WW - Outlines")
+        if base_outline_mat:
+            ol_json_ld_map = {}
+            for root, _, files in os.walk(folder):
+                for file_name in files:
+                    if file_name.lower().endswith("_ol.json"):
+                        import json
+                        try:
+                            with open(os.path.join(root, file_name), 'r', encoding='utf-8') as jf:
+                                jdata = json.load(jf)
+                                texs = jdata.get("Textures", {})
+                                for tk, tv in texs.items():
+                                    if "_ld" in str(tv).lower() or "_ld" in str(tk).lower():
+                                        ld_stem = str(tv).split(".")[-1].split("/")[-1]
+                                        ol_json_ld_map[file_name.lower()[:-8]] = ld_stem
+                        except Exception:
+                            pass
+
+            def _configure_outline_mat_nodes(target_mat, ld_img, id_img=None):
+                if not target_mat or not target_mat.node_tree:
+                    return
+                nodes = target_mat.node_tree.nodes
+                links = target_mat.node_tree.links
+                outlines_node = nodes.get("Outlines")
+                if not outlines_node:
+                    return
+
+                # 1. Disconnect Alpha Mask from Outline Converter and set Alpha socket to 0.0
+                alpha_socket = outlines_node.inputs.get("Alpha") or (outlines_node.inputs[0] if len(outlines_node.inputs) > 0 else None)
+                if alpha_socket:
+                    for l in list(links):
+                        if l.to_socket == alpha_socket:
+                            links.remove(l)
+                    try:
+                        alpha_socket.default_value = 0.0
+                    except Exception:
+                        pass
+
+                # 2. LD Texture Image node
+                ld_node = nodes.get("LD") or nodes.get("Texture_LD")
+                if not ld_node:
+                    for n in nodes:
+                        if n.type == 'TEX_IMAGE' and "ld" in (n.name + " " + (n.label or "")).lower():
+                            ld_node = n
+                            break
+
+                if ld_node:
+                    ld_node.image = ld_img
+                    if ld_img:
+                        ld_img.colorspace_settings.name = 'sRGB'
+                        ld_img.alpha_mode = 'CHANNEL_PACKED'
+
+                # 3. ID Texture Image node (Shadow Color Masks)
+                id_node = nodes.get("Texture ID") or nodes.get("Texture_ID") or nodes.get("ID")
+                if not id_node:
+                    for n in nodes:
+                        if n.type == 'TEX_IMAGE' and any(k in (n.name + " " + (n.label or "")).lower() for k in ["texture id", "texture_id", "mask id"]):
+                            id_node = n
+                            break
+
+                if id_node and id_img:
+                    id_node.image = id_img
+                    id_img.colorspace_settings.name = 'Non-Color'
+                    id_img.alpha_mode = 'CHANNEL_PACKED'
+
+                # 4. Find or create Mix Color nodes for Outline Color 1 and Outline Color 2
+                mix1 = nodes.get("Mix_Outline_Color_1")
+                if not mix1:
+                    mix1 = nodes.new("ShaderNodeMix")
+                    mix1.name = "Mix_Outline_Color_1"
+                    mix1.label = "Mix Outline Color 1"
+                    mix1.data_type = 'RGBA'
+                    mix1.blend_type = 'MIX'
+                    mix1.location = (outlines_node.location.x - 240, outlines_node.location.y - 120)
+
+                mix2 = nodes.get("Mix_Outline_Color_2")
+                if not mix2:
+                    mix2 = nodes.new("ShaderNodeMix")
+                    mix2.name = "Mix_Outline_Color_2"
+                    mix2.label = "Mix Outline Color 2"
+                    mix2.data_type = 'RGBA'
+                    mix2.blend_type = 'MIX'
+                    mix2.location = (outlines_node.location.x - 240, outlines_node.location.y - 260)
+
+                sc = bpy.context.scene
+                ol_mode = getattr(sc, "ww_outline_mode", "NORMAL")
+                col1 = getattr(sc, "ww_outline_color_1", (0.0, 0.0, 0.0, 1.0))
+                col2 = getattr(sc, "ww_outline_color_2", (0.0, 0.0, 0.0, 1.0))
+
+                factor_val = 1.0 if ol_mode == "CUSTOM" else 0.0
+                try:
+                    mix1.inputs[0].default_value = factor_val
+                    mix2.inputs[0].default_value = factor_val
+                except Exception:
+                    pass
+
+                # Connect LD Texture Color -> Socket A of Mix nodes
+                if ld_node:
+                    if not any(l.from_node == ld_node and l.to_socket == mix1.inputs[6] for l in links):
+                        links.new(ld_node.outputs['Color'], mix1.inputs[6])
+                    if not any(l.from_node == ld_node and l.to_socket == mix2.inputs[6] for l in links):
+                        links.new(ld_node.outputs['Color'], mix2.inputs[6])
+
+                # Set Socket B (Custom Colors)
+                col1_rgba = (*col1[:3], 1.0) if len(col1) == 3 else col1
+                col2_rgba = (*col2[:3], 1.0) if len(col2) == 3 else col2
+                try:
+                    mix1.inputs[7].default_value = col1_rgba
+                    mix2.inputs[7].default_value = col2_rgba
+                except Exception:
+                    pass
+
+                # Connect Mix outputs to Outlines sockets
+                target_sock_1 = None
+                target_sock_2 = None
+                for inp in outlines_node.inputs:
+                    name_clean = inp.name.strip().lower()
+                    if name_clean == "outline color":
+                        target_sock_1 = inp
+                    elif name_clean == "outline color 2":
+                        target_sock_2 = inp
+
+                if target_sock_1:
+                    for l in list(links):
+                        if l.to_socket == target_sock_1 and l.from_node != mix1:
+                            links.remove(l)
+                    if not any(l.from_node == mix1 and l.to_socket == target_sock_1 for l in links):
+                        links.new(mix1.outputs['Result'], target_sock_1)
+
+                if target_sock_2:
+                    for l in list(links):
+                        if l.to_socket == target_sock_2 and l.from_node != mix2:
+                            links.remove(l)
+                    if not any(l.from_node == mix2 and l.to_socket == target_sock_2 for l in links):
+                        links.new(mix2.outputs['Result'], target_sock_2)
+
+            # Configure base outline material
+            _configure_outline_mat_nodes(base_outline_mat, None, None)
+
+            mesh_objs = [obj for obj in bpy.context.scene.objects if obj.type == 'MESH' and not any(ign in obj.name.lower() for ign in ["highlight", "eye highlight", "cube"])]
+            char_name = "Character"
+            for mesh in mesh_objs:
+                cn = extract_character_name(mesh.name)
+                if cn and cn != "Character":
+                    char_name = cn
+                    break
+
+            for mat in list(bpy.data.materials):
+                if not mat.name.startswith("WW - ") or "outline" in mat.name.lower():
+                    continue
+
+                orig_name = mat.get("ww_original_name", "")
+                base_part, version = split_material_name(mat.name)
+                if mat.get("ww_base_part"):
+                    base_part = mat.get("ww_base_part")
+
+                if any(ign in base_part.lower() for ign in ["eye", "star", "highlight"]):
+                    continue
+
+                # Look for LD texture strictly for this material / base part
+                ld_img = None
+                clean_orig_key = re.sub(r"^mi_", "", orig_name.lower()) if orig_name else ""
+                clean_part_key = f"{base_part}{version}".lower()
+
+                # 1. Check exact OL JSON mapping
+                for k, ld_name in ol_json_ld_map.items():
+                    clean_k = re.sub(r"^mi_", "", k.lower())
+                    if clean_k in [clean_orig_key, clean_part_key] or k.lower() in [orig_name.lower(), clean_part_key]:
+                        for f in all_texture_files:
+                            if os.path.splitext(f)[0].lower() == ld_name.lower():
+                                ld_img = load_image_safely(os.path.join(folder, f), "_LD")
+                                break
+                        if ld_img:
+                            break
+
+                # 2. Check strict pattern matching
+                if not ld_img:
+                    ld_patterns = make_texture_patterns(base_part, version, "_LD", orig_name, mode=is_default_mode)
+                    # Filter out variant patterns if in default mode and material is not a variant
+                    if is_default_mode and not version:
+                        variants = ["_switch", "_change", "_damage", "_broken", "02", "03", "04"]
+                        clean_patterns = [p for p in ld_patterns if not any(v in p.lower() for v in variants if v not in base_part.lower())]
+                    else:
+                        clean_patterns = ld_patterns
+                    ld_img = find_texture_for_slot(all_texture_files, clean_patterns, folder, "_LD")
+
+                # Look for ID texture (Shadow Color Mask)
+                id_img = None
+                mat_json_texs = {}
+                if base_part and base_part.lower() in json_mappings:
+                    mat_json_texs.update(json_mappings[base_part.lower()])
+                ver_key = f"{base_part}{version}".lower()
+                if ver_key in json_mappings:
+                    mat_json_texs.update(json_mappings[ver_key])
+                if orig_name and orig_name.lower() in json_mappings:
+                    mat_json_texs.update(json_mappings[orig_name.lower()])
+
+                if "_ID" in mat_json_texs:
+                    json_fname = mat_json_texs["_ID"]
+                    full_json_path = os.path.join(folder, json_fname)
+                    id_img = load_image_safely(full_json_path, "_ID")
+
+                if not id_img:
+                    id_patterns = make_texture_patterns(base_part, version, "_ID", orig_name)
+                    id_img = find_texture_for_slot(all_texture_files, id_patterns, folder, "_ID")
+
+                if not id_img:
+                    for f in all_texture_files:
+                        f_low = f.lower()
+                        if "_id" in f_low and (base_part.lower() in f_low or (orig_name and orig_name.lower() in f_low)):
+                            id_img = load_image_safely(os.path.join(folder, f), "_ID")
+                            break
+
+                if not id_img and ("face" in mat.name.lower() or base_part.lower() in ["face", "head"]):
+                    if mat.node_tree and "Face Diffuse" in mat.node_tree.nodes and mat.node_tree.nodes["Face Diffuse"].image:
+                        id_img = mat.node_tree.nodes["Face Diffuse"].image
+
+                outline_mat_name = f"WW - Outlines {base_part}{version} {char_name}" if version else f"WW - Outlines {base_part} {char_name}"
+                part_ol_mat = bpy.data.materials.get(outline_mat_name)
+                if not part_ol_mat:
+                    part_ol_mat = base_outline_mat.copy()
+                    part_ol_mat.name = outline_mat_name
+                    part_ol_mat.use_fake_user = True
+
+                _configure_outline_mat_nodes(part_ol_mat, ld_img, id_img)
+
         self.blender_operator.report({'INFO'}, 'Successfully imported and assigned Wuthering Waves textures!')
         NextStepInvoker().invoke(
             self.blender_operator.next_step_idx, 

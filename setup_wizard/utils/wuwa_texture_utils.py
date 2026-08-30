@@ -27,6 +27,7 @@ TEXTURE_TYPE_MAPPINGS_JAREDNYTS = {
     "_RGID": ("RGID",),
     "_FX": ("FX Texture",),
     "_Skin": ("Skin",),
+    "_LD": ("Texture_LD", "LD Texture", "LD", "Texture_LD(sRGB) (Channel Packed)"),
 }
 
 _MODEL_PREFIX_PATTERNS = [

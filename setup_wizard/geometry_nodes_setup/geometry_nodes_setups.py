@@ -1773,29 +1773,75 @@ class WutheringWavesGeometryNodesSetup(GameGeometryNodesSetup):
                     if hasattr(outlines_group, "interface") and hasattr(outlines_group.interface, "items_tree"):
                         for item in outlines_group.interface.items_tree:
                             if getattr(item, 'item_type', '') == 'SOCKET' and getattr(item, 'in_out', '') == 'INPUT':
-                                if item.name == socket_name:
+                                if item.name.strip() == socket_name.strip():
                                     ident = item.identifier
+                                    sock_type = getattr(item, 'socket_type', '')
                                     if hasattr(mod, 'properties') and hasattr(mod.properties, 'inputs'):
                                         sock = getattr(mod.properties.inputs, ident, None)
-                                        if sock and hasattr(sock, 'value'):
-                                            try:
-                                                sock.value = val
-                                                break
-                                            except Exception:
-                                                pass
+                                        if sock:
+                                            if isinstance(val, str):
+                                                try:
+                                                    if hasattr(sock, 'type'):
+                                                        sock.type = 'ATTRIBUTE'
+                                                    if hasattr(sock, 'attribute_name'):
+                                                        sock.attribute_name = val
+                                                    break
+                                                except Exception:
+                                                    pass
+                                            if hasattr(sock, 'value'):
+                                                try:
+                                                    if sock_type == 'NodeSocketInt':
+                                                        sock.value = int(val)
+                                                    elif sock_type == 'NodeSocketFloat':
+                                                        sock.value = float(val)
+                                                    elif sock_type == 'NodeSocketBool':
+                                                        sock.value = bool(val)
+                                                    else:
+                                                        sock.value = val
+                                                    break
+                                                except Exception:
+                                                    pass
                                     try:
                                         mod[ident] = val
                                     except Exception:
                                         pass
                                     break
 
+                outline_configs = {
+                    'Rotate Normals **UNUSED**': 90,
+                    'Use Base Geometry?': 1,
+                    'Vertex Colors': 'Col',
+                    'Use Vertex Colors?': 1,
+                    'Screen Space Switch': 0.0,
+                    'Outline Thickness': float(getattr(bpy.context.scene, "ww_outline_thickness", 0.2)),
+                    'Clamp Minimum Distance Mult?': False,
+                    'Minimum Distance Mult': 0.0,
+                    'Clamp Maximum Distance Mult?': False,
+                    'Maximum Distance Mult': 100.0,
+                    'Depth Offset': 0.0,
+                }
+                for cfg_k, cfg_v in outline_configs.items():
+                    _set_outline_input(cfg_k, cfg_v)
+
                 if bpy.context.scene.camera:
                     _set_outline_input("Camera", bpy.context.scene.camera)
 
                 for idx, c_mat in enumerate(char_materials[:7], start=1):
                     _set_outline_input(f"Outline {idx} Mask", c_mat)
-                    if outline_mat:
-                        _set_outline_input(f"Outline {idx} Material", outline_mat)
+                    
+                    part_mat_name = c_mat.name
+                    specific_ol_mat = None
+                    if part_mat_name.startswith("WW - "):
+                        base_p = part_mat_name[5:]
+                        specific_ol_mat = bpy.data.materials.get(f"WW - Outlines {base_p}")
+                    if not specific_ol_mat:
+                        for m in bpy.data.materials:
+                            if m.name.startswith("WW - Outlines ") and any(p in m.name.lower() for p in part_mat_name.lower().split()):
+                                specific_ol_mat = m
+                                break
+                    target_ol = specific_ol_mat or outline_mat
+                    if target_ol:
+                        _set_outline_input(f"Outline {idx} Material", target_ol)
 
             # 3. Add ResonatorStar Move if mesh has ResonatorStar material
             has_star = any(s.material and "star" in s.material.name.lower() for s in mesh.material_slots)

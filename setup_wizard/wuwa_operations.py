@@ -324,6 +324,134 @@ def update_light_mode(self, context=None):
             apply_light_mode_to_nodes(mat.node_tree)
 
 
+def update_outline_settings(self, context=None):
+    scene = getattr(bpy.context, "scene", None) if not isinstance(self, bpy.types.Scene) else self
+    if not scene:
+        return
+
+    ol_mode = getattr(scene, "ww_outline_mode", "NORMAL")
+    col1 = getattr(scene, "ww_outline_color_1", (0.0, 0.0, 0.0))
+    col2 = getattr(scene, "ww_outline_color_2", (0.0, 0.0, 0.0))
+
+    col1_rgba = (*col1[:3], 1.0) if len(col1) == 3 else col1
+    col2_rgba = (*col2[:3], 1.0) if len(col2) == 3 else col2
+    factor_val = 1.0 if ol_mode == "CUSTOM" else 0.0
+
+    for mat in bpy.data.materials:
+        if not mat.use_nodes or not mat.node_tree:
+            continue
+        if mat.name != "WW - Outlines" and not mat.name.startswith("WW - Outlines"):
+            continue
+
+        nodes = mat.node_tree.nodes
+
+        mix1 = nodes.get("Mix_Outline_Color_1")
+        mix2 = nodes.get("Mix_Outline_Color_2")
+        outlines_node = nodes.get("Outlines")
+
+        if mix1:
+            try:
+                mix1.inputs[0].default_value = factor_val
+                mix1.inputs[7].default_value = col1_rgba
+            except Exception:
+                pass
+
+        if mix2:
+            try:
+                mix2.inputs[0].default_value = factor_val
+                mix2.inputs[7].default_value = col2_rgba
+            except Exception:
+                pass
+
+        if outlines_node and ol_mode == "CUSTOM":
+            for inp in outlines_node.inputs:
+                name_clean = inp.name.strip().lower()
+                if name_clean == "outline color":
+                    try:
+                        inp.default_value = col1_rgba
+                    except Exception:
+                        pass
+                elif name_clean == "outline color 2":
+                    try:
+                        inp.default_value = col2_rgba
+                    except Exception:
+                        pass
+
+    if hasattr(bpy.context, 'window_manager') and bpy.context.window_manager:
+        for win in getattr(bpy.context.window_manager, 'windows', []):
+            screen = getattr(win, 'screen', None)
+            if screen:
+                for area in screen.areas:
+                    if area.type == 'VIEW_3D':
+                        area.tag_redraw()
+
+
+def update_outline_thickness(self, context=None):
+    scene = getattr(bpy.context, "scene", None) if not isinstance(self, bpy.types.Scene) else self
+    if not scene:
+        return
+    val = float(getattr(scene, "ww_outline_thickness", 0.2))
+
+    outlines_group = bpy.data.node_groups.get("WW - Outlines")
+    updated_objs = []
+
+    for obj in bpy.data.objects:
+        if obj.type != 'MESH':
+            continue
+        obj_updated = False
+        for mod in obj.modifiers:
+            if mod.type == 'NODES' and (mod.node_group == outlines_group or "outline" in mod.name.lower()):
+                if outlines_group and hasattr(outlines_group, "interface") and hasattr(outlines_group.interface, "items_tree"):
+                    for item in outlines_group.interface.items_tree:
+                        if getattr(item, 'item_type', '') == 'SOCKET' and getattr(item, 'in_out', '') == 'INPUT':
+                            if item.name.strip() == "Outline Thickness":
+                                ident = item.identifier
+                                if hasattr(mod, 'properties') and hasattr(mod.properties, 'inputs'):
+                                    sock = getattr(mod.properties.inputs, ident, None)
+                                    if sock and hasattr(sock, 'value'):
+                                        try:
+                                            sock.value = val
+                                        except Exception:
+                                            pass
+                                try:
+                                    mod[ident] = val
+                                except Exception:
+                                    pass
+
+                                # Force flush of modifier viewport evaluation
+                                try:
+                                    orig_vp = mod.show_viewport
+                                    mod.show_viewport = not orig_vp
+                                    mod.show_viewport = orig_vp
+                                except Exception:
+                                    pass
+
+                                obj_updated = True
+                                break
+        if obj_updated:
+            try:
+                obj.update_tag(refresh={'DATA', 'OBJECT'})
+                if hasattr(obj, 'data') and obj.data:
+                    obj.data.update()
+                updated_objs.append(obj)
+            except Exception:
+                pass
+
+    if hasattr(bpy.context, 'view_layer') and bpy.context.view_layer:
+        try:
+            bpy.context.view_layer.update()
+        except Exception:
+            pass
+
+    if hasattr(bpy.context, 'window_manager') and bpy.context.window_manager:
+        for win in getattr(bpy.context.window_manager, 'windows', []):
+            screen = getattr(win, 'screen', None)
+            if screen:
+                for area in screen.areas:
+                    if area.type == 'VIEW_3D':
+                        area.tag_redraw()
+
+
 def sync_wuwa_shader_properties(scene=None):
     """Synchronizes all Wuthering Waves scene UI properties to shader node groups and materials."""
     scene = scene or getattr(bpy.context, "scene", None)
@@ -339,6 +467,8 @@ def sync_wuwa_shader_properties(scene=None):
     update_specular(scene, None)
     update_disgust(scene, None)
     update_alpha_transparency(scene, None)
+    update_outline_settings(scene, None)
+    update_outline_thickness(scene, None)
 
 
 # Animate Mode: Swapping materials for low-poly/simplified fast viewport playback
@@ -893,6 +1023,50 @@ def register_wuwa_properties():
         description="Toggle Alpha Transparency on Alpha materials",
         default=True,
         update=update_alpha_transparency,
+    )
+
+    bpy.types.Scene.ww_outline_mode = EnumProperty(
+        name="Outline Mode",
+        description="Outline color mode for Wuthering Waves characters",
+        items=[
+            ("NORMAL", "Normal", "Use LD texture or default outline colors"),
+            ("CUSTOM", "Custom", "Use custom outline colors"),
+        ],
+        default="NORMAL",
+        update=update_outline_settings,
+    )
+
+    bpy.types.Scene.ww_outline_color_1 = FloatVectorProperty(
+        name="Outline Color 1",
+        description="First custom outline color",
+        subtype='COLOR',
+        size=3,
+        min=0.0,
+        max=1.0,
+        default=(0.0, 0.0, 0.0),
+        update=update_outline_settings,
+    )
+
+    bpy.types.Scene.ww_outline_color_2 = FloatVectorProperty(
+        name="Outline Color 2",
+        description="Second custom outline color",
+        subtype='COLOR',
+        size=3,
+        min=0.0,
+        max=1.0,
+        default=(0.0, 0.0, 0.0),
+        update=update_outline_settings,
+    )
+
+    bpy.types.Scene.ww_outline_thickness = FloatProperty(
+        name="Outline Thickness",
+        description="Outline thickness modifier setting",
+        min=0.0,
+        max=2.0,
+        default=0.2,
+        step=1,
+        precision=3,
+        update=update_outline_thickness,
     )
 
 

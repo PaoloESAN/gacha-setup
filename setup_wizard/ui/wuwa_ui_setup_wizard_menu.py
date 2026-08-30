@@ -333,6 +333,22 @@ class WW_PT_Rig_Character_Settings(Panel):
         # 5. Alpha Transparency (Animatable checkbox)
         layout.prop(scene, "ww_alpha_transparency", text="Alpha Transparency")
 
+        # 6. Outlines Mode (Own row with label on top, below Alpha Transparency)
+        col_ol = layout.column(align=True)
+        col_ol.label(text="Outlines:")
+        col_ol.prop(scene, "ww_outline_mode", text="")
+
+        # Custom Outline Colors when Outlines Mode is Custom
+        if getattr(scene, "ww_outline_mode", "NORMAL") == "CUSTOM":
+            box_ol = col_ol.box()
+            box_ol.label(text="Custom Outline Colors", icon="COLOR")
+            col_ol_colors = box_ol.column(align=True)
+            col_ol_colors.prop(scene, "ww_outline_color_1", text="Outline Color 1")
+            col_ol_colors.prop(scene, "ww_outline_color_2", text="Outline Color 2")
+
+        # 7. Outline Thickness Slider
+        layout.prop(scene, "ww_outline_thickness", text="Outline Thickness", slider=True)
+
         # --- Other controls commented out ---
         # layout.prop(scene, "ww_metallic_value", text="Metallics", slider=True)
         # layout.prop(scene, "ww_specular_value", text="Specular", slider=True)
