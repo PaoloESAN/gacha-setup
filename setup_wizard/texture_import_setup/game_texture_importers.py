@@ -449,6 +449,55 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                 best = f
         return best
 
+    def _find_best_face_diffuse(self, mat_name, mesh_names, image_files, char_prefix=''):
+        import re
+        face_candidates = []
+        for f in image_files:
+            f_low = f.lower()
+            if any(k in f_low for k in ['lightmap', 'ligthmap', 'facemap', 'expression', 'normal', 'bump', '_m.', '_m_', '_n.', '_n_', '_a.', '_a_', 'shadow', 'ramp', 'curve', 'lut', 'mask', 'eff_matcap']):
+                continue
+            if any(k in f_low for k in ['face', 'cara', 'head', 'rostro', 'eye', 'eyebrow', 'brow', '眉']):
+                face_candidates.append(f)
+
+        if not face_candidates:
+            face_candidates = [
+                f for f in image_files
+                if not any(k in f.lower() for k in ['lightmap', 'ligthmap', 'facemap', 'expression', 'normal', 'bump', '_m.', '_m_', '_n.', '_n_', '_a.', '_a_', 'shadow', 'ramp', 'curve', 'lut', 'mask', 'eff_matcap'])
+                and any(k in f.lower() for k in ['face', 'cara', 'head'])
+            ]
+
+        if not face_candidates:
+            return None
+
+        if len(face_candidates) == 1:
+            return face_candidates[0]
+
+        best = face_candidates[0]
+        best_sc = -9999
+        mat_raw = mat_name.lower()
+        mat_nums = re.findall(r'\d+', mat_raw)
+
+        for f in face_candidates:
+            f_low = f.lower()
+            sc = 0
+            if any(k in f_low for k in ['_d.', '_d_', '_diffuse', '_color', '_basecolor', '_albedo', '_col']):
+                sc += 100
+            if 'face' in f_low or 'cara' in f_low:
+                sc += 80
+            if char_prefix and char_prefix.lower() in f_low:
+                sc += 60
+
+            f_nums = re.findall(r'\d+', f_low)
+            for num in mat_nums:
+                if num in f_nums:
+                    sc += 120
+
+            if sc > best_sc:
+                best_sc = sc
+                best = f
+
+        return best
+
     def _build_zzz_json_texture_map(self, folder):
         candidates_dirs = [
             folder,
@@ -535,7 +584,11 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                         if t_name:
                             resolved = resolve_file(t_name)
                             if resolved:
-                                extracted[map_key] = resolved
+                                if map_key == 'd' and any(k in resolved.lower() for k in ['lightmap', 'ligthmap']):
+                                    extracted['lightmap'] = resolved
+                                    extracted['n'] = resolved
+                                else:
+                                    extracted[map_key] = resolved
 
             if not extracted:
                 # If Name is empty in JSON (Unity dump), infer from active slots and JSON name
@@ -550,6 +603,10 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                                 if matched_tex:
                                     extracted['lightmap'] = matched_tex
                                     extracted['n'] = matched_tex
+                            elif is_mat_face and map_key == 'd':
+                                matched_tex = self._find_best_face_diffuse(mat_key, [], image_files)
+                                if matched_tex:
+                                    extracted['d'] = matched_tex
                             else:
                                 matched_tex = self._find_best_texture(mat_key, [], map_key, image_files)
                                 if matched_tex:
@@ -645,37 +702,49 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                   any(any(k in m for k in ["face", "eyebrow", "brow", "eye"]) for m in mesh_names)
 
         # Helper to find file by stem in image_files
-        def find_file_by_stem(stem_to_find):
+        def find_file_by_stem(stem_to_find, target_type='d'):
             if not stem_to_find:
                 return None
             s_low = stem_to_find.lower().strip()
             for f in image_files:
                 if os.path.splitext(f)[0].lower() == s_low:
+                    if target_type == 'd' and any(k in f.lower() for k in ['lightmap', 'ligthmap', '_m.', '_m_', '_n.', '_n_', '_a.', '_a_']):
+                        continue
                     return f
             for f in image_files:
                 f_stem = os.path.splitext(f)[0].lower()
-                if f_stem == f"{s_low}_d" or f_stem == f"{s_low}_m" or f_stem == f"{s_low}_n" or f_stem == f"{s_low}_a":
+                if f_stem in [f"{s_low}_d", f"{s_low}_m", f"{s_low}_n", f"{s_low}_a"]:
+                    if target_type == 'd' and any(k in f.lower() for k in ['lightmap', 'ligthmap']):
+                        continue
                     return f
             for f in image_files:
-                if os.path.splitext(f)[0].lower().startswith(s_low) or s_low.startswith(os.path.splitext(f)[0].lower()):
+                f_stem = os.path.splitext(f)[0].lower()
+                if target_type == 'd' and any(k in f.lower() for k in ['lightmap', 'ligthmap', '_m.', '_m_', '_n.', '_n_', '_a.', '_a_']):
+                    continue
+                if f_stem.startswith(s_low) or s_low.startswith(f_stem):
                     return f
             return None
 
         # 1. First priority: Base material texture from FBX import
         base_tex_name = mat.get("_original_fbx_texture")
         if not base_tex_name:
-            for n in mat.node_tree.nodes:
-                if n.type == 'TEX_IMAGE' and n.image and n.image.name:
-                    if not n.name.startswith("Texture_") and not n.label.startswith("Texture"):
-                        base_tex_name = n.image.name
-                        break
+            orig_mat_name = mat.get("_original_material_name")
+            if orig_mat_name:
+                orig_m = bpy.data.materials.get(orig_mat_name)
+                if orig_m and orig_m.node_tree:
+                    for n in orig_m.node_tree.nodes:
+                        if n.type == 'TEX_IMAGE' and n.image and n.image.name:
+                            i_name_low = n.image.name.lower()
+                            if not any(ign in i_name_low for ign in ["female_face_lightmap", "lightmap", "ramp", "white_", "mask"]):
+                                base_tex_name = n.image.name
+                                break
 
-        if base_tex_name:
+        if base_tex_name and not any(ign in base_tex_name.lower() for ign in ["female_face_lightmap", "lightmap", "ramp", "white_", "mask"]):
             clean_base = os.path.splitext(base_tex_name)[0]
             stem = re.sub(r'(_d|_diffuse|_basecolor|_color|_albedo)$', '', clean_base, flags=re.IGNORECASE)
             for t in ['d', 'm', 'n', 'a']:
-                f_match = find_file_by_stem(f"{stem}_{t}")
-                if f_match:
+                f_match = find_file_by_stem(f"{stem}_{t}", target_type=t)
+                if f_match and not (t == 'd' and any(k in f_match.lower() for k in ['lightmap', 'ligthmap'])):
                     resolved[t] = f_match
 
             if is_face:
@@ -693,14 +762,18 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         if json_textures:
             for k, val in json_textures.items():
                 if k not in resolved or not resolved[k]:
-                    resolved[k] = val
+                    if k == 'd' and any(ign in val.lower() for ign in ['lightmap', 'ligthmap']):
+                        resolved['lightmap'] = val
+                        resolved['n'] = val
+                    else:
+                        resolved[k] = val
                 elif k in ['matcap', 'matcap2', 'matcap3', 'matcap4', 'matcap5']:
                     resolved[k] = val
 
         # 3. Third priority: Heuristic fallback
         if is_face:
-            if 'd' not in resolved or not resolved['d']:
-                resolved['d'] = self._find_best_texture(matname, mesh_names, "d", image_files, main_prefix)
+            if 'd' not in resolved or not resolved['d'] or any(k in resolved['d'].lower() for k in ['lightmap', 'ligthmap']):
+                resolved['d'] = self._find_best_face_diffuse(matname, mesh_names, image_files, main_prefix)
             if 'lightmap' not in resolved or not resolved['lightmap']:
                 resolved['lightmap'] = self._find_best_face_lightmap(matname, mesh_names, image_files, main_prefix)
                 resolved['n'] = resolved['lightmap']
@@ -926,7 +999,12 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
 
                 if is_face:
                     face_d = res_textures.get('d')
+                    if not face_d or any(k in face_d.lower() for k in ['lightmap', 'ligthmap']):
+                        face_d = self._find_best_face_diffuse(combined_names, mesh_names, filtered_files, main_prefix)
+
                     face_lm = res_textures.get('lightmap') or res_textures.get('n')
+                    if not face_lm:
+                        face_lm = self._find_best_face_lightmap(combined_names, mesh_names, filtered_files, main_prefix)
 
                     # 1. Face D -> _D Map / Diffuse Texture (sRGB)
                     if face_d:
@@ -1026,6 +1104,9 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
 
                 if is_face:
                     face_d = res_textures.get('d')
+                    if not face_d or any(k in face_d.lower() for k in ['lightmap', 'ligthmap']):
+                        face_d = self._find_best_face_diffuse(combined_names, mesh_names, filtered_files, main_prefix)
+
                     if face_d:
                         img_path = os.path.join(tex_folder, face_d) if os.path.isfile(os.path.join(tex_folder, face_d)) else os.path.join(folder, face_d)
                         if os.path.isfile(img_path):
@@ -1041,6 +1122,9 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                                         node.image = img
 
                     face_lm = res_textures.get('lightmap') or res_textures.get('n')
+                    if not face_lm:
+                        face_lm = self._find_best_face_lightmap(combined_names, mesh_names, filtered_files, main_prefix)
+
                     if face_lm:
                         img_path = os.path.join(tex_folder, face_lm) if os.path.isfile(os.path.join(tex_folder, face_lm)) else os.path.join(folder, face_lm)
                         if os.path.isfile(img_path):
