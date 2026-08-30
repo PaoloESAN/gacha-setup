@@ -1,12 +1,14 @@
 ---
 title: "Lights & Coloramp Configuration"
-description: "Controlling light direction and customizing StellarToon shader color ramps for Honkai: Star Rail models."
+description: "Controlling light direction, lighting presets, custom colors, and expression sliders for Honkai: Star Rail models."
 ---
 
 import { Image } from 'astro:assets';
 import hsrLightdir from '../../../assets/content/hsr/hsr-lightdir.png';
-import hsrAmbient1 from '../../../assets/content/hsr/hsr-ambient1.png';
-import hsrAmbient2 from '../../../assets/content/hsr/hsr-ambient2.png';
+import hsrLight1 from '../../../assets/content/hsr/hsr-light1.png';
+import hsrLight2 from '../../../assets/content/hsr/hsr-light2.png';
+import hsrLight3 from '../../../assets/content/hsr/hsr-light3.png';
+import hsrLight4 from '../../../assets/content/hsr/hsr-light4.png';
 
 ## 1. Controlling Light & Shadow Direction
 
@@ -23,21 +25,43 @@ During character setup, a dedicated `Light Direction_<Character>` object is crea
 
 ---
 
-## 2. Ambient Lighting & Global Properties Customization
+## 2. Character Settings (Item Panel)
 
-To customize the color tint, ambient lighting, and cel-shaded tones of the **StellarToon Shader**:
+Select your character mesh or armature and press `N` in the 3D Viewport. Open the **Item** tab to access the **Character Settings** panel, providing real-time controls without having to manually edit shader node trees:
 
-1. Select your character object and open the **Shader Editor**.
-2. Locate the **Global Properties** node group and double-click it to enter into the node tree.
+- **Lighting Mode**: Switch between built-in ambient lighting presets or choose Custom to tune individual color channels.
+- **Expressions**: Dedicated sliders for quick facial overlays:
+  - **Cheek**: Controls blush cheek overlay intensity.
+  - **Shy**: Controls flushed cheek / shy overlay intensity.
+  - **Shadow**: Controls the forehead and face drop shadow intensity.
+- **Eye Can't Be Tinted?**: Enable this checkbox to prevent the character's eyes from being tinted by environment or custom lighting colors.
 
-<Image src={hsrAmbient1} alt="Global Properties node in Shader Editor" loading="lazy" />
+<Image src={hsrLight1} alt="Character Settings panel in Honkai Star Rail" loading="lazy" />
 
-3. Inside the node group, scroll to the bottom section where the coloring and ambient light options are located:
-   - **Tint Lit / Custom Ambient Color**: Controls the ambient light base tint and lighting color scheme.
-   - **Coloramp & Shadows**: Manages color ramps and gradient falloffs for cel-shaded areas.
+### Lighting Modes & Presets
 
-<Image src={hsrAmbient2} alt="Coloring and ambient light options at the bottom of the Global Properties node" loading="lazy" />
+You can select from multiple built-in lighting presets:
 
-:::tip
-You can allow the eyes to be tinted as well by setting the **Eye Cant be tinted** option to `0`.
-:::
+- **Default**: Default game lighting baseline.
+- **Sunrise**: Warm morning hue with soft shadows.
+- **Day**: Neutral, bright daylight illumination.
+- **Sunset**: Rich golden sunset glow with deep shadow tones.
+- **Night**: Cool, dark nighttime palette.
+- **Rainy**: Overcast and diffuse ambient lighting.
+- **Custom**: Displays color swatches for full custom control.
+
+<Image src={hsrLight2} alt="Preset light modes in Character Settings for Honkai Star Rail" loading="lazy" />
+
+<Image src={hsrLight3} alt="Lighting Mode dropdown in Character Settings for Honkai Star Rail" loading="lazy" />
+
+### Custom Colors
+
+When **Lighting Mode** is set to **Custom**, you can adjust individual shader tones:
+
+- **Ambient**: Base unshaded ambient illumination color.
+- **Lit**: Primary direct light color tone.
+- **Shadow**: Main shadow region color tone.
+- **Sharp Lit**: Secondary lit highlights.
+- **Sharp Shadow**: Deep occluded cel-shadows.
+
+<Image src={hsrLight4} alt="Custom color controls in Character Settings for Honkai Star Rail" loading="lazy" />

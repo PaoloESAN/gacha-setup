@@ -26,7 +26,7 @@ description: Acknowledgements, contributors, and assets credits.
 - **Just_ScaasI** — ZZZ Shader
 - **Isaac** — HSR Face Rig
 - **Stormz67** — Supervision
-- **Omatsuri** — NTE Shader · [Discord](https://discord.gg/omatsuri)
+- **Omatsuri** — NTE Shader · [Discord](https://discord.com/invite/85rP9SpAkF)
 - **矩阵映画** — NTE Rig
 - **[thewindlead](https://www.youtube.com/@thewindlead)** — Hair & Clothes physics · [YouTube](https://www.youtube.com/@thewindlead)
 - **VANS** — Sandrone Pupil

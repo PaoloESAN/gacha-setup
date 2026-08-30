@@ -26,7 +26,7 @@ description: Agradecimientos, colaboradores y créditos de recursos.
 - **Just_ScaasI** — Shader de ZZZ
 - **Isaac** — Face Rig de HSR
 - **Stormz67** — Supervisión
-- **Omatsuri Discord** — Shader de NTE · [Discord](https://discord.gg/omatsuri)
+- **Omatsuri** — NTE Shader · [Discord](https://discord.com/invite/85rP9SpAkF)
 - **矩阵映画** — Rig de NTE
 - **[thewindlead](https://www.youtube.com/@thewindlead)** — Físicas de pelo y ropa · [YouTube](https://www.youtube.com/@thewindlead)
 - **Hiragara** — Assets de Personajes

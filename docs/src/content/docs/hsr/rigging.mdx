@@ -1,6 +1,6 @@
 ---
-title: "Honkai: Star Rail Rigging"
-description: "Isaac facial expression controls and face rig setup for Honkai: Star Rail models."
+title: "Honkai: Star Rail Rigging & Bone Collections"
+description: "Isaac facial expression controls, face rig setup, and bone collections for Honkai: Star Rail models in Blender 5.2+."
 ---
 
 import { Image } from 'astro:assets';
@@ -8,6 +8,7 @@ import hsrFacerig from '../../../assets/content/hsr/hsr-facerig.png';
 import hsrManualrig from '../../../assets/content/hsr/hsr-manualrig.png';
 import hsrShapekeys from '../../../assets/content/hsr/hsr-shapekeys.png';
 import hsrTworigs from '../../../assets/content/hsr/hsr-tworigs.png';
+import hsrBonecoll from '../../../assets/content/hsr/hsr-bonecoll.png';
 
 ## 1. 3D Facial Expression Control Board & Isaac Face Rig
 
@@ -26,3 +27,26 @@ Upon importing and setting up the character, the add-on configures two main rigs
 - **Side Preset Shapekey Sliders**: The sliders located on the sides of the head are used to easily trigger and blend the character's built-in preset facial poses.
 
 <Image src={hsrShapekeys} alt="Side sliders for triggering and blending built-in preset shape keys" loading="lazy" />
+
+---
+
+## 2. Bone Collections
+
+Honkai: Star Rail character armatures are organized into structured groups within the **Bone Collections** tab (Blender 5.2+).
+
+<Image src={hsrBonecoll} alt="Armature Properties Bone Collections panel for Honkai Star Rail character" loading="lazy" />
+
+### Bone Collections Overview
+
+- **Face**: Eyebrow, eye, eyelid, pupil, nose, and mouth controllers.
+- **Torso (IK / FK)**: Spine, chest, neck, and head handles.
+- **Arm.L / Arm.R (IK & FK)**: Left and right arm chains with individual IK target pins and pole targets.
+- **Leg.L / Leg.R (IK & FK)**: Left and right leg chains with foot roll and knee target controls.
+- **Fingers**: Hand and finger bone controllers.
+- **Hair**: Dynamic secondary bones for hair strands and pony tails.
+- **Clothes**: Dynamic secondary bones for coats, skirts, capes, and tassels.
+- **Lighting**: Vector handles and lighting controllers.
+
+:::tip
+Use the **star icon** in the **Bone Collections** tab to solo/isolate a specific bone collection, or click the **eye icons** to toggle visibility while animating.
+:::

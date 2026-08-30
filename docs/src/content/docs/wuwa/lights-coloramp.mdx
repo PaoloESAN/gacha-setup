@@ -1,0 +1,77 @@
+---
+title: "Lights & Coloramp Configuration"
+description: "Controlling light direction, presets, custom palette colors, and shader settings for Wuthering Waves models."
+---
+
+import { Image } from 'astro:assets';
+import wuwaLightdir from '../../../assets/content/wuwa/wuwa-lightdir.png';
+import wuwaLight1 from '../../../assets/content/wuwa/wuwa-light1.png';
+import wuwaLight2 from '../../../assets/content/wuwa/wuwa-light2.png';
+import wuwaLight3 from '../../../assets/content/wuwa/wuwa-light3.png';
+import wuwaLight4 from '../../../assets/content/wuwa/wuwa-light4.png';
+import wuwaAnimateMode from '../../../assets/content/wuwa/wuwa-animate-mode.png';
+
+## 1. Controlling Light & Shadow Direction
+
+During character setup, a dedicated `Light Direction_<Character>` object is created in your scene collection.
+
+1. Locate `Light Direction_<Character>` in the **Outliner** panel.
+2. Open the **Item Transform** panel in Object Properties.
+3. Adjust the **Rotation** values (XYZ Euler) to rotate the light vector:
+   - **Rotation Z**: Rotates the sun angle horizontally around the character.
+   - **Rotation Y**: Adjusts the horizontal tilt of the light across the character.
+   - **Rotation X**: Adjusts the vertical pitch of the shadow line.
+
+<Image src={wuwaLightdir} alt="Adjusting Light Direction object rotation in Outliner for Wuthering Waves" loading="eager" />
+
+---
+
+## 2. Character Settings (Item Panel)
+
+Select your character mesh or armature and press `N` in the 3D Viewport. Open the **Item** tab to access the **Character Settings** panel, providing real-time controls without having to manually edit shader node trees:
+
+- **Animate Mode**: Temporarily swaps complex toon shaders for lightweight materials to ensure smooth viewport animation playback.
+- **Lighting Mode**: Switch between built-in ambient lighting presets or choose Custom to tune individual color channels.
+- **Blush**: Adjusts the intensity of the character's facial blush texture.
+- **Toggle Resonator Star**: Toggles the visibility/animation driver for the character's Resonator star emblem.
+- **Alpha Transparency**: Easily toggle transparency on alpha materials (such as transparent veils, cloth lace, and hair ribbons) between blended transparency and solid rendering.
+
+<Image src={wuwaLight1} alt="Character Settings panel for Wuthering Waves" loading="lazy" />
+
+### Lighting Modes & Presets
+
+You can select from several curated lighting preset modes:
+
+- **Default**: Original game lighting baseline.
+- **Sunrise**: Warm, soft morning glow with soft blue-purple shadow tints.
+- **Day**: Crisp, balanced daylight illumination.
+- **Sunset**: Golden-hour tones with deep amber lit colors and rich shadows.
+- **Night**: Dim cool moonlight tones.
+- **Rainy**: Overcast, diffused atmospheric shading.
+- **Custom**: Unlocks granular control over Ambient, Light, Shadow, and Rim color swatches.
+
+<Image src={wuwaLight2} alt="Wuthering Waves Lighting Mode preset dropdown" loading="lazy" />
+
+### Custom Colors
+
+When **Lighting Mode** is set to **Custom**, you can adjust individual shader tones:
+
+- **Ambient**: Controls base unshaded ambient illumination.
+- **Light**: Color tint applied to fully lit regions.
+- **Shadow**: Tone applied to shaded/occluded regions.
+- **Rim**: Color of the specular rim light highlight.
+
+<Image src={wuwaLight3} alt="Custom colors and blush sliders in Character Settings" loading="lazy" />
+
+### Resonator Star & Alpha Transparency
+
+- **Toggle Resonator Star**: Toggles the visibility/animation driver for the character's Resonator star emblem.
+- **Alpha Transparency**: Easily toggle transparency on alpha materials (such as transparent veils, cloth lace, and hair ribbons) between blended transparency and solid rendering.
+
+<Image src={wuwaLight4} alt="Toggle Resonator Star and Alpha Transparency controls" loading="lazy" />
+
+### Animate Mode
+
+For smooth and lag-free viewport animation playback, click **Enable Animate Mode** in the Character Settings panel. This temporarily swaps complex toon shader trees with lightweight low-overhead materials while you animate, and you can switch back with one click when preparing your final render.
+
+<Image src={wuwaAnimateMode} alt="Enable Animate Mode in Wuthering Waves Character Settings" loading="lazy" />

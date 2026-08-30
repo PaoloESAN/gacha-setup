@@ -5,7 +5,28 @@ description: Release history and version updates for Gacha Setup.
 
 ## Version History
 
-### v3.3.2 — Latest
+### v3.4.0 — Latest
+
+**Wuthering Waves**
+- **Features:** Added Wuthering Waves setup by fnoji.
+- Added Gustling Waters shader by nytsjared.
+- Added hair and clothing physics.
+- Added alpha material.
+- Added facerig.
+- Added character settings in Items. (A huge thank you to both for the incredible work on the shader and the WuWa setup!)
+
+**Honkai: Star Rail**
+- **Features:** Added character settings in Items.
+- Added preset light modes, and you can customize the preset light.
+
+**Zenless Zone Zero**
+- **Features:** Added character settings in Items.
+- Added preset light modes, and you can customize the preset light.
+- **Fixes & Improvements:** Fixed: some models were not assigned the correct texture.
+
+[Full Changelog: #8](https://github.com/PaoloESAN/gacha-setup/pull/8)
+
+### v3.3.2
 
 **Honkai: Star Rail (HSR)**
 - Fixed FaceRig not working.

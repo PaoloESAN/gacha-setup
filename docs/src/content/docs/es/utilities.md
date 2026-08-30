@@ -1,6 +1,22 @@
 ---
 title: Utilidades
-description: Guías útiles, tutoriales y recursos para trabajar con personajes y shaders en Blender.
+description: Guías útiles, tutoriales y recursos de la comunidad para trabajar con personajes y shaders en Blender.
+---
+
+## Comunidad y Feedback
+
+### Discord de Omatsuri
+
+¡Únete a la comunidad de **Omatsuri en Discord** (servidor en inglés)! Es un gran espacio donde hay personas que te pueden ayudar y donde se comparten constantemente novedades, recursos y herramientas sobre todo el mundo del 3D de diversos juegos de anime (Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Wuthering Waves, etc.).
+
+Además, tengo un post en la sección de **sharing** dedicado a **Gacha Setup** donde puedes reportar bugs, sugerir nuevas funciones, resolver dudas y dejar tus sugerencias.
+
+:::note
+Ten en cuenta que el servidor de Omatsuri es una comunidad de habla **inglesa**.
+:::
+
+👉 **[Unirse al servidor de Discord de Omatsuri](https://discord.com/invite/85rP9SpAkF)**
+
 ---
 
 ## Tutoriales y Guías

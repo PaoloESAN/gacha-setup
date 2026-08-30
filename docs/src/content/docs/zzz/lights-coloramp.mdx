@@ -1,10 +1,12 @@
 ---
 title: "Lights & Coloramp Configuration"
-description: "Controlling light direction and customizing ZZZ toon shader color ramps for Zenless Zone Zero models."
+description: "Controlling light direction, Kythera shader presets, custom tints, and rim light for Zenless Zone Zero models."
 ---
 
 import { Image } from 'astro:assets';
 import zzzLightdir from '../../../assets/content/zzz/zzz-lightdir.png';
+import zzzLight1 from '../../../assets/content/zzz/zzz-light1.png';
+import zzzLight2 from '../../../assets/content/zzz/zzz-light2.png';
 import zzzLightpanel from '../../../assets/content/zzz/zzz-lightpanel.png';
 import zzzTworigs from '../../../assets/content/zzz/zzz-tworigs.png';
 
@@ -23,23 +25,55 @@ During character setup, a dedicated `Light Direction_<Character>` object is crea
 
 ---
 
-## 2. Interactive 3D Lighting & Control Panel
+## 2. Kythera Shader: Character Settings (Item Panel)
 
-Every setup includes a 3D control board generated in your viewport, allowing real-time adjustment of ZZZ shader parameters without digging into node trees.
+When using **Kythera's Shader**, select your character and open the **Item** tab in the 3D Viewport sidebar (`N` key) to access real-time shader controls.
 
-<Image src={zzzLightpanel} alt="3D Lighting and control board in viewport for ZZZ" loading="lazy" />
+### Lighting Modes & Presets
+
+Choose from preset lighting environments or switch to Custom mode:
+
+- **Default**: Standard game look.
+- **Sunrise**: Soft morning light with pastel shadows.
+- **Day**: Crisp daytime illumination.
+- **Sunset**: Warm golden hour tones.
+- **Night**: Dim moonlight palette.
+- **Rainy**: Diffuse overcast lighting.
+- **Custom**: Unlocks granular control over tints, shadows, and rim light.
+
+<Image src={zzzLight1} alt="Kythera Shader Lighting Mode presets in Zenless Zone Zero" loading="lazy" />
+
+### Shading & Tints (Custom Mode)
+
+When set to **Custom**, you can fine-tune:
+
+- **Ambient**: Base ambient color tone.
+- **Lit Tint / Lit Brightness**: Direct illumination color and brightness intensity.
+- **Shadow Tint / Shadow Intensity**: Cel-shadow color tint and darkness depth.
+- **Fake SSS Intensity**: Adjusts the soft Subsurface Scattering (SSS) falloff simulation across skin and fabric.
+
+<Image src={zzzLight2} alt="Shading and Tints settings in Character Settings for ZZZ" loading="lazy" />
+
+### Rim Light Settings
+
+Customize the edge highlight effect around your character:
+
+- **Enable Rim Light**: Toggles the rim lighting effect.
+- **Color**: Tint of the rim light glow.
+- **Coverage**: How far the rim light extends across the mesh silhouettes.
+- **Brightness**: Overall intensity of the rim light.
+- **Left / Right & Up / Down**: Fine positional vectors to shift the highlight direction.
+
+---
+
+## 3. Legacy Shader: 3D Viewport Control Rig
+
+When using the **Legacy Shader**, a 3D control board is generated in your viewport as a separate rig object.
+
+<Image src={zzzLightpanel} alt="3D Lighting and control board in viewport for ZZZ Legacy Shader" loading="lazy" />
 
 <Image src={zzzTworigs} alt="Light control panel armature rig structure in Blender" loading="lazy" />
 
 :::note
-The 3D light control board is generated as a separate rig object in your scene. To modify the character's colors, shadow tones, ambient brightness, or rim light intensity, select the light panel rig and enter **Pose Mode** (`Ctrl + Tab`). Once in Pose Mode, you can manipulate the color picker bones and control sliders.
+Select the light panel rig, enter **Pose Mode** (`Ctrl + Tab`), and transform the color picker bones and sliders to adjust the Legacy shader's ambient, sharp lit, sharp shadow, and rim parameters.
 :::
-
-### Lighting Controls
-- **Ambient**: Color wheel controlling unshaded base ambient lighting brightness and tint.
-- **Sharp Lit**: Color wheel controlling lit region tones for sharp cel shading.
-- **Sharp Shadow**: Color wheel controlling cel-shadow region tones.
-- **Rim Lit**: Color wheel controlling rim light highlight color and intensity.
-- **Rim Shadow**: Color wheel controlling rim light shadow tones.
-- **Rim X**: Slider controlling horizontal rim light placement and vector offset.
-- **Rim Y**: Slider controlling vertical rim light placement and vector offset.

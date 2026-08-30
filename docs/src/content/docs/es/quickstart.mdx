@@ -28,13 +28,13 @@ Gacha Setup está diseñado para **Blender 5.2+**. Versiones anteriores de Blend
 <Image src={mainPanel} alt="Panel principal del Character Setup Wizard" loading="eager" />
 
 2. Selecciona tu juego.
-3. Haz clic en **Run entire setup**.
-   > Nota: en **ZZZ** y **NTE** tendrás que correr los pasos uno por uno de arriba a abajo en **Basic Setup**.
-4. Selecciona la [carpeta de personaje](/es/character-models/) y haz clic en **Select Character Folder**.
+3. *(Opcional)* En **Setup Settings**, activa la casilla **Hair & Clothes Physics** para añadir físicas dinámicas al cabello y ropa cuando el personaje se mueva, y ajusta los deslizadores de influencia si lo deseas.
+4. Haz clic en **Run entire setup** (o ejecuta los pasos uno a uno en **Basic Setup**).
+5. Selecciona la [carpeta de personaje](/es/character-models/) y haz clic en **Select Character Folder**.
 
 <Image src={selectCharacter} alt="Select Character Folder" loading="lazy" />
 
-5. Espera unos segundos y tendrás a tu personaje listo en la escena.
+6. Espera unos segundos y tendrás a tu personaje listo en la escena.
 
 <Image src={characterEscene} alt="Personaje listo en la escena" loading="lazy" />
 
@@ -42,7 +42,7 @@ Gacha Setup está diseñado para **Blender 5.2+**. Versiones anteriores de Blend
 
 <Image src={panelLegend} alt="Leyenda del panel Character Setup Wizard" loading="lazy" />
 
-1. **Selector de juego**: Genshin, HSR, ZZZ, NTE.
-2. **Run entire setup**: Corre todo el Basic Setup paso a paso con un solo clic. Nota: ese botón no existe en ZZZ y NTE.
-3. **Basic Setup**: Si no hay botón de Run entire setup, puedes correr los pasos uno por uno de arriba a abajo para poner todo del personaje.
-4. **Advanced Setup**: No es recomendable usarlo.
+1. **Add-on Updater**: Permite comprobar si hay nuevas actualizaciones del add-on y activar la comprobación automática de versiones en segundo plano.
+2. **Selector de juego y Run Entire Setup**: Selecciona tu juego (Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Neverness to Everness, Wuthering Waves) y haz clic en **Run Entire Setup** para ejecutar el flujo completo automatizado (importación, materiales, delineados, rig y posprocesado) con un solo clic.
+3. **Setup Settings**: Opciones antes de iniciar la configuración. Activa **Hair & Clothes Physics** para generar físicas dinámicas con constraints Damped Track en el cabello y ropa cuando el personaje se mueva, y ajusta los deslizadores de influencia de cabello y ropa.
+4. **Basic Setup y Advanced Setup**: **Basic Setup** permite ejecutar cada paso de configuración de manera individual de arriba a abajo. **Advanced Setup** ofrece control manual detallado de cada componente (solo recomendado para usuarios avanzados).

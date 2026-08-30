@@ -1,0 +1,77 @@
+---
+title: "Configuración de Luces y Coloramp"
+description: "Control de dirección de luz, presets, colores personalizados y ajustes del shader para modelos de Wuthering Waves."
+---
+
+import { Image } from 'astro:assets';
+import wuwaLightdir from '../../../../assets/content/wuwa/wuwa-lightdir.png';
+import wuwaLight1 from '../../../../assets/content/wuwa/wuwa-light1.png';
+import wuwaLight2 from '../../../../assets/content/wuwa/wuwa-light2.png';
+import wuwaLight3 from '../../../../assets/content/wuwa/wuwa-light3.png';
+import wuwaLight4 from '../../../../assets/content/wuwa/wuwa-light4.png';
+import wuwaAnimateMode from '../../../../assets/content/wuwa/wuwa-animate-mode.png';
+
+## 1. Controlar la Dirección de Luz y Sombras
+
+Durante la configuración del personaje, se genera un objeto `Light Direction_<Personaje>` en la colección de la escena.
+
+1. Ubica `Light Direction_<Personaje>` en el panel **Outliner**.
+2. Abre la pestaña **Item > Transform** en las propiedades del objeto.
+3. Modifica los valores de **Rotation** (Euler XYZ) para rotar el vector de luz:
+   - **Rotation Z**: Rota el ángulo horizontal del sol alrededor del personaje.
+   - **Rotation Y**: Ajusta la inclinación horizontal de la luz.
+   - **Rotation X**: Ajusta la inclinación vertical de la línea de sombra.
+
+<Image src={wuwaLightdir} alt="Ajuste de rotación del objeto Light Direction en el Outliner para Wuthering Waves" loading="eager" />
+
+---
+
+## 2. Character Settings (Panel Item)
+
+Al seleccionar el rig o la malla del personaje en la Vista 3D, presiona `N` para acceder a la pestaña **Item** y abrir el panel **Character Settings**, permitiendo realizar ajustes en tiempo real sin editar árboles de nodos:
+
+- **Animate Mode**: Alterna temporalmente a materiales optimizados para una reproducción fluida al animar en el viewport.
+- **Lighting Mode**: Elige entre presets de iluminación ambiental o selecciona Custom para ajustar canales individuales.
+- **Blush**: Controla la intensidad del rubor facial del personaje.
+- **Toggle Resonator Star**: Activa o desactiva la visibilidad y animación de la estrella del resonador.
+- **Alpha Transparency**: Alterna con un solo clic la transparencia en materiales Alpha (velos, encajes de tela, lazos del cabello).
+
+<Image src={wuwaLight1} alt="Panel Character Settings en Wuthering Waves" loading="lazy" />
+
+### Modos y Presets de Iluminación
+
+Puedes elegir entre varios presets de iluminación diseñados para diferentes atmósferas:
+
+- **Default**: Iluminación original del juego.
+- **Sunrise**: Tono cálido de amanecer con sombras azuladas suaves.
+- **Day**: Luz de día nítida y balanceada.
+- **Sunset**: Iluminación dorada de atardecer con tonos intensos.
+- **Night**: Tonos fríos y oscuros de luz nocturna.
+- **Rainy**: Clima nublado y atmósfera difusa.
+- **Custom**: Desbloquea el control manual de los colores Ambient, Light, Shadow y Rim.
+
+<Image src={wuwaLight2} alt="Menú desplegable de presets de iluminación en Wuthering Waves" loading="lazy" />
+
+### Colores Personalizados (Modo Custom)
+
+Cuando **Lighting Mode** está en **Custom**, se muestra la paleta de colores:
+
+- **Ambient**: Controla la iluminación ambiental base sin sombrear.
+- **Light**: Tono aplicado a las áreas totalmente iluminadas.
+- **Shadow**: Tono aplicado a las zonas de sombra.
+- **Rim**: Color del brillo especular de borde (Rim light).
+
+<Image src={wuwaLight3} alt="Colores personalizados y control de rubor en Character Settings" loading="lazy" />
+
+### Estrella Resonadora y Transparencia Alfa
+
+- **Toggle Resonator Star**: Activa o desactiva la visibilidad y animación de la estrella del resonador.
+- **Alpha Transparency**: Alterna con un solo clic la transparencia en materiales Alpha (velos, encajes de tela, lazos del cabello) entre modo transparente combinado y opaco sólido.
+
+<Image src={wuwaLight4} alt="Botón de estrella resonadora y casilla de transparencia alfa" loading="lazy" />
+
+### Animate Mode
+
+Para una reproducción de animación fluida y sin caídas de rendimiento en el viewport, haz clic en **Enable Animate Mode** en el panel Character Settings. Esto reemplaza temporalmente los árboles de shaders complejos por materiales ligeros optimizados mientras animas, pudiendo restaurarlos con un solo clic al preparar el render final.
+
+<Image src={wuwaAnimateMode} alt="Habilitar Animate Mode en Character Settings de Wuthering Waves" loading="lazy" />

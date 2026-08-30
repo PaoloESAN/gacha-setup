@@ -1,6 +1,6 @@
 ---
-title: "Rigging en Honkai: Star Rail"
-description: "Controles de expresiones faciales Isaac y rig facial para Honkai: Star Rail."
+title: "Rigging y Colecciones de Huesos en Honkai: Star Rail"
+description: "Control de expresiones faciales Isaac, configuración de face rig y colecciones de huesos para modelos de Honkai: Star Rail en Blender 5.2+."
 ---
 
 import { Image } from 'astro:assets';
@@ -8,21 +8,45 @@ import hsrFacerig from '../../../../assets/content/hsr/hsr-facerig.png';
 import hsrManualrig from '../../../../assets/content/hsr/hsr-manualrig.png';
 import hsrShapekeys from '../../../../assets/content/hsr/hsr-shapekeys.png';
 import hsrTworigs from '../../../../assets/content/hsr/hsr-tworigs.png';
+import hsrBonecoll from '../../../../assets/content/hsr/hsr-bonecoll.png';
 
-## 1. Panel 3D de Control Facial e Isaac Face Rig
+## 1. Panel de Control de Expresiones 3D e Isaac Face Rig
 
-Al importar y configurar el personaje, el add-on genera dos esqueletos principales: el rig de cuerpo normal y el rig facial de **Isaac Face Rig** posicionado cerca de la cabeza para controlar las expresiones faciales.
+Al importar y configurar el personaje, el add-on crea dos armaduras principales: el rig corporal estándar y el **Isaac Face Rig** secundario situado junto a la cabeza para el control de expresiones.
 
-<Image src={hsrFacerig} alt="Panel 3D de control facial Isaac Face Rig y rig del personaje" loading="eager" />
+<Image src={hsrFacerig} alt="Tablero de control 3D Isaac Face Rig y armadura del personaje" loading="eager" />
 
-<Image src={hsrTworigs} alt="Estructura del rig normal y el rig facial de Isaac en el proyecto" loading="lazy" />
+<Image src={hsrTworigs} alt="Estructura del rig corporal y del Isaac Face Rig en Blender" loading="lazy" />
 
 ### Modos de Control Facial
 
-- **Controles Manuales en la Cara**: Los controles posicionados directamente sobre los ojos, cejas y boca sirven para ajustar y manipular las expresiones de la cara de forma completamente manual.
+- **Controles Manuales en el Rostro**: Widgets colocados directamente sobre los ojos, cejas y boca que permiten manipular expresiones individuales manualmente.
 
-<Image src={hsrManualrig} alt="Controles manuales posicionados directamente sobre la cara del personaje" loading="lazy" />
+<Image src={hsrManualrig} alt="Widgets de control manual posicionados directamente sobre el rostro del personaje" loading="lazy" />
 
-- **Controles de Poses y Shapekeys Laterales**: Las barras y deslizadores ubicados a los lados permiten activar y mezclar de forma rápida las poses y expresiones faciales predeterminadas que trae el modelo original del personaje.
+- **Deslizadores Laterales de Presets**: Deslizadores ubicados a los lados de la cabeza para activar y mezclar rápidamente las expresiones predeterminadas del modelo.
 
-<Image src={hsrShapekeys} alt="Barras laterales para activar y mezclar las shape keys y poses predeterminadas" loading="lazy" />
+<Image src={hsrShapekeys} alt="Deslizadores laterales para activar y mezclar shape keys predeterminadas" loading="lazy" />
+
+---
+
+## 2. Colecciones de Huesos (Bone Collections)
+
+Las armaduras de Honkai: Star Rail están organizadas en grupos estructurados dentro de la pestaña **Bone Collections** (Blender 5.2+).
+
+<Image src={hsrBonecoll} alt="Panel Bone Collections en Armature Properties para personajes de Honkai Star Rail" loading="lazy" />
+
+### Resumen de Colecciones de Huesos
+
+- **Face**: Controladores de ojos, cejas, párpados, pupilas, nariz y boca.
+- **Torso (IK / FK)**: Controles de columna, pecho, cuello y cabeza.
+- **Arm.L / Arm.R (IK & FK)**: Cadenas de brazos izquierdo y derecho con pines IK y pole targets.
+- **Leg.L / Leg.R (IK & FK)**: Cadenas de piernas con controles de rodilla y rotación de pie.
+- **Fingers**: Controladores individuales de dedos y manos.
+- **Hair**: Huesos dinámicos secundarios para mechones de cabello y accesorios.
+- **Clothes**: Huesos dinámicos secundarios para abrigos, faldas y capas.
+- **Lighting**: Controladores de vectores de iluminación y paneles.
+
+:::tip
+Usa el **icono de estrella** en la pestaña **Bone Collections** para aislar una colección específica, o los **iconos de ojo** para mostrar u ocultar grupos mientras animas.
+:::

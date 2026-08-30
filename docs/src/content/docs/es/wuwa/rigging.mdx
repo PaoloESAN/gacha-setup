@@ -1,0 +1,47 @@
+---
+title: "Rigging y Colecciones de Huesos en Wuthering Waves"
+description: "Panel de control facial, físicas de cabello y ropa, y colecciones de huesos para modelos de Wuthering Waves en Blender 5.2+."
+---
+
+import { Image } from 'astro:assets';
+import wuwaBonecoll from '../../../../assets/content/wuwa/wuwa-bonecoll.png';
+
+## 1. Panel de Expresiones Faciales 3D
+
+Al importar y configurar un personaje de Wuthering Waves, el add-on crea un **Face Rig Panel** equipado con controladores directos en el rostro y deslizadores de expresiones:
+
+- **Ojos y Cejas**: Controladores directos sobre la cara para seguimiento de pupilas, guiños, parpadeo e inclinación de cejas.
+- **Formas de Boca**: Controladores para comisuras labiales, apertura de boca, sonrisa, tristeza y fonemas.
+- **Presets de Cinemáticas**: Deslizadores organizados en el tablero facial para activar y mezclar rápidamente las expresiones predeterminadas del personaje.
+
+---
+
+## 2. Físicas de Cabello y Ropa (Damped Track)
+
+El add-on genera automáticamente una jerarquía dinámica de físicas utilizando constraints nativos de Blender **Damped Track**:
+
+1. Activa **Hair & Clothes Physics** en los ajustes antes de iniciar la configuración (o aplícalo después mediante Advanced Setup > Rig Character).
+2. Ajusta los deslizadores de **Hair** y **Clothes** en el panel N para calibrar la respuesta y amortiguación del movimiento secundario.
+
+---
+
+## 3. Colecciones de Huesos (Bone Collections)
+
+Las armaduras están organizadas en grupos estructurados dentro de la pestaña **Bone Collections** (Blender 5.2+), facilitando aislar y animar zonas específicas del cuerpo.
+
+<Image src={wuwaBonecoll} alt="Panel Bone Collections en Armature Properties para personajes de Wuthering Waves" loading="lazy" />
+
+### Resumen de Colecciones de Huesos
+
+- **Face**: Controladores de ojos, cejas, párpados, pupilas, nariz y boca.
+- **Torso (IK / FK)**: Controles de columna, pecho, cuello y cabeza.
+- **Arm.L / Arm.R (IK & FK)**: Cadenas de brazos izquierdo y derecho con pines IK y pole targets.
+- **Leg.L / Leg.R (IK & FK)**: Cadenas de piernas con controles de rodilla y rotación de pie.
+- **Fingers**: Controladores individuales de dedos y manos.
+- **Hair**: Huesos dinámicos secundarios para mechones de cabello y coletas.
+- **Clothes**: Huesos dinámicos secundarios para faldas, capas, abrigos y cintas.
+- **Lighting**: Controladores de vectores de iluminación y paneles.
+
+:::tip
+Usa el **icono de estrella** en la pestaña **Bone Collections** para aislar una colección específica, o los **iconos de ojo** para mostrar u ocultar grupos mientras animas.
+:::

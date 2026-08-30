@@ -1,33 +1,51 @@
 ---
-title: Rigging y Colecciones de Huesos en Neverness to Everness
-description: Controles de expresiones faciales, rig facial y colecciones de huesos para modelos de Neverness to Everness.
+title: "Rigging y Colecciones de Huesos en Neverness to Everness"
+description: "Control de expresiones faciales, face rig y colecciones de huesos para modelos de Neverness to Everness en Blender 5.2+."
 ---
 
 import { Image } from 'astro:assets';
+import nteFacerig from '../../../../assets/content/nte/nte-facerig.webp';
 import nteRig from '../../../../assets/content/nte/nte-rig.png';
 import nteBonecoll from '../../../../assets/content/nte/nte-bonecoll.png';
 
 :::note
-Mover el rig puede lagear un poco.
+Mover la armadura en mallas de alta densidad puede provocar un ligero lag en el viewport.
 :::
 
-## 1. Panel 3D de Control Facial y Rigging
+## 1. Panel de Expresiones Faciales 3D
 
-Próximamente se añadirá un panel de control facial dedicado. Por ahora puedes seleccionar la cara y usar las shape keys manualmente.
+Al importar y configurar un personaje de NTE, el add-on integra el **Face Rig de NTE** (adaptado de la arquitectura de rig facial de Jideeh) con controladores directos en el rostro y deslizadores de expresiones:
 
-<Image src={nteRig} alt="Armadura y controles del personaje NTE en Blender" loading="eager" />
+- **Controles de Cejas y Párpados**: Widgets directos posicionados sobre el rostro para posar cejas y parpadeos con precisión.
+- **Seguimiento de Mirada y Pupilas**: Widgets dedicados para dirección de mirada y controladores dinámicos.
+- **Fonemas y Formas de Boca**: Controladores para apertura de boca, sonrisas, tristeza y fonemas de habla.
+
+<Image src={nteFacerig} alt="Tablero de control 3D y widgets del Face Rig de NTE" loading="eager" />
 
 ---
 
-## 2. Colecciones de Huesos y Jerarquía de Armadura
+## 2. Rig Corporal y Estructura de Armadura
 
-La armadura de Neverness to Everness se organiza en grupos estructurados dentro de la pestaña **Bone Collections** para agilizar el flujo de trabajo durante el posado y la animación.
+El rig corporal utiliza controladores estándar de Rigify para posado completo IK/FK y físicas dinámicas de cabello y ropa con constraints Damped Track.
 
-<Image src={nteBonecoll} alt="Panel de Colecciones de Huesos en las propiedades de Armadura para NTE" loading="lazy" />
+<Image src={nteRig} alt="Armadura y widgets de control de personajes de NTE en Blender" loading="lazy" />
 
-### Grupos de Huesos Principales
-- **Face & Eye Controls**: Controles de cejas, ojos, párpados, pupilas y rostro.
-- **Torso & Spine**: Controles de columna, pecho, cuello y cabeza en IK / FK.
-- **Arms & Hands**: Cadenas de brazos izquierdo y derecho con controles de IK y huesos digitales de dedos.
-- **Legs & Feet**: Cadenas de piernas con controles de giro de pie y rodilla.
-- **Secondary / Cloth & Hair**: Huesos dinámicos secundarios para faldas, chaquetas, lazos y mechones de cabello.
+---
+
+## 3. Colecciones de Huesos (Bone Collections)
+
+Las armaduras de Neverness to Everness están organizadas en grupos estructurados dentro de la pestaña **Bone Collections** (Blender 5.2+) para optimizar el flujo de animación.
+
+<Image src={nteBonecoll} alt="Panel Bone Collections en Armature Properties para personajes de NTE" loading="lazy" />
+
+### Resumen de Colecciones de Huesos
+- **Face**: Controladores de cejas, ojos, párpados, pupilas y boca.
+- **Torso & Spine**: Controles de columna, pecho, cuello y cabeza.
+- **Arms & Hands**: Cadenas de brazos izquierdo y derecho con pines IK y huesos de dedos.
+- **Legs & Feet**: Cadenas de piernas con controles de rodilla y rotación de pie.
+- **Hair & Clothes**: Huesos dinámicos secundarios para faldas, chaquetas, lazos y mechones de cabello.
+- **Lighting**: Controladores de vectores de iluminación y paneles.
+
+:::tip
+Usa el **icono de estrella** en la pestaña **Bone Collections** para aislar una colección específica, o los **iconos de ojo** para mostrar u ocultar grupos mientras animas.
+:::

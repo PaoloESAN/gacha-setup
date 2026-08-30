@@ -1,0 +1,47 @@
+---
+title: "Wuthering Waves Rigging & Bone Collections"
+description: "Face rig panel, hair & clothes physics, and bone collections for Wuthering Waves character models in Blender 5.2+."
+---
+
+import { Image } from 'astro:assets';
+import wuwaBonecoll from '../../../assets/content/wuwa/wuwa-bonecoll.png';
+
+## 1. 3D Facial Expression Control Panel
+
+Upon importing and rigging a Wuthering Waves character, the add-on builds a dedicated **Face Rig Panel** equipped with intuitive direct-manipulation widgets and expression preset sliders:
+
+- **Eyes & Brows**: Direct widgets positioned around the face for pupil tracking, squinting, blinking, and eyebrow angling.
+- **Mouth Shapes**: Individual lip corner, open mouth, smile, frown, and phoneme controllers.
+- **Cutscene Presets**: Organized sliders on the facial board for quickly triggering and blending the character's built-in expression poses.
+
+---
+
+## 2. Hair & Clothes Physics (Damped Track)
+
+The add-on automatically generates a dynamic physics rig using Blender's native **Damped Track** constraints:
+
+1. Enable **Hair & Clothes Physics** in the Setup Settings before running the setup (or apply it afterwards via Advanced Setup > Rig Character).
+2. Adjust the **Hair** and **Clothes** influence sliders in the N-panel to customize the responsiveness and damping strength of the dynamic secondary motion.
+
+---
+
+## 3. Bone Collections
+
+Character armatures are organized into structured groups within the **Bone Collections** tab (Blender 5.2+), making it easy to isolate and animate specific body parts.
+
+<Image src={wuwaBonecoll} alt="Armature Properties Bone Collections panel for Wuthering Waves character" loading="lazy" />
+
+### Bone Collections Overview
+
+- **Face**: Eyebrow, eye, eyelid, pupil, nose, and mouth controllers.
+- **Torso (IK / FK)**: Spine, chest, neck, and head handles.
+- **Arm.L / Arm.R (IK & FK)**: Left and right arm chains with individual IK target pins and pole targets.
+- **Leg.L / Leg.R (IK & FK)**: Left and right leg chains with foot roll and knee target controls.
+- **Fingers**: Hand and finger bone controllers.
+- **Hair**: Dynamic secondary bones for hair strands and pony tails.
+- **Clothes**: Dynamic secondary bones for coats, skirts, capes, and tassels.
+- **Lighting**: Vector handles and lighting controllers.
+
+:::tip
+Use the **star icon** in the **Bone Collections** tab to solo/isolate a specific bone collection, or click the **eye icons** to toggle visibility while animating.
+:::

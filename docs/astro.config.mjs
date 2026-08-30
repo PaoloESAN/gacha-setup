@@ -12,9 +12,9 @@ export default defineConfig({
 				starlightLlmsTxt({
 					projectName: 'Gacha Setup for Blender',
 					description:
-						'Gacha Setup is an open-source Blender add-on (Blender 5.2+) that automates character model importing, anime toon shading (Festivity, StellarToon, ZZZ Shader, NTE Shader), outline setup, facial driver controls, hair & cloth physics, and rigging for Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, and Neverness to Everness.',
+						'Gacha Setup is an open-source Blender add-on (Blender 5.2+) that automates character model importing, anime toon shading (Festivity, StellarToon, ZZZ Shader, NTE Shader, Gustling Waters), outline setup, facial driver controls, hair & cloth physics, and rigging for Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Neverness to Everness, and Wuthering Waves.',
 					details: `
-- **Supported Games:** Genshin Impact (GI), Honkai: Star Rail (HSR), Zenless Zone Zero (ZZZ), Neverness to Everness (NTE).
+- **Supported Games:** Genshin Impact (GI), Honkai: Star Rail (HSR), Zenless Zone Zero (ZZZ), Neverness to Everness (NTE), Wuthering Waves (WuWa).
 - **Blender Compatibility:** Blender 5.2 and newer official releases.
 - **Key Features:** One-click setup wizard, bundled anime toon shaders, hair & cloth physics with Damped Track, 3D facial driver control boards, automated addon dependency installation (ExpyKit, UEFormat), and weapon support.
 `.trim(),
@@ -31,7 +31,7 @@ export default defineConfig({
 						},
 						{
 							label: 'Omatsuri Discord Community',
-							url: 'https://discord.gg/omatsuri',
+							url: 'https://discord.com/invite/85rP9SpAkF',
 							description: 'Community for anime 3D models and shaders in Blender.',
 						},
 						{
@@ -60,6 +60,11 @@ export default defineConfig({
 							label: 'Neverness to Everness',
 							description: 'Character importing, NTE toon shader, compositor setup, and rigging for Neverness to Everness.',
 							paths: ['nte/**', 'es/nte/**'],
+						},
+						{
+							label: 'Wuthering Waves',
+							description: 'Character importing, Gustling Waters shader, face rig panel, and lighting for Wuthering Waves.',
+							paths: ['wuwa/**', 'es/wuwa/**'],
 						},
 					],
 					promote: ['index*', 'quickstart*', 'es/index*', 'es/quickstart*'],
@@ -163,6 +168,16 @@ export default defineConfig({
 						{ label: 'Lights & Coloramp', slug: 'nte/lights-coloramp', translations: { es: 'Luces y Coloramp' } },
 						{ label: 'Bugs & Solutions', slug: 'nte/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
 						{ label: 'Rigging', slug: 'nte/rigging', translations: { es: 'Rigging' } },
+					],
+				},
+				{
+					label: 'Wuthering Waves',
+					collapsed: true,
+					items: [
+						{ label: 'Setup Character', slug: 'wuwa/setup-character', translations: { es: 'Setup Character' } },
+						{ label: 'Lights & Coloramp', slug: 'wuwa/lights-coloramp', translations: { es: 'Luces y Coloramp' } },
+						{ label: 'Bugs & Solutions', slug: 'wuwa/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
+						{ label: 'Rigging', slug: 'wuwa/rigging', translations: { es: 'Rigging' } },
 					],
 				},
 			],

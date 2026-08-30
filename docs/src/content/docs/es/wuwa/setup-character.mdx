@@ -1,0 +1,57 @@
+---
+title: Configuración de Personajes de Wuthering Waves
+description: Guía paso a paso para configurar modelos de Wuthering Waves en Blender 5.2+.
+---
+
+import { Image } from 'astro:assets';
+import wuwaPanel from '../../../../assets/content/wuwa/wuwa-panel.png';
+import wuwaCharacter from '../../../../assets/content/wuwa/wuwa-character.png';
+import wuwaScene from '../../../../assets/content/wuwa/wuwa-scene.png';
+import wuwaCompositor from '../../../../assets/content/wuwa/wuwa-compositor.png';
+
+## 1. Abrir el Setup Wizard
+
+1. Presiona `N` en la Vista 3D para abrir el panel lateral.
+2. Ve a la pestaña **Character Setup Wizard**.
+3. En el menú desplegable **Game**, selecciona **Wuthering Waves**.
+
+<Image src={wuwaPanel} alt="Panel N del Setup Wizard de Wuthering Waves" loading="eager" />
+
+---
+
+## 2. Importar tu Personaje
+
+Puedes configurar tu modelo con un solo clic usando **Run Entire Setup** o paso a paso mediante **Basic Setup**.
+
+1. *(Opcional)* En **Setup Settings**, activa la casilla **Hair & Clothes Physics** para añadir físicas dinámicas al cabello y ropa cuando el personaje se mueva, y ajusta los deslizadores de influencia si lo deseas.
+2. Haz clic en **Run Entire Setup** (o **Set Up Character** en Basic Setup).
+3. Aparecerá una ventana del explorador de archivos. Navega a tu [carpeta de personaje](/es/character-models/#wuwa) que contiene el modelo `.uemodel` (UEFormat) o `.fbx` y las texturas.
+4. Haz clic en **Select Character Folder**.
+
+<Image src={wuwaCharacter} alt="Explorador de archivos de Blender seleccionando la carpeta del personaje de Wuthering Waves" loading="lazy" />
+
+---
+
+## 3. Flujo Automatizado de Basic Setup
+
+Al ejecutar la configuración, el add-on realiza los siguientes pasos automáticos para Wuthering Waves:
+
+- **Set Up Character**: Importa la malla del modelo, limpia grupos de vértices y estandariza las jerarquías de huesos.
+- **Set Up Materials**: Reemplaza los materiales por defecto de Blender con nodos personalizados del **Shader Toon Gustling Waters**, conectando automáticamente difuso, normales, lightmaps y mapas de transparencia alfa.
+- **Set Up Outlines**: Aplica modificadores de delineado Inverted Hull basados en Geometry Nodes para un trazo limpio estilo anime.
+- **Rig Character**: Configura la armadura Rigify, el sistema de físicas para cabello y ropa, y genera el panel de control facial 3D.
+- **Finish Setup**: Configura el driver de cabeza, reflexiones de espacio en pantalla (SSR), captura de sombras, nodos del compositor y ajusta el Color Management a **Standard** para conservar la fidelidad de color original.
+
+<Image src={wuwaScene} alt="Personaje de Wuthering Waves importado en la escena 3D" loading="lazy" />
+
+---
+
+## 4. Configuración de Viewport Shading y Compositor
+
+Para visualizar los shaders Gustling Waters y la sombra de cabeza en tiempo real en el viewport:
+
+1. Abre el menú **Viewport Shading** (esquina superior derecha de la Vista 3D).
+2. Bajo **Lighting**, activa **Scene Lights** y **Scene World**.
+3. Bajo **Compositor**, selecciona la opción **Always** (o **Camera**).
+
+<Image src={wuwaCompositor} alt="Ajustes de compositor en Viewport Shading configurados en Always para Wuthering Waves" loading="lazy" />

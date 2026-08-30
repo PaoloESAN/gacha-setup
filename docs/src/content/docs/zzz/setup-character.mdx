@@ -5,19 +5,41 @@ description: Step-by-step setup guide for Zenless Zone Zero character models in 
 
 import { Image } from 'astro:assets';
 import zzzPanel from '../../../assets/content/zzz/zzz-panel.png';
+import zzzKythera from '../../../assets/content/zzz/zzz-kythera.png';
+import zzzLegacy from '../../../assets/content/zzz/zzz-legacy.png';
 import zzzCharacter from '../../../assets/content/zzz/zzz-character.png';
 import zzzScene from '../../../assets/content/zzz/zzz-scene.png';
 import zzzEyeshadow1 from '../../../assets/content/zzz/zzz-eyeshadow1.png';
 import zzzEyeshadow2 from '../../../assets/content/zzz/zzz-eyeshadow2.png';
 import zzzEyeshadow3 from '../../../assets/content/zzz/zzz-eyeshadow3.png';
 
-## 1. Opening the Setup Wizard
+## 1. Opening the Setup Wizard & Shader Selection
 
 1. Press `N` in the 3D Viewport to open the sidebar.
 2. Navigate to the **Character Setup Wizard** tab.
 3. In the **Game** drop-down menu, select **Zenless Zone Zero**.
+4. Under **Setup Settings**, select your preferred **Shader**:
+   - **Kythera's Shader** (Recommended): Modern anime shader supporting real-time Lighting Mode presets, rim lighting, fake SSS, and tint controls in the Item panel.
+   - **Legacy Shader**: Classic ZZZ Setup File V2.0 shader with 3D viewport control rig boards.
 
 <Image src={zzzPanel} alt="Zenless Zone Zero Setup Wizard N-Panel" loading="eager" />
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; margin: 1.5rem 0;">
+  <div style="background-color: var(--sl-color-black); border: 1px solid var(--sl-color-hairline); border-radius: var(--sl-border-radius-md); padding: 1rem; display: flex; flex-direction: column; text-align: center; margin-top: 0;">
+    <div style="width: 100%; aspect-ratio: 860 / 720; overflow: hidden; border-radius: var(--sl-border-radius-sm); margin: 0 0 0.75rem 0;">
+      <Image src={zzzKythera} alt="Kythera's Shader (Toon)" style="width: 100%; height: 100%; object-fit: cover; margin: 0;" loading="lazy" />
+    </div>
+    <h4 style="margin: 0 0 0.25rem; font-size: 1.05rem;">Kythera's Shader (Toon)</h4>
+    <p style="margin: 0; font-size: 0.875rem; color: var(--sl-color-gray-2); line-height: 1.4; flex-grow: 1;">More anime toon-style look with vibrant cel-shading, real-time lighting presets, and Item panel controls.</p>
+  </div>
+  <div style="background-color: var(--sl-color-black); border: 1px solid var(--sl-color-hairline); border-radius: var(--sl-border-radius-md); padding: 1rem; display: flex; flex-direction: column; text-align: center; margin-top: 0;">
+    <div style="width: 100%; aspect-ratio: 860 / 720; overflow: hidden; border-radius: var(--sl-border-radius-sm); margin: 0 0 0.75rem 0;">
+      <Image src={zzzLegacy} alt="Legacy Shader (Realistic)" style="width: 100%; height: 100%; object-fit: cover; margin: 0;" loading="lazy" />
+    </div>
+    <h4 style="margin: 0 0 0.25rem; font-size: 1.05rem;">Legacy Shader (Realistic)</h4>
+    <p style="margin: 0; font-size: 0.875rem; color: var(--sl-color-gray-2); line-height: 1.4; flex-grow: 1;">More realistic shading with gradient light falloffs, softer transitions, and 3D viewport control rig boards.</p>
+  </div>
+</div>
 
 ---
 
@@ -25,9 +47,10 @@ import zzzEyeshadow3 from '../../../assets/content/zzz/zzz-eyeshadow3.png';
 
 You can set up your model in one click using **Run Entire Setup** or step-by-step via **Basic Setup**.
 
-1. Click **Run Entire Setup** (or **Set Up Character** under Basic Setup).
-2. A file browser window will appear. Navigate to your [character folder](/character-models/#zzz) containing the `.fbx` model and textures.
-3. Click **Select Character Folder**.
+1. *(Optional)* Under **Setup Settings**, enable **Hair & Clothes Physics** to add dynamic physics to the hair and clothing when the character moves, and adjust the influence sliders if desired.
+2. Click **Run Entire Setup** (or **Set Up Character** under Basic Setup).
+3. A file browser window will appear. Navigate to your [character folder](/character-models/#zzz) containing the `.fbx` model and textures.
+4. Click **Select Character Folder**.
 
 <Image src={zzzCharacter} alt="Blender File View selecting ZZZ character model folder" loading="lazy" />
 
@@ -38,7 +61,7 @@ You can set up your model in one click using **Run Entire Setup** or step-by-ste
 When running the setup, the add-on executes the following automated steps for Zenless Zone Zero:
 
 - **Set Up Character**: Imports the `.fbx` mesh, cleans vertex groups, and standardizes bone hierarchies.
-- **Set Up Materials**: Replaces default Blender materials with custom **ZZZ Toon Shader** nodes, automatically binding diffuse, lightmap, eyeshadow, and color ramp textures.
+- **Set Up Materials**: Replaces default Blender materials with your chosen **ZZZ Toon Shader** nodes, automatically binding diffuse, lightmap, eyeshadow, and color ramp textures.
 - **Set Up Outlines**: Applies geometry-node inverted-hull outline modifiers to all character meshes for crisp line art rendering.
 - **Fix Transformations**: Resets location, rotation, and scale transformations.
 - **Rig Character**: Integrates the specialized **jideeh ZZZ Face Rig** and configures breast/torso physics controls.

@@ -1,0 +1,57 @@
+---
+title: Wuthering Waves Character Setup
+description: Step-by-step setup guide for Wuthering Waves character models in Blender 5.2+.
+---
+
+import { Image } from 'astro:assets';
+import wuwaPanel from '../../../assets/content/wuwa/wuwa-panel.png';
+import wuwaCharacter from '../../../assets/content/wuwa/wuwa-character.png';
+import wuwaScene from '../../../assets/content/wuwa/wuwa-scene.png';
+import wuwaCompositor from '../../../assets/content/wuwa/wuwa-compositor.png';
+
+## 1. Opening the Setup Wizard
+
+1. Press `N` in the 3D Viewport to open the sidebar.
+2. Navigate to the **Character Setup Wizard** tab.
+3. In the **Game** drop-down menu, select **Wuthering Waves**.
+
+<Image src={wuwaPanel} alt="Wuthering Waves Setup Wizard N-Panel" loading="eager" />
+
+---
+
+## 2. Importing Your Character
+
+You can set up your model in one click using **Run Entire Setup** or step-by-step via **Basic Setup**.
+
+1. *(Optional)* Under **Setup Settings**, enable **Hair & Clothes Physics** to add dynamic physics to the hair and clothing when the character moves, and adjust the influence sliders if desired.
+2. Click **Run Entire Setup** (or **Set Up Character** under Basic Setup).
+3. A file browser window will appear. Navigate to your [character folder](/character-models/#wuwa) containing the `.uemodel` (UEFormat) or `.fbx` model and textures.
+4. Click **Select Character Folder**.
+
+<Image src={wuwaCharacter} alt="Blender File View selecting Wuthering Waves character model folder" loading="lazy" />
+
+---
+
+## 3. Automated Basic Setup Pipeline
+
+When running the setup, the add-on executes the following automated steps for Wuthering Waves:
+
+- **Set Up Character**: Imports the model mesh, cleans vertex groups, and standardizes bone hierarchies.
+- **Set Up Materials**: Replaces default Blender materials with custom **Gustling Waters Toon Shader** nodes, automatically connecting diffuse, normal, lightmaps, and alpha transparency maps.
+- **Set Up Outlines**: Applies geometry-node inverted-hull outline modifiers to all character meshes for crisp line art rendering.
+- **Rig Character**: Configures the Rigify armature, hair & clothes physics, and generates the 3D facial control board.
+- **Finish Setup**: Configures the head driver, screen-space reflections, shadow capture, compositing nodes, and switches Color Management to **Standard** to preserve raw texture accuracy.
+
+<Image src={wuwaScene} alt="Wuthering Waves character imported into 3D scene" loading="lazy" />
+
+---
+
+## 4. Viewport Shading & Compositor Settings
+
+To view Gustling Waters shaders and real-time head shadow compositing in the viewport:
+
+1. Open the **Viewport Shading** menu (top right of the 3D Viewport).
+2. Under **Lighting**, enable **Scene Lights** and **Scene World**.
+3. Under **Compositor**, set the dropdown mode to **Always** (or **Camera**).
+
+<Image src={wuwaCompositor} alt="Viewport Shading compositor settings set to Always for Wuthering Waves" loading="lazy" />

@@ -1,12 +1,13 @@
 ---
-title: "Zenless Zone Zero Rigging"
-description: "jideeh facial expression controls and face rig setup for Zenless Zone Zero models."
+title: "Zenless Zone Zero Rigging & Bone Collections"
+description: "jideeh facial expression controls, face rig setup, and bone collections for Zenless Zone Zero models in Blender 5.2+."
 ---
 
 import { Image } from 'astro:assets';
 import zzzFacerig from '../../../assets/content/zzz/zzz-facerig.png';
+import zzzBonecoll from '../../../assets/content/zzz/zzz-bonecoll.png';
 
-## 1. Jideeh Facerig
+## 1. Jideeh Face Rig
 
 Upon importing and setting up a Zenless Zone Zero character, the add-on configures the **jideeh ZZZ Face Rig** integrated directly inside the character's main armature for advanced facial expression control.
 
@@ -16,3 +17,26 @@ Upon importing and setting up a Zenless Zone Zero character, the add-on configur
 
 - **jideeh Facial Rig Integration**: Advanced drivers for eyebrows, eyelids, eye tracking, and mouth shape keys.
 - **On-Face Control Widgets**: Allows intuitive posing of individual facial features directly in the 3D viewport.
+
+---
+
+## 2. Bone Collections
+
+Zenless Zone Zero armatures are organized into structured groups within the **Bone Collections** tab (Blender 5.2+).
+
+<Image src={zzzBonecoll} alt="Armature Properties Bone Collections panel for Zenless Zone Zero character" loading="lazy" />
+
+### Bone Collections Overview
+
+- **Face**: Eyebrow, eye, eyelid, pupil, nose, and mouth controllers.
+- **Torso (IK / FK)**: Spine, chest, neck, head, and breast/torso dynamics.
+- **Arm.L / Arm.R (IK & FK)**: Left and right arm chains with individual IK target pins and pole targets.
+- **Leg.L / Leg.R (IK & FK)**: Left and right leg chains with foot roll and knee target controls.
+- **Fingers**: Hand and finger bone controllers.
+- **Hair**: Dynamic secondary bones for hair strands and tails.
+- **Clothes**: Dynamic secondary bones for jackets, skirts, and accessories.
+- **Lighting**: Vector handles and lighting controllers.
+
+:::tip
+Use the **star icon** in the **Bone Collections** tab to solo/isolate a specific bone collection, or click the **eye icons** to toggle visibility while animating.
+:::

@@ -1,18 +1,42 @@
 ---
-title: "Rigging en Zenless Zone Zero"
-description: "Controles de expresiones faciales jideeh y rig facial para Zenless Zone Zero."
+title: "Rigging y Colecciones de Huesos en Zenless Zone Zero"
+description: "Control de expresiones faciales jideeh, configuración de face rig y colecciones de huesos para modelos de Zenless Zone Zero en Blender 5.2+."
 ---
 
 import { Image } from 'astro:assets';
 import zzzFacerig from '../../../../assets/content/zzz/zzz-facerig.png';
+import zzzBonecoll from '../../../../assets/content/zzz/zzz-bonecoll.png';
 
-## 1. Jideeh Facerig
+## 1. Face Rig de Jideeh
 
-Al importar y configurar el personaje de Zenless Zone Zero, el add-on integra el **jideeh ZZZ Face Rig** directamente dentro del esqueleto normal del personaje para el control avanzado de expresiones faciales.
+Al importar y configurar un personaje de Zenless Zone Zero, el add-on integra directamente el **Face Rig de ZZZ de jideeh** dentro de la armadura principal para un control facial avanzado.
 
-<Image src={zzzFacerig} alt="Panel 3D de control facial jideeh Face Rig y rig del personaje ZZZ" loading="eager" />
+<Image src={zzzFacerig} alt="Tablero de control 3D jideeh Face Rig y armadura de personaje ZZZ" loading="eager" />
 
-### Características y Controles Principales
+### Características Principales del Control Facial
 
-- **Integración de Rig Facial de jideeh**: Drivers avanzados para cejas, párpados, seguimiento ocular y claves de forma (shape keys) de la boca.
-- **Controles Manuales en la Vista 3D**: Permite posar de forma intuitiva los rasgos faciales individuales directamente en la vista 3D.
+- **Integración Facial de jideeh**: Drivers avanzados para cejas, párpados, seguimiento de pupilas y fonemas de boca.
+- **Widgets de Control en el Rostro**: Permite posar de forma intuitiva los rasgos faciales directamente en la Vista 3D.
+
+---
+
+## 2. Colecciones de Huesos (Bone Collections)
+
+Las armaduras de Zenless Zone Zero están organizadas en grupos estructurados dentro de la pestaña **Bone Collections** (Blender 5.2+).
+
+<Image src={zzzBonecoll} alt="Panel Bone Collections en Armature Properties para personajes de Zenless Zone Zero" loading="lazy" />
+
+### Resumen de Colecciones de Huesos
+
+- **Face**: Controladores de ojos, cejas, párpados, pupilas, nariz y boca.
+- **Torso (IK / FK)**: Controles de columna, pecho, cuello, cabeza y dinámicas de pecho/respiración.
+- **Arm.L / Arm.R (IK & FK)**: Cadenas de brazos izquierdo y derecho con pines IK y pole targets.
+- **Leg.L / Leg.R (IK & FK)**: Cadenas de piernas con controles de rodilla y rotación de pie.
+- **Fingers**: Controladores individuales de dedos y manos.
+- **Hair**: Huesos dinámicos secundarios para mechones de cabello y coletas.
+- **Clothes**: Huesos dinámicos secundarios para chaquetas, faldas y accesorios.
+- **Lighting**: Controladores de vectores de iluminación y paneles.
+
+:::tip
+Usa el **icono de estrella** en la pestaña **Bone Collections** para aislar una colección específica, o los **iconos de ojo** para mostrar u ocultar grupos mientras animas.
+:::

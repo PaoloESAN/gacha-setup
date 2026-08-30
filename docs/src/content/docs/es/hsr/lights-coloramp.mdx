@@ -1,43 +1,67 @@
 ---
 title: "Configuración de Luces y Coloramp"
-description: "Control de dirección de luz e iluminación ambiental del StellarToon shader para modelos de Honkai: Star Rail."
+description: "Control de dirección de luz, presets de iluminación, colores personalizados y deslizadores de expresiones para modelos de Honkai: Star Rail."
 ---
 
 import { Image } from 'astro:assets';
 import hsrLightdir from '../../../../assets/content/hsr/hsr-lightdir.png';
-import hsrAmbient1 from '../../../../assets/content/hsr/hsr-ambient1.png';
-import hsrAmbient2 from '../../../../assets/content/hsr/hsr-ambient2.png';
+import hsrLight1 from '../../../../assets/content/hsr/hsr-light1.png';
+import hsrLight2 from '../../../../assets/content/hsr/hsr-light2.png';
+import hsrLight3 from '../../../../assets/content/hsr/hsr-light3.png';
+import hsrLight4 from '../../../../assets/content/hsr/hsr-light4.png';
 
 ## 1. Controlar la Dirección de Luz y Sombras
 
-Durante la configuración del personaje de Honkai: Star Rail, se genera un objeto especializado de dirección de luz llamado `Light Direction_<Personaje>` en tu colección de la escena.
+Durante la configuración del personaje, se genera un objeto `Light Direction_<Personaje>` en la colección de la escena.
 
-1. Selecciona `Light Direction_<Personaje>` en el panel **Outliner** (por ejemplo, `Light Direction_March7th`).
-2. Abre la pestaña **Transformar** en las Propiedades del Objeto.
-3. Modifica los valores de **Rotación** (XYZ Euler) para orientar el vector de luz:
-   - **Rotación Z**: Gira horizontalmente la inclinación de la luz alrededor del personaje.
-   - **Rotación Y**: Ajusta la inclinación horizontal de la luz a través del modelo.
-   - **Rotación X**: Ajusta la altura e inclinación vertical de la línea de sombra.
+1. Ubica `Light Direction_<Personaje>` en el panel **Outliner** (por ejemplo `Light Direction_March7th`).
+2. Abre la pestaña **Item > Transform** en las propiedades del objeto.
+3. Modifica los valores de **Rotation** (Euler XYZ) para rotar el vector de luz:
+   - **Rotation Z**: Rota el ángulo horizontal del sol alrededor del personaje.
+   - **Rotation Y**: Ajusta la inclinación horizontal de la luz.
+   - **Rotation X**: Ajusta la inclinación vertical de la línea de sombra.
 
-<Image src={hsrLightdir} alt="Ajuste de rotación del objeto Light Direction de Honkai: Star Rail en el Outliner" loading="eager" />
+<Image src={hsrLightdir} alt="Ajuste de rotación del objeto Light Direction en el Outliner para Honkai: Star Rail" loading="eager" />
 
 ---
 
-## 2. Iluminación Ambiental y Personalización en Global Properties
+## 2. Character Settings (Panel Item)
 
-Para personalizar el color, la luz ambiental y los tonos cel-shaded del shader **StellarToon**:
+Selecciona la malla o armadura de tu personaje y presiona `N` en la Vista 3D. Abre la pestaña **Item** para acceder al panel **Character Settings**, que permite realizar ajustes en tiempo real sin necesidad de editar nodos en el Shader Editor:
 
-1. Selecciona el objeto del personaje y ve al **Shader Editor**.
-2. Ubica el nodo de **Global Properties** y haz doble clic sobre él para entrar a su grupo de nodos.
+- **Lighting Mode**: Alterna entre presets de iluminación ambiental o selecciona Custom para ajustar canales individuales.
+- **Expressions**: Deslizadores directos para overlays faciales:
+  - **Cheek**: Controla la intensidad del rubor en las mejillas.
+  - **Shy**: Controla la intensidad del sonrojo / efecto avergonzado.
+  - **Shadow**: Controla la intensidad de la sombra en la frente y rostro.
+- **Eye Can't Be Tinted?**: Activa esta casilla para evitar que los ojos del personaje se vean afectados por los tintes de iluminación del entorno o modos de color personalizados.
 
-<Image src={hsrAmbient1} alt="Nodo Global Properties en el Shader Editor" loading="lazy" />
+<Image src={hsrLight1} alt="Panel Character Settings en Honkai Star Rail" loading="lazy" />
 
-3. Dentro del grupo de nodos, desplázate a la parte inferior donde se encuentran las opciones para colorear e iluminar:
-   - **Tint Lit / Custom Ambient Color**: Permite definir el color base de la luz ambiental y las tonalidades de iluminación del personaje.
-   - **Coloramp & Sombras**: Control de rampas de color y degradados para las áreas cel-shaded.
+### Modos y Presets de Iluminación
 
-<Image src={hsrAmbient2} alt="Opciones de coloreado y luz ambiental en la parte inferior del nodo Global Properties" loading="lazy" />
+Puedes elegir entre varios presets de iluminación integrados:
 
-:::tip
-Puedes hacer que los ojos también se pinten si pones la opción **Eye Cant be tinted** en `0`.
-:::
+- **Default**: Iluminación estándar del juego.
+- **Sunrise**: Tono cálido de amanecer con sombras suaves.
+- **Day**: Iluminación diurna balanceada y clara.
+- **Sunset**: Tono dorado de atardecer con sombras profundas.
+- **Night**: Paleta oscura y fría de noche.
+- **Rainy**: Iluminación difusa y nublada de lluvia.
+- **Custom**: Muestra selectores de color para personalización total.
+
+<Image src={hsrLight2} alt="Presets de luz en Character Settings para Honkai Star Rail" loading="lazy" />
+
+<Image src={hsrLight3} alt="Selector de presets de Lighting Mode en Honkai Star Rail" loading="lazy" />
+
+### Colores Personalizados (Modo Custom)
+
+Cuando **Lighting Mode** está en **Custom**, puedes configurar tonos individuales:
+
+- **Ambient**: Color de iluminación ambiental base sin sombrear.
+- **Lit**: Tono de luz directa principal.
+- **Shadow**: Tono principal para áreas sombreadas.
+- **Sharp Lit**: Resaltes secundarios iluminados.
+- **Sharp Shadow**: Sombras duras y oclusiones profundas.
+
+<Image src={hsrLight4} alt="Controles de colores personalizados en Character Settings para Honkai Star Rail" loading="lazy" />
