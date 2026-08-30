@@ -275,9 +275,67 @@ def update_catch_shadows(self, context=None):
                 pass
 
 
+WW_LIGHT_PRESETS = {
+    "0": {  # Default (Value = 0)
+        "ambient": (1.0, 1.0, 1.0),
+        "light": (1.0, 1.0, 1.0),
+        "shadow": (0.9, 0.9, 0.9),
+        "rim": (0.9, 0.9, 0.9),
+    },
+    "1": {  # Sunrise (Value = 1)
+        "ambient": (1.0, 0.967269, 0.935483),
+        "light": (1.0, 0.895639, 0.906351),
+        "shadow": (0.76, 0.78477, 0.95),
+        "rim": (1.0, 0.823099, 0.657774),
+    },
+    "2": {  # Day (Value = 2)
+        "ambient": (1.0, 1.0, 1.0),
+        "light": (1.0, 1.0, 1.0),
+        "shadow": (0.81, 0.826437, 0.90),
+        "rim": (1.0, 0.923343, 0.923343),
+    },
+    "3": {  # Sunset (Value = 3)
+        "ambient": (1.0, 0.905373, 0.905373),
+        "light": (1.0, 0.731331, 0.68462),
+        "shadow": (0.778473, 0.758187, 0.90),
+        "rim": (1.0, 0.800843, 0.505831),
+    },
+    "4": {  # Night (Value = 4)
+        "ambient": (0.92078, 0.949791, 1.0),
+        "light": (0.794931, 0.859457, 1.0),
+        "shadow": (0.90, 0.934303, 1.0),
+        "rim": (0.492182, 0.678144, 1.0),
+    },
+    "5": {  # Rainy (Value = 5)
+        "ambient": (0.900502, 0.922236, 0.945747),
+        "light": (0.445574, 0.445574, 0.445574),
+        "shadow": (0.511766, 0.511766, 0.511766),
+        "rim": (0.28772, 0.28772, 0.28772),
+    },
+}
+
+_is_updating_ww_light_props = False
+
 def update_light_mode(self, context=None):
+    global _is_updating_ww_light_props
+    if _is_updating_ww_light_props:
+        return
+    mode = str(getattr(self, "ww_light_mode", "0"))
+    if mode in WW_LIGHT_PRESETS:
+        preset = WW_LIGHT_PRESETS[mode]
+        _is_updating_ww_light_props = True
+        try:
+            self.ww_amb_color = preset["ambient"]
+            self.ww_light_color = preset["light"]
+            self.ww_shadow_color = preset["shadow"]
+            self.ww_rim_color = preset["rim"]
+        except Exception:
+            pass
+        finally:
+            _is_updating_ww_light_props = False
+
     try:
-        mode_val = float(getattr(self, "ww_light_mode", 0))
+        mode_val = float(mode)
     except Exception:
         mode_val = 0.0
 
@@ -322,6 +380,77 @@ def update_light_mode(self, context=None):
     for mat in bpy.data.materials:
         if mat.use_nodes and mat.node_tree:
             apply_light_mode_to_nodes(mat.node_tree)
+
+    update_custom_colors(self, context)
+
+
+def update_fresnel(self, context=None):
+    scene = getattr(bpy.context, "scene", None) if not isinstance(self, bpy.types.Scene) else self
+    if not scene:
+        return
+    use_fresnel = bool(getattr(scene, "ww_use_fresnel", False))
+    col = getattr(scene, "ww_fresnel_color", (1.0, 1.0, 1.0))
+    col_rgba = (*col[:3], 1.0) if len(col) == 3 else col
+    scale = float(getattr(scene, "ww_fresnel_scale", 2.0))
+    strength = float(getattr(scene, "ww_fresnel_strength", 2.0))
+
+    # 1. Update in Global Material Properties Main node group definition
+    g_props = bpy.data.node_groups.get("Global Material Properties Main")
+    if g_props and hasattr(g_props, "nodes"):
+        out_node = g_props.nodes.get("Global Properties") or g_props.nodes.get("Group Output")
+        if out_node:
+            if "Use Fresnel" in out_node.inputs:
+                try:
+                    out_node.inputs["Use Fresnel"].default_value = use_fresnel
+                except Exception:
+                    pass
+            if "Fresnel Color" in out_node.inputs:
+                try:
+                    out_node.inputs["Fresnel Color"].default_value = col_rgba
+                except Exception:
+                    pass
+            if "Fresnel Scale" in out_node.inputs:
+                try:
+                    out_node.inputs["Fresnel Scale"].default_value = scale
+                except Exception:
+                    pass
+            if "Fresnel Strength" in out_node.inputs:
+                try:
+                    out_node.inputs["Fresnel Strength"].default_value = strength
+                except Exception:
+                    pass
+
+        if hasattr(g_props, "interface") and hasattr(g_props.interface, "items_tree"):
+            for item in g_props.interface.items_tree:
+                if item.name == "Use Fresnel":
+                    try:
+                        item.default_value = use_fresnel
+                    except Exception:
+                        pass
+                elif item.name == "Fresnel Color":
+                    try:
+                        item.default_value = col_rgba
+                    except Exception:
+                        pass
+                elif item.name == "Fresnel Scale":
+                    try:
+                        item.default_value = scale
+                    except Exception:
+                        pass
+                elif item.name == "Fresnel Strength":
+                    try:
+                        item.default_value = strength
+                    except Exception:
+                        pass
+
+    # 2. Tag 3D viewports for redraw
+    if hasattr(bpy.context, 'window_manager') and bpy.context.window_manager:
+        for win in getattr(bpy.context.window_manager, 'windows', []):
+            screen = getattr(win, 'screen', None)
+            if screen:
+                for area in screen.areas:
+                    if area.type == 'VIEW_3D':
+                        area.tag_redraw()
 
 
 def update_outline_settings(self, context=None):
@@ -467,6 +596,7 @@ def sync_wuwa_shader_properties(scene=None):
     update_specular(scene, None)
     update_disgust(scene, None)
     update_alpha_transparency(scene, None)
+    update_fresnel(scene, None)
     update_outline_settings(scene, None)
     update_outline_thickness(scene, None)
 
@@ -1025,14 +1155,53 @@ def register_wuwa_properties():
         update=update_alpha_transparency,
     )
 
+    bpy.types.Scene.ww_use_fresnel = BoolProperty(
+        name="Use Fresnel",
+        description="Enable Fresnel rim lighting",
+        default=False,
+        update=update_fresnel,
+    )
+
+    bpy.types.Scene.ww_fresnel_color = FloatVectorProperty(
+        name="Fresnel Color",
+        subtype='COLOR',
+        size=3,
+        min=0.0,
+        max=1.0,
+        default=(1.0, 1.0, 1.0),
+        update=update_fresnel,
+    )
+
+    bpy.types.Scene.ww_fresnel_scale = FloatProperty(
+        name="Fresnel Scale",
+        description="Fresnel scale",
+        min=0.0,
+        max=20.0,
+        default=2.0,
+        step=10,
+        precision=2,
+        update=update_fresnel,
+    )
+
+    bpy.types.Scene.ww_fresnel_strength = FloatProperty(
+        name="Fresnel Strength",
+        description="Fresnel strength",
+        min=0.0,
+        max=20.0,
+        default=2.0,
+        step=10,
+        precision=2,
+        update=update_fresnel,
+    )
+
     bpy.types.Scene.ww_outline_mode = EnumProperty(
         name="Outline Mode",
         description="Outline color mode for Wuthering Waves characters",
         items=[
-            ("NORMAL", "Normal", "Use LD texture or default outline colors"),
+            ("DEFAULT", "Default", "Use default / LD texture outline colors"),
             ("CUSTOM", "Custom", "Use custom outline colors"),
         ],
-        default="NORMAL",
+        default="DEFAULT",
         update=update_outline_settings,
     )
 

@@ -2039,7 +2039,7 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
                     mix2.location = (outlines_node.location.x - 240, outlines_node.location.y - 260)
 
                 sc = bpy.context.scene
-                ol_mode = getattr(sc, "ww_outline_mode", "NORMAL")
+                ol_mode = getattr(sc, "ww_outline_mode", "DEFAULT")
                 col1 = getattr(sc, "ww_outline_color_1", (0.0, 0.0, 0.0, 1.0))
                 col2 = getattr(sc, "ww_outline_color_2", (0.0, 0.0, 0.0, 1.0))
 
