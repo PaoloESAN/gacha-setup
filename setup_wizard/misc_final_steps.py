@@ -43,6 +43,12 @@ class GI_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties
                 game_type=self.game_type,
             )
 
+        try:
+            from setup_wizard.ui.gi_ui_setup_wizard_menu import sync_genshin_shader_properties
+            sync_genshin_shader_properties(context.scene)
+        except Exception as e_sync:
+            print(f"[GI FINISH] Notice syncing shader properties: {e_sync}")
+
         return result
 
 

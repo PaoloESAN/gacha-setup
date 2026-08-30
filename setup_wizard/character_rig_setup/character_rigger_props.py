@@ -10,7 +10,7 @@ class CharacterRiggerPropertyGroup(PropertyGroup):
     set_up_lighting_panel: BoolProperty(
         name=' Set Up Lighting Panel', 
         description='Import and Set Up Lighting Panel',
-        default=True
+        default=False
     )
     allow_arm_ik_stretch: BoolProperty(
         name=' Allow Arm IK Stretch', 

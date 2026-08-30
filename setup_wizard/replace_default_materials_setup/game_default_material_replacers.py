@@ -221,6 +221,12 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 # if genshin_material.name != f'miHoYo - Genshin Face':
                 #     genshin_main_shader_node = genshin_material.node_tree.nodes.get('Group.001')
                 #     genshin_main_shader_node.node_tree = self.__clone_shader_node_and_rename(genshin_material, mesh_body_part_name)
+        try:
+            from setup_wizard.ui.gi_ui_setup_wizard_menu import sync_genshin_shader_properties
+            sync_genshin_shader_properties()
+        except Exception as e_sync:
+            print(f"[GI MATERIALS] Notice syncing shader properties: {e_sync}")
+
         self.blender_operator.report({'INFO'}, 'Replaced default materials with Genshin shader materials...')
 
     def create_shader_material_if_unique_mesh(self, mesh, mesh_body_part_name, material_name):

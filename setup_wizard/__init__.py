@@ -117,6 +117,10 @@ else:
         GI_PT_UI_Outlines_Menu,
         GI_PT_UI_Post_Processing_Node_Editor_Setup_Menu,
         GI_PT_UI_Post_Processing_Setup_Menu,
+        GI_PT_Rig_Character_Settings,
+        register_gi_properties,
+        unregister_gi_properties,
+        gi_frame_change_handler,
         UI_Properties,
     )
     from setup_wizard.ui.hsr_ui_setup_wizard_menu import (
@@ -200,6 +204,7 @@ else:
         GI_PT_UI_Outlines_Menu,
         GI_PT_UI_Finish_Setup_Menu,
         GI_PT_UI_Character_Rig_Setup_Menu,
+        GI_PT_Rig_Character_Settings,
         GI_PT_UI_Post_Processing_Setup_Menu,
         GI_PT_UI_Post_Processing_Node_Editor_Setup_Menu,
         GI_OT_GenshinSetupWizardUI,
@@ -296,22 +301,37 @@ else:
 
     def register():
         _register_classes()
+        if hasattr(bpy.types, "VIEW3D_PT_context_properties"):
+            try:
+                bpy.types.VIEW3D_PT_context_properties.bl_order = 100
+            except Exception:
+                pass
         register_wuwa_properties()
         register_zzz_properties()
         register_hsr_properties()
+        register_gi_properties()
         if wuwa_frame_change_handler not in bpy.app.handlers.frame_change_post:
             bpy.app.handlers.frame_change_post.append(wuwa_frame_change_handler)
         if wuwa_frame_change_handler not in bpy.app.handlers.render_init:
             bpy.app.handlers.render_init.append(wuwa_frame_change_handler)
+        if gi_frame_change_handler not in bpy.app.handlers.frame_change_post:
+            bpy.app.handlers.frame_change_post.append(gi_frame_change_handler)
+        if gi_frame_change_handler not in bpy.app.handlers.render_init:
+            bpy.app.handlers.render_init.append(gi_frame_change_handler)
         addon_updater_ops.register(bl_info)
 
 
     def unregister():
+        if gi_frame_change_handler in bpy.app.handlers.frame_change_post:
+            bpy.app.handlers.frame_change_post.remove(gi_frame_change_handler)
+        if gi_frame_change_handler in bpy.app.handlers.render_init:
+            bpy.app.handlers.render_init.remove(gi_frame_change_handler)
         if wuwa_frame_change_handler in bpy.app.handlers.frame_change_post:
             bpy.app.handlers.frame_change_post.remove(wuwa_frame_change_handler)
         if wuwa_frame_change_handler in bpy.app.handlers.render_init:
             bpy.app.handlers.render_init.remove(wuwa_frame_change_handler)
         addon_updater_ops.unregister()
+        unregister_gi_properties()
         unregister_hsr_properties()
         unregister_zzz_properties()
         _unregister_classes()
