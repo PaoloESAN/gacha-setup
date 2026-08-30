@@ -3,6 +3,7 @@ import MobileTableOfContents from '@astrojs/starlight/components/MobileTableOfCo
 import MobileMenuToggle from '@astrojs/starlight/components/MobileMenuToggle.astro';
 import SiteTitle from '@astrojs/starlight/components/SiteTitle.astro';
 import ChibiWidget from './ChibiWidget.astro';
+import ImageZoom from './ImageZoom.astro';
 
 const { hasSidebar } = Astro.locals.starlightRoute;
 ---
@@ -35,6 +36,7 @@ const { hasSidebar } = Astro.locals.starlightRoute;
 </div>
 
 <ChibiWidget {...Astro.props} />
+<ImageZoom />
 
 <style>
 	@layer starlight.core {

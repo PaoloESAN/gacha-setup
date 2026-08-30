@@ -1,0 +1,211 @@
+---
+// Component: ImageZoom.astro
+// Lightweight, zero-dependency, accessible <dialog>-based Image Zoom for Markdown/MDX images
+---
+
+<dialog id="starlight-image-zoom-dialog" class="image-zoom-dialog" aria-modal="true" aria-label="Image Zoom">
+	<div class="image-zoom-container">
+		<button type="button" class="image-zoom-close" aria-label="Close zoomed image">
+			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+				<line x1="18" y1="6" x2="6" y2="18"></line>
+				<line x1="6" y1="6" x2="18" y2="18"></line>
+			</svg>
+		</button>
+		<figure class="image-zoom-figure">
+			<img class="image-zoom-img" src="" alt="" />
+			<figcaption class="image-zoom-caption"></figcaption>
+		</figure>
+	</div>
+</dialog>
+
+<script>
+	function setupImageZoom() {
+		const dialog = document.getElementById('starlight-image-zoom-dialog') as HTMLDialogElement | null;
+		if (!dialog) return;
+
+		const imgEl = dialog.querySelector<HTMLImageElement>('.image-zoom-img');
+		const captionEl = dialog.querySelector<HTMLElement>('.image-zoom-caption');
+		const closeBtn = dialog.querySelector<HTMLButtonElement>('.image-zoom-close');
+
+		if (!imgEl || !captionEl || !closeBtn) return;
+
+		const closeZoom = () => {
+			dialog.close();
+			document.body.classList.remove('image-zoom-open');
+			imgEl.src = '';
+			captionEl.textContent = '';
+		};
+
+		closeBtn.onclick = (e) => {
+			e.stopPropagation();
+			closeZoom();
+		};
+
+		// Close on clicking backdrop (outside container)
+		dialog.onclick = (e) => {
+			if (e.target === dialog) {
+				closeZoom();
+			}
+		};
+
+		dialog.onclose = () => {
+			document.body.classList.remove('image-zoom-open');
+		};
+
+		// Query all content images in markdown
+		const images = document.querySelectorAll<HTMLImageElement>(
+			'.sl-markdown-content img:not(.game-icon-img):not(.credits-end-img):not(.chibi-img):not([data-no-zoom])'
+		);
+
+		images.forEach((img) => {
+			if (img.dataset.zoomAttached) return;
+			img.dataset.zoomAttached = 'true';
+			img.classList.add('zoomable-image');
+			img.setAttribute('role', 'button');
+			img.setAttribute('tabindex', '0');
+			img.setAttribute('aria-haspopup', 'dialog');
+			img.setAttribute('aria-label', `Zoom image: ${img.alt || 'Documentation illustration'}`);
+
+			const openZoom = () => {
+				const src = img.currentSrc || img.src;
+				if (!src) return;
+				imgEl.src = src;
+				imgEl.alt = img.alt || '';
+				captionEl.textContent = img.alt || '';
+				captionEl.style.display = img.alt ? 'block' : 'none';
+				document.body.classList.add('image-zoom-open');
+				dialog.showModal();
+			};
+
+			img.addEventListener('click', (e) => {
+				if ((e.target as HTMLElement).closest('a, button')) return;
+				e.preventDefault();
+				openZoom();
+			});
+
+			img.addEventListener('keydown', (e) => {
+				if (e.key === 'Enter' || e.key === ' ') {
+					e.preventDefault();
+					openZoom();
+				}
+			});
+		});
+	}
+
+	document.addEventListener('astro:page-load', setupImageZoom);
+</script>
+
+<style>
+	.image-zoom-dialog {
+		margin: auto;
+		padding: 0;
+		border: none;
+		background: transparent;
+		color: #ffffff;
+		max-width: 95vw;
+		max-height: 95vh;
+		overflow: visible;
+		outline: none;
+	}
+
+	.image-zoom-dialog::backdrop {
+		background: rgba(0, 0, 0, 0.85);
+		backdrop-filter: blur(10px);
+		-webkit-backdrop-filter: blur(10px);
+		animation: zoom-fade-in 0.2s ease-out;
+	}
+
+	.image-zoom-container {
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		max-width: 95vw;
+		max-height: 95vh;
+		animation: zoom-scale-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+	}
+
+	.image-zoom-close {
+		position: absolute;
+		top: -2.75rem;
+		right: 0;
+		background: rgba(255, 255, 255, 0.18);
+		border: 1px solid rgba(255, 255, 255, 0.35);
+		color: #ffffff;
+		border-radius: 50%;
+		width: 2.25rem;
+		height: 2.25rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		transition: background 0.15s ease, transform 0.15s ease;
+		z-index: 10;
+	}
+
+	.image-zoom-close:hover {
+		background: rgba(255, 255, 255, 0.35);
+		transform: scale(1.08);
+	}
+
+	.image-zoom-figure {
+		margin: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		max-width: 92vw;
+		max-height: 86vh;
+	}
+
+	.image-zoom-img {
+		max-width: 92vw;
+		max-height: 80vh;
+		object-fit: contain;
+		border-radius: 8px;
+		border: none;
+		outline: none;
+		box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.7);
+		display: block;
+	}
+
+	.image-zoom-caption {
+		margin-top: 0.85rem;
+		font-size: 0.95rem;
+		font-weight: 500;
+		color: #f1f5f9;
+		text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
+		text-align: center;
+		max-width: 800px;
+		line-height: 1.4;
+	}
+
+	:global(.zoomable-image) {
+		cursor: zoom-in;
+		transition: opacity 0.15s ease;
+	}
+
+	:global(.zoomable-image:hover) {
+		opacity: 0.92;
+	}
+
+	:global(body.image-zoom-open) {
+		overflow: hidden;
+	}
+
+	@keyframes zoom-fade-in {
+		from { opacity: 0; }
+		to { opacity: 1; }
+	}
+
+	@keyframes zoom-scale-in {
+		from {
+			opacity: 0;
+			transform: scale(0.96);
+		}
+		to {
+			opacity: 1;
+			transform: scale(1);
+		}
+	}
+</style>
