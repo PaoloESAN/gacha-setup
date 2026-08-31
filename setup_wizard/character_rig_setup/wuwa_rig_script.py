@@ -838,7 +838,7 @@ def rig_wuthering_waves_character(context=None):
         if RigArmatureObj.data:
             RigArmatureObj.data.name = RigArmature
 
-        # Link RigArmatureObj to character's collection (e.g. Chun) and remove from base Collection
+        # Link RigArmatureObj to character's collection (e.g. Chun) and move scene objects into character collection
         orig_arm_obj = bpy.data.objects.get(OrigArmature) or armature
         char_collection = None
         if orig_arm_obj:
@@ -846,13 +846,61 @@ def rig_wuthering_waves_character(context=None):
                 if coll.name not in ("Collection", "Master Collection", "Scene Collection"):
                     char_collection = coll
                     break
+        if not char_collection and char_base_name:
+            char_collection = bpy.data.collections.get(char_base_name)
+
         if char_collection:
             if RigArmatureObj.name not in char_collection.objects:
                 char_collection.objects.link(RigArmatureObj)
             for c in list(RigArmatureObj.users_collection):
-                if c != char_collection:
+                if c != char_collection and not c.name.startswith("WGTS"):
                     try:
                         c.objects.unlink(RigArmatureObj)
+                    except Exception:
+                        pass
+
+            # Move all objects from default 'Collection' into the character's collection
+            main_coll = bpy.data.collections.get("Collection")
+            if main_coll and main_coll != char_collection:
+                for child_c in list(main_coll.children):
+                    if child_c != char_collection:
+                        if child_c.name not in context.scene.collection.children:
+                            context.scene.collection.children.link(child_c)
+                        try:
+                            main_coll.children.unlink(child_c)
+                        except Exception:
+                            pass
+                for obj_c in list(main_coll.objects):
+                    if obj_c.name not in char_collection.objects:
+                        char_collection.objects.link(obj_c)
+                    try:
+                        main_coll.objects.unlink(obj_c)
+                    except Exception:
+                        pass
+                try:
+                    context.scene.collection.children.unlink(main_coll)
+                except Exception:
+                    pass
+                try:
+                    bpy.data.collections.remove(main_coll, do_unlink=True)
+                except Exception:
+                    pass
+
+        # Delete rogue Cube objects and duplicate .001 control objects
+        for obj in list(bpy.data.objects):
+            if obj.name.lower().startswith("cube") and obj.type == 'MESH':
+                if not any(k in obj.name.lower() for k in ["body", "cloth", "face", "hair", "eye", "head"]):
+                    try:
+                        bpy.data.objects.remove(obj, do_unlink=True)
+                    except Exception:
+                        pass
+
+        for base_name in ['Head Origin', 'Head Forward', 'Head Up', 'Light Direction', 'Sun', 'Eye Highlight', 'Highlight Top', 'Highlight Bottom']:
+            orig_obj = bpy.data.objects.get(base_name)
+            for obj in list(bpy.data.objects):
+                if obj != orig_obj and (obj.name.startswith(f"{base_name}.") or (base_name.lower() in obj.name.lower() and ('.00' in obj.name or '.01' in obj.name))):
+                    try:
+                        bpy.data.objects.remove(obj, do_unlink=True)
                     except Exception:
                         pass
 

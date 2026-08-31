@@ -10,7 +10,7 @@ class CharacterRiggerPropertyGroup(PropertyGroup):
     set_up_lighting_panel: BoolProperty(
         name=' Set Up Lighting Panel', 
         description='Import and Set Up Lighting Panel',
-        default=True
+        default=False
     )
     allow_arm_ik_stretch: BoolProperty(
         name=' Allow Arm IK Stretch', 
@@ -78,6 +78,11 @@ class CharacterRiggerPropertyGroup(PropertyGroup):
         default=0.4,
         step=5,
         precision=2
+    )
+    disable_rigging: BoolProperty(
+        name=' Disable Rigging',
+        description='Skip the entire character rigging step during setup',
+        default=False
     )
 
     @staticmethod

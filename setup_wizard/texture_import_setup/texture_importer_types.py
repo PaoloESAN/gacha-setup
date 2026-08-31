@@ -2067,14 +2067,21 @@ class HonkaiStarRailTextureImporter(GenshinTextureImporter):
             self.set_up_stellartoon_stocking_texture(body2_material, img)
 
     def set_up_stellartoon_stocking_texture(self, material, img):
+        if not material or not material.node_tree:
+            body_stockings_node_group = bpy.data.node_groups.get(self.texture_node_names.STOCKINGS_NODE_GROUP)
+            if body_stockings_node_group and self.texture_node_names.STOCKINGS in body_stockings_node_group.nodes:
+                body_stockings_node_group.nodes[self.texture_node_names.STOCKINGS].image = img
+            return
+
         body_stockings_node = material.node_tree.nodes.get(self.texture_node_names.STOCKINGS)
         body_stockings_node_group = bpy.data.node_groups.get(self.texture_node_names.STOCKINGS_NODE_GROUP)
 
         if body_stockings_node:
             body_stockings_node.image = img
-            material.node_tree.nodes.get(StellarToonShaderNodeNames.BODY_SHADER).inputs.get(
-                StellarToonShaderNodeNames.ENABLE_STOCKINGS).default_value = 1.0
-        if body_stockings_node_group:
+            body_shader = material.node_tree.nodes.get(StellarToonShaderNodeNames.BODY_SHADER)
+            if body_shader and body_shader.inputs.get(StellarToonShaderNodeNames.ENABLE_STOCKINGS):
+                body_shader.inputs.get(StellarToonShaderNodeNames.ENABLE_STOCKINGS).default_value = 1.0
+        if body_stockings_node_group and self.texture_node_names.STOCKINGS in body_stockings_node_group.nodes:
             body_stockings_node_group.nodes[self.texture_node_names.STOCKINGS].image = img
 
 class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
@@ -2087,197 +2094,475 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
         )
         self.material_names = material_names
 
-    def import_textures(self, directory):
-        for name, folder, files in os.walk(directory):
-            for file in files:
-                # load the file with the correct alpha mode
-                img_path = os.path.join(name, file)
-                img = bpy.data.images.load(filepath = img_path, check_existing=True)
+    def _collect_image_files(self, directory):
+        image_exts = ('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff', '.webp')
+        candidates = [
+            directory,
+            os.path.join(directory, "Textures"),
+            os.path.join(os.path.dirname(directory), "Textures"),
+            os.path.dirname(directory),
+        ]
+        seen_paths = set()
+        image_files = []
+
+        for d in candidates:
+            if not d or not os.path.isdir(d):
+                continue
+            for root, _, files in os.walk(d):
+                for f in files:
+                    if f.lower().endswith(image_exts):
+                        full_p = os.path.normpath(os.path.join(root, f))
+                        if full_p not in seen_paths:
+                            seen_paths.add(full_p)
+                            image_files.append((f, full_p))
+        return image_files
+
+    def _resolve_image(self, tex_name, image_files):
+        if not tex_name:
+            return None
+
+        existing_img = bpy.data.images.get(tex_name)
+        if existing_img and (existing_img.has_data or (hasattr(existing_img, 'filepath') and existing_img.filepath)):
+            existing_img.alpha_mode = 'CHANNEL_PACKED'
+            return existing_img
+
+        t_clean = os.path.splitext(tex_name)[0].strip()
+        t_low = t_clean.lower()
+
+        # 1. Exact stem match
+        for fname, fpath in image_files:
+            stem = os.path.splitext(fname)[0]
+            if stem.lower() == t_low:
+                img = bpy.data.images.get(fname) or bpy.data.images.load(filepath=fpath, check_existing=True)
                 img.alpha_mode = 'CHANNEL_PACKED'
+                return img
 
-                hair_material = bpy.data.materials.get(self.material_names.HAIR)
-                face_material = bpy.data.materials.get(self.material_names.FACE)
-                body_material = bpy.data.materials.get(self.material_names.BODY)
-                body1_material = bpy.data.materials.get(self.material_names.BODY1)
-                body2_material = bpy.data.materials.get(self.material_names.BODY2)
-                body3_material = bpy.data.materials.get(self.material_names.BODY3)
-                body_trans_material = bpy.data.materials.get(self.material_names.BODY_TRANS)
-                body2_trans_material = bpy.data.materials.get(self.material_names.BODY2_TRANS)
-                coat_material = bpy.data.materials.get(self.material_names.COAT)
-                weapon_material = bpy.data.materials.get(self.material_names.WEAPON)
-                weapon1_material = bpy.data.materials.get(self.material_names.WEAPON1)
-                weapon01_material = bpy.data.materials.get(self.material_names.WEAPON01)
-                weapon02_material = bpy.data.materials.get(self.material_names.WEAPON02)
-                weapon_trans_material = bpy.data.materials.get(self.material_names.WEAPON_TRANS)
-                weapon_materials = [weapon_material, weapon1_material, weapon01_material, weapon02_material, weapon_trans_material]
-                handbag_material = bpy.data.materials.get(self.material_names.HANDBAG)
-                kendama_material = bpy.data.materials.get(self.material_names.KENDAMA)
+        # 2. Match ignoring common prefixes
+        t_no_prefix = re.sub(r'^(avatar_tex_|tex_avatar_|tex_|avatar_)', '', t_low)
+        for fname, fpath in image_files:
+            stem = os.path.splitext(fname)[0].lower()
+            stem_no_prefix = re.sub(r'^(avatar_tex_|tex_avatar_|tex_|avatar_)', '', stem)
+            if stem_no_prefix == t_no_prefix or stem == t_no_prefix or stem_no_prefix == t_low:
+                img = bpy.data.images.get(fname) or bpy.data.images.load(filepath=fpath, check_existing=True)
+                img.alpha_mode = 'CHANNEL_PACKED'
+                return img
 
-                # Implement the texture in the correct node
-                print(f'INFO: Importing texture {file} using {self.__class__.__name__}')
+        # 3. Prefix / Suffix match
+        for fname, fpath in image_files:
+            stem = os.path.splitext(fname)[0].lower()
+            if stem.startswith(t_low) or t_low.startswith(stem) or stem.endswith(t_low) or t_low.endswith(stem):
+                img = bpy.data.images.get(fname) or bpy.data.images.load(filepath=fpath, check_existing=True)
+                img.alpha_mode = 'CHANNEL_PACKED'
+                return img
 
-                if self.is_texture_identifiers_in_texture_name(['Hair', 'Color'], file) and \
-                    not self.is_texture_identifiers_in_texture_name(['Eff'], file):  # TODO: Review this line
-                    self.set_diffuse_texture(TextureType.HAIR, hair_material, img)
+        # 4. Substring match
+        for fname, fpath in image_files:
+            if t_low in fname.lower() or fname.lower() in t_low:
+                img = bpy.data.images.get(fname) or bpy.data.images.load(filepath=fpath, check_existing=True)
+                img.alpha_mode = 'CHANNEL_PACKED'
+                return img
 
-                elif self.is_texture_identifiers_in_texture_name(['Hair', 'LightMap'], file):
-                    self.set_lightmap_texture(TextureType.HAIR, hair_material, img)
+        return None
 
-                elif self.is_texture_identifiers_in_texture_name(['Hair', 'Warm_Ramp'], file):
-                    self.set_warm_shadow_ramp_texture(TextureType.HAIR, img)
+    def _build_hsr_json_texture_map(self, directory):
+        candidates = [
+            os.path.join(directory, "Materials"),
+            os.path.join(os.path.dirname(directory), "Materials"),
+            directory,
+            os.path.dirname(directory),
+        ]
+        materials_dirs = []
+        for d in candidates:
+            if d and os.path.isdir(d) and d not in materials_dirs:
+                if any(f.lower().endswith('.json') and not f.startswith('config') and not f.startswith('character_setup_wizard') for f in os.listdir(d)):
+                    materials_dirs.append(d)
 
-                elif self.is_texture_identifiers_in_texture_name(['Hair', 'Cool_Ramp'], file):
-                    self.set_cool_shadow_ramp_texture(TextureType.HAIR, img)
-                
-                # Character has Body and no Body1 or Body2?
-                elif self.is_texture_identifiers_in_texture_name(['Body_', 'Color'], file):
-                    if body_material:
-                        self.set_diffuse_texture(TextureType.BODY, body_material, img)
+        json_map = {}
+        for m_dir in materials_dirs:
+            for jf in os.listdir(m_dir):
+                if not jf.lower().endswith('.json') or jf.startswith('config') or jf.startswith('character_setup_wizard'):
+                    continue
+                jpath = os.path.join(m_dir, jf)
+                try:
+                    with open(jpath, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                except Exception:
+                    continue
 
-                    # If NOT Body material, but Body texture, check for Body1/Body2 (Firefly)
-                    if not body_material:
-                        if body1_material:
-                            self.set_diffuse_texture(TextureType.BODY, body1_material, img)
-                        if body2_material:
-                            self.set_diffuse_texture(TextureType.BODY, body2_material, img)
-                        if body2_trans_material:
-                            self.set_diffuse_texture(TextureType.BODY, body2_trans_material, img)
+                tex_envs = {}
+                if isinstance(data, dict):
+                    saved_props = data.get('m_SavedProperties') or data.get('0 UnityPropertySheet m_SavedProperties') or {}
+                    raw_envs = saved_props.get('m_TexEnvs') or saved_props.get('0 map m_TexEnvs') or data.get('m_TexEnvs') or {}
 
-                    if body_trans_material:
-                        self.set_diffuse_texture(TextureType.BODY, body_trans_material, img)
+                    if isinstance(raw_envs, dict):
+                        tex_envs = raw_envs
+                    elif isinstance(raw_envs, list):
+                        for item in raw_envs:
+                            if isinstance(item, dict):
+                                k = item.get('Key') or item.get('0 pair data', {}).get('1 string first')
+                                v = item.get('Value') or item.get('0 pair data', {}).get('0 TextureEnv second')
+                                if k:
+                                    tex_envs[k] = v
 
-                # Character has Body and no Body1 or Body2?
-                elif self.is_texture_identifiers_in_texture_name(['Body_', 'LightMap'], file):
-                    if body_material:
-                        self.set_lightmap_texture(TextureType.BODY, body_material, img)
+                def extract_tex_name(slot_keys):
+                    for k in slot_keys:
+                        slot = tex_envs.get(k)
+                        if not slot:
+                            continue
+                        if isinstance(slot, dict):
+                            tex_obj = slot.get('m_Texture') or slot.get('m_Texture2D') or slot.get('0 PPtr<Texture> m_Texture') or {}
+                            if isinstance(tex_obj, dict):
+                                name = tex_obj.get('Name') or tex_obj.get('m_Name') or tex_obj.get('1 string m_Name')
+                                if name:
+                                    return name
+                            elif isinstance(slot.get('Name'), str):
+                                return slot.get('Name')
+                        elif isinstance(slot, str):
+                            return slot
+                    return None
 
-                    # If NOT Body material, but Body texture, check for Body1/Body2 (Firefly)
-                    if not body_material:
-                        if body1_material:
-                            self.set_lightmap_texture(TextureType.BODY, body1_material, img)
-                        if body2_material:
-                            self.set_lightmap_texture(TextureType.BODY, body2_material, img)
-                        if body2_trans_material:
-                            self.set_lightmap_texture(TextureType.BODY, body2_trans_material, img)
+                extracted = {
+                    'diffuse': extract_tex_name(['_MainTex', '_BaseTex', '_BaseTexV2', '_ColorTex', '_Diffuse', '_Tex', '_EyeColorMap']),
+                    'lightmap': extract_tex_name(['_LightMapTex', '_LightMap', '_Lightmap', '_LightmapTex', '_MainLightmap', '_LightTex']),
+                    'warm_ramp': extract_tex_name(['_WarmRampTex', '_WarmRamp', '_ShadowRampTex', '_PackedShadowRampTex', '_Body_Warm_Ramp', '_Hair_Warm_Ramp', '_RampTex']),
+                    'cool_ramp': extract_tex_name(['_CoolRampTex', '_CoolRamp', '_Body_Cool_Ramp', '_Hair_Cool_Ramp']),
+                    'stockings': extract_tex_name(['_StockingsTex', '_StockingTex', '_Stockings', '_Body_Stockings']),
+                    'facemap': extract_tex_name(['_FaceMapTex', '_FaceMap', '_FaceLightMap', '_Face_LightMap', '_FaceShadow']),
+                    'expression': extract_tex_name(['_ExpressionMap', '_Face_ExpressionMap', '_FaceExpressionMap', '_Expression']),
+                    'normal': extract_tex_name(['_BumpMap', '_NormalMap', '_NormalTex']),
+                }
 
-                    if body_trans_material:
-                        self.set_lightmap_texture(TextureType.BODY, body_trans_material, img)
+                mat_key = os.path.splitext(jf)[0].lower()
+                json_map[mat_key] = extracted
 
-                elif self.is_texture_identifiers_in_texture_name(['Body1', 'Color'], file):
-                    self.set_diffuse_texture(TextureType.BODY, body1_material, img)
+        return json_map
 
-                elif self.is_texture_identifiers_in_texture_name(['Body1', 'LightMap'], file):
-                    self.set_lightmap_texture(TextureType.BODY, body1_material, img)
+    def _find_json_textures_for_material(self, mat, json_map):
+        if not json_map:
+            return None
 
-                elif self.is_texture_identifiers_in_texture_name(['Body2', 'Color'], file):
-                    self.set_diffuse_texture(TextureType.BODY, body2_material, img)
+        orig_mat_name = mat.get("_original_material_name") or ""
+        mat_name = mat.name
 
-                    if body2_trans_material:
-                        self.set_diffuse_texture(TextureType.BODY, body2_trans_material, img)
+        def clean_key(name):
+            k = re.sub(r'\.\d+$', '', name.lower())
+            k = re.sub(r'^(mihoyo - honkai star rail |hoyoverse - star rail |mihoyo - genshin |hoyoverse - genshin |stellartoon )', '', k)
+            k = k.replace('mat_', '').replace('_mat', '').replace('material', '')
+            return k.strip(' _-')
 
-                elif self.is_texture_identifiers_in_texture_name(['Body2', 'LightMap'], file):
-                    self.set_lightmap_texture(TextureType.BODY, body2_material, img)
+        m_clean = clean_key(mat_name)
+        orig_clean = clean_key(orig_mat_name) if orig_mat_name else ""
 
-                    if body2_trans_material:
-                        self.set_lightmap_texture(TextureType.BODY, body2_trans_material, img)
+        # 1. Exact match on candidates
+        for candidate in [mat_name.lower(), orig_mat_name.lower(), m_clean, orig_clean]:
+            if candidate and candidate in json_map:
+                return json_map[candidate]
+            for j_key, tex_dict in json_map.items():
+                if candidate and (j_key == candidate or clean_key(j_key) == candidate):
+                    return tex_dict
 
-                elif self.is_texture_identifiers_in_texture_name(['Body3', 'Color'], file):
-                    self.set_diffuse_texture(TextureType.BODY, body3_material, img)
+        # 2. Body part matching
+        parts = ['hair', 'face', 'body_trans', 'body2_trans', 'body3', 'body2', 'body1', 'body_leather', 'body_tuoma', 'body_stockings', 'body_s', 'body_d', 'body', 'coat', 'weapon', 'handbag', 'kendama', 'eyeshadow', 'eyespecular', 'eyestar']
+        target_part = None
+        for p in parts:
+            if p in m_clean or (orig_clean and p in orig_clean):
+                target_part = p
+                break
 
-                elif self.is_texture_identifiers_in_texture_name(['Body3', 'LightMap'], file):
-                    self.set_lightmap_texture(TextureType.BODY, body3_material, img)
+        if target_part:
+            for j_key, tex_dict in json_map.items():
+                j_clean = clean_key(j_key)
+                if target_part in j_clean:
+                    return tex_dict
 
-                elif (self.is_texture_identifiers_in_texture_name(['Warm_Ramp'], file) or \
-                    self.is_texture_identifiers_in_texture_name(['Body_Ramp'], file)) and \
-                        not self.is_texture_identifiers_in_texture_name(['Weapon'], file):  # Not Hair, so ramp must be Body
+        # 3. Token similarity
+        m_tokens = set(re.split(r'[^a-zA-Z0-9]+', m_clean + " " + orig_clean)) - {'', 'mat', 'mihoyo', 'hoyoverse', 'star', 'rail'}
+        best_match = None
+        best_score = 0
+        for j_key, tex_dict in json_map.items():
+            j_tokens = set(re.split(r'[^a-zA-Z0-9]+', clean_key(j_key))) - {'', 'mat', 'mihoyo', 'hoyoverse', 'star', 'rail'}
+            score = len(m_tokens.intersection(j_tokens))
+            if score > best_score:
+                best_score = score
+                best_match = tex_dict
+
+        if best_match and best_score > 0:
+            return best_match
+
+        return None
+
+    def _get_current_material_texture(self, material):
+        if not material:
+            return None
+
+        # 1. Diffuse node image
+        if material.use_nodes and material.node_tree:
+            diffuse_nodes = find_all_image_nodes_by_category(material.node_tree, 'diffuse')
+            for n in diffuse_nodes:
+                if n.image and n.image.name and not n.image.name.startswith('White_'):
+                    return n.image
+
+        # 2. _original_fbx_texture property
+        orig_tex_name = material.get('_original_fbx_texture')
+        if orig_tex_name:
+            img = bpy.data.images.get(orig_tex_name)
+            if img:
+                return img
+
+        # 3. Any non-ramp image node
+        if material.use_nodes and material.node_tree:
+            for n in material.node_tree.nodes:
+                if n.type == 'TEX_IMAGE' and n.image and n.image.name:
+                    i_low = n.image.name.lower()
+                    if not any(k in i_low for k in ['ramp', 'white_', 'mask', 'curve']):
+                        return n.image
+
+        # 4. Check original material if recorded
+        orig_mat_name = material.get('_original_material_name')
+        if orig_mat_name:
+            orig_mat = bpy.data.materials.get(orig_mat_name)
+            if orig_mat and orig_mat.use_nodes and orig_mat.node_tree:
+                for n in orig_mat.node_tree.nodes:
+                    if n.type == 'TEX_IMAGE' and n.image and n.image.name:
+                        return n.image
+
+        return None
+
+    def _find_matching_lightmap_for_texture(self, tex_name, image_files):
+        if not tex_name:
+            return None
+
+        stem = os.path.splitext(tex_name)[0].strip()
+        tex_clean = re.sub(r'\.\d+$', '', stem)
+
+        candidates = []
+        sub_patterns = [
+            (r'_Color_A_L$', '_LightMap_L'),
+            (r'_Color_A$', '_LightMap_A'),
+            (r'_Color_L$', '_LightMap_L'),
+            (r'_Color_0(\d)$', r'_LightMap_0\1'),
+            (r'_Color$', '_LightMap'),
+            (r'_Diffuse$', '_LightMap'),
+            (r'_Col$', '_LightMap'),
+            (r'_BaseColor$', '_LightMap'),
+        ]
+        for pat, repl in sub_patterns:
+            cand = re.sub(pat, repl, tex_clean, flags=re.IGNORECASE)
+            if cand != tex_clean and cand not in candidates:
+                candidates.append(cand)
+                candidates.append(cand.replace('_LightMap', '_Lightmap'))
+                candidates.append(cand.replace('_LightMap', '_LM'))
+
+        base_prefix = re.sub(r'(_color|_diffuse|_col|_basecolor|_tex_diffuse|_tex|_basetex|_albedo)(_a_l|_a|_l|_0\d)?$', '', tex_clean, flags=re.IGNORECASE)
+        base_prefix_clean = re.sub(r'(_d|_s)$', '', base_prefix, flags=re.IGNORECASE)
+
+        for bp in [base_prefix, base_prefix_clean]:
+            for suffix in ['_LightMap_L', '_LightMap', '_Lightmap_L', '_Lightmap', '_LigthMap', '_LM', '_M']:
+                c = f"{bp}{suffix}"
+                if c not in candidates:
+                    candidates.append(c)
+
+        filtered_candidates = [c for c in candidates if c.lower() != tex_clean.lower() and not any(k in c.lower() for k in ['color', 'diffuse'])]
+
+        for cand in filtered_candidates:
+            img = self._resolve_image(cand, image_files)
+            if img and img.name.lower() != tex_name.lower() and not any(k in img.name.lower() for k in ['color', 'diffuse']):
+                return img
+
+        bp_low = base_prefix_clean.lower()
+        for fname, fpath in image_files:
+            f_low = fname.lower()
+            if ('lightmap' in f_low or 'ligthmap' in f_low) and bp_low in f_low and not any(k in f_low for k in ['color', 'diffuse', 'eff', 'lut', 'curve', 'materialid']):
+                img = bpy.data.images.get(fname) or bpy.data.images.load(filepath=fpath, check_existing=True)
+                img.alpha_mode = 'CHANNEL_PACKED'
+                return img
+
+        return None
+
+    def _assign_global_character_textures(self, image_files, json_map):
+        for fname, fpath in image_files:
+            f_low = fname.lower()
+            if any(k in f_low for k in ['eff', 'lut', 'curve', 'materialid']):
+                continue
+
+            # Hair Warm Ramp
+            if 'hair' in f_low and ('warm_ramp' in f_low or 'warmramp' in f_low or 'hair_ramp' in f_low):
+                img = self._resolve_image(fname, image_files)
+                if img: self.set_warm_shadow_ramp_texture(TextureType.HAIR, img)
+            # Hair Cool Ramp
+            elif 'hair' in f_low and ('cool_ramp' in f_low or 'coolramp' in f_low):
+                img = self._resolve_image(fname, image_files)
+                if img: self.set_cool_shadow_ramp_texture(TextureType.HAIR, img)
+            # Body Warm Ramp
+            elif ('body_warm_ramp' in f_low or 'body_ramp' in f_low or ('warm_ramp' in f_low and 'body' in f_low) or ('warm_ramp' in f_low and not any(k in f_low for k in ['hair', 'weapon']))) and not any(k in f_low for k in ['weapon', 'hair']):
+                img = self._resolve_image(fname, image_files)
+                if img:
                     self.set_warm_shadow_ramp_texture(TextureType.BODY, img)
                     self.set_weapon_ramp_texture(img)
+            # Body Cool Ramp
+            elif ('body_cool_ramp' in f_low or ('cool_ramp' in f_low and 'body' in f_low) or ('cool_ramp' in f_low and not any(k in f_low for k in ['hair', 'weapon']))) and not any(k in f_low for k in ['weapon', 'hair']):
+                img = self._resolve_image(fname, image_files)
+                if img: self.set_cool_shadow_ramp_texture(TextureType.BODY, img)
+            # Weapon Ramp
+            elif 'weapon' in f_low and 'ramp' in f_low and not any(k in f_low for k in ['body', 'hair']):
+                img = self._resolve_image(fname, image_files)
+                if img: self.set_weapon_ramp_texture(img, override=True)
+            # Face Map
+            elif 'facemap' in f_low or ('face' in f_low and 'lightmap' in f_low):
+                img = self._resolve_image(fname, image_files)
+                if img: self.set_facemap_texture(img)
+            # Face Expression
+            elif 'expressionmap' in f_low or 'expression' in f_low:
+                img = self._resolve_image(fname, image_files)
+                if img:
+                    face_material = bpy.data.materials.get(self.material_names.FACE)
+                    if face_material:
+                        self.set_face_expression_texture(face_material, img)
+            # Stockings
+            elif ('stockings' in f_low or 'stocking' in f_low) and not any(k in f_low for k in ['lut', 'materialid']):
+                img = self._resolve_image(fname, image_files)
+                if img:
+                    body_mat = bpy.data.materials.get(self.material_names.BODY) or \
+                               bpy.data.materials.get(self.material_names.BODY1) or \
+                               bpy.data.materials.get(self.material_names.BODY2) or \
+                               bpy.data.materials.get(f"{getattr(self.material_names, 'MATERIAL_PREFIX', '')}Body_Stockings")
+                    if body_mat:
+                        self.set_stocking_texture(TextureType.BODY, body_mat, img)
 
-                # Not Hair, so ramp must be Body
-                elif self.is_texture_identifiers_in_texture_name(['Cool_Ramp'], file):
-                    self.set_cool_shadow_ramp_texture(TextureType.BODY, img)
+    def import_textures(self, directory):
+        image_files = self._collect_image_files(directory)
+        json_map = self._build_hsr_json_texture_map(directory)
 
-                # Not Hair, so ramp must be Body. Only one ramp texture exists (no specific Warm or Cool ramp)
-                # TODO: Unknown uses, previously this was to handle Svarog, but was updated)
-                elif self.is_texture_identifiers_in_texture_name(['Ramp'], file) and \
-                    not self.is_texture_identifiers_in_texture_name(['Weapon'], file):
+        prefix = getattr(self.material_names, 'MATERIAL_PREFIX', '')
+        character_materials = []
+        for mat in bpy.data.materials:
+            if not mat.use_nodes:
+                continue
+            if 'outlines' in mat.name.lower() or 'outline' in mat.name.lower():
+                continue
+            if prefix and mat.name.startswith(prefix):
+                character_materials.append(mat)
 
-                    if self.is_texture_identifiers_in_texture_name(['Warm_Ramp'], file):
-                        self.set_warm_shadow_ramp_texture(TextureType.BODY, img)
-                    # TODO: RAMPS? Only supporting Warm Ramps for now
-                    # self.set_cool_shadow_ramp_texture(TextureType.BODY, img)
+        for obj in bpy.context.scene.objects:
+            if obj.type == 'MESH':
+                for slot in obj.material_slots:
+                    if slot.material and slot.material not in character_materials and 'outline' not in slot.material.name.lower():
+                        if prefix and slot.material.name.startswith(prefix):
+                            character_materials.append(slot.material)
 
-                elif self.is_texture_identifiers_in_texture_name(['Stockings'], file):
-                    if self.is_texture_identifiers_in_texture_name(['Body1'], file):
-                        self.set_stocking_texture(TextureType.BODY, body1_material, img)
-                    elif self.is_texture_identifiers_in_texture_name(['Body2'], file):
-                        self.set_stocking_texture(TextureType.BODY, body2_material, img)
-                    elif self.is_texture_identifiers_in_texture_name(['Body'], file):  # Must be AFTER Body1/Body2
-                        self.set_stocking_texture(TextureType.BODY, body_material, img)
+        for material in character_materials:
+            mat_low = material.name.lower()
+            orig_low = (material.get("_original_material_name") or "").lower()
 
-                elif self.is_texture_identifiers_in_texture_name(['Coat', 'Color'], file):
-                    self.set_diffuse_texture(TextureType.BODY, coat_material, img)
-                elif self.is_texture_identifiers_in_texture_name(['Coat', 'LightMap'], file):
-                    self.set_lightmap_texture(TextureType.BODY, coat_material, img)
+            if 'hair' in mat_low or 'hair' in orig_low:
+                tex_type = TextureType.HAIR
+            elif 'face' in mat_low or 'face' in orig_low:
+                tex_type = TextureType.FACE
+            elif any(k in mat_low or k in orig_low for k in ['weapon', 'handbag', 'kendama']):
+                tex_type = TextureType.WEAPON
+            else:
+                tex_type = TextureType.BODY
 
-                elif self.is_texture_identifiers_in_texture_name(['Face', 'Color'], file):
-                    self.set_diffuse_texture(TextureType.FACE, face_material, img)
+            diffuse_img = None
+            lightmap_img = None
 
-                # TODO: Review this whole block, NPC support is borrowed code from GI
-                elif self.is_texture_identifiers_in_texture_name(['FaceMap'], file) or \
-                    (self.is_texture_identifiers_in_texture_name(['NPC', 'Face', 'LightMap'], file) and
-                        not self.is_texture_identifiers_in_files(['FaceMap'], files)):
-                    # If Face Shadow exists, use that texture
-                    # If Face Shadow does not exist in this folder, use "Face Lightmap" (actually an NPC Face Shadow texture)
-                    self.set_facemap_texture(img)
+            # PRIORITY 1: Check existing texture on the material ("revisar en la textura del personaje del material que tiene actualmente")
+            current_tex = self._get_current_material_texture(material)
+            if current_tex:
+                diffuse_img = current_tex
+                self.set_diffuse_texture(tex_type, material, diffuse_img)
+                # Derive LightMap from this current texture ("y con eso sacar el lightmap y tal")
+                lightmap_img = self._find_matching_lightmap_for_texture(current_tex.name, image_files)
+                if lightmap_img:
+                    self.set_lightmap_texture(tex_type, material, lightmap_img)
 
-                elif self.is_texture_identifiers_in_texture_name(['Face_ExpressionMap'], file):
-                    self.set_face_expression_texture(face_material, img)
+            # PRIORITY 2: If NO texture on material, use JSON ("si esque no hubiera textura, usa el json para saber la textura y tal")
+            if not diffuse_img or not lightmap_img:
+                json_data = self._find_json_textures_for_material(material, json_map)
+                if json_data:
+                    if not diffuse_img and json_data.get('diffuse'):
+                        diffuse_img = self._resolve_image(json_data['diffuse'], image_files)
+                        if diffuse_img:
+                            self.set_diffuse_texture(tex_type, material, diffuse_img)
 
-                elif self.is_texture_identifiers_in_texture_name(['Weapon', 'Color'], file) and \
-                    not self.is_texture_identifiers_in_texture_name(['Screen'], file):  # Pela, Silverwolf
-                    for weapon_material in weapon_materials:
-                        if weapon_material:
-                            self.set_diffuse_texture(TextureType.WEAPON, weapon_material, img)
+                    if not lightmap_img and json_data.get('lightmap'):
+                        lightmap_img = self._resolve_image(json_data['lightmap'], image_files)
+                        if lightmap_img:
+                            self.set_lightmap_texture(tex_type, material, lightmap_img)
+                        elif diffuse_img:
+                            lightmap_img = self._find_matching_lightmap_for_texture(diffuse_img.name, image_files)
+                            if lightmap_img:
+                                self.set_lightmap_texture(tex_type, material, lightmap_img)
 
-                elif self.is_texture_identifiers_in_texture_name(['Weapon', 'LightMap'], file) or \
-                    self.is_texture_identifiers_in_texture_name(['Weapon', 'LigthMap'], file):  # Yes, intentional typo (Asta)
+                    # Ramps / Stockings / Maps from JSON
+                    if json_data.get('warm_ramp'):
+                        w_ramp = self._resolve_image(json_data['warm_ramp'], image_files)
+                        if w_ramp:
+                            self.set_warm_shadow_ramp_texture(tex_type, w_ramp)
+                            if tex_type == TextureType.BODY:
+                                self.set_weapon_ramp_texture(w_ramp)
 
-                    for weapon_material in weapon_materials:
-                        if weapon_material:
-                            self.set_lightmap_texture(TextureType.WEAPON, weapon_material, img)
+                    if json_data.get('cool_ramp'):
+                        c_ramp = self._resolve_image(json_data['cool_ramp'], image_files)
+                        if c_ramp:
+                            self.set_cool_shadow_ramp_texture(tex_type, c_ramp)
 
-                elif self.is_texture_identifiers_in_texture_name(['Weapon', 'Ramp'], file):
-                    # Set Weapon Ramp, if none exists use Body Ramp
-                    self.set_weapon_ramp_texture(img, override=True)
+                    if json_data.get('stockings'):
+                        stocking_img = self._resolve_image(json_data['stockings'], image_files)
+                        if stocking_img:
+                            self.set_stocking_texture(tex_type, material, stocking_img)
 
-                elif self.is_texture_identifiers_in_texture_name(['Handbag', 'Color'], file):
-                    self.set_diffuse_texture(TextureType.WEAPON, handbag_material, img)
-                
-                elif self.is_texture_identifiers_in_texture_name(['Handbag', 'Lightmap'], file):
-                    self.set_lightmap_texture(TextureType.WEAPON, handbag_material, img)
+                    if json_data.get('facemap'):
+                        fmap = self._resolve_image(json_data['facemap'], image_files)
+                        if fmap:
+                            self.set_facemap_texture(fmap)
 
-                elif self.is_texture_identifiers_in_texture_name(['Kendama', 'Color'], file):
-                    self.set_diffuse_texture(TextureType.WEAPON, kendama_material, img)
+                    if json_data.get('expression'):
+                        exp_map = self._resolve_image(json_data['expression'], image_files)
+                        if exp_map:
+                            self.set_face_expression_texture(material, exp_map)
 
-                elif self.is_texture_identifiers_in_texture_name(['Kendama', 'Lightmap'], file):
-                    self.set_lightmap_texture(TextureType.WEAPON, kendama_material, img)
+            # PRIORITY 3: Fallback heuristic scan if still missing diffuse or lightmap
+            if not diffuse_img or not lightmap_img:
+                part_kw = 'Hair' if tex_type == TextureType.HAIR else \
+                          'Face' if tex_type == TextureType.FACE else \
+                          'Weapon' if tex_type == TextureType.WEAPON else \
+                          'Body'
+                if 'body1' in mat_low: part_kw = 'Body1'
+                elif 'body2' in mat_low: part_kw = 'Body2'
+                elif 'body3' in mat_low: part_kw = 'Body3'
+                elif 'coat' in mat_low: part_kw = 'Coat'
+                elif 'handbag' in mat_low: part_kw = 'Handbag'
+                elif 'kendama' in mat_low: part_kw = 'Kendama'
 
-                # Dynamic match for any custom/variant materials (e.g. Body_D1, Body_Matcap, etc.)
-                else:
-                    matched = False
-                    for mat in bpy.data.materials:
-                        if mat.name.startswith(self.material_names.MATERIAL_PREFIX):
-                            part = mat.name.replace(self.material_names.MATERIAL_PREFIX, '')
-                            if part and len(part) >= 2 and part.lower() in file.lower():
-                                if any(k in file.lower() for k in ['color', 'diffuse']):
-                                    self.set_diffuse_texture(TextureType.BODY, mat, img)
-                                    matched = True
-                                elif 'lightmap' in file.lower():
-                                    self.set_lightmap_texture(TextureType.BODY, mat, img)
-                                    matched = True
-                    if not matched:
-                        print(f'WARN: Ignoring texture {file}')
+                if not diffuse_img:
+                    for fname, fpath in image_files:
+                        f_low = fname.lower()
+                        if part_kw.lower() in f_low and any(k in f_low for k in ['color', 'diffuse']) and not any(k in f_low for k in ['ramp', 'eff', 'lightmap', 'mask']):
+                            diffuse_img = self._resolve_image(fname, image_files)
+                            if diffuse_img:
+                                self.set_diffuse_texture(tex_type, material, diffuse_img)
+                                break
+
+                if not lightmap_img:
+                    if diffuse_img:
+                        lightmap_img = self._find_matching_lightmap_for_texture(diffuse_img.name, image_files)
+                    if not lightmap_img:
+                        for fname, fpath in image_files:
+                            f_low = fname.lower()
+                            if part_kw.lower() in f_low and any(k in f_low for k in ['lightmap', 'ligthmap', 'facemap']) and 'eff' not in f_low:
+                                lightmap_img = self._resolve_image(fname, image_files)
+                                if lightmap_img:
+                                    break
+                    if lightmap_img:
+                        self.set_lightmap_texture(tex_type, material, lightmap_img)
+
+        # Global Pass: Character Ramps, Stockings, Face Maps
+        self._assign_global_character_textures(image_files, json_map)
+
+        # Synchronize categories & set color spaces on all materials
+        for material in character_materials:
+            sync_material_category_textures(material)
 
 
 

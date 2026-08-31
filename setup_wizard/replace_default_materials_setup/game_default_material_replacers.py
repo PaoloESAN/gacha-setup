@@ -221,6 +221,12 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 # if genshin_material.name != f'miHoYo - Genshin Face':
                 #     genshin_main_shader_node = genshin_material.node_tree.nodes.get('Group.001')
                 #     genshin_main_shader_node.node_tree = self.__clone_shader_node_and_rename(genshin_material, mesh_body_part_name)
+        try:
+            from setup_wizard.ui.gi_ui_setup_wizard_menu import sync_genshin_shader_properties
+            sync_genshin_shader_properties()
+        except Exception as e_sync:
+            print(f"[GI MATERIALS] Notice syncing shader properties: {e_sync}")
+
         self.blender_operator.report({'INFO'}, 'Replaced default materials with Genshin shader materials...')
 
     def create_shader_material_if_unique_mesh(self, mesh, mesh_body_part_name, material_name):
@@ -571,7 +577,7 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             for node in new_material.node_tree.nodes:
                 if node.type == 'TEX_IMAGE':
                     n_low = (node.name + " " + (node.label or "")).lower()
-                    if any(k in n_low for k in ['diffuse', 'color', 'srgb']) and not any(k in n_low for k in ['lightmap', 'ramp', 'normal', 'mask']):
+                    if any(k in n_low for k in ['diffuse', 'color', 'srgb', '画像テクスチャ']) and not any(k in n_low for k in ['lightmap', 'ramp', 'normal', 'mask']):
                         diffuse_nodes.append(node)
         for node in diffuse_nodes:
             node.image = old_image
@@ -640,6 +646,13 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 honkai_star_rail_material = bpy.data.materials.get(material_name)
 
                 if honkai_star_rail_material:
+                    if material_slot.material:
+                        honkai_star_rail_material["_original_material_name"] = material_slot.material.name
+                        if material_slot.material.use_nodes and material_slot.material.node_tree:
+                            for node in material_slot.material.node_tree.nodes:
+                                if node.type == 'TEX_IMAGE' and node.image and node.image.name:
+                                    honkai_star_rail_material["_original_fbx_texture"] = node.image.name
+                                    break
                     self.__transfer_diffuse_texture(material_slot.material, honkai_star_rail_material)
                     material_slot.material = honkai_star_rail_material
                 else:
@@ -648,10 +661,11 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         self.blender_operator.report({'INFO'}, 'Replaced default materials with Genshin shader materials...')
 
     def find_body_part_name(self, material_name):
+        if material_name.startswith('Eff_') or 'Eff_' in material_name or material_name.startswith('Effect_'):
+            return material_name
+
         if '_Mat_' in material_name:
             suffix = material_name.split('_Mat_')[1]
-            if suffix.endswith('_D') or suffix.endswith('_S'):
-                return suffix[:-2]
             return suffix
 
         expected_format_body_part_name = self.__expected_format_body_part_name_search(material_name)
@@ -1025,7 +1039,17 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     if target_mat_name:
                         template_mat = bpy.data.materials.get(target_mat_name)
                         if template_mat:
+                            orig_tex_name = None
+                            if mat and mat.node_tree:
+                                for n in mat.node_tree.nodes:
+                                    if n.type == 'TEX_IMAGE' and n.image and n.image.name:
+                                        orig_tex_name = n.image.name
+                                        break
                             new_mat = template_mat.copy()
+                            if orig_tex_name:
+                                new_mat["_original_fbx_texture"] = orig_tex_name
+                            if mat and mat.name:
+                                new_mat["_original_material_name"] = mat.name
                             name_base = mat.name if mat else mesh.name
                             new_mat.name = f"ZZZ Shader {name_base}"
                             new_mat.use_fake_user = True
@@ -1038,9 +1062,12 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 if any(k in m_lower for k in ["weapon", "wpn", "equip", "sword", "blade", "spear", "lance", "gun", "prop"]):
                     for slot in mesh.material_slots:
                         if not slot.material and main_weapon_mat:
-                            slot.material = main_weapon_mat
+                            new_mat = main_weapon_mat.copy()
+                            new_mat.name = f"ZZZ Shader {mesh.name}"
+                            new_mat.use_fake_user = True
+                            slot.material = new_mat
 
-            self.blender_operator.report({'INFO'}, "Replaced default materials with Legacy ZZZ Shader materials...")
+            self.blender_operator.report({'INFO'}, "Replaced default materials with ZZZ Shader materials...")
 
         else:
             # --- KYTHERA SHADER REPLACEMENT ---
@@ -1110,7 +1137,18 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     template_mat = face_template if is_face else shader_template
 
                     if template_mat:
+                        orig_tex_name = None
+                        if mat and mat.node_tree:
+                            for n in mat.node_tree.nodes:
+                                if n.type == 'TEX_IMAGE' and n.image and n.image.name:
+                                    orig_tex_name = n.image.name
+                                    break
+
                         new_mat = template_mat.copy()
+                        if orig_tex_name:
+                            new_mat["_original_fbx_texture"] = orig_tex_name
+                        if mat and mat.name:
+                            new_mat["_original_material_name"] = mat.name
                         
                         # Ensure meaningful name preserving mesh context (e.g. Wing, Dress, Leg, Hair, Body)
                         if mat and mat.name and not mat.name.lower().startswith(("material", "default", "node", "untitled")):
@@ -2144,12 +2182,13 @@ class WutheringWavesDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     target_mat["ww_base_part"] = base_part
                     slot.material = target_mat
 
-                    # If material name or original name contains / ends with 'Alpha', unmute Alpha Transparency node
+                    # If material name or original name contains / ends with 'Alpha' or is Fur, unmute Alpha Transparency node
                     is_alpha = any(
                         k in orig_mat_name.lower() or k in base_part.lower() or k in target_mat.name.lower()
-                        for k in ["alpha", "touming", "transparency"]
+                        for k in ["alpha", "touming", "transparency", "fur", "flur"]
                     )
                     if is_alpha and target_mat.node_tree:
+                        target_mat["ww_is_alpha_material"] = True
                         for n in target_mat.node_tree.nodes:
                             if (n.type == 'GROUP' and n.node_tree and "alpha transparency" in n.node_tree.name.lower()) or "alpha transparency" in n.name.lower():
                                 n.mute = False

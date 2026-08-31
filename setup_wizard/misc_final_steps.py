@@ -43,6 +43,12 @@ class GI_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties
                 game_type=self.game_type,
             )
 
+        try:
+            from setup_wizard.ui.gi_ui_setup_wizard_menu import sync_genshin_shader_properties
+            sync_genshin_shader_properties(context.scene)
+        except Exception as e_sync:
+            print(f"[GI FINISH] Notice syncing shader properties: {e_sync}")
+
         return result
 
 
@@ -183,6 +189,59 @@ class WW_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties
             setup_wuwa_compositor_nodes(context)
         except Exception as e_comp:
             print(f"[WUWA FINISH] Notice setting up compositor nodes: {e_comp}")
+
+        # Move all objects from default 'Collection' into the character's collection and remove empty 'Collection'
+        char_coll = None
+        for coll in bpy.data.collections:
+            if coll.name not in ("Collection", "Master Collection", "Scene Collection") and not coll.name.startswith("WGTS"):
+                if any(obj.type in ("ARMATURE", "MESH") for obj in coll.objects):
+                    char_coll = coll
+                    break
+
+        if char_coll:
+            main_coll = bpy.data.collections.get("Collection")
+            if main_coll and main_coll != char_coll:
+                for child_c in list(main_coll.children):
+                    if child_c != char_coll:
+                        if child_c.name not in context.scene.collection.children:
+                            context.scene.collection.children.link(child_c)
+                        try:
+                            main_coll.children.unlink(child_c)
+                        except Exception:
+                            pass
+                for obj_c in list(main_coll.objects):
+                    if obj_c.name not in char_coll.objects:
+                        char_coll.objects.link(obj_c)
+                    try:
+                        main_coll.objects.unlink(obj_c)
+                    except Exception:
+                        pass
+                try:
+                    context.scene.collection.children.unlink(main_coll)
+                except Exception:
+                    pass
+                try:
+                    bpy.data.collections.remove(main_coll, do_unlink=True)
+                except Exception:
+                    pass
+
+        # Delete rogue Cube objects and duplicate .001 control objects
+        for obj in list(bpy.data.objects):
+            if obj.name.lower().startswith("cube") and obj.type == 'MESH':
+                if not any(k in obj.name.lower() for k in ["body", "cloth", "face", "hair", "eye", "head"]):
+                    try:
+                        bpy.data.objects.remove(obj, do_unlink=True)
+                    except Exception:
+                        pass
+
+        for base_name in ['Head Origin', 'Head Forward', 'Head Up', 'Light Direction', 'Sun', 'Eye Highlight', 'Highlight Top', 'Highlight Bottom']:
+            orig_obj = bpy.data.objects.get(base_name)
+            for obj in list(bpy.data.objects):
+                if obj != orig_obj and (obj.name.startswith(f"{base_name}.") or (base_name.lower() in obj.name.lower() and ('.00' in obj.name or '.01' in obj.name))):
+                    try:
+                        bpy.data.objects.remove(obj, do_unlink=True)
+                    except Exception:
+                        pass
 
         # Remove any extra scenes created during append or setup
         current_scene = context.scene

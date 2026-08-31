@@ -391,8 +391,8 @@ class HonkaiStarRailOutlineTextureImporter(OutlineTextureImporter):
             return {'FINISHED'}
 
         for name, folder, files in os.walk(character_model_folder_file_path):
-            color_files = [file for file in files if 'Color'.lower() in file.lower()]
-            lightmap_files = [file for file in files if 'LightMap'.lower() in file.lower() or 'FaceMap' in file.lower() or 'LigthMap'.lower() in file.lower()]  # that Lightmap typo is on purpose
+            color_files = [file for file in files if 'Color'.lower() in file.lower() and 'ramp' not in file.lower() and 'eff' not in file.lower()]
+            lightmap_files = [file for file in files if ('LightMap'.lower() in file.lower() or 'FaceMap' in file.lower() or 'LigthMap'.lower() in file.lower()) and 'eff' not in file.lower()]
             outline_materials = [material for material in bpy.data.materials.values() if 'outlines' in material.name.lower() and material.name != self.shader_material_names.OUTLINES]
 
             for outline_material in outline_materials:
@@ -422,61 +422,76 @@ class HonkaiStarRailOutlineTextureImporter(OutlineTextureImporter):
     def assign_lightmap_texture(self, character_model_folder_file_path, lightmap_files, body_part_material_name, actual_material_part_name):
         outline_material = bpy.data.materials.get(
             f'{self.shader_material_names.MATERIAL_PREFIX}{body_part_material_name} Outlines')
+        if not outline_material:
+            return
         texture_type = TextureType.HAIR if 'Hair' in body_part_material_name else TextureType.BODY
 
-        # Genshin Note: Unable to determine between character/equipment textures for Monsters w/ equipment in same folder
-        lightmap_filenames = [file for file in lightmap_files if actual_material_part_name in file]
-        if not lightmap_filenames:
-            print(f'Warn: Did not find lightmap for {actual_material_part_name} in {lightmap_files} when setting up outline textures. Falling back to base material.')
-            base_material = bpy.data.materials.get(f'{self.shader_material_names.MATERIAL_PREFIX}{body_part_material_name}')
-            shader_identifier_service = ShaderIdentifierServiceFactory.create(self.blender_operator.game_type)
-            shader = shader_identifier_service.identify_shader(bpy.data.materials, bpy.data.node_groups)
-            lightmap_node_name = shader_identifier_service.get_shader_texture_node_names(shader).LIGHTMAP
-            if base_material and base_material.use_nodes:
-                base_lightmap_node = base_material.node_tree.nodes.get(lightmap_node_name)
-                if base_lightmap_node and base_lightmap_node.image:
-                    hsr_texture_importer = TextureImporterFactory.create(TextureImporterType.HSR_AVATAR, GameType.HONKAI_STAR_RAIL)
-                    hsr_texture_importer.set_lightmap_texture(texture_type, outline_material, base_lightmap_node.image)
-            return
-        lightmap_filename = lightmap_filenames[0]
+        # 1. Prioritize copying lightmap directly from base material
+        base_material = bpy.data.materials.get(f'{self.shader_material_names.MATERIAL_PREFIX}{body_part_material_name}')
+        if not base_material:
+            base_material = next((m for m in bpy.data.materials if body_part_material_name.lower() in m.name.lower() and 'outlines' not in m.name.lower()), None)
 
-        texture_img_path = os.path.normpath(os.path.join(character_model_folder_file_path, lightmap_filename))
-        texture_img = bpy.data.images.get(lightmap_filename)
-        if not texture_img:
-            texture_img = bpy.data.images.load(filepath=texture_img_path, check_existing=True)
-        texture_img.alpha_mode = 'CHANNEL_PACKED'
-
+        shader_identifier_service = ShaderIdentifierServiceFactory.create(self.blender_operator.game_type)
+        shader = shader_identifier_service.identify_shader(bpy.data.materials, bpy.data.node_groups)
+        lightmap_node_name = shader_identifier_service.get_shader_texture_node_names(shader).LIGHTMAP
         hsr_texture_importer = TextureImporterFactory.create(TextureImporterType.HSR_AVATAR, GameType.HONKAI_STAR_RAIL)
-        hsr_texture_importer.set_lightmap_texture(texture_type, outline_material, texture_img)
+
+        if base_material and base_material.use_nodes:
+            base_lightmap_node = base_material.node_tree.nodes.get(lightmap_node_name)
+            if not base_lightmap_node:
+                lm_nodes = find_texture_nodes(base_material.node_tree, [lightmap_node_name, 'Lightmap', 'Main_Lightmap', '画像テクスチャ.001', 'Image Texture.002'])
+                base_lightmap_node = next((n for n in lm_nodes if n.image), None)
+            if base_lightmap_node and base_lightmap_node.image:
+                hsr_texture_importer.set_lightmap_texture(texture_type, outline_material, base_lightmap_node.image)
+                return
+
+        # 2. Fallback: search lightmap in lightmap_files
+        lightmap_filenames = [file for file in lightmap_files if actual_material_part_name in file or body_part_material_name in file]
+        if lightmap_filenames:
+            lightmap_filename = lightmap_filenames[0]
+            texture_img_path = os.path.normpath(os.path.join(character_model_folder_file_path, lightmap_filename))
+            texture_img = bpy.data.images.get(lightmap_filename)
+            if not texture_img:
+                texture_img = bpy.data.images.load(filepath=texture_img_path, check_existing=True)
+            texture_img.alpha_mode = 'CHANNEL_PACKED'
+            hsr_texture_importer.set_lightmap_texture(texture_type, outline_material, texture_img)
 
     def assign_diffuse_texture(self, character_model_folder_file_path, diffuse_files, body_part_material_name, actual_material_part_name):
         outline_material = bpy.data.materials.get(
             f'{self.shader_material_names.MATERIAL_PREFIX}{body_part_material_name} Outlines')
+        if not outline_material:
+            return
         texture_type = TextureType.HAIR if 'Hair' in body_part_material_name else TextureType.BODY
 
-        diffuse_filenames = [file for file in diffuse_files if actual_material_part_name in file]
-        if not diffuse_filenames:
-            print(f'Warn: Did not find diffuse for {actual_material_part_name} in {diffuse_files} when setting up outline textures. Falling back to base material.')
-            base_material = bpy.data.materials.get(f'{self.shader_material_names.MATERIAL_PREFIX}{body_part_material_name}')
-            shader_identifier_service = ShaderIdentifierServiceFactory.create(self.blender_operator.game_type)
-            shader = shader_identifier_service.identify_shader(bpy.data.materials, bpy.data.node_groups)
-            diffuse_node_name = shader_identifier_service.get_shader_texture_node_names(shader).DIFFUSE
-            if base_material and base_material.use_nodes:
-                base_diffuse_node = base_material.node_tree.nodes.get(diffuse_node_name)
-                if base_diffuse_node and base_diffuse_node.image:
-                    hsr_texture_importer = TextureImporterFactory.create(TextureImporterType.HSR_AVATAR, GameType.HONKAI_STAR_RAIL)
-                    hsr_texture_importer.set_diffuse_texture(texture_type, outline_material, base_diffuse_node.image)
-            return
-        diffuse_filename = diffuse_filenames[0]
+        # 1. Prioritize copying diffuse directly from base material
+        base_material = bpy.data.materials.get(f'{self.shader_material_names.MATERIAL_PREFIX}{body_part_material_name}')
+        if not base_material:
+            base_material = next((m for m in bpy.data.materials if body_part_material_name.lower() in m.name.lower() and 'outlines' not in m.name.lower()), None)
 
-        texture_img_path = os.path.normpath(os.path.join(character_model_folder_file_path, diffuse_filename))
-        texture_img = bpy.data.images.get(diffuse_filename)
-        if not texture_img:
-            texture_img = bpy.data.images.load(filepath=texture_img_path, check_existing=True)
-        texture_img.alpha_mode = 'CHANNEL_PACKED'
-
+        shader_identifier_service = ShaderIdentifierServiceFactory.create(self.blender_operator.game_type)
+        shader = shader_identifier_service.identify_shader(bpy.data.materials, bpy.data.node_groups)
+        diffuse_node_name = shader_identifier_service.get_shader_texture_node_names(shader).DIFFUSE
         hsr_texture_importer = TextureImporterFactory.create(TextureImporterType.HSR_AVATAR, GameType.HONKAI_STAR_RAIL)
-        hsr_texture_importer.set_diffuse_texture(texture_type, outline_material, texture_img)
+
+        if base_material and base_material.use_nodes:
+            base_diffuse_node = base_material.node_tree.nodes.get(diffuse_node_name)
+            if not base_diffuse_node:
+                diff_nodes = find_texture_nodes(base_material.node_tree, [diffuse_node_name, 'Diffuse', 'Main_Diffuse', '画像テクスチャ', 'Image Texture.001'])
+                base_diffuse_node = next((n for n in diff_nodes if n.image), None)
+            if base_diffuse_node and base_diffuse_node.image:
+                hsr_texture_importer.set_diffuse_texture(texture_type, outline_material, base_diffuse_node.image)
+                return
+
+        # 2. Fallback: search diffuse in diffuse_files
+        diffuse_filenames = [file for file in diffuse_files if actual_material_part_name in file or body_part_material_name in file]
+        if diffuse_filenames:
+            diffuse_filename = diffuse_filenames[0]
+            texture_img_path = os.path.normpath(os.path.join(character_model_folder_file_path, diffuse_filename))
+            texture_img = bpy.data.images.get(diffuse_filename)
+            if not texture_img:
+                texture_img = bpy.data.images.load(filepath=texture_img_path, check_existing=True)
+            texture_img.alpha_mode = 'CHANNEL_PACKED'
+            hsr_texture_importer.set_diffuse_texture(texture_type, outline_material, texture_img)
 
 
 class PunishingGrayRavenOutlineTextureImporter(OutlineTextureImporter):

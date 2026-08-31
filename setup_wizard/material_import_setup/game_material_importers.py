@@ -712,12 +712,37 @@ class WutheringWavesMaterialImporterFacade(GameMaterialImporter):
             except Exception as e_obj:
                 print(f"Notice appending WuWa control objects: {e_obj}")
 
-            # Ensure all control objects are linked to current collection
-            coll = self.context.scene.collection
+            # Delete helper / placeholder Cube objects from blend template
+            for obj in list(bpy.data.objects):
+                if obj.name.lower().startswith("cube") and obj.type == 'MESH':
+                    if not any(k in obj.name.lower() for k in ["body", "cloth", "face", "hair", "eye", "head"]):
+                        try:
+                            bpy.data.objects.remove(obj, do_unlink=True)
+                        except Exception:
+                            pass
+
+            # Find character collection created by uemodel/import
+            char_coll = None
+            for c in bpy.data.collections:
+                if c.name not in ("Collection", "Master Collection", "Scene Collection") and not c.name.startswith("WGTS"):
+                    if any(o.type in ('MESH', 'ARMATURE') for o in c.objects):
+                        char_coll = c
+                        break
+            if not char_coll:
+                char_coll = self.context.scene.collection
+
+            # Ensure all control objects are linked to character collection
             for obj_info in self.WUWA_CONTROL_OBJECTS:
                 o = bpy.data.objects.get(obj_info['name'])
-                if o and o.name not in coll.objects and not o.users_collection:
-                    coll.objects.link(o)
+                if o:
+                    if o.name not in char_coll.objects:
+                        char_coll.objects.link(o)
+                    for c in list(o.users_collection):
+                        if c != char_coll and not c.name.startswith("WGTS"):
+                            try:
+                                c.objects.unlink(o)
+                            except Exception:
+                                pass
 
             # Parent child controls to Head Origin
             head_origin = bpy.data.objects.get('Head Origin')
@@ -737,22 +762,23 @@ class WutheringWavesMaterialImporterFacade(GameMaterialImporter):
                         hl_child.parent = eye_highlight
                         hl_child.matrix_parent_inverse = eye_highlight.matrix_world.inverted()
 
-        # Clean duplicate empties (.001, .002)
-        orig_head = bpy.data.objects.get('Head Origin')
-        orig_light = bpy.data.objects.get('Light Direction')
+        # Clean duplicate empties (.001, .002) and delete any rogue Cube objects
+        for base_name in ['Head Origin', 'Head Forward', 'Head Up', 'Light Direction', 'Sun', 'Eye Highlight', 'Highlight Top', 'Highlight Bottom']:
+            orig_obj = bpy.data.objects.get(base_name)
+            for obj in list(bpy.data.objects):
+                if obj != orig_obj and (obj.name.startswith(f"{base_name}.") or (base_name.lower() in obj.name.lower() and ('.00' in obj.name or '.01' in obj.name))):
+                    try:
+                        bpy.data.objects.remove(obj, do_unlink=True)
+                    except Exception:
+                        pass
+
         for obj in list(bpy.data.objects):
-            try:
-                name_low = obj.name.lower()
-                has_suffix = '.00' in obj.name or '.01' in obj.name
-                if has_suffix:
-                    if any(k in name_low for k in ['head origin', 'head forward', 'head up', 'highlight top', 'highlight bottom']):
-                        if orig_head and obj != orig_head:
-                            bpy.data.objects.remove(obj, do_unlink=True)
-                    elif any(k in name_low for k in ['light direction', 'sun']):
-                        if orig_light and obj != orig_light:
-                            bpy.data.objects.remove(obj, do_unlink=True)
-            except Exception:
-                pass
+            if obj.name.lower().startswith("cube") and obj.type == 'MESH':
+                if not any(k in obj.name.lower() for k in ["body", "cloth", "face", "hair", "eye", "head"]):
+                    try:
+                        bpy.data.objects.remove(obj, do_unlink=True)
+                    except Exception:
+                        pass
 
         if self.blender_operator:
             cache_enabled = self.context.window_manager.cache_enabled

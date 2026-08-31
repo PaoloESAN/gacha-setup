@@ -47,6 +47,7 @@ class WW_PT_Setup_Wizard_UI_Layout(Panel, WutheringWavesUIRenderChecker):
         sliders_col.active = enable_physics
         sliders_col.prop(props, "hair_physics_influence", text="Hair", slider=True)
         sliders_col.prop(props, "clothes_physics_influence", text="Clothes", slider=True)
+        settings_col.prop(props, "disable_rigging", text="Disable Rigging")
 
 
 class WW_PT_Basic_Setup_Wizard_UI_Layout(Panel, WutheringWavesUIRenderChecker):
@@ -329,8 +330,35 @@ class WW_PT_Rig_Character_Settings(Panel):
         # 4. Toggle Resonator Star
         layout.operator("wuthering_waves.toggle_star_motion", text="Toggle Resonator Star", icon="LIGHT_SUN")
 
-        # 5. Alpha Transparency (Animatable checkbox)
+        # 5. Use Fresnel
+        col_fresnel = layout.column(align=True)
+        col_fresnel.prop(scene, "ww_use_fresnel", text="Use Fresnel")
+        if getattr(scene, "ww_use_fresnel", False):
+            box_fr = col_fresnel.box()
+            box_fr.label(text="Fresnel Options", icon="SHADING_RENDERED")
+            col_fr_props = box_fr.column(align=True)
+            col_fr_props.prop(scene, "ww_fresnel_color", text="Fresnel Color")
+            col_fr_props.prop(scene, "ww_fresnel_scale", text="Fresnel Scale")
+            col_fr_props.prop(scene, "ww_fresnel_strength", text="Fresnel Strength")
+
+        # 6. Alpha Transparency (Animatable checkbox)
         layout.prop(scene, "ww_alpha_transparency", text="Alpha Transparency")
+
+        # 7. Outlines Mode (Default / Custom)
+        col_ol = layout.column(align=True)
+        col_ol.label(text="Outlines:")
+        col_ol.prop(scene, "ww_outline_mode", text="")
+
+        # Custom Outline Colors when Outlines Mode is Custom
+        if getattr(scene, "ww_outline_mode", "DEFAULT") == "CUSTOM":
+            box_ol = col_ol.box()
+            box_ol.label(text="Custom Outline Colors", icon="COLOR")
+            col_ol_colors = box_ol.column(align=True)
+            col_ol_colors.prop(scene, "ww_outline_color_1", text="Outline Color 1")
+            col_ol_colors.prop(scene, "ww_outline_color_2", text="Outline Color 2")
+
+        # 8. Outline Thickness Slider
+        layout.prop(scene, "ww_outline_thickness", text="Outline Thickness", slider=True)
 
         # --- Other controls commented out ---
         # layout.prop(scene, "ww_metallic_value", text="Metallics", slider=True)

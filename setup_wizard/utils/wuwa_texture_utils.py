@@ -27,6 +27,7 @@ TEXTURE_TYPE_MAPPINGS_JAREDNYTS = {
     "_RGID": ("RGID",),
     "_FX": ("FX Texture",),
     "_Skin": ("Skin",),
+    "_LD": ("Texture_LD", "LD Texture", "LD", "Texture_LD(sRGB) (Channel Packed)"),
 }
 
 _MODEL_PREFIX_PATTERNS = [
@@ -320,6 +321,10 @@ def classify_wuwa_json_texture(param_name: str, tex_file_stem: str, is_hair_or_b
     if not is_star_material and any(k in tex_low for k in ["star", "xingstar", "shakenoise", "soundnoise"]):
         return None
 
+    # Ignore fur noise masks for diffuse
+    if "fur" in tex_low and not any(k in tex_low for k in ["_d", "cloth"]):
+        return None
+
     # HET (Hair-Eye Transparency / Face HET / Eye HET)
     if "het" in tex_low or "heta" in tex_low or "het" in stem_low:
         if param_low in ["mask", "het", "heta", "ishet"] or "het" in tex_low or "heta" in tex_low:
@@ -328,15 +333,21 @@ def classify_wuwa_json_texture(param_name: str, tex_file_stem: str, is_hair_or_b
     # Base Color / Diffuse (_D)
     if param_low in ["maintex", "basecolor", "diffuse"]:
         return "_D"
-    if param_low == "d" and not any(k in tex_low for k in ["noise", "mc_", "matcap"]):
+    if param_low == "d" and not any(k in tex_low for k in ["noise", "mc_", "matcap", "fur"]):
         return "_D"
-    if param_low == "pm_diffuse" and not any(k in tex_low for k in ["_mc_", "matcap", "cubemap", "shakenoise", "soundnoise", "premake", "noise"]):
+    if param_low == "pm_diffuse" and not any(k in tex_low for k in ["_mc_", "matcap", "cubemap", "shakenoise", "soundnoise", "premake", "noise", "fur"]):
         return "_D"
-    if tex_low.endswith("_d") and not any(k in tex_low for k in ["_mc_", "matcap", "cubemap", "shakenoise", "soundnoise", "premake", "noise"]):
+    if tex_low.endswith("_d") and not any(k in tex_low for k in ["_mc_", "matcap", "cubemap", "shakenoise", "soundnoise", "premake", "noise", "fur"]):
         return "_D"
 
     # Normal Map (_N)
-    if param_low in ["pm_normals", "normal_roughness_metallic", "normal", "normals", "normalmap"] or tex_low.endswith("_n"):
+    if param_low == "normal_roughness_metallic":
+        return "_N"
+    if tex_low.endswith("_n") and not "flowmap" in tex_low:
+        return "_N"
+    if param_low in ["pm_normals", "normal", "normals", "normalmap"]:
+        return "_N"
+    if tex_low.endswith("_n"):
         return "_N"
 
     # Mask ID / TypeMask (_ID)
@@ -372,6 +383,87 @@ def classify_wuwa_json_texture(param_name: str, tex_file_stem: str, is_hair_or_b
         return "_FX"
 
     return None
+
+
+def check_material_has_metallic(scalars: dict, switches: dict) -> bool:
+    if switches.get("UseMetal", False) or switches.get("UseMetallic", False):
+        return True
+    for k, v in scalars.items():
+        k_low = k.lower()
+        if "nonmetallic" in k_low or "non_metallic" in k_low or "useid" in k_low or "specular" in k_low:
+            continue
+        if "metallic" in k_low or k_low == "metal":
+            if isinstance(v, (int, float)) and v > 0.001:
+                return True
+    return False
+
+
+def load_wuwa_json_material_parameters(folder: str) -> Dict[str, Dict[str, Any]]:
+    """
+    Parses all MI_*.json files in folder and extracts shader parameters (metallic, normal, emission, alpha, etc.).
+    Returns: { mat_key: { 'has_metallic': bool, 'use_normal': bool, 'normal_strength': float, 'use_emission': bool, 'is_alpha': bool, ... } }
+    """
+    import json
+    results: Dict[str, Dict[str, Any]] = {}
+    if not folder or not os.path.isdir(folder):
+        return results
+
+    json_files = []
+    for root, _, files in os.walk(folder):
+        for f in files:
+            if f.lower().endswith(".json") and f.startswith("MI_"):
+                json_files.append((root, f))
+
+    for root, f in json_files:
+        fpath = os.path.join(root, f)
+        try:
+            with open(fpath, "r", encoding="utf-8") as jf:
+                data = json.load(jf)
+            params = data.get("Parameters", {})
+            switches = params.get("Switches", {})
+            scalars = params.get("Scalars", {})
+            colors = params.get("Colors", {})
+            base_props = params.get("Properties", {}).get("BasePropertyOverrides", {})
+
+            stem = os.path.splitext(f)[0]
+            base_part, version = split_material_name(stem)
+
+            has_metal = check_material_has_metallic(scalars, switches)
+            use_normal = switches.get("UseNormalMap", True)
+            normal_str = float(scalars.get("NormalStrength", 1.0))
+            use_emission = (
+                switches.get("UseBreathLight", False)
+                or switches.get("UseEffectMaterial", False)
+                or switches.get("UseEmissive", False)
+                or (scalars.get("EmissionStrength", 0) > 0)
+                or (scalars.get("BreatheStrength", 0) > 0)
+            )
+
+            entry = {
+                "stem": stem,
+                "base_part": base_part,
+                "version": version,
+                "has_metallic": has_metal,
+                "use_normal": use_normal,
+                "normal_strength": normal_str,
+                "use_emission": use_emission,
+                "switches": switches,
+                "scalars": scalars,
+                "colors": colors,
+            }
+
+            results[stem.lower()] = entry
+            if base_part:
+                bp_low = base_part.lower()
+                if bp_low not in results:
+                    results[bp_low] = entry
+                ver_key = f"{base_part}{version}".lower()
+                if ver_key not in results:
+                    results[ver_key] = entry
+        except Exception as e:
+            print(f"[WuWa JSON Parameters] Error parsing {f}: {e}")
+
+    return results
 
 
 def load_wuwa_json_mappings(folder: str) -> Dict[str, Dict[str, str]]:
@@ -441,6 +533,13 @@ def load_wuwa_json_mappings(folder: str) -> Dict[str, Dict[str, str]]:
                             parsed_texs["_D"] = matched_fname
                         elif tex_key.lower() in ["maintex", "basecolor"]:
                             parsed_texs["_D"] = matched_fname
+                    elif slot == "_N":
+                        if "_N" not in parsed_texs:
+                            parsed_texs["_N"] = matched_fname
+                        elif "flowmap" in parsed_texs["_N"].lower() and "flowmap" not in matched_fname.lower():
+                            parsed_texs["_N"] = matched_fname
+                        elif tex_key.lower() == "normal_roughness_metallic":
+                            parsed_texs["_N"] = matched_fname
                     else:
                         parsed_texs[slot] = matched_fname
 
