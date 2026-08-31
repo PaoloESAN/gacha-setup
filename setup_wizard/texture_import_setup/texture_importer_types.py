@@ -742,7 +742,6 @@ class GenshinTextureImporter:
         """
         candidates = [
             os.path.join(directory, "Materials"),
-            os.path.join(os.path.dirname(directory), "Materials"),
             directory
         ]
         materials_dir = None
@@ -2099,8 +2098,6 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
         candidates = [
             directory,
             os.path.join(directory, "Textures"),
-            os.path.join(os.path.dirname(directory), "Textures"),
-            os.path.dirname(directory),
         ]
         seen_paths = set()
         image_files = []
@@ -2121,10 +2118,13 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
         if not tex_name:
             return None
 
+        # Check if an existing image with the same name actually belongs to the character folder
         existing_img = bpy.data.images.get(tex_name)
         if existing_img and (existing_img.has_data or (hasattr(existing_img, 'filepath') and existing_img.filepath)):
-            existing_img.alpha_mode = 'CHANNEL_PACKED'
-            return existing_img
+            img_fp = getattr(existing_img, 'filepath', '')
+            if img_fp and any(os.path.samefile(img_fp, fp) for _, fp in image_files if os.path.exists(img_fp) and os.path.exists(fp)):
+                existing_img.alpha_mode = 'CHANNEL_PACKED'
+                return existing_img
 
         t_clean = os.path.splitext(tex_name)[0].strip()
         t_low = t_clean.lower()
@@ -2167,9 +2167,7 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
     def _build_hsr_json_texture_map(self, directory):
         candidates = [
             os.path.join(directory, "Materials"),
-            os.path.join(os.path.dirname(directory), "Materials"),
             directory,
-            os.path.dirname(directory),
         ]
         materials_dirs = []
         for d in candidates:

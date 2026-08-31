@@ -502,7 +502,6 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         candidates_dirs = [
             folder,
             os.path.join(folder, "Materials"),
-            os.path.join(os.path.dirname(folder), "Materials"),
         ]
         
         materials_dir = None
@@ -518,10 +517,6 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                 sub = os.path.join(folder, "Textures")
                 if os.path.isdir(sub):
                     tex_dir = sub
-                else:
-                    sub = os.path.join(os.path.dirname(folder), "Textures")
-                    if os.path.isdir(sub):
-                        tex_dir = sub
 
         if not materials_dir or not os.path.isdir(tex_dir):
             return {}, tex_dir
