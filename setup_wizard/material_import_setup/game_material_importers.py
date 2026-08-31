@@ -145,7 +145,6 @@ class GenshinImpactMaterialImporterFacade(GameMaterialImporter):
         {'name': V3_BonnyFestivityGenshinImpactMaterialNames.OUTLINES},
         {'name': V3_BonnyFestivityGenshinImpactMaterialNames.PUPIL},
         {'name': V3_BonnyFestivityGenshinImpactMaterialNames.NEW_PUPIL},
-        {'name': V3_BonnyFestivityGenshinImpactMaterialNames.SANDRONE_PUPIL},
         {'name': V4_PrimoToonGenshinImpactMaterialNames.VFX},
     ]
     OUTLINES_FILE_PATH = GENSHIN_IMPACT_OUTLINES_FILE_PATH

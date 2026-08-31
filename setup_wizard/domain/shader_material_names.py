@@ -102,7 +102,6 @@ class V3_BonnyFestivityGenshinImpactMaterialNames(ShaderMaterialNames):
     OUTLINES = f'{MATERIAL_PREFIX}Outlines'
     PUPIL = f'{MATERIAL_PREFIX}Pupil'
     NEW_PUPIL = f'{MATERIAL_PREFIX}New Pupil'
-    SANDRONE_PUPIL = f'{MATERIAL_PREFIX}Sandrone pupil'
     SKILLOBJ = f'{MATERIAL_PREFIX}SkillObj'
     SKIRT = f'{MATERIAL_PREFIX}Skirt'
 

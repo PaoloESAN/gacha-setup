@@ -837,7 +837,13 @@ class GenshinTextureImporter:
             mat_part = raw_name.split('_')[-1]
 
             target_mat = None
-            if hasattr(self, 'material_names') and hasattr(self.material_names, 'MATERIAL_PREFIX'):
+            if mat_part.lower() == 'pupil':
+                target_mat = bpy.data.materials.get(getattr(self.material_names, 'NEW_PUPIL', f'{self.material_names.MATERIAL_PREFIX}New Pupil')) or \
+                             bpy.data.materials.get('HoYoverse - Genshin New Pupil') or \
+                             bpy.data.materials.get('miHoYo - Genshin New Pupil') or \
+                             bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{mat_part}') or \
+                             bpy.data.materials.get('HoYoverse - Genshin Pupil')
+            elif hasattr(self, 'material_names') and hasattr(self.material_names, 'MATERIAL_PREFIX'):
                 target_mat = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{mat_part}')
 
             if not target_mat:
@@ -881,21 +887,21 @@ class GenshinTextureImporter:
                     tex_type = TextureType.HAIR if mat_part.lower() in ['hair', 'effecthair', 'helmet', 'helmetemo'] else TextureType.BODY
                     if mat_part.lower() == 'face':
                         self.set_face_diffuse_texture(target_mat, diffuse_img)
-                    elif mat_part.lower() in ['pupil', 'pupila', 'sandrone pupil'] or ('pupil' in target_mat.name.lower() and 'outlines' not in target_mat.name.lower()):
+                    elif mat_part.lower() in ['pupil', 'pupila', 'new pupil'] or ('pupil' in target_mat.name.lower() and 'outlines' not in target_mat.name.lower()):
                         pass  # Handled below by multi-pupil resolver
                     else:
                         self.set_diffuse_texture(tex_type, target_mat, diffuse_img)
                     imported_any = True
                 else:
-                    if mat_part.lower() not in ['face', 'pupil', 'pupila', 'sandrone pupil'] and not any(k in target_mat.name.lower() for k in ['face', 'pupil', 'pupila']):
+                    if mat_part.lower() not in ['face', 'pupil', 'pupila', 'new pupil'] and not any(k in target_mat.name.lower() for k in ['face', 'pupil', 'pupila']):
                         for node in find_all_image_nodes_by_category(target_mat.node_tree, 'diffuse'):
                             node.image = None
             else:
-                if mat_part.lower() not in ['face', 'pupil', 'pupila', 'sandrone pupil'] and not any(k in target_mat.name.lower() for k in ['face', 'pupil', 'pupila']):
+                if mat_part.lower() not in ['face', 'pupil', 'pupila', 'new pupil'] and not any(k in target_mat.name.lower() for k in ['face', 'pupil', 'pupila']):
                     for node in find_all_image_nodes_by_category(target_mat.node_tree, 'diffuse'):
                         node.image = None
 
-            if mat_part.lower() not in ['face', 'pupil', 'pupila', 'sandrone pupil'] and not any(k in target_mat.name.lower() for k in ['face', 'pupil', 'pupila']):
+            if mat_part.lower() not in ['face', 'pupil', 'pupila', 'new pupil'] and not any(k in target_mat.name.lower() for k in ['face', 'pupil', 'pupila']):
                 lightmap_tex_name = tex_envs.get('_LightMapTex', {}).get('m_Texture', {}).get('Name')
                 if lightmap_tex_name:
                     lightmap_img = resolve_img(lightmap_tex_name)
@@ -942,8 +948,8 @@ class GenshinTextureImporter:
                 self.set_shadow_ramp_texture(TextureType.BODY, white_ramp)
                 set_use_alpha_on_material(target_mat, 1.0)
 
-            # Pupil diffuse textures (for Pupil, New Pupil, and Sandrone pupil)
-            if mat_part.lower() in ['pupil', 'pupila', 'sandrone pupil'] or ('pupil' in target_mat.name.lower() and 'outlines' not in target_mat.name.lower()):
+            # Pupil diffuse textures, ramp, and highlight (for Pupil and New Pupil)
+            if mat_part.lower() in ['pupil', 'pupila', 'new pupil'] or ('pupil' in target_mat.name.lower() and 'outlines' not in target_mat.name.lower()):
                 pupil_imgs = {}
                 for fname, fpath in image_files:
                     f_low = fname.lower()
@@ -974,30 +980,53 @@ class GenshinTextureImporter:
                         p1_img.colorspace_settings.name = 'sRGB'
                         pupil_imgs['01'] = p1_img
                         pupil_imgs['1'] = p1_img
-                if pupil_imgs:
-                    self.set_multi_pupil_textures(target_mat, pupil_imgs)
-                    imported_any = True
 
-            # Eye Highlight / Highlight Mask
-            highlight_tex_name = tex_envs.get('_EyeHighlightTex', {}).get('m_Texture', {}).get('Name') or \
-                                 tex_envs.get('_HighlightMask', {}).get('m_Texture', {}).get('Name') or \
-                                 tex_envs.get('_EyeLightTex', {}).get('m_Texture', {}).get('Name') or \
-                                 tex_envs.get('_HighlightTex', {}).get('m_Texture', {}).get('Name') or \
-                                 tex_envs.get('_EyeHighlight', {}).get('m_Texture', {}).get('Name')
-            if highlight_tex_name:
-                h_img = resolve_img(highlight_tex_name)
-                if h_img:
-                    self.set_highlight_mask_texture(target_mat, h_img)
-                    imported_any = True
-            elif mat_part.lower() in ['pupil', 'pupila', 'sandrone pupil'] or ('pupil' in target_mat.name.lower() and 'outlines' not in target_mat.name.lower()):
-                for fname, fpath in image_files:
-                    f_low = fname.lower()
-                    if ('eyehighlight' in f_low or 'eyelight' in f_low or 'eye_highlight' in f_low or 'eye_light' in f_low) or ('highlight' in f_low and ('diffuse' in f_low or 'mask' in f_low)):
-                        h_img = resolve_img(os.path.splitext(fname)[0])
-                        if h_img:
-                            self.set_highlight_mask_texture(target_mat, h_img)
-                            imported_any = True
-                            break
+                # Pupil Blend / Packed Ramp
+                pupil_ramp_tex_name = tex_envs.get('_PupilBlendRamp', {}).get('m_Texture', {}).get('Name') or \
+                                      tex_envs.get('_PupilPackedRamp', {}).get('m_Texture', {}).get('Name') or \
+                                      tex_envs.get('_PupilRamp', {}).get('m_Texture', {}).get('Name')
+                pupil_ramp_img = resolve_img(pupil_ramp_tex_name) if pupil_ramp_tex_name else None
+                if not pupil_ramp_img:
+                    ramp_candidates = []
+                    for fname, fpath in image_files:
+                        f_low = fname.lower()
+                        if 'pupil' in f_low and 'blend' in f_low and 'ramp' in f_low:
+                            ramp_candidates.append((5, fname))
+                        elif 'pupil' in f_low and 'blend' in f_low:
+                            ramp_candidates.append((4, fname))
+                        elif 'pupil' in f_low and 'packed' in f_low and 'ramp' in f_low:
+                            ramp_candidates.append((3, fname))
+                        elif 'pupil' in f_low and 'packed' in f_low:
+                            ramp_candidates.append((2, fname))
+                        elif 'pupil' in f_low and 'ramp' in f_low:
+                            ramp_candidates.append((1, fname))
+                    if ramp_candidates:
+                        ramp_candidates.sort(key=lambda x: x[0], reverse=True)
+                        pupil_ramp_img = resolve_img(os.path.splitext(ramp_candidates[0][1])[0])
+
+                # Eye Highlight / Highlight Mask
+                highlight_tex_name = tex_envs.get('_EyeHighlightTex', {}).get('m_Texture', {}).get('Name') or \
+                                     tex_envs.get('_HighlightMask', {}).get('m_Texture', {}).get('Name') or \
+                                     tex_envs.get('_EyeLightTex', {}).get('m_Texture', {}).get('Name') or \
+                                     tex_envs.get('_HighlightTex', {}).get('m_Texture', {}).get('Name') or \
+                                     tex_envs.get('_EyeHighlight', {}).get('m_Texture', {}).get('Name')
+                h_img = resolve_img(highlight_tex_name) if highlight_tex_name else None
+                if not h_img:
+                    for fname, fpath in image_files:
+                        f_low = fname.lower()
+                        if ('eyehighlight' in f_low or 'eyelight' in f_low or 'eye_highlight' in f_low or 'eye_light' in f_low) or ('highlight' in f_low and ('diffuse' in f_low or 'mask' in f_low)):
+                            h_img = resolve_img(os.path.splitext(fname)[0])
+                            if h_img:
+                                break
+
+                target_mats = [target_mat] if target_mat else []
+                new_pupil_mat = bpy.data.materials.get('HoYoverse - Genshin New Pupil') or \
+                                bpy.data.materials.get(getattr(self.material_names, 'NEW_PUPIL', None))
+                if new_pupil_mat and new_pupil_mat not in target_mats:
+                    target_mats.append(new_pupil_mat)
+                for tmat in target_mats:
+                    self.set_new_pupil_material_textures(tmat, pupil_imgs, pupil_ramp_img, h_img)
+                imported_any = True
 
             stockings_name = tex_envs.get('_ShiningCustomIDMask_V2', {}).get('m_Texture', {}).get('Name')
             if stockings_name:
@@ -1218,6 +1247,24 @@ class GenshinTextureImporter:
                 shadow_ramp_node_group.nodes[shader_node_names.STOCKINGS_DETAIL].image = img
 
 
+    def get_transparent_texture(self, name="Transparent_Texture"):
+        for candidate_name in [name, "Transparent_Texture", "Transparent_Pupil_Texture", "Transparent_Highlight_Mask", "Transparent_Pupil_Ramp"]:
+            img = bpy.data.images.get(candidate_name)
+            if img:
+                return img
+        for img in bpy.data.images:
+            if 'transparent' in img.name.lower():
+                return img
+        img = bpy.data.images.new("Transparent_Texture", width=16, height=16, alpha=True)
+        img.generated_type = 'BLANK'
+        img.generated_color = (0.0, 0.0, 0.0, 0.0)
+        img.alpha_mode = 'STRAIGHT'
+        img.colorspace_settings.name = 'sRGB'
+        img.pixels = [0.0, 0.0, 0.0, 0.0] * (16 * 16)
+        img.use_fake_user = True
+        img.update()
+        return img
+
     def set_highlight_mask_texture(self, material, img):
         if not material or not material.use_nodes or not material.node_tree:
             return
@@ -1226,27 +1273,19 @@ class GenshinTextureImporter:
         if any(k in m_low for k in ['face', 'body', 'hair', 'dress', 'arm', 'cloak', 'glass', 'tail', 'wing', 'skirt', 'gauntlet', 'leather', 'outlines']):
             return
 
-        def get_all_tex_nodes(tree):
-            nodes = []
-            for n in tree.nodes:
-                if n.type == 'TEX_IMAGE':
-                    nodes.append(n)
-                elif n.type == 'GROUP' and n.node_tree:
-                    ng_name = n.node_tree.name.lower()
-                    if any(ign in ng_name for ign in ['face factor', 'face shader', 'gi face', 'eyeshadow', 'body shader', 'gi body', 'gi hair', 'primotoon', 'hoyotoon', 'outline']):
-                        continue
-                    nodes.extend(get_all_tex_nodes(n.node_tree))
-            return nodes
+        if img:
+            img.colorspace_settings.name = 'sRGB'
+            img.alpha_mode = 'CHANNEL_PACKED'
+        else:
+            img = self.get_transparent_texture("Transparent_Texture")
 
-        img.colorspace_settings.name = 'sRGB'
-        tex_nodes = get_all_tex_nodes(material.node_tree)
-        for n in tex_nodes:
-            n_id = (n.name + " " + (n.label or "")).lower()
-            if any(k in n_id for k in ['highlight mask', 'highlight_mask', 'highlightmask', 'eyehighlight', 'eyelight', 'eye_highlight', 'eye_light', 'highlight']):
-                if not ('blend' in n_id or 'ramp' in n_id):
+        for n in material.node_tree.nodes:
+            if n.type == 'TEX_IMAGE':
+                n_id = (n.name + " " + (n.label or "")).lower()
+                if any(k in n_id for k in ['highlight', 'eyelight', 'eyehighlight']):
                     n.image = img
 
-    def set_multi_pupil_textures(self, material, pupil_images_dict):
+    def set_new_pupil_material_textures(self, material, pupil_images_dict, ramp_img=None, highlight_img=None):
         if not material or not material.use_nodes or not material.node_tree:
             return
 
@@ -1254,56 +1293,161 @@ class GenshinTextureImporter:
         if any(k in m_low for k in ['face', 'body', 'hair', 'dress', 'arm', 'cloak', 'glass', 'tail', 'wing', 'skirt', 'gauntlet', 'leather', 'outlines']):
             return
 
-        def get_all_tex_nodes(tree):
-            nodes = []
-            for n in tree.nodes:
-                if n.type == 'TEX_IMAGE':
-                    nodes.append(n)
-                elif n.type == 'GROUP' and n.node_tree:
-                    ng_name = n.node_tree.name.lower()
-                    if any(ign in ng_name for ign in ['face factor', 'face shader', 'gi face', 'eyeshadow', 'body shader', 'gi body', 'gi hair', 'primotoon', 'hoyotoon', 'outline']):
-                        continue
-                    nodes.extend(get_all_tex_nodes(n.node_tree))
-            return nodes
+        transparent_img = self.get_transparent_texture("Transparent_Texture")
 
-        tex_nodes = get_all_tex_nodes(material.node_tree)
+        # 1. Outside group in material: Highlight Mask
+        self.set_highlight_mask_texture(material, highlight_img)
 
-        diffuse_nodes = [
-            n for n in tex_nodes
-            if not any(k in (n.name + " " + (n.label or "")).lower() for k in ['blend', 'ramp', 'highlight', 'mask', 'lightmap', 'normal'])
-        ]
-        diffuse_nodes.sort(key=lambda n: n.location.y, reverse=True)
+        # 2. Inside group (PupilaTodo only):
+        group_trees = []
+        for n in material.node_tree.nodes:
+            if n.type == 'GROUP' and n.node_tree:
+                g_name = n.node_tree.name.lower()
+                if 'pupilatodo' in g_name or (('pupila' in g_name or 'pupil' in g_name) and not any(ign in g_name for ign in ['body', 'hair', 'face', 'shadow', 'specular', 'metallic', 'outline', 'lightmap'])):
+                    if n.node_tree not in group_trees:
+                        group_trees.append(n.node_tree)
+        has_ramp = (ramp_img is not None)
+        actual_ramp = ramp_img if has_ramp else transparent_img
+        if ramp_img:
+            ramp_img.alpha_mode = 'CHANNEL_PACKED'
 
-        matched_nodes = set()
-        for n in diffuse_nodes:
-            n_id = (n.name + " " + (n.label or "")).lower()
-            for key in ['01', '02', '03', '04', '1', '2', '3', '4']:
-                k_num = str(int(key))
-                k_0num = f'{int(key):02d}'
-                match_patterns = [
-                    f'diffuse{k_0num}', f'diffuse{k_num}', f'diffuse_{k_0num}', f'diffuse_{k_num}',
-                    f'diffuse {k_0num}', f'diffuse {k_num}',
-                    f'pupil{k_0num}', f'pupil{k_num}', f'pupil_{k_0num}', f'pupil_{k_num}',
-                    f'pupil {k_0num}', f'pupil {k_num}', f'pupil{k_0num}_', f'pupil{k_num}_',
-                    f'pupila{k_0num}', f'pupila{k_num}', f'pupila_{k_0num}', f'pupila_{k_num}'
-                ]
-                if any(p in n_id for p in match_patterns):
-                    img = pupil_images_dict.get(k_0num) or pupil_images_dict.get(k_num)
-                    if img:
-                        img.colorspace_settings.name = 'sRGB'
-                        n.image = img
-                        matched_nodes.add(n)
-                    break
+        p1 = pupil_images_dict.get('01') or pupil_images_dict.get('1') or transparent_img
+        p2 = pupil_images_dict.get('02') or pupil_images_dict.get('2') or transparent_img
+        p3 = pupil_images_dict.get('03') or pupil_images_dict.get('3') or transparent_img
+        p4 = pupil_images_dict.get('04') or pupil_images_dict.get('4') or transparent_img
+        pupil_diffuses = [p1, p2, p3, p4]
 
-        if not matched_nodes and diffuse_nodes:
-            slot_keys = ['01', '02', '03', '04']
-            for idx, n in enumerate(diffuse_nodes):
-                if idx < len(slot_keys):
-                    key = slot_keys[idx]
-                    img = pupil_images_dict.get(key) or pupil_images_dict.get(str(int(key)))
-                    if img:
-                        img.colorspace_settings.name = 'sRGB'
-                        n.image = img
+        for p_img in pupil_diffuses:
+            if p_img and p_img != transparent_img:
+                p_img.colorspace_settings.name = 'sRGB'
+                p_img.alpha_mode = 'CHANNEL_PACKED'
+
+        for gtree in group_trees:
+            tex_nodes = [n for n in gtree.nodes if n.type == 'TEX_IMAGE']
+            if not tex_nodes:
+                continue
+
+            ramp_nodes = []
+            diffuse_nodes = []
+
+            for n in tex_nodes:
+                n_id = (n.name + " " + (n.label or "")).lower()
+                if any(k in n_id for k in ['ramp', 'blend', 'pupil_ramp', 'pupilramp']):
+                    ramp_nodes.append(n)
+                else:
+                    diffuse_nodes.append(n)
+
+            # Sort ramp nodes top to bottom (Y descending): 1st is top ramp, 2nd is bottom ramp
+            ramp_nodes.sort(key=lambda n: n.location.y, reverse=True)
+            for r_node in ramp_nodes:
+                r_node.image = actual_ramp
+
+            # Diffuse nodes in group:
+            p_node_map = {}
+            for n in diffuse_nodes:
+                n_id = (n.name + " " + (n.label or "")).lower()
+                for idx, key in enumerate(['01', '02', '03', '04']):
+                    k_num = str(int(key))
+                    k_0num = f'{int(key):02d}'
+                    if any(p in n_id for p in [f'diffuse{k_0num}', f'diffuse{k_num}', f'diffuse {k_0num}', f'diffuse {k_num}', f'pupil{k_0num}', f'pupil{k_num}']):
+                        p_node_map[idx] = n
+                        n.image = pupil_diffuses[idx]
+                        break
+
+            if len(p_node_map) < len(diffuse_nodes):
+                diffuse_nodes.sort(key=lambda n: n.location.y, reverse=True)
+                for idx, n in enumerate(diffuse_nodes):
+                    if idx not in p_node_map:
+                        p_node_map[idx] = n
+                    if idx < len(pupil_diffuses):
+                        n.image = pupil_diffuses[idx]
+                    else:
+                        n.image = transparent_img
+
+            p1_node = p_node_map.get(0)
+            p2_node = p_node_map.get(1)
+            p3_node = p_node_map.get(2)
+            p4_node = p_node_map.get(3)
+
+            mix_001 = gtree.nodes.get('Mix.001')
+            mix_main = gtree.nodes.get('Mix')
+            mix_shader_002 = gtree.nodes.get('Mix Shader.002')
+            mix_shader_main = gtree.nodes.get('Mix Shader')
+
+            if not mix_001 or not mix_main:
+                mix_nodes = [n for n in gtree.nodes if n.type == 'MIX']
+                for mn in mix_nodes:
+                    if '001' in mn.name:
+                        mix_001 = mn
+                    elif mn.name == 'Mix':
+                        mix_main = mn
+
+            if not mix_shader_002 or not mix_shader_main:
+                ms_nodes = [n for n in gtree.nodes if n.type == 'MIX_SHADER']
+                for msn in ms_nodes:
+                    if '002' in msn.name:
+                        mix_shader_002 = msn
+                    elif msn.name == 'Mix Shader':
+                        mix_shader_main = msn
+
+            if has_ramp:
+                # With ramp: Pupil_ramp1 & Pupil04 -> Mix.001 -> Mix Shader.002
+                if mix_001 and mix_shader_002:
+                    for link in list(gtree.links):
+                        if p4_node and link.from_node == p4_node and link.to_node == mix_shader_002 and link.to_socket.name == 'Shader':
+                            gtree.links.remove(link)
+                    ramp1_node = ramp_nodes[0] if ramp_nodes else None
+                    if ramp1_node and 'Color' in ramp1_node.outputs:
+                        a_sock = mix_001.inputs.get('A') or (mix_001.inputs[6] if len(mix_001.inputs) > 6 else None)
+                        if a_sock:
+                            gtree.links.new(ramp1_node.outputs['Color'], a_sock)
+                    if p4_node and 'Color' in p4_node.outputs:
+                        b_sock = mix_001.inputs.get('B') or (mix_001.inputs[7] if len(mix_001.inputs) > 7 else None)
+                        if b_sock:
+                            gtree.links.new(p4_node.outputs['Color'], b_sock)
+                    res_sock = mix_001.outputs.get('Result') or mix_001.outputs[0]
+                    shader_in_sock = mix_shader_002.inputs[2] if len(mix_shader_002.inputs) > 2 else mix_shader_002.inputs.get('Shader')
+                    if res_sock and shader_in_sock:
+                        gtree.links.new(res_sock, shader_in_sock)
+
+                # With ramp: Pupil_ramp2 & Pupil02 -> Mix -> Mix Shader
+                if mix_main and mix_shader_main:
+                    for link in list(gtree.links):
+                        if p2_node and link.from_node == p2_node and link.to_node == mix_shader_main and link.to_socket.name == 'Shader':
+                            gtree.links.remove(link)
+                    ramp2_node = ramp_nodes[1] if len(ramp_nodes) > 1 else (ramp_nodes[0] if ramp_nodes else None)
+                    if ramp2_node and 'Color' in ramp2_node.outputs:
+                        a_sock = mix_main.inputs.get('A') or (mix_main.inputs[6] if len(mix_main.inputs) > 6 else None)
+                        if a_sock:
+                            gtree.links.new(ramp2_node.outputs['Color'], a_sock)
+                    if p2_node and 'Color' in p2_node.outputs:
+                        b_sock = mix_main.inputs.get('B') or (mix_main.inputs[7] if len(mix_main.inputs) > 7 else None)
+                        if b_sock:
+                            gtree.links.new(p2_node.outputs['Color'], b_sock)
+                    res_sock = mix_main.outputs.get('Result') or mix_main.outputs[0]
+                    shader_in_sock = mix_shader_main.inputs[2] if len(mix_shader_main.inputs) > 2 else mix_shader_main.inputs.get('Shader')
+                    if res_sock and shader_in_sock:
+                        gtree.links.new(res_sock, shader_in_sock)
+            else:
+                # NO RAMP: Pupil04 and Pupil02 go directly to Mix Shader nodes!
+                if p4_node and mix_shader_002:
+                    for link in list(gtree.links):
+                        if mix_001 and link.from_node == mix_001 and link.to_node == mix_shader_002:
+                            gtree.links.remove(link)
+                    shader_in_sock = mix_shader_002.inputs[2] if len(mix_shader_002.inputs) > 2 else mix_shader_002.inputs.get('Shader')
+                    if shader_in_sock:
+                        gtree.links.new(p4_node.outputs['Color'], shader_in_sock)
+
+                if p2_node and mix_shader_main:
+                    for link in list(gtree.links):
+                        if mix_main and link.from_node == mix_main and link.to_node == mix_shader_main:
+                            gtree.links.remove(link)
+                    shader_in_sock = mix_shader_main.inputs[2] if len(mix_shader_main.inputs) > 2 else mix_shader_main.inputs.get('Shader')
+                    if shader_in_sock:
+                        gtree.links.new(p2_node.outputs['Color'], shader_in_sock)
+
+    def set_multi_pupil_textures(self, material, pupil_images_dict, ramp_img=None, highlight_img=None):
+        self.set_new_pupil_material_textures(material, pupil_images_dict, ramp_img, highlight_img)
 
 
 class GenshinAvatarTextureImporter(GenshinTextureImporter):
@@ -1336,6 +1480,7 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
 
             pupil_diffuse_images = {}
             highlight_img = None
+            pupil_ramp_img = None
             for f_name in files:
                 f_lower = f_name.lower()
                 if (('eyehighlight' in f_lower or 'eyelight' in f_lower or 'eye_highlight' in f_lower or 'eye_light' in f_lower) and f_lower.endswith(('.png', '.tga', '.dds'))) or \
@@ -1345,10 +1490,33 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                     highlight_img.alpha_mode = 'CHANNEL_PACKED'
                     highlight_img.colorspace_settings.name = 'sRGB'
 
+            # Find pupil blend / packed ramp with priority
+            ramp_candidates = []
+            for f_name in files:
+                f_lower = f_name.lower()
+                if f_lower.endswith(('.png', '.tga', '.dds')):
+                    if 'pupil' in f_lower and 'blend' in f_lower and 'ramp' in f_lower:
+                        ramp_candidates.append((5, f_name))
+                    elif 'pupil' in f_lower and 'blend' in f_lower:
+                        ramp_candidates.append((4, f_name))
+                    elif 'pupil' in f_lower and 'packed' in f_lower and 'ramp' in f_lower:
+                        ramp_candidates.append((3, f_name))
+                    elif 'pupil' in f_lower and 'packed' in f_lower:
+                        ramp_candidates.append((2, f_name))
+                    elif 'pupil' in f_lower and 'ramp' in f_lower:
+                        ramp_candidates.append((1, f_name))
+            if ramp_candidates:
+                ramp_candidates.sort(key=lambda x: x[0], reverse=True)
+                best_ramp_file = ramp_candidates[0][1]
+                img_p = os.path.normpath(os.path.join(name, best_ramp_file))
+                pupil_ramp_img = bpy.data.images.get(best_ramp_file) or bpy.data.images.load(filepath=img_p, check_existing=True)
+                pupil_ramp_img.alpha_mode = 'CHANNEL_PACKED'
+                pupil_ramp_img.colorspace_settings.name = 'sRGB'
+
                 if ('pupil' in f_lower or 'pupila' in f_lower) and 'diffuse' in f_lower and f_lower.endswith(('.png', '.tga', '.dds')):
                     for k in ['01', '02', '03', '04', '1', '2', '3', '4']:
                         k_num = str(int(k))
-                        k_0num = f'{int(key):02d}' if 'key' in locals() else f'{int(k):02d}'
+                        k_0num = f'{int(k):02d}'
                         if (f'pupil{k_0num}' in f_lower or f'pupil{k_num}' in f_lower or f'pupil_{k_0num}' in f_lower or f'pupil_{k_num}' in f_lower or
                             f'pupil 0{k_num}' in f_lower or f'pupil 00{k_num}' in f_lower or f'pupil{k_0num}_' in f_lower or f'pupil{k_num}_' in f_lower or
                             f'pupila{k_0num}' in f_lower or f'pupila{k_num}' in f_lower or f'pupila_{k_0num}' in f_lower or f'pupila_{k_num}' in f_lower):
@@ -1361,32 +1529,9 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                             break
 
             has_multiple_pupil_diffuse = len(pupil_diffuse_images) > 1
+            has_new_pupil_setup = has_multiple_pupil_diffuse or is_sandrone or any('new pupil' in m.name.lower() for m in bpy.data.materials)
 
-            if is_sandrone:
-                target_pupil_mats = [
-                    m for m in bpy.data.materials
-                    if m.use_nodes and 'sandrone pupil' in m.name.lower() and 'outlines' not in m.name.lower()
-                ]
-                if not target_pupil_mats:
-                    sandrone_mat = bpy.data.materials.get(getattr(self.material_names, 'SANDRONE_PUPIL', f'{self.material_names.MATERIAL_PREFIX}Sandrone pupil')) or \
-                                   bpy.data.materials.get('HoYoverse - Genshin Sandrone pupil')
-                    if sandrone_mat:
-                        target_pupil_mats = [sandrone_mat]
-                for target_pupil_mat in target_pupil_mats:
-                    if pupil_diffuse_images:
-                        self.set_multi_pupil_textures(target_pupil_mat, pupil_diffuse_images)
-                    if highlight_img:
-                        self.set_highlight_mask_texture(target_pupil_mat, highlight_img)
-                if target_pupil_mats:
-                    primary_pupil_mat = target_pupil_mats[0]
-                    for obj in bpy.data.objects:
-                        if obj.type == 'MESH':
-                            for slot in obj.material_slots:
-                                if slot.material and slot.material not in target_pupil_mats:
-                                    m_low = slot.material.name.lower()
-                                    if ('pupil' in m_low or 'pupila' in m_low) and not any(x in m_low for x in ['face', 'eyestar', 'eyeshadow', 'brow', 'outlines']):
-                                        slot.material = primary_pupil_mat
-            elif has_multiple_pupil_diffuse:
+            if has_new_pupil_setup:
                 target_pupil_mats = [
                     m for m in bpy.data.materials
                     if m.use_nodes and 'new pupil' in m.name.lower() and 'outlines' not in m.name.lower()
@@ -1399,10 +1544,7 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                     if new_pupil_mat:
                         target_pupil_mats = [new_pupil_mat]
                 for target_pupil_mat in target_pupil_mats:
-                    if pupil_diffuse_images:
-                        self.set_multi_pupil_textures(target_pupil_mat, pupil_diffuse_images)
-                    if highlight_img:
-                        self.set_highlight_mask_texture(target_pupil_mat, highlight_img)
+                    self.set_new_pupil_material_textures(target_pupil_mat, pupil_diffuse_images, pupil_ramp_img, highlight_img)
                 if target_pupil_mats:
                     primary_pupil_mat = target_pupil_mats[0]
                     for obj in bpy.data.objects:
@@ -1507,7 +1649,7 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                     for extra_name, extra_mat in extra_mapping:
                         if extra_mat and not self.has_dedicated_texture(extra_name, 'Diffuse'):
                             self.set_diffuse_texture(TextureType.BODY, extra_mat, img, override=False)
-                    if not has_multiple_pupil_diffuse and not is_sandrone:
+                    if not has_new_pupil_setup:
                         self.set_diffuse_texture(TextureType.BODY, pupil_material, img) if pupil_material and selected_body_material is body1_material else None
                     if star_cloak_material and self.star_cloak_uses_body_texture(file):
                         self.set_diffuse_texture(TextureType.BODY, star_cloak_material, img)
@@ -1523,7 +1665,7 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                         body2_material if ShaderMaterialNameKeywords.BODY2_LIGHTMAP in file else body_material
                     self.set_lightmap_texture(TextureType.BODY, selected_body_material, img)
                 elif any(k in file.lower() for k in ['eyehighlight', 'eyelight', 'eye_highlight', 'eye_light']) or ('highlight' in file.lower() and ('diffuse' in file.lower() or 'mask' in file.lower())):
-                    for p_name in [getattr(self.material_names, 'NEW_PUPIL', None), getattr(self.material_names, 'SANDRONE_PUPIL', None), 'HoYoverse - Genshin New Pupil', 'HoYoverse - Genshin Sandrone pupil', 'HoYoverse - Genshin Pupil']:
+                    for p_name in [getattr(self.material_names, 'NEW_PUPIL', None), 'HoYoverse - Genshin New Pupil', 'HoYoverse - Genshin Pupil']:
                         if p_name:
                             p_mat = bpy.data.materials.get(p_name)
                             if p_mat:
@@ -1532,7 +1674,7 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                         if 'pupil' in mat.name.lower() and 'outlines' not in mat.name.lower():
                             self.set_highlight_mask_texture(mat, img)
                 elif "Pupil" in file and "Diffuse" in file:
-                    if not has_multiple_pupil_diffuse and not is_sandrone:
+                    if not has_new_pupil_setup:
                         self.set_diffuse_texture(TextureType.BODY, pupil_material, img)
                 elif self.is_texture_identifiers_in_texture_name([ShaderMaterialNameKeywords.BODY, ShaderMaterialNameKeywords.NORMAL_MAP], file):
                     self.set_normalmap_texture(TextureType.BODY, body_material, img)
@@ -1806,7 +1948,7 @@ class GenshinNPCTextureImporter(GenshinTextureImporter):
                         self.set_lightmap_texture(TextureType.BODY, others_material, img)
 
                 elif any(k in file.lower() for k in ['eyehighlight', 'eyelight', 'eye_highlight', 'eye_light']) or ('highlight' in file.lower() and ('diffuse' in file.lower() or 'mask' in file.lower())):
-                    for p_name in [getattr(self.material_names, 'NEW_PUPIL', None), getattr(self.material_names, 'SANDRONE_PUPIL', None), 'HoYoverse - Genshin New Pupil', 'HoYoverse - Genshin Sandrone pupil', 'HoYoverse - Genshin Pupil']:
+                    for p_name in [getattr(self.material_names, 'NEW_PUPIL', None), 'HoYoverse - Genshin New Pupil', 'HoYoverse - Genshin Pupil']:
                         if p_name:
                             p_mat = bpy.data.materials.get(p_name)
                             if p_mat:
@@ -1829,7 +1971,11 @@ class GenshinMonsterTextureImporter(GenshinTextureImporter):
         self.genshin_shader_version = self.shader_identifier_service.identify_shader(bpy.data.materials, bpy.data.node_groups)
 
     def import_textures(self, directory):
-        self.import_textures_from_json(directory)
+        if self.import_textures_from_json(directory):
+            for mat in bpy.data.materials:
+                if mat.use_nodes and not any(k in mat.name.lower() for k in ['outlines', 'outline', 'face', 'pupil', 'brow', 'eye']):
+                    sync_material_category_textures(mat)
+            return
 
         for name, folder, files in os.walk(directory):
             self.files = files
