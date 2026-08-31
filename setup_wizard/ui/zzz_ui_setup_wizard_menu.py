@@ -37,11 +37,6 @@ class ZZZ_PT_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
             "PLAY",
             game_type=GameType.ZENLESS_ZONE_ZERO.name,
         )
-        expy_kit_installed = bpy.context.preferences.addons.get("Expy-Kit-main")
-        rigify_installed = bpy.context.preferences.addons.get("rigify")
-
-        if not expy_kit_installed or not rigify_installed:
-            sub_layout.label(text="Rigging Disabled", icon="ERROR")
 
         settings_box = layout.box()
         settings_header = settings_box.row()
@@ -346,8 +341,8 @@ class OperatorFactory:
     def create_rig_character_ui(
         ui_object: UILayout,
     ):
-        expy_kit_installed = bpy.context.preferences.addons.get("Expy-Kit-main")
-        rigify_installed = bpy.context.preferences.addons.get("rigify")
+        expy_kit_installed = any('expy' in k.lower() for k in bpy.context.preferences.addons.keys())
+        rigify_installed = any('rigify' in k.lower() for k in bpy.context.preferences.addons.keys())
 
         column = ui_object.column()
         column.enabled = True if expy_kit_installed and rigify_installed else False
@@ -654,6 +649,22 @@ class ZZZ_PT_Rig_Character_Settings(Panel):
             col_rim.prop(scene, "zzz_rim_brightness", text="Brightness", slider=True)
             col_rim.prop(scene, "zzz_rim_left_right", text="Left / Right", slider=True)
             col_rim.prop(scene, "zzz_rim_up_down", text="Up / Down", slider=True)
+
+        # 4. Hair & Clothes Physics
+        box_physics = layout.box()
+        box_physics.label(text="Hair & Clothes Physics", icon="PHYSICS")
+        col_physics = box_physics.column(align=True)
+        try:
+            from setup_wizard.character_rig_setup.rig_ui_utils import has_hair_clothes_physics
+            physics_present = has_hair_clothes_physics(context)
+        except Exception:
+            physics_present = False
+
+        if physics_present:
+            col_physics.prop(scene, "gi_hair_physics_influence", text="Hair Physics", slider=True)
+            col_physics.prop(scene, "gi_clothes_physics_influence", text="Clothes Physics", slider=True)
+        else:
+            col_physics.operator("hoyoverse.apply_hair_clothes_physics", text="Apply Physics", icon="FILE_REFRESH")
 
 
 def register_zzz_properties():

@@ -90,12 +90,6 @@ class GI_PT_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
             game_type=GameType.GENSHIN_IMPACT.name
         )
 
-        expy_kit_installed = bpy.context.preferences.addons.get('Expy-Kit-main')
-        rigify_installed = bpy.context.preferences.addons.get('rigify')
-
-        if not expy_kit_installed or not rigify_installed:
-            sub_layout.label(text='Rigging Disabled', icon='ERROR')
-
         settings_box = layout.box()
         settings_header = settings_box.row()
         settings_header.label(text="Setup Settings", icon="PREFERENCES")
@@ -185,6 +179,7 @@ class GI_PT_UI_Character_Model_Menu(Panel, GenshinImpactUIRenderChecker):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_parent_id = 'GI_PT_UI_Advanced_Setup_Layout'
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -216,6 +211,7 @@ class GI_PT_UI_Materials_Menu(Panel, GenshinImpactUIRenderChecker):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_parent_id = 'GI_PT_UI_Advanced_Setup_Layout'
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -250,6 +246,7 @@ class GI_PT_UI_Outlines_Menu(Panel, GenshinImpactUIRenderChecker):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_parent_id = 'GI_PT_UI_Advanced_Setup_Layout'
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -300,6 +297,7 @@ class GI_PT_UI_Finish_Setup_Menu(Panel, GenshinImpactUIRenderChecker):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_parent_id = 'GI_PT_UI_Advanced_Setup_Layout'
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -339,6 +337,7 @@ class GI_PT_UI_Character_Rig_Setup_Menu(Panel, GenshinImpactUIRenderChecker):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_parent_id = 'GI_PT_UI_Advanced_Setup_Layout'
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -388,6 +387,7 @@ class GI_PT_UI_Post_Processing_Setup_Menu(Panel, GenshinImpactUIRenderChecker):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_parent_id = 'GI_PT_UI_Advanced_Setup_Layout'
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -472,8 +472,8 @@ class OperatorFactory:
         ui_object: UILayout,
         game_type: str = GameType.GENSHIN_IMPACT.name,
     ):
-        expy_kit_installed = bpy.context.preferences.addons.get('Expy-Kit-main')
-        rigify_installed = bpy.context.preferences.addons.get('rigify')
+        expy_kit_installed = any('expy' in k.lower() for k in bpy.context.preferences.addons.keys())
+        rigify_installed = any('rigify' in k.lower() for k in bpy.context.preferences.addons.keys())
 
         column = ui_object.column()
         column.enabled = True if expy_kit_installed and rigify_installed else False
@@ -714,6 +714,24 @@ def sync_genshin_shader_properties(scene=None):
                         area.tag_redraw()
 
 
+def update_gi_hair_physics(self, context):
+    val = getattr(self, "gi_hair_physics_influence", 0.7)
+    try:
+        from setup_wizard.character_rig_setup.rig_ui_utils import update_hair_physics_influence
+        update_hair_physics_influence(val, context)
+    except Exception:
+        pass
+
+
+def update_gi_clothes_physics(self, context):
+    val = getattr(self, "gi_clothes_physics_influence", 0.4)
+    try:
+        from setup_wizard.character_rig_setup.rig_ui_utils import update_clothes_physics_influence
+        update_clothes_physics_influence(val, context)
+    except Exception:
+        pass
+
+
 class GI_PT_Rig_Character_Settings(Panel):
     bl_label = "Character Settings"
     bl_idname = "GI_PT_Rig_Character_Settings"
@@ -775,13 +793,29 @@ class GI_PT_Rig_Character_Settings(Panel):
             col_fr_props.prop(scene, "gi_fresnel_power", text="Fresnel Power")
             col_fr_props.prop(scene, "gi_fresnel_scaler", text="Fresnel Scaler")
 
-        # 4. Shadows & Scene Settings (At the very bottom)
+        # 4. Shadows & Scene Settings (At the bottom)
         box_shadow = layout.box()
         box_shadow.label(text="Shadow & Scene Settings", icon="SHADING_SOLID")
         col_shadow = box_shadow.column(align=True)
         col_shadow.prop(scene, "gi_shadow_position", text="Shadow Position", slider=True)
         col_shadow.prop(scene, "gi_catch_shadows", text="Catch Shadows")
         col_shadow.prop(scene, "gi_day_night", text="Day / Night", slider=True)
+
+        # 5. Hair & Clothes Physics (Below Shadow & Scene Settings)
+        box_physics = layout.box()
+        box_physics.label(text="Hair & Clothes Physics", icon="PHYSICS")
+        col_physics = box_physics.column(align=True)
+        try:
+            from setup_wizard.character_rig_setup.rig_ui_utils import has_hair_clothes_physics
+            physics_present = has_hair_clothes_physics(context)
+        except Exception:
+            physics_present = False
+
+        if physics_present:
+            col_physics.prop(scene, "gi_hair_physics_influence", text="Hair Physics", slider=True)
+            col_physics.prop(scene, "gi_clothes_physics_influence", text="Clothes Physics", slider=True)
+        else:
+            col_physics.operator("hoyoverse.apply_hair_clothes_physics", text="Apply Physics", icon="FILE_REFRESH")
 
 
 def register_gi_properties():
@@ -932,6 +966,26 @@ def register_gi_properties():
         default=(0.5, 0.5, 0.6),
         update=update_gi_lighting,
     )
+    bpy.types.Scene.gi_hair_physics_influence = bpy.props.FloatProperty(
+        name="Hair Physics",
+        description="Damped Track constraint influence for hair bone chains",
+        min=0.0,
+        max=1.0,
+        default=0.7,
+        step=5,
+        precision=2,
+        update=update_gi_hair_physics,
+    )
+    bpy.types.Scene.gi_clothes_physics_influence = bpy.props.FloatProperty(
+        name="Clothes Physics",
+        description="Damped Track constraint influence for clothes/dress bone chains",
+        min=0.0,
+        max=1.0,
+        default=0.4,
+        step=5,
+        precision=2,
+        update=update_gi_clothes_physics,
+    )
 
 
 def unregister_gi_properties():
@@ -939,7 +993,8 @@ def unregister_gi_properties():
         "gi_light_mode", "gi_use_fresnel", "gi_fresnel_color", "gi_fresnel_power", "gi_fresnel_scaler",
         "gi_amb_color", "gi_sharp_lit_color", "gi_soft_lit_color",
         "gi_sharp_shadow_color", "gi_soft_shadow_color", "gi_shadow_position",
-        "gi_catch_shadows", "gi_day_night", "gi_rim_lit_color", "gi_rim_shadow_color"
+        "gi_catch_shadows", "gi_day_night", "gi_rim_lit_color", "gi_rim_shadow_color",
+        "gi_hair_physics_influence", "gi_clothes_physics_influence"
     ]:
         if hasattr(bpy.types.Scene, prop):
             delattr(bpy.types.Scene, prop)

@@ -59,7 +59,7 @@ class CharacterRiggerPropertyGroup(PropertyGroup):
         max=1.0,
         default=0.7,
         step=5,
-        precision=2
+        precision=2,
     )
     clothes_physics_influence: FloatProperty(
         name=' Clothes Influence',
@@ -68,7 +68,7 @@ class CharacterRiggerPropertyGroup(PropertyGroup):
         max=1.0,
         default=0.4,
         step=5,
-        precision=2
+        precision=2,
     )
     dress_physics_influence: FloatProperty(
         name=' Clothes Influence',
@@ -77,7 +77,7 @@ class CharacterRiggerPropertyGroup(PropertyGroup):
         max=1.0,
         default=0.4,
         step=5,
-        precision=2
+        precision=2,
     )
     disable_rigging: BoolProperty(
         name=' Disable Rigging',

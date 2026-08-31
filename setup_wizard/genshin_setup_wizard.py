@@ -310,9 +310,9 @@ def setup_dependencies():
         setup_wizard.misc_operations.PGR_OT_PaintVertexEraseFaceAlpha,
 
         setup_wizard.join_meshes_on_armature.join_meshes_operator.GI_OT_JoinMeshesOnArmature,
-        setup_wizard.character_rig_setup.character_rigger_operator.GI_OT_CharacterRiggerOperator,
-        setup_wizard.character_rig_setup.character_rigger_operator.GI_OT_ApplyHairClothesPhysicsOperator,
-        setup_wizard.character_rig_setup.character_rigger_operator.GI_OT_ApplyHairDressPhysicsOperator,
+        setup_wizard.character_rig_setup.character_rigger_operator.HOYOVERSE_OT_rig_character,
+        setup_wizard.character_rig_setup.character_rigger_operator.HOYOVERSE_OT_apply_hair_clothes_physics,
+        setup_wizard.character_rig_setup.character_rigger_operator.HOYOVERSE_OT_apply_hair_dress_physics,
         setup_wizard.character_rig_setup.rootshape_filepath_setter_operator.GI_OT_RootShape_FilePath_Setter_Operator,
         setup_wizard.optimization.emissive_optimizer.GI_OT_Emissive_Optimizer,
         setup_wizard.genshin_compositing_node_setup.GI_OT_CompositingNodeSetup,
@@ -322,9 +322,13 @@ def setup_dependencies():
         setup_wizard.mesh_import_setup.chibi_face_setup.PGR_OT_ImportChibiFaceTexture,
     ]:
         try:
+            bpy.utils.unregister_class(class_to_register)
+        except Exception:
+            pass
+        try:
             bpy.utils.register_class(class_to_register)
-        except ValueError:
-            pass  # expected if class is already registered
+        except Exception:
+            pass
     return setup_wizard.import_order.invoke_next_step
 
 
@@ -384,9 +388,9 @@ def unregister():
         PGR_OT_PaintFaceShadowTexture,
         PGR_OT_PaintVertexEraseFaceAlpha,
         GI_OT_JoinMeshesOnArmature,
-        GI_OT_CharacterRiggerOperator,
-        GI_OT_ApplyHairClothesPhysicsOperator,
-        GI_OT_ApplyHairDressPhysicsOperator,
+        setup_wizard.character_rig_setup.character_rigger_operator.HOYOVERSE_OT_rig_character,
+        setup_wizard.character_rig_setup.character_rigger_operator.HOYOVERSE_OT_apply_hair_clothes_physics,
+        setup_wizard.character_rig_setup.character_rigger_operator.HOYOVERSE_OT_apply_hair_dress_physics,
         GI_OT_RootShape_FilePath_Setter_Operator,
         GI_OT_Emissive_Optimizer,
         GI_OT_CompositingNodeSetup,

@@ -2189,7 +2189,9 @@ def rig_character(
     remake_spine_constraint("MCH-pivot","spine_fk.001")
                              
     # Use this to swap a variable in a constraint
-    def swap_const_follow_in_const(bone, constraint_type, new_var):
+    def swap_const_follow_in_const(bone, constraint_type, new_var, target_bone="torso.002"):
+        if bone not in this_obj.pose.bones:
+            return
         const = this_obj.pose.bones[bone].constraints     
         for c in const:
             if c.type == constraint_type:
@@ -2197,7 +2199,9 @@ def rig_character(
         
         new = const.new(constraint_type)
         new.target = bpy.data.objects[char_name]
-        new.subtarget = "torso.002"       
+        new.subtarget = target_bone       
+        new.owner_space = 'LOCAL'
+        new.target_space = 'LOCAL'
         
         driver = new.driver_add("influence").driver
         driver.type = 'SUM'
@@ -2208,8 +2212,8 @@ def rig_character(
         depsgraph = bpy.context.evaluated_depsgraph_get()
         depsgraph.update()
     
-    swap_const_follow_in_const("MCH-ROT-head","COPY_ROTATION","pose.bones[\"plate-settings\"][\"Head Follow\"]")
-    swap_const_follow_in_const("MCH-ROT-neck","COPY_ROTATION","pose.bones[\"plate-settings\"][\"Neck Follow\"]")                                             
+    swap_const_follow_in_const("MCH-ROT-head","COPY_ROTATION","pose.bones[\"plate-settings\"][\"Head Follow\"]", target_bone="torso.002")
+    swap_const_follow_in_const("MCH-ROT-neck","COPY_ROTATION","pose.bones[\"plate-settings\"][\"Neck Follow\"]", target_bone="torso.002")                                             
         
     # Delete all existing bone collections, and make new ones.   
     if is_version_4:

@@ -853,6 +853,73 @@ def modify_and_run_rig_ui_script(
         return False
 
 
+def find_target_armature(context=None, armature_obj=None):
+    context = context or bpy.context
+    if armature_obj and getattr(armature_obj, "type", None) == "ARMATURE":
+        print(f"[GACHA SETUP LOG] find_target_armature: directly provided '{armature_obj.name}'")
+        return armature_obj
+
+    # 1. Check active object
+    act = context.active_object or getattr(context, "object", None)
+    if act:
+        if act.type == "ARMATURE" and not act.name.startswith("WGT"):
+            print(f"[GACHA SETUP LOG] find_target_armature: active object is armature '{act.name}'")
+            return act
+        if act.type == "MESH":
+            if hasattr(act, "find_armature") and act.find_armature():
+                arm = act.find_armature()
+                print(f"[GACHA SETUP LOG] find_target_armature: found via active mesh.find_armature() -> '{arm.name}'")
+                return arm
+            for m in act.modifiers:
+                if m.type == 'ARMATURE' and m.object:
+                    print(f"[GACHA SETUP LOG] find_target_armature: found via active mesh modifier -> '{m.object.name}'")
+                    return m.object
+            if act.parent and act.parent.type == 'ARMATURE':
+                print(f"[GACHA SETUP LOG] find_target_armature: found via active mesh parent -> '{act.parent.name}'")
+                return act.parent
+
+    # 2. Check selected objects
+    for obj in context.selected_objects:
+        if obj.type == "ARMATURE" and not obj.name.startswith("WGT"):
+            print(f"[GACHA SETUP LOG] find_target_armature: found in selected objects -> '{obj.name}'")
+            return obj
+        if obj.type == "MESH":
+            if hasattr(obj, "find_armature") and obj.find_armature():
+                arm = obj.find_armature()
+                print(f"[GACHA SETUP LOG] find_target_armature: found in selected mesh.find_armature() -> '{arm.name}'")
+                return arm
+            for m in obj.modifiers:
+                if m.type == 'ARMATURE' and m.object:
+                    print(f"[GACHA SETUP LOG] find_target_armature: found in selected mesh modifier -> '{m.object.name}'")
+                    return m.object
+            if obj.parent and obj.parent.type == 'ARMATURE':
+                print(f"[GACHA SETUP LOG] find_target_armature: found in selected mesh parent -> '{obj.parent.name}'")
+                return obj.parent
+
+    # 3. Check scene / bpy.data objects (prioritize generated 'rig' / *Rig / Rig_* / armatures with pose bones over metarigs)
+    all_objs = list(context.scene.objects) if context.scene else list(bpy.data.objects)
+    armatures = [o for o in all_objs if o.type == "ARMATURE" and not o.name.startswith("WGT")]
+    if armatures:
+        def rig_priority(o):
+            nl = o.name.lower()
+            if 'metarig' in nl or 'rootshape' in nl or 'root_shape' in nl:
+                return 0
+            if nl == 'rig' or nl.startswith('rig_') or nl.endswith('rig') or 'rigify' in nl:
+                return 100
+            if nl.startswith('avatar_') or nl.startswith('char_'):
+                return 50
+            if o.pose and len(o.pose.bones) > 0:
+                return 20
+            return 1
+        armatures.sort(key=rig_priority, reverse=True)
+        chosen = armatures[0]
+        print(f"[GACHA SETUP LOG] find_target_armature: picked highest priority scene armature -> '{chosen.name}'")
+        return chosen
+
+    print("[GACHA SETUP LOG] find_target_armature: No armature found in context or scene!")
+    return None
+
+
 def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influence=None, clothes_influence=None, dress_influence=None):
     """
     Applies Damped Track constraints along bone chains for Hair and Clothes bones:
@@ -864,19 +931,7 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
     Ensures hair and clothes collections/layers and bones are visible so constraints are properly applied.
     """
     context = context or bpy.context
-
-    if not armature_obj:
-        for obj in context.selected_objects:
-            if obj.type == "ARMATURE" and not obj.name.startswith("WGT"):
-                armature_obj = obj
-                break
-        if not armature_obj and context.active_object and context.active_object.type == "ARMATURE":
-            armature_obj = context.active_object
-        if not armature_obj:
-            for obj in context.scene.objects:
-                if obj.type == "ARMATURE" and not obj.name.startswith("WGT"):
-                    armature_obj = obj
-                    break
+    armature_obj = find_target_armature(context, armature_obj)
 
     if not armature_obj:
         print("[PHYSICS] No armature found to apply hair & clothes physics.")
@@ -884,7 +939,9 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
 
     # Read influences from scene properties if not explicitly provided
     if hair_influence is None:
-        if hasattr(context, "scene") and hasattr(context.scene, "character_rigger_props") and hasattr(context.scene.character_rigger_props, "hair_physics_influence"):
+        if hasattr(context, "scene") and hasattr(context.scene, "gi_hair_physics_influence"):
+            hair_influence = context.scene.gi_hair_physics_influence
+        elif hasattr(context, "scene") and hasattr(context.scene, "character_rigger_props") and hasattr(context.scene.character_rigger_props, "hair_physics_influence"):
             hair_influence = context.scene.character_rigger_props.hair_physics_influence
         elif hasattr(context, "scene") and hasattr(context.scene, "hair_physics_influence"):
             hair_influence = context.scene.hair_physics_influence
@@ -895,7 +952,9 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
         clothes_influence = dress_influence
 
     if clothes_influence is None:
-        if hasattr(context, "scene") and hasattr(context.scene, "character_rigger_props"):
+        if hasattr(context, "scene") and hasattr(context.scene, "gi_clothes_physics_influence"):
+            clothes_influence = context.scene.gi_clothes_physics_influence
+        elif hasattr(context, "scene") and hasattr(context.scene, "character_rigger_props"):
             props = context.scene.character_rigger_props
             if hasattr(props, "clothes_physics_influence"):
                 clothes_influence = props.clothes_physics_influence
@@ -910,8 +969,17 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
     if clothes_influence is None:
         clothes_influence = 0.4
 
-    # Ensure armature is active and in POSE mode
-    context.view_layer.objects.active = armature_obj
+    # Ensure armature is active, selectable, unhidden, and in POSE mode
+    try:
+        armature_obj.hide_set(False)
+        armature_obj.hide_viewport = False
+    except Exception:
+        pass
+    try:
+        context.view_layer.objects.active = armature_obj
+        armature_obj.select_set(True)
+    except Exception:
+        pass
     try:
         bpy.ops.object.mode_set(mode="POSE")
     except Exception:
@@ -921,8 +989,8 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
     arm_data = armature_obj.data
 
     # Make Hair and Clothes collections / layers visible
-    if is_v4:
-        for coll_name in ["Hair", "Clothes"]:
+    if is_v4 and hasattr(arm_data, "collections"):
+        for coll_name in ["Hair", "Clothes", "Dress", "Physics", "Extra", "Secondary"]:
             if coll_name in arm_data.collections:
                 arm_data.collections[coll_name].is_visible = True
     else:
@@ -932,8 +1000,10 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
 
     physics_ignore_list = {
         "+UpperArmTwistA02.L", "+UpperArmTwistA01.L", "+UpperArmTwistA01.R", "+UpperArmTwistA02.R",
+        "+UpperArmTwist L A01", "+UpperArmTwist L A02", "+UpperArmTwist R A01", "+UpperArmTwist R A02",
         "eye.R", "eye.L", "+ToothBone D A01", "+ToothBone U A01", "+ToothBone A A01",
         "+EyeBone L A01", "+EyeBoneA02.L", "+EyeBone R A01", "+EyeBoneA02.R",
+        "+EyeBone L A02", "+EyeBone R A02",
         "+EyeBone R A01.001", "+EyeBone L A01.001", "+PelvisTwist CF A01",
         "+ForeArmTwistSA01.R", "+ForeArmTwistSA01.L", "+ShoulderSA01.L", "+ShoulderSA01.R",
         "+ElbowSA01.R", "+ElbowSA01.L", "+KneeFA01.R", "+KneeFA01.L", "+SkirtAllF CF A01",
@@ -992,6 +1062,8 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
             hair_bone_names.update(b.name for b in arm_data.collections["Hair"].bones if not is_physics_ignored(b.name))
         if "Clothes" in arm_data.collections:
             clothes_bone_names.update(b.name for b in arm_data.collections["Clothes"].bones if not is_physics_ignored(b.name))
+        if "Dress" in arm_data.collections:
+            clothes_bone_names.update(b.name for b in arm_data.collections["Dress"].bones if not is_physics_ignored(b.name))
 
     # Fallback or additional keyword detection if collections are empty
     hair_keywords = [
@@ -1131,7 +1203,7 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
             child_pb = pick_best_child(b_name, hair_children)
             if child_pb:
                 dt = pb.constraints.new("DAMPED_TRACK")
-                dt.name = "Damped Track"
+                dt.name = "Hair_Physics_DampedTrack"
                 dt.target = armature_obj
                 dt.subtarget = child_pb.name
                 dt.influence = hair_influence
@@ -1151,7 +1223,7 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
             child_pb = pick_best_child(b_name, clothes_children)
             if child_pb:
                 dt = pb.constraints.new("DAMPED_TRACK")
-                dt.name = "Damped Track"
+                dt.name = "Clothes_Physics_DampedTrack"
                 dt.target = armature_obj
                 dt.subtarget = child_pb.name
                 dt.influence = clothes_influence
@@ -1167,8 +1239,70 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
             arm_data.layers[20] = False
             arm_data.layers[22] = False
 
+    if applied_count > 0:
+        try:
+            armature_obj["gi_has_physics"] = True
+        except Exception:
+            pass
+
     print(f"[PHYSICS] Applied Damped Track physics to {applied_count} Hair & Clothes bones (Hair: {hair_influence}, Clothes: {clothes_influence}) and hidden physics collections.")
     return applied_count
+
+
+def update_hair_physics_influence(influence, context=None):
+    context = context or bpy.context
+    armature_obj = find_target_armature(context)
+    if not armature_obj or not armature_obj.pose:
+        return 0
+    count = 0
+    for pb in armature_obj.pose.bones:
+        for c in pb.constraints:
+            if c.type == 'DAMPED_TRACK' and (
+                c.name == "Hair_Physics_DampedTrack" or
+                (c.name == "Damped Track" and any(k in pb.name.lower() for k in ["hair", "ahoge", "bangs", "ponytail", "twintail", "bone00"]))
+            ):
+                c.influence = influence
+                count += 1
+    if count == 0:
+        apply_hair_and_clothes_physics(armature_obj, context, hair_influence=influence)
+    return count
+
+
+def update_clothes_physics_influence(influence, context=None):
+    context = context or bpy.context
+    armature_obj = find_target_armature(context)
+    if not armature_obj or not armature_obj.pose:
+        return 0
+    count = 0
+    for pb in armature_obj.pose.bones:
+        for c in pb.constraints:
+            if c.type == 'DAMPED_TRACK' and (
+                c.name == "Clothes_Physics_DampedTrack" or
+                (c.name == "Damped Track" and not any(k in pb.name.lower() for k in ["hair", "ahoge", "bangs", "ponytail", "twintail", "bone00"]))
+            ):
+                c.influence = influence
+                count += 1
+    if count == 0:
+        apply_hair_and_clothes_physics(armature_obj, context, clothes_influence=influence)
+    return count
+
+
+def has_hair_clothes_physics(context=None, armature_obj=None):
+    context = context or bpy.context
+    if not armature_obj:
+        armature_obj = find_target_armature(context)
+    if not armature_obj or not armature_obj.pose:
+        return False
+
+    if armature_obj.get("gi_has_physics", False):
+        return True
+
+    # Check if any pose bone has our specific physics constraint
+    for pb in armature_obj.pose.bones:
+        for c in pb.constraints:
+            if c.type == 'DAMPED_TRACK' and c.name in ["Hair_Physics_DampedTrack", "Clothes_Physics_DampedTrack"]:
+                return True
+    return False
 
 
 # Compatibility alias

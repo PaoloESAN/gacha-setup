@@ -45,12 +45,6 @@ class PGR_PT_Setup_Wizard_UI_Layout(Panel, PunishingGrayRavenUIRenderChecker):
             game_type=GameType.PUNISHING_GRAY_RAVEN.name
         )
 
-        expy_kit_installed = bpy.context.preferences.addons.get('Expy-Kit-main')
-        rigify_installed = bpy.context.preferences.addons.get('rigify')
-
-        if (not expy_kit_installed or not rigify_installed) and rigging_global_settings_feature_flag:
-            sub_layout.label(text='Rigging Disabled', icon='ERROR')
-
         settings_box = layout.box()
         settings_header = settings_box.row()
         settings_header.label(text="Setup Settings", icon="PREFERENCES")
@@ -176,6 +170,7 @@ class PGR_PT_UI_Character_Model_Menu(Panel, PunishingGrayRavenUIRenderChecker):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_parent_id = 'PGR_PT_UI_Advanced_Setup_Layout'
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -201,6 +196,7 @@ class PGR_PT_UI_Materials_Menu(Panel, PunishingGrayRavenUIRenderChecker):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_parent_id = 'PGR_PT_UI_Advanced_Setup_Layout'
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -235,6 +231,7 @@ class PGR_PT_UI_Outlines_Menu(Panel, PunishingGrayRavenUIRenderChecker):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_parent_id = 'PGR_PT_UI_Advanced_Setup_Layout'
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -285,6 +282,7 @@ class PGR_PT_UI_Finish_Setup_Menu(Panel, PunishingGrayRavenUIRenderChecker):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_parent_id = 'PGR_PT_UI_Advanced_Setup_Layout'
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout

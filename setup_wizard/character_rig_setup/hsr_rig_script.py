@@ -586,6 +586,12 @@ def rig_character(
     rigifyr.pose.bones["upper_arm_parent.L"]["FK_limb_follow"] = 1
     rigifyr.pose.bones["upper_arm_parent.R"]["FK_limb_follow"] = 1
 
+    if "torso" in rigifyr.pose.bones:
+        if "neck_follow" in rigifyr.pose.bones["torso"]:
+            rigifyr.pose.bones["torso"]["neck_follow"] = 1.0
+        if "head_follow" in rigifyr.pose.bones["torso"]:
+            rigifyr.pose.bones["torso"]["head_follow"] = 1.0
+
     bpy.ops.object.mode_set(mode='EDIT')
     #### Symmetrize clothes/hair bones
     eb = rigifyr.data.edit_bones

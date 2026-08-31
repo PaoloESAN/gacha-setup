@@ -598,6 +598,13 @@ def rig_character(
             pass
         rigifyr.name = char_name + "Rig"
 
+    if rigifyr:
+        if "torso" in rigifyr.pose.bones:
+            if "neck_follow" in rigifyr.pose.bones["torso"]:
+                rigifyr.pose.bones["torso"]["neck_follow"] = 1.0
+            if "head_follow" in rigifyr.pose.bones["torso"]:
+                rigifyr.pose.bones["torso"]["head_follow"] = 1.0
+
     if is_version_4 and rigifyr:
         setup_standard_bone_collections(rigifyr, is_version_4)
 
