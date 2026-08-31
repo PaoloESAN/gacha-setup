@@ -90,12 +90,6 @@ class GI_PT_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
             game_type=GameType.GENSHIN_IMPACT.name
         )
 
-        expy_kit_installed = bpy.context.preferences.addons.get('Expy-Kit-main')
-        rigify_installed = bpy.context.preferences.addons.get('rigify')
-
-        if not expy_kit_installed or not rigify_installed:
-            sub_layout.label(text='Rigging Disabled', icon='ERROR')
-
         settings_box = layout.box()
         settings_header = settings_box.row()
         settings_header.label(text="Setup Settings", icon="PREFERENCES")
@@ -472,8 +466,8 @@ class OperatorFactory:
         ui_object: UILayout,
         game_type: str = GameType.GENSHIN_IMPACT.name,
     ):
-        expy_kit_installed = bpy.context.preferences.addons.get('Expy-Kit-main')
-        rigify_installed = bpy.context.preferences.addons.get('rigify')
+        expy_kit_installed = any('expy' in k.lower() for k in bpy.context.preferences.addons.keys())
+        rigify_installed = any('rigify' in k.lower() for k in bpy.context.preferences.addons.keys())
 
         column = ui_object.column()
         column.enabled = True if expy_kit_installed and rigify_installed else False

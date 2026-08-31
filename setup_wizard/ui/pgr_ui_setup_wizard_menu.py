@@ -45,12 +45,6 @@ class PGR_PT_Setup_Wizard_UI_Layout(Panel, PunishingGrayRavenUIRenderChecker):
             game_type=GameType.PUNISHING_GRAY_RAVEN.name
         )
 
-        expy_kit_installed = bpy.context.preferences.addons.get('Expy-Kit-main')
-        rigify_installed = bpy.context.preferences.addons.get('rigify')
-
-        if (not expy_kit_installed or not rigify_installed) and rigging_global_settings_feature_flag:
-            sub_layout.label(text='Rigging Disabled', icon='ERROR')
-
         settings_box = layout.box()
         settings_header = settings_box.row()
         settings_header.label(text="Setup Settings", icon="PREFERENCES")

@@ -130,12 +130,8 @@ class GI_OT_CharacterRiggerOperator(Operator, ImportHelper, CustomOperatorProper
         rigging_enabled = is_advanced_setup or \
             (getattr(bpy.context.window_manager, "setup_wizard_full_run_rigging_enabled", True) and self.game_type in self.GAME_TYPES_FULL_SETUP_RIGGING_ENABLED)
 
-        rigify_installed = bool(bpy.context.preferences.addons.get('rigify'))
-        expy_kit_installed = bool(
-            bpy.context.preferences.addons.get('Expy-Kit-main') or
-            bpy.context.preferences.addons.get('expy_kit') or
-            bpy.context.preferences.addons.get('Expy-Kit')
-        )
+        rigify_installed = any('rigify' in k.lower() for k in bpy.context.preferences.addons.keys())
+        expy_kit_installed = any('expy' in k.lower() for k in bpy.context.preferences.addons.keys())
 
         if not rigging_enabled:
             self.report(

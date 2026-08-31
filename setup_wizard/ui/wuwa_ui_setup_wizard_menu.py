@@ -31,10 +31,6 @@ class WW_PT_Setup_Wizard_UI_Layout(Panel, WutheringWavesUIRenderChecker):
             operator_context="INVOKE_DEFAULT",
         )
 
-        rigify_installed = bpy.context.preferences.addons.get('rigify')
-        if not rigify_installed:
-            sub_layout.label(text='Rigify Disabled / Missing', icon='ERROR')
-
         settings_box = layout.box()
         settings_header = settings_box.row()
         settings_header.label(text="Setup Settings", icon="PREFERENCES")

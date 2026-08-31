@@ -27,11 +27,6 @@ class HSR_PT_Setup_Wizard_UI_Layout(Panel, HonkaiStarRailUIRenderChecker):
             "PLAY",
             game_type=GameType.HONKAI_STAR_RAIL.name,
         )
-        expy_kit_installed = bpy.context.preferences.addons.get("Expy-Kit-main")
-        rigify_installed = bpy.context.preferences.addons.get("rigify")
-
-        if not expy_kit_installed or not rigify_installed:
-            sub_layout.label(text="Rigging Disabled", icon="ERROR")
 
         settings_box = layout.box()
         settings_header = settings_box.row()
@@ -408,8 +403,8 @@ class OperatorFactory:
     def create_rig_character_ui(
         ui_object: UILayout,
     ):
-        expy_kit_installed = bpy.context.preferences.addons.get("Expy-Kit-main")
-        rigify_installed = bpy.context.preferences.addons.get("rigify")
+        expy_kit_installed = any('expy' in k.lower() for k in bpy.context.preferences.addons.keys())
+        rigify_installed = any('rigify' in k.lower() for k in bpy.context.preferences.addons.keys())
 
         column = ui_object.column()
         column.enabled = True if expy_kit_installed and rigify_installed else False
