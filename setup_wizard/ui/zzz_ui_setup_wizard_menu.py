@@ -650,6 +650,22 @@ class ZZZ_PT_Rig_Character_Settings(Panel):
             col_rim.prop(scene, "zzz_rim_left_right", text="Left / Right", slider=True)
             col_rim.prop(scene, "zzz_rim_up_down", text="Up / Down", slider=True)
 
+        # 4. Hair & Clothes Physics
+        box_physics = layout.box()
+        box_physics.label(text="Hair & Clothes Physics", icon="PHYSICS")
+        col_physics = box_physics.column(align=True)
+        try:
+            from setup_wizard.character_rig_setup.rig_ui_utils import has_hair_clothes_physics
+            physics_present = has_hair_clothes_physics(context)
+        except Exception:
+            physics_present = False
+
+        if physics_present:
+            col_physics.prop(scene, "gi_hair_physics_influence", text="Hair Physics", slider=True)
+            col_physics.prop(scene, "gi_clothes_physics_influence", text="Clothes Physics", slider=True)
+        else:
+            col_physics.operator("hoyoverse.apply_hair_clothes_physics", text="Apply Physics", icon="FILE_REFRESH")
+
 
 def register_zzz_properties():
     from bpy.props import EnumProperty, FloatProperty, FloatVectorProperty, BoolProperty

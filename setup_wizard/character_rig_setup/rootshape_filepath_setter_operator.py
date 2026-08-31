@@ -13,7 +13,7 @@ from setup_wizard.setup_wizard_operator_base_classes import CustomOperatorProper
 from setup_wizard.import_order import GENSHIN_RIGIFY_BONE_SHAPES_FILE_PATH, cache_using_cache_key, get_cache
 
 
-class GI_OT_RootShape_FilePath_Setter_Operator(Operator, ImportHelper, CustomOperatorProperties):
+class HOYOVERSE_OT_rootshape_filepath_setter(Operator, ImportHelper, CustomOperatorProperties):
     """Set a different RootShape blend file to use"""
     bl_idname = "hoyoverse.rootshape_filepath_setter"
     bl_label = "Select RootShape File"
@@ -45,4 +45,4 @@ class GI_OT_RootShape_FilePath_Setter_Operator(Operator, ImportHelper, CustomOpe
         return {'FINISHED'}
 
 
-register, unregister = bpy.utils.register_classes_factory(GI_OT_RootShape_FilePath_Setter_Operator)
+GI_OT_RootShape_FilePath_Setter_Operator = HOYOVERSE_OT_rootshape_filepath_setter

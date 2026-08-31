@@ -206,8 +206,9 @@ class GenshinImpactCharacterRigger(CharacterRigger):
         refresh_light_vectors_modifiers()
 
         if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):
-            from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
-            apply_hair_and_clothes_physics(armature, self.context)
+            from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics, find_target_armature
+            target_rig = find_target_armature(self.context, armature)
+            apply_hair_and_clothes_physics(target_rig, self.context)
 
         cache_enabled = self.context.window_manager.cache_enabled
         if cache_enabled and filepath:
@@ -468,8 +469,9 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
         refresh_light_vectors_modifiers()
 
         if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):
-            from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
-            apply_hair_and_clothes_physics(armature, self.context)
+            from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics, find_target_armature
+            target_rig = find_target_armature(self.context, armature)
+            apply_hair_and_clothes_physics(target_rig, self.context)
 
         cache_enabled = self.context.window_manager.cache_enabled
         if cache_enabled and filepath:
@@ -621,8 +623,9 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
 
         if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):
             try:
-                from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
-                apply_hair_and_clothes_physics(armature, self.context)
+                from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics, find_target_armature
+                target_rig = find_target_armature(self.context, armature)
+                apply_hair_and_clothes_physics(target_rig, self.context)
             except Exception as e_phys:
                 print(f"[ZZZ Rig Warning] apply_hair_and_clothes_physics error: {e_phys}")
 
@@ -676,8 +679,9 @@ class NevernessToEvernessCharacterRigger(CharacterRigger):
 
         character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
         if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):
-            from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
-            apply_hair_and_clothes_physics(armature, self.context)
+            from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics, find_target_armature
+            target_rig = find_target_armature(self.context, armature)
+            apply_hair_and_clothes_physics(target_rig, self.context)
 
         cache_enabled = self.context.window_manager.cache_enabled
         if cache_enabled and filepath:

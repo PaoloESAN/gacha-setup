@@ -21,7 +21,7 @@ class GI_OT_RigCharacter(Operator, BasicSetupUIOperator):
     bl_label = 'HoYoverse: Set Up Character Rig (UI)'
 
 
-class GI_OT_CharacterRiggerOperator(Operator, ImportHelper, CustomOperatorProperties):
+class HOYOVERSE_OT_rig_character(Operator, ImportHelper, CustomOperatorProperties):
     """Sets Up Rig for Character"""
     bl_idname = "hoyoverse.rig_character"  # important since its how we chain file dialogs
     bl_label = "Rigs Character"
@@ -183,6 +183,9 @@ class GI_OT_CharacterRiggerOperator(Operator, ImportHelper, CustomOperatorProper
                 game_type=self.game_type,
             )
 
+GI_OT_CharacterRiggerOperator = HOYOVERSE_OT_rig_character
+
+
 class ZZZ_OT_FixBoneChains(Operator):
     '''Fix selected bone chains (tails) parenting and lengths'''
     bl_idname = 'zenless_zone_zero.fix_bone_chains'
@@ -237,7 +240,74 @@ class ZZZ_OT_FixBoneChains(Operator):
         return {'FINISHED'}
 
 
-class GI_OT_ApplyHairClothesPhysicsOperator(Operator):
+def write_physics_log_datablock(log_lines):
+    try:
+        tb = bpy.data.texts.get("PHYSICS_LOG") or bpy.data.texts.new("PHYSICS_LOG")
+        tb.clear()
+        tb.write("\n".join(log_lines))
+    except Exception as e:
+        print(f"[GACHA SETUP LOG] Could not write text datablock: {e}")
+
+
+def _apply_hair_clothes_physics_impl(self, context):
+    log_lines = []
+    def log(msg):
+        print(f"[GACHA SETUP LOG] {msg}")
+        log_lines.append(str(msg))
+
+    log("=======================================================")
+    log(">>> Button 'Apply Hair & Clothes Physics' CLICKED!")
+    act = context.active_object
+    log(f"Active object in context: {act.name if act else 'None'} ({act.type if act else 'None'})")
+    log(f"Selected objects: {[o.name for o in context.selected_objects]}")
+
+    from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics, find_target_armature
+    armature = find_target_armature(context)
+    log(f"Target armature resolved: {armature.name if armature else 'None'}")
+
+    if not armature:
+        log("ERROR: No active or selected character armature found in scene!")
+        write_physics_log_datablock(log_lines)
+        self.report({'ERROR'}, "No active or selected character armature found")
+        return {'CANCELLED'}
+
+    hair_inf = getattr(context.scene, "gi_hair_physics_influence", None)
+    if hair_inf is None and hasattr(context.scene, "character_rigger_props"):
+        hair_inf = getattr(context.scene.character_rigger_props, "hair_physics_influence", 0.7)
+    if hair_inf is None:
+        hair_inf = 0.7
+
+    clothes_inf = getattr(context.scene, "gi_clothes_physics_influence", None)
+    if clothes_inf is None and hasattr(context.scene, "character_rigger_props"):
+        clothes_inf = getattr(context.scene.character_rigger_props, "clothes_physics_influence", getattr(context.scene.character_rigger_props, "dress_physics_influence", 0.4))
+    if clothes_inf is None:
+        clothes_inf = 0.4
+
+    log(f"Settings to apply -> Hair Influence: {hair_inf:.2f}, Clothes Influence: {clothes_inf:.2f}")
+    count = apply_hair_and_clothes_physics(armature, context, hair_influence=hair_inf, clothes_influence=clothes_inf)
+    log(f"apply_hair_and_clothes_physics finished -> {count} bones affected.")
+
+    log("\n--- Active Damped Track Constraints on Armature ---")
+    found_constraints = 0
+    if armature.pose:
+        for pb in armature.pose.bones:
+            for c in pb.constraints:
+                if c.type == 'DAMPED_TRACK':
+                    log(f"  • {pb.name:<24} | Constraint: '{c.name}' | Target: {c.subtarget} | Inf: {c.influence:.2f}")
+                    found_constraints += 1
+    log(f"Total Damped Track constraints active: {found_constraints}")
+    log("=======================================================")
+
+    write_physics_log_datablock(log_lines)
+
+    if count > 0:
+        self.report({'INFO'}, f"Applied Hair & Clothes Physics ({count} bones affected)")
+    else:
+        self.report({'WARNING'}, "No qualifying hair or clothes bones found in the armature")
+    return {'FINISHED'}
+
+
+class HOYOVERSE_OT_apply_hair_clothes_physics(Operator):
     """Apply Damped Track physics to Hair (0.7) and Clothes (0.4) bone chains"""
     bl_idname = "hoyoverse.apply_hair_clothes_physics"
     bl_label = "Apply Hair & Clothes Physics"
@@ -245,38 +315,21 @@ class GI_OT_ApplyHairClothesPhysicsOperator(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
-        armature = None
-        for obj in context.selected_objects:
-            if obj.type == 'ARMATURE' and not obj.name.startswith("WGT"):
-                armature = obj
-                break
-        if not armature and context.active_object and context.active_object.type == 'ARMATURE':
-            armature = context.active_object
-        if not armature:
-            for obj in context.scene.objects:
-                if obj.type == 'ARMATURE' and not obj.name.startswith("WGT"):
-                    armature = obj
-                    break
-
-        if not armature:
-            self.report({'ERROR'}, "No active or selected armature found")
-            return {'CANCELLED'}
-
-        count = apply_hair_and_clothes_physics(armature, context)
-        self.report({'INFO'}, f"Applied Hair & Clothes Physics constraints ({count} bones affected)")
-        return {'FINISHED'}
+        return _apply_hair_clothes_physics_impl(self, context)
 
 
-class GI_OT_ApplyHairDressPhysicsOperator(GI_OT_ApplyHairClothesPhysicsOperator):
+class HOYOVERSE_OT_apply_hair_dress_physics(Operator):
     """Compatibility alias for apply_hair_dress_physics"""
     bl_idname = "hoyoverse.apply_hair_dress_physics"
     bl_label = "Apply Hair & Clothes Physics"
+    bl_description = "Applies Damped Track constraints to hair (influence 0.7) and clothes (influence 0.4) bones"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        return _apply_hair_clothes_physics_impl(self, context)
 
 
-register, unregister = bpy.utils.register_classes_factory([
-    GI_OT_CharacterRiggerOperator,
-    ZZZ_OT_FixBoneChains,
-    GI_OT_ApplyHairClothesPhysicsOperator,
-    GI_OT_ApplyHairDressPhysicsOperator,
-])
+# Compatibility aliases
+GI_OT_ApplyHairClothesPhysicsOperator = HOYOVERSE_OT_apply_hair_clothes_physics
+GI_OT_ApplyHairDressPhysicsOperator = HOYOVERSE_OT_apply_hair_dress_physics
+

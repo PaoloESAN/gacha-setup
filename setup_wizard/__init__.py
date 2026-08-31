@@ -33,6 +33,9 @@ else:
     import setup_wizard.ui.gi_ui_setup_wizard_menu
     from setup_wizard.character_rig_setup.character_rigger_operator import (
         GI_OT_RigCharacter,
+        GI_OT_CharacterRiggerOperator,
+        GI_OT_ApplyHairClothesPhysicsOperator,
+        GI_OT_ApplyHairDressPhysicsOperator,
         ZZZ_OT_FixBoneChains,
     )
     from setup_wizard.character_rig_setup.wuwa_face_panel import (
@@ -177,7 +180,6 @@ else:
         unregister_zzz_properties,
     )
 
-    register_genshin_setup_wizard()
     setup_dependencies()
 
     modules = [
@@ -214,6 +216,9 @@ else:
         GI_OT_SetUpOutlines,
         GI_OT_FinishSetup,
         GI_OT_RigCharacter,
+        GI_OT_CharacterRiggerOperator,
+        GI_OT_ApplyHairClothesPhysicsOperator,
+        GI_OT_ApplyHairDressPhysicsOperator,
         GI_OT_PostProcessingCompositingSetup,
         HSR_PT_Setup_Wizard_UI_Layout,
         HSR_PT_Basic_Setup_Wizard_UI_Layout,
@@ -300,7 +305,17 @@ else:
 
 
     def register():
-        _register_classes()
+        try:
+            register_genshin_setup_wizard()
+        except Exception:
+            pass
+        for cls in classes:
+            try:
+                bpy.utils.register_class(cls)
+            except ValueError:
+                pass
+            except Exception as e:
+                print(f"[GACHA SETUP] Notice registering {cls}: {e}")
         if hasattr(bpy.types, "VIEW3D_PT_context_properties"):
             try:
                 bpy.types.VIEW3D_PT_context_properties.bl_order = 100
@@ -334,7 +349,15 @@ else:
         unregister_gi_properties()
         unregister_hsr_properties()
         unregister_zzz_properties()
-        _unregister_classes()
+        try:
+            setup_wizard.genshin_setup_wizard.unregister()
+        except Exception:
+            pass
+        for cls in reversed(classes):
+            try:
+                bpy.utils.unregister_class(cls)
+            except Exception:
+                pass
 
     """
     For auto_loading, but right now we're doing simple loading to have

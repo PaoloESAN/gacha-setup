@@ -170,6 +170,7 @@ class PGR_PT_UI_Character_Model_Menu(Panel, PunishingGrayRavenUIRenderChecker):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_parent_id = 'PGR_PT_UI_Advanced_Setup_Layout'
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -195,6 +196,7 @@ class PGR_PT_UI_Materials_Menu(Panel, PunishingGrayRavenUIRenderChecker):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_parent_id = 'PGR_PT_UI_Advanced_Setup_Layout'
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -229,6 +231,7 @@ class PGR_PT_UI_Outlines_Menu(Panel, PunishingGrayRavenUIRenderChecker):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_parent_id = 'PGR_PT_UI_Advanced_Setup_Layout'
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
@@ -279,6 +282,7 @@ class PGR_PT_UI_Finish_Setup_Menu(Panel, PunishingGrayRavenUIRenderChecker):
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_parent_id = 'PGR_PT_UI_Advanced_Setup_Layout'
+    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout

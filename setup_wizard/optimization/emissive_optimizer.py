@@ -11,7 +11,7 @@ from setup_wizard.setup_wizard_operator_base_classes import CustomOperatorProper
 EMISSIVE_MATERIAL_SUFFIX = ' HELPER'
 
 
-class GI_OT_Emissive_Optimizer(Operator, CustomOperatorProperties):
+class HOYOVERSE_OT_emissive_optimizer(Operator, CustomOperatorProperties):
     """Swaps shader materials with optimized material"""
     bl_idname = "hoyoverse.emissive_optimizer"
     bl_label = "Swaps shader materials with optimized material"
@@ -91,3 +91,6 @@ class GI_OT_Emissive_Optimizer(Operator, CustomOperatorProperties):
         bpy.ops.object.select_all(action='DESELECT')
         for selected_object in selected_objects:
             selected_object.select_set(True)
+
+
+GI_OT_Emissive_Optimizer = HOYOVERSE_OT_emissive_optimizer

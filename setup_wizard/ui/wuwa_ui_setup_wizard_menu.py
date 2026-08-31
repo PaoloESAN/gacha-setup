@@ -356,6 +356,22 @@ class WW_PT_Rig_Character_Settings(Panel):
         # 8. Outline Thickness Slider
         layout.prop(scene, "ww_outline_thickness", text="Outline Thickness", slider=True)
 
+        # 9. Hair & Clothes Physics
+        box_physics = layout.box()
+        box_physics.label(text="Hair & Clothes Physics", icon="PHYSICS")
+        col_physics = box_physics.column(align=True)
+        try:
+            from setup_wizard.character_rig_setup.rig_ui_utils import has_hair_clothes_physics
+            physics_present = has_hair_clothes_physics(context)
+        except Exception:
+            physics_present = False
+
+        if physics_present:
+            col_physics.prop(scene, "gi_hair_physics_influence", text="Hair Physics", slider=True)
+            col_physics.prop(scene, "gi_clothes_physics_influence", text="Clothes Physics", slider=True)
+        else:
+            col_physics.operator("hoyoverse.apply_hair_clothes_physics", text="Apply Physics", icon="FILE_REFRESH")
+
         # --- Other controls commented out ---
         # layout.prop(scene, "ww_metallic_value", text="Metallics", slider=True)
         # layout.prop(scene, "ww_specular_value", text="Specular", slider=True)
