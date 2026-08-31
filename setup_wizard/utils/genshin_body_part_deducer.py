@@ -7,33 +7,27 @@ from setup_wizard.domain.character_types import CharacterType
 
 
 def get_monster_body_part_name(name):
-    if 'Hair' in name:
-        return 'Hair'
-    elif 'Face' in name:
-        return 'Face'
-    elif 'Body' in name:
+    if not name:
         return 'Body'
-    elif 'Dress' in name:
-        return 'Dress'  # TODO: Not sure if all 'Dress' are 'Body'
-    elif 'None' in name:
-        return 'Body'  # TODO: Current assumption/belief all None are Body-type
-    else:
-        print(f'"Best Guess" attempt made for retrieving mosnter body part name {name}')
-        return 'Body'
+    if '_Mat_' in name:
+        return name.split('_Mat_')[-1]
+    if name.endswith('_Mat') or '_Mat_' in name:
+        clean = name[:-4] if name.endswith('_Mat') else name
+        return clean.split('_')[-1]
+    if '_' in name:
+        return name.split('_')[-1]
+    return name
 
 
 def get_npc_mesh_body_part_name(material_name):
+    if not material_name:
+        return 'Body'
     if 'Hair' in material_name:
         return 'Hair'
     elif 'Face' in material_name:
         return 'Face'
-    elif 'Body' in material_name:
-        return 'Body'
-    elif 'Dress' in material_name:  # I don't think this is a valid case, either they use Hair or Body textures
-        return 'Dress'
     elif 'Item' in material_name:
-        item_name = material_name.replace('NPC_', '').replace('_Mat', '')
-        return item_name
+        return material_name.replace('NPC_', '').replace('_Mat', '')
     elif 'Screw' in material_name:
         return 'Screw'
     elif 'Hat' in material_name:
@@ -42,8 +36,13 @@ def get_npc_mesh_body_part_name(material_name):
         return 'Others'
     elif 'Cloak' in material_name:
         return 'Cloak'
-    else:
-        return None
+    if '_Mat_' in material_name:
+        return material_name.split('_Mat_')[-1]
+    if material_name.endswith('_Mat'):
+        return material_name[:-4].split('_')[-1]
+    if '_' in material_name:
+        return material_name.split('_')[-1]
+    return material_name
 
 
 def get_body_part(file):

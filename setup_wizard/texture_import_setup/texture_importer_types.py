@@ -871,6 +871,7 @@ class GenshinTextureImporter:
             if not target_mat:
                 continue
 
+            diffuse_img = None
             diffuse_tex_name = tex_envs.get('_MainTex', {}).get('m_Texture', {}).get('Name') or \
                                tex_envs.get('_BaseTexV2', {}).get('m_Texture', {}).get('Name') or \
                                tex_envs.get('_BaseTex', {}).get('m_Texture', {}).get('Name')
@@ -1314,7 +1315,11 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
         self.genshin_shader_version = self.shader_identifier_service.identify_shader(bpy.data.materials, bpy.data.node_groups)
 
     def import_textures(self, directory):
-        self.import_textures_from_json(directory)
+        if self.import_textures_from_json(directory):
+            for mat in bpy.data.materials:
+                if mat.use_nodes and not any(k in mat.name.lower() for k in ['outlines', 'outline', 'face', 'pupil', 'brow', 'eye']):
+                    sync_material_category_textures(mat)
+            return
 
         for name, folder, files in os.walk(directory):
             self.files = files
