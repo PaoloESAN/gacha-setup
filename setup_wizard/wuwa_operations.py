@@ -55,7 +55,7 @@ def update_alpha_transparency(self, context=None):
         base_m = mat.get("ww_base_part", "")
         is_alpha = any(
             k in orig_m.lower() or k in base_m.lower() or k in mat.name.lower()
-            for k in ["alpha", "touming", "transparency"]
+            for k in ["alpha", "touming", "transparency", "fur", "flur"]
         )
         if is_alpha and mat.node_tree:
             for node in mat.node_tree.nodes:
@@ -70,6 +70,11 @@ def update_alpha_transparency(self, context=None):
                 if hasattr(mat, "blend_method"):
                     try:
                         mat.blend_method = 'BLEND'
+                    except Exception:
+                        pass
+                if hasattr(mat, "shadow_method"):
+                    try:
+                        mat.shadow_method = 'HASHED'
                     except Exception:
                         pass
             else:

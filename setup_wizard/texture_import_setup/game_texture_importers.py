@@ -1774,6 +1774,7 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
             find_texture_for_slot,
             load_image_safely,
             load_wuwa_json_mappings,
+            load_wuwa_json_material_parameters,
             TEXTURE_TYPE_MAPPINGS_JAREDNYTS,
         )
 
@@ -1787,6 +1788,7 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
             self.blender_operator.report({'WARNING'}, f"No texture image files found in: {folder}")
 
         json_mappings = load_wuwa_json_mappings(folder)
+        json_params = load_wuwa_json_material_parameters(folder)
 
         has_het_any = False
         has_id_any = False
@@ -1866,6 +1868,40 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
                                     elif suffix == '_RGID':
                                         has_rgid_any = True
 
+            # Special handling for Fur materials: Use Cloth_D texture for Base Color, Cloth_N for Normal
+            is_fur_mat = "fur" in mat.name.lower() or base_part.lower() in ["fur", "flur"] or "fur" in orig_name.lower()
+            if is_fur_mat:
+                base_color_node = mat.node_tree.nodes.get("Base Color") or mat.node_tree.nodes.get("Texture_D")
+                if base_color_node:
+                    # Find Cloth_D texture in folder
+                    cloth_d_img = None
+                    for fname in all_texture_files:
+                        fn_low = fname.lower()
+                        if "cloth" in fn_low and (fn_low.endswith("_d.png") or "_d." in fn_low or "_d_" in fn_low):
+                            cloth_d_img = load_image_safely(os.path.join(folder, fname), "_D")
+                            if cloth_d_img:
+                                break
+                    if not cloth_d_img:
+                        for fname in all_texture_files:
+                            fn_low = fname.lower()
+                            if any(k in fn_low for k in ["up", "body", "main"]) and (fn_low.endswith("_d.png") or "_d." in fn_low):
+                                cloth_d_img = load_image_safely(os.path.join(folder, fname), "_D")
+                                if cloth_d_img:
+                                    break
+                    if cloth_d_img:
+                        base_color_node.image = cloth_d_img
+
+                # Also ensure Normal Map uses Cloth_N if current is flowmap or None
+                norm_node = mat.node_tree.nodes.get("Normal Map") or mat.node_tree.nodes.get("Texture_N")
+                if norm_node and (not norm_node.image or "flowmap" in norm_node.image.name.lower()):
+                    for fname in all_texture_files:
+                        fn_low = fname.lower()
+                        if "cloth" in fn_low and (fn_low.endswith("_n.png") or "_n." in fn_low) and "flowmap" not in fn_low:
+                            cloth_n_img = load_image_safely(os.path.join(folder, fname), "_N")
+                            if cloth_n_img:
+                                norm_node.image = cloth_n_img
+                                break
+
             # Fallback for Face ID texture: If no Face ID image was found, use Face Diffuse image
             if "face" in mat.name.lower() or base_part.lower() in ["face", "head"]:
                 mask_id_node = (
@@ -1907,23 +1943,52 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
                     if node.type == 'UVMAP':
                         node.uv_map = "UV2"
 
-        # If HET texture was found, enable See Through node groups
-        if has_het_any:
-            for mat in bpy.data.materials:
-                if mat.node_tree:
-                    for node in mat.node_tree.nodes:
-                        if node.type == 'GROUP' and node.node_tree and "see through" in node.node_tree.name.lower():
-                            node.mute = False
+            # Apply JSON-driven material switches & parameters
+            mat_json_info = {}
+            for key in [orig_name.lower(), f"{base_part}{version}".lower(), base_part.lower()]:
+                if key and key in json_params:
+                    mat_json_info = json_params[key]
+                    break
 
-        # Ensure Alpha Transparency is unmuted on all Alpha materials
-        for mat in bpy.data.materials:
-            orig_m = mat.get("ww_original_name", "")
-            base_m = mat.get("ww_base_part", "")
+            main_shader = None
+            for n in mat.node_tree.nodes:
+                if n.type == 'GROUP' and n.node_tree and any(k in n.node_tree.name.lower() for k in ["ww - main", "ww - face", "ww - hair", "main shader"]):
+                    main_shader = n
+                    break
+
+            if main_shader:
+                # 1. Enable Metallics
+                if "Enable Metallics" in main_shader.inputs:
+                    if mat_json_info:
+                        main_shader.inputs["Enable Metallics"].default_value = mat_json_info.get("has_metallic", False)
+                    else:
+                        main_shader.inputs["Enable Metallics"].default_value = False
+
+                # 2. Use Normal Map
+                if "Use Normal Map" in main_shader.inputs:
+                    norm_node = mat.node_tree.nodes.get("Normal Map") or mat.node_tree.nodes.get("Texture_N")
+                    has_norm_img = bool(norm_node and norm_node.image)
+                    use_norm = has_norm_img
+                    if mat_json_info and not mat_json_info.get("use_normal", True):
+                        use_norm = False
+                    main_shader.inputs["Use Normal Map"].default_value = use_norm
+                    if mat_json_info and "normal_strength" in mat_json_info and "Normal Map Strength" in main_shader.inputs:
+                        main_shader.inputs["Normal Map Strength"].default_value = mat_json_info["normal_strength"]
+
+                # 3. Use Emission
+                if "Use Emission" in main_shader.inputs:
+                    fx_node = mat.node_tree.nodes.get("FX Texture") or mat.node_tree.nodes.get("Emission")
+                    has_fx_img = bool(fx_node and fx_node.image)
+                    use_emiss = has_fx_img or (mat_json_info.get("use_emission", False) if mat_json_info else False)
+                    main_shader.inputs["Use Emission"].default_value = use_emiss
+
+            # 4. Alpha Transparency (Only for materials with alpha, touming, transparency, fur, flur in name)
             is_alpha = any(
-                k in orig_m.lower() or k in base_m.lower() or k in mat.name.lower()
-                for k in ["alpha", "touming", "transparency"]
+                k in orig_name.lower() or k in base_part.lower() or k in mat.name.lower()
+                for k in ["alpha", "touming", "transparency", "fur", "flur"]
             )
-            if is_alpha and mat.node_tree:
+            if is_alpha:
+                mat["ww_is_alpha_material"] = True
                 for node in mat.node_tree.nodes:
                     if (node.type == 'GROUP' and node.node_tree and "alpha transparency" in node.node_tree.name.lower()) or "alpha transparency" in node.name.lower():
                         node.mute = False
@@ -1942,6 +2007,14 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
                         mat.shadow_method = 'HASHED'
                     except Exception:
                         pass
+
+        # If HET texture was found, enable See Through node groups
+        if has_het_any:
+            for mat in bpy.data.materials:
+                if mat.node_tree:
+                    for node in mat.node_tree.nodes:
+                        if node.type == 'GROUP' and node.node_tree and "see through" in node.node_tree.name.lower():
+                            node.mute = False
 
         # Set global switches if ID or RGID textures found
         g_props = bpy.data.node_groups.get("Global Material Properties Main")
