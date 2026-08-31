@@ -13,6 +13,9 @@ description: Acknowledgements, contributors, and assets credits.
 - **[@BonnyAnimations](https://github.com/BonnyAnimations)** — ZZZ Shader · [GitHub](https://github.com/BonnyAnimations) · [YouTube](https://www.youtube.com/@BonnyAnimations) · [X](https://x.com/BonnyAnimations)
 - **Enthralpy** — ZZZ Rigging & scripting · [YouTube](https://www.youtube.com/@Enthralpy) · [X](https://x.com/Enthralpy)
 - **[@OctavoPE](https://github.com/OctavoPE)** — [GitHub](https://github.com/OctavoPE) · [X](https://x.com/Llama3D)
+- **Mken**
+- **Meliodas**
+- **Manashiku**
 - **[@fnoji](https://github.com/fnoji)** — WuWa Base Setup & Rigging · [GitHub](https://github.com/fnoji)
 - **[@nytsjared](https://github.com/nytsjared)** — WuWa Gustling Waters Shader · [GitHub](https://github.com/nytsjared)
 - **SubutaiProduction** — [YouTube](https://www.youtube.com/@SubutaiProduction) · [X](https://twitter.com/SubutaiEdits)

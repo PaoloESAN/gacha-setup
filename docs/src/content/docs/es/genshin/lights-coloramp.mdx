@@ -5,9 +5,7 @@ description: Control de dirección de luz y personalización de rampas de color 
 
 import { Image } from 'astro:assets';
 import genshinLightdir from '../../../../assets/content/genshin/genshin-lightdir.png';
-import genshinLightpanel from '../../../../assets/content/genshin/genshin-lightpanel.png';
-import genshinFresnel1 from '../../../../assets/content/genshin/genshin-fresnel1.png';
-import genshinFresnel2 from '../../../../assets/content/genshin/genshin-fresnel2.png';
+import genshinLight from '../../../../assets/content/genshin/genshin-light.png';
 
 ## 1. Controlar la Dirección de Luz y Sombras
 
@@ -24,34 +22,23 @@ Durante la configuración del personaje, se genera un objeto especializado llama
 
 ---
 
-## 2. Panel 3D Interactivo de Iluminación y Fresnel
+## 2. Character Settings (Panel Item)
 
-Cada personaje incluye un panel 3D de control posicionado en la escena, permitiéndote cambiar los parámetros del shader Festivity en tiempo real sin tener que abrir el editor de nodos.
+Selecciona la malla o armadura de tu personaje y presiona `N` en la Vista 3D. Abre la pestaña **Item** para acceder al panel **Character Settings**, que te permite realizar ajustes en tiempo real sin necesidad de editar nodos en el Shader Editor:
 
-<Image src={genshinLightpanel} alt="Panel de control 3D de Iluminación y Fresnel en la vista 3D" loading="lazy" />
+<Image src={genshinLight} alt="Panel Character Settings para Genshin Impact en la pestaña Item de la vista 3D" loading="lazy" />
 
-:::note
-Algunos controles del panel de luz podrían no funcionar como se espera. Lo sentimos — es una limitación conocida que se mejorará en futuras versiones.
-:::
+### Modos de Iluminación (Lighting Mode)
+- **Presets de Iluminación**: Permite alternar rápidamente entre diferentes ambientes y presets predefinidos (*Default*, *Sunrise*, *Day*, *Sunset*, *Night*, *Rainy*).
+- **Modo Custom**: Al seleccionar la opción **Custom**, se desbloquea un subpanel de colores personalizados para ajustar manualmente los canales de **Ambient**, **Sharp Lit**, **Soft Lit**, **Sharp Shadow**, **Soft Shadow**, **Rim Lit** y **Rim Shadow**.
 
-### Controles de Iluminación
-- **Soft Lit y Soft Shadow**: Ruedas de color para graduar los tonos suaves de transición de sombra.
-- **Sharp Lit y Sharp Shadow**: Ruedas de color para definir los tonos y bordes nítidos cel-shade.
-- **Ambient**: Ajusta el brillo base ambiental y el tinte de iluminación difusa.
-- **Rim Lit y Rim Shadow**: Define la intensidad y color del brillo de borde (Rim Light).
-- **Shadow Offset**: Deslizador para controlar el umbral de posición de las sombras en el cuerpo del personaje.
+### Opciones de Fresnel (Fresnel Options)
+- **Use Fresnel**: Casilla para activar o desactivar el efecto de resplandor en los bordes.
+- **Fresnel Color**: Selector para personalizar el tono de color del resplandor Fresnel.
+- **Fresnel Power**: Controla la intensidad y fuerza del efecto Fresnel.
+- **Fresnel Scaler**: Ajusta la escala y grosor de la caída del resplandor.
 
-### Controles de Fresnel
-- **Fresnel Toggle**: Activa o desactiva el efecto de resplandor en los bordes.
-- **Fresnel Color**: Rueda de color para personalizar el tono del brillo Fresnel.
-- **Fresnel Size**: Deslizador para graduar el grosor de la caída del resplandor.
-
-Para activar el fresnel selecciona el objeto, ve al **Shader Editor**, luego ubica el nodo de **Global Properties** y haz doble clic para entrar:
-
-<Image src={genshinFresnel1} alt="Configuración de fresnel en Global Properties" loading="lazy" />
-
-Luego para activarlo debes cambiar el valor de **Use Fresnel** a `1`:
-
-<Image src={genshinFresnel2} alt="Use Fresnel activado" loading="lazy" />
-
-Para cambiar el color puedes usar el **Fresnel Color** del panel de luz y ajustar su intensidad con **Fresnel Power**.
+### Configuración de Sombras y Escena (Shadow & Scene Settings)
+- **Shadow Position**: Deslizador para calibrar el umbral y posición de las sombras en el personaje.
+- **Catch Shadows**: Activa esta opción para que el personaje reciba más sombras proyectadas sobre su propia malla.
+- **Day / Night**: Control deslizante para transicionar y mezclar la tonalidad e intensidad entre iluminación diurna y nocturna.

@@ -5,9 +5,7 @@ description: Controlling light direction and customizing Festivity toon shader c
 
 import { Image } from 'astro:assets';
 import genshinLightdir from '../../../assets/content/genshin/genshin-lightdir.png';
-import genshinLightpanel from '../../../assets/content/genshin/genshin-lightpanel.png';
-import genshinFresnel1 from '../../../assets/content/genshin/genshin-fresnel1.png';
-import genshinFresnel2 from '../../../assets/content/genshin/genshin-fresnel2.png';
+import genshinLight from '../../../assets/content/genshin/genshin-light.png';
 
 
 ## 1. Controlling Light & Shadow Direction
@@ -25,34 +23,23 @@ During character setup, a dedicated `Light Direction_<Character>` object is crea
 
 ---
 
-## 2. Interactive 3D Lighting & Coloramp Panel
+## 2. Character Settings (Item Panel)
 
-Every setup includes a 3D control board generated behind or beside your character in the viewport, allowing real-time adjustment of Festivity shader parameters without digging into node trees.
+Select your character mesh or armature and press `N` in the 3D Viewport. Open the **Item** tab to access the **Character Settings** panel, allowing real-time adjustments without digging into the Shader Editor:
 
-<Image src={genshinLightpanel} alt="3D Lighting and Fresnel control board in viewport" loading="lazy" />
+<Image src={genshinLight} alt="Character Settings panel for Genshin Impact in the Item tab" loading="lazy" />
 
-:::note
-Some of the light controls on the panel may not work as expected. Sorry about that — this is a known limitation that will be improved in future releases.
-:::
+### Lighting Mode
+- **Lighting Presets**: Quickly toggle between environmental lighting presets (*Default*, *Sunrise*, *Day*, *Sunset*, *Night*, *Rainy*).
+- **Custom Mode**: Selecting the **Custom** mode reveals a custom color palette subpanel to manually fine-tune individual channels: **Ambient**, **Sharp Lit**, **Soft Lit**, **Sharp Shadow**, **Soft Shadow**, **Rim Lit**, and **Rim Shadow**.
 
-### Lighting Controls
-- **Soft Lit & Soft Shadow**: Color wheels controlling soft gradient transition tones.
-- **Sharp Lit & Sharp Shadow**: Color wheels controlling sharp anime cel-shadow boundaries.
-- **Ambient**: Adjusts unshaded base ambient brightness and tint.
-- **Rim Lit & Rim Shadow**: Controls rim light highlights and edge shadow intensity.
-- **Shadow Offset**: Slider controlling global shadow threshold placement across the character body.
+### Fresnel Options
+- **Use Fresnel**: Checkbox to toggle the outer rim glow effect on or off.
+- **Fresnel Color**: Color selector to customize the rim glow tint.
+- **Fresnel Power**: Adjusts the strength and intensity of the Fresnel effect.
+- **Fresnel Scaler**: Controls the edge falloff scale and thickness.
 
-### Fresnel Controls
-- **Fresnel Toggle**: Switch on/off the outer rim glow effect.
-- **Fresnel Color**: Color wheel for custom rim glow tinting.
-- **Fresnel Size**: Slider controlling edge falloff thickness.
-
-To enable fresnel, select the object, go to the **Shader Editor**, then locate the **Global Properties** node and double-click to enter it:
-
-<Image src={genshinFresnel1} alt="Fresnel settings in Global Properties" loading="lazy" />
-
-Then enable it by setting **Use Fresnel** to `1`:
-
-<Image src={genshinFresnel2} alt="Use Fresnel enabled" loading="lazy" />
-
-You can change the color and intensity from the **Fresnel Color** in the light panel, adjusting its intensity with **Fresnel Power**.
+### Shadow & Scene Settings
+- **Shadow Position**: Slider to calibrate the shadow threshold and placement across the character.
+- **Catch Shadows**: Enable this option to cast more self-shadows across the character's own mesh.
+- **Day / Night**: Slider controlling the balance and transition between daytime and nighttime lighting.
