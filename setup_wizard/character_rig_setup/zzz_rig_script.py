@@ -855,7 +855,7 @@ def rig_character(
 
     bpy.context.view_layer.objects.active = bpy.data.objects["rigify"]
 
-    setup_neck_and_head_follow(neck_follow_value=1.0, head_follow_value=1.0)
+    setup_neck_and_head_follow(neck_follow_value=0.0, head_follow_value=0.0)
     setup_finger_scale_controls_on_x_axis_to_curl_just_the_fingertips(rigifyr)
 
     bpy.ops.object.mode_set(mode='EDIT')
@@ -1890,9 +1890,9 @@ def rig_character(
         if "Toggle Shoulder Constraints" not in plate:
             plate["Toggle Shoulder Constraints"] = 1.00
         if "Head Follow" not in plate:
-            plate["Head Follow"] = 1.00
+            plate["Head Follow"] = 0.00
         if "Neck Follow" not in plate:
-            plate["Neck Follow"] = 1.00
+            plate["Neck Follow"] = 0.00
         if "Use Head Controller" not in plate:
             plate["Use Head Controller"] = 0.00
         if "Viewport Outlines" not in plate:
@@ -2394,7 +2394,11 @@ def rig_character(
         bpy.data.objects[char_name+"Rig"].pose.bones["thigh_parent.L"]["pole_vector"] = 1
         bpy.data.objects[char_name+"Rig"].pose.bones["thigh_parent.R"]["pole_vector"] = 1
 
-    bpy.data.objects[char_name+"Rig"].pose.bones["torso"]["head_follow"] = 1.0
+    if "torso" in bpy.data.objects[char_name+"Rig"].pose.bones:
+        if "head_follow" in bpy.data.objects[char_name+"Rig"].pose.bones["torso"]:
+            bpy.data.objects[char_name+"Rig"].pose.bones["torso"]["head_follow"] = 0.0
+        if "neck_follow" in bpy.data.objects[char_name+"Rig"].pose.bones["torso"]:
+            bpy.data.objects[char_name+"Rig"].pose.bones["torso"]["neck_follow"] = 0.0
     bpy.data.objects[char_name+"Rig"].pose.bones["upper_arm_parent.L"]["IK_parent"] = 4
     bpy.data.objects[char_name+"Rig"].pose.bones["upper_arm_parent.R"]["IK_parent"] = 4
 
@@ -2877,8 +2881,13 @@ def rig_character(
         depsgraph = bpy.context.evaluated_depsgraph_get()
         depsgraph.update()
     
-    swap_const_follow_in_const("MCH-ROT-head","COPY_ROTATION","pose.bones[\"plate-settings\"][\"Head Follow\"]", target_bone="torso.002")
-    swap_const_follow_in_const("MCH-ROT-neck","COPY_ROTATION","pose.bones[\"plate-settings\"][\"Neck Follow\"]", target_bone="torso.002")
+    # Remove following on cog for head and neck so they follow the chest directly
+    for bone_name in ["MCH-ROT-head", "MCH-ROT-neck"]:
+        if bone_name in this_obj.pose.bones:
+            consts = this_obj.pose.bones[bone_name].constraints
+            for c in list(consts):
+                if c.type == 'COPY_ROTATION':
+                    consts.remove(c)
         
     # Delete all existing bone collections, and make new ones.   
     if is_version_4:
@@ -2973,7 +2982,7 @@ def rig_character(
         return "\n        if is_selected({'"+bone+"'}):\n            group1 = layout.row(align=True)\n            group2 = group1.split(factor=0.75, align=True)\n            props = group2.operator('pose.rigify_switch_parent_"+rig_char_id+"\', text=\'Parent Switch\', icon=\'DOWNARROW_HLT\')\n            props.bone = \'"+prop1+"\'\n            props.prop_bone = \'"+prop2+"\'\n            props.prop_id=\'IK_parent\'\n            props.parent_names = '[\"None\", \"root\", \"root.001\", \"root.002\", \"torso\", \"chest\"]'\n            props.locks = (False, False, False)\n            group2.prop(pose_bones['"+prop2+"'], '[\"IK_parent\"]', text='')\n            props = group1.operator('pose.rigify_switch_parent_bake_"+rig_char_id+"', text='', icon='ACTION_TWEAK')\n            props.bone = '"+prop1+"'\n            props.prop_bone='"+prop2+"'\n            props.prop_id='IK_parent'\n            props.parent_names='[\"None\", \"root\", \"root.001\", \"root.002\", \"torso\", \"chest\"]'\n            props.locks = (False, False, False)"
         
     def generate_string_for_settings_slider():
-        return '\n        if is_selected({"plate-settings"}):\n            layout.prop(pose_bones["plate-settings"], \'["Viewport Outlines"]\', text="Show Viewport Outlines", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Tracker Controller", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Head Follow"]\', text="Head Follow", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Neck Follow"]\', text="Neck Follow", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Toggle Shoulder Constraints"]\', text="Auto Shoulder Constraints", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Toggle Skirt Constraints"]\', text="Auto Skirt Constraints", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["EyeCorrection"]\', text="Adjust Pupil Wink Distance", slider=True)'
+        return '\n        if is_selected({"plate-settings"}):\n            layout.prop(pose_bones["plate-settings"], \'["Viewport Outlines"]\', text="Show Viewport Outlines", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Tracker Controller", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Toggle Shoulder Constraints"]\', text="Auto Shoulder Constraints", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Toggle Skirt Constraints"]\', text="Auto Skirt Constraints", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["EyeCorrection"]\', text="Adjust Pupil Wink Distance", slider=True)'
 
     def generate_string_for_head_controller_slider():
         return '\n        if is_selected({"head-controller"}):\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Tracker Controller", slider=True)\n        if is_selected({"head"}):\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Tracker Controller", slider=True)'
@@ -3481,9 +3490,13 @@ def rig_character(
         log_text.write("No warnings or messages recorded.\n")
     log_text.write("\n=== END ===")
     
-def setup_neck_and_head_follow(neck_follow_value, head_follow_value):
-    bpy.context.object.pose.bones["torso"]["neck_follow"] = neck_follow_value
-    bpy.context.object.pose.bones["torso"]["head_follow"] = head_follow_value
+def setup_neck_and_head_follow(neck_follow_value=0.0, head_follow_value=0.0):
+    if bpy.context.object and hasattr(bpy.context.object, "pose") and bpy.context.object.pose and "torso" in bpy.context.object.pose.bones:
+        torso_pb = bpy.context.object.pose.bones["torso"]
+        if "neck_follow" in torso_pb:
+            torso_pb["neck_follow"] = neck_follow_value
+        if "head_follow" in torso_pb:
+            torso_pb["head_follow"] = head_follow_value
 
 
 # Make it so that the finger scale controls can be scaled on the X axis to curl in just the fingertips instead of the entire finger.
