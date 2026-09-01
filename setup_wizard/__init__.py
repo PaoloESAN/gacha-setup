@@ -325,12 +325,8 @@ else:
         register_zzz_properties()
         register_hsr_properties()
         register_gi_properties()
-        if wuwa_frame_change_handler not in bpy.app.handlers.frame_change_post:
-            bpy.app.handlers.frame_change_post.append(wuwa_frame_change_handler)
         if wuwa_frame_change_handler not in bpy.app.handlers.render_init:
             bpy.app.handlers.render_init.append(wuwa_frame_change_handler)
-        if gi_frame_change_handler not in bpy.app.handlers.frame_change_post:
-            bpy.app.handlers.frame_change_post.append(gi_frame_change_handler)
         if gi_frame_change_handler not in bpy.app.handlers.render_init:
             bpy.app.handlers.render_init.append(gi_frame_change_handler)
         addon_updater_ops.register(bl_info)
