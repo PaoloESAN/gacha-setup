@@ -135,11 +135,8 @@ def update_blush(self, context=None):
                         except Exception:
                             pass
 
-    for mat in bpy.data.materials:
-        if mat.use_nodes and mat.node_tree:
-            apply_blush_to_container(mat.node_tree)
-
-    for ng in bpy.data.node_groups:
+    target_groups = [ng for ng in bpy.data.node_groups if any(k in ng.name.lower() for k in ["blush", "face", "head"])]
+    for ng in target_groups:
         apply_blush_to_container(ng)
         if hasattr(ng, "interface"):
             try:
@@ -161,6 +158,10 @@ def update_blush(self, context=None):
                                 pass
             except Exception:
                 pass
+
+    for mat in bpy.data.materials:
+        if getattr(mat, "use_nodes", False) and mat.node_tree and any(k in mat.name.lower() for k in ["face", "head", "skin", "body"]):
+            apply_blush_to_container(mat.node_tree)
 
 
 def update_disgust(self, context=None):
@@ -527,12 +528,12 @@ def update_outline_thickness(self, context=None):
     val = float(getattr(scene, "ww_outline_thickness", 0.2))
 
     outlines_group = bpy.data.node_groups.get("WW - Outlines")
-    updated_objs = []
+    updated_any = False
 
     for obj in bpy.data.objects:
         if obj.type != 'MESH':
             continue
-        obj_updated = False
+        obj_mod_updated = False
         for mod in obj.modifiers:
             if mod.type == 'NODES' and (mod.node_group == outlines_group or "outline" in mod.name.lower()):
                 if outlines_group and hasattr(outlines_group, "interface") and hasattr(outlines_group.interface, "items_tree"):
@@ -552,32 +553,23 @@ def update_outline_thickness(self, context=None):
                                 except Exception:
                                     pass
 
-                                # Force flush of modifier viewport evaluation
+                                # Force modifier to re-evaluate in viewport so thickness change is immediately visible
                                 try:
                                     orig_vp = mod.show_viewport
                                     mod.show_viewport = not orig_vp
                                     mod.show_viewport = orig_vp
                                 except Exception:
                                     pass
-
-                                obj_updated = True
+                                obj_mod_updated = True
+                                updated_any = True
                                 break
-        if obj_updated:
+        if obj_mod_updated:
             try:
-                obj.update_tag(refresh={'DATA', 'OBJECT'})
-                if hasattr(obj, 'data') and obj.data:
-                    obj.data.update()
-                updated_objs.append(obj)
+                obj.update_tag(refresh={'DATA'})
             except Exception:
                 pass
 
-    if hasattr(bpy.context, 'view_layer') and bpy.context.view_layer:
-        try:
-            bpy.context.view_layer.update()
-        except Exception:
-            pass
-
-    if hasattr(bpy.context, 'window_manager') and bpy.context.window_manager:
+    if updated_any and hasattr(bpy.context, 'window_manager') and bpy.context.window_manager:
         for win in getattr(bpy.context.window_manager, 'windows', []):
             screen = getattr(win, 'screen', None)
             if screen:
@@ -1285,8 +1277,6 @@ def register():
     register_wuwa_properties()
     for cls in classes:
         bpy.utils.register_class(cls)
-    if wuwa_frame_change_handler not in bpy.app.handlers.frame_change_post:
-        bpy.app.handlers.frame_change_post.append(wuwa_frame_change_handler)
     if wuwa_frame_change_handler not in bpy.app.handlers.render_init:
         bpy.app.handlers.render_init.append(wuwa_frame_change_handler)
 
