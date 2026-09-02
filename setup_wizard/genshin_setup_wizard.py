@@ -118,6 +118,24 @@ class WW_OT_WutheringWavesSetupWizardUI(Operator, BasicSetupUIOperator):
         return {'FINISHED'}
 
 
+class AKE_OT_ArknightsEndfieldSetupWizardUI(Operator, BasicSetupUIOperator):
+    '''Runs through entire setup process for Arknights: Endfield'''
+    bl_idname = 'arknights_endfield.setup_wizard_ui'
+    bl_label = 'Arknights Endfield: Setup Wizard (UI)'
+
+    def execute(self, context):
+        next_step_index = 0
+
+        NextStepInvoker().invoke(
+            next_step_index,
+            'invoke_next_step_ui', 
+            high_level_step_name=self.bl_idname if bpy.app.version >= (3,3,0) \
+                else self.bl_idname + '_no_outlines',
+            game_type=self.game_type,
+        )
+        return {'FINISHED'}
+
+
 
 class GI_OT_GenshinSetupWizard(Operator):
     """Setup Wizard Process"""
@@ -293,10 +311,10 @@ def setup_dependencies():
         setup_wizard.genshin_import_textures.GI_OT_GenshinImportTextures,
         setup_wizard.genshin_replace_default_materials.GI_OT_GenshinReplaceDefaultMaterials,
         setup_wizard.fix_mouth_outlines.GI_OT_FixMouthOutlines,
-        setup_wizard.misc_final_steps.GI_OT_FixTransformations,
         setup_wizard.set_up_head_driver.GI_OT_SetUpHeadDriver,
         setup_wizard.set_up_head_driver.ZZZ_OT_SetUpHeadDriver,
         setup_wizard.set_up_head_driver.WW_OT_SetUpHeadDriver,
+        setup_wizard.set_up_head_driver.AKE_OT_SetUpHeadDriver,
         setup_wizard.misc_operations.GI_OT_SetColorManagementToStandard,
         setup_wizard.misc_operations.HYV_OT_SetUpScreenSpaceReflections,
         setup_wizard.misc_operations.HYV_OT_VertexPaintFaceSeeThroughEffect,

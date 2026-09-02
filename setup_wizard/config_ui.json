@@ -607,6 +607,86 @@
       "set_color_management_to_standard",
       "set_up_screen_space_reflections",
       "wuwa_finish_setup"
+    ],
+    "ARKNIGHTS_ENDFIELD_OT_setup_wizard_ui": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
+      "import_character_model",
+      "delete_empties",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures",
+      "ake_setup_outlines",
+      "rig_character",
+      "ake_finish_setup"
+    ],
+    "ARKNIGHTS_ENDFIELD_OT_setup_wizard_ui_no_outlines": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
+      "import_character_model",
+      "delete_empties",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures",
+      "rig_character",
+      "ake_finish_setup"
+    ],
+    "ARKNIGHTS_ENDFIELD_OT_set_up_character": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_character",
+      "import_character_model",
+      "delete_empties"
+    ],
+    "ARKNIGHTS_ENDFIELD_OT_set_up_materials": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_materials",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures"
+    ],
+    "ARKNIGHTS_ENDFIELD_OT_set_up_outlines": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_outlines",
+      "ake_setup_outlines"
+    ],
+    "ARKNIGHTS_ENDFIELD_OT_finish_setup": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_finish_setup",
+      "ake_finish_setup"
+    ],
+    "arknights_endfield.setup_wizard_ui": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
+      "import_character_model",
+      "delete_empties",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures",
+      "ake_setup_outlines",
+      "rig_character",
+      "ake_finish_setup"
+    ],
+    "arknights_endfield.setup_wizard_ui_no_outlines": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
+      "import_character_model",
+      "delete_empties",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures",
+      "rig_character",
+      "ake_finish_setup"
+    ],
+    "arknights_endfield.set_up_character": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_character",
+      "import_character_model",
+      "delete_empties"
+    ],
+    "arknights_endfield.set_up_materials": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_materials",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures"
+    ],
+    "arknights_endfield.set_up_outlines": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_outlines",
+      "ake_setup_outlines"
+    ],
+    "arknights_endfield.finish_setup": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_finish_setup",
+      "ake_finish_setup"
     ]
   }
 }

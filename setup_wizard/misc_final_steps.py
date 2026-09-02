@@ -142,6 +142,126 @@ class WW_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
         return {'FINISHED'}
 
 
+def setup_ake_compositor_nodes(context):
+    """Sets up the Compositor post-processing node tree for Arknights: Endfield."""
+    scene = context.scene
+    addon_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    target_blend = os.path.join(addon_dir, "setup_wizard", "shaders", "ake", "AKE.blend")
+    if not os.path.exists(target_blend):
+        target_blend = os.path.join(addon_dir, "shaders", "ake", "AKE.blend")
+
+    if os.path.exists(target_blend):
+        try:
+            with bpy.data.libraries.load(target_blend, link=False) as (data_from, data_to):
+                data_to.node_groups = [
+                    g for g in data_from.node_groups
+                    if g not in bpy.data.node_groups and 'Compositing' in g
+                ]
+        except Exception as e_load:
+            print(f"[AKE COMPOSITING] Notice loading node groups: {e_load}")
+
+    comp_ng = bpy.data.node_groups.get("Compositing Nodetree")
+
+    if hasattr(scene, "compositing_node_group") and comp_ng:
+        scene.compositing_node_group = comp_ng
+    else:
+        scene.use_nodes = True
+        tree = getattr(scene, "node_tree", None)
+        if tree and comp_ng:
+            tree.nodes.clear()
+            rl = tree.nodes.new(type="CompositorNodeRLayers")
+            rl.location = (-300, 0)
+            grp_node = tree.nodes.new(type="CompositorNodeGroup")
+            grp_node.node_tree = comp_ng
+            grp_node.location = (0, 0)
+            if "Image" in rl.outputs and "Image" in grp_node.inputs:
+                tree.links.new(rl.outputs["Image"], grp_node.inputs["Image"])
+            elif grp_node.inputs:
+                tree.links.new(rl.outputs[0], grp_node.inputs[0])
+
+            out_type = "NodeGroupOutput" if bpy.app.version >= (5, 0, 0) else "CompositorNodeComposite"
+            comp = tree.nodes.new(type=out_type)
+            comp.location = (300, 100)
+            out_socket = comp.inputs.get("Image") or (comp.inputs[0] if comp.inputs else None)
+            grp_out = grp_node.outputs.get("Image") or grp_node.outputs.get("Result") or (grp_node.outputs[0] if grp_node.outputs else None)
+            if out_socket and grp_out:
+                tree.links.new(grp_out, out_socket)
+
+
+class AKE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
+    """Setup Arknights: Endfield Compositor Post-Processing Nodes"""
+
+    bl_idname = "arknights_endfield.setup_compositor_nodes"
+    bl_label = "Arknights Endfield: Setup Compositor Nodes"
+
+    def execute(self, context):
+        try:
+            setup_ake_compositor_nodes(context)
+            self.report({'INFO'}, "Arknights Endfield compositor nodes configured.")
+        except Exception as ex:
+            self.report({'WARNING'}, f"Compositor setup notice: {ex}")
+        return {'FINISHED'}
+
+
+class AKE_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties):
+    """Finish Setup for Arknights: Endfield"""
+
+    bl_idname = "arknights_endfield.finish_setup"
+    bl_label = "Arknights Endfield: Finish Setup (UI)"
+
+    def execute(self, context):
+        result = BasicSetupUIOperator.execute(self, context)
+        context.scene.display_settings.display_device = 'sRGB'
+        try:
+            context.scene.view_settings.view_transform = 'AgX'
+            context.scene.view_settings.look = 'AgX - Medium High Contrast'
+        except Exception:
+            try:
+                context.scene.view_settings.view_transform = 'Standard'
+            except Exception:
+                pass
+        context.scene.render.fps = 60
+
+        if hasattr(context.scene, "eevee"):
+            if hasattr(context.scene.eevee, "use_ssr"):
+                context.scene.eevee.use_ssr = True
+            if hasattr(context.scene.eevee, "use_shadows"):
+                context.scene.eevee.use_shadows = True
+
+        # Setup World environment nodes
+        try:
+            world = context.scene.world
+            world_ng = bpy.data.node_groups.get("Arknights_Endfield_Env")
+            if world and world_ng:
+                world.use_nodes = True
+                tree = world.node_tree
+                if tree:
+                    out_node = next((n for n in tree.nodes if n.type == 'OUTPUT_WORLD'), None)
+                    if not out_node:
+                        out_node = tree.nodes.new('ShaderNodeOutputWorld')
+                    for bg in [n for n in tree.nodes if n.type == 'BACKGROUND']:
+                        try:
+                            tree.nodes.remove(bg)
+                        except Exception:
+                            pass
+                    grp_node = next((n for n in tree.nodes if n.type == 'GROUP' and n.node_tree == world_ng), None)
+                    if not grp_node:
+                        grp_node = tree.nodes.new('ShaderNodeGroup')
+                        grp_node.node_tree = world_ng
+                    if grp_node.outputs and out_node.inputs:
+                        tree.links.new(grp_node.outputs[0], out_node.inputs[0])
+        except Exception as e_w:
+            print(f"[AKE FINISH] Notice setting up world nodes: {e_w}")
+
+        # Setup Compositor post-processing nodes
+        try:
+            setup_ake_compositor_nodes(context)
+        except Exception as e_comp:
+            print(f"[AKE FINISH] Notice setting up compositor nodes: {e_comp}")
+
+        return result
+
+
 class WW_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties):
     """Finish Setup for Wuthering Waves"""
 
@@ -806,12 +926,13 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
         if "Dehya" in armature.name and armature.animation_data:
             self.clean_character(armature)
 
-        # HSR, ZZZ, NTE, and WuWa models are typically already oriented correctly; forcing +90° X here breaks them.
+        # HSR, ZZZ, NTE, WuWa, and AKE models are typically already oriented correctly; forcing +90° X here breaks them.
         should_force_upright_rotation = self.game_type not in [
             GameType.ZENLESS_ZONE_ZERO.name,
             GameType.HONKAI_STAR_RAIL.name,
             GameType.NEVERNESS_TO_EVERNESS.name,
             GameType.WUTHERING_WAVES.name,
+            GameType.ARKNIGHTS_ENDFIELD.name,
         ]
 
         try:

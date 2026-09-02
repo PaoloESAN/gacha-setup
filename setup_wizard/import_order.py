@@ -46,6 +46,10 @@ WUTHERING_WAVES_ROOT_FOLDER_FILE_PATH = 'wuthering_waves_folder_file_path'
 WUTHERING_WAVES_SHADER_FILE_PATH = 'wuthering_waves_shader_file_path'
 WUTHERING_WAVES_OUTLINES_FILE_PATH = 'wuthering_waves_outlines_file_path'
 
+ARKNIGHTS_ENDFIELD_ROOT_FOLDER_FILE_PATH = 'arknights_endfield_folder_file_path'
+ARKNIGHTS_ENDFIELD_SHADER_FILE_PATH = 'arknights_endfield_shader_file_path'
+ARKNIGHTS_ENDFIELD_OUTLINES_FILE_PATH = 'arknights_endfield_outlines_file_path'
+
 
 
 class NextStepInvoker:
@@ -117,6 +121,8 @@ def invoke_next_step_ui(
             game_type = GameType.WUTHERING_WAVES.name
         elif 'neverness' in hl_low or 'nte' in hl_low:
             game_type = GameType.NEVERNESS_TO_EVERNESS.name
+        elif 'arknights' in hl_low or 'endfield' in hl_low or 'ake' in hl_low:
+            game_type = GameType.ARKNIGHTS_ENDFIELD.name
         elif 'zenless' in hl_low or 'zzz' in hl_low:
             game_type = GameType.ZENLESS_ZONE_ZERO.name
         elif 'honkai' in hl_low or 'hsr' in hl_low:
@@ -261,6 +267,11 @@ def get_shader_file_path(game_type: str, file_type: str = "main") -> str:
         if os.path.isfile(p):
             return p
 
+    elif game_type == GameType.ARKNIGHTS_ENDFIELD.name:
+        p = os.path.join(shaders_dir, 'ake', 'AKE.blend')
+        if os.path.isfile(p):
+            return p
+
     return ""
 
 
@@ -285,6 +296,9 @@ def get_cache(cache_enabled=True):
             NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH: active_dir,
             WUTHERING_WAVES_ROOT_FOLDER_FILE_PATH: active_dir,
             WUTHERING_WAVES_SHADER_FILE_PATH: active_dir,
+            ARKNIGHTS_ENDFIELD_ROOT_FOLDER_FILE_PATH: active_dir,
+            ARKNIGHTS_ENDFIELD_SHADER_FILE_PATH: active_dir,
+            ARKNIGHTS_ENDFIELD_OUTLINES_FILE_PATH: active_dir,
         }
     return {}
 
@@ -461,6 +475,12 @@ class ComponentFunctionFactory:
             return bpy.ops.wuthering_waves.setup_head_driver
         elif component_name == 'wuwa_finish_setup':
             return bpy.ops.wuthering_waves.finish_setup
+        elif component_name == 'ake_setup_outlines':
+            return bpy.ops.arknights_endfield.set_up_outlines
+        elif component_name == 'ake_setup_compositor_nodes':
+            return bpy.ops.arknights_endfield.setup_compositor_nodes
+        elif component_name == 'ake_finish_setup':
+            return bpy.ops.arknights_endfield.finish_setup
         else:
             raise Exception(f'Unknown component name passed into {__name__}: {component_name}')
 

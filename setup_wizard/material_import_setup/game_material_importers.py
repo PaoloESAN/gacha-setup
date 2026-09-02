@@ -34,6 +34,8 @@ class GameMaterialImporterFactory:
             return NevernessToEvernessMaterialImporterFacade(blender_operator, context)
         elif game_type == GameType.WUTHERING_WAVES.name:
             return WutheringWavesMaterialImporterFacade(blender_operator, context)
+        elif game_type == GameType.ARKNIGHTS_ENDFIELD.name:
+            return ArknightsEndfieldMaterialImporterFacade(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -791,6 +793,171 @@ class WutheringWavesMaterialImporterFacade(GameMaterialImporter):
                 file_path_to_cache=project_root_directory_file_path,
                 high_level_step_name=getattr(self.blender_operator, 'high_level_step_name', None),
                 game_type=getattr(self.blender_operator, 'game_type', GameType.WUTHERING_WAVES.name),
+            )
+
+
+class ArknightsEndfieldMaterialImporterFacade(GameMaterialImporter):
+    AKE_MATERIAL_NAMES = [
+        {'name': 'body_01'},
+        {'name': 'cloth_01'},
+        {'name': 'cloth_02'},
+        {'name': 'Dots Stroke'},
+        {'name': 'eyebrow_01'},
+        {'name': 'eyebrow_01_ALPHA'},
+        {'name': 'eyeshadow_01'},
+        {'name': 'face_01'},
+        {'name': 'hair_01'},
+        {'name': 'hairshadow_01'},
+        {'name': 'head'},
+        {'name': 'iris_01'},
+        {'name': 'iris_01_ALPHA'},
+        {'name': 'weapon'},
+        {'name': 'wing'},
+    ]
+
+    AKE_NODE_GROUPS = [
+        'Arknights: Endfield_Alpha',
+        'Arknights: Endfield_PBRToon_irisBase',
+        'Arknights: Endfield_PBRToonBase',
+        'Arknights: Endfield_PBRToonBaseBrow',
+        'Arknights: Endfield_PBRToonBaseFace',
+        'Arknights: Endfield_PBRToonBaseHair',
+        'Light',
+        'Facemat',
+        'Head Controller',
+        'Face_ALPHA',
+        'Outlines',
+        'Compositing Nodetree',
+    ]
+
+    AKE_CONTROL_OBJECTS = [
+        {'name': 'HC'},
+        {'name': 'HF'},
+        {'name': 'HR'},
+        {'name': 'LC'},
+        {'name': 'LF'},
+        {'name': 'Light'},
+    ]
+
+    def __init__(self, blender_operator: Operator, context: Context):
+        from setup_wizard.import_order import (
+            ARKNIGHTS_ENDFIELD_ROOT_FOLDER_FILE_PATH,
+            ARKNIGHTS_ENDFIELD_SHADER_FILE_PATH,
+            ARKNIGHTS_ENDFIELD_OUTLINES_FILE_PATH,
+        )
+        super().__init__(
+            blender_operator,
+            context,
+            ARKNIGHTS_ENDFIELD_SHADER_FILE_PATH,
+            ARKNIGHTS_ENDFIELD_ROOT_FOLDER_FILE_PATH,
+            'AKE.blend',
+            self.AKE_MATERIAL_NAMES,
+        )
+        self.OUTLINES_FILE_PATH = ARKNIGHTS_ENDFIELD_OUTLINES_FILE_PATH
+
+    def import_materials(self):
+        target_blend_file = get_shader_file_path(self.blender_operator.game_type, 'main')
+        if not target_blend_file or not os.path.isfile(target_blend_file):
+            print(f"[ERROR] Could not locate bundled shader blend file for AKE: {target_blend_file}")
+            return {'FINISHED'}
+
+        obj_dir = os.path.join(target_blend_file, "Object")
+
+        # 1. Load Materials and Node Groups via bpy.data.libraries.load
+        try:
+            with bpy.data.libraries.load(target_blend_file, link=False) as (data_from, data_to):
+                data_to.materials = [m for m in data_from.materials if m in [x['name'] for x in self.AKE_MATERIAL_NAMES] and m not in bpy.data.materials]
+                data_to.node_groups = [ng for ng in data_from.node_groups if ng not in bpy.data.node_groups]
+                data_to.objects = [o for o in data_from.objects if o in [x['name'] for x in self.AKE_CONTROL_OBJECTS] and o not in bpy.data.objects]
+
+            for m in data_to.materials:
+                if m:
+                    m.use_fake_user = True
+            for ng in data_to.node_groups:
+                if ng:
+                    ng.use_fake_user = True
+
+            dots_mat = bpy.data.materials.get('Dots Stroke')
+            if dots_mat:
+                dots_mat.use_backface_culling = True
+                dots_mat.surface_render_method = 'DITHERED'
+                if dots_mat.node_tree:
+                    for n in dots_mat.node_tree.nodes:
+                        if n.type == 'BSDF_PRINCIPLED':
+                            n.inputs['Base Color'].default_value = (0.02, 0.02, 0.02, 1.0)
+                            n.inputs['Roughness'].default_value = 1.0
+                        elif n.type == 'BSDF_DIFFUSE':
+                            n.inputs['Color'].default_value = (0.02, 0.02, 0.02, 1.0)
+
+            body_mat = bpy.data.materials.get('body_01')
+            if body_mat:
+                body_mat.surface_render_method = 'DITHERED'
+                body_mat.use_backface_culling = False
+
+            # Set SmoothnessMax = 1.0 and NormalStrength = 5.0 on all imported AKE shader materials
+            for m in list(bpy.data.materials):
+                if m.node_tree:
+                    for n in m.node_tree.nodes:
+                        if n.type == 'GROUP' and n.node_tree:
+                            if 'SmoothnessMax' in n.inputs:
+                                n.inputs['SmoothnessMax'].default_value = 1.0
+                            if 'NormalStrength' in n.inputs:
+                                n.inputs['NormalStrength'].default_value = 5.0
+                            if 'HNormalStrength' in n.inputs:
+                                n.inputs['HNormalStrength'].default_value = 5.0
+                            if 'Skin NormalStrength' in n.inputs:
+                                n.inputs['Skin NormalStrength'].default_value = 5.0
+                            if 'Use NormalTex?' in n.inputs:
+                                n.inputs['Use NormalTex?'].default_value = True
+        except Exception as e_load:
+            print(f"[AKE SETUP] Notice loading library data: {e_load}")
+
+        # 2. Append any missing objects via wm.append
+        try:
+            for obj_info in self.AKE_CONTROL_OBJECTS:
+                obj_name = obj_info['name']
+                if not bpy.data.objects.get(obj_name):
+                    bpy.ops.wm.append(
+                        filepath=os.path.join(obj_dir, obj_name),
+                        directory=obj_dir,
+                        filename=obj_name
+                    )
+        except Exception as e_obj:
+            print(f"[AKE SETUP] Notice appending control objects: {e_obj}")
+
+        # 3. Create Lighting collection and link control objects
+        light_col = bpy.data.collections.get('Lighting')
+        if not light_col:
+            light_col = bpy.data.collections.new('Lighting')
+            self.context.scene.collection.children.link(light_col)
+
+        for obj_info in self.AKE_CONTROL_OBJECTS:
+            o = bpy.data.objects.get(obj_info['name'])
+            if o:
+                if o.name not in light_col.objects:
+                    light_col.objects.link(o)
+
+        # 4. Position and bind HC, HF, HR head driver system to Armature Head bone
+        from setup_wizard.set_up_head_driver import setup_ake_head_driver_system
+        try:
+            setup_ake_head_driver_system(self.context)
+        except Exception as e_hd:
+            print(f"[AKE SETUP] Notice setting up head driver system: {e_hd}")
+
+        self.blender_operator.report({'INFO'}, f'Imported Arknights: Endfield Shader Materials from {target_blend_file}...')
+
+        if self.blender_operator:
+            cache_enabled = self.context.window_manager.cache_enabled
+            project_root_directory_file_path = getattr(self.blender_operator, 'file_directory', None) \
+                or get_cache(cache_enabled).get(self.game_shader_folder_path) \
+                or (os.path.dirname(self.blender_operator.filepath) if getattr(self.blender_operator, 'filepath', None) else None)
+
+            NextStepInvoker().invoke(
+                getattr(self.blender_operator, 'next_step_idx', None), 
+                getattr(self.blender_operator, 'invoker_type', None), 
+                file_path_to_cache=project_root_directory_file_path,
+                high_level_step_name=getattr(self.blender_operator, 'high_level_step_name', None),
+                game_type=getattr(self.blender_operator, 'game_type', GameType.ARKNIGHTS_ENDFIELD.name),
             )
 
 

@@ -7,6 +7,7 @@ import os
 import pathlib
 
 import bpy
+from mathutils import Vector
 from bpy.props import StringProperty
 from bpy.types import Operator
 
@@ -438,6 +439,191 @@ class WW_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
                 file_path_to_cache=folder,
                 high_level_step_name=self.high_level_step_name,
                 game_type=self.game_type or GameType.WUTHERING_WAVES.name,
+            )
+        super().clear_custom_properties()
+        return {"FINISHED"}
+
+
+def compute_ake_smoothnormal_ws(mesh_obj):
+    """Calculates corner-domain smoothnormalWS attribute for Arknights: Endfield meshes."""
+    if not mesh_obj or mesh_obj.type != 'MESH':
+        return
+    mesh = mesh_obj.data
+    if "smoothnormalWS" in mesh.attributes:
+        return
+    try:
+        if mesh.uv_layers.active:
+            mesh.calc_tangents(uvmap=mesh.uv_layers.active.name)
+        elif mesh.uv_layers:
+            mesh.calc_tangents(uvmap=mesh.uv_layers[0].name)
+    except Exception:
+        pass
+
+    if not mesh.uv_layers.get("UV0") and mesh.uv_layers.active:
+        try:
+            mesh.uv_layers.new(name="UV0")
+        except Exception:
+            pass
+
+    try:
+        smooth_attr = mesh.attributes.new(name="smoothnormalWS", type='FLOAT_VECTOR', domain='CORNER')
+        vert_normals = [Vector((0.0, 0.0, 0.0)) for _ in mesh.vertices]
+        for poly in mesh.polygons:
+            p_norm = poly.normal
+            p_area = poly.area
+            for vert_idx in poly.vertices:
+                vert_normals[vert_idx] += p_norm * p_area
+
+        for v_i in range(len(vert_normals)):
+            if vert_normals[v_i].length > 1e-6:
+                vert_normals[v_i].normalize()
+            else:
+                vert_normals[v_i] = mesh.vertices[v_i].normal
+
+        for loop in mesh.loops:
+            smooth_attr.data[loop.index].vector = vert_normals[loop.vertex_index]
+    except Exception as e:
+        print(f"[AKE SETUP] smoothnormalWS notice for {mesh_obj.name}: {e}")
+
+
+def handle_ake_post_import(context):
+    """Handles post FBX import operations for Arknights: Endfield: normal smoothing, vertex color attributes, face subpart vertex weighting, face mesh joining, camera creation, and hiding auxiliary parts."""
+    # 1. Compute smoothnormalWS and ensure Color vertex attribute exists for all meshes
+    for obj in bpy.data.objects:
+        if obj.type == 'MESH':
+            compute_ake_smoothnormal_ws(obj)
+            mesh = obj.data
+            if 'Color' not in mesh.color_attributes:
+                try:
+                    col_attr = mesh.color_attributes.new(name='Color', type='FLOAT_COLOR', domain='CORNER')
+                    for col in col_attr.data:
+                        col.color = (1.0, 1.0, 1.0, 1.0)
+                except Exception:
+                    pass
+
+    # 2. Fix vertex group weighting for face subparts before joining
+    meshes = [o for o in bpy.data.objects if o.type == 'MESH']
+    face_mesh = next((o for o in meshes if 'face_01' in o.name.lower() or 'face' in o.name.lower()), None)
+    iris_mesh = next((o for o in meshes if 'iris_01' in o.name.lower() or 'iris' in o.name.lower()), None)
+    join_targets = [
+        o for o in meshes
+        if o != face_mesh and any(k in o.name.lower() for k in ['eyebrow', 'brow', 'iris', 'eyeshadow', 'eyewhite'])
+    ]
+
+    # Assign Bip001_Head and eye bone weights to iris so it moves with the head
+    if iris_mesh:
+        vg_head = iris_mesh.vertex_groups.get('Bip001_Head') or iris_mesh.vertex_groups.new(name='Bip001_Head')
+        for v in iris_mesh.data.vertices:
+            vg_head.add([v.index], 1.0, 'REPLACE')
+
+        vg_lf = iris_mesh.vertex_groups.get('faceLfIrisJoint') or iris_mesh.vertex_groups.new(name='faceLfIrisJoint')
+        vg_rt = iris_mesh.vertex_groups.get('faceRtIrisJoint') or iris_mesh.vertex_groups.new(name='faceRtIrisJoint')
+        for v in iris_mesh.data.vertices:
+            if v.co.x > 0:
+                vg_lf.add([v.index], 1.0, 'REPLACE')
+            else:
+                vg_rt.add([v.index], 1.0, 'REPLACE')
+
+    # Ensure eyebrows and eyeshadow have Bip001_Head vertex group
+    for obj in join_targets:
+        if obj and obj != iris_mesh:
+            if 'Bip001_Head' not in obj.vertex_groups:
+                vg = obj.vertex_groups.new(name='Bip001_Head')
+                for v in obj.data.vertices:
+                    vg.add([v.index], 1.0, 'REPLACE')
+
+    # Join face subparts into face_mesh
+    if face_mesh and join_targets:
+        try:
+            if bpy.ops.object.mode_set.poll():
+                bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.select_all(action='DESELECT')
+            face_mesh.select_set(True)
+            context.view_layer.objects.active = face_mesh
+            for o in join_targets:
+                o.select_set(True)
+            bpy.ops.object.join()
+        except Exception as e:
+            print(f"[AKE SETUP] Face join notice: {e}")
+
+    # 3. Ensure an active camera exists in the scene (required by Face_ALPHA and Facemat)
+    if not context.scene.camera:
+        cam_data = bpy.data.cameras.new("Camera")
+        cam_obj = bpy.data.objects.new("Camera", cam_data)
+        cam_obj.location = (0.0, -2.5, 1.5)
+        cam_obj.rotation_euler = (1.5708, 0, 0)
+        context.scene.collection.objects.link(cam_obj)
+        context.scene.camera = cam_obj
+
+    # 4. Hide auxiliary vfxpart meshes
+    for o in bpy.data.objects:
+        if o.type == 'MESH' and ('vfxpart' in o.name.lower() or 'eyestar' in o.name.lower()):
+            try:
+                o.hide_viewport = True
+                o.hide_render = True
+            except Exception:
+                pass
+
+
+class AKE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
+    """Sets Up Character for Arknights: Endfield"""
+
+    bl_idname = "arknights_endfield.set_up_character"
+    bl_label = "Select Arknights Endfield Character Folder or .fbx"
+
+    filename_ext = "*.*"
+    filter_glob: StringProperty(
+        default="*.*",
+        options={'HIDDEN'},
+        maxlen=255,
+    )
+
+    def execute(self, context):
+        if not self.filepath:
+            return {"CANCELLED"}
+
+        folder = self.filepath if os.path.isdir(self.filepath) else os.path.dirname(self.filepath)
+        fbx_path = None
+        if not os.path.isdir(self.filepath) and self.filepath.lower().endswith(".fbx"):
+            fbx_path = self.filepath
+        elif os.path.isdir(self.filepath):
+            for root, _, files in os.walk(self.filepath):
+                for f in files:
+                    if f.lower().endswith(".fbx"):
+                        fbx_path = os.path.join(root, f)
+                        break
+                if fbx_path:
+                    break
+
+        from setup_wizard.import_order import (
+            ARKNIGHTS_ENDFIELD_ROOT_FOLDER_FILE_PATH,
+            ARKNIGHTS_ENDFIELD_SHADER_FILE_PATH,
+        )
+
+        set_active_character_directory(folder)
+        cache_using_cache_key(get_cache(True), CHARACTER_MODEL_FOLDER_FILE_PATH, folder)
+        cache_using_cache_key(get_cache(True), ARKNIGHTS_ENDFIELD_ROOT_FOLDER_FILE_PATH, folder)
+        cache_using_cache_key(get_cache(True), ARKNIGHTS_ENDFIELD_SHADER_FILE_PATH, folder)
+        try:
+            bpy.context.scene["setup_wizard_imported_model_dir"] = folder
+            if fbx_path:
+                bpy.context.scene["setup_wizard_imported_fbx_path"] = fbx_path
+        except Exception:
+            pass
+
+        if fbx_path:
+            _execute_fbx_import(fbx_path)
+
+        handle_ake_post_import(context)
+
+        self.report({"INFO"}, f"Imported Arknights: Endfield character model")
+        if self.next_step_idx:
+            NextStepInvoker().invoke(
+                self.next_step_idx,
+                self.invoker_type,
+                file_path_to_cache=folder,
+                high_level_step_name=self.high_level_step_name,
+                game_type=self.game_type or GameType.ARKNIGHTS_ENDFIELD.name,
             )
         super().clear_custom_properties()
         return {"FINISHED"}
@@ -970,6 +1156,9 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                     bpy.data.objects[object.name].hide_viewport = True
                 bpy.data.objects[object.name].hide_render = True
 
+        if self.game_type == GameType.ARKNIGHTS_ENDFIELD.name:
+            handle_ake_post_import(bpy.context)
+
     def fix_zzz_eye_shadow(self):
         faceobj = None
         for obj in bpy.data.objects:
@@ -1198,5 +1387,6 @@ register, unregister = bpy.utils.register_classes_factory(
         ZZZ_OT_SetUpCharacter,
         NTE_OT_SetUpCharacter,
         WW_OT_SetUpCharacter,
+        AKE_OT_SetUpCharacter,
     ]
 )

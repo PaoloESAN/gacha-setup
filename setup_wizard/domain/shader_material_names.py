@@ -267,3 +267,23 @@ class WutheringWavesShaderMaterialNames(ShaderMaterialNames):
     FACE_SEETHRU = 'WW - Face_SEETHRU'
     EYE_SEETHRU = 'WW - Eye_SEETHRU'
 
+
+class ArknightsEndfieldShaderMaterialNames(ShaderMaterialNames):
+    MATERIAL_PREFIX = 'AKE - '
+    MATERIAL_PREFIX_AFTER_RENAME = 'AKE - '
+    BODY = 'body_01'
+    CLOTH_01 = 'cloth_01'
+    CLOTH_02 = 'cloth_02'
+    EYEBROW = 'eyebrow_01'
+    EYEBROW_ALPHA = 'eyebrow_01_ALPHA'
+    EYESHADOW = 'eyeshadow_01'
+    FACE = 'face_01'
+    HAIR = 'hair_01'
+    HAIRSHADOW = 'hairshadow_01'
+    HEAD = 'head'
+    IRIS = 'iris_01'
+    IRIS_ALPHA = 'iris_01_ALPHA'
+    WEAPON = 'weapon'
+    WING = 'wing'
+    OUTLINES = 'Dots Stroke'
+

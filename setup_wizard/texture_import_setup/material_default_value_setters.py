@@ -37,6 +37,8 @@ class MaterialDefaultValueSetterFactory:
             return NevernessToEvernessMaterialDefaultValueSetter()
         elif game_type == GameType.WUTHERING_WAVES.name:
             return WutheringWavesMaterialDefaultValueSetter()
+        elif game_type == GameType.ARKNIGHTS_ENDFIELD.name:
+            return ArknightsEndfieldMaterialDefaultValueSetter()
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -246,4 +248,185 @@ class WutheringWavesMaterialDefaultValueSetter(MaterialDefaultValueSetter):
 
     def set_default_values(self):
         return
+
+
+class ArknightsEndfieldMaterialDefaultValueSetter(MaterialDefaultValueSetter):
+    def __init__(self, character_folder: str = None) -> None:
+        self.character_folder = character_folder
+
+    def set_default_values(self):
+        import os, json
+        from setup_wizard.import_order import get_active_character_directory
+
+        folder = self.character_folder or get_active_character_directory() or bpy.context.scene.get("setup_wizard_imported_model_dir")
+        if not folder or not os.path.isdir(folder):
+            return
+
+        json_data = {}
+        for root, _, files in os.walk(folder):
+            for f in files:
+                if f.lower().endswith('.json'):
+                    try:
+                        with open(os.path.join(root, f), 'r', encoding='utf-8') as jf:
+                            d = json.load(jf)
+                            stem = os.path.splitext(f)[0].lower()
+                            json_data[stem] = d
+                    except Exception:
+                        pass
+
+        for mat in bpy.data.materials:
+            if not mat.use_nodes or not mat.node_tree:
+                continue
+            mat_name = mat.name.lower()
+
+            matched_json = None
+            for j_stem, j_content in json_data.items():
+                if j_stem in mat_name or mat_name in j_stem:
+                    matched_json = j_content
+                    break
+                parts = mat_name.split('_')
+                if len(parts) >= 2 and '_'.join(parts[-2:]) in j_stem:
+                    matched_json = j_content
+                    break
+
+            if not matched_json:
+                continue
+
+            saved_props = matched_json.get('m_SavedProperties', {})
+            floats = saved_props.get('m_Floats', {})
+            colors = saved_props.get('m_Colors', {})
+
+            # Blend mode / transparency
+            surface_type = float(floats.get('_SurfaceType', 0.0) or 0.0)
+            blend_mode = float(floats.get('_BlendMode', 0.0) or 0.0)
+            alpha_clip = float(floats.get('_AlphaClip', 0.0) or 0.0)
+            
+            if 'body' in mat_name:
+                is_transp = False
+            else:
+                is_transp = (surface_type > 0.0 or blend_mode > 0.0 or alpha_clip > 0.0 or any(k in mat_name for k in ['cloth_03', 'cloth_04', 'cloth_07', 'cloth_08', 'vfxpart']))
+
+            if is_transp:
+                try:
+                    mat.surface_render_method = 'BLENDED'
+                    mat.use_backface_culling = False
+                    mat.show_transparent_back = False
+                except Exception:
+                    pass
+            else:
+                try:
+                    mat.surface_render_method = 'DITHERED'
+                    mat.use_backface_culling = False
+                except Exception:
+                    pass
+
+            # Update shader node group inputs
+            for node in mat.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree:
+                    inputs = node.inputs
+                    if 'BaseColor' in inputs and '_BaseColor' in colors:
+                        c = colors['_BaseColor']
+                        try:
+                            inputs['BaseColor'].default_value = (c.get('r', 1.0), c.get('g', 1.0), c.get('b', 1.0), c.get('a', 1.0))
+                        except Exception:
+                            pass
+
+                    if 'Emission Color' in inputs and '_EmissionColor' in colors:
+                        c = colors['_EmissionColor']
+                        br = float(floats.get('_EmissionBrightness', 1.0) or 1.0)
+                        try:
+                            inputs['Emission Color'].default_value = (c.get('r', 0.0) * br, c.get('g', 0.0) * br, c.get('b', 0.0) * br, 1.0)
+                        except Exception:
+                            pass
+
+                    # Force SmoothnessMax to 1.0 and NormalStrength to 5.0 as requested
+                    if 'SmoothnessMax' in inputs:
+                        try:
+                            inputs['SmoothnessMax'].default_value = 1.0
+                        except Exception:
+                            pass
+
+                    if 'NormalStrength' in inputs:
+                        try:
+                            inputs['NormalStrength'].default_value = 5.0
+                        except Exception:
+                            pass
+
+                    if 'HNormalStrength' in inputs:
+                        try:
+                            inputs['HNormalStrength'].default_value = 5.0
+                        except Exception:
+                            pass
+
+                    if 'Skin NormalStrength' in inputs:
+                        try:
+                            inputs['Skin NormalStrength'].default_value = 5.0
+                        except Exception:
+                            pass
+
+                    if 'Use NormalTex?' in inputs:
+                        try:
+                            inputs['Use NormalTex?'].default_value = True
+                        except Exception:
+                            pass
+
+                    if 'MetallicMax' in inputs and '_Metallic' in floats:
+                        try:
+                            inputs['MetallicMax'].default_value = float(floats['_Metallic'])
+                        except Exception:
+                            pass
+
+                    if 'SpecularColor' in inputs and '_Specular' in floats:
+                        sp = float(floats['_Specular'])
+                        try:
+                            inputs['SpecularColor'].default_value = (sp, sp, sp, 1.0)
+                        except Exception:
+                            pass
+
+                    if 'Highlight length' in inputs and '_AnisotropyIntensity' in floats:
+                        try:
+                            inputs['Highlight length'].default_value = float(floats['_AnisotropyIntensity'])
+                        except Exception:
+                            pass
+
+                    if 'Front R Color' in inputs and '_SDFRimColor' in colors:
+                        c = colors['_SDFRimColor']
+                        try:
+                            inputs['Front R Color'].default_value = (c.get('r', 1.0), c.get('g', 1.0), c.get('b', 1.0), 1.0)
+                        except Exception:
+                            pass
+
+                    if 'Rim_Color' in inputs and '_SDFRimColor' in colors:
+                        c = colors['_SDFRimColor']
+                        try:
+                            inputs['Rim_Color'].default_value = (c.get('r', 1.0), c.get('g', 1.0), c.get('b', 1.0), 1.0)
+                        except Exception:
+                            pass
+
+                    if 'nose_shadow_Color' in inputs and '_NoseShadowColor' in colors:
+                        c = colors['_NoseShadowColor']
+                        try:
+                            inputs['nose_shadow_Color'].default_value = (c.get('r', 1.0), c.get('g', 1.0), c.get('b', 1.0), 1.0)
+                        except Exception:
+                            pass
+
+                    if 'Eyes HightLight brightness' in inputs:
+                        if '_EyeHighLightColor' in colors:
+                            c = colors['_EyeHighLightColor']
+                            mag = max(c.get('r', 1.0), c.get('g', 1.0), c.get('b', 1.0))
+                            try:
+                                inputs['Eyes HightLight brightness'].default_value = max(mag * 2.0, 5.0)
+                            except Exception:
+                                pass
+                        elif '_EmissionBrightness' in floats:
+                            try:
+                                inputs['Eyes HightLight brightness'].default_value = float(floats['_EmissionBrightness']) * 5.0
+                            except Exception:
+                                pass
+
+                    if 'Eyes brightness' in inputs and '_EmissionBrightness' in floats:
+                        try:
+                            inputs['Eyes brightness'].default_value = max(float(floats['_EmissionBrightness']), 1.2)
+                        except Exception:
+                            pass
 

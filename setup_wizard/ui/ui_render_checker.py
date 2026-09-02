@@ -30,3 +30,7 @@ class NevernessToEvernessUIRenderChecker(UIRenderChecker):
 class WutheringWavesUIRenderChecker(UIRenderChecker):
     GAME_TYPE = GameType.WUTHERING_WAVES.name
 
+
+class ArknightsEndfieldUIRenderChecker(UIRenderChecker):
+    GAME_TYPE = GameType.ARKNIGHTS_ENDFIELD.name
+

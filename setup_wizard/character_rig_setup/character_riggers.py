@@ -55,6 +55,8 @@ class CharacterRiggerFactory:
             return NevernessToEvernessCharacterRigger(blender_operator, context)
         elif game_type == GameType.WUTHERING_WAVES.name:
             return WutheringWavesCharacterRigger(blender_operator, context)
+        elif game_type == GameType.ARKNIGHTS_ENDFIELD.name:
+            return ArknightsEndfieldCharacterRigger(blender_operator, context)
         else:
             raise Exception(f'Unexpected input GameType "{game_type}" for CharacterRiggerFactory')
 
@@ -711,6 +713,26 @@ class WutheringWavesCharacterRigger(CharacterRigger):
         except Exception as ex:
             self.blender_operator.report({'ERROR'}, f"Failed to rig Wuthering Waves character: {ex}")
             raise ex
+
+
+class ArknightsEndfieldCharacterRigger(CharacterRigger):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+
+    def rig_character(self):
+        try:
+            armature = _get_character_armature(self.context)
+            if armature:
+                character_rigger_props = self.context.scene.character_rigger_props
+                if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):
+                    from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
+                    apply_hair_and_clothes_physics(armature, self.context)
+                self.blender_operator.report({'INFO'}, 'Arknights: Endfield rig processed successfully.')
+            else:
+                self.blender_operator.report({'INFO'}, 'No armature found, skipped rigging.')
+        except Exception as ex:
+            self.blender_operator.report({'WARNING'}, f"Notice during Arknights: Endfield rigging: {ex}")
 
 
 

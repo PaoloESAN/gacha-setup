@@ -595,8 +595,112 @@ class WW_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
                 pass
 
 
+class AKE_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
+    """Sets up Head Driver (HC, HF, HR) for Arknights: Endfield"""
+
+    bl_idname = "arknights_endfield.setup_head_driver"
+    bl_label = "Arknights Endfield: Setup Head Driver"
+
+    def execute(self, context):
+        setup_ake_head_driver_system(context)
+        self.report({"INFO"}, "Configured Arknights Endfield Head Driver (HC, HF, HR).")
+        if self.next_step_idx:
+            NextStepInvoker().invoke(
+                self.next_step_idx,
+                self.invoker_type,
+                high_level_step_name=self.high_level_step_name,
+                game_type=self.game_type,
+            )
+        super().clear_custom_properties()
+        return {"FINISHED"}
+
+
+def setup_ake_head_driver_system(context=None):
+    if context is None:
+        context = bpy.context
+
+    arm = next((o for o in context.selected_objects if o.type == 'ARMATURE'), None)
+    if not arm:
+        arm = next((o for o in bpy.data.objects if o.type == 'ARMATURE'), None)
+
+    if not arm:
+        return
+
+    head_bone_name = next((b.name for b in arm.data.bones if any(k in b.name.lower() for k in ['bip001_head', 'bip001 head', 'head', 'head_m'])), None)
+    if not head_bone_name:
+        return
+
+    head_pose_bone = arm.pose.bones.get(head_bone_name)
+    if not head_pose_bone:
+        return
+
+    head_world_pos = arm.matrix_world @ head_pose_bone.head
+
+    hc = bpy.data.objects.get('HC')
+    hf = bpy.data.objects.get('HF')
+    hr = bpy.data.objects.get('HR')
+
+    if not hc:
+        return
+
+    # 1. Unparent and clear previous transforms
+    for obj in [hf, hr]:
+        if obj:
+            obj.parent = None
+            obj.matrix_world.identity()
+
+    hc.parent = None
+    for c in list(hc.constraints):
+        hc.constraints.remove(c)
+
+    # 2. Position HC at head center
+    hc.location = head_world_pos
+    hc.rotation_euler = (0, 0, 0)
+    hc.scale = (0.28, 0.28, 0.28)
+
+    # 3. Position HF (Head Forward, front facing: Y -0.28) and HR (Head Right: X -0.28)
+    if hf:
+        hf.parent = hc
+        hf.location = (0.0, -0.28, 0.0)
+        hf.rotation_euler = (0, 0, 0)
+        hf.scale = (1.0, 1.0, 1.0)
+
+    if hr:
+        hr.parent = hc
+        hr.location = (-0.28, 0.0, 0.0)
+        hr.rotation_euler = (0, 0, 0)
+        hr.scale = (1.0, 1.0, 1.0)
+
+    # 4. Add Child Of constraint to HC and call childof_set_inverse
+    con = hc.constraints.new('CHILD_OF')
+    con.target = arm
+    con.subtarget = head_bone_name
+
+    prev_active = context.view_layer.objects.active
+    prev_selected = list(context.selected_objects)
+
+    try:
+        bpy.ops.object.select_all(action='DESELECT')
+        hc.select_set(True)
+        context.view_layer.objects.active = hc
+        bpy.ops.constraint.childof_set_inverse(constraint=con.name, owner='OBJECT')
+    except Exception as e:
+        print(f"[AKE SETUP] Notice setting HC Child Of inverse: {e}")
+    finally:
+        try:
+            bpy.ops.object.select_all(action='DESELECT')
+            for sel in prev_selected:
+                if sel and sel.name in context.view_layer.objects:
+                    sel.select_set(True)
+            if prev_active and prev_active.name in context.view_layer.objects:
+                context.view_layer.objects.active = prev_active
+        except Exception:
+            pass
+
+
 register, unregister = bpy.utils.register_classes_factory([
     GI_OT_SetUpHeadDriver,
     ZZZ_OT_SetUpHeadDriver,
     WW_OT_SetUpHeadDriver,
+    AKE_OT_SetUpHeadDriver,
 ])
