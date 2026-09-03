@@ -537,29 +537,67 @@ class GenshinTextureImporter:
     def set_shadow_ramp_texture(self, type: TextureType, img):
         if not img:
             return
-        img.colorspace_settings.name = 'Non-Color'
-        possible_shadow_ramp_node_group_names = [
-            f'{type.value} Shadow Ramp',
-            f'{type.value}_Shadow_Ramp',
-            'Body Shadow Ramp',
-            'Hair Shadow Ramp',
-            V4_GenshinImpactTextureNodeNames.SHADER_TEXTURES_NODE_GROUP,
-        ]
-        for shadow_ramp_node_name in possible_shadow_ramp_node_group_names:
-            shadow_ramp_node_group = bpy.data.node_groups.get(shadow_ramp_node_name)
-            if shadow_ramp_node_group and hasattr(shadow_ramp_node_group, 'nodes'):
-                for n in shadow_ramp_node_group.nodes:
-                    if n.type == 'TEX_IMAGE':
+        img.colorspace_settings.name = 'sRGB'
+
+        img_name_low = (img.name or "").lower()
+        if 'hair' in img_name_low and 'body' not in img_name_low:
+            is_hair = True
+            is_body = False
+            is_body2 = False
+        elif 'body2' in img_name_low or type == TextureType.BODY2:
+            is_hair = False
+            is_body = False
+            is_body2 = True
+        elif 'body' in img_name_low and 'hair' not in img_name_low:
+            is_hair = False
+            is_body = True
+            is_body2 = False
+        else:
+            is_hair = (type == TextureType.HAIR)
+            is_body2 = (type == TextureType.BODY2)
+            is_body = (type == TextureType.BODY)
+
+        def is_valid_shadow_ramp_node(n):
+            n_id = f"{n.name} {n.label or ''}".lower()
+            if any(ign in n_id for ign in ['diffuse', 'lightmap', 'normal', 'mask', 'specular', 'metal', 'ao', 'face_shadow', 'face shadow']):
+                return False
+            return 'shadow' in n_id or 'ramp' in n_id
+
+        # 1. Target node groups (e.g. "Body Shadow Ramp", "Hair Shadow Ramp", "Shader Textures")
+        for ng in bpy.data.node_groups:
+            if not hasattr(ng, 'nodes'):
+                continue
+            ng_low = ng.name.lower()
+            if any(ign in ng_low for ign in ['face', 'pupil', 'pupila', 'metal', 'specular', 'ao']):
+                continue
+
+            for n in ng.nodes:
+                if n.type == 'TEX_IMAGE' and is_valid_shadow_ramp_node(n):
+                    node_title = f"{n.name} {n.label or ''}".lower()
+                    if is_hair and ('hair' in node_title or ('hair' in ng_low and 'body' not in node_title)):
+                        n.image = img
+                    elif is_body2 and 'body2' in node_title:
+                        n.image = img
+                    elif is_body and ('body' in node_title or ('body' in ng_low and 'hair' not in node_title)):
                         n.image = img
 
+        # 2. Target materials
         for mat in bpy.data.materials:
-            if mat.use_nodes and mat.node_tree:
-                for n in mat.node_tree.nodes:
-                    if n.type == 'TEX_IMAGE':
-                        n_id = (n.name + " " + (n.label or "")).lower()
-                        if 'shadow' in n_id or 'ramp' in n_id:
-                            if not any(k in n_id for k in ['diffuse', 'lightmap', 'normal', 'mask']):
-                                n.image = img
+            if not getattr(mat, 'use_nodes', False) or not mat.node_tree:
+                continue
+            m_low = mat.name.lower()
+            if any(k in m_low for k in ['outlines', 'outline', 'face', 'pupil', 'pupila', 'brow', 'eye']):
+                continue
+
+            for n in mat.node_tree.nodes:
+                if n.type == 'TEX_IMAGE' and is_valid_shadow_ramp_node(n):
+                    node_title = f"{n.name} {n.label or ''}".lower()
+                    if is_hair and ('hair' in node_title or ('hair' in m_low and 'body' not in node_title)):
+                        n.image = img
+                    elif is_body2 and 'body2' in node_title:
+                        n.image = img
+                    elif is_body and ('body' in node_title or ('body' in m_low and 'hair' not in node_title)):
+                        n.image = img
 
     def set_specular_ramp_texture(self, type: TextureType, img):
         specular_ramp_node_exists = bpy.data.node_groups.get(f'{type.value} Specular Ramp')
@@ -936,7 +974,15 @@ class GenshinTextureImporter:
                 if shadow_ramp_name:
                     shadow_ramp_img = resolve_img(shadow_ramp_name)
                     if shadow_ramp_img:
-                        tex_type = TextureType.HAIR if mat_part.lower() in ['hair', 'effecthair', 'helmet', 'helmetemo'] else TextureType.BODY
+                        s_name_low = (shadow_ramp_name + " " + shadow_ramp_img.name).lower()
+                        if 'hair' in s_name_low and 'body' not in s_name_low:
+                            tex_type = TextureType.HAIR
+                        elif 'body2' in s_name_low:
+                            tex_type = TextureType.BODY2
+                        elif 'body' in s_name_low and 'hair' not in s_name_low:
+                            tex_type = TextureType.BODY
+                        else:
+                            tex_type = TextureType.HAIR if mat_part.lower() in ['hair', 'effecthair', 'helmet', 'helmetemo'] else TextureType.BODY
                         self.set_shadow_ramp_texture(tex_type, shadow_ramp_img)
                         imported_any = True
 
@@ -1513,6 +1559,8 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                 pupil_ramp_img.alpha_mode = 'CHANNEL_PACKED'
                 pupil_ramp_img.colorspace_settings.name = 'sRGB'
 
+            for f_name in files:
+                f_lower = f_name.lower()
                 if ('pupil' in f_lower or 'pupila' in f_lower) and 'diffuse' in f_lower and f_lower.endswith(('.png', '.tga', '.dds')):
                     for k in ['01', '02', '03', '04', '1', '2', '3', '4']:
                         k_num = str(int(k))
@@ -1825,7 +1873,11 @@ class GenshinNPCTextureImporter(GenshinTextureImporter):
         self.shader_material_names = self.shader_identifier_service.get_shader_material_names_using_shader(self.genshin_shader_version)
 
     def import_textures(self, directory):
-        self.import_textures_from_json(directory)
+        if self.import_textures_from_json(directory):
+            for mat in bpy.data.materials:
+                if mat.use_nodes and not any(k in mat.name.lower() for k in ['outlines', 'outline', 'face', 'pupil', 'brow', 'eye']):
+                    sync_material_category_textures(mat)
+            return
 
         for name, folder, files in os.walk(directory):
             self.files = files

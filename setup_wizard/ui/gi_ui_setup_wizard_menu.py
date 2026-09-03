@@ -497,12 +497,12 @@ GI_LIGHT_PRESETS = {
         "ambient": (1.0, 1.0, 1.0),
         "sharp_lit": (1.0, 1.0, 1.0),
         "soft_lit": (1.0, 1.0, 1.0),
-        "sharp_shadow": (0.7, 0.7, 0.8),
-        "soft_shadow": (0.7, 0.7, 0.8),
+        "sharp_shadow": (1.0, 1.0, 1.0),
+        "soft_shadow": (1.0, 1.0, 1.0),
         "shadow_position": 0.55,
         "day_night": 0.0,
         "rim_lit": (1.0, 1.0, 1.0),
-        "rim_shadow": (0.5, 0.5, 0.6),
+        "rim_shadow": (1.0, 1.0, 1.0),
     },
     "1": {  # Sunrise
         "ambient": (0.95, 0.85, 0.8),
@@ -623,11 +623,11 @@ def sync_genshin_shader_properties(scene=None):
     if len(soft_lit_col) == 3:
         soft_lit_col.append(1.0)
 
-    sharp_shadow_col = list(getattr(scene, "gi_sharp_shadow_color", (0.7, 0.7, 0.8)))
+    sharp_shadow_col = list(getattr(scene, "gi_sharp_shadow_color", (1.0, 1.0, 1.0)))
     if len(sharp_shadow_col) == 3:
         sharp_shadow_col.append(1.0)
 
-    soft_shadow_col = list(getattr(scene, "gi_soft_shadow_color", (0.7, 0.7, 0.8)))
+    soft_shadow_col = list(getattr(scene, "gi_soft_shadow_color", (1.0, 1.0, 1.0)))
     if len(soft_shadow_col) == 3:
         soft_shadow_col.append(1.0)
 
@@ -639,7 +639,7 @@ def sync_genshin_shader_properties(scene=None):
     if len(rim_lit_col) == 3:
         rim_lit_col.append(1.0)
 
-    rim_shadow_col = list(getattr(scene, "gi_rim_shadow_color", (0.5, 0.5, 0.6)))
+    rim_shadow_col = list(getattr(scene, "gi_rim_shadow_color", (1.0, 1.0, 1.0)))
     if len(rim_shadow_col) == 3:
         rim_shadow_col.append(1.0)
 
@@ -910,7 +910,7 @@ def register_gi_properties():
         size=3,
         min=0.0,
         max=1.0,
-        default=(0.7, 0.7, 0.8),
+        default=(1.0, 1.0, 1.0),
         update=update_gi_lighting,
     )
     bpy.types.Scene.gi_soft_shadow_color = bpy.props.FloatVectorProperty(
@@ -919,7 +919,7 @@ def register_gi_properties():
         size=3,
         min=0.0,
         max=1.0,
-        default=(0.7, 0.7, 0.8),
+        default=(1.0, 1.0, 1.0),
         update=update_gi_lighting,
     )
     bpy.types.Scene.gi_shadow_position = bpy.props.FloatProperty(
@@ -963,7 +963,7 @@ def register_gi_properties():
         size=3,
         min=0.0,
         max=1.0,
-        default=(0.5, 0.5, 0.6),
+        default=(1.0, 1.0, 1.0),
         update=update_gi_lighting,
     )
     bpy.types.Scene.gi_hair_physics_influence = bpy.props.FloatProperty(
