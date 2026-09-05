@@ -610,14 +610,23 @@ def rig_character(
             has_lighting_panel=False,
         )
 
-        # Distribute AKE facial bones to Face collection
-        face_coll = rigifyr.data.collections.get("Face")
+        # Distribute AKE facial bones to Face collection and hide it
+        face_coll = rigifyr.data.collections.get("Face") or rigifyr.data.collections.new("Face")
+        other_coll = rigifyr.data.collections.get("Other")
         if face_coll:
             for pb in rigifyr.pose.bones:
+                if pb.name in ("eye.L", "eye.R", "eyes"):
+                    continue
                 pb_low = pb.name.lower()
-                if any(k in pb_low for k in ["brow", "eye", "iris", "lip", "mouth", "jaw", "cheek", "face_"]):
+                if any(k in pb_low for k in ["brow", "eye", "iris", "lip", "mouth", "jaw", "cheek", "face_", "tongue", "nose", "tooth"]):
                     if not pb.name.startswith(("DEF-", "MCH-", "ORG-")):
                         face_coll.assign(pb.bone)
+                        if other_coll and pb.name in other_coll.bones:
+                            try:
+                                other_coll.unassign(pb.bone)
+                            except Exception:
+                                pass
+            face_coll.is_visible = False
 
     # 14. Clean up utility armatures and widget objects
     for extra_arm in ["metarig"]:
@@ -698,3 +707,4 @@ def rig_character(
     modify_and_run_rig_ui_script(rigifyr, original_name, char_name=char_name)
 
     print(f"[AKE RIG] Character '{char_name}' rigged successfully!")
+    return rigifyr

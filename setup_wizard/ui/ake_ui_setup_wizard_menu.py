@@ -199,6 +199,13 @@ class AKE_PT_UI_Rig_Character_Menu(Panel, ArknightsEndfieldUIRenderChecker):
         layout = self.layout
         sub_layout = layout.column(align=True)
         OperatorFactory.create_rig_character_ui(sub_layout, game_type=GameType.ARKNIGHTS_ENDFIELD.name)
+        OperatorFactory.create(
+            sub_layout,
+            "arknights_endfield.setup_face_rig",
+            "Set Up Isaac Face Rig",
+            "ARMATURE_DATA",
+            game_type=GameType.ARKNIGHTS_ENDFIELD.name,
+        )
 
 
 class AKE_PT_UI_Finish_Setup_Menu(Panel, ArknightsEndfieldUIRenderChecker):

@@ -770,6 +770,14 @@ class ArknightsEndfieldCharacterRigger(CharacterRigger):
             except Exception as e_phys:
                 print(f"[AKE Rig Warning] apply_hair_and_clothes_physics error: {e_phys}")
 
+        try:
+            from setup_wizard.character_rig_setup.ake_face_rig import setup_endfield_isaac_face_rig
+            from setup_wizard.character_rig_setup.rig_ui_utils import find_target_armature
+            target_rig = find_target_armature(self.context, armature)
+            setup_endfield_isaac_face_rig(target_rig, self.context)
+        except Exception as e_face:
+            print(f"[AKE Rig Warning] Isaac face rig setup error: {e_face}")
+
         cache_enabled = self.context.window_manager.cache_enabled
         if cache_enabled and filepath:
             cache_using_cache_key(get_cache(cache_enabled), self.rigify_bone_shapes_file_path, filepath)

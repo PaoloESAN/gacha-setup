@@ -41,6 +41,9 @@ else:
     from setup_wizard.character_rig_setup.wuwa_face_panel import (
         WW_OT_CreateFacePanel,
     )
+    from setup_wizard.character_rig_setup.ake_face_rig import (
+        AKE_OT_SetUpIsaacFaceRig,
+    )
     from setup_wizard.character_rig_setup.character_rigger_props import (
         CharacterRiggerPropertyGroup,
         CharacterRiggerPropertyManager,
@@ -329,6 +332,7 @@ else:
         AKE_OT_SetUpOutlines,
         AKE_OT_FinishSetup,
         AKE_OT_SetupCompositorNodes,
+        AKE_OT_SetUpIsaacFaceRig,
     ]
 
     for module in modules:
