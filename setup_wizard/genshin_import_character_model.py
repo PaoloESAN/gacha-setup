@@ -124,6 +124,51 @@ def apply_spine_rest_pose(armature):
             pass
 
 
+def clear_armature_pose(armature):
+    """
+    Clears all pose transformations (location, rotation, scale) for all bones in the armature.
+    Switches to POSE mode, selects all bones, and clears transforms to reset the pose.
+    """
+    if not armature or armature.type != 'ARMATURE':
+        return
+
+    orig_mode = bpy.context.object.mode if bpy.context.object else 'OBJECT'
+
+    try:
+        if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        armature.hide_viewport = False
+        armature.hide_set(False)
+        bpy.context.view_layer.objects.active = armature
+        armature.select_set(True)
+
+        bpy.ops.object.mode_set(mode='POSE')
+        try:
+            bpy.ops.pose.select_all(action='SELECT')
+            bpy.ops.pose.transforms_clear()
+        except Exception:
+            pass
+
+        # Also reset directly on all pose bones to guarantee every bone is reset
+        if armature.pose:
+            for pbone in armature.pose.bones:
+                pbone.location = (0.0, 0.0, 0.0)
+                pbone.rotation_euler = (0.0, 0.0, 0.0)
+                if hasattr(pbone, 'rotation_quaternion'):
+                    pbone.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
+                if hasattr(pbone, 'rotation_axis_angle'):
+                    pbone.rotation_axis_angle = (0.0, 0.0, 1.0, 0.0)
+                pbone.scale = (1.0, 1.0, 1.0)
+    except Exception as e:
+        print(f"[CLEAR POSE] Notice: {e}")
+    finally:
+        try:
+            bpy.ops.object.mode_set(mode=orig_mode if orig_mode in ('OBJECT', 'EDIT', 'POSE') else 'OBJECT')
+        except Exception:
+            pass
+
+
 def reorient_armature_bones(armature):
     """
     Reorients edit bone tails towards their children's average position
@@ -746,6 +791,8 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
             ):
                 armatures = [o for o in bpy.data.objects if o.type == "ARMATURE"]
                 if armatures:
+                    if self.game_type == GameType.GENSHIN_IMPACT.name:
+                        clear_armature_pose(armatures[0])
                     reorient_armature_bones(armatures[0])
 
             self.rename_mesh_color_attribute_name(
@@ -1393,6 +1440,33 @@ class GI_OT_DeleteEmpties(Operator, CustomOperatorProperties):
         return {"FINISHED"}
 
 
+class GI_OT_ClearPose(Operator, CustomOperatorProperties):
+    """Clears pose transforms (location, rotation, scale) for all bones in the armature"""
+
+    bl_idname = "genshin.clear_pose"
+    bl_label = "Clear Pose"
+
+    def execute(self, context):
+        armature = context.active_object
+        if not armature or armature.type != "ARMATURE":
+            armatures = [o for o in context.selected_objects if o.type == "ARMATURE"]
+            if not armatures:
+                armatures = [
+                    o for o in context.scene.objects
+                    if o.type == "ARMATURE" and not any(ign in o.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig"])
+                ]
+            if armatures:
+                armature = armatures[0]
+
+        if not armature or armature.type != "ARMATURE":
+            self.report({"ERROR"}, "Please select a character armature first.")
+            return {"CANCELLED"}
+
+        clear_armature_pose(armature)
+        self.report({"INFO"}, f"Successfully cleared pose for '{armature.name}'.")
+        return {"FINISHED"}
+
+
 class GI_OT_ReorientBones(Operator, CustomOperatorProperties):
     """Reorients armature bones toward children and recalculates roll along global +Y axis"""
 
@@ -1415,6 +1489,15 @@ class GI_OT_ReorientBones(Operator, CustomOperatorProperties):
             self.report({"ERROR"}, "Please select a character armature first.")
             return {"CANCELLED"}
 
+        game_type = self.game_type
+        if not game_type and hasattr(context.scene, "game_type_dropdown"):
+            game_type = context.scene.game_type_dropdown
+        if not game_type:
+            game_type = GameType.GENSHIN_IMPACT.name
+
+        if game_type == GameType.GENSHIN_IMPACT.name:
+            clear_armature_pose(armature)
+
         reorient_armature_bones(armature)
         self.report({"INFO"}, f"Successfully fixed bone orientation for '{armature.name}'.")
         return {"FINISHED"}
@@ -1424,6 +1507,7 @@ register, unregister = bpy.utils.register_classes_factory(
     [
         GI_OT_GenshinImportModel,
         GI_OT_DeleteEmpties,
+        GI_OT_ClearPose,
         GI_OT_ReorientBones,
         GI_OT_SetUpCharacter,
         HSR_OT_SetUpCharacter,

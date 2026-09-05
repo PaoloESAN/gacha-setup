@@ -199,6 +199,13 @@ class GI_PT_UI_Character_Model_Menu(Panel, GenshinImpactUIRenderChecker):
         )
         OperatorFactory.create(
             sub_layout,
+            'genshin.clear_pose',
+            'Clear Pose',
+            'POSE_HLT',
+            game_type=GameType.GENSHIN_IMPACT.name,
+        )
+        OperatorFactory.create(
+            sub_layout,
             'genshin.reorient_bones',
             'Fix Orientation',
             'BONE_DATA'

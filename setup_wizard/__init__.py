@@ -55,6 +55,7 @@ else:
         NTE_OT_SetUpCharacter,
         WW_OT_SetUpCharacter,
         AKE_OT_SetUpCharacter,
+        GI_OT_ClearPose,
         GI_OT_ReorientBones,
     )
     from setup_wizard.genshin_import_materials import (
@@ -230,6 +231,7 @@ else:
         GI_PT_UI_Post_Processing_Node_Editor_Setup_Menu,
         GI_OT_GenshinSetupWizardUI,
         GI_OT_SetUpCharacter,
+        GI_OT_ClearPose,
         GI_OT_ReorientBones,
         GI_OT_SetUpMaterials,
         GI_OT_SetUpOutlines,
