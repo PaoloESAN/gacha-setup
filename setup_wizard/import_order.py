@@ -370,17 +370,58 @@ def get_actual_material_name_for_dress(material_name, character_type='AVATAR', i
                             actual_material_name = 'Body2'
                         elif any(k in material_name for k in ['Dress01', 'Dress1', 'Body01', 'Body1']):
                             actual_material_name = 'Body1'
+                        elif 'collei' in material_name.lower():
+                            actual_material_name = 'Hair'
                         else:
                             actual_material_name = 'Body'
                 except (IndexError, AttributeError, KeyError, Exception):
-                    # ex. 'Diffuse Texture.001'
-                    actual_material_name = material_name.split('_')[-1]
-                    if any(k in material_name or k in actual_material_name for k in ['Dress02', 'Dress2', 'Body02', 'Body2']):
-                        actual_material_name = 'Body2'
-                    elif any(k in material_name or k in actual_material_name for k in ['Dress01', 'Dress1', 'Body01', 'Body1']):
-                        actual_material_name = 'Body1'
-                    elif actual_material_name == 'Dress' or 'Dress' in material_name:
-                        actual_material_name = 'Body'
+                    actual_material_name = None
+                    char_dir = get_active_character_directory()
+                    if char_dir:
+                        candidates = [os.path.join(char_dir, "Materials"), char_dir]
+                        for c_dir in candidates:
+                            if os.path.isdir(c_dir):
+                                dress_json = None
+                                hair_json = None
+                                for jf in os.listdir(c_dir):
+                                    if jf.lower().endswith('.json'):
+                                        if 'dress' in jf.lower():
+                                            dress_json = os.path.join(c_dir, jf)
+                                        elif 'hair' in jf.lower():
+                                            hair_json = os.path.join(c_dir, jf)
+                                if dress_json:
+                                    try:
+                                        with open(dress_json, 'r', encoding='utf-8') as f:
+                                            d_data = json.load(f)
+                                        d_tex_envs = d_data.get('m_SavedProperties', {}).get('m_TexEnvs', {})
+                                        d_main = d_tex_envs.get('_MainTex', {}).get('m_Texture', {})
+                                        d_name = d_main.get('Name', '')
+                                        d_pid = d_main.get('m_PathID')
+                                        if 'hair' in d_name.lower():
+                                            actual_material_name = 'Hair'
+                                        elif 'body' in d_name.lower():
+                                            actual_material_name = 'Body'
+                                        elif d_pid and hair_json:
+                                            with open(hair_json, 'r', encoding='utf-8') as hf:
+                                                h_data = json.load(hf)
+                                            h_pid = h_data.get('m_SavedProperties', {}).get('m_TexEnvs', {}).get('_MainTex', {}).get('m_Texture', {}).get('m_PathID')
+                                            if h_pid == d_pid:
+                                                actual_material_name = 'Hair'
+                                    except Exception:
+                                        pass
+                                break
+
+                    if not actual_material_name:
+                        if 'collei' in material_name.lower() or (char_dir and 'collei' in char_dir.lower()):
+                            actual_material_name = 'Hair'
+                        elif any(k in material_name for k in ['Dress02', 'Dress2', 'Body02', 'Body2']):
+                            actual_material_name = 'Body2'
+                        elif any(k in material_name for k in ['Dress01', 'Dress1', 'Body01', 'Body1']):
+                            actual_material_name = 'Body1'
+                        elif 'Dress' in material_name or material_name.split('_')[-1] == 'Dress':
+                            actual_material_name = 'Body'
+                        else:
+                            actual_material_name = material_name.split('_')[-1]
                     print(f'WARNING: Fallback to applying "{actual_material_name}" onto "{material_name}". Image name is not parseable for: {material_name}')
                 return actual_material_name
     else:
@@ -390,7 +431,10 @@ def get_actual_material_name_for_dress(material_name, character_type='AVATAR', i
 
         # is it the shader's Dress material? or are we checking the original material's name?
         actual_material_name = material_name.split(' ')[-1] if is_shader_dress_material else material_name.split('_')[-2] if material_name.split('_')[-2] != 'Mat' else material_name.split('_')[-1]
-        if any(k in material_name or k in actual_material_name for k in ['Dress02', 'Dress2', 'Body02', 'Body2']):
+        char_dir = get_active_character_directory()
+        if 'collei' in material_name.lower() or (char_dir and 'collei' in char_dir.lower()):
+            actual_material_name = 'Hair'
+        elif any(k in material_name or k in actual_material_name for k in ['Dress02', 'Dress2', 'Body02', 'Body2']):
             actual_material_name = 'Body2'
         elif any(k in material_name or k in actual_material_name for k in ['Dress01', 'Dress1', 'Body01', 'Body1']):
             actual_material_name = 'Body1'
