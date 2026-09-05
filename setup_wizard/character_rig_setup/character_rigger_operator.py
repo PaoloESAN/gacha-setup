@@ -49,6 +49,7 @@ class HOYOVERSE_OT_rig_character(Operator, ImportHelper, CustomOperatorPropertie
         GameType.ZENLESS_ZONE_ZERO.name,
         GameType.NEVERNESS_TO_EVERNESS.name,
         GameType.WUTHERING_WAVES.name,
+        GameType.ARKNIGHTS_ENDFIELD.name,
     ]
 
     def execute(self, context):
@@ -115,6 +116,8 @@ class HOYOVERSE_OT_rig_character(Operator, ImportHelper, CustomOperatorPropertie
                     self.game_type = GameType.NEVERNESS_TO_EVERNESS.name
                 elif 'Bip001Pelvis' in b_names or 'Bip001Head' in b_names or 'Bip001Neck' in b_names or 'Bip001LUpperArm' in b_names:
                     self.game_type = GameType.WUTHERING_WAVES.name
+                elif any(k in b_names for k in ('faceLfIrisJoint', 'faceRtIrisJoint', 'browLf01Joint', 'browLineLf01Joint')) or any('actor_' in o.name.lower() or 'chr_' in o.name.lower() for o in context.scene.objects if o.type == 'MESH'):
+                    self.game_type = GameType.ARKNIGHTS_ENDFIELD.name
         
         if not self.game_type:
             if getattr(context.scene, "game_type_dropdown", None):

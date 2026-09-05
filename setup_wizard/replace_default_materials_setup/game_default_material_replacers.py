@@ -2495,12 +2495,6 @@ class ArknightsEndfieldDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         _set_mod_socket(mod_fa, "browAlphaMat", brow_alpha_mat)
 
         self.blender_operator.report({'INFO'}, 'Replaced default materials with Arknights: Endfield materials and configured modifiers.')
-        NextStepInvoker().invoke(
-            self.blender_operator.next_step_idx, 
-            self.blender_operator.invoker_type, 
-            high_level_step_name=self.blender_operator.high_level_step_name,
-            game_type=self.blender_operator.game_type,
-        )
 
 
 

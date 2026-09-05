@@ -92,6 +92,7 @@ else:
         AKE_OT_SetUpHeadDriver,
     )
     from setup_wizard.misc_final_steps import (
+        GI_OT_FixTransformations,
         GI_OT_FinishSetup,
         HSR_OT_FinishSetup,
         ZZZ_OT_FinishSetup,
@@ -232,6 +233,7 @@ else:
         GI_OT_ReorientBones,
         GI_OT_SetUpMaterials,
         GI_OT_SetUpOutlines,
+        GI_OT_FixTransformations,
         GI_OT_FinishSetup,
         GI_OT_RigCharacter,
         GI_OT_CharacterRiggerOperator,

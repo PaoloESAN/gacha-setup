@@ -13,6 +13,7 @@ from setup_wizard.character_rig_setup.hsr_rig_script import rig_character as hsr
 from setup_wizard.character_rig_setup.zzz_rig_script import rig_character as zzz_rig_character
 from setup_wizard.character_rig_setup.nte_rig_script import rig_character as nte_rig_character
 from setup_wizard.character_rig_setup.wuwa_rig_script import rig_wuthering_waves_character
+from setup_wizard.character_rig_setup.ake_rig_script import rig_character as ake_rig_character
 from setup_wizard.character_rig_setup.zzz_face_rig import zzz_face_rig_main
 
 
@@ -719,20 +720,68 @@ class ArknightsEndfieldCharacterRigger(CharacterRigger):
     def __init__(self, blender_operator, context):
         self.blender_operator = blender_operator
         self.context = context
+        self.rigify_bone_shapes_file_path = GENSHIN_RIGIFY_BONE_SHAPES_FILE_PATH
 
     def rig_character(self):
+        cache_enabled = self.context.window_manager.cache_enabled
+        filepath = get_cache(cache_enabled).get(self.rigify_bone_shapes_file_path) or self.blender_operator.filepath
+
+        if not filepath:
+            filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'RootShape.blend')
+
+        armature = _get_character_armature(self.context)
+        if not armature:
+            self.blender_operator.report({'ERROR'}, 'No armature found. Please import or select a character.')
+            return
+
+        character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
+        meshes_joined = not (bpy.data.objects.get('Body') and bpy.data.objects.get('Face'))
+
         try:
-            armature = _get_character_armature(self.context)
-            if armature:
-                character_rigger_props = self.context.scene.character_rigger_props
-                if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):
-                    from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
-                    apply_hair_and_clothes_physics(armature, self.context)
-                self.blender_operator.report({'INFO'}, 'Arknights: Endfield rig processed successfully.')
-            else:
-                self.blender_operator.report({'INFO'}, 'No armature found, skipped rigging.')
-        except Exception as ex:
-            self.blender_operator.report({'WARNING'}, f"Notice during Arknights: Endfield rigging: {ex}")
+            if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+                bpy.ops.object.mode_set(mode='OBJECT')
+        except Exception:
+            pass
+
+        bpy.ops.object.select_all(action='DESELECT')
+        try:
+            armature.hide_set(False)
+        except Exception:
+            pass
+        self.context.view_layer.objects.active = armature
+        armature.select_set(True)
+
+        ake_rig_character(
+            filepath,
+            not character_rigger_props.allow_arm_ik_stretch,
+            not character_rigger_props.allow_leg_ik_stretch,
+            character_rigger_props.use_arm_ik_poles,
+            character_rigger_props.use_leg_ik_poles,
+            character_rigger_props.add_children_of_constraints,
+            character_rigger_props.use_head_tracker,
+            meshes_joined=meshes_joined,
+        )
+
+        if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):
+            try:
+                from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics, find_target_armature
+                target_rig = find_target_armature(self.context, armature)
+                apply_hair_and_clothes_physics(target_rig, self.context)
+            except Exception as e_phys:
+                print(f"[AKE Rig Warning] apply_hair_and_clothes_physics error: {e_phys}")
+
+        cache_enabled = self.context.window_manager.cache_enabled
+        if cache_enabled and filepath:
+            cache_using_cache_key(get_cache(cache_enabled), self.rigify_bone_shapes_file_path, filepath)
+
+        try:
+            if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+                bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.select_all(action='DESELECT')
+        except Exception:
+            pass
+
+        self.blender_operator.report({'INFO'}, 'Successfully rigged Arknights: Endfield character')
 
 
 

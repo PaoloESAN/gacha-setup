@@ -4,6 +4,7 @@
 # the armature bone settings when importing the FBX model
 
 import os
+import math
 import pathlib
 
 import bpy
@@ -487,7 +488,53 @@ def compute_ake_smoothnormal_ws(mesh_obj):
 
 
 def handle_ake_post_import(context):
-    """Handles post FBX import operations for Arknights: Endfield: normal smoothing, vertex color attributes, face subpart vertex weighting, face mesh joining, camera creation, and hiding auxiliary parts."""
+    """Handles post FBX import operations for Arknights: Endfield: clearing imported pose, rotating -90 deg X to stand upright, normal smoothing, vertex color attributes, face subpart vertex weighting, face mesh joining, and hiding auxiliary parts."""
+    # 0. Clear baked import pose and stand model upright (-90 deg on X)
+    armatures = [o for o in bpy.data.objects if o.type == 'ARMATURE']
+    if armatures:
+        armature = armatures[0]
+        orig_mode = bpy.context.object.mode if bpy.context.object else 'OBJECT'
+        try:
+            if bpy.ops.object.mode_set.poll():
+                bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.select_all(action='DESELECT')
+            armature.hide_viewport = False
+            try:
+                armature.hide_set(False)
+            except Exception:
+                pass
+            armature.select_set(True)
+            context.view_layer.objects.active = armature
+
+            # Select all in pose mode and clear all pose transforms
+            bpy.ops.object.mode_set(mode='POSE')
+            bpy.ops.pose.select_all(action='SELECT')
+            bpy.ops.pose.transforms_clear()
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+            # Clearing baked pose makes the character lie flat on the floor because FBX imported with rot_x = +90 deg.
+            # Rotate -90 degrees on X to stand upright.
+            armature.rotation_euler.x -= math.radians(90)
+            context.view_layer.update()
+
+            # Apply rotation transforms across armature and all child meshes
+            meshes = [o for o in bpy.data.objects if o.type == 'MESH']
+            bpy.ops.object.select_all(action='DESELECT')
+            armature.select_set(True)
+            for m in meshes:
+                m.select_set(True)
+            context.view_layer.objects.active = armature
+            bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
+            print("[AKE SETUP] Cleared import pose, rotated -90 deg on X, and applied transforms successfully.")
+        except Exception as e:
+            print(f"[AKE SETUP] Pose clear / orientation notice: {e}")
+        finally:
+            try:
+                if bpy.ops.object.mode_set.poll():
+                    bpy.ops.object.mode_set(mode=orig_mode if orig_mode in ('OBJECT', 'EDIT', 'POSE') else 'OBJECT')
+            except Exception:
+                pass
+
     # 1. Compute smoothnormalWS and ensure Color vertex attribute exists for all meshes
     for obj in bpy.data.objects:
         if obj.type == 'MESH':
@@ -510,7 +557,7 @@ def handle_ake_post_import(context):
         if o != face_mesh and any(k in o.name.lower() for k in ['eyebrow', 'brow', 'iris', 'eyeshadow', 'eyewhite'])
     ]
 
-    # Assign Bip001_Head and eye bone weights to iris so it moves with the head
+    # Assign Bip001_Head and eye bone weights to iris so it moves with the head and eye controllers
     if iris_mesh:
         vg_head = iris_mesh.vertex_groups.get('Bip001_Head') or iris_mesh.vertex_groups.new(name='Bip001_Head')
         for v in iris_mesh.data.vertices:
@@ -518,11 +565,15 @@ def handle_ake_post_import(context):
 
         vg_lf = iris_mesh.vertex_groups.get('faceLfIrisJoint') or iris_mesh.vertex_groups.new(name='faceLfIrisJoint')
         vg_rt = iris_mesh.vertex_groups.get('faceRtIrisJoint') or iris_mesh.vertex_groups.new(name='faceRtIrisJoint')
+        vg_def_lf = iris_mesh.vertex_groups.get('DEF-eye.L') or iris_mesh.vertex_groups.new(name='DEF-eye.L')
+        vg_def_rt = iris_mesh.vertex_groups.get('DEF-eye.R') or iris_mesh.vertex_groups.new(name='DEF-eye.R')
         for v in iris_mesh.data.vertices:
             if v.co.x > 0:
                 vg_lf.add([v.index], 1.0, 'REPLACE')
+                vg_def_lf.add([v.index], 1.0, 'REPLACE')
             else:
                 vg_rt.add([v.index], 1.0, 'REPLACE')
+                vg_def_rt.add([v.index], 1.0, 'REPLACE')
 
     # Ensure eyebrows and eyeshadow have Bip001_Head vertex group
     for obj in join_targets:
@@ -546,14 +597,6 @@ def handle_ake_post_import(context):
         except Exception as e:
             print(f"[AKE SETUP] Face join notice: {e}")
 
-    # 3. Ensure an active camera exists in the scene (required by Face_ALPHA and Facemat)
-    if not context.scene.camera:
-        cam_data = bpy.data.cameras.new("Camera")
-        cam_obj = bpy.data.objects.new("Camera", cam_data)
-        cam_obj.location = (0.0, -2.5, 1.5)
-        cam_obj.rotation_euler = (1.5708, 0, 0)
-        context.scene.collection.objects.link(cam_obj)
-        context.scene.camera = cam_obj
 
     # 4. Hide auxiliary vfxpart meshes
     for o in bpy.data.objects:

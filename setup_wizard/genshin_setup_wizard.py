@@ -310,6 +310,7 @@ def setup_dependencies():
         setup_wizard.genshin_import_outlines.GI_OT_GenshinImportOutlines,
         setup_wizard.genshin_import_textures.GI_OT_GenshinImportTextures,
         setup_wizard.genshin_replace_default_materials.GI_OT_GenshinReplaceDefaultMaterials,
+        setup_wizard.misc_final_steps.GI_OT_FixTransformations,
         setup_wizard.fix_mouth_outlines.GI_OT_FixMouthOutlines,
         setup_wizard.set_up_head_driver.GI_OT_SetUpHeadDriver,
         setup_wizard.set_up_head_driver.ZZZ_OT_SetUpHeadDriver,
