@@ -1524,7 +1524,15 @@ class GenshinTextureImporter:
                     elif msn.name == 'Mix Shader':
                         mix_shader_main = msn
 
-            if has_ramp:
+            dir_str = getattr(self, 'directory', '') or ''
+            is_marionette_new = (
+                'marionettenew' in dir_str.lower() or
+                any('marionettenew' in obj.name.lower() for obj in bpy.data.objects) or
+                any('marionettenew' in f.lower() for f in getattr(self, 'files', [])) or
+                any('marionettenew' in m.name.lower() for m in bpy.data.materials)
+            )
+
+            if has_ramp and is_marionette_new:
                 # With ramp: Pupil_ramp1 & Pupil04 -> Mix.001 -> Mix Shader.002
                 if mix_001 and mix_shader_002:
                     for link in list(gtree.links):
@@ -1562,8 +1570,8 @@ class GenshinTextureImporter:
                     shader_in_sock = mix_shader_main.inputs[2] if len(mix_shader_main.inputs) > 2 else mix_shader_main.inputs.get('Shader')
                     if res_sock and shader_in_sock:
                         gtree.links.new(res_sock, shader_in_sock)
-            else:
-                # NO RAMP: Pupil04 and Pupil02 go directly to Mix Shader nodes!
+            elif not is_marionette_new:
+                # Disconnect Mix/Mix.001: Pupil04 and Pupil02 go directly to Mix Shader nodes if NOT MarionetteNew
                 if p4_node and mix_shader_002:
                     for link in list(gtree.links):
                         if mix_001 and link.from_node == mix_001 and link.to_node == mix_shader_002:
@@ -1593,6 +1601,7 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
         self.genshin_shader_version = self.shader_identifier_service.identify_shader(bpy.data.materials, bpy.data.node_groups)
 
     def import_textures(self, directory):
+        self.directory = directory
         if self.import_textures_from_json(directory):
             for mat in bpy.data.materials:
                 if mat.use_nodes and not any(k in mat.name.lower() for k in ['outlines', 'outline', 'face', 'pupil', 'brow', 'eye']):
