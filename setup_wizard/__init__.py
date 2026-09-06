@@ -3,9 +3,9 @@ import os
 bl_info = {
     "name": "Gacha Setup",
     "author": "Mken, OctavoPE, Enthralpy, PaoloESAN",
-    "version": (3, 4, 4),
+    "version": (3, 5, 0),
     "blender": (5, 2, 0),
-    "location": "3D View > Sidebar > Genshin Impact / Honkai Star Rail / Zenless Zone Zero / Neverness to Everness / Wuthering Waves",
+    "location": "3D View > Sidebar > Genshin Impact / Honkai Star Rail / Zenless Zone Zero / Neverness to Everness / Wuthering Waves / Arknights: Endfield",
     "description": "An addon to streamline the character model setup process for Gacha games in Blender 5.2+",
     "warning": "",
     "doc_url": "",
@@ -41,6 +41,9 @@ else:
     from setup_wizard.character_rig_setup.wuwa_face_panel import (
         WW_OT_CreateFacePanel,
     )
+    from setup_wizard.character_rig_setup.ake_face_rig import (
+        AKE_OT_SetUpIsaacFaceRig,
+    )
     from setup_wizard.character_rig_setup.character_rigger_props import (
         CharacterRiggerPropertyGroup,
         CharacterRiggerPropertyManager,
@@ -54,6 +57,8 @@ else:
         ZZZ_OT_SetUpCharacter,
         NTE_OT_SetUpCharacter,
         WW_OT_SetUpCharacter,
+        AKE_OT_SetUpCharacter,
+        GI_OT_ClearPose,
         GI_OT_ReorientBones,
     )
     from setup_wizard.genshin_import_materials import (
@@ -64,6 +69,8 @@ else:
         NTE_OT_SetUpOutlines,
         NTE_OT_SetUpHairSpecular,
         WW_OT_SetUpMaterials,
+        AKE_OT_SetUpMaterials,
+        AKE_OT_SetUpOutlines,
     )
 
     from setup_wizard.genshin_import_outlines import (
@@ -78,6 +85,7 @@ else:
         ZZZ_OT_SetupWizardUI,
         NTE_OT_SetupWizardUI,
         WW_OT_WutheringWavesSetupWizardUI,
+        AKE_OT_ArknightsEndfieldSetupWizardUI,
         setup_dependencies,
     )
     from setup_wizard.genshin_setup_wizard import (
@@ -85,8 +93,10 @@ else:
     )
     from setup_wizard.set_up_head_driver import (
         WW_OT_SetUpHeadDriver,
+        AKE_OT_SetUpHeadDriver,
     )
     from setup_wizard.misc_final_steps import (
+        GI_OT_FixTransformations,
         GI_OT_FinishSetup,
         HSR_OT_FinishSetup,
         ZZZ_OT_FinishSetup,
@@ -94,6 +104,22 @@ else:
         NTE_OT_SetupCompositorNodes,
         WW_OT_FinishSetup,
         WW_OT_SetupCompositorNodes,
+        AKE_OT_FinishSetup,
+        AKE_OT_SetupCompositorNodes,
+    )
+    from setup_wizard.ui.ake_ui_setup_wizard_menu import (
+        AKE_PT_Setup_Wizard_UI_Layout,
+        AKE_PT_Basic_Setup_Wizard_UI_Layout,
+        AKE_PT_Advanced_Setup_Wizard_UI_Layout,
+        AKE_PT_UI_Character_Model_Menu,
+        AKE_PT_UI_Materials_Menu,
+        AKE_PT_UI_Outlines_Menu,
+        AKE_PT_UI_Rig_Character_Menu,
+        AKE_PT_UI_Finish_Setup_Menu,
+        AKE_PT_Rig_Character_Settings,
+        register_ake_properties,
+        unregister_ake_properties,
+        ake_frame_change_handler,
     )
     from setup_wizard.wuwa_operations import (
         WW_OT_ToggleAnimateMode,
@@ -188,6 +214,7 @@ else:
         setup_wizard.ui.zzz_ui_setup_wizard_menu,
         setup_wizard.ui.nte_ui_setup_wizard_menu,
         setup_wizard.ui.wuwa_ui_setup_wizard_menu,
+        setup_wizard.ui.ake_ui_setup_wizard_menu,
         setup_wizard.genshin_setup_wizard,
         addon_updater_ops,
     ]
@@ -211,9 +238,11 @@ else:
         GI_PT_UI_Post_Processing_Node_Editor_Setup_Menu,
         GI_OT_GenshinSetupWizardUI,
         GI_OT_SetUpCharacter,
+        GI_OT_ClearPose,
         GI_OT_ReorientBones,
         GI_OT_SetUpMaterials,
         GI_OT_SetUpOutlines,
+        GI_OT_FixTransformations,
         GI_OT_FinishSetup,
         GI_OT_RigCharacter,
         GI_OT_CharacterRiggerOperator,
@@ -292,6 +321,23 @@ else:
         WW_OT_SeparateMesh,
         WW_OT_SetPerformanceMode,
         WW_OT_SetQualityMode,
+        # Arknights: Endfield
+        AKE_PT_Setup_Wizard_UI_Layout,
+        AKE_PT_Basic_Setup_Wizard_UI_Layout,
+        AKE_PT_Advanced_Setup_Wizard_UI_Layout,
+        AKE_PT_UI_Character_Model_Menu,
+        AKE_PT_UI_Materials_Menu,
+        AKE_PT_UI_Outlines_Menu,
+        AKE_PT_UI_Rig_Character_Menu,
+        AKE_PT_UI_Finish_Setup_Menu,
+        AKE_PT_Rig_Character_Settings,
+        AKE_OT_ArknightsEndfieldSetupWizardUI,
+        AKE_OT_SetUpCharacter,
+        AKE_OT_SetUpMaterials,
+        AKE_OT_SetUpOutlines,
+        AKE_OT_FinishSetup,
+        AKE_OT_SetupCompositorNodes,
+        AKE_OT_SetUpIsaacFaceRig,
     ]
 
     for module in modules:
@@ -325,10 +371,13 @@ else:
         register_zzz_properties()
         register_hsr_properties()
         register_gi_properties()
+        register_ake_properties()
         if wuwa_frame_change_handler not in bpy.app.handlers.render_init:
             bpy.app.handlers.render_init.append(wuwa_frame_change_handler)
         if gi_frame_change_handler not in bpy.app.handlers.render_init:
             bpy.app.handlers.render_init.append(gi_frame_change_handler)
+        if ake_frame_change_handler not in bpy.app.handlers.render_init:
+            bpy.app.handlers.render_init.append(ake_frame_change_handler)
         addon_updater_ops.register(bl_info)
 
 
@@ -341,10 +390,15 @@ else:
             bpy.app.handlers.frame_change_post.remove(wuwa_frame_change_handler)
         if wuwa_frame_change_handler in bpy.app.handlers.render_init:
             bpy.app.handlers.render_init.remove(wuwa_frame_change_handler)
+        if ake_frame_change_handler in bpy.app.handlers.frame_change_post:
+            bpy.app.handlers.frame_change_post.remove(ake_frame_change_handler)
+        if ake_frame_change_handler in bpy.app.handlers.render_init:
+            bpy.app.handlers.render_init.remove(ake_frame_change_handler)
         addon_updater_ops.unregister()
         unregister_gi_properties()
         unregister_hsr_properties()
         unregister_zzz_properties()
+        unregister_ake_properties()
         try:
             setup_wizard.genshin_setup_wizard.unregister()
         except Exception:

@@ -46,6 +46,10 @@ WUTHERING_WAVES_ROOT_FOLDER_FILE_PATH = 'wuthering_waves_folder_file_path'
 WUTHERING_WAVES_SHADER_FILE_PATH = 'wuthering_waves_shader_file_path'
 WUTHERING_WAVES_OUTLINES_FILE_PATH = 'wuthering_waves_outlines_file_path'
 
+ARKNIGHTS_ENDFIELD_ROOT_FOLDER_FILE_PATH = 'arknights_endfield_folder_file_path'
+ARKNIGHTS_ENDFIELD_SHADER_FILE_PATH = 'arknights_endfield_shader_file_path'
+ARKNIGHTS_ENDFIELD_OUTLINES_FILE_PATH = 'arknights_endfield_outlines_file_path'
+
 
 
 class NextStepInvoker:
@@ -117,6 +121,8 @@ def invoke_next_step_ui(
             game_type = GameType.WUTHERING_WAVES.name
         elif 'neverness' in hl_low or 'nte' in hl_low:
             game_type = GameType.NEVERNESS_TO_EVERNESS.name
+        elif 'arknights' in hl_low or 'endfield' in hl_low or 'ake' in hl_low:
+            game_type = GameType.ARKNIGHTS_ENDFIELD.name
         elif 'zenless' in hl_low or 'zzz' in hl_low:
             game_type = GameType.ZENLESS_ZONE_ZERO.name
         elif 'honkai' in hl_low or 'hsr' in hl_low:
@@ -261,6 +267,11 @@ def get_shader_file_path(game_type: str, file_type: str = "main") -> str:
         if os.path.isfile(p):
             return p
 
+    elif game_type == GameType.ARKNIGHTS_ENDFIELD.name:
+        p = os.path.join(shaders_dir, 'ake', 'AKE.blend')
+        if os.path.isfile(p):
+            return p
+
     return ""
 
 
@@ -285,6 +296,9 @@ def get_cache(cache_enabled=True):
             NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH: active_dir,
             WUTHERING_WAVES_ROOT_FOLDER_FILE_PATH: active_dir,
             WUTHERING_WAVES_SHADER_FILE_PATH: active_dir,
+            ARKNIGHTS_ENDFIELD_ROOT_FOLDER_FILE_PATH: active_dir,
+            ARKNIGHTS_ENDFIELD_SHADER_FILE_PATH: active_dir,
+            ARKNIGHTS_ENDFIELD_OUTLINES_FILE_PATH: active_dir,
         }
     return {}
 
@@ -356,17 +370,58 @@ def get_actual_material_name_for_dress(material_name, character_type='AVATAR', i
                             actual_material_name = 'Body2'
                         elif any(k in material_name for k in ['Dress01', 'Dress1', 'Body01', 'Body1']):
                             actual_material_name = 'Body1'
+                        elif 'collei' in material_name.lower():
+                            actual_material_name = 'Hair'
                         else:
                             actual_material_name = 'Body'
                 except (IndexError, AttributeError, KeyError, Exception):
-                    # ex. 'Diffuse Texture.001'
-                    actual_material_name = material_name.split('_')[-1]
-                    if any(k in material_name or k in actual_material_name for k in ['Dress02', 'Dress2', 'Body02', 'Body2']):
-                        actual_material_name = 'Body2'
-                    elif any(k in material_name or k in actual_material_name for k in ['Dress01', 'Dress1', 'Body01', 'Body1']):
-                        actual_material_name = 'Body1'
-                    elif actual_material_name == 'Dress' or 'Dress' in material_name:
-                        actual_material_name = 'Body'
+                    actual_material_name = None
+                    char_dir = get_active_character_directory()
+                    if char_dir:
+                        candidates = [os.path.join(char_dir, "Materials"), char_dir]
+                        for c_dir in candidates:
+                            if os.path.isdir(c_dir):
+                                dress_json = None
+                                hair_json = None
+                                for jf in os.listdir(c_dir):
+                                    if jf.lower().endswith('.json'):
+                                        if 'dress' in jf.lower():
+                                            dress_json = os.path.join(c_dir, jf)
+                                        elif 'hair' in jf.lower():
+                                            hair_json = os.path.join(c_dir, jf)
+                                if dress_json:
+                                    try:
+                                        with open(dress_json, 'r', encoding='utf-8') as f:
+                                            d_data = json.load(f)
+                                        d_tex_envs = d_data.get('m_SavedProperties', {}).get('m_TexEnvs', {})
+                                        d_main = d_tex_envs.get('_MainTex', {}).get('m_Texture', {})
+                                        d_name = d_main.get('Name', '')
+                                        d_pid = d_main.get('m_PathID')
+                                        if 'hair' in d_name.lower():
+                                            actual_material_name = 'Hair'
+                                        elif 'body' in d_name.lower():
+                                            actual_material_name = 'Body'
+                                        elif d_pid and hair_json:
+                                            with open(hair_json, 'r', encoding='utf-8') as hf:
+                                                h_data = json.load(hf)
+                                            h_pid = h_data.get('m_SavedProperties', {}).get('m_TexEnvs', {}).get('_MainTex', {}).get('m_Texture', {}).get('m_PathID')
+                                            if h_pid == d_pid:
+                                                actual_material_name = 'Hair'
+                                    except Exception:
+                                        pass
+                                break
+
+                    if not actual_material_name:
+                        if 'collei' in material_name.lower() or (char_dir and 'collei' in char_dir.lower()):
+                            actual_material_name = 'Hair'
+                        elif any(k in material_name for k in ['Dress02', 'Dress2', 'Body02', 'Body2']):
+                            actual_material_name = 'Body2'
+                        elif any(k in material_name for k in ['Dress01', 'Dress1', 'Body01', 'Body1']):
+                            actual_material_name = 'Body1'
+                        elif 'Dress' in material_name or material_name.split('_')[-1] == 'Dress':
+                            actual_material_name = 'Body'
+                        else:
+                            actual_material_name = material_name.split('_')[-1]
                     print(f'WARNING: Fallback to applying "{actual_material_name}" onto "{material_name}". Image name is not parseable for: {material_name}')
                 return actual_material_name
     else:
@@ -376,7 +431,10 @@ def get_actual_material_name_for_dress(material_name, character_type='AVATAR', i
 
         # is it the shader's Dress material? or are we checking the original material's name?
         actual_material_name = material_name.split(' ')[-1] if is_shader_dress_material else material_name.split('_')[-2] if material_name.split('_')[-2] != 'Mat' else material_name.split('_')[-1]
-        if any(k in material_name or k in actual_material_name for k in ['Dress02', 'Dress2', 'Body02', 'Body2']):
+        char_dir = get_active_character_directory()
+        if 'collei' in material_name.lower() or (char_dir and 'collei' in char_dir.lower()):
+            actual_material_name = 'Hair'
+        elif any(k in material_name or k in actual_material_name for k in ['Dress02', 'Dress2', 'Body02', 'Body2']):
             actual_material_name = 'Body2'
         elif any(k in material_name or k in actual_material_name for k in ['Dress01', 'Dress1', 'Body01', 'Body1']):
             actual_material_name = 'Body1'
@@ -461,6 +519,12 @@ class ComponentFunctionFactory:
             return bpy.ops.wuthering_waves.setup_head_driver
         elif component_name == 'wuwa_finish_setup':
             return bpy.ops.wuthering_waves.finish_setup
+        elif component_name == 'ake_setup_outlines':
+            return bpy.ops.arknights_endfield.set_up_outlines
+        elif component_name == 'ake_setup_compositor_nodes':
+            return bpy.ops.arknights_endfield.setup_compositor_nodes
+        elif component_name == 'ake_finish_setup':
+            return bpy.ops.arknights_endfield.finish_setup
         else:
             raise Exception(f'Unknown component name passed into {__name__}: {component_name}')
 

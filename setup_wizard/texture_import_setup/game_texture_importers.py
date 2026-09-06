@@ -41,6 +41,8 @@ class GameTextureImporterFactory:
             return NevernessToEvernessTextureImporterFacade(blender_operator, context)
         elif game_type == GameType.WUTHERING_WAVES.name:
             return WutheringWavesTextureImporterFacade(blender_operator, context)
+        elif game_type == GameType.ARKNIGHTS_ENDFIELD.name:
+            return ArknightsEndfieldTextureImporterFacade(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -2249,6 +2251,213 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
                 _configure_outline_mat_nodes(part_ol_mat, ld_img, id_img)
 
         self.blender_operator.report({'INFO'}, 'Successfully imported and assigned Wuthering Waves textures!')
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx, 
+            self.blender_operator.invoker_type, 
+            file_path_to_cache=folder,
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=self.blender_operator.game_type,
+        )
+
+
+class ArknightsEndfieldTextureImporterFacade(GameTextureImporter):
+    def __init__(self, blender_operator: Operator, context: Context):
+        self.blender_operator = blender_operator
+        self.context = context
+
+    def import_textures(self):
+        cache_enabled = self.context.window_manager.cache_enabled
+        folder = getattr(self.blender_operator, 'file_directory', None) \
+            or get_cache(cache_enabled).get('arknights_endfield_folder_file_path') \
+            or get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH) \
+            or (os.path.dirname(self.blender_operator.filepath) if getattr(self.blender_operator, 'filepath', None) else None) \
+            or get_active_character_directory() \
+            or self.context.scene.get("setup_wizard_imported_model_dir")
+
+        if not folder or not os.path.isdir(folder):
+            self.blender_operator.report({'WARNING'}, f"Folder '{folder}' does not exist.")
+            return
+
+        # 1. Scan texture files
+        texture_file_map = {}
+        for root, _, files in os.walk(folder):
+            for f in files:
+                if f.lower().endswith(('.png', '.tga', '.jpg', '.jpeg', '.dds', '.tif', '.tiff', '.bmp')):
+                    full_p = os.path.join(root, f)
+                    texture_file_map[f.lower()] = full_p
+                    stem = os.path.splitext(f)[0].lower()
+                    texture_file_map[stem] = full_p
+
+        # 2. Parse JSON files in Materials/ or character folder if present
+        json_tex_mappings = {}
+        for root, _, files in os.walk(folder):
+            for f in files:
+                if f.lower().endswith('.json'):
+                    try:
+                        with open(os.path.join(root, f), 'r', encoding='utf-8') as jf:
+                            data = json.load(jf)
+                            tex_envs = data.get('m_SavedProperties', {}).get('m_TexEnvs', {})
+                            mat_stem = os.path.splitext(f)[0].lower()
+                            json_tex_mappings[mat_stem] = {}
+                            for prop_k, prop_v in tex_envs.items():
+                                t_name = prop_v.get('m_Texture', {}).get('Name')
+                                if t_name:
+                                    json_tex_mappings[mat_stem][prop_k] = t_name
+                    except Exception:
+                        pass
+
+        # 3. Match and assign textures to image nodes in all materials
+        for mat in bpy.data.materials:
+            if not mat.use_nodes or not mat.node_tree:
+                continue
+            mat_name = mat.name.lower()
+            if mat_name.startswith('__raw_fbx_'):
+                continue
+
+            for node in mat.node_tree.nodes:
+                if node.type != 'TEX_IMAGE':
+                    continue
+
+                label_key = (node.label or node.name or "").lower().strip()
+                matched_path = None
+
+                # JSON mapping lookup
+                clean_mat_name = mat_name.split('.')[0].replace('__raw_fbx_', '').lower()
+                for j_mat, props in json_tex_mappings.items():
+                    j_clean = j_mat.lower()
+                    if j_clean in clean_mat_name or clean_mat_name in j_clean or ('brow' in clean_mat_name and 'brow' in j_clean) or ('hairshadow' in clean_mat_name and 'hairshadow' in j_clean):
+                        for prop_name, tex_val in props.items():
+                            prop_low = prop_name.lower()
+                            tex_val_low = tex_val.lower()
+                            if ('base' in prop_low or 'maintex' in prop_low or 'blend' in prop_low) and (label_key.endswith('_d') or 'diffuse' in label_key or 'hairshadow' in label_key or 'eyeshadow' in label_key or 'image texture' in label_key):
+                                if tex_val_low in texture_file_map:
+                                    matched_path = texture_file_map[tex_val_low]
+                                    break
+                            elif ('bump' in prop_low or 'normal' in prop_low) and label_key.endswith('_n'):
+                                if tex_val_low in texture_file_map:
+                                    matched_path = texture_file_map[tex_val_low]
+                                    break
+                            elif ('param' in prop_low or 'metallicgloss' in prop_low) and label_key.endswith('_p'):
+                                if tex_val_low in texture_file_map:
+                                    matched_path = texture_file_map[tex_val_low]
+                                    break
+                            elif ('emission' in prop_low or 'emissive' in prop_low) and label_key.endswith('_e'):
+                                if tex_val_low in texture_file_map:
+                                    matched_path = texture_file_map[tex_val_low]
+                                    break
+                            elif ('mask' in prop_low or 'disturb' in prop_low) and (label_key.endswith('_m') or 'image texture' in label_key):
+                                if tex_val_low in texture_file_map:
+                                    matched_path = texture_file_map[tex_val_low]
+                                    break
+                            elif ('splitnormal' in prop_low) and label_key.endswith('_hn'):
+                                if tex_val_low in texture_file_map:
+                                    matched_path = texture_file_map[tex_val_low]
+                                    break
+                            elif ('stroke' in prop_low or 'outlinemask' in prop_low) and label_key.endswith('_st'):
+                                if tex_val_low in texture_file_map:
+                                    matched_path = texture_file_map[tex_val_low]
+                                    break
+                            elif ('specramp' in prop_low) and label_key.endswith('_rs'):
+                                if tex_val_low in texture_file_map:
+                                    matched_path = texture_file_map[tex_val_low]
+                                    break
+                            elif ('difframp' in prop_low) and label_key.endswith('_rd'):
+                                if tex_val_low in texture_file_map:
+                                    matched_path = texture_file_map[tex_val_low]
+                                    break
+                        if matched_path:
+                            break
+
+                # Label / node key pattern matching
+                if not matched_path and label_key:
+                    search_keys = [label_key]
+                    if label_key == 'iris_01_d':
+                        search_keys.append('eye_01_d')
+
+                    if any(k in clean_mat_name for k in ['brow', 'eyebrow']) and any(k in label_key for k in ['face_01_d', 'image texture']):
+                        search_keys.extend(['face_01_d', 'face_d', '_face_01_d'])
+
+                    if 'hairshadow' in label_key or 'hairshadow' in clean_mat_name:
+                        search_keys.extend(['hairshadow', 'hair_shadow', 'shadow_01'])
+                    if 'eyeshadow' in label_key or 'eyeshadow' in clean_mat_name:
+                        search_keys.extend(['eyeshadow', 'eye_shadow', 'eyewhiteshadow'])
+
+                    if 'cloth_03' in mat_name and 'cloth_01' in label_key:
+                        search_keys.insert(0, label_key.replace('cloth_01', 'cloth_03'))
+                    elif 'cloth_04' in mat_name and 'cloth_02' in label_key:
+                        search_keys.insert(0, label_key.replace('cloth_02', 'cloth_04'))
+
+                    for k_search in search_keys:
+                        for tf_name, tf_path in texture_file_map.items():
+                            if k_search in tf_name:
+                                matched_path = tf_path
+                                break
+                        if matched_path:
+                            break
+
+                    if not matched_path and label_key.endswith('_hn'):
+                        stem = label_key[:-3]
+                        for tf_name, tf_path in texture_file_map.items():
+                            if stem in tf_name and ('_hn' in tf_name or '_n.' in tf_name):
+                                matched_path = tf_path
+                                break
+
+                # Load and assign image
+                if matched_path and os.path.isfile(matched_path):
+                    img_name = os.path.basename(matched_path)
+                    img = bpy.data.images.get(img_name)
+                    if not img:
+                        try:
+                            img = bpy.data.images.load(matched_path)
+                        except Exception:
+                            img = None
+                    if img:
+                        node.image = img
+                        img.alpha_mode = 'CHANNEL_PACKED'
+                        if any(x in label_key or x in img.name.lower() for x in ['_n.', '_n_', '_hn', '_m.', '_m_', '_rs', '_p.', '_p_', '_sdf', '_st', '_cm_m', '_hl_m', '_lut']):
+                            try:
+                                img.colorspace_settings.name = 'Non-Color'
+                            except Exception:
+                                pass
+                        else:
+                            try:
+                                img.colorspace_settings.name = 'sRGB'
+                            except Exception:
+                                pass
+
+        # 3.5 Update common textures in internal shader node groups if available in character folder
+        for ng in bpy.data.node_groups:
+            if ng.type == 'SHADER':
+                for node in ng.nodes:
+                    if node.type == 'TEX_IMAGE' and node.image:
+                        img_lower = node.image.name.lower()
+                        for tf_name, tf_path in texture_file_map.items():
+                            core_name = os.path.splitext(os.path.basename(tf_path))[0].lower()
+                            if core_name in img_lower or img_lower.startswith(core_name):
+                                cur_img = bpy.data.images.get(os.path.basename(tf_path))
+                                if not cur_img:
+                                    try:
+                                        cur_img = bpy.data.images.load(tf_path)
+                                    except Exception:
+                                        cur_img = None
+                                if cur_img:
+                                    node.image = cur_img
+                                    cur_img.alpha_mode = 'CHANNEL_PACKED'
+                                    if any(x in img_lower for x in ['_sdf', '_cm_m', '_hl_m', '_lut', '_rs', '_rd', '_n.', '_hn']):
+                                        try:
+                                            cur_img.colorspace_settings.name = 'Non-Color'
+                                        except Exception:
+                                            pass
+                                break
+
+        # 4. Apply material JSON properties and transparency settings
+        try:
+            from setup_wizard.texture_import_setup.material_default_value_setters import ArknightsEndfieldMaterialDefaultValueSetter
+            ArknightsEndfieldMaterialDefaultValueSetter(folder).set_default_values()
+        except Exception as e:
+            print(f"[AKE SETUP] JSON properties setter notice: {e}")
+
+        self.blender_operator.report({'INFO'}, 'Successfully imported and assigned Arknights: Endfield textures!')
         NextStepInvoker().invoke(
             self.blender_operator.next_step_idx, 
             self.blender_operator.invoker_type, 

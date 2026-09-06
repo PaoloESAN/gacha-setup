@@ -361,8 +361,9 @@ class GenshinImpactOutlineTextureImporter(OutlineTextureImporter):
         all_outlines = [m for m in bpy.data.materials if m.use_nodes and ('outlines' in m.name.lower() or m.name.endswith('Outlines')) and 'night_soul' not in m.name.lower() and m.name != 'HoYoverse - Genshin Outlines']
         for o_mat in all_outlines:
             part = o_mat.name.split()[-2] if len(o_mat.name.split()) >= 2 else ""
-            self.assign_lightmap_texture(character_model_folder_file_path, lightmap_files, part, part, target_outline_material=o_mat)
-            self.assign_diffuse_texture(character_model_folder_file_path, diffuse_files, part, part, target_outline_material=o_mat)
+            actual_part = get_actual_material_name_for_dress(part, 'AVATAR') if part.lower() == 'dress' else part
+            self.assign_lightmap_texture(character_model_folder_file_path, lightmap_files, part, actual_part, target_outline_material=o_mat)
+            self.assign_diffuse_texture(character_model_folder_file_path, diffuse_files, part, actual_part, target_outline_material=o_mat)
 
         if cache_enabled and character_model_folder_file_path:
             cache_using_cache_key(get_cache(cache_enabled), CHARACTER_MODEL_FOLDER_FILE_PATH, character_model_folder_file_path)

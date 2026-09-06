@@ -4,9 +4,11 @@
 # the armature bone settings when importing the FBX model
 
 import os
+import math
 import pathlib
 
 import bpy
+from mathutils import Vector
 from bpy.props import StringProperty
 from bpy.types import Operator
 
@@ -122,6 +124,51 @@ def apply_spine_rest_pose(armature):
             pass
 
 
+def clear_armature_pose(armature):
+    """
+    Clears all pose transformations (location, rotation, scale) for all bones in the armature.
+    Switches to POSE mode, selects all bones, and clears transforms to reset the pose.
+    """
+    if not armature or armature.type != 'ARMATURE':
+        return
+
+    orig_mode = bpy.context.object.mode if bpy.context.object else 'OBJECT'
+
+    try:
+        if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        armature.hide_viewport = False
+        armature.hide_set(False)
+        bpy.context.view_layer.objects.active = armature
+        armature.select_set(True)
+
+        bpy.ops.object.mode_set(mode='POSE')
+        try:
+            bpy.ops.pose.select_all(action='SELECT')
+            bpy.ops.pose.transforms_clear()
+        except Exception:
+            pass
+
+        # Also reset directly on all pose bones to guarantee every bone is reset
+        if armature.pose:
+            for pbone in armature.pose.bones:
+                pbone.location = (0.0, 0.0, 0.0)
+                pbone.rotation_euler = (0.0, 0.0, 0.0)
+                if hasattr(pbone, 'rotation_quaternion'):
+                    pbone.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
+                if hasattr(pbone, 'rotation_axis_angle'):
+                    pbone.rotation_axis_angle = (0.0, 0.0, 1.0, 0.0)
+                pbone.scale = (1.0, 1.0, 1.0)
+    except Exception as e:
+        print(f"[CLEAR POSE] Notice: {e}")
+    finally:
+        try:
+            bpy.ops.object.mode_set(mode=orig_mode if orig_mode in ('OBJECT', 'EDIT', 'POSE') else 'OBJECT')
+        except Exception:
+            pass
+
+
 def reorient_armature_bones(armature):
     """
     Reorients edit bone tails towards their children's average position
@@ -153,6 +200,13 @@ def reorient_armature_bones(armature):
                 avg_child_pos = sum((child.head for child in bone.children), bone.children[0].head * 0) / len(bone.children)
                 if (avg_child_pos - bone.head).length > 0.001:
                     bone.tail = avg_child_pos
+
+        for bone in edit_bones:
+            if not bone.children and bone.parent:
+                p_dir = bone.head - bone.parent.head
+                if p_dir.length > 0.001:
+                    length = bone.length if bone.length > 0.001 else 0.05
+                    bone.tail = bone.head + p_dir.normalized() * length
 
         bpy.ops.armature.calculate_roll(type='GLOBAL_POS_Y')
     except Exception as e:
@@ -443,6 +497,234 @@ class WW_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
         return {"FINISHED"}
 
 
+def compute_ake_smoothnormal_ws(mesh_obj):
+    """Calculates corner-domain smoothnormalWS attribute for Arknights: Endfield meshes."""
+    if not mesh_obj or mesh_obj.type != 'MESH':
+        return
+    mesh = mesh_obj.data
+    if "smoothnormalWS" in mesh.attributes:
+        return
+    try:
+        if mesh.uv_layers.active:
+            mesh.calc_tangents(uvmap=mesh.uv_layers.active.name)
+        elif mesh.uv_layers:
+            mesh.calc_tangents(uvmap=mesh.uv_layers[0].name)
+    except Exception:
+        pass
+
+    if not mesh.uv_layers.get("UV0") and mesh.uv_layers.active:
+        try:
+            mesh.uv_layers.new(name="UV0")
+        except Exception:
+            pass
+
+    try:
+        smooth_attr = mesh.attributes.new(name="smoothnormalWS", type='FLOAT_VECTOR', domain='CORNER')
+        vert_normals = [Vector((0.0, 0.0, 0.0)) for _ in mesh.vertices]
+        for poly in mesh.polygons:
+            p_norm = poly.normal
+            p_area = poly.area
+            for vert_idx in poly.vertices:
+                vert_normals[vert_idx] += p_norm * p_area
+
+        for v_i in range(len(vert_normals)):
+            if vert_normals[v_i].length > 1e-6:
+                vert_normals[v_i].normalize()
+            else:
+                vert_normals[v_i] = mesh.vertices[v_i].normal
+
+        for loop in mesh.loops:
+            smooth_attr.data[loop.index].vector = vert_normals[loop.vertex_index]
+    except Exception as e:
+        print(f"[AKE SETUP] smoothnormalWS notice for {mesh_obj.name}: {e}")
+
+
+def handle_ake_post_import(context):
+    """Handles post FBX import operations for Arknights: Endfield: clearing imported pose, rotating -90 deg X to stand upright, normal smoothing, vertex color attributes, face subpart vertex weighting, face mesh joining, and hiding auxiliary parts."""
+    # 0. Clear baked import pose and stand model upright (-90 deg on X)
+    armatures = [o for o in bpy.data.objects if o.type == 'ARMATURE']
+    if armatures:
+        armature = armatures[0]
+        orig_mode = bpy.context.object.mode if bpy.context.object else 'OBJECT'
+        try:
+            if bpy.ops.object.mode_set.poll():
+                bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.select_all(action='DESELECT')
+            armature.hide_viewport = False
+            try:
+                armature.hide_set(False)
+            except Exception:
+                pass
+            armature.select_set(True)
+            context.view_layer.objects.active = armature
+
+            # Select all in pose mode and clear all pose transforms
+            bpy.ops.object.mode_set(mode='POSE')
+            bpy.ops.pose.select_all(action='SELECT')
+            bpy.ops.pose.transforms_clear()
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+            # Clearing baked pose makes the character lie flat on the floor because FBX imported with rot_x = +90 deg.
+            # Rotate -90 degrees on X to stand upright.
+            armature.rotation_euler.x -= math.radians(90)
+            context.view_layer.update()
+
+            # Apply rotation transforms across armature and all child meshes
+            meshes = [o for o in bpy.data.objects if o.type == 'MESH']
+            bpy.ops.object.select_all(action='DESELECT')
+            armature.select_set(True)
+            for m in meshes:
+                m.select_set(True)
+            context.view_layer.objects.active = armature
+            bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
+            print("[AKE SETUP] Cleared import pose, rotated -90 deg on X, and applied transforms successfully.")
+            reorient_armature_bones(armature)
+        except Exception as e:
+            print(f"[AKE SETUP] Pose clear / orientation notice: {e}")
+        finally:
+            try:
+                if bpy.ops.object.mode_set.poll():
+                    bpy.ops.object.mode_set(mode=orig_mode if orig_mode in ('OBJECT', 'EDIT', 'POSE') else 'OBJECT')
+            except Exception:
+                pass
+
+    # 1. Compute smoothnormalWS and ensure Color vertex attribute exists for all meshes
+    for obj in bpy.data.objects:
+        if obj.type == 'MESH':
+            compute_ake_smoothnormal_ws(obj)
+            mesh = obj.data
+            if 'Color' not in mesh.color_attributes:
+                try:
+                    col_attr = mesh.color_attributes.new(name='Color', type='FLOAT_COLOR', domain='CORNER')
+                    for col in col_attr.data:
+                        col.color = (1.0, 1.0, 1.0, 1.0)
+                except Exception:
+                    pass
+
+    # 2. Fix vertex group weighting for face subparts before joining
+    meshes = [o for o in bpy.data.objects if o.type == 'MESH']
+    face_mesh = next((o for o in meshes if 'face_01' in o.name.lower() or 'face' in o.name.lower()), None)
+    iris_mesh = next((o for o in meshes if 'iris_01' in o.name.lower() or 'iris' in o.name.lower()), None)
+    join_targets = [
+        o for o in meshes
+        if o != face_mesh and any(k in o.name.lower() for k in ['eyebrow', 'brow', 'iris', 'eyeshadow', 'eyewhite'])
+    ]
+
+    # Assign Bip001_Head and eye bone weights to iris so it moves with the head and eye controllers
+    if iris_mesh:
+        vg_head = iris_mesh.vertex_groups.get('Bip001_Head') or iris_mesh.vertex_groups.new(name='Bip001_Head')
+        for v in iris_mesh.data.vertices:
+            vg_head.add([v.index], 1.0, 'REPLACE')
+
+        vg_lf = iris_mesh.vertex_groups.get('faceLfIrisJoint') or iris_mesh.vertex_groups.new(name='faceLfIrisJoint')
+        vg_rt = iris_mesh.vertex_groups.get('faceRtIrisJoint') or iris_mesh.vertex_groups.new(name='faceRtIrisJoint')
+        vg_def_lf = iris_mesh.vertex_groups.get('DEF-eye.L') or iris_mesh.vertex_groups.new(name='DEF-eye.L')
+        vg_def_rt = iris_mesh.vertex_groups.get('DEF-eye.R') or iris_mesh.vertex_groups.new(name='DEF-eye.R')
+        for v in iris_mesh.data.vertices:
+            if v.co.x > 0:
+                vg_lf.add([v.index], 1.0, 'REPLACE')
+                vg_def_lf.add([v.index], 1.0, 'REPLACE')
+            else:
+                vg_rt.add([v.index], 1.0, 'REPLACE')
+                vg_def_rt.add([v.index], 1.0, 'REPLACE')
+
+    # Ensure eyebrows and eyeshadow have Bip001_Head vertex group
+    for obj in join_targets:
+        if obj and obj != iris_mesh:
+            if 'Bip001_Head' not in obj.vertex_groups:
+                vg = obj.vertex_groups.new(name='Bip001_Head')
+                for v in obj.data.vertices:
+                    vg.add([v.index], 1.0, 'REPLACE')
+
+    # Join face subparts into face_mesh
+    if face_mesh and join_targets:
+        try:
+            if bpy.ops.object.mode_set.poll():
+                bpy.ops.object.mode_set(mode='OBJECT')
+            bpy.ops.object.select_all(action='DESELECT')
+            face_mesh.select_set(True)
+            context.view_layer.objects.active = face_mesh
+            for o in join_targets:
+                o.select_set(True)
+            bpy.ops.object.join()
+        except Exception as e:
+            print(f"[AKE SETUP] Face join notice: {e}")
+
+
+    # 4. Hide auxiliary vfxpart meshes
+    for o in bpy.data.objects:
+        if o.type == 'MESH' and ('vfxpart' in o.name.lower() or 'eyestar' in o.name.lower()):
+            try:
+                o.hide_viewport = True
+                o.hide_render = True
+            except Exception:
+                pass
+
+
+class AKE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
+    """Sets Up Character for Arknights: Endfield"""
+
+    bl_idname = "arknights_endfield.set_up_character"
+    bl_label = "Select Arknights Endfield Character Folder or .fbx"
+
+    filename_ext = "*.*"
+    filter_glob: StringProperty(
+        default="*.*",
+        options={'HIDDEN'},
+        maxlen=255,
+    )
+
+    def execute(self, context):
+        if not self.filepath:
+            return {"CANCELLED"}
+
+        folder = self.filepath if os.path.isdir(self.filepath) else os.path.dirname(self.filepath)
+        fbx_path = None
+        if not os.path.isdir(self.filepath) and self.filepath.lower().endswith(".fbx"):
+            fbx_path = self.filepath
+        elif os.path.isdir(self.filepath):
+            for root, _, files in os.walk(self.filepath):
+                for f in files:
+                    if f.lower().endswith(".fbx"):
+                        fbx_path = os.path.join(root, f)
+                        break
+                if fbx_path:
+                    break
+
+        from setup_wizard.import_order import (
+            ARKNIGHTS_ENDFIELD_ROOT_FOLDER_FILE_PATH,
+            ARKNIGHTS_ENDFIELD_SHADER_FILE_PATH,
+        )
+
+        set_active_character_directory(folder)
+        cache_using_cache_key(get_cache(True), CHARACTER_MODEL_FOLDER_FILE_PATH, folder)
+        cache_using_cache_key(get_cache(True), ARKNIGHTS_ENDFIELD_ROOT_FOLDER_FILE_PATH, folder)
+        cache_using_cache_key(get_cache(True), ARKNIGHTS_ENDFIELD_SHADER_FILE_PATH, folder)
+        try:
+            bpy.context.scene["setup_wizard_imported_model_dir"] = folder
+            if fbx_path:
+                bpy.context.scene["setup_wizard_imported_fbx_path"] = fbx_path
+        except Exception:
+            pass
+
+        if fbx_path:
+            _execute_fbx_import(fbx_path)
+
+        handle_ake_post_import(context)
+
+        self.report({"INFO"}, f"Imported Arknights: Endfield character model")
+        if self.next_step_idx:
+            NextStepInvoker().invoke(
+                self.next_step_idx,
+                self.invoker_type,
+                file_path_to_cache=folder,
+                high_level_step_name=self.high_level_step_name,
+                game_type=self.game_type or GameType.ARKNIGHTS_ENDFIELD.name,
+            )
+        super().clear_custom_properties()
+        return {"FINISHED"}
+
+
 class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties):
     """Select the folder with the desired model to import"""
 
@@ -514,9 +796,12 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                 GameType.GENSHIN_IMPACT.name,
                 GameType.HONKAI_STAR_RAIL.name,
                 GameType.ZENLESS_ZONE_ZERO.name,
+                GameType.ARKNIGHTS_ENDFIELD.name,
             ):
                 armatures = [o for o in bpy.data.objects if o.type == "ARMATURE"]
                 if armatures:
+                    if self.game_type == GameType.GENSHIN_IMPACT.name:
+                        clear_armature_pose(armatures[0])
                     reorient_armature_bones(armatures[0])
 
             self.rename_mesh_color_attribute_name(
@@ -919,6 +1204,7 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                     GameType.GENSHIN_IMPACT.name,
                     GameType.HONKAI_STAR_RAIL.name,
                     GameType.ZENLESS_ZONE_ZERO.name,
+                    GameType.ARKNIGHTS_ENDFIELD.name,
                 ):
                     reorient_armature_bones(obj)
 
@@ -969,6 +1255,9 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                     # Object is not in the active View Layer, use hide_viewport instead
                     bpy.data.objects[object.name].hide_viewport = True
                 bpy.data.objects[object.name].hide_render = True
+
+        if self.game_type == GameType.ARKNIGHTS_ENDFIELD.name:
+            handle_ake_post_import(bpy.context)
 
     def fix_zzz_eye_shadow(self):
         faceobj = None
@@ -1161,6 +1450,33 @@ class GI_OT_DeleteEmpties(Operator, CustomOperatorProperties):
         return {"FINISHED"}
 
 
+class GI_OT_ClearPose(Operator, CustomOperatorProperties):
+    """Clears pose transforms (location, rotation, scale) for all bones in the armature"""
+
+    bl_idname = "genshin.clear_pose"
+    bl_label = "Clear Pose"
+
+    def execute(self, context):
+        armature = context.active_object
+        if not armature or armature.type != "ARMATURE":
+            armatures = [o for o in context.selected_objects if o.type == "ARMATURE"]
+            if not armatures:
+                armatures = [
+                    o for o in context.scene.objects
+                    if o.type == "ARMATURE" and not any(ign in o.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig"])
+                ]
+            if armatures:
+                armature = armatures[0]
+
+        if not armature or armature.type != "ARMATURE":
+            self.report({"ERROR"}, "Please select a character armature first.")
+            return {"CANCELLED"}
+
+        clear_armature_pose(armature)
+        self.report({"INFO"}, f"Successfully cleared pose for '{armature.name}'.")
+        return {"FINISHED"}
+
+
 class GI_OT_ReorientBones(Operator, CustomOperatorProperties):
     """Reorients armature bones toward children and recalculates roll along global +Y axis"""
 
@@ -1183,6 +1499,15 @@ class GI_OT_ReorientBones(Operator, CustomOperatorProperties):
             self.report({"ERROR"}, "Please select a character armature first.")
             return {"CANCELLED"}
 
+        game_type = self.game_type
+        if not game_type and hasattr(context.scene, "game_type_dropdown"):
+            game_type = context.scene.game_type_dropdown
+        if not game_type:
+            game_type = GameType.GENSHIN_IMPACT.name
+
+        if game_type == GameType.GENSHIN_IMPACT.name:
+            clear_armature_pose(armature)
+
         reorient_armature_bones(armature)
         self.report({"INFO"}, f"Successfully fixed bone orientation for '{armature.name}'.")
         return {"FINISHED"}
@@ -1192,11 +1517,13 @@ register, unregister = bpy.utils.register_classes_factory(
     [
         GI_OT_GenshinImportModel,
         GI_OT_DeleteEmpties,
+        GI_OT_ClearPose,
         GI_OT_ReorientBones,
         GI_OT_SetUpCharacter,
         HSR_OT_SetUpCharacter,
         ZZZ_OT_SetUpCharacter,
         NTE_OT_SetUpCharacter,
         WW_OT_SetUpCharacter,
+        AKE_OT_SetUpCharacter,
     ]
 )

@@ -6,7 +6,7 @@ from enum import Enum, auto
 
 from setup_wizard.domain.shader_node_names import JaredNyts_PunishingGrayRavenNodeNames, ShaderNodeNames, StellarToonShaderNodeNames, V2_GenshinShaderNodeNames, V3_GenshinShaderNodeNames, V4_PrimoToonShaderNodeNames, V1_HoYoToonShaderNodeNames
 from setup_wizard.domain.game_types import GameType
-from setup_wizard.domain.shader_material_names import JaredNytsPunishingGrayRavenShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, V2_FestivityGenshinImpactMaterialNames, V4_PrimoToonGenshinImpactMaterialNames, V1_HoYoToonGenshinImpactMaterialNames, ZenlessZoneZeroShaderMaterialNames, NevernessToEvernessShaderMaterialNames, WutheringWavesShaderMaterialNames
+from setup_wizard.domain.shader_material_names import JaredNytsPunishingGrayRavenShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, V2_FestivityGenshinImpactMaterialNames, V4_PrimoToonGenshinImpactMaterialNames, V1_HoYoToonGenshinImpactMaterialNames, ZenlessZoneZeroShaderMaterialNames, NevernessToEvernessShaderMaterialNames, WutheringWavesShaderMaterialNames, ArknightsEndfieldShaderMaterialNames
 from setup_wizard.texture_import_setup.texture_node_names import GenshinImpactTextureNodeNames, JaredNytsPunishingGrayRavenTextureNodeNames, Nya222HonkaiStarRailTextureNodeNames, StellarToonTextureNodeNames, V1_GenshinImpactTextureNodeNames, V2_GenshinImpactTextureNodeNames, V3_GenshinImpactTextureNodeNames, V4_GenshinImpactTextureNodeNames, V1_HoYoToonGenshinImpactTextureNodeNames, ZenlessZoneZeroTextureNodeNames
 
 
@@ -39,6 +39,10 @@ class WutheringWavesShaders(Enum):
     V1_GUSTLING_WATERS_SHADER = auto()
 
 
+class ArknightsEndfieldShaders(Enum):
+    V1_ARKNIGHTS_ENDFIELD_SHADER = auto()
+
+
 class ShaderIdentifier:
     def __init__(self, material_name, shader_node_name, shader_label_name, material_prefix_after_rename, material_endswith_after_rename):
         self.material_name = material_name
@@ -62,6 +66,8 @@ class ShaderIdentifierServiceFactory:
             return NevernessToEvernessShaderIdentifierService()
         elif game_type == GameType.WUTHERING_WAVES.name:
             return WutheringWavesShaderIdentifierService()
+        elif game_type == GameType.ARKNIGHTS_ENDFIELD.name:
+            return ArknightsEndfieldShaderIdentifierService()
         else:
             raise Exception(f'Unexpected input GameType "{game_type}" for ShaderIdentifierServiceFactory')
 
@@ -134,6 +140,8 @@ class ShaderIdentifierService:
             return NevernessToEvernessShaderMaterialNames
         elif game_type == GameType.WUTHERING_WAVES.name:
             return WutheringWavesShaderMaterialNames
+        elif game_type == GameType.ARKNIGHTS_ENDFIELD.name:
+            return ArknightsEndfieldShaderMaterialNames
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -159,6 +167,8 @@ class ShaderIdentifierService:
             return NevernessToEvernessShaderMaterialNames
         elif shader is WutheringWavesShaders.V1_GUSTLING_WATERS_SHADER:
             return WutheringWavesShaderMaterialNames
+        elif shader is ArknightsEndfieldShaders.V1_ARKNIGHTS_ENDFIELD_SHADER:
+            return ArknightsEndfieldShaderMaterialNames
         else:
             raise Exception(f'Unknown Shader: {shader}')
 
@@ -181,7 +191,7 @@ class ShaderIdentifierService:
             return JaredNytsPunishingGrayRavenTextureNodeNames
         elif shader is ZenlessZoneZeroShaders.V1_ZENLESS_ZONE_ZERO_SHADER or shader is None:
             return ZenlessZoneZeroTextureNodeNames
-        elif shader is NevernessToEvernessShaders.V1_NEVERNESS_TO_EVERNESS_SHADER or shader is WutheringWavesShaders.V1_GUSTLING_WATERS_SHADER:
+        elif shader is NevernessToEvernessShaders.V1_NEVERNESS_TO_EVERNESS_SHADER or shader is WutheringWavesShaders.V1_GUSTLING_WATERS_SHADER or shader is ArknightsEndfieldShaders.V1_ARKNIGHTS_ENDFIELD_SHADER:
             return None
         else:
             raise Exception(f'Unknown Shader: {shader}')
@@ -204,7 +214,7 @@ class ShaderIdentifierService:
             return JaredNyts_PunishingGrayRavenNodeNames  # Unused
         elif shader is ZenlessZoneZeroShaders.V1_ZENLESS_ZONE_ZERO_SHADER or shader is None:
             return ShaderNodeNames  # Unused
-        elif shader is NevernessToEvernessShaders.V1_NEVERNESS_TO_EVERNESS_SHADER or shader is WutheringWavesShaders.V1_GUSTLING_WATERS_SHADER:
+        elif shader is NevernessToEvernessShaders.V1_NEVERNESS_TO_EVERNESS_SHADER or shader is WutheringWavesShaders.V1_GUSTLING_WATERS_SHADER or shader is ArknightsEndfieldShaders.V1_ARKNIGHTS_ENDFIELD_SHADER:
             return ShaderNodeNames
         else:
             raise Exception(f'Unknown Shader: {shader}')
@@ -343,4 +353,30 @@ class WutheringWavesShaderIdentifierService(ShaderIdentifierService):
             if ng and any(k in ng.name.lower() for k in ["ww - ", "gustling", "wuwanormals", "tacet mark", "eye depth"]):
                 return WutheringWavesShaders.V1_GUSTLING_WATERS_SHADER
         return WutheringWavesShaders.V1_GUSTLING_WATERS_SHADER
+
+
+class ArknightsEndfieldShaderIdentifierService(ShaderIdentifierService):
+    V1_NAMES_OF_AKE_MATERIALS = [
+        'body_01',
+        'cloth_01',
+        'face_01',
+    ]
+    material_lists_to_search_through = {
+        ArknightsEndfieldShaders.V1_ARKNIGHTS_ENDFIELD_SHADER: V1_NAMES_OF_AKE_MATERIALS
+    }
+
+    def __init__(self):
+        super().__init__()
+
+    def identify_shader(self, materials, node_groups):
+        res = super().identify_shader(materials, node_groups)
+        if res is not None:
+            return res
+        for m in materials.values():
+            if m and any(k in m.name.lower() for k in ["ake", "body_01", "cloth_01", "face_01"]):
+                return ArknightsEndfieldShaders.V1_ARKNIGHTS_ENDFIELD_SHADER
+        for ng in node_groups.values():
+            if ng and any(k in ng.name.lower() for k in ["arknights", "endfield", "facemat", "face_alpha"]):
+                return ArknightsEndfieldShaders.V1_ARKNIGHTS_ENDFIELD_SHADER
+        return ArknightsEndfieldShaders.V1_ARKNIGHTS_ENDFIELD_SHADER
 

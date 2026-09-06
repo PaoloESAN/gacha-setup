@@ -13,4 +13,5 @@ class GameType(Enum):
     ZENLESS_ZONE_ZERO = auto()
     NEVERNESS_TO_EVERNESS = auto()
     WUTHERING_WAVES = auto()
+    ARKNIGHTS_ENDFIELD = auto()
 

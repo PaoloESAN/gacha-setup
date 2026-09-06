@@ -45,6 +45,105 @@ class WW_OT_SetUpMaterials(Operator, BasicSetupUIOperator):
     bl_label = 'Wuthering Waves: Set Up Materials (UI)'
 
 
+class AKE_OT_SetUpMaterials(Operator, BasicSetupUIOperator, CustomOperatorProperties):
+    '''Sets Up Materials'''
+    bl_idname = 'arknights_endfield.set_up_materials'
+    bl_label = 'Arknights Endfield: Set Up Materials (UI)'
+
+
+class AKE_OT_SetUpOutlines(Operator, BasicSetupUIOperator, CustomOperatorProperties):
+    '''Sets Up Outlines for Arknights: Endfield'''
+    bl_idname = 'arknights_endfield.set_up_outlines'
+    bl_label = 'Arknights Endfield: Setup Outlines'
+
+    def execute(self, context):
+        ng_outline = bpy.data.node_groups.get('Outlines')
+        dots_mat = bpy.data.materials.get('Dots Stroke')
+
+        # Configure Dots Stroke material for inverted hull outlines
+        if dots_mat:
+            try:
+                dots_mat.use_backface_culling = True
+                dots_mat.surface_render_method = 'DITHERED'
+                if dots_mat.node_tree:
+                    for n in dots_mat.node_tree.nodes:
+                        if n.type == 'BSDF_PRINCIPLED':
+                            n.inputs['Base Color'].default_value = (0.02, 0.02, 0.02, 1.0)
+                            n.inputs['Roughness'].default_value = 1.0
+                        elif n.type == 'BSDF_DIFFUSE':
+                            n.inputs['Color'].default_value = (0.02, 0.02, 0.02, 1.0)
+            except Exception:
+                pass
+
+        # Ensure smoothnormalWS is connected in Outlines node group
+        if ng_outline:
+            try:
+                node_sn = next((n for n in ng_outline.nodes if n.type == 'INPUT_ATTRIBUTE' and getattr(n, 'attribute_name', '') == 'smoothnormalWS'), None)
+                node_vm2 = ng_outline.nodes.get('Vector Math.002')
+                if node_sn and node_vm2:
+                    ng_outline.links.new(node_sn.outputs['Attribute'], node_vm2.inputs[0])
+            except Exception:
+                pass
+
+        for o in bpy.data.objects:
+            if o.type == 'MESH':
+                mesh = o.data
+                if 'Color' not in mesh.color_attributes:
+                    try:
+                        col_attr = mesh.color_attributes.new(name='Color', type='FLOAT_COLOR', domain='CORNER')
+                        for col in col_attr.data:
+                            col.color = (1.0, 1.0, 1.0, 1.0)
+                    except Exception:
+                        pass
+
+                mod = o.modifiers.get('Outlines')
+                if not mod:
+                    mod = o.modifiers.new('Outlines', 'NODES')
+                if ng_outline:
+                    mod.node_group = ng_outline
+                
+                # Set modifier inputs in Blender 5.2 and legacy versions
+                def _set_input(target_mod, ident_or_name, val):
+                    if hasattr(target_mod, 'properties') and target_mod.properties and hasattr(target_mod.properties, 'inputs'):
+                        sock = getattr(target_mod.properties.inputs, ident_or_name, None)
+                        if not sock and target_mod.node_group and hasattr(target_mod.node_group, 'interface'):
+                            for item in target_mod.node_group.interface.items_tree:
+                                if getattr(item, 'item_type', '') == 'SOCKET' and item.name == ident_or_name:
+                                    sock = getattr(target_mod.properties.inputs, item.identifier, None)
+                                    break
+                        if sock and hasattr(sock, 'value'):
+                            try:
+                                sock.value = val
+                                return True
+                            except Exception:
+                                pass
+                    try:
+                        target_mod[ident_or_name] = val
+                        return True
+                    except Exception:
+                        pass
+                    return False
+
+                _set_input(mod, 'Input_2', 0.001)
+                _set_input(mod, '描边宽度', 0.001)
+                if dots_mat:
+                    _set_input(mod, 'Input_3', dots_mat)
+                    _set_input(mod, '描边材质', dots_mat)
+                _set_input(mod, 'Input_4', True)
+                _set_input(mod, '使用顶点色控制', True)
+
+        self.report({'INFO'}, 'Arknights Endfield outlines configured.')
+        next_step = getattr(self, 'next_step_idx', 0)
+        if next_step:
+            NextStepInvoker().invoke(
+                next_step,
+                getattr(self, 'invoker_type', 'invoke_next_step_ui'),
+                high_level_step_name=getattr(self, 'high_level_step_name', ''),
+                game_type=getattr(self, 'game_type', 'ARKNIGHTS_ENDFIELD'),
+            )
+        return {'FINISHED'}
+
+
 def build_anisotropic_hair_spec_group():
     GROUP_NAME = "KK_Anisotropic_HairSpec"
     group = bpy.data.node_groups.get(GROUP_NAME)
@@ -615,7 +714,10 @@ register, unregister = bpy.utils.register_classes_factory([
     ZZZ_OT_SetUpMaterials,
     NTE_OT_SetUpMaterials,
     NTE_OT_SetUpHairSpecular,
+    NTE_OT_SetUpOutlines,
     WW_OT_SetUpMaterials,
+    AKE_OT_SetUpMaterials,
+    AKE_OT_SetUpOutlines,
 ])
 
 

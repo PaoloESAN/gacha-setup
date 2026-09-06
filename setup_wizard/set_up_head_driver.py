@@ -595,8 +595,191 @@ class WW_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
                 pass
 
 
+class AKE_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
+    """Sets up Head Driver (HC, HF, HR) for Arknights: Endfield"""
+
+    bl_idname = "arknights_endfield.setup_head_driver"
+    bl_label = "Arknights Endfield: Setup Head Driver"
+
+    def execute(self, context):
+        setup_ake_head_driver_system(context)
+        self.report({"INFO"}, "Configured Arknights Endfield Head Driver (HC, HF, HR).")
+        if self.next_step_idx:
+            NextStepInvoker().invoke(
+                self.next_step_idx,
+                self.invoker_type,
+                high_level_step_name=self.high_level_step_name,
+                game_type=self.game_type,
+            )
+        super().clear_custom_properties()
+        return {"FINISHED"}
+
+
+def setup_ake_head_driver_system(context=None):
+    if context is None:
+        context = bpy.context
+
+    arm = next((o for o in context.selected_objects if o.type == 'ARMATURE'), None)
+    if not arm:
+        arm = next((o for o in bpy.data.objects if o.type == 'ARMATURE'), None)
+
+    if not arm:
+        return
+
+    head_bone_name = next((b.name for b in arm.data.bones if any(k in b.name.lower() for k in ['bip001_head', 'bip001 head', 'head', 'head_m'])), None)
+    if not head_bone_name:
+        return
+
+    head_pose_bone = arm.pose.bones.get(head_bone_name)
+    if not head_pose_bone:
+        return
+
+    head_world_pos = arm.matrix_world @ head_pose_bone.head
+
+    hc = bpy.data.objects.get('HC')
+    hf = bpy.data.objects.get('HF')
+    hr = bpy.data.objects.get('HR')
+
+    if not hc:
+        return
+
+    # 1. Unparent and clear previous transforms
+    for obj in [hf, hr]:
+        if obj:
+            obj.parent = None
+            obj.matrix_world.identity()
+
+    hc.parent = None
+    for c in list(hc.constraints):
+        hc.constraints.remove(c)
+
+    # 2. Position HC at head center
+    hc.location = head_world_pos
+    hc.rotation_euler = (0, 0, 0)
+    hc.scale = (0.28, 0.28, 0.28)
+
+    # 3. Position HF and HR (swapped)
+    if hf:
+        hf.parent = hc
+        hf.location = (1.0, 0.0, 0.0)
+        hf.rotation_euler = (0, 0, 0)
+        hf.scale = (1.0, 1.0, 1.0)
+
+    if hr:
+        hr.parent = hc
+        hr.location = (0.0, 0.0, -1.0)
+        hr.rotation_euler = (0, 0, 0)
+        hr.scale = (1.0, 1.0, 1.0)
+
+    # 4. Add Child Of constraint to HC and call childof_set_inverse
+    con = hc.constraints.new('CHILD_OF')
+    con.target = arm
+    con.subtarget = head_bone_name
+
+    prev_active = context.view_layer.objects.active
+    prev_selected = list(context.selected_objects)
+
+    try:
+        bpy.ops.object.select_all(action='DESELECT')
+        hc.select_set(True)
+        context.view_layer.objects.active = hc
+        bpy.ops.constraint.childof_set_inverse(constraint=con.name, owner='OBJECT')
+    except Exception as e:
+        print(f"[AKE SETUP] Notice setting HC Child Of inverse: {e}")
+    finally:
+        try:
+            bpy.ops.object.select_all(action='DESELECT')
+            for sel in prev_selected:
+                if sel and sel.name in context.view_layer.objects:
+                    sel.select_set(True)
+            if prev_active and prev_active.name in context.view_layer.objects:
+                context.view_layer.objects.active = prev_active
+        except Exception:
+            pass
+
+    # 5. Organization: Nest Lighting collection into WGTS_Armature / WGTS and place Light with character rig
+    try:
+        organize_ake_lighting_collections(context, arm)
+    except Exception as e_org:
+        print(f"[AKE SETUP] Notice organizing Lighting and WGTS collections: {e_org}")
+
+
+def organize_ake_lighting_collections(context=None, arm=None):
+    if context is None:
+        context = bpy.context
+
+    light_col = bpy.data.collections.get('Lighting')
+    light_obj = bpy.data.objects.get('Light')
+
+    # 1. Resolve character armature if not provided
+    if not arm:
+        # Prefer Rigify rig (e.g. PelicaRig) or active armature
+        armatures = [o for o in context.selected_objects if o.type == 'ARMATURE' and not any(k in o.name.lower() for k in ['facerig', 'lighting', 'metarig'])]
+        if armatures:
+            arm = armatures[0]
+        else:
+            arm = next((o for o in bpy.data.objects if o.type == 'ARMATURE' and o.name.endswith('Rig') and not any(k in o.name.lower() for k in ['facerig', 'lighting', 'metarig'])), None)
+        if not arm:
+            arm = next((o for o in bpy.data.objects if o.type == 'ARMATURE' and not any(k in o.name.lower() for k in ['facerig', 'lighting', 'metarig'])), None)
+
+    # 2. Resolve character collection (e.g. Pelica)
+    char_coll = None
+    if arm and arm.users_collection:
+        for c in arm.users_collection:
+            if not c.name.startswith("WGTS") and c.name.lower() != "wgt":
+                char_coll = c
+                break
+    if not char_coll:
+        for c in bpy.data.collections:
+            if c.name not in ("Collection", "Master Collection", "Scene Collection", "Lighting") and not c.name.startswith("WGTS") and c.name.lower() != "wgt":
+                char_coll = c
+                break
+    if not char_coll:
+        char_coll = context.scene.collection
+
+    # 3. Resolve WGTS collection (e.g. WGTS_Armature, WGTS_Pelica, etc.)
+    wgts_coll = None
+    for c in bpy.data.collections:
+        if c.name.startswith("WGTS_") or c.name.startswith("WGTS") or c.name.lower() == "wgt":
+            wgts_coll = c
+            break
+
+    # 4. Move Light object directly into char_coll (alongside Rig, FaceRig, Meshes)
+    if light_obj and char_coll:
+        if light_obj.name not in char_coll.objects:
+            char_coll.objects.link(light_obj)
+        for c in list(bpy.data.collections):
+            if c != char_coll and light_obj.name in c.objects:
+                try:
+                    c.objects.unlink(light_obj)
+                except Exception:
+                    pass
+        if light_obj.name in context.scene.collection.objects and context.scene.collection != char_coll:
+            try:
+                context.scene.collection.objects.unlink(light_obj)
+            except Exception:
+                pass
+
+    # 5. Nest Lighting collection inside wgts_coll
+    if light_col and wgts_coll:
+        if light_col.name not in wgts_coll.children:
+            wgts_coll.children.link(light_col)
+        for parent_c in list(bpy.data.collections):
+            if parent_c != wgts_coll and light_col.name in parent_c.children:
+                try:
+                    parent_c.children.unlink(light_col)
+                except Exception:
+                    pass
+        if light_col.name in context.scene.collection.children:
+            try:
+                context.scene.collection.children.unlink(light_col)
+            except Exception:
+                pass
+
+
 register, unregister = bpy.utils.register_classes_factory([
     GI_OT_SetUpHeadDriver,
     ZZZ_OT_SetUpHeadDriver,
     WW_OT_SetUpHeadDriver,
+    AKE_OT_SetUpHeadDriver,
 ])

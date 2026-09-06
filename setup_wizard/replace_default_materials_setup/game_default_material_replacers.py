@@ -66,6 +66,8 @@ class GameDefaultMaterialReplacerFactory:
             return NevernessToEvernessDefaultMaterialReplacer(blender_operator, context)
         elif game_type == GameType.WUTHERING_WAVES.name:
             return WutheringWavesDefaultMaterialReplacer(blender_operator, context)
+        elif game_type == GameType.ARKNIGHTS_ENDFIELD.name:
+            return ArknightsEndfieldDefaultMaterialReplacer(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -2248,6 +2250,267 @@ class WutheringWavesDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 def clean_mesh_slots():
     clean_hair_mesh_slots()
     clean_face_mesh_slots()
+
+
+class ArknightsEndfieldDefaultMaterialReplacer(GameDefaultMaterialReplacer):
+    def __init__(self, blender_operator: Operator, context: Context):
+        self.blender_operator = blender_operator
+        self.context = context
+
+    def replace_default_materials(self):
+        meshes = [o for o in bpy.data.objects if o.type == 'MESH']
+
+        # Cache standard template materials from AKE.blend
+        mat_map = {
+            'body': bpy.data.materials.get('body_01'),
+            'cloth_01': bpy.data.materials.get('cloth_01'),
+            'cloth_02': bpy.data.materials.get('cloth_02'),
+            'cloth_03': bpy.data.materials.get('cloth_03'),
+            'cloth_04': bpy.data.materials.get('cloth_04'),
+            'face_01': bpy.data.materials.get('face_01'),
+            'hair_01': bpy.data.materials.get('hair_01'),
+            'hairshadow_01': bpy.data.materials.get('hairshadow_01'),
+            'iris': bpy.data.materials.get('iris_01'),
+            'eyebrow': bpy.data.materials.get('eyebrow_01'),
+            'eyeshadow': bpy.data.materials.get('eyeshadow_01'),
+            'head': bpy.data.materials.get('head'),
+            'weapon': bpy.data.materials.get('weapon'),
+            'wing': bpy.data.materials.get('wing'),
+        }
+
+        def get_template_for_slot(raw_slot_name, mesh_name):
+            slot_low = raw_slot_name.lower()
+            mesh_low = mesh_name.lower()
+            
+            # 1. First match slot name tokens
+            if any(k in slot_low for k in ['iris', 'eye_01']):
+                return mat_map['iris']
+            elif any(k in slot_low for k in ['eyebrow', 'brow']):
+                return mat_map['eyebrow']
+            elif any(k in slot_low for k in ['eyeshadow', 'eyewhite', 'whiteshadow']):
+                return mat_map['eyeshadow']
+            elif 'hairshadow' in slot_low:
+                return mat_map['hairshadow_01']
+            elif 'hair' in slot_low:
+                return mat_map['hair_01']
+            elif 'face' in slot_low:
+                return mat_map['face_01']
+            elif 'body' in slot_low:
+                return mat_map['body']
+            elif 'cloth_01' in slot_low or 'cloth_05' in slot_low:
+                return mat_map['cloth_01']
+            elif 'cloth_02' in slot_low or 'cloth_06' in slot_low:
+                return mat_map['cloth_02']
+            elif 'cloth_03' in slot_low:
+                return mat_map['cloth_03'] or mat_map['cloth_01']
+            elif 'cloth_04' in slot_low:
+                return mat_map['cloth_04'] or mat_map['cloth_02']
+            elif 'cloth_07' in slot_low or 'cloth_08' in slot_low:
+                return mat_map['cloth_01']
+            elif 'vfx' in slot_low or 'toppotential' in slot_low:
+                return bpy.data.materials.get('Arknights: Endfield_Alpha') or mat_map['cloth_01']
+            elif 'cloth' in slot_low:
+                return mat_map['cloth_01']
+            elif any(k in slot_low for k in ['wpn', 'weapon']):
+                return mat_map['weapon']
+            elif 'wing' in slot_low:
+                return mat_map['wing']
+            elif 'head' in slot_low:
+                return mat_map['head']
+
+            # 2. Fallback to mesh name tokens
+            if any(k in mesh_low for k in ['iris', 'eye_01']):
+                return mat_map['iris']
+            elif any(k in mesh_low for k in ['eyebrow', 'brow']):
+                return mat_map['eyebrow']
+            elif any(k in mesh_low for k in ['eyeshadow', 'eyewhite']):
+                return mat_map['eyeshadow']
+            elif 'hairshadow' in mesh_low:
+                return mat_map['hairshadow_01']
+            elif 'hair' in mesh_low:
+                return mat_map['hair_01']
+            elif 'face' in mesh_low:
+                return mat_map['face_01']
+            elif 'body' in mesh_low:
+                return mat_map['body']
+            elif 'cloth_01' in mesh_low or 'cloth_05' in mesh_low:
+                return mat_map['cloth_01']
+            elif 'cloth_02' in mesh_low or 'cloth_06' in mesh_low:
+                return mat_map['cloth_02']
+            elif 'cloth_03' in mesh_low:
+                return mat_map['cloth_03'] or mat_map['cloth_01']
+            elif 'cloth_04' in mesh_low:
+                return mat_map['cloth_04'] or mat_map['cloth_02']
+            elif any(k in mesh_low for k in ['cloth_07', 'cloth_08', 'vfxpart', 'toppotential']):
+                return bpy.data.materials.get('Arknights: Endfield_Alpha') or mat_map['cloth_01']
+            elif 'cloth' in mesh_low:
+                return mat_map['cloth_01']
+
+            return mat_map['cloth_01']
+
+        cloned_mats = {}
+
+        # 1. Assign AKE materials to all mesh slots
+        for mesh in meshes:
+            mesh_name = mesh.name.lower()
+            for slot in mesh.material_slots:
+                raw_mat = slot.material
+                raw_name = raw_mat.name if raw_mat else slot.name
+                clean_name = raw_name.replace('__raw_fbx_', '')
+
+                if clean_name not in cloned_mats:
+                    chosen_template = get_template_for_slot(clean_name, mesh.name)
+                    if not chosen_template:
+                        chosen_template = mat_map['cloth_01']
+
+                    new_mat = chosen_template.copy()
+                    new_mat.name = clean_name
+                    new_mat.use_fake_user = True
+                    cloned_mats[clean_name] = new_mat
+
+                slot.material = cloned_mats[clean_name]
+
+                # Transparency settings: body must strictly be DITHERED, eyeshadow must strictly be BLENDED
+                if slot.material:
+                    m = slot.material
+                    m_low = m.name.lower()
+                    if any(k in m_low or k in mesh_name for k in ['eyeshadow', 'eyewhite', 'whiteshadow', 'eye_shadow']):
+                        if hasattr(m, "surface_render_method"):
+                            try:
+                                m.surface_render_method = 'BLENDED'
+                            except Exception:
+                                pass
+                        if hasattr(m, "blend_method"):
+                            try:
+                                m.blend_method = 'BLEND'
+                            except Exception:
+                                pass
+                        if hasattr(m, "use_backface_culling"):
+                            m.use_backface_culling = False
+                        if hasattr(m, "show_transparent_back"):
+                            m.show_transparent_back = False
+                    elif 'body' in m_low or 'body' in mesh_name:
+                        if hasattr(m, "surface_render_method"):
+                            try:
+                                m.surface_render_method = 'DITHERED'
+                            except Exception:
+                                pass
+                        if hasattr(m, "use_backface_culling"):
+                            m.use_backface_culling = False
+                    elif any(k in m.name.lower() or k in mesh_name for k in ['cloth_03', 'cloth_04', 'cloth_05', 'cloth_06', 'cloth_07', 'cloth_08', 'vfxpart']):
+                        if hasattr(m, "surface_render_method"):
+                            try:
+                                m.surface_render_method = 'BLENDED'
+                            except Exception:
+                                pass
+                        if hasattr(m, "blend_method"):
+                            try:
+                                m.blend_method = 'BLEND'
+                            except Exception:
+                                pass
+                        if hasattr(m, "use_backface_culling"):
+                            m.use_backface_culling = False
+                        if hasattr(m, "show_transparent_back"):
+                            m.show_transparent_back = False
+
+        # 2. Geometry Node Modifiers: Light, Facemat, Head Controller, Face_ALPHA
+        light_ng = bpy.data.node_groups.get('Light')
+        facemat_ng = bpy.data.node_groups.get('Facemat')
+        head_ctrl_ng = bpy.data.node_groups.get('Head Controller')
+        face_alpha_ng = bpy.data.node_groups.get('Face_ALPHA')
+
+        hc = bpy.data.objects.get('HC')
+        hf = bpy.data.objects.get('HF')
+        hr = bpy.data.objects.get('HR')
+
+        face_mat = bpy.data.materials.get('face_01')
+        iris_mat = bpy.data.materials.get('iris_01')
+        brow_mat = bpy.data.materials.get('eyebrow_01')
+        iris_alpha_mat = bpy.data.materials.get('iris_01_ALPHA')
+        brow_alpha_mat = bpy.data.materials.get('eyebrow_01_ALPHA')
+
+        def _set_mod_socket(target_mod, ident_or_name, val):
+            if hasattr(target_mod, 'properties') and target_mod.properties and hasattr(target_mod.properties, 'inputs'):
+                sock = getattr(target_mod.properties.inputs, ident_or_name, None)
+                if not sock and target_mod.node_group and hasattr(target_mod.node_group, 'interface'):
+                    for item in target_mod.node_group.interface.items_tree:
+                        if getattr(item, 'item_type', '') == 'SOCKET' and item.name == ident_or_name:
+                            sock = getattr(target_mod.properties.inputs, item.identifier, None)
+                            break
+                if sock and hasattr(sock, 'value'):
+                    try:
+                        sock.value = val
+                        return True
+                    except Exception:
+                        pass
+            try:
+                target_mod[ident_or_name] = val
+                return True
+            except Exception:
+                pass
+            return False
+
+        for mesh in meshes:
+            mesh_name = mesh.name.lower()
+            is_hair = 'hair_01' in mesh_name or ('hair' in mesh_name and 'shadow' not in mesh_name)
+            is_face = 'face_01' in mesh_name or 'face' in mesh_name
+
+            # Light modifier on non-hair meshes
+            if light_ng and not is_hair:
+                mod_light = mesh.modifiers.get('Light')
+                if not mod_light:
+                    mod_light = mesh.modifiers.new('Light', 'NODES')
+                mod_light.node_group = light_ng
+            elif is_hair:
+                mod_light = mesh.modifiers.get('Light')
+                if mod_light:
+                    mesh.modifiers.remove(mod_light)
+
+            # Face modifiers on face mesh
+            if is_face:
+                if facemat_ng:
+                    mod_facemat = mesh.modifiers.get('Facemat')
+                    if not mod_facemat:
+                        mod_facemat = mesh.modifiers.new('Facemat', 'NODES')
+                    mod_facemat.node_group = facemat_ng
+                    if face_mat:
+                        _set_mod_socket(mod_facemat, "Socket_2", face_mat)
+                        _set_mod_socket(mod_facemat, "FaceMat", face_mat)
+
+                if head_ctrl_ng:
+                    mod_hc = mesh.modifiers.get('Head Controller')
+                    if not mod_hc:
+                        mod_hc = mesh.modifiers.new('Head Controller', 'NODES')
+                    mod_hc.node_group = head_ctrl_ng
+                    if hc:
+                        _set_mod_socket(mod_hc, "Socket_0", hc)
+                        _set_mod_socket(mod_hc, "HC", hc)
+                    if hf:
+                        _set_mod_socket(mod_hc, "Socket_2", hf)
+                        _set_mod_socket(mod_hc, "HF", hf)
+                    if hr:
+                        _set_mod_socket(mod_hc, "Socket_3", hr)
+                        _set_mod_socket(mod_hc, "HR", hr)
+
+                if face_alpha_ng:
+                    mod_fa = mesh.modifiers.get('Face_ALPHA')
+                    if not mod_fa:
+                        mod_fa = mesh.modifiers.new('Face_ALPHA', 'NODES')
+                    mod_fa.node_group = face_alpha_ng
+                    if iris_mat:
+                        _set_mod_socket(mod_fa, "Socket_4", iris_mat)
+                        _set_mod_socket(mod_fa, "irisMat", iris_mat)
+                    if brow_mat:
+                        _set_mod_socket(mod_fa, "Socket_5", brow_mat)
+                        _set_mod_socket(mod_fa, "browMat", brow_mat)
+                    if iris_alpha_mat:
+                        _set_mod_socket(mod_fa, "Socket_6", iris_alpha_mat)
+                        _set_mod_socket(mod_fa, "irisAlphaMat", iris_alpha_mat)
+                    if brow_alpha_mat:
+                        _set_mod_socket(mod_fa, "Socket_7", brow_alpha_mat)
+                        _set_mod_socket(mod_fa, "browAlphaMat", brow_alpha_mat)
+
+        self.blender_operator.report({'INFO'}, 'Replaced default materials with Arknights: Endfield materials and configured modifiers.')
 
 
 
