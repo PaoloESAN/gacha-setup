@@ -139,6 +139,27 @@ class AKE_PT_UI_Character_Model_Menu(Panel, ArknightsEndfieldUIRenderChecker):
             game_type=GameType.ARKNIGHTS_ENDFIELD.name,
             operator_context="INVOKE_DEFAULT",
         )
+        OperatorFactory.create(
+            sub_layout,
+            "genshin.fix_transformations",
+            "Fix Transformations",
+            "OBJECT_ORIGIN",
+            game_type=GameType.ARKNIGHTS_ENDFIELD.name,
+        )
+        OperatorFactory.create(
+            sub_layout,
+            "genshin.delete_empties",
+            "Delete Empties",
+            "TRASH",
+            game_type=GameType.ARKNIGHTS_ENDFIELD.name,
+        )
+        OperatorFactory.create(
+            sub_layout,
+            "genshin.reorient_bones",
+            "Fix Orientation",
+            "BONE_DATA",
+            game_type=GameType.ARKNIGHTS_ENDFIELD.name,
+        )
 
 
 class AKE_PT_UI_Materials_Menu(Panel, ArknightsEndfieldUIRenderChecker):

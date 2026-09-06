@@ -358,7 +358,8 @@ def distribute_standard_rig_bones(
         "necklace", "earring", "pendant", "badge", "prop"
     ]
     hair_keywords = [
-        "hair", "eardrop", "headline", "ahoge", "bangs", "ponytail", "twintail", "bone00"
+        "hair", "eardrop", "headline", "ahoge", "bangs", "ponytail", "twintail", "bone00",
+        "plait", "braid", "toufa"
     ]
 
     for b in arm_data.bones:
@@ -1033,11 +1034,15 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
     def is_physics_ignored(name):
         if name in physics_ignore_list or name in core_biped_org:
             return True
+        if is_v4 and hasattr(arm_data, "collections") and "Face" in arm_data.collections:
+            if name in arm_data.collections["Face"].bones:
+                return True
         low = name.lower()
         if any(k in low for k in [
             "eyebone", "eye", "tooth", "teeth", "tongue", "mouth", "jaw", "brow", "lip", "nose",
             "cheek", "plate", "twist", "sa01", "sa02", "fa01", "skirtallf", "prop", "light",
-            "finger", "thumb", "heel", "camera", "case", "chest", "breast"
+            "finger", "thumb", "heel", "camera", "case", "chest", "breast",
+            "face", "wink", "slider", "ctrl", "control"
         ]):
             return True
         if (
@@ -1067,7 +1072,8 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
 
     # Fallback or additional keyword detection if collections are empty
     hair_keywords = [
-        "hair", "eardrop", "headline", "ahoge", "bangs", "ponytail", "twintail", "bone00"
+        "hair", "eardrop", "headline", "ahoge", "bangs", "ponytail", "twintail", "bone00",
+        "plait", "braid", "toufa"
     ]
     clothes_keywords = [
         "ribbon", "sleeve", "strap", "skirt", "button", "belt", "cloth", "dress",

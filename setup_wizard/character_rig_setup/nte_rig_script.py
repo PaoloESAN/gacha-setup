@@ -94,12 +94,24 @@ def rig_character(
         for k, v in body_base_map.items():
             abadidea[pfx + k] = v
 
-    # Add extra exact matches for eyes & breasts
+    # Add exact and dynamic matches for eyes & breasts (Bn_l_breast_001, Bn_r_breast_001)
     abadidea.update({
         'eye_R': 'DEF-eye.R', 'eye_L': 'DEF-eye.L',
+        'Bn_l_breast_001': 'DEF-breast.L', 'Bn_r_breast_001': 'DEF-breast.R',
+        'Bn_L_breast_001': 'DEF-breast.L', 'Bn_R_breast_001': 'DEF-breast.R',
+        'bn_l_breast_001': 'DEF-breast.L', 'bn_r_breast_001': 'DEF-breast.R',
         'Bn_l_breast_01': 'DEF-breast.L', 'Bn_r_breast_01': 'DEF-breast.R',
         'breast.L': 'DEF-breast.L', 'breast.R': 'DEF-breast.R',
     })
+
+    # Dynamic breast detection for other naming conventions in NTE
+    for pb in obj.pose.bones:
+        pb_low = pb.name.lower()
+        if ("breast" in pb_low or "xiong" in pb_low) and not pb.name.startswith(("DEF-", "ORG-", "MCH-")):
+            if any(s in pb_low for s in ["_l", ".l", "l_", "left"]) and "DEF-breast.L" not in abadidea.values():
+                abadidea[pb.name] = "DEF-breast.L"
+            elif any(s in pb_low for s in ["_r", ".r", "r_", "right"]) and "DEF-breast.R" not in abadidea.values():
+                abadidea[pb.name] = "DEF-breast.R"
 
     # Dynamic Finger Mappings for both Left (.L) and Right (.R) hands
     existing_bone_names = {pb.name for pb in obj.pose.bones}
@@ -306,29 +318,56 @@ def rig_character(
             eb_head.tail.z = eb_head.head.z + 0.22
             eb_head.roll = 0.0
 
-        # Center breast bones on front of chest
-        chest_eb = metarig_obj.data.edit_bones.get("spine.003") or metarig_obj.data.edit_bones.get("chest")
-        if chest_eb:
-            cz = chest_eb.head.z + (chest_eb.tail.z - chest_eb.head.z) * 0.25
-            cy = chest_eb.head.y - 0.07
+        # Align breast bones in metarig to character's actual breast bones (Bn_l_breast_001 / Bn_r_breast_001)
+        orig_arm = backup_arm or obj
+        boob_b_L = None
+        boob_b_R = None
+        if orig_arm and orig_arm.data:
+            for b_cand in ["Bn_l_breast_001", "Bn_L_breast_001", "Bn_l_breast_01", "DEF-breast.L", "breast.L"]:
+                if b_cand in orig_arm.data.bones:
+                    boob_b_L = orig_arm.data.bones[b_cand]
+                    break
+            for b_cand in ["Bn_r_breast_001", "Bn_R_breast_001", "Bn_r_breast_01", "DEF-breast.R", "breast.R"]:
+                if b_cand in orig_arm.data.bones:
+                    boob_b_R = orig_arm.data.bones[b_cand]
+                    break
+            if not boob_b_L:
+                for b in orig_arm.data.bones:
+                    b_l = b.name.lower()
+                    if ("breast" in b_l or "xiong" in b_l) and any(s in b_l for s in ["_l", ".l", "l_", "left"]):
+                        boob_b_L = b
+                        break
+            if not boob_b_R:
+                for b in orig_arm.data.bones:
+                    b_l = b.name.lower()
+                    if ("breast" in b_l or "xiong" in b_l) and any(s in b_l for s in ["_r", ".r", "r_", "right"]):
+                        boob_b_R = b
+                        break
 
-            eb_bl = metarig_obj.data.edit_bones.get("breast.L")
-            if eb_bl:
-                eb_bl.head.x = 0.050
-                eb_bl.head.y = cy
-                eb_bl.head.z = cz
-                eb_bl.tail.x = 0.050
-                eb_bl.tail.y = cy - 0.05
-                eb_bl.tail.z = cz
+        eb_bl = metarig_obj.data.edit_bones.get("breast.L")
+        eb_br = metarig_obj.data.edit_bones.get("breast.R")
 
-            eb_br = metarig_obj.data.edit_bones.get("breast.R")
+        if boob_b_L and eb_bl:
+            eb_bl.head = boob_b_L.head_local.copy()
+            eb_bl.tail = eb_bl.head + mathutils.Vector((0, -0.06, 0))
+            eb_bl.roll = 0.0
+
             if eb_br:
-                eb_br.head.x = -0.050
-                eb_br.head.y = cy
-                eb_br.head.z = cz
-                eb_br.tail.x = -0.050
-                eb_br.tail.y = cy - 0.05
-                eb_br.tail.z = cz
+                if boob_b_R:
+                    eb_br.head = boob_b_R.head_local.copy()
+                else:
+                    eb_br.head = mathutils.Vector((-eb_bl.head.x, eb_bl.head.y, eb_bl.head.z))
+                eb_br.tail = eb_br.head + mathutils.Vector((0, -0.06, 0))
+                eb_br.roll = 0.0
+        elif eb_bl and eb_br:
+            chest_eb = metarig_obj.data.edit_bones.get("spine.003") or metarig_obj.data.edit_bones.get("chest")
+            if chest_eb:
+                cz = chest_eb.head.z + (chest_eb.tail.z - chest_eb.head.z) * 0.25
+                cy = chest_eb.head.y - 0.07
+                eb_bl.head = mathutils.Vector((0.050, cy, cz))
+                eb_bl.tail = mathutils.Vector((0.050, cy - 0.05, cz))
+                eb_br.head = mathutils.Vector((-0.050, cy, cz))
+                eb_br.tail = mathutils.Vector((-0.050, cy - 0.05, cz))
 
         # Align shoulder.R metarig bone roll so widget is symmetrical and not flipped
         sh_L = metarig_obj.data.edit_bones.get("shoulder.L")
@@ -561,6 +600,8 @@ def rig_character(
                             target_p = rig_edit_bones.get("ORG-forearm.R") or rig_edit_bones.get("DEF-forearm.R")
                         else:
                             target_p = rig_edit_bones.get("ORG-forearm.L") or rig_edit_bones.get("DEF-forearm.L")
+                    elif any(k in nl for k in ["breast", "xiong"]):
+                        target_p = rig_edit_bones.get("ORG-breast.R" if any(s in nl for s in [".r", "_r", "r_"]) else "ORG-breast.L") or rig_edit_bones.get("DEF-breast.R" if any(s in nl for s in [".r", "_r", "r_"]) else "DEF-breast.L") or rig_edit_bones.get("chest")
                     elif any(k in nl for k in ["cloth", "sce"]):
                         target_p = rig_edit_bones.get("ORG-spine.003") or rig_edit_bones.get("DEF-spine.003") or rig_edit_bones.get("chest")
                     elif "thigh" in nl:

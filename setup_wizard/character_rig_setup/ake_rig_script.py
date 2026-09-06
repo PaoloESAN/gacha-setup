@@ -351,16 +351,13 @@ def rig_character(
 
         if boob_b_L and meta_boob_L:
             meta_boob_L.head = boob_b_L.head_local.copy()
-            meta_boob_L.tail = boob_b_L.tail_local.copy()
+            meta_boob_L.tail = meta_boob_L.head + Vector((0, -0.06, 0))
+            meta_boob_L.roll = 0.0
 
-            if boob_b_R and meta_boob_R:
-                meta_boob_R.head = boob_b_R.head_local.copy()
-                meta_boob_R.tail = boob_b_R.tail_local.copy()
-            elif meta_boob_R:
-                meta_boob_R.head = boob_b_L.head_local.copy()
-                meta_boob_R.head.x = -meta_boob_R.head.x
-                meta_boob_R.tail = boob_b_L.tail_local.copy()
-                meta_boob_R.tail.x = -meta_boob_R.tail.x
+            if meta_boob_R:
+                meta_boob_R.head = Vector((-meta_boob_L.head.x, meta_boob_L.head.y, meta_boob_L.head.z))
+                meta_boob_R.tail = meta_boob_R.head + Vector((0, -0.06, 0))
+                meta_boob_R.roll = 0.0
         else:
             if meta_boob_L:
                 metarig_obj.data.edit_bones.remove(meta_boob_L)
@@ -559,6 +556,8 @@ def rig_character(
     safe_set_custom_shape("torso", "pelvis2")
     safe_set_custom_shape("hips", "hips", scale=(1, 1, 1), translation=(0.0, -0.04, 0.044), rotation_euler=(1.309, 0, 0))
     safe_set_custom_shape("chest", "chest", scale=(0.45, 0.45, 0.45), translation=(0.0, -0.04, 0.0), rotation_euler=(1.5708, 0, 0))
+    safe_set_custom_shape("breast.L", rotation_euler=(0, 0, 0), scale=(0.10, 0.10, 0.10), disable_bone_size=True)
+    safe_set_custom_shape("breast.R", rotation_euler=(0, 0, 0), scale=(0.10, 0.10, 0.10), disable_bone_size=True)
     safe_set_custom_shape("hand_ik.L", "hand", scale=(1.0, 1.0, 1.0), disable_bone_size=True)
     safe_set_custom_shape("hand_ik.R", "hand", scale=(1.0, 1.0, 1.0), disable_bone_size=True)
 

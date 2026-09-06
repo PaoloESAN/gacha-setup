@@ -201,6 +201,13 @@ def reorient_armature_bones(armature):
                 if (avg_child_pos - bone.head).length > 0.001:
                     bone.tail = avg_child_pos
 
+        for bone in edit_bones:
+            if not bone.children and bone.parent:
+                p_dir = bone.head - bone.parent.head
+                if p_dir.length > 0.001:
+                    length = bone.length if bone.length > 0.001 else 0.05
+                    bone.tail = bone.head + p_dir.normalized() * length
+
         bpy.ops.armature.calculate_roll(type='GLOBAL_POS_Y')
     except Exception as e:
         print(f"[REORIENT BONES] Notice: {e}")
@@ -571,6 +578,7 @@ def handle_ake_post_import(context):
             context.view_layer.objects.active = armature
             bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
             print("[AKE SETUP] Cleared import pose, rotated -90 deg on X, and applied transforms successfully.")
+            reorient_armature_bones(armature)
         except Exception as e:
             print(f"[AKE SETUP] Pose clear / orientation notice: {e}")
         finally:
@@ -788,6 +796,7 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                 GameType.GENSHIN_IMPACT.name,
                 GameType.HONKAI_STAR_RAIL.name,
                 GameType.ZENLESS_ZONE_ZERO.name,
+                GameType.ARKNIGHTS_ENDFIELD.name,
             ):
                 armatures = [o for o in bpy.data.objects if o.type == "ARMATURE"]
                 if armatures:
@@ -1195,6 +1204,7 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                     GameType.GENSHIN_IMPACT.name,
                     GameType.HONKAI_STAR_RAIL.name,
                     GameType.ZENLESS_ZONE_ZERO.name,
+                    GameType.ARKNIGHTS_ENDFIELD.name,
                 ):
                     reorient_armature_bones(obj)
 
