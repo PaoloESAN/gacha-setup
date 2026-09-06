@@ -778,6 +778,12 @@ class ArknightsEndfieldCharacterRigger(CharacterRigger):
         except Exception as e_face:
             print(f"[AKE Rig Warning] Isaac face rig setup error: {e_face}")
 
+        try:
+            from setup_wizard.set_up_head_driver import setup_ake_head_driver_system
+            setup_ake_head_driver_system(self.context)
+        except Exception as e_hd:
+            print(f"[AKE Rig Warning] Head driver setup notice: {e_hd}")
+
         cache_enabled = self.context.window_manager.cache_enabled
         if cache_enabled and filepath:
             cache_using_cache_key(get_cache(cache_enabled), self.rigify_bone_shapes_file_path, filepath)

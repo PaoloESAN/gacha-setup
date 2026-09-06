@@ -706,5 +706,12 @@ def rig_character(
     # 16. Update and run Rigify UI script
     modify_and_run_rig_ui_script(rigifyr, original_name, char_name=char_name)
 
+    # 17. Organize collections: ensure Lighting is nested in WGTS_Armature and Light is in character collection
+    try:
+        from setup_wizard.set_up_head_driver import organize_ake_lighting_collections
+        organize_ake_lighting_collections(context, rigifyr)
+    except Exception as e_org:
+        print(f"[AKE RIG] Notice organizing Lighting and WGTS collections: {e_org}")
+
     print(f"[AKE RIG] Character '{char_name}' rigged successfully!")
     return rigifyr

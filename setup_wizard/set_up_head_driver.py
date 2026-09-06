@@ -658,16 +658,16 @@ def setup_ake_head_driver_system(context=None):
     hc.rotation_euler = (0, 0, 0)
     hc.scale = (0.28, 0.28, 0.28)
 
-    # 3. Position HF (Head Forward, front facing: Y -0.28) and HR (Head Right: X -0.28)
+    # 3. Position HF and HR (swapped)
     if hf:
         hf.parent = hc
-        hf.location = (0.0, -0.28, 0.0)
+        hf.location = (1.0, 0.0, 0.0)
         hf.rotation_euler = (0, 0, 0)
         hf.scale = (1.0, 1.0, 1.0)
 
     if hr:
         hr.parent = hc
-        hr.location = (-0.28, 0.0, 0.0)
+        hr.location = (0.0, 0.0, -1.0)
         hr.rotation_euler = (0, 0, 0)
         hr.scale = (1.0, 1.0, 1.0)
 
@@ -696,6 +696,85 @@ def setup_ake_head_driver_system(context=None):
                 context.view_layer.objects.active = prev_active
         except Exception:
             pass
+
+    # 5. Organization: Nest Lighting collection into WGTS_Armature / WGTS and place Light with character rig
+    try:
+        organize_ake_lighting_collections(context, arm)
+    except Exception as e_org:
+        print(f"[AKE SETUP] Notice organizing Lighting and WGTS collections: {e_org}")
+
+
+def organize_ake_lighting_collections(context=None, arm=None):
+    if context is None:
+        context = bpy.context
+
+    light_col = bpy.data.collections.get('Lighting')
+    light_obj = bpy.data.objects.get('Light')
+
+    # 1. Resolve character armature if not provided
+    if not arm:
+        # Prefer Rigify rig (e.g. PelicaRig) or active armature
+        armatures = [o for o in context.selected_objects if o.type == 'ARMATURE' and not any(k in o.name.lower() for k in ['facerig', 'lighting', 'metarig'])]
+        if armatures:
+            arm = armatures[0]
+        else:
+            arm = next((o for o in bpy.data.objects if o.type == 'ARMATURE' and o.name.endswith('Rig') and not any(k in o.name.lower() for k in ['facerig', 'lighting', 'metarig'])), None)
+        if not arm:
+            arm = next((o for o in bpy.data.objects if o.type == 'ARMATURE' and not any(k in o.name.lower() for k in ['facerig', 'lighting', 'metarig'])), None)
+
+    # 2. Resolve character collection (e.g. Pelica)
+    char_coll = None
+    if arm and arm.users_collection:
+        for c in arm.users_collection:
+            if not c.name.startswith("WGTS") and c.name.lower() != "wgt":
+                char_coll = c
+                break
+    if not char_coll:
+        for c in bpy.data.collections:
+            if c.name not in ("Collection", "Master Collection", "Scene Collection", "Lighting") and not c.name.startswith("WGTS") and c.name.lower() != "wgt":
+                char_coll = c
+                break
+    if not char_coll:
+        char_coll = context.scene.collection
+
+    # 3. Resolve WGTS collection (e.g. WGTS_Armature, WGTS_Pelica, etc.)
+    wgts_coll = None
+    for c in bpy.data.collections:
+        if c.name.startswith("WGTS_") or c.name.startswith("WGTS") or c.name.lower() == "wgt":
+            wgts_coll = c
+            break
+
+    # 4. Move Light object directly into char_coll (alongside Rig, FaceRig, Meshes)
+    if light_obj and char_coll:
+        if light_obj.name not in char_coll.objects:
+            char_coll.objects.link(light_obj)
+        for c in list(bpy.data.collections):
+            if c != char_coll and light_obj.name in c.objects:
+                try:
+                    c.objects.unlink(light_obj)
+                except Exception:
+                    pass
+        if light_obj.name in context.scene.collection.objects and context.scene.collection != char_coll:
+            try:
+                context.scene.collection.objects.unlink(light_obj)
+            except Exception:
+                pass
+
+    # 5. Nest Lighting collection inside wgts_coll
+    if light_col and wgts_coll:
+        if light_col.name not in wgts_coll.children:
+            wgts_coll.children.link(light_col)
+        for parent_c in list(bpy.data.collections):
+            if parent_c != wgts_coll and light_col.name in parent_c.children:
+                try:
+                    parent_c.children.unlink(light_col)
+                except Exception:
+                    pass
+        if light_col.name in context.scene.collection.children:
+            try:
+                context.scene.collection.children.unlink(light_col)
+            except Exception:
+                pass
 
 
 register, unregister = bpy.utils.register_classes_factory([

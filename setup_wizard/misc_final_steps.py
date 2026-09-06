@@ -259,6 +259,13 @@ class AKE_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorPropertie
         except Exception as e_comp:
             print(f"[AKE FINISH] Notice setting up compositor nodes: {e_comp}")
 
+        # Ensure collection organization (Lighting inside WGTS, Light beside rig)
+        try:
+            from setup_wizard.set_up_head_driver import organize_ake_lighting_collections
+            organize_ake_lighting_collections(context)
+        except Exception as e_org:
+            print(f"[AKE FINISH] Notice organizing Lighting and WGTS collections: {e_org}")
+
         return result
 
 
