@@ -116,6 +116,10 @@ else:
         AKE_PT_UI_Outlines_Menu,
         AKE_PT_UI_Rig_Character_Menu,
         AKE_PT_UI_Finish_Setup_Menu,
+        AKE_PT_Rig_Character_Settings,
+        register_ake_properties,
+        unregister_ake_properties,
+        ake_frame_change_handler,
     )
     from setup_wizard.wuwa_operations import (
         WW_OT_ToggleAnimateMode,
@@ -326,6 +330,7 @@ else:
         AKE_PT_UI_Outlines_Menu,
         AKE_PT_UI_Rig_Character_Menu,
         AKE_PT_UI_Finish_Setup_Menu,
+        AKE_PT_Rig_Character_Settings,
         AKE_OT_ArknightsEndfieldSetupWizardUI,
         AKE_OT_SetUpCharacter,
         AKE_OT_SetUpMaterials,
@@ -366,10 +371,13 @@ else:
         register_zzz_properties()
         register_hsr_properties()
         register_gi_properties()
+        register_ake_properties()
         if wuwa_frame_change_handler not in bpy.app.handlers.render_init:
             bpy.app.handlers.render_init.append(wuwa_frame_change_handler)
         if gi_frame_change_handler not in bpy.app.handlers.render_init:
             bpy.app.handlers.render_init.append(gi_frame_change_handler)
+        if ake_frame_change_handler not in bpy.app.handlers.render_init:
+            bpy.app.handlers.render_init.append(ake_frame_change_handler)
         addon_updater_ops.register(bl_info)
 
 
@@ -382,10 +390,15 @@ else:
             bpy.app.handlers.frame_change_post.remove(wuwa_frame_change_handler)
         if wuwa_frame_change_handler in bpy.app.handlers.render_init:
             bpy.app.handlers.render_init.remove(wuwa_frame_change_handler)
+        if ake_frame_change_handler in bpy.app.handlers.frame_change_post:
+            bpy.app.handlers.frame_change_post.remove(ake_frame_change_handler)
+        if ake_frame_change_handler in bpy.app.handlers.render_init:
+            bpy.app.handlers.render_init.remove(ake_frame_change_handler)
         addon_updater_ops.unregister()
         unregister_gi_properties()
         unregister_hsr_properties()
         unregister_zzz_properties()
+        unregister_ake_properties()
         try:
             setup_wizard.genshin_setup_wizard.unregister()
         except Exception:
