@@ -344,30 +344,62 @@ class ArknightsEndfieldMaterialDefaultValueSetter(MaterialDefaultValueSetter):
                         except Exception:
                             pass
 
-                    # Force SmoothnessMax to 1.0 and NormalStrength to 5.0 as requested
+                    # AKE shader defaults: SmoothnessMax 2.0 (1.0 on hair, max), NormalStrength 1.5, ToonFresnelPow 7.0 on hair, Front R Smo 1.7 on face
+                    is_hair = 'hair' in mat_name
+                    is_face = 'face' in mat_name
                     if 'SmoothnessMax' in inputs:
                         try:
-                            inputs['SmoothnessMax'].default_value = 1.0
+                            inputs['SmoothnessMax'].default_value = 1.0 if is_hair else 2.0
                         except Exception:
                             pass
 
                     if 'NormalStrength' in inputs:
                         try:
-                            inputs['NormalStrength'].default_value = 5.0
+                            inputs['NormalStrength'].default_value = 1.5
                         except Exception:
                             pass
 
                     if 'HNormalStrength' in inputs:
                         try:
-                            inputs['HNormalStrength'].default_value = 5.0
+                            inputs['HNormalStrength'].default_value = 1.5
                         except Exception:
                             pass
 
                     if 'Skin NormalStrength' in inputs:
                         try:
-                            inputs['Skin NormalStrength'].default_value = 5.0
+                            inputs['Skin NormalStrength'].default_value = 1.5
                         except Exception:
                             pass
+
+                    if is_hair:
+                        for fresnel_pow_key in ('ToonFresnelPow', 'Toon Fresnel Pow', 'ToonFresnel Pow', 'Toon FresnelPow'):
+                            if fresnel_pow_key in inputs:
+                                try:
+                                    inputs[fresnel_pow_key].default_value = 7.0
+                                except Exception:
+                                    pass
+                        for inp in inputs:
+                            try:
+                                k_low = inp.name.lower().replace(' ', '').replace('_', '')
+                                if 'fresnel' in k_low and 'pow' in k_low and 'toon' in k_low:
+                                    inp.default_value = 7.0
+                            except Exception:
+                                pass
+
+                    if is_face:
+                        for smo_key in ('Front R Smo', 'Front R Smooth', 'Front R Smoothness', 'Front RSmo', 'FrontR Smo'):
+                            if smo_key in inputs:
+                                try:
+                                    inputs[smo_key].default_value = 1.7
+                                except Exception:
+                                    pass
+                        for inp in inputs:
+                            try:
+                                k_low = inp.name.lower().replace(' ', '').replace('_', '')
+                                if 'front' in k_low and 'smo' in k_low:
+                                    inp.default_value = 1.7
+                            except Exception:
+                                pass
 
                     if 'Use NormalTex?' in inputs:
                         try:
