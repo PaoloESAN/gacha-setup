@@ -89,7 +89,16 @@ class AKE_PT_Basic_Setup_Wizard_UI_Layout(Panel, ArknightsEndfieldUIRenderChecke
         # Step 4: Rig Character
         OperatorFactory.create_rig_character_ui(sub_layout, game_type=GameType.ARKNIGHTS_ENDFIELD.name)
 
-        # Step 5: Finish Setup
+        # Step 5: Setup Compositor Nodes
+        OperatorFactory.create(
+            sub_layout,
+            "arknights_endfield.setup_compositor_nodes",
+            "Setup Compositor Nodes",
+            icon="NODE_COMPOSITING",
+            game_type=GameType.ARKNIGHTS_ENDFIELD.name,
+        )
+
+        # Step 6: Finish Setup
         OperatorFactory.create(
             sub_layout,
             "arknights_endfield.finish_setup",

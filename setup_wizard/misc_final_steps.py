@@ -187,6 +187,28 @@ def setup_ake_compositor_nodes(context):
             if out_socket and grp_out:
                 tree.links.new(grp_out, out_socket)
 
+    # Clean up any duplicate / imported scenes (e.g. Scene.001 from AKE.blend) so only the active scene remains
+    current_scene = scene
+    for sc in list(bpy.data.scenes):
+        if sc != current_scene and (sc.name.startswith("Scene.") or sc.name in ["Scene.001", "Scene.002", "Preview"]):
+            try:
+                bpy.data.scenes.remove(sc, do_unlink=True)
+            except Exception:
+                pass
+
+    # Ensure Render Layers node points to the active scene
+    try:
+        tree = scene.compositing_node_group if hasattr(scene, "compositing_node_group") and getattr(scene, "compositing_node_group", None) else getattr(scene, "node_tree", None)
+        if tree:
+            rl_node = next((n for n in tree.nodes if getattr(n, "type", "") in ("R_LAYERS", "RENDER_LAYERS") or "RLayers" in getattr(n, "bl_idname", "") or "RenderLayers" in getattr(n, "bl_idname", "")), None)
+            if rl_node:
+                try:
+                    rl_node.scene = current_scene
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
 
 class AKE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
     """Setup Arknights: Endfield Compositor Post-Processing Nodes"""
@@ -200,6 +222,15 @@ class AKE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
             self.report({'INFO'}, "Arknights Endfield compositor nodes configured.")
         except Exception as ex:
             self.report({'WARNING'}, f"Compositor setup notice: {ex}")
+
+        if self.next_step_idx:
+            NextStepInvoker().invoke(
+                self.next_step_idx,
+                self.invoker_type,
+                high_level_step_name=self.high_level_step_name,
+                game_type=self.game_type,
+            )
+        super().clear_custom_properties()
         return {'FINISHED'}
 
 
@@ -265,6 +296,28 @@ class AKE_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorPropertie
             organize_ake_lighting_collections(context)
         except Exception as e_org:
             print(f"[AKE FINISH] Notice organizing Lighting and WGTS collections: {e_org}")
+
+        # Ensure all outline modifiers are disabled in viewport and render
+        try:
+            for obj in bpy.data.objects:
+                for mod in obj.modifiers:
+                    if 'outline' in mod.name.lower() or (mod.type == 'NODES' and mod.node_group and 'outline' in mod.node_group.name.lower()):
+                        mod.show_viewport = False
+                        mod.show_render = False
+        except Exception as e_mod:
+            print(f"[AKE FINISH] Notice disabling outline modifiers: {e_mod}")
+
+        # Remove any extra scenes created during append or setup (e.g. Scene.001 from AKE.blend)
+        try:
+            current_scene = context.scene
+            for sc in list(bpy.data.scenes):
+                if sc != current_scene and (sc.name.startswith("Scene.") or sc.name in ["Scene.001", "Scene.002", "Preview"]):
+                    try:
+                        bpy.data.scenes.remove(sc, do_unlink=True)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
         return result
 

@@ -45,6 +45,12 @@ class WW_OT_SetUpOutlines(Operator, BasicSetupUIOperator):
     bl_label = 'Wuthering Waves: Set Up Outlines (UI)'
 
 
+class AKE_OT_SetUpOutlines(Operator, BasicSetupUIOperator):
+    '''Sets Up Outlines'''
+    bl_idname = 'arknights_endfield.set_up_outlines'
+    bl_label = 'Arknights Endfield: Set Up Outlines (UI)'
+
+
 class GI_OT_GenshinImportOutlines(Operator, ImportHelper, CustomOperatorProperties):
     """Select the .blend file with the outlines node group to import"""
     bl_idname = "genshin.import_outlines"  # important since its how we chain file dialogs
@@ -87,4 +93,5 @@ register, unregister = bpy.utils.register_classes_factory([
     ZZZ_OT_SetUpOutlines,
     NTE_OT_SetUpOutlines,
     WW_OT_SetUpOutlines,
+    AKE_OT_SetUpOutlines,
 ])

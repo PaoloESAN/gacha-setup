@@ -617,6 +617,7 @@
       "import_character_textures",
       "ake_setup_outlines",
       "rig_character",
+      "ake_setup_compositor_nodes",
       "ake_finish_setup"
     ],
     "ARKNIGHTS_ENDFIELD_OT_setup_wizard_ui_no_outlines": [
@@ -627,6 +628,7 @@
       "replace_default_materials",
       "import_character_textures",
       "rig_character",
+      "ake_setup_compositor_nodes",
       "ake_finish_setup"
     ],
     "ARKNIGHTS_ENDFIELD_OT_set_up_character": [
@@ -646,6 +648,7 @@
     ],
     "ARKNIGHTS_ENDFIELD_OT_finish_setup": [
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_finish_setup",
+      "ake_setup_compositor_nodes",
       "ake_finish_setup"
     ],
     "arknights_endfield.setup_wizard_ui": [
@@ -657,6 +660,7 @@
       "import_character_textures",
       "ake_setup_outlines",
       "rig_character",
+      "ake_setup_compositor_nodes",
       "ake_finish_setup"
     ],
     "arknights_endfield.setup_wizard_ui_no_outlines": [
@@ -667,6 +671,7 @@
       "replace_default_materials",
       "import_character_textures",
       "rig_character",
+      "ake_setup_compositor_nodes",
       "ake_finish_setup"
     ],
     "arknights_endfield.set_up_character": [
@@ -686,6 +691,7 @@
     ],
     "arknights_endfield.finish_setup": [
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_finish_setup",
+      "ake_setup_compositor_nodes",
       "ake_finish_setup"
     ]
   }

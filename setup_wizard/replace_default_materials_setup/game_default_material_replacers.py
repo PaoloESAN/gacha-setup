@@ -2370,10 +2370,26 @@ class ArknightsEndfieldDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 
                 slot.material = cloned_mats[clean_name]
 
-                # Transparency settings: body must strictly be DITHERED
+                # Transparency settings: body must strictly be DITHERED, eyeshadow must strictly be BLENDED
                 if slot.material:
                     m = slot.material
-                    if 'body' in m.name.lower() or 'body' in mesh_name:
+                    m_low = m.name.lower()
+                    if any(k in m_low or k in mesh_name for k in ['eyeshadow', 'eyewhite', 'whiteshadow', 'eye_shadow']):
+                        if hasattr(m, "surface_render_method"):
+                            try:
+                                m.surface_render_method = 'BLENDED'
+                            except Exception:
+                                pass
+                        if hasattr(m, "blend_method"):
+                            try:
+                                m.blend_method = 'BLEND'
+                            except Exception:
+                                pass
+                        if hasattr(m, "use_backface_culling"):
+                            m.use_backface_culling = False
+                        if hasattr(m, "show_transparent_back"):
+                            m.show_transparent_back = False
+                    elif 'body' in m_low or 'body' in mesh_name:
                         if hasattr(m, "surface_render_method"):
                             try:
                                 m.surface_render_method = 'DITHERED'

@@ -925,6 +925,18 @@ class ArknightsEndfieldMaterialImporterFacade(GameMaterialImporter):
         except Exception as e_obj:
             print(f"[AKE SETUP] Notice appending control objects: {e_obj}")
 
+        # 2.5 Remove any extra scenes pulled in by wm.append (e.g. Scene.001 from AKE.blend)
+        try:
+            current_scene = self.context.scene
+            for sc in list(bpy.data.scenes):
+                if sc != current_scene and (sc.name.startswith("Scene.") or sc.name in ["Scene.001", "Scene.002", "Preview"]):
+                    try:
+                        bpy.data.scenes.remove(sc, do_unlink=True)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
         # 3. Create Lighting collection and link control objects
         light_col = bpy.data.collections.get('Lighting')
         if not light_col:

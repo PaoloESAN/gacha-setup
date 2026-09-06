@@ -301,10 +301,10 @@ class ArknightsEndfieldMaterialDefaultValueSetter(MaterialDefaultValueSetter):
             blend_mode = float(floats.get('_BlendMode', 0.0) or 0.0)
             alpha_clip = float(floats.get('_AlphaClip', 0.0) or 0.0)
             
-            if 'body' in mat_name:
+            if 'body' in mat_name and not any(k in mat_name for k in ['eyeshadow', 'eyewhite', 'whiteshadow', 'eye_shadow']):
                 is_transp = False
             else:
-                is_transp = (surface_type > 0.0 or blend_mode > 0.0 or alpha_clip > 0.0 or any(k in mat_name for k in ['cloth_03', 'cloth_04', 'cloth_07', 'cloth_08', 'vfxpart']))
+                is_transp = (surface_type > 0.0 or blend_mode > 0.0 or alpha_clip > 0.0 or any(k in mat_name for k in ['cloth_03', 'cloth_04', 'cloth_07', 'cloth_08', 'vfxpart', 'eyeshadow', 'eyewhite', 'whiteshadow', 'eye_shadow']))
 
             if is_transp:
                 try:
@@ -313,6 +313,11 @@ class ArknightsEndfieldMaterialDefaultValueSetter(MaterialDefaultValueSetter):
                     mat.show_transparent_back = False
                 except Exception:
                     pass
+                if hasattr(mat, "blend_method"):
+                    try:
+                        mat.blend_method = 'BLEND'
+                    except Exception:
+                        pass
             else:
                 try:
                     mat.surface_render_method = 'DITHERED'
