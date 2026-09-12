@@ -286,6 +286,13 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
             self.blender_operator.report({'ERROR'}, 'No armature found. Please import or select a character.')
             return
 
+        # Ensure transformations are applied so rigify and facerig coordinate systems match
+        if any(abs(r) > 1e-4 for r in armature.rotation_euler) or any(abs(s - 1.0) > 1e-4 for s in armature.scale):
+            try:
+                bpy.ops.genshin.fix_transformations()
+            except Exception:
+                pass
+
         character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
         meshes_joined = not (bpy.data.objects.get('Body') and bpy.data.objects.get('Face'))
 
@@ -511,6 +518,31 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
                         print(f"[FACE RIG] Parented '{bname}' to '{head_eb.name}'")
             bpy.ops.object.mode_set(mode='OBJECT')
 
+            # 5b. Update Child Of constraints on Eye-Track-Follow bones
+            # isaacfacerig.blend contains baked inverse_matrix values for a template character (Z=1.45m).
+            # When joined to characters of different height (e.g. Ashveil Z=1.69m), the outdated inverse_matrix
+            # causes Child Of to push the eye tracking targets and eye scale controls high up into the forehead
+            # or sunglasses, causing the eyes to roll up unnaturally.
+            self.context.view_layer.update()
+            for bname in ["Eye-Track-Follow.L", "Eye-Track-Follow.R"]:
+                pb = body_rig.pose.bones.get(bname)
+                if pb:
+                    c = pb.constraints.get("Child Of")
+                    if c:
+                        c.target = body_rig
+                        if not c.subtarget:
+                            c.subtarget = "Eye-Track-Master"
+                        if c.subtarget in body_rig.pose.bones:
+                            tgt_pbone = body_rig.pose.bones[c.subtarget]
+                            c.inverse_matrix = tgt_pbone.matrix.inverted()
+                            print(f"[FACE RIG] Updated Child Of inverse_matrix on '{bname}' for '{tgt_pbone.name}'")
+
+            # Ensure all constraints on fused facerig bones point to body_rig
+            for pb in body_rig.pose.bones:
+                for c in pb.constraints:
+                    if hasattr(c, "target") and c.target and c.target != body_rig and "isaac" in c.target.name.lower():
+                        c.target = body_rig
+
             # 6. Ensure all meshes with Armature modifiers point to body_rig
             for obj in bpy.data.objects:
                 if obj.type == 'MESH':
@@ -653,6 +685,7 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
                 print(f"[FACE RIG] Eye pushback (Adjust Pupil Distance) drivers configured on eye_L and eye_R with {len(eye_shapekeys_L)} L-keys and {len(eye_shapekeys_R)} R-keys.")
 
             print("[FACE RIG] Fusion and armature modifier targets verified.")
+            self.context.view_layer.update()
 
         if target_rig:
             try:
