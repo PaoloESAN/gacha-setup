@@ -1161,6 +1161,12 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
                 core_biped_org.add(f"ORG-{f}.{n}{side}")
                 core_biped_org.add(f"ORG-{f}.{n}{side}.001")
 
+    has_skirt_rig = bool(
+        arm_data.bones.get("MCH-Skirt_Parent02")
+        or arm_data.bones.get("MCH-Skirt_Parent")
+        or any(b.name.startswith("CTRL-") and any(k in b.name.lower() for k in ["skirt", "dress", "hem", "qun"]) for b in arm_data.bones)
+    )
+
     def is_physics_ignored(name):
         if name in physics_ignore_list or name in core_biped_org:
             return True
@@ -1168,6 +1174,11 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
             if name in arm_data.collections["Face"].bones:
                 return True
         low = name.lower()
+        if has_skirt_rig and any(k in low for k in ["skirt", "dress", "hem", "qun"]):
+            return True
+        pb = armature_obj.pose.bones.get(name) if (armature_obj and hasattr(armature_obj, "pose") and armature_obj.pose) else None
+        if pb and any(c.type == 'STRETCH_TO' for c in pb.constraints):
+            return True
         if any(k in low for k in [
             "eyebone", "eye", "tooth", "teeth", "tongue", "mouth", "jaw", "brow", "lip", "nose",
             "cheek", "plate", "twist", "sa01", "sa02", "fa01", "skirtallf", "prop", "light",

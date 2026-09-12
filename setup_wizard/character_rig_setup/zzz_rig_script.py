@@ -1762,20 +1762,13 @@ def rig_character(
             eb_prop_l.roll = primary_w_l.roll
             for rwb in roots_L:
                 rwb.parent = eb_prop_l
+            if root_master:
+                eb_prop_l.parent = root_master
+            eb_prop_l.inherit_scale = "FULL"
         else:
-            hand_ref_l = (
-                armature.edit_bones.get("DEF-hand.L")
-                or armature.edit_bones.get("hand.L")
-                or armature.edit_bones.get("hand-ik-L")
-                or armature.edit_bones.get("hand_ik.L")
-            )
-            if hand_ref_l:
-                eb_prop_l.head = hand_ref_l.head.copy()
-                eb_prop_l.tail = hand_ref_l.tail.copy()
-                eb_prop_l.roll = hand_ref_l.roll
-        if root_master:
-            eb_prop_l.parent = root_master
-        eb_prop_l.inherit_scale = "FULL"
+            # No weapon for left hand: remove unused prop.L to avoid confusion
+            armature.edit_bones.remove(eb_prop_l)
+            print("[ZZZ RIG] No left-hand weapon detected: removed unused 'prop.L'")
 
     # Handle prop.R
     eb_prop_r = armature.edit_bones.get("prop.R")
@@ -1787,20 +1780,13 @@ def rig_character(
             eb_prop_r.roll = primary_w_r.roll
             for rwb in roots_R:
                 rwb.parent = eb_prop_r
+            if root_master:
+                eb_prop_r.parent = root_master
+            eb_prop_r.inherit_scale = "FULL"
         else:
-            hand_ref_r = (
-                armature.edit_bones.get("DEF-hand.R")
-                or armature.edit_bones.get("hand.R")
-                or armature.edit_bones.get("hand-ik-R")
-                or armature.edit_bones.get("hand_ik.R")
-            )
-            if hand_ref_r:
-                eb_prop_r.head = hand_ref_r.head.copy()
-                eb_prop_r.tail = hand_ref_r.tail.copy()
-                eb_prop_r.roll = hand_ref_r.roll
-        if root_master:
-            eb_prop_r.parent = root_master
-        eb_prop_r.inherit_scale = "FULL"
+            # No weapon for right hand: remove unused prop.R to avoid confusion
+            armature.edit_bones.remove(eb_prop_r)
+            print("[ZZZ RIG] No right-hand weapon detected: removed unused 'prop.R'")
 
     detected_weapon_bone_names = [b.name for b in raw_weapon_bones]
 
@@ -2211,36 +2197,77 @@ def rig_character(
             continue
         b_low = b.name.lower()
         if any(k in b_low for k in skirt_keywords):
-            # Exclude breast, chest, arm, sleeve, furisode, hand, collar
-            if any(ex in b_low for ex in ["breast", "chest", "arm", "sleeve", "furisode", "hand", "shoulder", "collar"]):
+            # Exclude breast, chest, arm, sleeve, furisode, hand, collar, weapon, prop
+            if any(ex in b_low for ex in ["breast", "chest", "arm", "sleeve", "furisode", "hand", "shoulder", "collar", "weapon", "prop", "w1", "w2"]):
+                continue
+            # Also ensure parent/ancestor is not a weapon or prop bone
+            curr_p = b.parent
+            is_prop = False
+            while curr_p:
+                p_low = curr_p.name.lower()
+                if any(ex in p_low for ex in ["weapon", "prop", "w1", "w2", "fx_"]):
+                    is_prop = True
+                    break
+                curr_p = curr_p.parent
+            if is_prop:
                 continue
             # Also ensure parent is at or below pelvis level (not attached to upper spine like spine.002 or spine.003)
             if b.parent and any(p_ex in b.parent.name.lower() for p_ex in ["spine.002", "spine.003", "chest", "neck", "shoulder", "arm", "head"]):
                 continue
             sk_bones.append(b)
 
-    # First try hierarchy roots
-    skirt_chain_roots = []
-    for b in sk_bones:
-        parent_is_skirt = b.parent and b.parent in sk_bones
-        if not parent_is_skirt:
-            skirt_chain_roots.append(b)
+    all_skirt_deform_names = set(b.name for b in sk_bones)
 
-    # Walk children chain for each root
+    # Robust multi-branch chain extraction:
+    # 1. Identify starting roots:
+    #    - Any bone whose parent is NOT in sk_bones
+    #    - Any branch bone whose head is coincident with parent head (< 0.005m, e.g. inner ruffles starting at waist)
+    #    - Any branch bone where parent has multiple children in sk_bones
+    chain_starts = []
+    for b in sk_bones:
+        p = b.parent
+        if not p or p not in sk_bones:
+            chain_starts.append(b)
+        else:
+            dist_p = (b.head - p.head).length
+            if dist_p < 0.005:
+                chain_starts.append(b)
+            elif any(c != b and (c.head - p.head).length >= 0.005 and c.name.rsplit('_', 1)[0] == p.name.rsplit('_', 1)[0] for c in p.children if c in sk_bones):
+                chain_starts.append(b)
+
+    chain_starts.sort(key=lambda b: b.name)
+
+    # Walk children chain for each root, respecting branch separation and prefix continuity
     chains_list = []
-    for root_eb in skirt_chain_roots:
-        chain = [root_eb.name]
-        curr = root_eb
-        while curr.children:
-            sk_kids = [c for c in curr.children if c in sk_bones]
-            if not sk_kids:
+    visited_skirt_bones = set()
+    for start_b in chain_starts:
+        if start_b.name in visited_skirt_bones:
+            continue
+        chain = [start_b.name]
+        visited_skirt_bones.add(start_b.name)
+        curr = start_b
+        while True:
+            kids = [c for c in curr.children if c in sk_bones and c.name not in visited_skirt_bones]
+            if not kids:
                 break
-            curr = sk_kids[0]
-            chain.append(curr.name)
-        chains_list.append(chain)
+            # Filter out coincident children (they start their own branch chains)
+            valid_kids = [c for c in kids if (c.head - curr.head).length >= 0.005]
+            if not valid_kids:
+                break
+            # Pick kid with best prefix match
+            def pfx_score(c):
+                p1 = curr.name.rsplit('_', 1)[0]
+                p2 = c.name.rsplit('_', 1)[0]
+                return 1 if p1 == p2 else 0
+            best_k = max(valid_kids, key=pfx_score)
+            chain.append(best_k.name)
+            visited_skirt_bones.add(best_k.name)
+            curr = best_k
+        if chain:
+            chains_list.append(chain)
 
     # Fallback to prefix grouping if hierarchy was flat or already reparented
-    if len(sk_bones) > len(chains_list) and all(len(c) == 1 for c in chains_list):
+    if len(sk_bones) > len(visited_skirt_bones) and all(len(c) == 1 for c in chains_list):
         import re
         chains_dict = {}
         for b in sk_bones:
@@ -2311,6 +2338,8 @@ def rig_character(
             c_chain = []
             root_orig = armature.edit_bones[chain[0]]
             orig_parent = root_orig.parent
+            is_leaf_ruffle = (len(chain) == 1 and orig_parent and orig_parent.name in all_skirt_deform_names)
+
             for i, bname in enumerate(chain):
                 orig_eb = armature.edit_bones[bname]
                 all_skirt_deform_bones.append(bname)
@@ -2321,7 +2350,7 @@ def rig_character(
                 c_chain.append(cname)
                 all_skirt_ctrl_bones.append(cname)
 
-            # Align control tails along the chain towards the next head so bone axes point cleanly down the skirt
+            # Align control tails and deform bone tails along the chain towards the next head
             for i in range(len(chain)):
                 bname = chain[i]
                 cname = c_chain[i]
@@ -2330,20 +2359,28 @@ def rig_character(
                 if i < len(chain) - 1:
                     next_head = armature.edit_bones[chain[i+1]].head.copy()
                     ctrl_eb.tail = next_head.copy()
+                    orig_eb.tail = next_head.copy()
                 else:
                     if len(chain) > 1:
                         prev_head = armature.edit_bones[chain[i-1]].head.copy()
                         dir_v = (ctrl_eb.head - prev_head).normalized()
                         seg_len = (ctrl_eb.head - prev_head).length
                     else:
-                        dir_v = Vector((0, 0, -1))
-                        seg_len = 0.05
+                        dir_v = (orig_eb.tail - orig_eb.head).normalized() if orig_eb.length > 0.001 else Vector((0, 0, -1))
+                        seg_len = orig_eb.length if orig_eb.length > 0.001 else 0.05
                     ctrl_eb.tail = ctrl_eb.head + dir_v * seg_len
+                    orig_eb.tail = ctrl_eb.tail.copy()
 
             for i, cname in enumerate(c_chain):
                 ctrl_eb = armature.edit_bones[cname]
                 if i == 0:
-                    ctrl_eb.parent = orig_parent if (orig_parent and not orig_parent.name.startswith("CTRL-")) else hips_b
+                    if orig_parent:
+                        ctrl_parent = armature.edit_bones.get(f"CTRL-{orig_parent.name}")
+                        if not ctrl_parent and orig_parent.name not in all_skirt_deform_names and not orig_parent.name.startswith("CTRL-"):
+                            ctrl_parent = orig_parent
+                        ctrl_eb.parent = ctrl_parent or hips_b
+                    else:
+                        ctrl_eb.parent = hips_b
                 else:
                     ctrl_eb.parent = armature.edit_bones[c_chain[i-1]]
 
@@ -2355,7 +2392,8 @@ def rig_character(
                 prev_head = armature.edit_bones[chain[-1]].head.copy()
                 dir_v = (tip_eb.head - prev_head).normalized()
             else:
-                dir_v = Vector((0, 0, -1))
+                orig_eb = armature.edit_bones[chain[-1]]
+                dir_v = (orig_eb.tail - orig_eb.head).normalized() if orig_eb.length > 0.001 else Vector((0, 0, -1))
             tip_eb.tail = tip_eb.head + dir_v * 0.03
             tip_eb.parent = last_ctrl
             tip_eb.use_deform = False
@@ -2372,7 +2410,8 @@ def rig_character(
                 "cat": cat,
                 "deform_chain": chain,
                 "ctrl_chain": c_chain,
-                "tip_name": tip_name
+                "tip_name": tip_name,
+                "is_leaf_ruffle": is_leaf_ruffle
             })                                                            
 
     # Switch to pose mode for subsequent operations
@@ -2542,9 +2581,11 @@ def rig_character(
                         st.subtarget = c_chain[i+1]
                     else:
                         st.subtarget = tip_name
+                    tgt_b = rig_obj_ref.data.bones.get(st.subtarget)
                     b_ref = rig_obj_ref.data.bones.get(bname)
-                    if b_ref:
-                        st.rest_length = b_ref.length
+                    if tgt_b and b_ref:
+                        dist = (tgt_b.head_local - b_ref.head_local).length
+                        st.rest_length = dist if dist > 0.001 else b_ref.length
 
         # Assign custom shape widgets to CTRL bones
         skirt_wgt = bpy.data.objects.get("eye circle") or bpy.data.objects.get("Circle.001") or bpy.data.objects.get("Circle")
@@ -2631,6 +2672,8 @@ def rig_character(
 
         # Apply deflection constraints per radial quadrant across full chain
         for chain_data in skirt_ctrl_chains_data:
+            if chain_data.get("is_leaf_ruffle", False):
+                continue
             cat = chain_data["cat"]
             c_chain = chain_data["ctrl_chain"]
             n = len(c_chain)
