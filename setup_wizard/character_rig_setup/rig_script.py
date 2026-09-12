@@ -5414,18 +5414,13 @@ def rig_character(
 
     # MOVING OF BONES END -------------------------------
 
-    # Write rig log to Blender Text block (ALWAYS, so user can verify code ran)
+    # Clean up any leftover RIG_LOG text block
     log_text = bpy.data.texts.get("RIG_LOG")
     if log_text:
         bpy.data.texts.remove(log_text)
-    log_text = bpy.data.texts.new("RIG_LOG")
-    log_text.write(f"=== RIG LOG ({len(_rig_log)} entries) ===\n\n")
     if _rig_log:
-        for i, msg in enumerate(_rig_log, 1):
-            log_text.write(f"{i}. {msg}\n")
-    else:
-        log_text.write("No warnings or messages recorded.\n")
-    log_text.write("\n=== END ===")
+        for msg in _rig_log:
+            print(f"[GI RIG LOG] {msg}")
 
     # Final step: Select armature, enter Pose Mode and apply pose as rest pose for selected eye bones
     try:

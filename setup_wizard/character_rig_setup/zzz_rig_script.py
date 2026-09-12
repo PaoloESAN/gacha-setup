@@ -4628,18 +4628,13 @@ def rig_character(
                 bone_to_layer(ik_name, 3, "Torso (IK)", "Tails")
                 print(f"[TAIL IK] Configured {ik_name} with prop cube widget and IK constraint on {last_name}")
 
-    # Write rig log to Blender Text block (ALWAYS, so user can verify code ran)
+    # Clean up any leftover RIG_LOG text block
     log_text = bpy.data.texts.get("RIG_LOG")
     if log_text:
         bpy.data.texts.remove(log_text)
-    log_text = bpy.data.texts.new("RIG_LOG")
-    log_text.write(f"=== RIG LOG ({len(_rig_log)} entries) ===\n\n")
     if _rig_log:
-        for i, msg in enumerate(_rig_log, 1):
-            log_text.write(f"{i}. {msg}\n")
-    else:
-        log_text.write("No warnings or messages recorded.\n")
-    log_text.write("\n=== END ===")
+        for msg in _rig_log:
+            print(f"[ZZZ RIG LOG] {msg}")
 
     # Final Append-safe sweep: consolidate scene-root wgt / wgt.00X / WGTS leftovers
     # created later in this function (merge_duplicate_collections, slider appends...)

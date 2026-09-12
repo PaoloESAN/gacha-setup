@@ -358,6 +358,14 @@ else:
     UI_Properties.create_custom_ui_properties()
 
 
+    @bpy.app.handlers.persistent
+    def gacha_rig_ui_load_post_handler(dummy=None):
+        try:
+            from setup_wizard.ui.character_settings_utils import ensure_all_rig_uis_registered
+            ensure_all_rig_uis_registered()
+        except Exception:
+            pass
+
     def register():
         try:
             register_genshin_setup_wizard()
@@ -392,10 +400,19 @@ else:
             bpy.app.handlers.render_init.append(gi_frame_change_handler)
         if ake_frame_change_handler not in bpy.app.handlers.render_init:
             bpy.app.handlers.render_init.append(ake_frame_change_handler)
+        if gacha_rig_ui_load_post_handler not in bpy.app.handlers.load_post:
+            bpy.app.handlers.load_post.append(gacha_rig_ui_load_post_handler)
+        try:
+            from setup_wizard.ui.character_settings_utils import ensure_all_rig_uis_registered
+            ensure_all_rig_uis_registered()
+        except Exception:
+            pass
         addon_updater_ops.register(bl_info)
 
 
     def unregister():
+        if gacha_rig_ui_load_post_handler in bpy.app.handlers.load_post:
+            bpy.app.handlers.load_post.remove(gacha_rig_ui_load_post_handler)
         if gi_frame_change_handler in bpy.app.handlers.frame_change_post:
             bpy.app.handlers.frame_change_post.remove(gi_frame_change_handler)
         if gi_frame_change_handler in bpy.app.handlers.render_init:
