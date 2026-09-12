@@ -668,6 +668,7 @@ def rig_character(
     armature.edit_bones["shoulder.L"].align_roll(Vector((0, -1, 0)))
     armature.edit_bones["shoulder.R"].align_roll(Vector((0, -1, 0)))
 
+
     # Preserve natural finger and thumb bone rolls from model armature
     for bone in armature.edit_bones:
         ## Not sure why this bone exist but it's gotta go lmao
@@ -1021,42 +1022,46 @@ def rig_character(
             bone.select_head = True
 
     bpy.ops.armature.separate()
+
+    metarig_obj = bpy.data.objects.get("metarig")
+    if metarig_obj:
+        bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.ops.object.select_all(action="DESELECT")
+        metarig_obj.select_set(True)
+        bpy.context.view_layer.objects.active = metarig_obj
+        bpy.ops.object.mode_set(mode="POSE")
+
     # Generates rigify rig and renames it to 'rigify'
     bpy.ops.pose.rigify_generate()
-    bpy.data.objects[obj.name].name = "rigify"
-    bpy.context.view_layer.objects.active = bpy.data.objects[armature.name + ".001"]
 
-    for o in bpy.data.objects:
-        # Check for given object names
-        if o.name in ("rigify", armature.name):
-            o.select_set(True)
+    gen_rig = None
+    if metarig_obj and getattr(metarig_obj.data, "rigify_target_rig", None):
+        gen_rig = metarig_obj.data.rigify_target_rig
+    if not gen_rig or gen_rig.name not in bpy.data.objects:
+        gen_rig = bpy.context.active_object
+    if not gen_rig or gen_rig.type != "ARMATURE":
+        for cand in [bpy.data.objects.get("rig"), bpy.data.objects.get(obj.name), bpy.data.objects.get(original_name)]:
+            if cand and cand.type == "ARMATURE":
+                gen_rig = cand
+                break
+    if gen_rig:
+        gen_rig.name = "rigify"
 
-    # THEN REATTACH PHYSICS
+    newrig = armature.name + ".001"
+    newrig_obj = bpy.data.objects.get(newrig)
+    rigify_obj = bpy.data.objects.get("rigify")
 
-    bpy.ops.object.mode_set(mode="OBJECT")
-    ### BLENDER ARE U GOOD LMAO WTF IS THIS (this joins two objects together)
-    newrig = (
-        armature.name + ".001"
-    )  ## New temporary armature with the physics bones. Hopefully you didnt touch any names lmao
+    if rigify_obj and newrig_obj:
+        obs = [rigify_obj, newrig_obj]
+        bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.ops.object.select_all(action="DESELECT")
+        with bpy.context.temp_override(
+            active_object=rigify_obj, selected_editable_objects=obs
+        ):
+            bpy.ops.object.join()
 
-    ## Why's the list for selected objects ordered alphabetically instead of by selection order
-    objList = bpy.context.selected_objects
-    unselected = [obj for obj in objList if obj != context.active_object]
-    rigifyr = unselected[0]  ## Rigified Rig
-
-    obs = [bpy.data.objects.get("rigify"), bpy.data.objects.get(newrig)]
-    c = {}
-    c["object"] = c["active_object"] = bpy.data.objects.get("rigify")
-    c["selected_objects"] = c["selected_editable_objects"] = obs
-    bpy.ops.object.mode_set(mode="OBJECT")
-    bpy.ops.object.select_all(action="DESELECT")
-
-    with bpy.context.temp_override(
-        active_object=bpy.data.objects.get("rigify"), selected_editable_objects=obs
-    ):
-        bpy.ops.object.join()
-
-    bpy.context.view_layer.objects.active = bpy.data.objects["rigify"]
+    bpy.context.view_layer.objects.active = bpy.data.objects.get("rigify")
+    rigifyr = bpy.data.objects.get("rigify")
 
     setup_neck_and_head_follow(neck_follow_value=1.0, head_follow_value=1.0)
     setup_finger_scale_controls_on_x_axis_to_curl_just_the_fingertips(rigifyr)
@@ -1073,9 +1078,65 @@ def rig_character(
     # Go back into rigify, find the main body bones, and reattach every bone in the corresponding dict list
     for mainbone in savethechildren:
         for childbone in savethechildren[mainbone]:
-            rigifyr.data.edit_bones[childbone].parent = rigifyr.data.edit_bones[
-                mainbone
-            ]
+            if childbone in rigifyr.data.edit_bones and mainbone in rigifyr.data.edit_bones:
+                rigifyr.data.edit_bones[childbone].parent = rigifyr.data.edit_bones[
+                    mainbone
+                ]
+
+    # Ensure Root, Bip001 Pelvis and other pelvic/hip root bones follow DEF-spine
+    target_hip_parent = (
+        rigifyr.data.edit_bones.get("DEF-spine")
+        or rigifyr.data.edit_bones.get("hips")
+        or rigifyr.data.edit_bones.get("torso")
+    )
+    if target_hip_parent:
+        root_candidates = [
+            b.name for b in rigifyr.data.edit_bones
+            if b.name.lower() in ["root", "bip001", "bip001 pelvis", "pelvis", "pelvis_m", "root_m"]
+            or b.name.lower().startswith("root.")
+            or b.name.lower().startswith("bip001.")
+        ]
+        for r_name in root_candidates:
+            r_bone = rigifyr.data.edit_bones.get(r_name)
+            if r_bone and r_bone.name != target_hip_parent.name:
+                if not r_bone.parent or r_bone.parent.name in ["Main", "root", ""]:
+                    r_bone.parent = target_hip_parent
+                    r_bone.use_connect = False
+
+    # Breast, cape/flycloak, and accessory bones parented to chest
+    chest_parent = (
+        rigifyr.data.edit_bones.get("DEF-spine.003")
+        or rigifyr.data.edit_bones.get("chest")
+    )
+    if chest_parent:
+        for b in rigifyr.data.edit_bones:
+            if not b.parent or b.parent.name in ["Main", "root", ""]:
+                b_low = b.name.lower()
+                if "breast" in b_low:
+                    b.parent = chest_parent
+                    b.use_connect = False
+                elif any(k in b_low for k in ["flycloak", "scarf", "amice", "cape"]):
+                    b.parent = chest_parent
+                    b.use_connect = False
+                elif "catalyst" in b_low or "weaponroot" in b_low:
+                    b.parent = chest_parent
+                    b.use_connect = False
+
+    # Hand weapon bones parented to hand DEF bones
+    hand_l = rigifyr.data.edit_bones.get("DEF-hand.L") or rigifyr.data.edit_bones.get("hand.L")
+    hand_r = rigifyr.data.edit_bones.get("DEF-hand.R") or rigifyr.data.edit_bones.get("hand.R")
+    for b in rigifyr.data.edit_bones:
+        if not b.parent or b.parent.name in ["Main", "root", ""]:
+            b_low = b.name.lower()
+            if "weapon" in b_low:
+                if b_low.endswith(".l") or b_low.endswith("l") or "_l" in b_low:
+                    if hand_l:
+                        b.parent = hand_l
+                        b.use_connect = False
+                elif b_low.endswith(".r") or b_low.endswith("r") or "_r" in b_low:
+                    if hand_r:
+                        b.parent = hand_r
+                        b.use_connect = False
 
     print("donelol\n")
     bpy.ops.object.mode_set(mode="OBJECT")
@@ -1161,10 +1222,10 @@ def rig_character(
         pass
     if "rigify" in bpy.data.objects:
         bpy.data.objects["rigify"].name = char_name + "Rig"
+    our_char = bpy.data.objects.get(char_name + "Rig") or rigifyr
     try:
         from setup_wizard.ui.character_settings_utils import stamp_rig_game
-        _rig = bpy.data.objects.get(char_name + "Rig")
-        stamp_rig_game(_rig, "GENSHIN_IMPACT", char_name)
+        stamp_rig_game(our_char, "GENSHIN_IMPACT", char_name)
     except Exception:
         pass
 
@@ -1603,10 +1664,17 @@ def rig_character(
 
     bpy.ops.wm.append(filename="append_Props", directory=path_to_file)
 
-    this_obj = None
-    for obj in bpy.data.objects:
-        if "Rig" in obj.name:
-            this_obj = obj
+    this_obj = (
+        bpy.data.objects.get(char_name + "Rig")
+        or our_char
+        or bpy.data.objects.get("rigify")
+        or bpy.context.active_object
+    )
+    if not this_obj or this_obj.type != "ARMATURE":
+        for o in bpy.data.objects:
+            if o.type == "ARMATURE" and "Rig" in o.name:
+                this_obj = o
+                break
 
     this_obj.pose.bones["root"].custom_shape = bpy.data.objects["root plate.002"]
     this_obj.pose.bones["root"].use_custom_shape_bone_size = False
@@ -4041,39 +4109,37 @@ def rig_character(
     # Disable IK Stretching & Turn on IK Poles. Toggle manually as needed.
     rig_obj = bpy.data.objects.get(char_name + "Rig") or bpy.data.objects.get("rigify") or bpy.context.object
     if rig_obj and hasattr(rig_obj, "pose") and rig_obj.pose:
-        if disallow_leg_ik_stretch or True:
-            for b_name in ["thigh_parent.L", "thigh_parent.R"]:
-                if b_name in rig_obj.pose.bones:
-                    rig_obj.pose.bones[b_name]["IK_Stretch"] = 0.0 if disallow_leg_ik_stretch else 0.0
+        for b_name in ["thigh_parent.L", "thigh_parent.R"]:
+            if b_name in rig_obj.pose.bones:
+                rig_obj.pose.bones[b_name]["IK_Stretch"] = 0.0 if disallow_leg_ik_stretch else 1.0
+                rig_obj.pose.bones[b_name]["IK_FK"] = 0.0
 
-        if disallow_arm_ik_stretch or True:
-            for b_name in ["upper_arm_parent.L", "upper_arm_parent.R"]:
-                if b_name in rig_obj.pose.bones:
-                    rig_obj.pose.bones[b_name]["IK_Stretch"] = 0.0 if disallow_arm_ik_stretch else 0.0
+        for b_name in ["upper_arm_parent.L", "upper_arm_parent.R"]:
+            if b_name in rig_obj.pose.bones:
+                rig_obj.pose.bones[b_name]["IK_Stretch"] = 0.0 if disallow_arm_ik_stretch else 1.0
+                rig_obj.pose.bones[b_name]["IK_FK"] = 0.0
 
-    if use_arm_ik_poles:
-        bpy.data.objects[char_name + "Rig"].pose.bones["upper_arm_parent.L"][
-            "pole_vector"
-        ] = 1
-        bpy.data.objects[char_name + "Rig"].pose.bones["upper_arm_parent.R"][
-            "pole_vector"
-        ] = 1
+        for b_name in ["upper_arm_parent.L", "upper_arm_parent.R"]:
+            if b_name in rig_obj.pose.bones:
+                try:
+                    rig_obj.pose.bones[b_name]["pole_vector"] = bool(use_arm_ik_poles)
+                except Exception:
+                    rig_obj.pose.bones[b_name]["pole_vector"] = 1 if use_arm_ik_poles else 0
+                try:
+                    rig_obj.pose.bones[b_name]["IK_parent"] = 4
+                except Exception:
+                    pass
 
-    if use_leg_ik_poles:
-        bpy.data.objects[char_name + "Rig"].pose.bones["thigh_parent.L"][
-            "pole_vector"
-        ] = 1
-        bpy.data.objects[char_name + "Rig"].pose.bones["thigh_parent.R"][
-            "pole_vector"
-        ] = 1
+        for b_name in ["thigh_parent.L", "thigh_parent.R"]:
+            if b_name in rig_obj.pose.bones:
+                try:
+                    rig_obj.pose.bones[b_name]["pole_vector"] = bool(use_leg_ik_poles)
+                except Exception:
+                    rig_obj.pose.bones[b_name]["pole_vector"] = 1 if use_leg_ik_poles else 0
 
-    bpy.data.objects[char_name + "Rig"].pose.bones["torso"]["head_follow"] = 1.0
-    bpy.data.objects[char_name + "Rig"].pose.bones["upper_arm_parent.L"][
-        "IK_parent"
-    ] = 4
-    bpy.data.objects[char_name + "Rig"].pose.bones["upper_arm_parent.R"][
-        "IK_parent"
-    ] = 4
+        if "torso" in rig_obj.pose.bones:
+            rig_obj.pose.bones["torso"]["head_follow"] = 1.0
+            rig_obj.pose.bones["torso"]["neck_follow"] = 1.0
 
     def add_shoulder_const(follow, driver, hand):
         armature = bpy.context.scene.objects[ourRig]
@@ -4164,8 +4230,12 @@ def rig_character(
     depsgraph = bpy.context.evaluated_depsgraph_get()
     depsgraph.update()
 
-    if not use_head_tracker:
-        this_obj.pose.bones["plate-settings"]["Use Head Controller"] = 0.00
+    if "plate-settings" in this_obj.pose.bones:
+        this_obj.pose.bones["plate-settings"]["Use Head Controller"] = 1.00 if use_head_tracker else 0.00
+        if "Head Follow" in this_obj.pose.bones["plate-settings"]:
+            this_obj.pose.bones["plate-settings"]["Head Follow"] = 1.00
+        if "Neck Follow" in this_obj.pose.bones["plate-settings"]:
+            this_obj.pose.bones["plate-settings"]["Neck Follow"] = 1.00
 
     # This makes the controller follow the obj in the neck to keep it 'on' the head.
     head_pole_cont = bpy.context.scene.objects[char_name + "Rig"].pose.bones[
@@ -4226,7 +4296,10 @@ def rig_character(
         # New 4.0 functionality: change the bone itself to the color of the group it was originally assigned to.
         else:
             # 4.0: Armature bones or Pose bones?
-            bone = bpy.context.object.pose.bones[bone_name]
+            bone = bpy.context.object.pose.bones.get(bone_name)
+            if not bone:
+                return
+
 
             if group_name == "Root":
                 bone.color.palette = "CUSTOM"
@@ -4256,8 +4329,10 @@ def rig_character(
 
     # Root BG
     assign_bone_to_group("root", "Root")
-    assign_bone_to_group("root-outer", "Root")
-    assign_bone_to_group("root-inner", "Root")
+    assign_bone_to_group("root.001", "Root")
+    assign_bone_to_group("root.002", "Root")
+    assign_bone_to_group("plate-settings", "Root")
+
 
     # Torso BG
     assign_bone_to_group("torso", "Torso")
@@ -5163,9 +5238,15 @@ def rig_character(
     ]
     fast_bone_move(send_to_pivots, 19, "Pivots & Pins")
 
+    bone_to_layer("root", 28, "Root")
+    bone_to_layer("root.001", 28, "Root")
     bone_to_layer("root.002", 28, "Root")
-    bone_to_layer("root.001", 26, "Offsets")
-    bone_to_layer("root", 26, "Offsets")
+    assign_bone_to_group("root", "Root")
+    assign_bone_to_group("root.001", "Root")
+    assign_bone_to_group("root.002", "Root")
+    bone_to_layer("plate-settings", 28, "Root")
+    assign_bone_to_group("plate-settings", "Root")
+
 
     bone_to_layer("hand_ik.L", 7, "Arm.L (IK)")
     bone_to_layer("hand_ik_wrist.L", 26, "Offsets")
@@ -5408,8 +5489,28 @@ def rig_character(
                 for l_idx in [24, 25, 27]:
                     if len(rig_obj.data.layers) > l_idx:
                         rig_obj.data.layers[l_idx] = False
+
+            # Ensure all 3 root bones (root, root.001, root.002) and plate-settings are in Root collection
+            if hasattr(rig_obj.data, "collections"):
+
+                colls = rig_obj.data.collections
+                root_coll = colls.get("Root") or colls.new("Root")
+                other_coll = colls.get("Other")
+                face_coll = colls.get("Face")
+                for r_name in ["root", "root.001", "root.002", "plate-settings"]:
+                    rb = rig_obj.data.bones.get(r_name)
+                    if rb:
+                        root_coll.assign(rb)
+                        if "Offsets" in colls:
+                            colls["Offsets"].unassign(rb)
+                        if other_coll:
+                            other_coll.unassign(rb)
+                        if r_name == "plate-settings" and face_coll:
+                            face_coll.unassign(rb)
+                root_coll.is_visible = True
     except Exception as ex:
         print(f"Notice applying rest pose at end of rig: {ex}")
+
 
     # Final Append-safe sweep: consolidate scene-root wgt / wgt.00X / WGTS leftovers
     # created later in this function (merge_duplicate_collections, slider appends...)

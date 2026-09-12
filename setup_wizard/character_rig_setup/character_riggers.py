@@ -208,6 +208,26 @@ class GenshinImpactCharacterRigger(CharacterRigger):
 
         refresh_light_vectors_modifiers()
 
+        # Ensure all 3 root bones (root, root.001, root.002) and plate-settings are in Root collection and visible
+        target_rig = _get_character_armature(self.context)
+        if target_rig and hasattr(target_rig.data, "collections"):
+            colls = target_rig.data.collections
+            root_coll = colls.get("Root") or colls.new("Root")
+            other_coll = colls.get("Other")
+            face_coll = colls.get("Face")
+            for r_name in ["root", "root.001", "root.002", "plate-settings"]:
+                rb = target_rig.data.bones.get(r_name)
+                if rb:
+                    root_coll.assign(rb)
+                    if "Offsets" in colls:
+                        colls["Offsets"].unassign(rb)
+                    if other_coll:
+                        other_coll.unassign(rb)
+                    if r_name == "plate-settings" and face_coll:
+                        face_coll.unassign(rb)
+            root_coll.is_visible = True
+
+
         if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):
             from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics, find_target_armature
             target_rig = find_target_armature(self.context, armature)
