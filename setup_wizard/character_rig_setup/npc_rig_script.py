@@ -1865,7 +1865,10 @@ def rig_character(
         # New 4.0 functionality: change the bone itself to the color of the group it was originally assigned to.
         else:
             # 4.0: Armature bones or Pose bones?
-            bone = bpy.context.object.pose.bones[bone_name]
+            bone = bpy.context.object.pose.bones.get(bone_name)
+            if not bone:
+                return
+
             
             if group_name == "Root":
                 bone.color.palette = 'CUSTOM'
@@ -1895,8 +1898,10 @@ def rig_character(
 
     # Root BG
     assign_bone_to_group("root", "Root")
-    assign_bone_to_group("root-outer", "Root")
-    assign_bone_to_group("root-inner", "Root")
+    assign_bone_to_group("root.001", "Root")
+    assign_bone_to_group("root.002", "Root")
+    assign_bone_to_group("plate-settings", "Root")
+
     
     # Torso BG
     assign_bone_to_group("torso", "Torso")
@@ -2586,9 +2591,15 @@ def rig_character(
     send_to_pivots = ["foot_ik_pivot.L","foot_ik_pivot.R","hand_ik_pivot.L","hand_ik_pivot.R","torso_pivot.002","forearm_tweak-pin.L","forearm_tweak-pin.R","shin_tweak-pin.L","shin_tweak-pin.R"]
     fast_bone_move(send_to_pivots, 19, "Pivots & Pins")
     
+    bone_to_layer("root", 28, "Root")
+    bone_to_layer("root.001", 28, "Root")
     bone_to_layer("root.002", 28, "Root")
-    bone_to_layer("root.001", 26, "Offsets")
-    bone_to_layer("root", 26, "Offsets")
+    assign_bone_to_group("root", "Root")
+    assign_bone_to_group("root.001", "Root")
+    assign_bone_to_group("root.002", "Root")
+    bone_to_layer("plate-settings", 28, "Root")
+    assign_bone_to_group("plate-settings", "Root")
+
     
     bone_to_layer("hand_ik.L",7,"Arm.L (IK)")
     bone_to_layer("hand_ik_wrist.L",26,"Offsets")

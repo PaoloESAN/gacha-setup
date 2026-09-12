@@ -737,7 +737,13 @@ def build_rig_layers_ui_code(original_name, setup_version):
         "\n            row = col.row()" +
         '\n            row.label(text="Rig: " + setup_vers + " | " + v_str)' +
         "\n        elif bpy.app.version[0] >= 4:" +
-        "\n            arm_obj = context.active_object if (context.active_object and context.active_object.type == 'ARMATURE') else (context.object if (context.object and context.object.type == 'ARMATURE') else None)" +
+        "\n            arm_obj = context.active_object if (context.active_object and context.active_object.type == 'ARMATURE') else None" +
+        "\n            if not arm_obj:" +
+        "\n                try:" +
+        "\n                    from setup_wizard.ui.character_settings_utils import resolve_settings_armature" +
+        "\n                    arm_obj = resolve_settings_armature(context)" +
+        "\n                except Exception:" +
+        "\n                    pass" +
         "\n            if not arm_obj or not hasattr(arm_obj, 'data') or not hasattr(arm_obj.data, 'collections'):" +
         f'\n                arm_obj = bpy.data.objects.get("{original_name}") or bpy.data.objects.get(rig_id)' +
         "\n            if not arm_obj or not hasattr(arm_obj, 'data') or not hasattr(arm_obj.data, 'collections'):" +
@@ -884,6 +890,81 @@ def modify_and_run_rig_ui_script(
             'bl_label = "Rig Layers: " + rig_name',
             layers_replacement
         )
+
+    # Upgrade RigLayers.poll to resolve armature from selection (matching Character Settings)
+    layers_poll_old = """    @classmethod
+    def poll(cls, context):
+        try:
+            return (context.active_object.data.get("rig_id") == rig_id)
+        except (AttributeError, KeyError, TypeError):
+            return False"""
+
+    layers_poll_new = """    @classmethod
+    def poll(cls, context):
+        try:
+            act = getattr(context, "active_object", None)
+            if act and getattr(act, "type", None) == 'ARMATURE' and getattr(act, "data", None) and act.data.get("rig_id") == rig_id:
+                return True
+            from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+            arm = resolve_settings_armature(context)
+            if arm and getattr(arm, "data", None) and arm.data.get("rig_id") == rig_id:
+                return True
+        except Exception:
+            pass
+        return False"""
+
+    if layers_poll_old in complete_rig_text:
+        complete_rig_text = complete_rig_text.replace(layers_poll_old, layers_poll_new)
+
+    # Upgrade RigUI.poll to resolve armature from selection (matching Character Settings)
+    ui_poll_old = """    @classmethod
+    def poll(cls, context):
+        if context.mode != 'POSE':
+            return False
+        try:
+            return (context.active_object.data.get("rig_id") == rig_id)
+        except (AttributeError, KeyError, TypeError):
+            return False"""
+
+    ui_poll_new = """    @classmethod
+    def poll(cls, context):
+        if context.mode != 'POSE':
+            return False
+        try:
+            act = getattr(context, "active_object", None)
+            if act and getattr(act, "type", None) == 'ARMATURE' and getattr(act, "data", None) and act.data.get("rig_id") == rig_id:
+                return True
+            from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+            arm = resolve_settings_armature(context)
+            if arm and getattr(arm, "data", None) and arm.data.get("rig_id") == rig_id:
+                return True
+        except Exception:
+            pass
+        return False"""
+
+    if ui_poll_old in complete_rig_text:
+        complete_rig_text = complete_rig_text.replace(ui_poll_old, ui_poll_new)
+
+    # Upgrade RigUI.draw to resolve armature from selection
+    ui_draw_old = """    def draw(self, context):
+        layout = self.layout
+        pose_bones = context.active_object.pose.bones"""
+
+    ui_draw_new = """    def draw(self, context):
+        layout = self.layout
+        arm = context.active_object if (context.active_object and context.active_object.type == 'ARMATURE') else None
+        if not arm:
+            try:
+                from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+                arm = resolve_settings_armature(context)
+            except Exception:
+                pass
+        if not arm or not getattr(arm, "pose", None):
+            return
+        pose_bones = arm.pose.bones"""
+
+    if ui_draw_old in complete_rig_text:
+        complete_rig_text = complete_rig_text.replace(ui_draw_old, ui_draw_new)
 
     # Safe selected_bones try-block and persistent General Settings box in RigUI.draw
     old_sel_block = """        try:
@@ -1161,6 +1242,12 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
                 core_biped_org.add(f"ORG-{f}.{n}{side}")
                 core_biped_org.add(f"ORG-{f}.{n}{side}.001")
 
+    has_skirt_rig = bool(
+        arm_data.bones.get("MCH-Skirt_Parent02")
+        or arm_data.bones.get("MCH-Skirt_Parent")
+        or any(b.name.startswith("CTRL-") and any(k in b.name.lower() for k in ["skirt", "dress", "hem", "qun"]) for b in arm_data.bones)
+    )
+
     def is_physics_ignored(name):
         if name in physics_ignore_list or name in core_biped_org:
             return True
@@ -1168,6 +1255,11 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
             if name in arm_data.collections["Face"].bones:
                 return True
         low = name.lower()
+        if has_skirt_rig and any(k in low for k in ["skirt", "dress", "hem", "qun"]):
+            return True
+        pb = armature_obj.pose.bones.get(name) if (armature_obj and hasattr(armature_obj, "pose") and armature_obj.pose) else None
+        if pb and any(c.type == 'STRETCH_TO' for c in pb.constraints):
+            return True
         if any(k in low for k in [
             "eyebone", "eye", "tooth", "teeth", "tongue", "mouth", "jaw", "brow", "lip", "nose",
             "cheek", "plate", "twist", "sa01", "sa02", "fa01", "skirtallf", "prop", "light",

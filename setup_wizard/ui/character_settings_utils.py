@@ -28,6 +28,266 @@ def stamp_rig_game(rig_obj, game_name, char_name=None):
         pass
 
 
+_registered_rig_ids = set()
+
+
+def patch_rig_ui_text_content(text_content):
+    """Patches RigUI and RigLayers code in UI text scripts to support mesh selection and Object Mode."""
+    if not text_content:
+        return text_content
+
+    # 1. Patch RigLayers.poll to resolve armature from selection (mesh or armature)
+    old_layers_poll = """    @classmethod
+    def poll(cls, context):
+        try:
+            return (context.active_object.data.get("rig_id") == rig_id)
+        except (AttributeError, KeyError, TypeError):
+            return False"""
+
+    new_layers_poll = """    @classmethod
+    def poll(cls, context):
+        try:
+            act = getattr(context, "active_object", None)
+            if act and getattr(act, "type", None) == 'ARMATURE' and getattr(act, "data", None) and act.data.get("rig_id") == rig_id:
+                return True
+            from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+            arm = resolve_settings_armature(context)
+            if arm and getattr(arm, "data", None) and arm.data.get("rig_id") == rig_id:
+                return True
+        except Exception:
+            pass
+        return False"""
+
+    if old_layers_poll in text_content:
+        text_content = text_content.replace(old_layers_poll, new_layers_poll)
+
+    # 2. Patch RigUI.poll to resolve armature from selection (mesh or armature) only in POSE mode
+    old_ui_poll = """    @classmethod
+    def poll(cls, context):
+        if context.mode != 'POSE':
+            return False
+        try:
+            return (context.active_object.data.get("rig_id") == rig_id)
+        except (AttributeError, KeyError, TypeError):
+            return False"""
+
+    prev_ui_poll = """    @classmethod
+    def poll(cls, context):
+        try:
+            act = getattr(context, "active_object", None)
+            if act and getattr(act, "type", None) == 'ARMATURE' and getattr(act, "data", None) and act.data.get("rig_id") == rig_id:
+                return True
+            from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+            arm = resolve_settings_armature(context)
+            if arm and getattr(arm, "data", None) and arm.data.get("rig_id") == rig_id:
+                return True
+        except Exception:
+            pass
+        return False"""
+
+    new_ui_poll = """    @classmethod
+    def poll(cls, context):
+        if context.mode != 'POSE':
+            return False
+        try:
+            act = getattr(context, "active_object", None)
+            if act and getattr(act, "type", None) == 'ARMATURE' and getattr(act, "data", None) and act.data.get("rig_id") == rig_id:
+                return True
+            from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+            arm = resolve_settings_armature(context)
+            if arm and getattr(arm, "data", None) and arm.data.get("rig_id") == rig_id:
+                return True
+        except Exception:
+            pass
+        return False"""
+
+    if old_ui_poll in text_content:
+        text_content = text_content.replace(old_ui_poll, new_ui_poll)
+    elif prev_ui_poll in text_content:
+        text_content = text_content.replace(prev_ui_poll, new_ui_poll)
+
+    # 3. Patch RigLayers arm_obj resolution in draw()
+    old_arm_obj = "arm_obj = context.active_object if (context.active_object and context.active_object.type == 'ARMATURE') else (context.object if (context.object and context.object.type == 'ARMATURE') else None)"
+    new_arm_obj = """arm_obj = context.active_object if (context.active_object and context.active_object.type == 'ARMATURE') else None
+            if not arm_obj:
+                try:
+                    from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+                    arm_obj = resolve_settings_armature(context)
+                except Exception:
+                    pass"""
+
+    if old_arm_obj in text_content:
+        text_content = text_content.replace(old_arm_obj, new_arm_obj)
+
+    # 4. Patch RigUI draw() to resolve arm from selection
+    old_rig_ui_draw_start = """    def draw(self, context):
+        layout = self.layout
+        pose_bones = context.active_object.pose.bones"""
+
+    prev_rig_ui_draw_start = """    def draw(self, context):
+        layout = self.layout
+        arm = context.active_object if (context.active_object and context.active_object.type == 'ARMATURE') else None
+        if not arm:
+            try:
+                from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+                arm = resolve_settings_armature(context)
+            except Exception:
+                pass
+        if not arm or not getattr(arm, "pose", None):
+            return
+        pose_bones = arm.pose.bones
+        if context.mode != 'POSE':
+            box = layout.box()
+            row = box.row(align=True)
+            row.label(text=f"Rig: {rig_name} (Object Mode)", icon='ARMATURE_DATA')
+            op = row.operator("object.mode_set", text="Pose Mode", icon='POSE_HLT')
+            op.mode = 'POSE'
+            if "plate-settings" in pose_bones:
+                for pk in ["Use Head Controller", "Use Neck Follow", "Use Eye Tracking"]:
+                    if pk in pose_bones["plate-settings"]:
+                        box.prop(pose_bones["plate-settings"], f'["{pk}"]', slider=True)
+            return"""
+
+    new_rig_ui_draw_start = """    def draw(self, context):
+        layout = self.layout
+        arm = context.active_object if (context.active_object and context.active_object.type == 'ARMATURE') else None
+        if not arm:
+            try:
+                from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+                arm = resolve_settings_armature(context)
+            except Exception:
+                pass
+        if not arm or not getattr(arm, "pose", None):
+            return
+        pose_bones = arm.pose.bones"""
+
+    if prev_rig_ui_draw_start in text_content:
+        text_content = text_content.replace(prev_rig_ui_draw_start, new_rig_ui_draw_start)
+    elif old_rig_ui_draw_start in text_content:
+        text_content = text_content.replace(old_rig_ui_draw_start, new_rig_ui_draw_start)
+
+    return text_content
+
+
+def _register_fallback_rig_panels(target_armature, r_id):
+    """Creates standalone RigLayers and RigUI panels when text datablock was not appended."""
+    import bpy
+    char_name = resolve_character_name(target_armature, target_armature.name.replace("Rig", ""))
+
+    class DynamicRigLayers(bpy.types.Panel):
+        bl_space_type = 'VIEW_3D'
+        bl_region_type = 'UI'
+        bl_label = f"Rig Layers: {char_name}"
+        bl_order = 3
+        bl_options = {'DEFAULT_CLOSED'}
+        bl_idname = f"VIEW3D_PT_rig_layers_{r_id}"
+        bl_category = 'Item'
+
+        @classmethod
+        def poll(cls, context):
+            try:
+                arm = resolve_settings_armature(context)
+                return bool(arm and getattr(arm, "data", None) and arm.data.get("rig_id") == r_id)
+            except Exception:
+                return False
+
+        def draw(self, context):
+            arm = resolve_settings_armature(context)
+            if not arm or not hasattr(arm, "data") or not hasattr(arm.data, "collections"):
+                return
+            layout = self.layout
+            col = layout.column()
+            colls = arm.data.collections
+            for c in colls:
+                if c.name in ["Other", "Others"]:
+                    continue
+                row = col.row(align=True)
+                row.prop(c, "is_visible", toggle=True, text=c.name)
+                row.prop(c, "is_solo", toggle=True, text="★")
+
+    class DynamicRigUI(bpy.types.Panel):
+        bl_space_type = 'VIEW_3D'
+        bl_region_type = 'UI'
+        bl_label = f"Rig Properties: {char_name}"
+        bl_order = 2
+        bl_options = {'DEFAULT_CLOSED'}
+        bl_idname = f"VIEW3D_PT_rig_ui_{r_id}"
+        bl_category = 'Item'
+
+        @classmethod
+        def poll(cls, context):
+            if context.mode != 'POSE':
+                return False
+            try:
+                arm = resolve_settings_armature(context)
+                return bool(arm and getattr(arm, "data", None) and arm.data.get("rig_id") == r_id)
+            except Exception:
+                return False
+
+        def draw(self, context):
+            arm = resolve_settings_armature(context)
+            if not arm or not getattr(arm, "pose", None):
+                return
+            layout = self.layout
+            box = layout.box()
+            box.label(text=f"Rig: {char_name} (Pose Mode)", icon='ARMATURE_DATA')
+            if "plate-settings" in arm.pose.bones:
+                pb = arm.pose.bones["plate-settings"]
+                for pk in ["Use Head Controller", "Use Neck Follow", "Use Eye Tracking"]:
+                    if pk in pb:
+                        box.prop(pb, f'["{pk}"]', slider=True)
+
+    try:
+        bpy.utils.register_class(DynamicRigLayers)
+        bpy.utils.register_class(DynamicRigUI)
+        _registered_rig_ids.add(r_id)
+        print(f"[GACHA SETUP] Registered fallback Rig Layers & UI for '{char_name}' (rig_id: {r_id})")
+    except Exception as e:
+        print(f"[GACHA SETUP] Fallback Rig UI register notice: {e}")
+
+
+def ensure_all_rig_uis_registered(target_armature=None):
+    """Auto-registers Rig UI / Rig Layers panels for all rigs in the scene or .blend file."""
+    import bpy
+    if "RIG_LOG" in bpy.data.texts:
+        try:
+            bpy.data.texts.remove(bpy.data.texts["RIG_LOG"])
+        except Exception:
+            pass
+    for t in list(bpy.data.texts):
+        t_name = t.name.lower()
+        if "_ui" in t_name or t_name == "rig_ui.py":
+            try:
+                content = t.as_string()
+                if "rig_id = " not in content and "class RigLayers" not in content:
+                    continue
+                r_id = None
+                if 'rig_id = "' in content:
+                    r_id = content.split('rig_id = "')[1].split('"')[0]
+                elif "rig_id = '" in content:
+                    r_id = content.split("rig_id = '")[1].split("'")[0]
+
+                if r_id and f"VIEW3D_PT_rig_layers_{r_id}" in dir(bpy.types):
+                    _registered_rig_ids.add(r_id)
+                    continue
+
+                patched = patch_rig_ui_text_content(content)
+                if patched != content:
+                    t.from_string(patched)
+                exec(compile(patched, t.name, 'exec'), {})
+                if r_id:
+                    _registered_rig_ids.add(r_id)
+                print(f"[GACHA SETUP] Auto-registered Rig UI: '{t.name}' (rig_id: {r_id})")
+            except Exception as e:
+                print(f"[GACHA SETUP] Warning registering Rig UI from text '{t.name}': {e}")
+
+    # Fallback for armatures whose UI text is missing in bpy.data.texts (e.g. appended collection)
+    if target_armature and getattr(target_armature, "type", None) == 'ARMATURE':
+        r_id = getattr(getattr(target_armature, "data", None), "get", lambda k: None)("rig_id")
+        if r_id and f"VIEW3D_PT_rig_layers_{r_id}" not in dir(bpy.types):
+            _register_fallback_rig_panels(target_armature, r_id)
+
+
 def resolve_settings_armature(context):
     """Returns the armature targeted by selection (None if none). Never falls back to scene."""
     if context is None:
@@ -43,27 +303,43 @@ def resolve_settings_armature(context):
         candidates.extend(list(getattr(context, "selected_objects", []) or []))
     except Exception:
         pass
+    target_arm = None
     for cand in candidates:
         if cand is None:
             continue
         if getattr(cand, "type", None) == 'ARMATURE':
-            return cand
+            target_arm = cand
+            break
         try:
             arm = cand.find_armature()
             if arm is not None:
-                return arm
+                target_arm = arm
+                break
         except Exception:
             pass
         for mod in getattr(cand, "modifiers", []) or []:
             try:
                 if mod.type == 'ARMATURE' and getattr(mod, "object", None) is not None:
-                    return mod.object
+                    target_arm = mod.object
+                    break
             except Exception:
                 continue
+        if target_arm is not None:
+            break
         parent = getattr(cand, "parent", None)
         if parent is not None and getattr(parent, "type", None) == 'ARMATURE':
-            return parent
-    return None
+            target_arm = parent
+            break
+
+    if target_arm is not None:
+        try:
+            r_id = getattr(getattr(target_arm, "data", None), "get", lambda k: None)("rig_id")
+            if r_id and (r_id not in _registered_rig_ids or f"VIEW3D_PT_rig_layers_{r_id}" not in dir(bpy.types)):
+                ensure_all_rig_uis_registered(target_arm)
+        except Exception:
+            pass
+
+    return target_arm
 
 
 def _iter_rig_meshes(arm):
