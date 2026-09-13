@@ -57,8 +57,8 @@ def is_rigging_disabled(context=None):
 
 def _execute_fbx_import(filepath):
     """
-    Executes FBX import using the modern Blender C++ importer (bpy.ops.wm.fbx_import) with default options
-    as requested by the user, with fallback to legacy import_scene.fbx if wm.fbx_import is not available.
+    Executes FBX import using the new experimental C++ wm.fbx_import.
+    Falls back to import_scene.fbx if wm.fbx_import is not available.
     """
     if hasattr(bpy.ops.wm, "fbx_import"):
         try:
@@ -80,12 +80,74 @@ def _execute_fbx_import(filepath):
         except Exception as e:
             print(f"bpy.ops.wm.fbx_import failed ({e}), falling back to import_scene.fbx")
 
-    # Fallback for older Blender versions / legacy FBX importer
-    bpy.ops.import_scene.fbx(
-        filepath=filepath,
-        force_connect_children=True,
-        automatic_bone_orientation=True,
-    )
+    if hasattr(bpy.ops.import_scene, "fbx"):
+        bpy.ops.import_scene.fbx(
+            filepath=filepath,
+            force_connect_children=True,
+            automatic_bone_orientation=True,
+        )
+
+
+def align_eye_bones(armature):
+    """
+    Fixes asymmetric or skewed eye pivot bones (e.g. from experimental wm.fbx_import)
+    where +EyeBone L/R A01 midpoints do not match the pupil bones +EyeBone L/R A02.
+    Centers A01 pivots along X to match A02, aligns height, and points A01 tail to A02.
+    Detects coordinate orientation (whether Y or Z is vertical height).
+    """
+    if not armature or armature.type != 'ARMATURE':
+        return
+
+    orig_mode = bpy.context.object.mode if bpy.context.object else 'OBJECT'
+
+    try:
+        if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        armature.hide_viewport = False
+        armature.hide_set(False)
+        armature.select_set(True)
+        bpy.context.view_layer.objects.active = armature
+
+        bpy.ops.object.mode_set(mode='EDIT')
+        eb = armature.data.edit_bones
+
+        eye_l1 = eb.get("+EyeBone L A01") or eb.get("+EyeBoneA01.L")
+        eye_r1 = eb.get("+EyeBone R A01") or eb.get("+EyeBoneA01.R")
+        eye_l2 = eb.get("+EyeBone L A02") or eb.get("+EyeBoneA02.L")
+        eye_r2 = eb.get("+EyeBone R A02") or eb.get("+EyeBoneA02.R")
+
+        if eye_l1 and eye_r1 and eye_l2 and eye_r2:
+            center_x_1 = (eye_l1.head.x + eye_r1.head.x) / 2.0
+            center_x_2 = (eye_l2.head.x + eye_r2.head.x) / 2.0
+            offset_x = center_x_1 - center_x_2
+            if abs(offset_x) > 0.001:
+                print(f"[ALIGN EYE BONES] Correcting eye bone X offset: {offset_x:.6f}")
+                eye_l1.head.x -= offset_x
+                eye_r1.head.x -= offset_x
+
+            # Determine vertical height axis (value > 0.5, typically ~1.45)
+            if abs(eye_l1.head.y) > 0.5:
+                # Y is height, Z is depth (raw FBX orientation)
+                avg_h = (eye_l2.head.y + eye_r2.head.y) / 2.0
+                eye_l1.head.y = avg_h
+                eye_r1.head.y = avg_h
+            elif abs(eye_l1.head.z) > 0.5:
+                # Z is height, Y is depth (after standing-up rotation)
+                avg_h = (eye_l2.head.z + eye_r2.head.z) / 2.0
+                eye_l1.head.z = avg_h
+                eye_r1.head.z = avg_h
+
+            # Point A01 tail directly to A02 head (pupil center)
+            eye_l1.tail = eye_l2.head.copy()
+            eye_r1.tail = eye_r2.head.copy()
+    except Exception as e:
+        print(f"[ALIGN EYE BONES] Notice: {e}")
+    finally:
+        try:
+            bpy.ops.object.mode_set(mode=orig_mode if orig_mode in ('OBJECT', 'EDIT', 'POSE') else 'OBJECT')
+        except Exception:
+            pass
 
 
 def apply_spine_rest_pose(armature):
@@ -205,6 +267,9 @@ def reorient_armature_bones(armature):
 
     # First apply spine rest pose to fix torso offset on models with altered rest pose
     apply_spine_rest_pose(armature)
+
+    # Align eye bones if they have import offset
+    align_eye_bones(armature)
 
     orig_mode = bpy.context.object.mode if bpy.context.object else 'OBJECT'
 
@@ -1287,6 +1352,11 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
 
         if self.game_type == GameType.ARKNIGHTS_ENDFIELD.name:
             handle_ake_post_import(bpy.context)
+
+        # Align eye bones if imported FBX has eye bone offsets
+        for obj in bpy.data.objects:
+            if obj.type == "ARMATURE":
+                align_eye_bones(obj)
 
     def fix_zzz_eye_shadow(self):
         faceobj = None
