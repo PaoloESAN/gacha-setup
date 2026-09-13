@@ -120,6 +120,34 @@ mesh_keywords_to_create_geometry_nodes_on = [
     ShaderMaterialNameKeywords.SKILLOBJ,
 ]
 
+# HSR outline depth offset socket in the StellarToon outline node group.
+# Like the thickness, it is consumed in mesh-local units by the GN.
+HSR_OUTLINE_DEPTH_OFFSET_INPUT = 'Input_8'
+HSR_OUTLINE_DEFAULT_DEPTH_OFFSET = 0.0075
+
+
+def get_mesh_world_scale(mesh):
+    """Effective (uniform) world scale of a mesh, following parent chain.
+
+    Newer HSR exports (FBX 7500, e.g. Cerydra/Cyrene) come in centimeters with
+    the armature at 0.01 scale, while older ones (Evernight/Firefly) are in
+    meters at 1.0. Geometry-nodes outline offsets are computed in mesh-local
+    units, so an absolute thickness only matches the author's intent at 1.0.
+    Returns 1.0 when the scale cannot be determined.
+    """
+    try:
+        sx, sy, sz = mesh.matrix_world.to_scale()
+        vals = [abs(float(v)) for v in (sx, sy, sz) if v]
+        if not vals:
+            return 1.0
+        scale = sum(vals) / len(vals)
+        if scale < 1e-6:
+            return 1.0
+        return scale
+    except Exception:
+        return 1.0
+
+
 meshes_to_create_outlines_on = \
     gi_meshes_to_create_outlines_on + \
     hsr_meshes_to_create_outlines_on + \
@@ -864,6 +892,38 @@ class HonkaiStarRailGeometryNodesSetup(GameGeometryNodesSetup):
         face_meshes = [mesh for mesh_name, mesh in bpy.data.meshes.items() if 'Face' in mesh_name and 'Face_Mask' not in mesh_name]
         self.fix_face_outlines_by_reordering_material_slots(face_meshes)
         self.apply_hsr_hair_cleanup_and_vertex_paint()
+
+    def set_up_modifier_default_values(self, modifier, mesh):
+        super().set_up_modifier_default_values(modifier, mesh)
+        self.compensate_outline_scale(modifier, mesh)
+
+    def compensate_outline_scale(self, modifier, mesh):
+        """Scale outline offsets for non-meter characters.
+
+        The outline node group displaces vertices in mesh-local units, so on
+        centimeter-scale characters (armature at 0.01, e.g. Cerydra/Cyrene)
+        the default thickness/depth produce a ~100x too thin, invisible
+        outline. Dividing by the mesh's effective world scale restores the
+        intended world-space width. Meter-scale characters divide by 1.0
+        (no-op). Assignment (not *=) keeps re-running the setup idempotent,
+        and the world scale is preserved by Fix Transformations, so the
+        compensation stays valid through the rest of the pipeline.
+        """
+        scale = get_mesh_world_scale(mesh)
+        if abs(scale - 1.0) < 1e-3:
+            return
+        # Always derive from the class defaults (not the live value) so that
+        # re-running the setup is idempotent instead of compounding.
+        try:
+            set_modifier_property(modifier, OUTLINE_THICKNESS_INPUT,
+                                  self.DEFAULT_OUTLINE_THICKNESS / scale)
+        except Exception as ex:
+            print(f"[HSR outlines] Notice: could not scale outline thickness on {mesh.name}: {ex}")
+        try:
+            set_modifier_property(modifier, HSR_OUTLINE_DEPTH_OFFSET_INPUT,
+                                  HSR_OUTLINE_DEFAULT_DEPTH_OFFSET / scale)
+        except Exception as ex:
+            print(f"[HSR outlines] Notice: could not scale outline depth offset on {mesh.name}: {ex}")
 
     def apply_hsr_hair_cleanup_and_vertex_paint(self):
         hair_objs = [obj for obj in bpy.context.scene.objects if obj.type == 'MESH' and 'hair' in obj.name.lower()]

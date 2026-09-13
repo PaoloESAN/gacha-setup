@@ -96,7 +96,8 @@ class GameMaterialDataImporter(ABC):
         # 3. Shader Materials renamed. Search for material.
         searched_materials = [material for material in bpy.data.materials.values() if 
                               body_part in material.name and 
-                              self.material_names.MATERIAL_PREFIX_AFTER_RENAME in material.name and
+                              (self.material_names.MATERIAL_PREFIX in material.name or
+                               self.material_names.MATERIAL_PREFIX_AFTER_RENAME in material.name) and
                               'Outlines' not in material.name
         ] if body_part else []
         is_not_outlines_material = lambda material: not ShaderMaterial(material, self.shader_node_names).is_outlines_material()
@@ -109,7 +110,8 @@ class GameMaterialDataImporter(ABC):
         # 3. Shader Materials renamed. Search for material.
         searched_outlines_materials = [material for material in bpy.data.materials.values() if 
                                        body_part in material.name and 
-                                       self.material_names.MATERIAL_PREFIX_AFTER_RENAME in material.name and
+                                       (self.material_names.MATERIAL_PREFIX in material.name or
+                                        self.material_names.MATERIAL_PREFIX_AFTER_RENAME in material.name) and
                                        ' Outlines' in material.name and
                                        not self.material_names.NIGHT_SOUL_OUTLINES_SUFFIX in material.name
         ] if body_part else []
@@ -293,7 +295,11 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
                 body_part = f'{ShaderMaterialNameKeywords.SKILLOBJ} {skillobj_identifier}'
                 character_type = CharacterType.UNKNOWN
             else:
-                body_part = PurePosixPath(file.name).stem.split('_')[-1]
+                stem = PurePosixPath(file.name).stem
+                if stem.endswith('_D') or stem.endswith('_S'):
+                    body_part = stem.split('_')[-2]
+                else:
+                    body_part = stem.split('_')[-1]
                 character_type = CharacterType.UNKNOWN  # catch-all, tries default material applying behavior
 
             json_material_data = self.open_and_load_json_data(material_data_directory.file_path, file)

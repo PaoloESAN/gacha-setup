@@ -86,6 +86,7 @@ class HSR_PT_Basic_Setup_Wizard_UI_Layout(Panel, HonkaiStarRailUIRenderChecker):
             "genshin.fix_transformations",
             "Fix Transformations",
             "OBJECT_DATA",
+            game_type=GameType.HONKAI_STAR_RAIL.name,
         )
 
         OperatorFactory.create_rig_character_ui(sub_layout)

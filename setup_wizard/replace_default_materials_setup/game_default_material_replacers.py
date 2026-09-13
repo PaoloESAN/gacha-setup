@@ -639,6 +639,22 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 honkai_star_rail_material = bpy.data.materials.get(material_name)
 
                 if honkai_star_rail_material:
+                    # If this material is already assigned to an earlier slot on the same mesh with a different raw texture, clone it
+                    for prev_slot in mesh.material_slots:
+                        if prev_slot == material_slot:
+                            break
+                        if prev_slot.material == honkai_star_rail_material:
+                            orig_tex = None
+                            if material_slot.material and material_slot.material.use_nodes:
+                                for node in material_slot.material.node_tree.nodes:
+                                    if node.type == 'TEX_IMAGE' and node.image:
+                                        orig_tex = node.image.name
+                                        break
+                            if orig_tex and orig_tex != honkai_star_rail_material.get("_original_fbx_texture"):
+                                honkai_star_rail_material = honkai_star_rail_material.copy()
+                                honkai_star_rail_material.name = f"{material_name}_{material_slot.name}"
+                                break
+
                     if material_slot.material:
                         honkai_star_rail_material["_original_material_name"] = material_slot.material.name
                         if material_slot.material.use_nodes and material_slot.material.node_tree:
@@ -726,21 +742,23 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         return body_material
 
     def create_weapon_materials(self, mesh_body_part_name):
-        weapon_material_name = \
-            f'{self.shader_material_names.MATERIAL_PREFIX}{mesh_body_part_name}' if \
-            mesh_body_part_name == 'Weapon01' or \
-            mesh_body_part_name == 'Weapon02' or \
-            mesh_body_part_name == 'Weapon1' or \
-            mesh_body_part_name == 'Weapon_Trans' or \
-            mesh_body_part_name == 'Handbag' or \
-            mesh_body_part_name == 'Kendama' else \
-            f'{self.shader_material_names.WEAPON}'
+        if mesh_body_part_name.lower() in ('weapon', 'wpn'):
+            weapon_material_name = f'{self.shader_material_names.WEAPON}'
+        else:
+            weapon_material_name = f'{self.shader_material_names.MATERIAL_PREFIX}{mesh_body_part_name}'
         weapon_material = bpy.data.materials.get(weapon_material_name)
 
         if not weapon_material:
-            weapon_material = bpy.data.materials.get(f'{self.shader_material_names.WEAPON}').copy()
-            weapon_material.name = weapon_material_name
-            weapon_material.use_fake_user = True
+            template = (
+                bpy.data.materials.get(f'{self.shader_material_names.WEAPON}')
+                or bpy.data.materials.get(f'{self.shader_material_names.BODY}')
+            )
+            if template:
+                weapon_material = template.copy()
+                weapon_material.name = weapon_material_name
+                weapon_material.use_fake_user = True
+            else:
+                weapon_material = bpy.data.materials.new(name=weapon_material_name)
         return weapon_material
 
 
@@ -807,7 +825,7 @@ class StellarToonDefaultMaterialReplacer(HonkaiStarRailDefaultMaterialReplacer):
 
     def create_weapon_materials(self, mesh_body_part_name):
         weapon_material = super().create_weapon_materials(mesh_body_part_name)
-        is_trans = self.shader_material_names.WEAPON_TRANS in weapon_material.name or '_Trans' in weapon_material.name or '_trans' in weapon_material.name
+        is_trans = self.shader_material_names.WEAPON_TRANS in weapon_material.name or '_Trans' in weapon_material.name or '_trans' in weapon_material.name or 'eff' in weapon_material.name.lower()
         self._set_transparency(weapon_material, is_trans)
         return weapon_material
 

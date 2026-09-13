@@ -70,6 +70,29 @@ def rig_character(
 
     bpy.ops.object.mode_set(mode="EDIT")
 
+    # Correct eye bone alignment if A01 center deviates from pupil A02 center (e.g. wm.fbx_import offset)
+    eye_l1 = temp_armature.edit_bones.get("+EyeBone L A01") or temp_armature.edit_bones.get("+EyeBoneA01.L")
+    eye_r1 = temp_armature.edit_bones.get("+EyeBone R A01") or temp_armature.edit_bones.get("+EyeBoneA01.R")
+    eye_l2 = temp_armature.edit_bones.get("+EyeBone L A02") or temp_armature.edit_bones.get("+EyeBoneA02.L")
+    eye_r2 = temp_armature.edit_bones.get("+EyeBone R A02") or temp_armature.edit_bones.get("+EyeBoneA02.R")
+    if eye_l1 and eye_r1 and eye_l2 and eye_r2:
+        center_x_1 = (eye_l1.head.x + eye_r1.head.x) / 2.0
+        center_x_2 = (eye_l2.head.x + eye_r2.head.x) / 2.0
+        offset_x = center_x_1 - center_x_2
+        if abs(offset_x) > 0.001:
+            eye_l1.head.x -= offset_x
+            eye_r1.head.x -= offset_x
+        if abs(eye_l1.head.y) > 0.5:
+            avg_h = (eye_l2.head.y + eye_r2.head.y) / 2.0
+            eye_l1.head.y = avg_h
+            eye_r1.head.y = avg_h
+        elif abs(eye_l1.head.z) > 0.5:
+            avg_h = (eye_l2.head.z + eye_r2.head.z) / 2.0
+            eye_l1.head.z = avg_h
+            eye_r1.head.z = avg_h
+        eye_l1.tail = eye_l2.head.copy()
+        eye_r1.tail = eye_r2.head.copy()
+
     # Check if toe bones exist
     toe_bones_exist = True
     if "Bip001 L Toe0" not in temp_armature.edit_bones:
@@ -4956,21 +4979,24 @@ def rig_character(
         arm = bpy.context.object
         if bone in arm.data.bones:
             if is_version_4:
+                b = arm.data.bones[bone]
                 if collection == "Other":
-                    bpy.context.object.data.collections[collection].assign(
-                        bpy.context.object.data.bones[bone]
-                    )
+                    for coll in list(b.collections):
+                        if coll.name != "Other":
+                            try:
+                                coll.unassign(b)
+                            except Exception:
+                                pass
+                    bpy.context.object.data.collections["Other"].assign(b)
                 else:
-                    bpy.context.object.data.collections[collection].assign(
-                        bpy.context.object.data.bones[bone]
-                    )
-                    bpy.context.object.data.collections["Other"].unassign(
-                        bpy.context.object.data.bones[bone]
-                    )
+                    bpy.context.object.data.collections[collection].assign(b)
+                    if "Other" in bpy.context.object.data.collections:
+                        try:
+                            bpy.context.object.data.collections["Other"].unassign(b)
+                        except Exception:
+                            pass
                     if second_coll != "None":
-                        bpy.context.object.data.collections[second_coll].assign(
-                            bpy.context.object.data.bones[bone]
-                        )
+                        bpy.context.object.data.collections[second_coll].assign(b)
             else:
                 move_bone(bone, layer)
 
