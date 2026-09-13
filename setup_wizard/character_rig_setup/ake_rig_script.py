@@ -71,11 +71,41 @@ def rig_character(
     # 1. Edit mode checks and head/eye correction
     bpy.ops.object.mode_set(mode="EDIT")
 
+    # Correct eye bone alignment if pivot center deviates from pupil center (e.g. wm.fbx_import offset)
+    eye_l1 = armature.edit_bones.get("+EyeBone L A01") or armature.edit_bones.get("+EyeBoneA01.L") or armature.edit_bones.get("eyeLfJoint")
+    eye_r1 = armature.edit_bones.get("+EyeBone R A01") or armature.edit_bones.get("+EyeBoneA01.R") or armature.edit_bones.get("eyeRtJoint")
+    eye_l2 = armature.edit_bones.get("+EyeBone L A02") or armature.edit_bones.get("+EyeBoneA02.L") or armature.edit_bones.get("faceLfIrisJoint")
+    eye_r2 = armature.edit_bones.get("+EyeBone R A02") or armature.edit_bones.get("+EyeBoneA02.R") or armature.edit_bones.get("faceRtIrisJoint")
+    if eye_l1 and eye_r1 and eye_l2 and eye_r2:
+        center_x_1 = (eye_l1.head.x + eye_r1.head.x) / 2.0
+        center_x_2 = (eye_l2.head.x + eye_r2.head.x) / 2.0
+        offset_x = center_x_1 - center_x_2
+        if abs(offset_x) > 0.001:
+            eye_l1.head.x -= offset_x
+            eye_r1.head.x -= offset_x
+        if abs(eye_l1.head.y) > 0.5:
+            avg_h = (eye_l2.head.y + eye_r2.head.y) / 2.0
+            eye_l1.head.y = avg_h
+            eye_r1.head.y = avg_h
+        elif abs(eye_l1.head.z) > 0.5:
+            avg_h = (eye_l2.head.z + eye_r2.head.z) / 2.0
+            eye_l1.head.z = avg_h
+            eye_r1.head.z = avg_h
+        eye_l1.tail = eye_l2.head.copy()
+        eye_r1.tail = eye_r2.head.copy()
+        eye_l2.tail = Vector((eye_l2.head.x, eye_l2.head.y - 0.02, eye_l2.head.z))
+        eye_r2.tail = Vector((eye_r2.head.x, eye_r2.head.y - 0.02, eye_r2.head.z))
+        eye_l2.roll = 0
+        eye_r2.roll = 0
+
     toe_bones_exist = any(
         t in armature.edit_bones
         for t in ["Bip001_L_Toe0", "Bip001 L Toe0", "toe.L", "Bip001-L-Toe0"]
     )
 
+    # NOTE: Endfield eyes animate by sliding the surface iris joints
+    # (faceLfIrisJoint/faceRtIrisJoint); eyeLfJoint/eyeRtJoint are static
+    # containers ~5cm deep, never the Rigify tracking eyes.
     possible_eye_L = [
         "faceLfIrisJoint", "eyeLf01Joint", "+EyeBone L A02", "+EyeBone L A01",
         "eye.L", "eye_L", "EYE_L", "Eye_L", "Skn_L_Eye", "Bdy_L_Eye"
@@ -229,6 +259,7 @@ def rig_character(
     if "shoulder.R" in armature.edit_bones:
         armature.edit_bones["shoulder.R"].align_roll(Vector((0, 0, 1)))
 
+
     # Remove Bip001 if present, reparenting children to spine
     for bone in list(armature.edit_bones):
         if bone.name in ["Bip001", "Bip001.001"]:
@@ -280,8 +311,12 @@ def rig_character(
 
     if "eye.L" in armature.edit_bones:
         armature.edit_bones["eye.L"].name = "DEF-eye.L"
+        armature.edit_bones["DEF-eye.L"].tail = Vector((armature.edit_bones["DEF-eye.L"].head.x, armature.edit_bones["DEF-eye.L"].head.y - 0.02, armature.edit_bones["DEF-eye.L"].head.z))
+        armature.edit_bones["DEF-eye.L"].roll = 0
     if "eye.R" in armature.edit_bones:
         armature.edit_bones["eye.R"].name = "DEF-eye.R"
+        armature.edit_bones["DEF-eye.R"].tail = Vector((armature.edit_bones["DEF-eye.R"].head.x, armature.edit_bones["DEF-eye.R"].head.y - 0.02, armature.edit_bones["DEF-eye.R"].head.z))
+        armature.edit_bones["DEF-eye.R"].roll = 0
     if "breast.L" in armature.edit_bones:
         armature.edit_bones["breast.L"].name = "DEF-breast.L"
     if "breast.R" in armature.edit_bones:
@@ -524,8 +559,93 @@ def rig_character(
                     bpy.ops.wm.append(filename=coll_name, directory=path_to_file)
                 except Exception:
                     pass
+            try:
+                path_to_objs = file_path if "/Object" in file_path else file_path + "/Object"
+                bpy.ops.wm.append(filename="setting-circle", directory=path_to_objs)
+            except Exception:
+                pass
     except Exception as e:
         print(f"[AKE RIG] Notice appending bone shapes: {e}")
+
+    # Join rootrig from append_Root to establish 3-tier root hierarchy
+    root_rig_obj = bpy.data.objects.get("rootrig")
+    if root_rig_obj and rigifyr:
+        bpy.ops.object.mode_set(mode="OBJECT")
+        bpy.ops.object.select_all(action="DESELECT")
+        root_rig_obj.select_set(True)
+        rigifyr.select_set(True)
+        context.view_layer.objects.active = rigifyr
+        bpy.ops.object.join()
+
+    # 3-tier root rename and parenting in Edit Mode
+    bpy.ops.object.mode_set(mode="EDIT")
+    eb = rigifyr.data.edit_bones
+
+    if "root" in eb and "root-inner" in eb:
+        eb["root"].name = "root.002"
+    if "root-inner" in eb:
+        eb["root-inner"].name = "root.001"
+    if "root-outer" in eb:
+        eb["root-outer"].name = "root"
+
+    r_master = eb.get("root")
+    r_offset = eb.get("root.001")
+    r_rigify = eb.get("root.002")
+
+    if r_offset and r_master:
+        r_offset.parent = r_master
+    if r_rigify and r_offset:
+        r_rigify.parent = r_offset
+
+    # Ensure plate-settings control bone above head (settings gear)
+    head_b = eb.get("head") or eb.get("DEF-spine.006")
+    head_z = head_b.head.z if head_b else 1.55
+    if "PROPERTIES" in eb:
+        eb.remove(eb["PROPERTIES"])
+    if "plate-settings" not in eb:
+        ps = eb.new("plate-settings")
+        ps.head = Vector((0.0, 0.0, head_z + 0.35))
+        ps.tail = Vector((0.0, 0.0, head_z + 0.45))
+        ps.roll = 0
+        if r_offset:
+            ps.parent = r_offset
+        elif r_master:
+            ps.parent = r_master
+
+    for b in eb:
+        if b.name not in ["root", "root.001", "root.002", "plate-settings"] and b.parent is None:
+            if b.name.startswith("MCH-"):
+                b.parent = r_rigify or r_offset or r_master
+            else:
+                b.parent = r_offset or r_master
+
+    # Symmetrize clothes and hair bone names
+    for bone in eb:
+        if "L_" in bone.name:
+            try:
+                y = bone.name.find("L_")
+                orgname = bone.name
+                newname = orgname[:y] + "_" + orgname[y+2:]
+                oppbone = orgname[:y] + "R_" + orgname[y+2:]
+                bone.name = newname + ".L"
+                eb[oppbone].name = newname + ".R"
+                if round(bone.head[0], 3) == round(-eb[newname+".R"].head[0], 3):
+                    eb[newname+".R"].roll = -bone.roll
+            except Exception:
+                pass
+
+    # Check for real weapons and remove unused prop.L / prop.R if character has no weapons
+    weapon_keywords = ["propbone", "weapon", "sword", "gun", "staff", "equip"]
+    has_weapon_bones = any(
+        any(k in b.name.lower() for k in weapon_keywords)
+        for b in eb
+        if b.name not in ["prop.L", "prop.R"]
+    )
+    if not has_weapon_bones:
+        for p_name in ["prop.L", "prop.R"]:
+            if p_name in eb:
+                eb.remove(eb[p_name])
+        print("[AKE RIG] No weapon bones detected: removed unused 'prop.L' and 'prop.R'")
 
     bpy.ops.object.mode_set(mode="POSE")
 
@@ -546,7 +666,34 @@ def rig_character(
             pbone.custom_shape_rotation_euler[1] = rotation_euler[1]
             pbone.custom_shape_rotation_euler[2] = rotation_euler[2]
 
+    # Assign custom shapes from RootShape.blend
     safe_set_custom_shape("root", "root plate.002")
+    safe_set_custom_shape("root.001", "root plate.001")
+    if "root.002" in rigifyr.pose.bones:
+        r2_pb = rigifyr.pose.bones["root.002"]
+        shape_obj = (
+            bpy.data.objects.get("WGT-" + original_name + "_root")
+            or bpy.data.objects.get("root plate.002")
+            or bpy.data.objects.get("root plate")
+        )
+        if shape_obj:
+            r2_pb.custom_shape = shape_obj
+        gear_obj = bpy.data.objects.get("setting-circle")
+        if not gear_obj:
+            for arm_bname in ["upper_arm_parent.L", "upper_arm_parent.R", "thigh_parent.L", "thigh_parent.R"]:
+                pb_gear = rigifyr.pose.bones.get(arm_bname)
+                if pb_gear and pb_gear.custom_shape:
+                    gear_obj = pb_gear.custom_shape
+                    break
+        if gear_obj:
+            safe_set_custom_shape("plate-settings", gear_obj.name)
+        if "plate-settings" in rigifyr.pose.bones:
+            ps_pb = rigifyr.pose.bones["plate-settings"]
+            ps_pb["Use Head Controller"] = 1.0 if use_head_tracker else 0.0
+            ps_pb["Head Follow"] = 1.0
+            ps_pb["Neck Follow"] = 1.0
+            ps_pb["Use Eye Tracking"] = 1.0
+
     safe_set_custom_shape("head", "neck", scale=(1.65, 1.65, 1.65), translation=(0.0, 0.255, 0.0), rotation_euler=(1.5708, 0, 0))
     safe_set_custom_shape("neck", "neck", scale=(1, 1, 1), translation=(0.0, 0.035, 0.007), rotation_euler=(1.5708, 0, 0))
     foot_l_pb = rigifyr.pose.bones.get("foot_ik.L")
@@ -577,6 +724,8 @@ def rig_character(
             if use_leg_ik_poles:
                 thigh_p["pole_vector"] = True
                 thigh_p["pole_parent"] = 2
+            if "FK_limb_follow" in thigh_p:
+                thigh_p["FK_limb_follow"] = 1.0
         if arm_p:
             if "IK_Stretch" in arm_p:
                 arm_p["IK_Stretch"] = 0.0 if disallow_arm_ik_stretch else 1.0
@@ -593,42 +742,51 @@ def rig_character(
         if "head_follow" in torso_pb:
             torso_pb["head_follow"] = 1.0 if use_head_tracker else 0.0
 
-    # 11. Symmetrize clothes and hair bone names
-    bpy.ops.object.mode_set(mode="EDIT")
-    eb = rigifyr.data.edit_bones
-    for bone in eb:
-        if "L_" in bone.name:
+    # Connect Head Follow and Neck Follow from plate-settings directly to Rigify's head and neck constraints
+    if rigifyr.animation_data:
+        for fcurve in rigifyr.animation_data.drivers:
+            drv = fcurve.driver
+            for var in drv.variables:
+                for target in var.targets:
+                    if target.id == rigifyr and target.data_path:
+                        if '["head_follow"]' in target.data_path:
+                            target.data_path = 'pose.bones["plate-settings"]["Head Follow"]'
+                        elif '["neck_follow"]' in target.data_path:
+                            target.data_path = 'pose.bones["plate-settings"]["Neck Follow"]'
+
+    root_bname = "root" if "root" in rigifyr.pose.bones else ("root.002" if "root.002" in rigifyr.pose.bones else "root.001")
+    for b_name in ["MCH-ROT-head", "MCH-ROT-neck"]:
+        pb_rot = rigifyr.pose.bones.get(b_name)
+        if pb_rot:
+            for c in pb_rot.constraints:
+                if c.type == 'COPY_ROTATION' and root_bname:
+                    c.subtarget = root_bname
+
+    for t_name in ["torso", "torso.002"]:
+        pb_t = rigifyr.pose.bones.get(t_name)
+        if pb_t:
             try:
-                y = bone.name.find("L_")
-                orgname = bone.name
-                newname = orgname[:y] + "_" + orgname[y+2:]
-                oppbone = orgname[:y] + "R_" + orgname[y+2:]
-                bone.name = newname + ".L"
-                eb[oppbone].name = newname + ".R"
-                if round(bone.head[0], 3) == round(-eb[newname+".R"].head[0], 3):
-                    eb[newname+".R"].roll = -bone.roll
+                d_hf = pb_t.driver_add('["head_follow"]').driver
+                d_hf.type = 'SCRIPTED'
+                d_hf.expression = "var"
+                var_hf = d_hf.variables.new()
+                var_hf.name = "var"
+                var_hf.type = 'SINGLE_PROP'
+                var_hf.targets[0].id = rigifyr
+                var_hf.targets[0].data_path = 'pose.bones["plate-settings"]["Head Follow"]'
             except Exception:
                 pass
-
-    # Create root_2 bone
-    if "root" in eb and "root_2" not in eb:
-        newroot = eb.new("root_2")
-        root = eb["root"]
-        newroot.head = root.head.copy()
-        newroot.tail = root.tail.copy()
-        newroot.roll = root.roll
-        newroot.matrix = root.matrix.copy()
-        newroot.tail.y += 0.5
-        root.parent = newroot
-
-    bpy.ops.object.mode_set(mode="POSE")
-    if "root_2" in rigifyr.pose.bones:
-        try:
-            shape_obj = bpy.data.objects.get("WGT-" + original_name + "_root") or bpy.data.objects.get("root plate.002")
-            if shape_obj:
-                rigifyr.pose.bones["root_2"].custom_shape = shape_obj
-        except Exception:
-            pass
+            try:
+                d_nf = pb_t.driver_add('["neck_follow"]').driver
+                d_nf.type = 'SCRIPTED'
+                d_nf.expression = "var"
+                var_nf = d_nf.variables.new()
+                var_nf.name = "var"
+                var_nf.type = 'SINGLE_PROP'
+                var_nf.targets[0].id = rigifyr
+                var_nf.targets[0].data_path = 'pose.bones["plate-settings"]["Neck Follow"]'
+            except Exception:
+                pass
 
     # 12. Fingertip curl drivers setup
     if rigifyr.animation_data and rigifyr.animation_data.drivers:
@@ -659,10 +817,10 @@ def rig_character(
     # Apply selected pose as rest pose so "Clear Transform" (Alt+R) retains this alignment
     try:
         bpy.ops.pose.select_all(action="DESELECT")
-        if "thumb.01_master.L" in rigifyr.data.bones:
-            rigifyr.data.bones["thumb.01_master.L"].select = True
-        if "thumb.01_master.R" in rigifyr.data.bones:
-            rigifyr.data.bones["thumb.01_master.R"].select = True
+        if "thumb.01_master.L" in rigifyr.pose.bones:
+            rigifyr.pose.bones["thumb.01_master.L"].bone.select_set(True)
+        if "thumb.01_master.R" in rigifyr.pose.bones:
+            rigifyr.pose.bones["thumb.01_master.R"].bone.select_set(True)
         bpy.ops.pose.armature_apply(selected=True)
         bpy.ops.pose.select_all(action="DESELECT")
     except Exception as e:
@@ -703,23 +861,47 @@ def rig_character(
             has_lighting_panel=False,
         )
 
-        # Distribute AKE facial bones to Face collection and hide it
-        face_coll = rigifyr.data.collections.get("Face") or rigifyr.data.collections.new("Face")
-        other_coll = rigifyr.data.collections.get("Other")
-        if face_coll:
-            for pb in rigifyr.pose.bones:
-                if pb.name in ("eye.L", "eye.R", "eyes"):
-                    continue
-                pb_low = pb.name.lower()
-                if any(k in pb_low for k in ["brow", "eye", "iris", "lip", "mouth", "jaw", "cheek", "face_", "tongue", "nose", "tooth"]):
-                    if not pb.name.startswith(("DEF-", "MCH-", "ORG-")):
-                        face_coll.assign(pb.bone)
-                        if other_coll and pb.name in other_coll.bones:
-                            try:
-                                other_coll.unassign(pb.bone)
-                            except Exception:
-                                pass
-            face_coll.is_visible = False
+        # Ensure all 3 root bones and plate-settings are in Root collection with THEME01
+        if hasattr(rigifyr.data, "collections"):
+            root_c = rigifyr.data.collections.get("Root") or rigifyr.data.collections.new("Root")
+            for r_name in ["root", "root.001", "root.002", "plate-settings"]:
+                rb = rigifyr.data.bones.get(r_name)
+                if rb:
+                    root_c.assign(rb)
+                    if "Offsets" in rigifyr.data.collections:
+                        rigifyr.data.collections["Offsets"].unassign(rb)
+                    if "Face" in rigifyr.data.collections and r_name == "plate-settings":
+                        rigifyr.data.collections["Face"].unassign(rb)
+            root_c.is_visible = True
+
+            for r_name in ["root", "root.001", "root.002", "plate-settings"]:
+                pb = rigifyr.pose.bones.get(r_name)
+                if pb and hasattr(pb, "color"):
+                    pb.color.palette = "THEME01"
+
+            # Check Weapon collection visibility
+            w_c = rigifyr.data.collections.get("Weapon")
+            if w_c:
+                has_w = any(b.name not in ["prop.L", "prop.R"] for b in w_c.bones)
+                w_c.is_visible = has_w
+
+        # Assign raw FBX facial deform bones to Other collection and hide them
+        face_coll = rigifyr.data.collections.get("Face")
+        other_coll = rigifyr.data.collections.get("Other") or rigifyr.data.collections.new("Other")
+        for pb in rigifyr.pose.bones:
+            if pb.name in ("eye.L", "eye.R", "eyes", "plate-settings", "root", "root.001", "root.002"):
+                continue
+            pb_low = pb.name.lower()
+            if any(k in pb_low for k in ["joint", "brow", "eye", "iris", "lip", "mouth", "jaw", "cheek", "face_", "tongue", "nose", "tooth"]):
+                if not pb.name.startswith(("DEF-", "MCH-", "ORG-", "Eye-", "Eyebrow-", "Mouth-", "Lip-")):
+                    if face_coll and pb.name in face_coll.bones:
+                        try:
+                            face_coll.unassign(pb.bone)
+                        except Exception:
+                            pass
+                    if other_coll and pb.name not in other_coll.bones:
+                        other_coll.assign(pb.bone)
+                    pb.bone.hide = True
 
     # 14. Clean up utility armatures and widget objects
     for extra_arm in ["metarig"]:
@@ -866,7 +1048,24 @@ def rig_character(
                         obj_item.parent_bone = "head"
 
     # 16. Update and run Rigify UI script
-    modify_and_run_rig_ui_script(rigifyr, original_name, char_name=char_name)
+    def generate_string_for_settings_slider():
+        return '''
+        if is_selected({"plate-settings"}):
+            p = pose_bones.get("plate-settings")
+            if p:
+                for prop_key, prop_label in [
+                    ("Use Head Controller", "Use Head Tracker Controller"),
+                    ("Head Follow", "Head Follow"),
+                    ("Neck Follow", "Neck Follow"),
+                    ("Use Eye Tracking", "Eye Tracking"),
+                ]:
+                    if prop_key in p:
+                        layout.prop(p, f'["{prop_key}"]', text=prop_label, slider=True)'''
+
+    splices = [
+        {"divider": "num_rig_separators[0] += 1", "text": generate_string_for_settings_slider()},
+    ]
+    modify_and_run_rig_ui_script(rigifyr, original_name, char_name=char_name, extra_splices=splices)
 
     # 17. Organize collections: ensure Lighting is nested in WGTS_<Char> and Light is in character collection
     try:
