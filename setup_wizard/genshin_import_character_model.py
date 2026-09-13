@@ -817,6 +817,11 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
             if not is_rigging_disabled(context):
                 armatures = [o for o in bpy.data.objects if o.type == "ARMATURE"]
                 for arm in armatures:
+                    try:
+                        from setup_wizard.character_rig_setup.armature_unification import unify_multi_branch_armature
+                        unify_multi_branch_armature(arm)
+                    except Exception as e:
+                        print(f"[ARMATURE UNIFY] Notice: {e}")
                     clear_armature_pose(arm)
 
                 if self.game_type in (

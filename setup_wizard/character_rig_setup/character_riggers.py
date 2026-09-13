@@ -286,6 +286,13 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
             self.blender_operator.report({'ERROR'}, 'No armature found. Please import or select a character.')
             return
 
+        # Ensure multi-branch duplicated armature (e.g. Stelle) is unified before rigging
+        try:
+            from setup_wizard.character_rig_setup.armature_unification import unify_multi_branch_armature
+            unify_multi_branch_armature(armature)
+        except Exception as e:
+            print(f"[HSR RIGGER] Armature unification notice: {e}")
+
         # Ensure transformations are applied so rigify and facerig coordinate systems match
         if any(abs(r) > 1e-4 for r in armature.rotation_euler) or any(abs(s - 1.0) > 1e-4 for s in armature.scale):
             try:

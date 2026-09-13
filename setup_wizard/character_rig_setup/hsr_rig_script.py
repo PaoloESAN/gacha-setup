@@ -72,6 +72,13 @@ def rig_character(
                     if bip_pattern.match(vg.name) and not vg.name.startswith("Bip001"):
                         vg.name = re.sub(r'^Bip\d{3}', 'Bip001', vg.name)
 
+    # Unify multi-branch duplicated armatures (e.g. models exported with separate sub-model skeletons)
+    try:
+        from setup_wizard.character_rig_setup.armature_unification import unify_multi_branch_armature
+        unify_multi_branch_armature(head_bone_arm_target)
+    except Exception as e:
+        print(f"[HSR RIG] Armature unification notice: {e}")
+
     temp_armature = head_bone_arm_target.data
 
     bpy.ops.object.mode_set(mode='EDIT')
