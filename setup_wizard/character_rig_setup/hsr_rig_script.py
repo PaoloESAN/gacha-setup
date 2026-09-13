@@ -435,8 +435,18 @@ def rig_character(
         armature.edit_bones["joint_face"].parent = armature.edit_bones["DEF-spine.006"]
 
     if "Main" in armature.edit_bones:
-        armature.edit_bones["Main"].tail.z = 0.1
-        armature.edit_bones["Main"].tail.y = 0
+        main_b = armature.edit_bones["Main"]
+        # Some models (e.g. Cerydra) import Root_M *connected* to Main, so
+        # shortening Main.tail would drag the connected pelvis (DEF-spine)
+        # head down with it, collapsing the whole spine/torso/hips chain.
+        # Disconnect such children first so their heads stay in place; this
+        # matches the layout of models that already import disconnected
+        # (e.g. Evernight), where Main simply ends in a short nub.
+        for child in list(main_b.children):
+            if child.use_connect:
+                child.use_connect = False
+        main_b.tail.z = 0.1
+        main_b.tail.y = 0
 
     bpy.ops.object.mode_set(mode='POSE')
 
@@ -473,6 +483,61 @@ def rig_character(
         if "f_" in bone.name or "thumb" in bone.name:
             if "DEF-" + bone.name in armature.edit_bones:
                 bone.roll = armature.edit_bones["DEF-" + bone.name].roll
+
+    # Heel bones in metarig: Expy-kit derives heel.02 from raw mesh vertex
+    # coordinates, ignoring object/parent scale (cm verts with scale 0.01).
+    # For HSR models heel.02 then lands ~10m away and breaks the Rigify
+    # heel-roll chain (feet end up pitched toward the floor).
+    # Rigify expects heel.02 to be LATERAL (head.y == tail.y, X span), so the
+    # correction must preserve that orientation, not rebuild a Y-aligned bone.
+    for side in ('L', 'R'):
+        heel_name = f'heel.02.{side}'
+        foot_name = f'foot.{side}'
+        toe_name = f'toe.{side}'
+        if heel_name in metarm.edit_bones and foot_name in metarm.edit_bones:
+            heel_b = metarm.edit_bones[heel_name]
+            foot_b = metarm.edit_bones[foot_name]
+            dist_to_foot = (heel_b.head - foot_b.head).length
+            if dist_to_foot > 1.0 or abs(heel_b.head.y) > 2.0 or abs(heel_b.head.x) > 2.0:
+                print(f"[HSR RIG] Correcting unscaled heel bone in metarig: {heel_name} from {heel_b.head}")
+                if (heel_b.head / 100.0 - foot_b.head).length < 0.5:
+                    # Pure cm->m scale issue: uniform scale preserves orientation.
+                    heel_b.head = heel_b.head / 100.0
+                    heel_b.tail = heel_b.tail / 100.0
+                else:
+                    # Anatomical rebuild in armature space (meters, Z-up).
+                    # Rear = opposite of ankle->toe direction; sole = ground level.
+                    ankle = foot_b.head.copy()
+                    toe_pos = None
+                    if toe_name in metarm.edit_bones:
+                        toe_pos = metarm.edit_bones[toe_name].head.copy()
+                    else:
+                        try:
+                            toe_pos = foot_b.tail.copy()
+                        except Exception:
+                            toe_pos = None
+                    toe_dir_y = (toe_pos.y - ankle.y) if toe_pos is not None else -1.0
+                    if abs(toe_dir_y) < 1e-5:
+                        toe_dir_y = -1.0  # HSR convention: toes point -Y, heel is +Y
+                    rear_sign = -1.0 if toe_dir_y > 0 else 1.0
+                    rear_y = ankle.y + rear_sign * 0.06
+                    # Sole height: toe head if sane, else foot tail, else ground 0.
+                    ground_z = 0.0
+                    if toe_pos is not None and abs(toe_pos.z) < 0.15:
+                        ground_z = toe_pos.z
+                    elif abs(foot_b.tail.z) < 0.15:
+                        ground_z = min(foot_b.tail.z, 0.02)
+                    # Lateral X span (mirrored per side), matching Expy-kit layout.
+                    half_width = 0.04
+                    side_sign = 1.0 if side == 'L' else -1.0
+                    heel_b.head.x = ankle.x + half_width * side_sign
+                    heel_b.head.y = rear_y
+                    heel_b.head.z = ground_z
+                    heel_b.tail.x = ankle.x - half_width * side_sign
+                    heel_b.tail.y = rear_y
+                    heel_b.tail.z = ground_z
+                    heel_b.roll = 0.0
+                print(f"[HSR RIG] Repositioned {heel_name} to {heel_b.head}")
 
     # Breast bones in metarig
     bpy.ops.object.mode_set(mode='EDIT')
@@ -1171,6 +1236,11 @@ def rig_character(
     # 1. Detect weapon bones (prop1, prop2, bip001 prop, weapon, equip, etc.)
     #    CRITICAL: EXCLUDE weaponbox or box (these are back/spine bones, NOT hand weapons)
     #    CRITICAL: EXCLUDE clothing / body / accessory false positives (e.g. skirtBow, bowknot, elbow, etc.)
+    #    NOTE: bare "bow" names are NEVER weapons in HSR exports — they are hair bows,
+    #    bowties and bow tiles parented under hair/tie joints (e.g. Cerydra's Bow_L_00_JNT
+    #    under hairBackBM_00_JNT). Real bow weapons always carry an explicit weapon/prop/
+    #    equip marker, so there is intentionally NO bare-bow fallback here: matching "bow"
+    #    attached accessory subtrees to prop.L/prop.R and stretched the rig (see Cerydra).
     #    CRITICAL: Recursively collect ALL children / descendants of weapon bones (e.g. umbrellaBase, umbrellaTop under Weapon_All_JNT)
     # 2. Unparent weapon roots from DEF-hand / hand bones
     # 3. Snap prop.L / prop.R to weapon root or hand
@@ -1219,17 +1289,6 @@ def rig_character(
             is_explicit_weapon
             or any(k in b_low for k in weapon_keywords)
             or ("prop" in b_low and "parent" not in b_low)
-            or (
-                ("bow" in b_low)
-                and not any(nw in b_low for nw in non_weapon_keywords)
-                and (
-                    b_low in ["bow", "weapon_bow"]
-                    or b_low.startswith(("bow_", "bow.", "bow-"))
-                    or "_bow_" in b_low
-                    or "-bow" in b_low
-                    or "_bow" in b_low
-                )
-            )
         )
 
         if is_weapon:
@@ -1448,19 +1507,61 @@ def rig_character(
     armature.edit_bones['ik-sub-pivot-R'].head = armature.edit_bones['foot_ik.R'].head.copy()
     armature.edit_bones['ik-sub-pivot-R'].tail = armature.edit_bones['foot_ik.R'].tail.copy()
     
-    armature.edit_bones['ik-pivot-L'].head = armature.edit_bones['MCH-heel.02_roll2.L'].head.copy()
-    armature.edit_bones['ik-pivot-L'].tail = armature.edit_bones['MCH-heel.02_roll2.L'].tail.copy()
-    armature.edit_bones['ik-pivot-L'].tail.y += 0.05
-    
-    armature.edit_bones['ik-pivot-R'].head = armature.edit_bones['MCH-heel.02_roll2.R'].head.copy()
-    armature.edit_bones['ik-pivot-R'].tail = armature.edit_bones['MCH-heel.02_roll2.R'].tail.copy()
-    armature.edit_bones['ik-pivot-R'].tail.y += 0.05
-    
-    armature.edit_bones['mch-ik-pivot-L'].head = armature.edit_bones['MCH-heel.02_roll2.L'].head.copy()
-    armature.edit_bones['mch-ik-pivot-L'].tail = armature.edit_bones['MCH-heel.02_roll2.L'].tail.copy()
-    
-    armature.edit_bones['mch-ik-pivot-R'].head = armature.edit_bones['MCH-heel.02_roll2.R'].head.copy()
-    armature.edit_bones['mch-ik-pivot-R'].tail = armature.edit_bones['MCH-heel.02_roll2.R'].tail.copy()
+    # Foot-roll pivots follow the generated MCH heel. If the metarig heel was
+    # unscaled (cm vs m), the MCH heel can sit ~10m away; re-anchor it near
+    # foot_ik while PRESERVING its head->tail vector and roll. Rebuilding the
+    # pivots as Y-only/zero-length bones destroys their orientation and pitches
+    # the feet toward the floor (seen on Cyrene), so plain head+tail+roll
+    # copies are used, as in the pre-fix code.
+    for side in ('L', 'R'):
+        mch_heel = f'MCH-heel.02_roll2.{side}'
+        foot_ik = f'foot_ik.{side}'
+        ik_pivot = f'ik-pivot-{side}'
+        mch_pivot = f'mch-ik-pivot-{side}'
+        if mch_heel in armature.edit_bones and foot_ik in armature.edit_bones:
+            mch_b = armature.edit_bones[mch_heel]
+            orig_head = mch_b.head.copy()
+            orig_tail = mch_b.tail.copy()
+            orig_vec = orig_tail - orig_head
+            f_pos = armature.edit_bones[foot_ik].head.copy()
+            if (orig_head - f_pos).length > 0.5:
+                if (orig_head / 100.0 - f_pos).length < 0.5:
+                    # Pure cm->m scale: scale both ends, keep vector/roll.
+                    mch_b.head = orig_head / 100.0
+                    mch_b.tail = orig_tail / 100.0
+                else:
+                    # Translate to anatomical heel, keeping orientation/roll.
+                    # Rear = opposite of ankle->ball/toe direction (HSR toes
+                    # point -Y, so heel sits at +Y from the ankle).
+                    toe_ik = f'toe_ik.{side}'
+                    spin_ik = f'foot_spin_ik.{side}'
+                    anchor_y = f_pos.y + 0.06
+                    ref_y = None
+                    if spin_ik in armature.edit_bones:
+                        ref_y = armature.edit_bones[spin_ik].head.y
+                    elif toe_ik in armature.edit_bones:
+                        ref_y = armature.edit_bones[toe_ik].head.y
+                    if ref_y is not None and abs(ref_y - f_pos.y) > 1e-5:
+                        anchor_y = f_pos.y + (0.06 if (ref_y - f_pos.y) < 0 else -0.06)
+                    h_pos = Vector((f_pos.x, anchor_y, 0.0))
+                    offset = h_pos - orig_head
+                    if orig_vec.length < 1e-5:
+                        # Degenerate source: fall back to lateral heel vector.
+                        half_w = 0.04 * (1.0 if side == 'L' else -1.0)
+                        mch_b.head = h_pos.copy()
+                        mch_b.tail = h_pos + Vector((-2.0 * half_w, 0.0, 0.0))
+                    else:
+                        mch_b.head = h_pos.copy()
+                        mch_b.tail = orig_tail + offset
+            if ik_pivot in armature.edit_bones:
+                armature.edit_bones[ik_pivot].head = armature.edit_bones[mch_heel].head.copy()
+                armature.edit_bones[ik_pivot].tail = armature.edit_bones[mch_heel].tail.copy()
+                armature.edit_bones[ik_pivot].roll = armature.edit_bones[mch_heel].roll
+                armature.edit_bones[ik_pivot].tail.y += 0.05
+            if mch_pivot in armature.edit_bones:
+                armature.edit_bones[mch_pivot].head = armature.edit_bones[mch_heel].head.copy()
+                armature.edit_bones[mch_pivot].tail = armature.edit_bones[mch_heel].tail.copy()
+                armature.edit_bones[mch_pivot].roll = armature.edit_bones[mch_heel].roll
     
     armature.edit_bones['ik-target-L'].head = armature.edit_bones['foot_tweak.L'].head.copy()
     armature.edit_bones['ik-target-L'].tail = armature.edit_bones['foot_tweak.L'].tail.copy()

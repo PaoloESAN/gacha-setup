@@ -276,9 +276,11 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
 
     def rig_character(self):
         cache_enabled = self.context.window_manager.cache_enabled
-        filepath = get_cache(cache_enabled).get(self.rigify_bone_shapes_file_path) or self.blender_operator.filepath
+        cached = get_cache(cache_enabled).get(self.rigify_bone_shapes_file_path)
+        op_path = getattr(self.blender_operator, 'filepath', '')
+        filepath = cached or (op_path if op_path and op_path.lower().endswith('.blend') else '')
 
-        if not filepath:
+        if not filepath or not os.path.isfile(filepath):
             filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'RootShape.blend')
 
         armature = _get_character_armature(self.context)
@@ -296,7 +298,7 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
         # Ensure transformations are applied so rigify and facerig coordinate systems match
         if any(abs(r) > 1e-4 for r in armature.rotation_euler) or any(abs(s - 1.0) > 1e-4 for s in armature.scale):
             try:
-                bpy.ops.genshin.fix_transformations()
+                bpy.ops.genshin.fix_transformations(game_type=GameType.HONKAI_STAR_RAIL.name)
             except Exception:
                 pass
 
