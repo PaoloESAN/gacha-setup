@@ -4,6 +4,7 @@
 import os
 import re
 import bpy
+import mathutils
 import addon_utils
 
 
@@ -1540,3 +1541,168 @@ def has_hair_clothes_physics(context=None, armature_obj=None):
 
 # Compatibility alias
 apply_hair_and_dress_physics = apply_hair_and_clothes_physics
+
+
+def ensure_root_trio(armature_obj):
+    """Garantiza root/root.001/root.002 con cadena root.002->root.001->root (ZZZ).
+
+    Idempotente: crea el tier que falte (cura rigs parciales) y fuerza la
+    jerarquia + props->root.002. Requiere EDIT mode activo en armature_obj.
+    Compartido NTE/WuWa (NTE conserva su copia local; no tocar).
+    """
+    if armature_obj is None:
+        return
+    eb = armature_obj.data.edit_bones
+    if "root" in eb and "root.001" not in eb and "root.002" not in eb:
+        r0 = eb["root"]
+        _h = r0.head.copy()
+        _t = r0.tail.copy()
+        _rl = r0.roll
+        r0.name = "root.002"
+        e001 = eb.new("root.001")
+        e001.head = _h.copy()
+        e001.tail = _t.copy()
+        e001.roll = _rl
+        e001.parent = None
+        e000 = eb.new("root")
+        e000.head = _h.copy()
+        e000.tail = _t.copy()
+        e000.roll = _rl
+        e000.parent = None
+    for _n in ["root.002", "root.001", "root"]:
+        if _n not in eb:
+            _ref = eb.get("root.002") or eb.get("root.001") or eb.get("root")
+            _nb = eb.new(_n)
+            if _ref is not None:
+                _nb.head = _ref.head.copy()
+                _nb.tail = _ref.tail.copy()
+                _nb.roll = _ref.roll
+            else:
+                _nb.head = mathutils.Vector((0.0, 0.0, 0.0))
+                _nb.tail = mathutils.Vector((0.0, 0.0, 0.5))
+                _nb.roll = 0
+            _nb.parent = None
+    _r2 = eb.get("root.002")
+    _r1 = eb.get("root.001")
+    _r0b = eb.get("root")
+    if _r2 is not None and _r1 is not None and _r2.parent != _r1:
+        _r2.parent = _r1
+    if _r1 is not None and _r0b is not None and _r1.parent != _r0b:
+        _r1.parent = _r0b
+    if _r0b is not None and _r0b.parent is not None:
+        _r0b.parent = None
+    if _r2 is not None:
+        for _pn in ["prop.L", "prop.R"]:
+            _ep = eb.get(_pn)
+            if _ep is not None and _ep.parent != _r2:
+                _ep.parent = _r2
+
+
+def strip_rigify_torso_follow_ui(rigifyr, original_name, char_name):
+    """Quita del rig_ui.py generado las filas de Rigify 'Neck/Head Follow' y el
+    bloque 'Torso Parent' sobre pose_bones['torso'].
+
+    En ZZZ esas referencias quedan huerfanas por el rename (torso->torso.002) y no
+    aparecen; en NTE/WuWa el hueso conserva el nombre y el panel las muestra aunque
+    el control real ya vive en plate-settings. Solo llamar en juegos con plate.
+    Se ejecuta ANTES de modify_and_run_rig_ui_script (que relee el texto).
+    """
+    candidates = []
+    if rigifyr is not None and getattr(rigifyr, "name", ""):
+        candidates.append(f"{rigifyr.name}_ui.py")
+    candidates += [f"{original_name}_ui.py", f"{char_name}_ui.py",
+                   f"{char_name}Rig_ui.py", "rig_ui.py", "metarig_ui.py"]
+    rig_file = None
+    for _name in candidates:
+        if _name in bpy.data.texts:
+            rig_file = bpy.data.texts[_name]
+            break
+    if rig_file is None:
+        for _t in bpy.data.texts:
+            try:
+                _c = _t.as_string()
+            except Exception:
+                continue
+            if "class RigLayers" in _c or "PT_rig_layers" in _c or "rig_id = " in _c:
+                rig_file = _t
+                break
+    if rig_file is None:
+        print("[RIG UI] torso-follow UI strip skipped: no rig ui text found")
+        return False
+    try:
+        lines = rig_file.as_string().splitlines()
+    except Exception as ex:
+        print(f"[RIG UI] torso-follow UI strip skipped: {ex}")
+        return False
+    removed = []
+
+    # 1. Filas sueltas Neck/Head Follow sobre torso
+    kept = []
+    for _ln in lines:
+        if ("layout.prop" in _ln and "pose_bones['torso']" in _ln
+                and ('"neck_follow"' in _ln or '"head_follow"' in _ln)):
+            removed.append(_ln.strip()[:90])
+            continue
+        kept.append(_ln)
+    lines = kept
+
+    # 2. Bloque anidado 'Torso Parent' (if is_selected ... hasta 2do props.locks)
+    anchor = next((i for i, _ln in enumerate(lines) if "text='Torso Parent'" in _ln), None)
+    if anchor is not None:
+        start = anchor
+        while start > 0 and "if is_selected(" not in lines[start]:
+            start -= 1
+        locks = 0
+        end = None
+        for _j in range(anchor, min(len(lines), anchor + 40)):
+            if "props.locks = (False, False, False)" in lines[_j]:
+                locks += 1
+                if locks == 2:
+                    end = _j
+                    break
+        if "if is_selected(" in lines[start] and end is not None and (end - start) < 40:
+            removed.append(f"torso-parent block L{start}-{end}")
+            del lines[start:end + 1]
+        else:
+            print("[RIG UI] torso-parent block guard tripped, kept")
+
+    # 3. Bloques torso huerfanos que solo dejan emit_rig_separator()
+    out = []
+    i = 0
+    n = len(lines)
+    while i < n:
+        _m = re.match(r"^(\s*)if is_selected\(", lines[i])
+        if _m:
+            _indent = len(_m.group(1))
+            _hdr_end = i
+            while _hdr_end < n and not lines[_hdr_end].rstrip().endswith(":"):
+                _hdr_end += 1
+            if _hdr_end < n and "'torso'" in "\n".join(lines[i:_hdr_end + 1]):
+                _j = _hdr_end + 1
+                _body = []
+                while _j < n and (not lines[_j].strip()
+                                  or len(lines[_j]) - len(lines[_j].lstrip()) > _indent):
+                    if lines[_j].strip():
+                        _body.append(lines[_j].strip())
+                    _j += 1
+                if _body == ["emit_rig_separator()"]:
+                    removed.append("orphan torso if-block")
+                    i = _j
+                    continue
+                out.extend(lines[i:_j])
+                i = _j
+                continue
+        out.append(lines[i])
+        i += 1
+
+    if removed:
+        try:
+            rig_file.clear()
+            rig_file.write("\n".join(out) + "\n")
+            print(f"[RIG UI] torso-follow UI stripped: {removed}")
+            return True
+        except Exception as ex:
+            print(f"[RIG UI] torso-follow UI write notice: {ex}")
+            return False
+    print("[RIG UI] torso-follow UI strip: nothing matched")
+    return False

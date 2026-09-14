@@ -2239,7 +2239,11 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
 
                 if not id_img and ("face" in mat.name.lower() or base_part.lower() in ["face", "head"]):
                     if mat.node_tree and "Face Diffuse" in mat.node_tree.nodes and mat.node_tree.nodes["Face Diffuse"].image:
-                        id_img = mat.node_tree.nodes["Face Diffuse"].image
+                        # No reutilizar el datablock del diffuse: _configure_outline_mat_nodes
+                        # lo fuerza a Non-Color y contaminaria el nodo Face_D, que debe
+                        # quedar sRGB + Channel Packed. Copia dedicada Non-Color.
+                        id_img = create_outline_image_copy(
+                            mat.node_tree.nodes["Face Diffuse"].image, 'Non-Color', '_outline_id')
 
                 outline_mat_name = f"WW - Outlines {base_part}{version} {char_name}" if version else f"WW - Outlines {base_part} {char_name}"
                 part_ol_mat = bpy.data.materials.get(outline_mat_name)

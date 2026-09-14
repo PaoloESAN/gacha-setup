@@ -664,11 +664,43 @@ class WW_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
         return {"FINISHED"}
 
     def _move_head_driver_system_to_wgt(self, main_obj):
+        # Paridad NTE/ZZZ: WGTS por personaje (append-safe), no global.
         wgt_coll = None
-        for c in bpy.data.collections:
-            if c.name.startswith("WGTS") or c.name.lower() == "wgt":
-                wgt_coll = c
-                break
+        try:
+            rig = None
+            for con in getattr(main_obj, "constraints", []) or []:
+                if con.type == 'CHILD_OF' and getattr(con, "target", None) is not None:
+                    if getattr(con.target, "type", None) == 'ARMATURE':
+                        rig = con.target
+                        break
+            if rig is None:
+                try:
+                    from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+                    rig = resolve_settings_armature(bpy.context)
+                except Exception:
+                    rig = None
+            if rig is None:
+                for o in bpy.data.objects:
+                    if o.type == 'ARMATURE' and (o.name.startswith("RIG-") or "rig" in o.name.lower()):
+                        rig = o
+                        break
+            if rig is not None:
+                try:
+                    char_tag = rig.get("gacha_character")
+                except Exception:
+                    char_tag = None
+                char_name = char_tag or rig.name.replace("RIG-", "").replace("Rig", "")
+                char_coll = rig.users_collection[0] if rig.users_collection else bpy.context.scene.collection
+                from setup_wizard.character_rig_setup.wgts_isolation import get_or_create_char_wgts
+                wgt_coll = get_or_create_char_wgts(char_coll, char_name)
+        except Exception as ex_wgts:
+            print(f"[WUWA HEAD] char WGTS notice: {ex_wgts}")
+            wgt_coll = None
+        if wgt_coll is None:
+            for c in bpy.data.collections:
+                if c.name.startswith("WGTS") or c.name.lower() == "wgt":
+                    wgt_coll = c
+                    break
         if not wgt_coll:
             wgt_coll = bpy.data.collections.get("wgt") or bpy.data.collections.get("WGTS")
         if not wgt_coll:

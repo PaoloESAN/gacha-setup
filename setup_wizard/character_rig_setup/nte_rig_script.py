@@ -117,24 +117,44 @@ def rig_character(
         for k, v in body_base_map.items():
             abadidea[pfx + k] = v
 
-    # Add exact and dynamic matches for eyes & breasts (Bn_l_breast_001, Bn_r_breast_001)
+    # Add exact and dynamic matches for eyes & breasts (Bn_l_breast_001, Bn_r_breast_001,
+    # Bn_l_breast01 como Nitsa, Bn_l_breast1, etc.)
     abadidea.update({
         'eye_R': 'DEF-eye.R', 'eye_L': 'DEF-eye.L',
         'Bn_l_breast_001': 'DEF-breast.L', 'Bn_r_breast_001': 'DEF-breast.R',
         'Bn_L_breast_001': 'DEF-breast.L', 'Bn_R_breast_001': 'DEF-breast.R',
         'bn_l_breast_001': 'DEF-breast.L', 'bn_r_breast_001': 'DEF-breast.R',
         'Bn_l_breast_01': 'DEF-breast.L', 'Bn_r_breast_01': 'DEF-breast.R',
+        'Bn_l_breast01': 'DEF-breast.L', 'Bn_r_breast01': 'DEF-breast.R',
+        'Bn_L_breast01': 'DEF-breast.L', 'Bn_R_breast01': 'DEF-breast.R',
+        'bn_l_breast01': 'DEF-breast.L', 'bn_r_breast01': 'DEF-breast.R',
+        'Bn_l_breast1': 'DEF-breast.L', 'Bn_r_breast1': 'DEF-breast.R',
+        'Bn_L_breast1': 'DEF-breast.L', 'Bn_R_breast1': 'DEF-breast.R',
+        'bn_l_breast1': 'DEF-breast.L', 'bn_r_breast1': 'DEF-breast.R',
         'breast.L': 'DEF-breast.L', 'breast.R': 'DEF-breast.R',
     })
 
-    # Dynamic breast detection for other naming conventions in NTE
+    # Dynamic breast detection for other naming conventions in NTE.
+    # OJO: no usar `v not in abadidea.values()` como guard: las entradas exactas
+    # ya pre-llenan esos valores y bloquearian la rama dinamica para siempre
+    # (caso Nitsa: Bn_l_breast01 nunca se mapeaba). Se rastrean slots ocupados
+    # por matches exactos REALES en este armature + claims dinamicos.
+    _existing_names = {pb.name for pb in obj.pose.bones}
+    _exact_claimed = {v for k, v in abadidea.items() if k in _existing_names}
+    _dynamic_claimed = set()
     for pb in obj.pose.bones:
         pb_low = pb.name.lower()
         if ("breast" in pb_low or "xiong" in pb_low) and not pb.name.startswith(("DEF-", "ORG-", "MCH-")):
-            if any(s in pb_low for s in ["_l", ".l", "l_", "left"]) and "DEF-breast.L" not in abadidea.values():
+            if any(s in pb_low for s in ["_l", ".l", "l_", "left"]) \
+                    and "DEF-breast.L" not in _exact_claimed \
+                    and "DEF-breast.L" not in _dynamic_claimed:
                 abadidea[pb.name] = "DEF-breast.L"
-            elif any(s in pb_low for s in ["_r", ".r", "r_", "right"]) and "DEF-breast.R" not in abadidea.values():
+                _dynamic_claimed.add("DEF-breast.L")
+            elif any(s in pb_low for s in ["_r", ".r", "r_", "right"]) \
+                    and "DEF-breast.R" not in _exact_claimed \
+                    and "DEF-breast.R" not in _dynamic_claimed:
                 abadidea[pb.name] = "DEF-breast.R"
+                _dynamic_claimed.add("DEF-breast.R")
 
     # Dynamic Finger Mappings for both Left (.L) and Right (.R) hands
     existing_bone_names = {pb.name for pb in obj.pose.bones}
@@ -346,11 +366,15 @@ def rig_character(
         boob_b_L = None
         boob_b_R = None
         if orig_arm and orig_arm.data:
-            for b_cand in ["Bn_l_breast_001", "Bn_L_breast_001", "Bn_l_breast_01", "DEF-breast.L", "breast.L"]:
+            for b_cand in ["Bn_l_breast_001", "Bn_L_breast_001", "Bn_l_breast_01",
+                           "Bn_l_breast01", "Bn_L_breast01", "Bn_l_breast1",
+                           "DEF-breast.L", "breast.L"]:
                 if b_cand in orig_arm.data.bones:
                     boob_b_L = orig_arm.data.bones[b_cand]
                     break
-            for b_cand in ["Bn_r_breast_001", "Bn_R_breast_001", "Bn_r_breast_01", "DEF-breast.R", "breast.R"]:
+            for b_cand in ["Bn_r_breast_001", "Bn_R_breast_001", "Bn_r_breast_01",
+                           "Bn_r_breast01", "Bn_R_breast01", "Bn_r_breast1",
+                           "DEF-breast.R", "breast.R"]:
                 if b_cand in orig_arm.data.bones:
                     boob_b_R = orig_arm.data.bones[b_cand]
                     break
@@ -391,6 +415,18 @@ def rig_character(
                 eb_bl.tail = mathutils.Vector((0.050, cy - 0.05, cz))
                 eb_br.head = mathutils.Vector((-0.050, cy, cz))
                 eb_br.tail = mathutils.Vector((-0.050, cy - 0.05, cz))
+
+        # Empujar controles al frente del volumen (como ZZZ): el hueso nace dentro
+        # del pecho y el circulo queda enterrado. Push proporcional al halfwidth
+        # en -Y (frente NTE), pre-generate para no desplazar el deform.
+        for _bb in [b for b in [eb_bl, eb_br] if b is not None]:
+            try:
+                _push = abs(_bb.head.x) * 2.0
+                _dir = _bb.tail - _bb.head
+                _bb.head.y -= _push
+                _bb.tail = _bb.head + _dir
+            except Exception as ex_push:
+                print(f"[NTE RIG] breast push notice: {ex_push}")
 
         # Align shoulder.R metarig bone roll so widget is symmetrical and not flipped
         sh_L = metarig_obj.data.edit_bones.get("shoulder.L")
@@ -559,10 +595,16 @@ def rig_character(
             if pb:
                 pb.custom_shape_scale_xyz = (0.65, 0.65, 0.65)
 
+        # Circulos grandes y deterministas: tamano absoluto (widget unitario r=0.5),
+        # sin bone-size (antes 0.70 x hueso 0.06 = diminutos y enterrados).
         for b_name in ["breast.L", "breast.R"]:
             pb = rigifyr.pose.bones.get(b_name)
             if pb:
-                pb.custom_shape_scale_xyz = (0.70, 0.70, 0.70)
+                try:
+                    pb.use_custom_shape_bone_size = False
+                except Exception:
+                    pass
+                pb.custom_shape_scale_xyz = (0.07, 0.07, 0.07)
 
         for b_name in finger_masters:
             pb = rigifyr.pose.bones.get(b_name)
@@ -1004,26 +1046,18 @@ def rig_character(
                 except Exception:
                     pass
 
-        # Head_Pole empty parenteado a neck + Damped Tracks con driver Use Head Controller
+        # head-controller sigue a neck DIRECTO (sin objeto Head_Pole en escena:
+        # el empty global se lo robaban entre personajes y quedaba huerfano).
+        # Limpieza: se elimina Head_Pole preexistente SOLO si cuelga de este rig
+        # (el de ZZZ/otros juegos no se toca).
         try:
             bpy.ops.object.mode_set(mode='OBJECT')
-            _hp_obj = bpy.data.objects.get("Head_Pole")
-            if _hp_obj is None:
-                bpy.ops.object.empty_add(type='PLAIN_AXES', align='WORLD', location=(0, 0, 0), scale=(1, 1, 1))
-                _hp_obj = context.active_object
-                _hp_obj.name = "Head_Pole"
+            _hp_old = bpy.data.objects.get("Head_Pole")
+            if _hp_old is not None and getattr(_hp_old, "parent", None) == rigifyr:
                 try:
-                    _hp_obj.empty_display_size = 0.01
+                    bpy.data.objects.remove(_hp_old, do_unlink=True)
                 except Exception:
                     pass
-            else:
-                context.view_layer.objects.active = _hp_obj
-            try:
-                _hp_obj.parent = rigifyr
-                _hp_obj.parent_type = "BONE"
-                _hp_obj.parent_bone = "neck" if "neck" in rigifyr.pose.bones else "head"
-            except Exception:
-                pass
             context.view_layer.objects.active = rigifyr
             bpy.ops.object.mode_set(mode='POSE')
             _head_pb = rigifyr.pose.bones.get("head")
@@ -1055,11 +1089,9 @@ def rig_character(
                     except Exception:
                         pass
                 _dt2 = _hc_pb.constraints.new('DAMPED_TRACK')
-                try:
-                    _dt2.target = _hp_obj
-                except Exception:
-                    _dt2.target = rigifyr
-                    _dt2.subtarget = "neck"
+                _dt2.target = rigifyr
+                _dt2.subtarget = "neck" if "neck" in rigifyr.pose.bones else "head"
+                _dt2.head_tail = 0.0
                 _dt2.track_axis = "TRACK_NEGATIVE_Z"
                 try:
                     _drv2 = _dt2.driver_add("influence").driver

@@ -18,7 +18,519 @@ from setup_wizard.character_rig_setup.rig_ui_utils import (
     bone_to_layer_or_collection,
     modify_and_run_rig_ui_script,
     extract_clean_character_name,
+    ensure_root_trio,
+    strip_rigify_torso_follow_ui,
 )
+
+_WUWA_HEAD_CANDIDATES = [
+    "head", "Bip001Head", "DEF-head", "DEF-spine.006", "spine.006",
+    "Head", "c_head.x", "Bip001-Head", "Bip001_Head",
+]
+
+_WUWA_ROOTSHAPE_OBJECTS = ["root plate.002", "root plate.001", "root plate", "head-control-shape"]
+
+
+def _wuwa_resolve_head(rig_obj):
+    for _b in _WUWA_HEAD_CANDIDATES:
+        if _b in rig_obj.data.bones:
+            return _b
+    for _b in rig_obj.data.bones:
+        if "head" in _b.name.lower() or "spine.006" in _b.name.lower():
+            return _b.name
+    return None
+
+
+def _wuwa_head_track_axis(rig_obj, head_name):
+    """Eje local del head mas alineado al frente de la cara, para el Damped Track.
+
+    No modifica el rest (enderezar post-generate voltea la cara via los hijos
+    deformantes). Elige entre +-X/+-Z (nunca Y, eje del hueso). Frente = hacia
+    EyeTracker si existe, si no -Y del armature.
+    """
+    try:
+        b = rig_obj.data.bones.get(head_name)
+        if b is None:
+            return "TRACK_Z"
+        rot = (rig_obj.matrix_world.to_3x3() @ b.matrix_local.to_3x3())
+        head_w = rig_obj.matrix_world @ b.head_local
+        fwd = None
+        et = rig_obj.data.bones.get("EyeTracker")
+        if et is not None:
+            fwd = (rig_obj.matrix_world @ et.head_local) - head_w
+            if fwd.length < 1e-6:
+                fwd = None
+        if fwd is None:
+            fwd = rig_obj.matrix_world.to_3x3() @ Vector((0.0, -1.0, 0.0))
+        fwd = fwd.normalized()
+        best, best_dot = "TRACK_Z", -2.0
+        for ax, tname in [((1.0, 0.0, 0.0), "TRACK_X"),
+                          ((-1.0, 0.0, 0.0), "TRACK_NEGATIVE_X"),
+                          ((0.0, 0.0, 1.0), "TRACK_Z"),
+                          ((0.0, 0.0, -1.0), "TRACK_NEGATIVE_Z")]:
+            d = (rot @ Vector(ax)).normalized().dot(fwd)
+            if d > best_dot:
+                best, best_dot = tname, d
+        return best
+    except Exception as ex:
+        print(f"[WUWA RIG] track axis notice: {ex}")
+        return "TRACK_Z"
+
+
+def _wuwa_set_prop(pb_bone, prop_name, default_val, min_val=0.0, max_val=1.0, description=""):
+    if not pb_bone:
+        return
+    if prop_name not in pb_bone:
+        pb_bone[prop_name] = default_val
+    try:
+        pb_bone.id_properties_ui(prop_name).update(
+            default=default_val, min=min_val, max=max_val,
+            soft_min=min_val, soft_max=max_val, description=description)
+    except Exception:
+        pass
+
+
+def _apply_zzz_parity_wuwa(rig_obj, context, orig_arm_name):
+    """Paridad ZZZ/NTE para WuWa: plate-settings minimo + head-controller +
+    roots 3-tier + shapes + UI. No toca el face rig propio ni el clasificador
+    de armas/pros de WuWa.
+    """
+    from mathutils import Vector as _Vec
+    ctx = context or bpy.context
+    try:
+        char_name = extract_clean_character_name(orig_arm_name or rig_obj.name)
+    except Exception:
+        char_name = "Character"
+
+    _rprops = getattr(ctx.scene, "character_rigger_props", None)
+    _use_head_tracker = getattr(_rprops, "use_head_tracker", False) if _rprops else False
+    _add_childof = getattr(_rprops, "add_children_of_constraints", True) if _rprops else True
+
+    # --- shapes desde RootShape.blend (solo los que ZZZ tiene) ---
+    _rs_blend = os.path.join(os.path.dirname(os.path.abspath(__file__)), "RootShape.blend")
+    if os.path.isfile(_rs_blend):
+        _obj_dir = _rs_blend + "/Object"
+        for _shape_name in _WUWA_ROOTSHAPE_OBJECTS:
+            if bpy.data.objects.get(_shape_name) is None:
+                try:
+                    bpy.ops.wm.append(filename=_shape_name, directory=_obj_dir)
+                except Exception as ex_app:
+                    print(f"[WUWA RIG] shape append notice '{_shape_name}': {ex_app}")
+
+    # --- EDIT: roots + plate + head-controller ---
+    ctx.view_layer.objects.active = rig_obj
+    bpy.ops.object.mode_set(mode='EDIT')
+    eb = rig_obj.data.edit_bones
+    try:
+        ensure_root_trio(rig_obj)
+    except Exception as ex_root:
+        print(f"[WUWA RIG] root trio notice: {ex_root}")
+
+    for _bn, _mode in [("upper_arm_parent.L", "NONE"), ("upper_arm_parent.R", "NONE"),
+                       ("thigh_parent.L", "NONE"), ("thigh_parent.R", "NONE")]:
+        _e = eb.get(_bn)
+        if _e is not None:
+            try:
+                _e.inherit_scale = _mode
+            except Exception:
+                pass
+    for _bn, _mode in [("torso", "FULL"), ("torso-inner", "FULL"), ("torso-outer", "AVERAGE")]:
+        _e = eb.get(_bn)
+        if _e is not None:
+            try:
+                _e.inherit_scale = _mode
+                _e.roll = 0
+            except Exception:
+                pass
+
+    _head_name = _wuwa_resolve_head(rig_obj)
+    _head_eb = eb.get(_head_name) if _head_name else None
+    # NOTA: no se toca el rest del head. Enderezarlo post-generate desplaza a
+    # sus hijos deformantes (DEF-head...) y voltea la cara. El tracker usa el
+    # eje local del head mas cercano al frente (ver _wuwa_head_track_axis).
+    _head_z = _head_eb.head.z if _head_eb is not None else 1.45
+    if 'PROPERTIES' in eb:
+        try:
+            eb.remove(eb['PROPERTIES'])
+        except Exception:
+            pass
+    _plate = eb.get("plate-settings") or eb.new("plate-settings")
+    if _head_eb is not None:
+        try:
+            _plate.parent = _head_eb
+        except Exception:
+            pass
+    try:
+        _plate.head = _Vec((0.0, 0.0, _head_z + 0.35))
+        _plate.tail = _Vec((0.0, 0.0, _head_z + 0.45))
+        _plate.roll = 0
+        _plate.use_deform = False
+    except Exception as ex_plate:
+        print(f"[WUWA RIG] plate-settings edit notice: {ex_plate}")
+
+    _hp_h2 = _head_eb.head[2] if _head_eb is not None else 1.2
+    _hp_t2 = _head_eb.tail[2] if _head_eb is not None else 1.3
+    _hc = eb.get("head-controller") or eb.new("head-controller")
+    try:
+        _hc.head[0] = 0
+        _hc.head[1] = -0.3
+        _hc.head[2] = _hp_h2
+        _hc.tail[0] = 0
+        _hc.tail[1] = -0.3
+        _hc.tail[2] = _hp_t2
+        _hc.use_deform = False
+    except Exception:
+        pass
+    _mch = eb.get("MCH-head-controller-parent") or eb.new("MCH-head-controller-parent")
+    try:
+        _mch.head = _hc.head.copy()
+        _mch.tail = _hc.head.copy()
+        _mch.tail.y += 0.05
+        if (_mch.tail - _mch.head).length < 0.01:
+            _mch.length = 0.05
+        _mch.roll = 0
+        _mch.parent = None
+        _mch.use_deform = False
+        _hc.parent = _mch
+    except Exception as ex_mch:
+        print(f"[WUWA RIG] head-controller edit notice: {ex_mch}")
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # --- POSE: props, shapes, drivers, tracking ---
+    ctx.view_layer.objects.active = rig_obj
+    bpy.ops.object.mode_set(mode='POSE')
+
+    plate = rig_obj.pose.bones.get("plate-settings")
+    if plate is not None:
+        gear_obj = None
+        for _gb in ["upper_arm_parent.L", "upper_arm_parent.R", "thigh_parent.L", "thigh_parent.R"]:
+            _pg = rig_obj.pose.bones.get(_gb)
+            if _pg is not None and getattr(_pg, "custom_shape", None):
+                gear_obj = _pg.custom_shape
+                break
+        if gear_obj is None:
+            gear_obj = bpy.data.objects.get("setting-circle")
+        if gear_obj is not None:
+            try:
+                plate.custom_shape = gear_obj
+                plate.use_custom_shape_bone_size = False
+                plate.custom_shape_scale_xyz = (0.05, 0.05, 0.05)
+                plate.custom_shape_rotation_euler = (1.5708, 0.0, 0.0)
+                plate.custom_shape_translation = (0.0, 0.0, 0.0)
+            except Exception:
+                pass
+        _wuwa_set_prop(plate, "Head Follow", 1.0, 0.0, 1.0, "Head Follow")
+        _wuwa_set_prop(plate, "Neck Follow", 1.0, 0.0, 1.0, "Neck Follow")
+        _wuwa_set_prop(plate, "Use Head Controller", 1.0 if _use_head_tracker else 0.0,
+                       0.0, 1.0, "Use Head Tracker Controller")
+
+    for _rb_name, _shape_name in [("root", "root plate"), ("root.001", "root plate.001"),
+                                  ("root.002", "root plate.002")]:
+        _pb_r = rig_obj.pose.bones.get(_rb_name)
+        _sh_obj = bpy.data.objects.get(_shape_name)
+        if _pb_r is not None and _sh_obj is not None:
+            try:
+                _pb_r.custom_shape = _sh_obj
+                _pb_r.use_custom_shape_bone_size = False
+            except Exception as ex_rsh:
+                print(f"[WUWA RIG] root shape notice '{_rb_name}': {ex_rsh}")
+
+    if rig_obj.animation_data:
+        for _fc in list(rig_obj.animation_data.drivers):
+            try:
+                for _var in _fc.driver.variables:
+                    for _tgt in _var.targets:
+                        if _tgt.id == rig_obj and _tgt.data_path:
+                            if '["head_follow"]' in _tgt.data_path:
+                                _tgt.data_path = 'pose.bones["plate-settings"]["Head Follow"]'
+                            elif '["neck_follow"]' in _tgt.data_path:
+                                _tgt.data_path = 'pose.bones["plate-settings"]["Neck Follow"]'
+            except Exception:
+                pass
+    _root_bname = "root" if "root" in rig_obj.pose.bones else (
+        "root.002" if "root.002" in rig_obj.pose.bones else "root.001")
+    for _rb in ["MCH-ROT-head", "MCH-ROT-neck"]:
+        _pb_rot = rig_obj.pose.bones.get(_rb)
+        if _pb_rot is not None:
+            for _c in _pb_rot.constraints:
+                if _c.type == 'COPY_ROTATION' and _root_bname:
+                    try:
+                        _c.subtarget = _root_bname
+                    except Exception:
+                        pass
+    for _tn in ["torso", "torso.002"]:
+        _pb_t = rig_obj.pose.bones.get(_tn)
+        if _pb_t is not None:
+            for _prop, _key in [("Head Follow", "head_follow"), ("Neck Follow", "neck_follow")]:
+                try:
+                    _d = _pb_t.driver_add(f'["{_key}"]').driver
+                    _d.type = 'SCRIPTED'
+                    _d.expression = "var"
+                    _vh = _d.variables.new()
+                    _vh.name = "var"
+                    _vh.type = 'SINGLE_PROP'
+                    _vh.targets[0].id = rig_obj
+                    _vh.targets[0].data_path = f'pose.bones["plate-settings"]["{_prop}"]'
+                except Exception:
+                    pass
+            try:
+                if "head_follow" in _pb_t:
+                    _pb_t["head_follow"] = 1.0
+                if "neck_follow" in _pb_t:
+                    _pb_t["neck_follow"] = 1.0
+            except Exception:
+                pass
+
+    # Switch targets: solo huesos existentes (WuWa no tiene torso.002)
+    _sw_cands = ["root", "root.001", "root.002", "torso", "chest"]
+    _sw_targets = [_b for _b in _sw_cands if _b in rig_obj.pose.bones]
+    _sw_default = (_sw_targets.index("root.002") + 1) if "root.002" in _sw_targets else 1
+    _sw_items = [("P0", "None", ""), ("P1", "root", ""), ("P2", "root.001", ""),
+                 ("P3", "root.002", ""), ("P4", "torso", ""), ("P5", "chest", "")]
+    # head-controller sigue a neck DIRECTO (sin objeto Head_Pole en escena:
+    # el empty global se lo robaban entre personajes y quedaba huerfano).
+    # Limpieza: se elimina Head_Pole preexistente SOLO si cuelga de este rig.
+    try:
+        bpy.ops.object.mode_set(mode='OBJECT')
+        _hp_old = bpy.data.objects.get("Head_Pole")
+        if _hp_old is not None and getattr(_hp_old, "parent", None) == rig_obj:
+            try:
+                bpy.data.objects.remove(_hp_old, do_unlink=True)
+            except Exception:
+                pass
+        ctx.view_layer.objects.active = rig_obj
+        bpy.ops.object.mode_set(mode='POSE')
+        _head_pb = rig_obj.pose.bones.get(_head_name) if _head_name else None
+        _hc_pb = rig_obj.pose.bones.get("head-controller")
+        if _head_pb is not None and _hc_pb is not None:
+            for _c in [c for c in _head_pb.constraints if c.type == 'DAMPED_TRACK']:
+                try:
+                    _head_pb.constraints.remove(_c)
+                except Exception:
+                    pass
+            _dt = _head_pb.constraints.new('DAMPED_TRACK')
+            _dt.target = rig_obj
+            _dt.subtarget = "head-controller"
+            _dt.track_axis = _wuwa_head_track_axis(rig_obj, _head_pb.name)
+            try:
+                _drv = _dt.driver_add("influence").driver
+                _drv.type = 'SCRIPTED'
+                _drv.expression = 'bone'
+                _vv = _drv.variables.new()
+                _vv.name = "bone"
+                _vv.type = 'SINGLE_PROP'
+                _vv.targets[0].id = rig_obj
+                _vv.targets[0].data_path = 'pose.bones["plate-settings"]["Use Head Controller"]'
+            except Exception:
+                pass
+            for _c in [c for c in _hc_pb.constraints if c.type == 'DAMPED_TRACK']:
+                try:
+                    _hc_pb.constraints.remove(_c)
+                except Exception:
+                    pass
+            _pole_bone = "neck" if "neck" in rig_obj.pose.bones else (_head_name or "head")
+            _dt2 = _hc_pb.constraints.new('DAMPED_TRACK')
+            _dt2.target = rig_obj
+            _dt2.subtarget = _pole_bone
+            _dt2.head_tail = 0.0
+            _dt2.track_axis = "TRACK_NEGATIVE_Z"
+            try:
+                _drv2 = _dt2.driver_add("influence").driver
+                _drv2.type = 'SCRIPTED'
+                _drv2.expression = 'bone'
+                _vv2 = _drv2.variables.new()
+                _vv2.name = "bone"
+                _vv2.type = 'SINGLE_PROP'
+                _vv2.targets[0].id = rig_obj
+                _vv2.targets[0].data_path = 'pose.bones["plate-settings"]["Use Head Controller"]'
+            except Exception:
+                pass
+        _star = bpy.data.objects.get("head-control-shape") or bpy.data.objects.get("primo-joint")
+        if _hc_pb is not None and _star is not None:
+            try:
+                _hc_pb.custom_shape = _star
+                _hc_pb.use_custom_shape_bone_size = False
+                _hc_pb.custom_shape_scale_xyz = (0.035, 0.035, 0.035)
+            except Exception:
+                pass
+        if _hc_pb is not None:
+            try:
+                _hc_pb["parent_switch"] = _sw_default
+                _hc_pb.id_properties_ui("parent_switch").update(
+                    items=_sw_items, default=_sw_default, description="Head Controller Parent")
+            except Exception:
+                pass
+        _mch_pb = rig_obj.pose.bones.get("MCH-head-controller-parent")
+        if _mch_pb is not None and _hc_pb is not None and _sw_targets:
+            try:
+                _const = _mch_pb.constraints.get("SWITCH PARENT") or _mch_pb.constraints.new('ARMATURE')
+                _const.name = "SWITCH PARENT"
+                while len(_const.targets) < len(_sw_targets):
+                    _const.targets.new()
+                for _i, _sub in enumerate(_sw_targets):
+                    try:
+                        _const.targets[_i].target = rig_obj
+                        _const.targets[_i].subtarget = _sub
+                    except Exception:
+                        pass
+                for _x in range(len(_sw_targets)):
+                    try:
+                        _dr = _const.targets[_x].driver_add("weight").driver
+                        _vr = _dr.variables.new()
+                        _vr.name = "toggle"
+                        _vr.type = 'SINGLE_PROP'
+                        _vr.targets[0].id = rig_obj
+                        _vr.targets[0].data_path = 'pose.bones["head-controller"]["parent_switch"]'
+                        _dr.type = 'SCRIPTED'
+                        _dr.expression = "toggle == " + str(_x + 1)
+                    except Exception:
+                        pass
+                _const.enabled = False
+                _const.enabled = True
+            except Exception as ex_sw:
+                print(f"[WUWA RIG] head parent switch notice: {ex_sw}")
+    except Exception as ex_head:
+        print(f"[WUWA RIG] head-controller pose notice: {ex_head}")
+        try:
+            ctx.view_layer.objects.active = rig_obj
+            bpy.ops.object.mode_set(mode='POSE')
+        except Exception:
+            pass
+
+    if _add_childof:
+        for _cb in ["hand_ik.L", "hand_ik.R", "foot_ik.R", "foot_ik.L", "torso", "root"]:
+            _pb_c = rig_obj.pose.bones.get(_cb)
+            if _pb_c is not None and not any(c.type == 'CHILD_OF' for c in _pb_c.constraints):
+                try:
+                    _pb_c.constraints.new('CHILD_OF')
+                except Exception:
+                    pass
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Pase final EDIT: re-afirma parenting
+    try:
+        ctx.view_layer.objects.active = rig_obj
+        bpy.ops.object.mode_set(mode='EDIT')
+        _eb2 = rig_obj.data.edit_bones
+        _mch2 = _eb2.get("MCH-head-controller-parent")
+        _hc2 = _eb2.get("head-controller")
+        if _hc2 is not None:
+            if _mch2 is None:
+                _mch2 = _eb2.new("MCH-head-controller-parent")
+                _mch2.head = _hc2.head.copy()
+                _mch2.tail = _hc2.head.copy()
+                _mch2.tail.y += 0.05
+                if (_mch2.tail - _mch2.head).length < 0.01:
+                    _mch2.length = 0.05
+                _mch2.roll = 0
+                _mch2.parent = None
+                _mch2.use_deform = False
+            if _hc2.parent != _mch2:
+                _hc2.parent = _mch2
+        _pl2 = _eb2.get("plate-settings")
+        _hd2 = _eb2.get(_head_name) if _head_name else None
+        if _pl2 is not None and _hd2 is not None and _pl2.parent != _hd2:
+            _pl2.parent = _hd2
+        ensure_root_trio(rig_obj)
+        bpy.ops.object.mode_set(mode='OBJECT')
+    except Exception as ex_par:
+        print(f"[WUWA RIG] final parenting pass notice: {ex_par}")
+        try:
+            bpy.ops.object.mode_set(mode='OBJECT')
+        except Exception:
+            pass
+
+    # Roots + plate en Root visibles; head-controller en Face
+    if hasattr(rig_obj.data, "collections"):
+        try:
+            _colls = rig_obj.data.collections
+            _root_coll = _colls.get("Root") or _colls.new("Root")
+            _face_coll = _colls.get("Face") or _colls.new("Face")
+            _other_coll = _colls.get("Other")
+            for _rn in ["root", "root.001", "root.002", "plate-settings"]:
+                _rb = rig_obj.data.bones.get(_rn)
+                if _rb is not None:
+                    try:
+                        _root_coll.assign(_rb)
+                    except Exception:
+                        pass
+                    try:
+                        if "Offsets" in _colls:
+                            _colls["Offsets"].unassign(_rb)
+                        if _other_coll is not None:
+                            _other_coll.unassign(_rb)
+                        if _rn == "plate-settings" and _face_coll is not None:
+                            _face_coll.unassign(_rb)
+                    except Exception:
+                        pass
+            for _fn in ["head-controller", "Face-Root"]:
+                _fb = rig_obj.data.bones.get(_fn)
+                if _fb is not None and _face_coll is not None:
+                    try:
+                        _face_coll.assign(_fb)
+                    except Exception:
+                        pass
+            try:
+                _root_coll.is_visible = True
+                _face_coll.is_visible = True
+            except Exception:
+                pass
+        except Exception as ex_coll:
+            print(f"[WUWA RIG] root/plate collection notice: {ex_coll}")
+
+    # Widgets parity: el isolate propio de WuWa corre antes de este append,
+    # asi que se mueven los 4 shapes a WGTS_<Char> explicitamente.
+    try:
+        from setup_wizard.character_rig_setup.wgts_isolation import (
+            get_or_create_char_wgts, get_char_collection)
+        _char_coll = get_char_collection(rig_obj, char_name)
+        if _char_coll is None:
+            _char_coll = rig_obj.users_collection[0] if rig_obj.users_collection else ctx.scene.collection
+        _wgts = get_or_create_char_wgts(_char_coll, char_name)
+        for _wn in ["root plate.002", "root plate.001", "root plate", "head-control-shape"]:
+            _wo = bpy.data.objects.get(_wn)
+            if _wo is not None:
+                if _wo.name not in _wgts.objects:
+                    _wgts.objects.link(_wo)
+                for _uc in list(_wo.users_collection):
+                    if _uc != _wgts:
+                        try:
+                            _uc.objects.unlink(_wo)
+                        except Exception:
+                            pass
+    except Exception as ex_w:
+        print(f"[WUWA RIG] WGTS widgets notice: {ex_w}")
+
+    # UI: strip torso-follow (paridad ZZZ) + splices minimos
+    try:
+        strip_rigify_torso_follow_ui(rig_obj, orig_arm_name, char_name)
+    except Exception as ex_strip:
+        print(f"[WUWA RIG] torso-follow UI strip notice: {ex_strip}")
+    _splices = [
+        {"divider": "num_rig_separators[0] += 1",
+         "text": '\n        if is_selected({"plate-settings"}):\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Tracker Controller", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Head Follow"]\', text="Head Follow", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Neck Follow"]\', text="Neck Follow", slider=True)'},
+        {"divider": "num_rig_separators[0] += 1",
+         "text": '\n        if is_selected({"head-controller"}):\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Tracker Controller", slider=True)\n        if is_selected({"head"}):\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Tracker Controller", slider=True)'},
+    ]
+    try:
+        _rid = None
+        for _t in bpy.data.texts:
+            try:
+                _s = _t.as_string()
+            except Exception:
+                continue
+            if 'rig_id = "' in _s:
+                _rid = _s.split('rig_id = "')[1].split('"')[0]
+                break
+        _rid = _rid or char_name
+        _pnames = str(["None", "root", "root.001", "root.002", "torso", "chest"]).replace("'", '"')
+        _sw_existing = [_b for _b in ["root", "root.001", "root.002", "torso", "chest"]
+                        if _b in rig_obj.pose.bones]
+        _pnames = str(["None"] + _sw_existing).replace("'", '"')
+        _splices.append({"divider": "num_rig_separators[0] += 1",
+            "text": "\n        if is_selected({'head-controller'}):\n            group1 = layout.row(align=True)\n            group2 = group1.split(factor=0.55, align=True)\n            props = group2.operator('pose.rigify_switch_parent_" + _rid + "', text='Parent Switch', icon='DOWNARROW_HLT')\n            props.bone = 'head-controller'\n            props.prop_bone = 'head-controller'\n            props.prop_id='parent_switch'\n            props.parent_names = '" + _pnames + "'\n            props.locks = (False, False, False)\n            group2.prop(pose_bones['head-controller'], '[\"parent_switch\"]', text='')\n            props = group1.operator('pose.rigify_switch_parent_bake_" + _rid + "', text='', icon='ACTION_TWEAK')\n            props.bone = 'head-controller'\n            props.prop_bone='head-controller'\n            props.prop_id='parent_switch'\n            props.parent_names='" + _pnames + "'\n            props.locks = (False, False, False)"})
+    except Exception as ex_ps:
+        print(f"[WUWA RIG] parent-switch splice notice: {ex_ps}")
+    modify_and_run_rig_ui_script(rig_obj, orig_arm_name, char_name=char_name, extra_splices=_splices)
 
 # Supported model prefixes — order matters for matching
 _MODEL_PREFIX_PATTERNS = [
@@ -943,17 +1455,77 @@ def rig_wuthering_waves_character(context=None):
 
         bpy.ops.object.mode_set(mode='OBJECT')
 
-        # IK Stretch & Parents
+        # IK defaults (paridad ZZZ/NTE): IK_FK=0, IK_Stretch segun props,
+        # pole_vector/IK_parent segun flags (antes todo hardcodeado).
+        _rprops = getattr(context.scene, "character_rigger_props", None)
+        _disallow_arm = (not getattr(_rprops, "allow_arm_ik_stretch", False)) if _rprops else True
+        _disallow_leg = (not getattr(_rprops, "allow_leg_ik_stretch", False)) if _rprops else True
+        _use_arm_poles = getattr(_rprops, "use_arm_ik_poles", False) if _rprops else False
+        _use_leg_poles = getattr(_rprops, "use_leg_ik_poles", False) if _rprops else False
         for side in [".L", ".R"]:
             b_name = "upper_arm_parent" + side
             if b_name in RigArmatureObj.pose.bones:
-                RigArmatureObj.pose.bones[b_name]["IK_Stretch"] = 0.000
-                RigArmatureObj.pose.bones[b_name]["IK_parent"] = 4
-                RigArmatureObj.pose.bones[b_name]["pole_parent"] = 2
+                _pb_ik = RigArmatureObj.pose.bones[b_name]
+                try:
+                    _pb_ik["IK_FK"] = 0.0
+                except Exception:
+                    pass
+                try:
+                    _pb_ik["IK_Stretch"] = 0.0 if _disallow_arm else 1.0
+                except Exception:
+                    pass
+                if _use_arm_poles:
+                    try:
+                        _pb_ik["pole_vector"] = True
+                    except Exception:
+                        pass
+                try:
+                    _pb_ik["pole_parent"] = 2
+                except Exception:
+                    pass
+                if "IK_parent" in _pb_ik:
+                    try:
+                        _ui = _pb_ik.id_properties_ui("IK_parent")
+                        _curr = _ui.as_dict()
+                        _items = _curr.get("items")
+                        _tuples = [(it[0], it[1], it[2]) for it in _items] if _items else [
+                            ("P0", "None", ""), ("P1", "Root", ""), ("P2", "Torso", ""),
+                            ("P3", "Hips", ""), ("P4", "Chest", ""), ("P5", "Head", ""),
+                        ]
+                        _ui.update(items=_tuples, default=1)
+                        _pb_ik["IK_parent"] = 1
+                    except Exception as ex_ikp:
+                        print(f"[WUWA RIG] IK_parent dropdown notice {b_name}: {ex_ikp}")
 
         for b_name in ["thigh_parent.L", "thigh_parent.R"]:
             if b_name in RigArmatureObj.pose.bones:
-                RigArmatureObj.pose.bones[b_name]["IK_Stretch"] = 0.000
+                _pb_ik = RigArmatureObj.pose.bones[b_name]
+                try:
+                    _pb_ik["IK_FK"] = 0.0
+                except Exception:
+                    pass
+                try:
+                    _pb_ik["IK_Stretch"] = 0.0 if _disallow_leg else 1.0
+                except Exception:
+                    pass
+                if _use_leg_poles:
+                    try:
+                        _pb_ik["pole_vector"] = True
+                    except Exception:
+                        pass
+                if "IK_parent" in _pb_ik:
+                    try:
+                        _ui = _pb_ik.id_properties_ui("IK_parent")
+                        _curr = _ui.as_dict()
+                        _items = _curr.get("items")
+                        _tuples = [(it[0], it[1], it[2]) for it in _items] if _items else [
+                            ("P0", "None", ""), ("P1", "Root", ""), ("P2", "Torso", ""),
+                            ("P3", "Hips", ""), ("P4", "Chest", ""), ("P5", "Head", ""),
+                        ]
+                        _ui.update(items=_tuples, default=1)
+                        _pb_ik["IK_parent"] = 1
+                    except Exception as ex_ikp:
+                        print(f"[WUWA RIG] IK_parent dropdown notice {b_name}: {ex_ikp}")
 
         # ORG Deform
         context.view_layer.objects.active = RigArmatureObj
@@ -1303,12 +1875,24 @@ def rig_wuthering_waves_character(context=None):
 
                 wgts_collection.hide_viewport = True
 
-            # IK Pole property
-            ik_pole_targets = ["upper_arm_parent.L", "upper_arm_parent.R", "thigh_parent.L", "thigh_parent.R"]
-            for b_name in ik_pole_targets:
+            # IK Pole property (paridad ZZZ/NTE: solo con flags, default OFF)
+            _pole_props = getattr(context.scene, "character_rigger_props", None)
+            _pole_arm = getattr(_pole_props, "use_arm_ik_poles", False) if _pole_props else False
+            _pole_leg = getattr(_pole_props, "use_leg_ik_poles", False) if _pole_props else False
+            for b_name in ["upper_arm_parent.L", "upper_arm_parent.R"]:
                 bone = RigArmatureObj.pose.bones.get(b_name)
                 if bone and "pole_vector" in bone:
-                    bone["pole_vector"] = True
+                    try:
+                        bone["pole_vector"] = bool(_pole_arm)
+                    except Exception:
+                        pass
+            for b_name in ["thigh_parent.L", "thigh_parent.R"]:
+                bone = RigArmatureObj.pose.bones.get(b_name)
+                if bone and "pole_vector" in bone:
+                    try:
+                        bone["pole_vector"] = bool(_pole_leg)
+                    except Exception:
+                        pass
             # Themes for Eye controls (All red THEME01)
             theme_assignments = {"EyeTracker": "THEME01", "Eye.L": "THEME01", "Eye.R": "THEME01"}
             for b_name, theme in theme_assignments.items():
@@ -1480,6 +2064,15 @@ def rig_wuthering_waves_character(context=None):
                 from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
                 apply_hair_and_clothes_physics(RigArmatureObj, context)
 
+            # ZZZ/NTE parity: plate-settings + head-controller + 3-tier roots + UI.
+            # Face rig propio (wuwa_face_panel) no se toca.
+            try:
+                _apply_zzz_parity_wuwa(RigArmatureObj, context, OrigArmature)
+            except Exception as ex_parity:
+                import traceback
+                traceback.print_exc()
+                print(f"[WUWA RIG] parity notice: {ex_parity}")
+
             orig_arm = bpy.data.objects.get(OrigArmature)
             if orig_arm and orig_arm != RigArmatureObj:
                 try:
@@ -1504,13 +2097,19 @@ def create_breast_widget_for_bone(name, bone_matrix, world_center_offset, radius
     bm = bmesh.new()
     segments = 32
     inv_mat = bone_matrix.inverted()
+    try:
+        _bone_head = bone_matrix.translation.copy()
+    except Exception:
+        _bone_head = mathutils.Vector((0.0, 0.0, 0.0))
 
     for i in range(segments):
         angle = 2 * pi * i / segments
         w_x = world_center_offset.x + cos(angle) * radius
         w_y = world_center_offset.y
         w_z = world_center_offset.z + sin(angle) * radius
-        local_pos = inv_mat.to_3x3() @ mathutils.Vector((w_x, w_y, w_z))
+        # Restar la cabeza del hueso: si no, el circulo se dibuja desplazado
+        # (P+H en lugar de P).
+        local_pos = inv_mat.to_3x3() @ (mathutils.Vector((w_x, w_y, w_z)) - _bone_head)
         bm.verts.new(local_pos)
 
     bm.verts.ensure_lookup_table()
@@ -1540,9 +2139,12 @@ def create_wuwa_breast_controls(rig_obj):
         b_low = b.name.lower()
         if "chest" in b_low or "breast" in b_low:
             if b.name.startswith("ORG-"):
-                if ("001_l" in b_low or "01_l" in b_low or "_l" in b_low or ".l" in b_low) and not chest_l:
+                # Incluye patron '-L_' (p. ej. ORG-L_ChestBone01) ademas de _l/.l
+                if ("001_l" in b_low or "01_l" in b_low or "_l" in b_low or ".l" in b_low
+                        or "-l_" in b_low or "-l-" in b_low) and not chest_l:
                     chest_l = b.name
-                elif ("001_r" in b_low or "01_r" in b_low or "_r" in b_low or ".r" in b_low) and not chest_r:
+                elif ("001_r" in b_low or "01_r" in b_low or "_r" in b_low or ".r" in b_low
+                        or "-r_" in b_low or "-r-" in b_low) and not chest_r:
                     chest_r = b.name
 
     if not chest_l or not chest_r:
@@ -1574,12 +2176,89 @@ def create_wuwa_breast_controls(rig_obj):
     mat_l = eb.get("breast.L").matrix.copy()
     mat_r = eb.get("breast.R").matrix.copy()
 
+    # Ancla lateral + push medido: el control nace en el centro (x~0) pero el
+    # volumen esta en el segmento exterior. Se toma el ORG chest/breast del lado
+    # con mayor |x| como ancla y se mide el gap real a la superficie en -Y
+    # (frente WuWa); push = gap + margen. Todo en espacio del armature.
+    # (Un push proporcional ciego overshootea: gap real ~0.02 vs 0.10.)
+    _meshes = []
+    try:
+        _meshes = [m for m in get_character_meshes(rig_obj) or [] if m.type == 'MESH']
+    except Exception:
+        pass
+    if not _meshes:
+        try:
+            _meshes = [m for m in bpy.data.objects if m.type == 'MESH' and any(
+                md.type == 'ARMATURE' and md.object == rig_obj for md in m.modifiers)]
+        except Exception:
+            pass
+    try:
+        _arm_inv = rig_obj.matrix_world.inverted()
+    except Exception:
+        _arm_inv = mathutils.Matrix.Identity(4)
+
+    def _measure_gap(arm_point):
+        best = None
+        for _m in _meshes:
+            try:
+                _mw = _arm_inv @ _m.matrix_world
+            except Exception:
+                continue
+            for _v in _m.data.vertices:
+                _wp = _mw @ _v.co
+                _d = _wp - arm_point
+                if _d.length > 1e-6 and _d.normalized().y < -0.94:
+                    if best is None or _d.length < best:
+                        best = _d.length
+        return best
+
+    def _anchor_center(side):
+        cands = []
+        for _b in arm_data.bones:
+            _bl = _b.name.lower()
+            if not _b.name.startswith("ORG-"):
+                continue
+            if "chest" not in _bl and "breast" not in _bl:
+                continue
+            if (side == 'L' and _b.head_local.x >= 0) or (side == 'R' and _b.head_local.x < 0):
+                cands.append(_b)
+        if cands:
+            _ab = max(cands, key=lambda _b: abs(_b.head_local.x))
+            _pt = _ab.head_local.copy()
+        else:
+            _cb = arm_data.bones.get("breast." + side)
+            if _cb is None:
+                return None
+            _pt = _cb.head_local.copy()
+        _gap = None
+        try:
+            _gap = _measure_gap(_pt)
+        except Exception:
+            pass
+        _push = (_gap + 0.003) if _gap is not None else abs(_pt.x) * 2.0
+        return mathutils.Vector((_pt.x, _pt.y - _push, _pt.z))
+
+    _bl_head = arm_data.bones.get("breast.L")
+    _br_head = arm_data.bones.get("breast.R")
+    ctr_l = _anchor_center('L')
+    ctr_r = _anchor_center('R')
+    if ctr_l is None and _bl_head is not None:
+        _hl = _bl_head.head_local.copy()
+        ctr_l = mathutils.Vector((_hl.x, _hl.y - abs(_hl.x) * 2.0, _hl.z))
+    if ctr_r is None and _br_head is not None:
+        _hr = _br_head.head_local.copy()
+        ctr_r = mathutils.Vector((_hr.x, _hr.y - abs(_hr.x) * 2.0, _hr.z))
+    if ctr_l is None:
+        ctr_l = mathutils.Vector((0.05, -0.15, 1.35))
+    if ctr_r is None:
+        ctr_r = mathutils.Vector((-0.05, -0.15, 1.35))
+
     bpy.ops.object.mode_set(mode='OBJECT')
 
     # 2. Create Circle Widgets for Breasts (WGT-rig_breast.L, WGT-rig_breast.R)
-    # Circle radius 0.25m positioned in front of the model (offset Y = -0.16m)
-    wgt_l = create_breast_widget_for_bone("WGT-rig_breast.L", mat_l, mathutils.Vector((0.0, -0.16, 0.0)), radius=0.25)
-    wgt_r = create_breast_widget_for_bone("WGT-rig_breast.R", mat_r, mathutils.Vector((0.0, -0.16, 0.0)), radius=0.25)
+    # Radio 0.035 (~7cm diametro, igual que NTE con scale 0.07).
+    wgt_l = create_breast_widget_for_bone("WGT-rig_breast.L", mat_l, ctr_l, radius=0.035)
+    wgt_r = create_breast_widget_for_bone("WGT-rig_breast.R", mat_r, ctr_r, radius=0.035)
 
     # 3. Pose mode: Configure Custom Shape, Theme, and Constraints
     bpy.ops.object.mode_set(mode='POSE')
@@ -1588,6 +2267,10 @@ def create_wuwa_breast_controls(rig_obj):
         if pb_ctrl:
             if wgt_obj:
                 pb_ctrl.custom_shape = wgt_obj
+                try:
+                    pb_ctrl.use_custom_shape_bone_size = False
+                except Exception:
+                    pass
                 pb_ctrl.custom_shape_scale_xyz = (1.0, 1.0, 1.0)
             if hasattr(pb_ctrl, "color"):
                 pb_ctrl.color.palette = 'THEME09'  # Yellow, matching Torso controls
@@ -1728,6 +2411,9 @@ def organize_rigify_bone_collections(rig_obj, orig_arm_name=None, char_name=None
                     bone.hide = False
 
     # 3. Distribute standard bones
+    # NTE/WuWa: la palabra 'prop' da falsos positivos en el detector de armas
+    # (accesorios/escena); se ignora. Se mantienen 'weapon' y el resto.
+    # El clasificador propio wuwa_physics_classifier (prop/weapon->Props) no se toca.
     distribute_standard_rig_bones(
         rig_obj,
         is_version_4=is_version_4,
@@ -1736,6 +2422,7 @@ def organize_rigify_bone_collections(rig_obj, orig_arm_name=None, char_name=None
         use_leg_ik_poles=True,
         has_lighting_panel=False,
         physics_bone_callback=wuwa_physics_classifier,
+        detect_prop_keyword=False,
     )
 
     # 4. Explicit bone assignments for WuWa specific controls
