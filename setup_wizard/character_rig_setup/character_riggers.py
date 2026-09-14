@@ -1105,18 +1105,25 @@ class NevernessToEvernessCharacterRigger(CharacterRigger):
             armature.select_set(True)
 
         cache_enabled = self.context.window_manager.cache_enabled
-        filepath = self.blender_operator.filepath or get_cache(cache_enabled).get(GENSHIN_RIGIFY_BONE_SHAPES_FILE_PATH)
+        cached = get_cache(cache_enabled).get(GENSHIN_RIGIFY_BONE_SHAPES_FILE_PATH)
+        op_path = getattr(self.blender_operator, 'filepath', '')
+        filepath = cached if (cached and os.path.isfile(cached)) else (op_path if (op_path and os.path.isfile(op_path)) else None)
+
+        if not filepath or not os.path.isfile(filepath):
+            filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'RootShape.blend')
+
+        character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
 
         if armature:
             try:
                 nte_rig_character(
                     filepath,
-                    disallow_arm_ik_stretch=True,
-                    disallow_leg_ik_stretch=True,
-                    use_arm_ik_poles=True,
-                    use_leg_ik_poles=True,
-                    add_child_of_constraints=True,
-                    use_head_tracker=True
+                    not character_rigger_props.allow_arm_ik_stretch,
+                    not character_rigger_props.allow_leg_ik_stretch,
+                    character_rigger_props.use_arm_ik_poles,
+                    character_rigger_props.use_leg_ik_poles,
+                    character_rigger_props.add_children_of_constraints,
+                    character_rigger_props.use_head_tracker
                 )
             except Exception as ex:
                 self.blender_operator.report({'ERROR'}, f"Failed to rig NTE character: {ex}")

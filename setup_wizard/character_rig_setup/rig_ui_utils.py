@@ -179,6 +179,7 @@ def distribute_standard_rig_bones(
     no_eyes=False,
     has_lighting_panel=False,
     physics_bone_callback=None,
+    detect_prop_keyword=True,
 ):
     """
     Distributes standard Rigify and character bones across the 23 standard collections / layers.
@@ -227,13 +228,17 @@ def distribute_standard_rig_bones(
     fast_move(["prop.L", "prop.R"], 21, "Weapon")
     fast_move(["prop.L", "prop.R"], 21, "Props")
     weapon_keywords = ["prop1", "prop2", "bip001 prop", "weapon", "garape", "grape", "equip"]
+    if not detect_prop_keyword:
+        # NTE: la palabra 'prop' da falsos positivos (accesorios/escena); se ignora.
+        # Se mantienen 'weapon' y el resto de detectores.
+        weapon_keywords = [k for k in weapon_keywords if "prop" not in k]
     for b in arm_data.bones:
         b_name = b.name
         b_low = b_name.lower()
         if (
             b_name in ["prop.L", "prop.R"]
             or any(k in b_low for k in weapon_keywords)
-            or ("prop" in b_low and "parent" not in b_low)
+            or (detect_prop_keyword and "prop" in b_low and "parent" not in b_low)
             or "_wpn_" in b_low
             or "_weapon_" in b_low
             or "_garape_" in b_low
