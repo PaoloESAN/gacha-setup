@@ -509,6 +509,7 @@ def build_rig_layers_ui_code(original_name, setup_version):
                 "\n            row = col.row()\n            row.separator()" +
                 "\n            row = col.row()\n            row.separator()" +
                 "\n            row = col.row()\n            " + make_layer_str("Face", 0, vers) +
+                "\n            row = col.row()\n            " + make_layer_str("Face (Detail)", 1, vers) +
                 "\n            row = col.row()\n            " + make_layer_str("Face (Primary)", 29, vers) +
                 "\n            " + make_layer_str("Face (Secondary)", 30, vers) +
                 "\n            row = col.row()\n            " + make_layer_str("Torso (IK)", 3, vers) +
@@ -585,6 +586,22 @@ def build_rig_layers_ui_code(original_name, setup_version):
                 "\n            " + make_layer_str("Face", 0, vers) +
                 "\n            row = split.row(align=True)" +
                 "\n            " + make_solo_str("Face") +
+                "\n            row = col.row()" +
+                # Face (Detail)
+                "\n            if 'Face (Detail)' in collection:\n" +
+                "                row = col.row()\n" +
+                "                split = row.split(align=True, factor=split_size)\n" +
+                "                row = split.row(align=True)\n" +
+                "                row.prop(collection['Face (Detail)'], 'is_visible', toggle=True, text='Face (Detail)')\n" +
+                "                row = split.row(align=True)\n" +
+                "                row.prop(collection['Face (Detail)'], 'is_solo', toggle=True, text='★')\n" +
+                "            elif 'Facerig Detail' in collection:\n" +
+                "                row = col.row()\n" +
+                "                split = row.split(align=True, factor=split_size)\n" +
+                "                row = split.row(align=True)\n" +
+                "                row.prop(collection['Facerig Detail'], 'is_visible', toggle=True, text='Facerig Detail')\n" +
+                "                row = split.row(align=True)\n" +
+                "                row.prop(collection['Facerig Detail'], 'is_solo', toggle=True, text='★')" +
                 "\n            row = col.row()" +
                 # Face (Primary) / Face (Secondary)
                 "\n            split = row.split(factor=split_small, align=True)" +

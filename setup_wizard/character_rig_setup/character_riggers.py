@@ -925,10 +925,7 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
             zzz_face_rig_main()
         except Exception as e:
             print(f"[ZZZ Rig Warning] Face rig skipped: {e}")
-            try:
-                setup_isaac_face_rig(armature)
-            except Exception as e_isaac:
-                print(f"[ZZZ Rig Warning] Isaac face rig fallback skipped: {e_isaac}")
+            pass
         finally:
             try:
                 if bpy.context.object and bpy.context.object.mode != 'OBJECT':
@@ -963,15 +960,20 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
             if hasattr(body_rig.data, "collections"):
                 colls = body_rig.data.collections
                 face_coll = colls.get("Face") or colls.new("Face")
+                face_detail_coll = colls.get("Face (Detail)") or colls.new("Face (Detail)")
                 root_coll = colls.get("Root") or colls.new("Root")
                 other_coll = colls.get("Other") or colls.new("Other")
                 to_remove = []
                 for c in colls:
                     c_low = c.name.lower()
+                    if c.name in ["Face", "Face (Detail)", "Root", "Other", "Weapon", "Clothes"]:
+                        continue
                     if "facerig" in c_low or "face hook" in c_low:
                         for b in list(c.bones):
                             if "hook" in b.name.lower():
                                 other_coll.assign(b)
+                            elif b.name.endswith(" Bone") or b.name == "Facerig Root":
+                                face_detail_coll.assign(b)
                             else:
                                 face_coll.assign(b)
                         to_remove.append(c)
@@ -992,10 +994,16 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
                     except Exception:
                         pass
 
-                # Move all hook bones (e.g. CTRL-Skn_L_highlights_hook) to Other and remove from Face
+                # Move all hook and mechanism MCH bones to Other and remove from Face / Face (Detail)
                 for b in body_rig.data.bones:
-                    if "hook" in b.name.lower():
+                    if "hook" in b.name.lower() or b.name.startswith("MCH-"):
                         other_coll.assign(b)
+                        if face_coll:
+                            face_coll.unassign(b)
+                        if face_detail_coll:
+                            face_detail_coll.unassign(b)
+                    elif b.name.endswith(" Bone") or b.name == "Facerig Root":
+                        face_detail_coll.assign(b)
                         if face_coll:
                             face_coll.unassign(b)
 
@@ -1010,6 +1018,7 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
                             other_coll.unassign(rb)
 
                 face_coll.is_visible = True
+                face_detail_coll.is_visible = True
                 root_coll.is_visible = True
                 if "Weapon" in colls:
                     actual_w_bones = [b for b in colls["Weapon"].bones if b.name not in ["prop.L", "prop.R"]]
