@@ -233,9 +233,12 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         m_low = mesh_body_part_name.lower()
         if m_low in ['body1', 'body01', 'body_01']:
             body_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
-            material_name = body_material.name
+            if body_material:
+                material_name = body_material.name
         elif m_low in ['body2', 'body02', 'body_02']:
             body_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
+            if body_material:
+                material_name = body_material.name
         elif m_low in ['dress1', 'dress01', 'dress_01', 'dress2', 'dress02', 'dress_02']:
             dress_template = bpy.data.materials.get(self.material_names.DRESS) or bpy.data.materials.get(self.material_names.BODY)
             new_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
@@ -247,25 +250,33 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             material_name = new_material.name if new_material else material_name
         elif mesh_body_part_name == 'EffectHair':  # Furina
             hair_material = self.create_hair_material(self.material_names, self.material_names.EFFECT_HAIR)
-            material_name = hair_material.name
+            if hair_material:
+                material_name = hair_material.name
         elif mesh_body_part_name == 'Effect':  # Furina (Default)
             hair_material = self.create_hair_material(self.material_names, self.material_names.EFFECT)
-            material_name = hair_material.name
+            if hair_material:
+                material_name = hair_material.name
         elif mesh_body_part_name == 'Helmet':  # Frem
             helmet_material = self.create_hair_material(self.material_names, self.material_names.HELMET)
-            material_name = helmet_material.name
+            if helmet_material:
+                material_name = helmet_material.name
         elif mesh_body_part_name == 'HelmetEmo':  # Frem
             helmet_material = self.create_hair_material(self.material_names, self.material_names.HELMET_EMO)
-            material_name = helmet_material.name
+            if helmet_material:
+                material_name = helmet_material.name
         elif mesh_body_part_name == 'Gauntlet':  # Wrioth
             gauntlet_material = self.create_body_material(self.material_names, self.material_names.GAUNTLET)
-            material_name = gauntlet_material.name
-        elif mesh_body_part_name == 'Leather':
-            leather_material = self.create_body_material(self.material_names, self.material_names.LEATHER)
-            material_name = leather_material.name
+            if gauntlet_material:
+                material_name = gauntlet_material.name
+        elif mesh_body_part_name == 'Leather':  # Mavuika, Natlan characters
+            leather_name = self.material_names.LEATHER or f'{self.material_names.MATERIAL_PREFIX}Leather'
+            leather_material = self.create_body_material(self.material_names, leather_name)
+            if leather_material:
+                material_name = leather_material.name
         elif mesh_body_part_name == 'Glass':
             glass_material = self.create_body_material(self.material_names, self.material_names.GLASS)
-            material_name = glass_material.name
+            if glass_material:
+                material_name = glass_material.name
         elif mesh_body_part_name == 'Glass_Eff':
             glass_material = self.create_glass_material(self.material_names, self.material_names.GLASS_EFF)
             if glass_material:
@@ -277,11 +288,13 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 material_name = glass_material.name
         elif mesh_body_part_name and mesh_body_part_name.startswith(ShaderMaterialNameKeywords.SKILLOBJ):
             skillobj_material = self.create_body_material(self.material_names, self.material_names.SKILLOBJ)
-            skillobj_material.name = skillobj_material.name.replace(ShaderMaterialNameKeywords.SKILLOBJ, mesh_body_part_name)
-            material_name = skillobj_material.name
+            if skillobj_material:
+                skillobj_material.name = skillobj_material.name.replace(ShaderMaterialNameKeywords.SKILLOBJ, mesh_body_part_name)
+                material_name = skillobj_material.name
         elif mesh_body_part_name == 'Skirt':
             skirt_material = self.create_body_material(self.material_names, self.material_names.SKIRT)
-            material_name = skirt_material.name
+            if skirt_material:
+                material_name = skirt_material.name
         elif mesh_body_part_name == 'Pupil':
             pupil_material = self.create_body_material(self.material_names, self.material_names.PUPIL)
             if pupil_material:
@@ -293,20 +306,25 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 material_name = pupil_material.name
         elif mesh_body_part_name and 'Item' in mesh_body_part_name:  # NPCs
             item_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
-            material_name = item_material.name
+            if item_material:
+                material_name = item_material.name
         elif mesh_body_part_name and ('Screw' in mesh_body_part_name or 'Hat' in mesh_body_part_name):  # Aranaras
             new_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
-            material_name = new_material.name
+            if new_material:
+                material_name = new_material.name
         elif mesh_body_part_name and 'Others' in mesh_body_part_name:  # NPCs, Frem Penguins
             new_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
-            material_name = new_material.name
+            if new_material:
+                material_name = new_material.name
         elif mesh_body_part_name and 'crystal' in mesh_body_part_name.lower():
             crystal_material = self.create_crystal_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
-            material_name = crystal_material.name
+            if crystal_material:
+                material_name = crystal_material.name
         elif mesh_body_part_name and mesh_body_part_name not in ['Face', 'Body', 'Hair', 'Eye', 'Dress', 'Arm', 'Cloak', 'VFX', 'StarCloak', 'Pupil', 'Pupila', 'New Pupil']:
             # Fallback for completely unknown materials (like 'Stockings', 'Wings', etc)
             new_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
-            material_name = new_material.name
+            if new_material:
+                material_name = new_material.name
         return material_name
 
     def __clone_material_and_rename(self, material_slot, mesh_body_part_name_template, mesh_body_part_name):
@@ -340,14 +358,26 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             node.image = old_image
 
     def __set_glass_star_cloak_toggle(self, material, value):
+        if not material or not material.use_nodes or not material.node_tree:
+            return
         vfx_shader_node = material.node_tree.nodes.get(self.shader_node_names.VFX_SHADER)
-        vfx_shader_node.inputs.get(self.shader_node_names.TOGGLE_GLASS_STAR_CLOAK).default_value = value
+        if not vfx_shader_node:
+            return
+        toggle_input = vfx_shader_node.inputs.get(self.shader_node_names.TOGGLE_GLASS_STAR_CLOAK)
+        if toggle_input is not None:
+            toggle_input.default_value = value
 
     def __set_star_cloak_type(self, material, original_material_name):
+        if not material or not material.use_nodes or not material.node_tree:
+            return
         for star_cloak_type in StarCloakTypes._member_names_:
             if star_cloak_type.lower() in original_material_name.lower():
                 vfx_shader_node = material.node_tree.nodes.get(self.shader_node_names.VFX_SHADER)
-                vfx_shader_node.inputs.get(self.shader_node_names.STAR_CLOAK_TYPE).default_value = getattr(StarCloakTypes, star_cloak_type).value
+                if not vfx_shader_node:
+                    return
+                type_input = vfx_shader_node.inputs.get(self.shader_node_names.STAR_CLOAK_TYPE)
+                if type_input is not None:
+                    type_input.default_value = getattr(StarCloakTypes, star_cloak_type).value
 
     def create_face_material(self, shader_material_names: ShaderMaterialNames, material_name):
         face_material = bpy.data.materials.get(material_name)
@@ -367,6 +397,8 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 node.image = None
 
     def create_body_material(self, shader_material_names: ShaderMaterialNames, material_name):
+        if not material_name:
+            return None
         body_material = bpy.data.materials.get(material_name)
         if not body_material:
             body_template = bpy.data.materials.get(shader_material_names.BODY)
@@ -378,6 +410,8 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         return body_material
 
     def create_hair_material(self, shader_material_names: ShaderMaterialNames, material_name):
+        if not material_name:
+            return None
         hair_material = bpy.data.materials.get(material_name)
         if not hair_material:
             hair_template = bpy.data.materials.get(shader_material_names.HAIR)
@@ -389,10 +423,15 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         return hair_material
 
     def create_glass_material(self, shader_material_names: ShaderMaterialNames, material_name):
+        if not material_name:
+            return None
         glass_material = bpy.data.materials.get(material_name)
-        vfx_template_material = bpy.data.materials.get(shader_material_names.VFX)
-        if vfx_template_material and not glass_material:
-            glass_material = vfx_template_material.copy()
+        if glass_material:
+            return glass_material
+        vfx_template_material = bpy.data.materials.get(shader_material_names.VFX) if getattr(shader_material_names, 'VFX', '') else None
+        template = vfx_template_material or bpy.data.materials.get(shader_material_names.BODY)
+        if template:
+            glass_material = template.copy()
             glass_material.name = material_name
             glass_material.use_fake_user = True
             self.__clear_material_images(glass_material)

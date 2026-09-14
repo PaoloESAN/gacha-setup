@@ -422,8 +422,42 @@ class GenshinTextureImporter:
                     return False
         return True
 
+    def _is_genshin_shader_material(self, material):
+        """
+        Returns True only for replaced Genshin shader materials.
+        Original FBX materials (ex. 'Avatar_Lady_Claymore_Mavuika_Mat_Leather' with a
+        Principled BSDF) must NEVER receive textures via the generic
+        'Image Texture' fallback, otherwise they look "textured" while still
+        using the wrong shader (see Mavuika Leather bug).
+        """
+        if not material or not getattr(material, 'use_nodes', False) or not material.node_tree:
+            return False
+        prefixes = ('miHoYo - Genshin ', 'miHoYo - ', 'HoYoverse - Genshin ', 'HoYoverse - ')
+        if hasattr(self, 'material_names') and getattr(self.material_names, 'MATERIAL_PREFIX', None):
+            prefixes = tuple(dict.fromkeys(
+                prefixes + (
+                    self.material_names.MATERIAL_PREFIX,
+                    getattr(self.material_names, 'MATERIAL_PREFIX_AFTER_RENAME', '') or '',
+                )
+            ))
+            prefixes = tuple(p for p in prefixes if p)
+        if material.name.startswith(prefixes):
+            return True
+        try:
+            for n in material.node_tree.nodes:
+                if n.type == 'GROUP' and n.node_tree:
+                    ng = (n.node_tree.name or '').lower()
+                    if any(k in ng for k in ['genshin', 'primotoon', 'hoyotoon', 'body shader', 'face shader', 'hair shader']):
+                        return True
+        except Exception:
+            pass
+        return False
+
     def set_diffuse_texture(self, texture_type: TextureType, material, img, override=True):
         if not material or not material.use_nodes:
+            return
+
+        if not self._is_genshin_shader_material(material):
             return
 
         if img:
@@ -461,6 +495,9 @@ class GenshinTextureImporter:
         if not material or not material.use_nodes:
             return
 
+        if not self._is_genshin_shader_material(material):
+            return
+
         if img and 'diffuse' not in img.name.lower():
             img.colorspace_settings.name = 'Non-Color'
         nodes = find_all_image_nodes_by_category(material.node_tree, 'lightmap')
@@ -492,6 +529,9 @@ class GenshinTextureImporter:
 
     def set_normalmap_texture(self, type: TextureType, material, img, override=True):
         if not material or not material.use_nodes:
+            return
+
+        if not self._is_genshin_shader_material(material):
             return
 
         img.colorspace_settings.name = 'Non-Color'
@@ -930,11 +970,18 @@ class GenshinTextureImporter:
                 target_mat = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{mat_part}')
 
             if not target_mat:
+                # Prefer shader materials over original FBX materials (ex. Mavuika Leather).
                 for mat in bpy.data.materials:
                     if mat.use_nodes and 'outlines' not in mat.name.lower() and 'outline' not in mat.name.lower():
-                        if is_mat_part_match(mat.name, mat_part):
+                        if is_mat_part_match(mat.name, mat_part) and self._is_genshin_shader_material(mat):
                             target_mat = mat
                             break
+                if not target_mat:
+                    for mat in bpy.data.materials:
+                        if mat.use_nodes and 'outlines' not in mat.name.lower() and 'outline' not in mat.name.lower():
+                            if is_mat_part_match(mat.name, mat_part):
+                                target_mat = mat
+                                break
 
             if not target_mat and mat_part.lower() == 'pupil':
                 target_mat = bpy.data.materials.get(getattr(self.material_names, 'NEW_PUPIL', f'{self.material_names.MATERIAL_PREFIX}New Pupil')) or \
@@ -950,9 +997,15 @@ class GenshinTextureImporter:
             if not target_mat:
                 for mat in bpy.data.materials:
                     if mat.use_nodes and 'outlines' not in mat.name.lower() and 'outline' not in mat.name.lower():
-                        if raw_name.lower() in mat.name.lower():
+                        if raw_name.lower() in mat.name.lower() and self._is_genshin_shader_material(mat):
                             target_mat = mat
                             break
+                if not target_mat:
+                    for mat in bpy.data.materials:
+                        if mat.use_nodes and 'outlines' not in mat.name.lower() and 'outline' not in mat.name.lower():
+                            if raw_name.lower() in mat.name.lower():
+                                target_mat = mat
+                                break
 
             if not target_mat:
                 target_mat = bpy.data.materials.get(raw_name)
@@ -1192,11 +1245,13 @@ class GenshinTextureImporter:
             equip_materials = [
                 mat for mat in bpy.data.materials 
                 if mat.use_nodes and 'outlines' not in mat.name.lower() and 'outline' not in mat.name.lower() and ('body' in mat.name.lower() or 'equip' in mat.name.lower())
+                and self._is_genshin_shader_material(mat)
             ]
             if not equip_materials:
                 equip_materials = [
                     mat for mat in bpy.data.materials 
                     if mat.use_nodes and 'outlines' not in mat.name.lower() and 'pupil' not in mat.name.lower() and 'face' not in mat.name.lower()
+                    and self._is_genshin_shader_material(mat)
                 ]
             for target_mat in equip_materials:
                 if is_diffuse:
@@ -1237,6 +1292,7 @@ class GenshinTextureImporter:
                 matching_materials = [
                     mat for mat in bpy.data.materials 
                     if mat.use_nodes and 'outlines' not in mat.name.lower() and 'outline' not in mat.name.lower() and is_mat_part_match(mat.name, part)
+                    and self._is_genshin_shader_material(mat)
                 ]
 
                 if matching_materials:
