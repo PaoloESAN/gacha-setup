@@ -436,6 +436,19 @@ class ZenlessZoneZeroMaterialImporterFacade(GameMaterialImporter):
             except Exception as ex:
                 print(f"[ZZZ Outline Material Import Notice]: {ex}")
 
+        # Remove extra scenes pulled in by the Kythera library load (e.g. Scene.001
+        # with preview objects Face/Main Shader + Sun).
+        try:
+            current_scene = self.context.scene
+            for sc in list(bpy.data.scenes):
+                if sc != current_scene and (sc.name.startswith("Scene.") or sc.name in ["Scene.001", "Scene.002", "Preview"]):
+                    try:
+                        bpy.data.scenes.remove(sc, do_unlink=True)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
         cache_enabled = self.context.window_manager.cache_enabled
         user_selected_shader_blend_file_path = self.blender_operator.filepath if \
             self.blender_operator.filepath and not os.path.isdir(self.blender_operator.filepath) else \
