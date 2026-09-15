@@ -267,48 +267,90 @@ def setup_endfield_isaac_face_rig(body_rig, context=None):
 
     context.view_layer.update()
 
-    # Visually lower Isaac FaceRig widgets to align with Endfield facial features
-    if not facerig_obj.get("ake_facerig_lowered", False):
-        try:
-            head_pbone = body_rig.pose.bones.get(body_head_bone_name)
-            if head_pbone:
-                head_tail_world = body_rig.matrix_world @ head_pbone.tail
-                head_head_world = body_rig.matrix_world @ head_pbone.head
-                world_head_up = (head_tail_world - head_head_world).normalized()
-                world_down = -world_head_up
-            else:
-                world_down = Vector((0.0, 0.0, -1.0))
+    # Precisely align Eye-Track-Master, Eye-Track, Eye-Track-Follow, and Eye-Scale-Control to character's eye coordinates
+    try:
+        pb_eye_l = body_rig.pose.bones.get("eye.L") or body_rig.pose.bones.get("DEF-eye.L")
+        pb_eye_r = body_rig.pose.bones.get("eye.R") or body_rig.pose.bones.get("DEF-eye.R")
+        if pb_eye_l and pb_eye_r:
+            eye_l_world = body_rig.matrix_world @ pb_eye_l.head
+            eye_r_world = body_rig.matrix_world @ pb_eye_r.head
+            eye_center_world = (eye_l_world + eye_r_world) / 2.0
 
-            armature_down = (facerig_obj.matrix_world.to_3x3().inverted() @ world_down).normalized()
-            shift_distance = 0.0105  # Lower by ~1.05 cm to align widgets over Endfield features
-            shift_vec = armature_down * shift_distance
+            facerig_inv = facerig_obj.matrix_world.inverted()
+            eye_l_local = facerig_inv @ eye_l_world
+            eye_r_local = facerig_inv @ eye_r_world
+            eye_center_local = (eye_l_local + eye_r_local) / 2.0
 
             orig_active = context.view_layer.objects.active
             orig_mode = facerig_obj.mode if facerig_obj.mode in ('OBJECT', 'EDIT', 'POSE') else 'OBJECT'
             context.view_layer.objects.active = facerig_obj
             bpy.ops.object.mode_set(mode='EDIT')
+            ebs = facerig_obj.data.edit_bones
 
-            eb_jf = facerig_obj.data.edit_bones.get('joint_face')
-            if eb_jf:
-                bones_to_shift = set()
-                def collect_descendants(eb):
-                    bones_to_shift.add(eb)
-                    for ch in eb.children:
-                        collect_descendants(ch)
-                collect_descendants(eb_jf)
+            # 1. Align Eye-Track-Master (the big eye rectangle) directly centered to eye height and midpoint
+            eb_master = ebs.get("Eye-Track-Master")
+            if eb_master:
+                dx = eye_center_local.x - eb_master.head.x
+                dz = eye_center_local.z - eb_master.head.z
+                eb_master.head.x += dx
+                eb_master.head.z += dz
+                eb_master.tail.x += dx
+                eb_master.tail.z += dz
 
-                for eb in bones_to_shift:
-                    eb.head += shift_vec
-                    eb.tail += shift_vec
+            # 2. Align Eye-Scale-Control, Eye-Track, and Eye-Track-Follow for each eye
+            for side, pos_local in [("L", eye_l_local), ("R", eye_r_local)]:
+                # Eye scale control box: MUST stay at Eye-Track-Master depth Y (inside the blue rectangle)
+                eb_scale = ebs.get(f"Eye-Scale-Control.{side}")
+                if eb_scale and eb_master:
+                    dx = pos_local.x - eb_scale.head.x
+                    dz = pos_local.z - eb_scale.head.z
+                    dy = eb_master.head.y - eb_scale.head.y
+                    eb_scale.head.x += dx
+                    eb_scale.head.z += dz
+                    eb_scale.head.y += dy
+                    eb_scale.tail.x += dx
+                    eb_scale.tail.z += dz
+                    eb_scale.tail.y += dy
+
+                # Eye-Track gaze pivot centered on the eye, pointing straight forward with zero tilt
+                eb_track = ebs.get(f"Eye-Track.{side}")
+                if eb_track:
+                    track_len = eb_track.length or 0.05
+                    eb_track.head = pos_local.copy()
+                    eb_track.tail = Vector((pos_local.x, pos_local.y - track_len, pos_local.z))
+                    eb_track.roll = 0.0
+
+                # Eye-Track-Follow target aligned in X and Z with the eye, at Eye-Track-Master depth Y
+                eb_follow = ebs.get(f"Eye-Track-Follow.{side}")
+                if eb_follow and eb_master:
+                    dx = pos_local.x - eb_follow.head.x
+                    dz = pos_local.z - eb_follow.head.z
+                    dy = eb_master.head.y - eb_follow.head.y
+                    eb_follow.head.x += dx
+                    eb_follow.head.z += dz
+                    eb_follow.head.y += dy
+                    eb_follow.tail.x += dx
+                    eb_follow.tail.z += dz
+                    eb_follow.tail.y += dy
 
             bpy.ops.object.mode_set(mode=orig_mode)
             if orig_active:
                 context.view_layer.objects.active = orig_active
 
+            # Update Child Of inverse_matrix on Eye-Track-Follow so rest pose points perfectly horizontal
+            context.view_layer.update()
+            for bname in ["Eye-Track-Follow.L", "Eye-Track-Follow.R"]:
+                pb = facerig_obj.pose.bones.get(bname)
+                if pb:
+                    c = pb.constraints.get("Child Of")
+                    if c and c.subtarget in facerig_obj.pose.bones:
+                        tgt_pbone = facerig_obj.pose.bones[c.subtarget]
+                        c.inverse_matrix = tgt_pbone.matrix.inverted()
+
             facerig_obj["ake_facerig_lowered"] = True
-            print(f"[AKE FACE RIG] Lowered FaceRig widgets by {shift_distance*100:.1f} cm for Endfield facial alignment.")
-        except Exception as shift_err:
-            print(f"[AKE FACE RIG] Warning while lowering FaceRig: {shift_err}")
+            print("[AKE FACE RIG] Perfectly aligned Eye-Track-Master, Eye-Track, Eye-Track-Follow, and Eye-Scale-Control to character eye coordinates.")
+    except Exception as align_err:
+        print(f"[AKE FACE RIG] Warning while aligning eye widgets: {align_err}")
 
     context.view_layer.update()
 
@@ -425,15 +467,20 @@ def setup_endfield_isaac_face_rig(body_rig, context=None):
                 if c.name.startswith("Isaac_"):
                     pb_eye.constraints.remove(c)
 
-            # 1. Eye Rotation (looking around): Rotates exactly with Isaac's eye_L / eye_R
+            # 1. Eye Rotation (looking around): Rotates with Isaac's Eye-Track.L / Eye-Track.R
             c_rot = pb_eye.constraints.new('COPY_ROTATION')
             c_rot.name = f"Isaac_EyeRot_{side}"
             c_rot.target = facerig_obj
-            c_rot.subtarget = f"eye_{side}"
+            c_rot.subtarget = f"Eye-Track.{side}"
             c_rot.owner_space = 'LOCAL'
-            c_rot.target_space = 'LOCAL_OWNER_ORIENT'
+            c_rot.target_space = 'LOCAL'
+            c_rot.invert_x = False
+            c_rot.invert_y = False
+            c_rot.invert_z = False
+            c_rot.influence = 0.25
 
-            # 2. Eye Movement (translation): Shifts eye over the face plane on X/Z
+            # 2. Eye Movement (translation): Slides the iris across the eye plane with Eye-Track-Master
+            # Locked Y (depth) so eyes stay flat against the eye surface without sinking or popping out
             c_loc = pb_eye.constraints.new('COPY_LOCATION')
             c_loc.name = f"Isaac_EyeLoc_{side}"
             c_loc.target = facerig_obj
@@ -441,8 +488,12 @@ def setup_endfield_isaac_face_rig(body_rig, context=None):
             c_loc.owner_space = 'LOCAL'
             c_loc.target_space = 'LOCAL'
             c_loc.use_offset = True
-            c_loc.use_y = False  # Keep depth locked so eyes never pop out or sink
-            c_loc.influence = 0.3  # Natural subtle translation accompanying the rotation
+            c_loc.use_x = True
+            c_loc.use_y = False
+            c_loc.use_z = True
+            c_loc.invert_x = True
+            c_loc.invert_z = True
+            c_loc.influence = 0.25
 
             # 3. Eye Scale: Scale control for iris/eye size
             c_scale = pb_eye.constraints.new('COPY_SCALE')

@@ -1041,10 +1041,14 @@ def apply_color(armature, pb, group_name, rgb, cache):
 
 
 def is_face_rig_bone(bone_name):
-    if bone_name == "Face-Root":
+    if bone_name in ("Face-Root", "Facerig Root"):
+        return True
+    if bone_name.endswith(" Bone"):
+        return True
+    if bone_name in ("MCH-EyeAim.L", "MCH-EyeAim.R", "MCH-Eyes_Parent"):
         return True
     b_low = bone_name.lower()
-    if any(k in b_low for k in ("skirt", "hair", "dress", "cloth", "surfboard", "weapon", "wpn", "garape", "grape", "tail", "spine", "arm", "leg", "hand", "foot", "torso", "root")):
+    if any(k in b_low for k in ("skirt", "hair", "dress", "cloth", "surfboard", "weapon", "wpn", "garape", "grape", "tail", "spine", "arm", "leg", "hand", "foot", "torso")):
         return False
     if bone_name.startswith("CTRL-Ctr_"):
         return False
@@ -1072,6 +1076,59 @@ def purge_previous(armature):
     for o in list(bpy.data.objects):
         if o.name.startswith("WGT-Face_"):
             bpy.data.objects.remove(o, do_unlink=True)
+    facerig_col = bpy.data.collections.get("Facerig")
+    if facerig_col:
+        for parent_col in list(bpy.data.collections):
+            if facerig_col.name in parent_col.children:
+                try:
+                    parent_col.children.unlink(facerig_col)
+                except Exception:
+                    pass
+        if facerig_col.name in bpy.context.scene.collection.children:
+            try:
+                bpy.context.scene.collection.children.unlink(facerig_col)
+            except Exception:
+                pass
+        for obj in list(facerig_col.objects):
+            try:
+                bpy.data.objects.remove(obj, do_unlink=True)
+            except Exception:
+                pass
+        try:
+            bpy.data.collections.remove(facerig_col)
+        except Exception:
+            pass
+    border = bpy.data.objects.get("Facerig Border")
+    if border:
+        try:
+            bpy.data.objects.remove(border, do_unlink=True)
+        except Exception:
+            pass
+
+
+
+def make_facerig_root_widget(coll):
+    name = "WGT-Face_FacerigRoot"
+    obj = bpy.data.objects.get(name)
+    if obj is not None:
+        return obj
+    mesh = bpy.data.meshes.new(name)
+    w, h = 0.85, 0.60
+    verts = [
+        (-w, -h, 0.0), (w, -h, 0.0), (w, h, 0.0), (-w, h, 0.0),
+        (-w*1.04, -h*1.04, 0.0), (w*1.04, -h*1.04, 0.0), (w*1.04, h*1.04, 0.0), (-w*1.04, h*1.04, 0.0)
+    ]
+    edges = [
+        (0, 1), (1, 2), (2, 3), (3, 0),
+        (4, 5), (5, 6), (6, 7), (7, 4),
+        (0, 4), (1, 5), (2, 6), (3, 7)
+    ]
+    mesh.from_pydata(verts, edges, [])
+    mesh.update()
+    obj = bpy.data.objects.new(name, mesh)
+    if coll is not None and obj.name not in coll.objects:
+        coll.objects.link(obj)
+    return obj
 
 
 def setup_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_size):
@@ -1410,7 +1467,7 @@ def hide_mechanism_bones(armature):
     HIDE_PREFIXES = (
         "CtrEyebrow", "SknEyebrow", "SknEyeLight", "SknMouth", "Face-Root",
         "Skn_L_Mouth", "Skn_R_Mouth", "Skn_M_Mouth", "Skn_L_Highlights",
-        "Skn_R_Highlights", "Skn_RemiMk_", "BdyMouth", "PTMouth"
+        "Skn_R_Highlights", "Skn_RemiMk_", "BdyMouth", "PTMouth", "MCH-"
     )
 
     if bpy.context.object and bpy.context.object.mode != 'OBJECT':
@@ -1422,7 +1479,7 @@ def hide_mechanism_bones(armature):
             b.hide = True
             hidden += 1
 
-    assign_bones_to_other_collection(armature, ("MCH-EyeAim.L", "MCH-EyeAim.R", "Face-Root"))
+    assign_bones_to_other_collection(armature, ("MCH-EyeAim.L", "MCH-EyeAim.R", "MCH-Eyes_Parent", "Face-Root"))
 
 
 def get_facerig_bone_collection(armature, name=FACERIG_COLLECTION):
@@ -1597,10 +1654,588 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
                 except Exception:
                     pass
             fcoll.assign(b)
+    else:
+        for nm in (MASTER, "CTRL-Eye.L", "CTRL-Eye.R"):
+            b = armature.data.bones.get(nm)
+            if b and hasattr(b, "layers"):
+                b.layers[0] = True
+                b.layers[1] = False
     for nm in ("MCH-EyeAim.L", "MCH-EyeAim.R"):
         b = armature.data.bones.get(nm)
         if b:
             b.hide = True
+
+
+
+FACERIG_DETAIL_COLLECTION = "Face (Detail)"
+
+FACERIG_SLIDER_COORDS = {
+    # Eyebrows
+    'Ebr_Angry': (2.4779, 0.0, 1.8121),
+    'Ebr_Down': (2.4779, 0.0, 1.7502),
+    'Ebr_L_Up': (2.4779, 0.0, 1.6752),
+    'Ebr_R_Up': (2.4779, 0.0, 1.6133),
+    'Ebr_Relax': (2.4779, 0.0, 1.5497),
+    'Ebr_Sad': (2.4779, 0.0, 1.4874),
+
+    # Eyes
+    'Eye_Angry': (1.7792, 0.0, 0.5454),
+    'Eye_Close': (1.1063, 0.0, 0.8463),
+    'Eye_HalfClose': (1.7792, 0.0, 0.8298),
+    'Eye_L_Open': (1.1063, 0.0, 0.5159),
+    'Eye_L_Wink': (1.1063, 0.0, 0.7094),
+    'Eye_LowlidUp': (1.7792, 0.0, 0.6195),
+    'Eye_MidDown': (1.7792, 0.0, 0.6929),
+    'Eye_MidUp': (1.7781, 0.0, 0.7584),
+    'Eye_R_Open': (1.1063, 0.0, 0.5778),
+    'Eye_R_Wink': (1.1063, 0.0, 0.7713),
+    'Eye_Sad': (1.7792, 0.0, 0.4816),
+
+    # Mouth
+    'Mth': (1.7768, 0.0, 1.0575),  # 2D controller
+    'Mth_Aa1': (1.7824, 0.0, 1.8121),
+    'Mth_AaTalk': (1.7824, 0.0, 1.4250),
+    'Mth_Ee': (1.7824, 0.0, 1.6133),
+    'Mth_Ii': (1.7824, 0.0, 1.7502),
+    'Mth_L_Down': (1.1035, 0.0, 1.5977),
+    'Mth_L_In': (1.1035, 0.0, 1.3762),
+    'Mth_L_Out': (1.1035, 0.0, 1.1495),
+    'Mth_L_Up': (1.1035, 0.0, 1.8121),
+    'Mth_Laugh': (1.7824, 0.0, 1.3614),
+    'Mth_R_Down': (1.1035, 0.0, 1.5358),
+    'Mth_R_In': (1.1035, 0.0, 1.3143),
+    'Mth_R_Out': (1.1035, 0.0, 1.0876),
+    'Mth_R_Up': (1.1035, 0.0, 1.7502),
+    'Mth_Uu': (1.7824, 0.0, 1.6752),
+    'Mth_UuOo': (1.7824, 0.0, 1.5497),
+
+    # Extra shapekeys (1..22)
+    'Extra 1': (2.5308, 0.0, 1.1443),
+    'Extra 2': (2.5297, 0.0, 1.0730),
+    'Extra 3': (2.5308, 0.0, 1.0074),
+    'Extra 4': (2.5308, 0.0, 0.9340),
+    'Extra 5': (2.5308, 0.0, 0.8599),
+    'Extra 6': (2.5308, 0.0, 0.7961),
+    'Extra 7': (2.5308, 0.0, 0.7241),
+    'Extra 8': (2.5297, 0.0, 0.6528),
+    'Extra 9': (2.5308, 0.0, 0.5872),
+    'Extra 10': (2.5308, 0.0, 0.5138),
+    'Extra 11': (2.5308, 0.0, 0.4397),
+    'Extra 12': (3.2323, 0.0, 1.1443),
+    'Extra 13': (3.2312, 0.0, 1.0730),
+    'Extra 14': (3.2323, 0.0, 1.0074),
+    'Extra 15': (3.2323, 0.0, 0.9340),
+    'Extra 16': (3.2323, 0.0, 0.8599),
+    'Extra 17': (3.2323, 0.0, 0.7961),
+    'Extra 18': (3.2323, 0.0, 0.7241),
+    'Extra 19': (3.2312, 0.0, 0.6528),
+    'Extra 20': (3.2323, 0.0, 0.5872),
+    'Extra 21': (3.2323, 0.0, 0.5138),
+    'Extra 22': (3.2323, 0.0, 0.4397),
+}
+
+
+def get_facerig_detail_bone_collection(armature):
+    if hasattr(armature.data, "collections"):
+        coll = armature.data.collections.get(FACERIG_DETAIL_COLLECTION) or armature.data.collections.new(FACERIG_DETAIL_COLLECTION)
+        return coll
+    return None
+
+
+def get_huge_facerig_widgets(wgt_coll):
+    panel_wgt_name = "WGT-Face_Huge_Facerig_Panel"
+    controls_wgt_name = "WGT-Face_Huge_Facerig_Controls"
+
+    panel_obj = bpy.data.objects.get(panel_wgt_name)
+    controls_obj = bpy.data.objects.get(controls_wgt_name)
+    if panel_obj and controls_obj:
+        return panel_obj, controls_obj
+
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    blend_candidates = [
+        os.path.join(current_dir, 'ZZZ_Facerig.blend'),
+        r'D:\BLENDERRR\ZZZ\shaders\ZZZ Setup File V2.0.blend',
+    ]
+    blend_path = next((p for p in blend_candidates if os.path.isfile(p)), None)
+    if not blend_path:
+        print("[ZZZ Face Rig Warning] Could not find ZZZ_Facerig.blend")
+        return panel_obj, controls_obj
+
+    try:
+        with bpy.data.libraries.load(blend_path, link=False) as (data_from, data_to):
+            load_objs = []
+            if "Huge Facerig Panel" in data_from.objects:
+                load_objs.append("Huge Facerig Panel")
+            elif "Huge Facerig" in data_from.objects:
+                load_objs.append("Huge Facerig")
+            elif "Facerig Border" in data_from.objects:
+                load_objs.append("Facerig Border")
+
+            if "Huge Facerig Controls" in data_from.objects:
+                load_objs.append("Huge Facerig Controls")
+
+            data_to.objects = load_objs
+
+        for obj in data_to.objects:
+            if not obj:
+                continue
+            if "Controls" in obj.name:
+                obj.name = controls_wgt_name
+                controls_obj = obj
+            else:
+                obj.name = panel_wgt_name
+                panel_obj = obj
+    except Exception as e:
+        print(f"[ZZZ Face Rig Warning] Failed to load Huge Facerig widgets: {e}")
+
+    for w_obj in (panel_obj, controls_obj):
+        if w_obj:
+            if wgt_coll and w_obj.name not in wgt_coll.objects:
+                wgt_coll.objects.link(w_obj)
+            if w_obj.name in bpy.context.scene.collection.objects:
+                try:
+                    bpy.context.scene.collection.objects.unlink(w_obj)
+                except Exception:
+                    pass
+            w_obj.hide_viewport = True
+            w_obj.hide_render = True
+
+    return panel_obj, controls_obj
+
+
+def update_rig_ui_text_for_face_detail(armature=None):
+    candidates = []
+    if armature:
+        arm_name = armature.name.replace("RIG - ", "").replace("RIG-", "").strip()
+        candidates.extend([f"{arm_name}_RigUI.py", f"{armature.name}_RigUI.py"])
+    candidates.extend(["rig_ui.py", "Miyabi_RigUI.py"])
+
+    found_texts = []
+    for cand in candidates:
+        t = bpy.data.texts.get(cand)
+        if t and t not in found_texts:
+            found_texts.append(t)
+
+    for t in bpy.data.texts:
+        if ("rigui" in t.name.lower() or "rig_ui" in t.name.lower()) and t not in found_texts:
+            found_texts.append(t)
+
+    for t in found_texts:
+        content = t.as_string()
+        if 'Face (Detail)' in content:
+            try:
+                with bpy.context.temp_override(edit_text=t):
+                    bpy.ops.text.run_script()
+            except Exception:
+                pass
+            continue
+
+        if 'collection["Face"]' in content or "collection['Face']" in content:
+            face_key = 'collection["Face"]' if 'collection["Face"]' in content else "collection['Face']"
+            idx = content.find(face_key)
+            end_line = content.find('\n', idx)
+            next_line = content.find('\n', end_line + 1)
+            line_start = content.rfind('\n', 0, idx) + 1
+            indent = content[line_start:idx]
+            if not indent.strip() == "":
+                indent = "\t\t"
+
+            detail_code = (
+                f"\n{indent}if \"Face (Detail)\" in collection:\n"
+                f"{indent}\trow = col.row(align = True)\n"
+                f"{indent}\trow.prop(collection[\"Face (Detail)\"], 'is_visible', toggle=True, text='Face (Detail)')\n"
+                f"{indent}\trow.prop(collection[\"Face (Detail)\"], 'is_solo', toggle=True, text=\"\", icon='SOLO_OFF', invert_checkbox=False, emboss=True)\n"
+            )
+            new_content = content[:next_line] + detail_code + content[next_line:]
+            t.clear()
+            t.write(new_content)
+
+            try:
+                with bpy.context.temp_override(edit_text=t):
+                    bpy.ops.text.run_script()
+            except Exception:
+                try:
+                    exec(compile(t.as_string(), t.name, 'exec'), {})
+                except Exception as e:
+                    print(f"[ZZZ Face Rig Warning] Could not reload rig UI script {t.name}: {e}")
+
+
+def setup_facerig_detail_panel(faceobj, armature, head_name, keyblock):
+    # Clean up any leftover legacy Facerig scene collections or standalone objects
+    old_facerig_col = bpy.data.collections.get("Facerig")
+    if old_facerig_col:
+        for parent_col in list(bpy.data.collections):
+            if old_facerig_col.name in parent_col.children:
+                try:
+                    parent_col.children.unlink(old_facerig_col)
+                except Exception:
+                    pass
+        if old_facerig_col.name in bpy.context.scene.collection.children:
+            try:
+                bpy.context.scene.collection.children.unlink(old_facerig_col)
+            except Exception:
+                pass
+        for obj in list(old_facerig_col.objects):
+            if not obj.name.startswith("WGT-Face_Huge_Facerig"):
+                try:
+                    bpy.data.objects.remove(obj, do_unlink=True)
+                except Exception:
+                    pass
+        try:
+            bpy.data.collections.remove(old_facerig_col)
+        except Exception:
+            pass
+
+    old_border = bpy.data.objects.get("Facerig Border")
+    if old_border and not old_border.name.startswith("WGT-Face_Huge_Facerig"):
+        try:
+            bpy.data.objects.remove(old_border, do_unlink=True)
+        except Exception:
+            pass
+
+    wgt_coll = get_widget_collection()
+    panel_wgt, controls_wgt = get_huge_facerig_widgets(wgt_coll)
+
+    base_slider_names = {
+        'Ebr_Angry', 'Ebr_Down', 'Ebr_L_Up', 'Ebr_R_Up', 'Ebr_Relax', 'Ebr_Sad',
+        'Eye_Angry', 'Eye_Close', 'Eye_HalfClose', 'Eye_L_Open', 'Eye_L_Wink',
+        'Eye_LowlidUp', 'Eye_MidDown', 'Eye_MidUp', 'Eye_R_Open', 'Eye_R_Wink', 'Eye_Sad',
+        'Mth_Aa1', 'Mth_AaTalk', 'Mth_Down', 'Mth_Ee', 'Mth_Ii', 'Mth_L_Down',
+        'Mth_L_In', 'Mth_L_Out', 'Mth_L_Up', 'Mth_Laugh', 'Mth_Left', 'Mth_R_Down',
+        'Mth_R_In', 'Mth_R_Out', 'Mth_R_Up', 'Mth_Right', 'Mth_Up', 'Mth_Uu', 'Mth_UuOo'
+    }
+
+    # Find character extra shapekeys
+    extra_shapekeys = []
+    if keyblock:
+        for sk in keyblock:
+            if sk.name == "Basis":
+                continue
+            raw_name = sk.name[4:] if sk.name.startswith("Fac_") else sk.name
+            if raw_name not in base_slider_names and not raw_name.startswith("Extra") and raw_name not in extra_shapekeys:
+                extra_shapekeys.append(raw_name)
+
+    # Switch armature to EDIT mode and create detail panel bones
+    bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.context.view_layer.objects.active = armature
+    armature.select_set(True)
+    bpy.ops.object.mode_set(mode='EDIT')
+    eb = armature.data.edit_bones
+
+    # Facerig Root aligned in +Y with roll=0 so local axes match world axes identically
+    faceroot = eb.get("Facerig Root") or eb.new("Facerig Root")
+    faceroot.head = Vector((1.2417, 0.0, 1.1727))
+    faceroot.tail = Vector((1.2417, 0.2, 1.1727))
+    faceroot.roll = 0.0
+    faceroot.use_deform = False
+
+    panel_bone_names = ["Facerig Root"]
+
+    # Facerig Controls bone for displaying the non-selectable text & slider borders
+    if controls_wgt:
+        facerig_ctrls = eb.get("Facerig Controls") or eb.new("Facerig Controls")
+        facerig_ctrls.head = faceroot.head
+        facerig_ctrls.tail = faceroot.tail
+        facerig_ctrls.roll = 0.0
+        facerig_ctrls.parent = faceroot
+        facerig_ctrls.use_connect = False
+        facerig_ctrls.use_deform = False
+        panel_bone_names.append("Facerig Controls")
+
+    # 1. Base sliders
+    for key, coord in FACERIG_SLIDER_COORDS.items():
+        if key.startswith("Extra "):
+            continue
+        if key == 'Mth':
+            has_2d = any(k in keyblock for k in ("Fac_Mth_Up", "Fac_Mth_Down", "Fac_Mth_Left", "Fac_Mth_Right", "Mth_Up", "Mth_Down", "Mth_Left", "Mth_Right"))
+            if not has_2d:
+                continue
+            bname = "Mth Bone"
+            head_pos = Vector(coord)
+        else:
+            has_sk = (("Fac_" + key) in keyblock) or (key in keyblock)
+            if not has_sk:
+                continue
+            bname = key + " Bone"
+            # Offset to the left of the slider box so it starts at 0 and slides to the right (0 to 1)
+            head_pos = Vector(coord) - Vector((0.10, 0.0, 0.0))
+
+        b = eb.get(bname) or eb.new(bname)
+        b.head = head_pos
+        b.tail = b.head + Vector((0.0, 0.05, 0.0))
+        b.roll = 0.0
+        b.parent = faceroot
+        b.use_connect = False
+        b.use_deform = False
+        panel_bone_names.append(bname)
+
+    # 2. Extra sliders (sequential slots Extra 1..22 for matching extras)
+    for i, sk_name in enumerate(extra_shapekeys[:22], 1):
+        slot_key = f"Extra {i}"
+        coord = FACERIG_SLIDER_COORDS.get(slot_key)
+        if not coord:
+            continue
+        bname = sk_name + " Bone"
+        b = eb.get(bname) or eb.new(bname)
+        # Offset to the left of the slider box so it starts at 0 and slides to the right (0 to 1)
+        b.head = Vector(coord) - Vector((0.10, 0.0, 0.0))
+        b.tail = b.head + Vector((0.0, 0.05, 0.0))
+        b.roll = 0.0
+        b.parent = faceroot
+        b.use_connect = False
+        b.use_deform = False
+        panel_bone_names.append(bname)
+
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Assign bones to Face (Detail) collection & layer
+    if hasattr(armature.data, "collections"):
+        colls = armature.data.collections
+        detail_coll = colls.get(FACERIG_DETAIL_COLLECTION) or colls.new(FACERIG_DETAIL_COLLECTION)
+        face_main_coll = colls.get(FACERIG_COLLECTION)
+        for bname in panel_bone_names:
+            b = armature.data.bones.get(bname)
+            if b:
+                detail_coll.assign(b)
+                if face_main_coll:
+                    face_main_coll.unassign(b)
+        detail_coll.is_visible = True
+    else:
+        # Blender 3: assign to layer 1
+        for bname in panel_bone_names:
+            b = armature.data.bones.get(bname)
+            if b:
+                b.layers[1] = True
+                b.layers[0] = False
+
+    # Setup pose mode constraints and custom shapes
+    bpy.context.view_layer.objects.active = armature
+    bpy.ops.object.mode_set(mode='POSE')
+
+    root_pb = armature.pose.bones.get("Facerig Root")
+    if root_pb:
+        if panel_wgt:
+            root_pb.custom_shape = panel_wgt
+            root_pb.use_custom_shape_bone_size = False
+        else:
+            root_pb.custom_shape = make_facerig_root_widget(wgt_coll)
+        root_pb.custom_shape_scale_xyz = Vector((1.0, 1.0, 1.0))
+        apply_color(armature, root_pb, 'Face Detail Root', COL_EBRMASTER, {})
+
+    ctrls_pb = armature.pose.bones.get("Facerig Controls")
+    if ctrls_pb:
+        if controls_wgt:
+            ctrls_pb.custom_shape = controls_wgt
+            ctrls_pb.use_custom_shape_bone_size = False
+        ctrls_pb.custom_shape_scale_xyz = Vector((1.0, 1.0, 1.0))
+        ctrls_pb.lock_location = (True, True, True)
+        ctrls_pb.lock_rotation = (True, True, True)
+        ctrls_pb.lock_scale = (True, True, True)
+
+    # Make Facerig Controls unselectable so clicking the panel only selects Facerig Root or sliders
+    b_ctrls = armature.data.bones.get("Facerig Controls")
+    if b_ctrls:
+        b_ctrls.hide_select = True
+
+    slider_wgt = make_widget('ring', wgt_coll)
+
+    for bname in panel_bone_names:
+        if bname in ("Facerig Root", "Facerig Controls"):
+            continue
+        pb = armature.pose.bones.get(bname)
+        if not pb:
+            continue
+        pb.custom_shape = slider_wgt
+        pb.use_custom_shape_bone_size = False
+
+        if bname == "Mth Bone":
+            pb.custom_shape_scale_xyz = Vector((0.038, 0.038, 0.038))
+            apply_color(armature, pb, 'Face Detail Mth', COL_MOUTH, {})
+            # Mouth moves in 2D (X and Z). Lock Y (depth into screen)
+            pb.lock_location = (False, True, False)
+            pb.lock_rotation = (True, True, True)
+            pb.lock_scale = (True, True, True)
+
+            c = pb.constraints.get("Limit Location") or pb.constraints.new('LIMIT_LOCATION')
+            c.name = "Limit Location"
+            c.use_min_x = True; c.min_x = -0.1
+            c.use_max_x = True; c.max_x = 0.1
+            c.use_min_z = True; c.min_z = -0.1
+            c.use_max_z = True; c.max_z = 0.1
+            c.use_transform_limit = True
+            c.owner_space = 'LOCAL'
+        else:
+            pb.custom_shape_scale_xyz = Vector((0.018, 0.018, 0.018))
+            if bname.startswith("Ebr_"):
+                apply_color(armature, pb, 'Face Detail Brow', COL_BROW, {})
+            elif bname.startswith("Eye_"):
+                apply_color(armature, pb, 'Face Detail Eye', COL_EYELID, {})
+            elif bname.startswith("Mth_"):
+                apply_color(armature, pb, 'Face Detail Mth', COL_VISEME, {})
+            else:
+                apply_color(armature, pb, 'Face Detail Extra', COL_EBRBONE, {})
+
+            # 1D sliders move along X. Lock Y and Z
+            pb.lock_location = (False, True, True)
+            pb.lock_rotation = (True, True, True)
+            pb.lock_scale = (True, True, True)
+
+            c = pb.constraints.get("Limit Location") or pb.constraints.new('LIMIT_LOCATION')
+            c.name = "Limit Location"
+            c.use_min_x = True; c.min_x = 0.0
+            c.use_max_x = True; c.max_x = 0.2
+            c.use_transform_limit = True
+            c.owner_space = 'LOCAL'
+
+    # Setup Child Of constraint on Facerig Root to follow character head
+    actual_head = head_name
+    if not actual_head or actual_head not in armature.pose.bones:
+        for cand in ["DEF-Head", "Head", "head", "DEF-spine.006", "spine.006", "Bip001 Head"]:
+            if cand in armature.pose.bones:
+                actual_head = cand
+                break
+
+    if root_pb and actual_head and actual_head in armature.pose.bones:
+        con_head = root_pb.constraints.get("Child Of") or root_pb.constraints.new('CHILD_OF')
+        con_head.name = "Child Of"
+        con_head.target = armature
+        con_head.subtarget = actual_head
+        armature.data.bones.active = armature.data.bones["Facerig Root"]
+        try:
+            bpy.ops.constraint.childof_set_inverse(constraint=con_head.name, owner='BONE')
+        except Exception:
+            head_bone = armature.data.bones.get(actual_head)
+            root_bone = armature.data.bones.get("Facerig Root")
+            if head_bone and root_bone:
+                con_head.inverse_matrix = head_bone.matrix_local.inverted() @ root_bone.matrix_local
+
+    bpy.context.view_layer.update()
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    def _get_or_add_driver(sk):
+        if sk.id_data.animation_data:
+            target_path = f'key_blocks["{sk.name}"].value'
+            for fc in sk.id_data.animation_data.drivers:
+                if fc.data_path == target_path:
+                    return fc
+        return sk.driver_add("value")
+
+    # Connect Shapekey Drivers
+    if faceobj and faceobj.data and faceobj.data.shape_keys:
+        for shapekey in faceobj.data.shape_keys.key_blocks:
+            if shapekey.name == "Basis":
+                continue
+            sk_name = shapekey.name
+            base_name = sk_name[4:] if sk_name.startswith("Fac_") else sk_name
+            bone_name = base_name + " Bone"
+            if bone_name in armature.data.bones:
+                fcurve = _get_or_add_driver(shapekey)
+                drv = fcurve.driver
+                drv.type = 'SCRIPTED'
+                vname = "var_pnl"
+                old_var = next((v for v in drv.variables if v.name == vname), None)
+                if old_var:
+                    drv.variables.remove(old_var)
+                var = drv.variables.new()
+                var.name = vname
+                var.type = 'TRANSFORMS'
+                tgt = var.targets[0]
+                tgt.id = armature
+                tgt.bone_target = bone_name
+                tgt.transform_type = 'LOC_X'
+                tgt.transform_space = 'LOCAL_SPACE'
+
+                current_expr = drv.expression.strip() if (drv.expression and drv.expression.strip()) else ""
+                # Clean up legacy (0.0) placeholder if present
+                if current_expr.startswith("(0.0) + "):
+                    current_expr = current_expr[8:].strip()
+                elif current_expr in ("0", "0.0", "0.000", "(0.0)"):
+                    current_expr = ""
+
+                if current_expr:
+                    if vname not in current_expr:
+                        drv.expression = f"({current_expr}) + ({vname} / 0.2)"
+                else:
+                    drv.expression = f"{vname} / 0.2"
+
+        # Mouth Bone 2D drivers
+        if "Mth Bone" in armature.data.bones:
+            sklist = ["Fac_Mth_Up", "Fac_Mth_Left", "Fac_Mth_Right", "Fac_Mth_Down"]
+            for shapekey_name in sklist:
+                if shapekey_name not in keyblock:
+                    continue
+                sk = keyblock[shapekey_name]
+                fcurve = _get_or_add_driver(sk)
+                drv = fcurve.driver
+                drv.type = 'SCRIPTED'
+                vname = "var_mth"
+                old_var = next((v for v in drv.variables if v.name == vname), None)
+                if old_var:
+                    drv.variables.remove(old_var)
+                var = drv.variables.new()
+                var.name = vname
+                var.type = 'TRANSFORMS'
+                tgt = var.targets[0]
+                tgt.id = armature
+                tgt.bone_target = "Mth Bone"
+                tgt.transform_space = 'LOCAL_SPACE'
+                if "_L" in shapekey_name or "_R" in shapekey_name:
+                    tgt.transform_type = 'LOC_X'
+                else:
+                    tgt.transform_type = 'LOC_Z'
+
+                factor = "0.1" if ("_L" in shapekey_name or "_Up" in shapekey_name) else "-0.1"
+                mth_term = f"({vname} / {factor})"
+                current_expr = drv.expression.strip() if (drv.expression and drv.expression.strip()) else ""
+                if current_expr.startswith("(0.0) + "):
+                    current_expr = current_expr[8:].strip()
+                elif current_expr in ("0", "0.0", "0.000", "(0.0)"):
+                    current_expr = ""
+
+                if current_expr:
+                    if vname not in current_expr:
+                        drv.expression = f"({current_expr}) + {mth_term}"
+                else:
+                    drv.expression = mth_term
+
+        # Lycaon mask shapekeys support
+        lycaon = bpy.data.objects.get("Lycaon_Body_3")
+        if lycaon and lycaon.data and lycaon.data.shape_keys:
+            for sk in lycaon.data.shape_keys.key_blocks:
+                if "_Body" in sk.name:
+                    sk.name = sk.name[:-5]
+                bname = (sk.name[4:] if sk.name.startswith("Fac_") else sk.name) + " Bone"
+                if bname in armature.data.bones:
+                    fcurve = _get_or_add_driver(sk)
+                    drv = fcurve.driver
+                    drv.type = 'SCRIPTED'
+                    vname = "var_lyc"
+                    old_v = next((v for v in drv.variables if v.name == vname), None)
+                    if old_v:
+                        drv.variables.remove(old_v)
+                    var = drv.variables.new()
+                    var.name = vname
+                    var.type = 'TRANSFORMS'
+                    tgt = var.targets[0]
+                    tgt.id = armature
+                    tgt.bone_target = bname
+                    tgt.transform_type = 'LOC_X'
+                    tgt.transform_space = 'LOCAL_SPACE'
+                    current_expr = drv.expression.strip() if (drv.expression and drv.expression.strip()) else ""
+                    if current_expr.startswith("(0.0) + "):
+                        current_expr = current_expr[8:].strip()
+                    elif current_expr in ("0", "0.0", "0.000", "(0.0)"):
+                        current_expr = ""
+
+                    if current_expr:
+                        if vname not in current_expr:
+                            drv.expression = f"({current_expr}) + ({vname} / 0.2)"
+                    else:
+                        drv.expression = f"{vname} / 0.2"
+
+    # Update Rig UI text scripts so Face (Detail) appears in N-panel Rig Layers
+    update_rig_ui_text_for_face_detail(armature)
+
 
 
 def zzz_face_rig_main():
@@ -1684,7 +2319,7 @@ def zzz_face_rig_main():
         _eye_L, _eye_R = find_eye_bone_pair(armature)
         has_eye_bones = (_eye_L is not None and _eye_R is not None)
 
-        if not controls and not has_eye_bones:
+        if not controls and not has_eye_bones and not keyblock:
             print("[ZZZ Face Rig] No drivable shape keys or facial bones found.")
             return
 
@@ -1703,7 +2338,14 @@ def zzz_face_rig_main():
         if old_facerig_wgt:
             finalize_widget_collection(old_facerig_wgt)
 
-        print("\nZZZ Face Rig complete. %d controls built on '%s'.\n"
+        # Build Face (Detail) panel
+        if keyblock:
+            try:
+                setup_facerig_detail_panel(faceobj, armature, head_name, keyblock)
+            except Exception as e_pnl:
+                print(f"[ZZZ Face Rig Warning] Failed to setup detail panel: {e_pnl}")
+
+        print("\nZZZ Face Rig complete (Face + Face (Detail)). %d controls built on '%s'.\n"
               % (len(controls), armature.name))
 
     finally:
