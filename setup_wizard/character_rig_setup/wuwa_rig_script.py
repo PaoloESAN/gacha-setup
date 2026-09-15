@@ -469,6 +469,23 @@ def _apply_zzz_parity_wuwa(rig_obj, context, orig_arm_name):
                         _face_coll.assign(_fb)
                     except Exception:
                         pass
+            # MCH-head-controller-parent a Other (oculta): mecanismo interno.
+            _mch_b = rig_obj.data.bones.get("MCH-head-controller-parent")
+            if _mch_b is not None:
+                _other_c = _colls.get("Other")
+                if _other_c is None:
+                    try:
+                        _other_c = _colls.new("Other")
+                    except Exception:
+                        _other_c = None
+                if _other_c is not None:
+                    for _c in list(_mch_b.collections):
+                        if _c != _other_c:
+                            try:
+                                _c.unassign(_mch_b)
+                            except Exception:
+                                pass
+                    _other_c.assign(_mch_b)
             try:
                 _root_coll.is_visible = True
                 _face_coll.is_visible = True
