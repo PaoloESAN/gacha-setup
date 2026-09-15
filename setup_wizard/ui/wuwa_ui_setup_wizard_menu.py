@@ -30,6 +30,8 @@ class WW_PT_Setup_Wizard_UI_Layout(Panel, WutheringWavesUIRenderChecker):
             game_type=GameType.WUTHERING_WAVES.name,
             operator_context="INVOKE_DEFAULT",
         )
+        from setup_wizard.services.isolation import isolation_service
+        isolation_service.draw_setup_status_box(sub_layout, context, run_entire_setup_column)
 
         settings_box = layout.box()
         settings_header = settings_box.row()
@@ -292,6 +294,12 @@ class WW_PT_Rig_Character_Settings(Panel):
     def draw(self, context):
         layout = self.layout
         scene = context.scene
+
+        try:
+            from setup_wizard.wuwa_operations import pull_wuwa_panel_values
+            pull_wuwa_panel_values(scene, context)
+        except Exception:
+            pass
 
         # 1. Enable / Disable Animate Mode
         is_anim = scene.get("ww_animate_mode", False)

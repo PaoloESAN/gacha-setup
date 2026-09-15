@@ -1000,6 +1000,24 @@ def rig_character(
                 except Exception as ex_rsh:
                     print(f"[NTE RIG] root shape notice '{_rb_name}': {ex_rsh}")
 
+        # Created roots copy root.002's color (born after theming with DEFAULT/blue).
+        try:
+            _r2c = rigifyr.pose.bones.get("root.002")
+            if _r2c is not None:
+                for _rb_name in ["root", "root.001"]:
+                    _pb = rigifyr.pose.bones.get(_rb_name)
+                    if _pb is not None and hasattr(_pb, "color"):
+                        try:
+                            _pb.color.palette = _r2c.color.palette
+                            if _r2c.color.palette == 'CUSTOM':
+                                _pb.color.custom.normal = tuple(_r2c.color.custom.normal)
+                                _pb.color.custom.select = tuple(_r2c.color.custom.select)
+                                _pb.color.custom.active = tuple(_r2c.color.custom.active)
+                        except Exception:
+                            pass
+        except Exception as ex_rcol:
+            print(f"[NTE RIG] root color notice: {ex_rcol}")
+
         # torso head_follow/neck_follow -> plate (ZZZ: MCH-ROT retarget a root)
         if rigifyr.animation_data:
             for _fc in list(rigifyr.animation_data.drivers):

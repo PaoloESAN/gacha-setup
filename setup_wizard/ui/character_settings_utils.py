@@ -351,20 +351,44 @@ def _iter_rig_meshes(arm):
                 yield child
     except Exception:
         pass
-    try:
         import bpy
         for obj in bpy.data.objects:
             if getattr(obj, "type", None) != 'MESH' or obj.name in seen:
                 continue
+            p = getattr(obj, "parent", None)
+            while p:
+                if p == arm:
+                    seen.add(obj.name)
+                    yield obj
+                    break
+                p = getattr(p, "parent", None)
+            if obj.name in seen:
+                continue
             try:
                 for mod in obj.modifiers:
                     if mod.type == 'ARMATURE' and getattr(mod, "object", None) == arm:
+                        seen.add(obj.name)
                         yield obj
                         break
             except Exception:
                 continue
-    except Exception:
-        pass
+
+
+def get_character_materials(context=None, arm=None):
+    """Returns (arm, [materials]) scoped strictly to the selected character armature."""
+    if arm is None:
+        arm = resolve_settings_armature(context)
+    if arm is None:
+        return None, []
+    mats = []
+    seen = set()
+    for mesh in _iter_rig_meshes(arm):
+        for slot in getattr(mesh, "material_slots", []) or []:
+            mat = getattr(slot, "material", None)
+            if mat and mat.name not in seen:
+                seen.add(mat.name)
+                mats.append(mat)
+    return arm, mats
 
 
 def detect_armature_game(arm):
@@ -455,3 +479,50 @@ def is_game_armature(context, game_name):
     if detected is not None:
         return detected == str(game_name)
     return False
+
+
+_LAST_SETTINGS_ARM = None
+
+
+def has_active_character_changed(context):
+    """Returns True if the active character changed since last check, updating the cache."""
+    global _LAST_SETTINGS_ARM
+    current_arm = resolve_settings_armature(context)
+    if current_arm is None:
+        return False
+    if current_arm != _LAST_SETTINGS_ARM:
+        _LAST_SETTINGS_ARM = current_arm
+        return True
+    return False
+
+
+def reset_last_settings_arm():
+    """Forces the next check to report a change."""
+    global _LAST_SETTINGS_ARM
+    _LAST_SETTINGS_ARM = None
+
+
+def ensure_character_node_trees_isolated(arm, mats):
+    """
+    Ensures that shader node groups in mats are uniquely owned by this character.
+    If another character's armature already owns a node tree, duplicates it to make it private.
+    """
+    if not arm or not mats:
+        return
+    arm_name = getattr(arm, "name", "")
+    if not arm_name:
+        return
+
+    for m in mats:
+        if getattr(m, "node_tree", None):
+            for node in m.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree:
+                    tree = node.node_tree
+                    owner = tree.get("_owner_armature")
+                    if owner is None:
+                        tree["_owner_armature"] = arm_name
+                    elif owner != arm_name:
+                        new_tree = tree.copy()
+                        new_tree["_owner_armature"] = arm_name
+                        node.node_tree = new_tree
+

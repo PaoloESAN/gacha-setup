@@ -29,6 +29,8 @@ class AKE_PT_Setup_Wizard_UI_Layout(Panel, ArknightsEndfieldUIRenderChecker):
             game_type=GameType.ARKNIGHTS_ENDFIELD.name,
             operator_context="INVOKE_DEFAULT",
         )
+        from setup_wizard.services.isolation import isolation_service
+        isolation_service.draw_setup_status_box(sub_layout, context, run_entire_setup_column)
 
         settings_box = layout.box()
         settings_header = settings_box.row()
@@ -458,21 +460,39 @@ def _read_ake_input(mats, input_names):
     return None
 
 
-def pull_ake_panel_values(scene, context):
+def pull_ake_panel_values(scene, context, force=False):
     """Copies the selected character's values into the scene props.
 
     This way sliders show/edit only that character (independent per
     character) instead of overwriting every shader in the scene.
     """
     global _is_updating_ake_props
-    if scene is None:
+    if scene is None or _is_updating_ake_props:
         return
     try:
-        _, mats = get_ake_character_materials(context)
+        from setup_wizard.ui.character_settings_utils import (
+            has_active_character_changed,
+            ensure_character_node_trees_isolated,
+        )
+        if not force and not has_active_character_changed(context):
+            return
+        rig, mats = get_ake_character_materials(context)
     except Exception:
         return
-    if not mats:
+    if not rig or not mats:
         return
+
+    ensure_character_node_trees_isolated(rig, mats)
+
+    # Pull lighting mode saved on this armature
+    saved_mode = rig.get("ake_light_mode", "0")
+    if getattr(scene, "ake_light_mode", "") != str(saved_mode):
+        _is_updating_ake_props = True
+        try:
+            scene.ake_light_mode = str(saved_mode)
+        finally:
+            _is_updating_ake_props = False
+
     base_mats = [m for m in mats if 'hair' not in m.name.lower()]
     hair_mats = [m for m in mats if 'hair' in m.name.lower()]
     _is_updating_ake_props = True
@@ -598,7 +618,10 @@ def sync_ake_shader_properties(scene=None, context=None, strict_character=False)
         except Exception:
             context = None
     try:
-        _, scoped_mats = get_ake_character_materials(context)
+        rig, scoped_mats = get_ake_character_materials(context)
+        if rig and scoped_mats:
+            from setup_wizard.ui.character_settings_utils import ensure_character_node_trees_isolated
+            ensure_character_node_trees_isolated(rig, scoped_mats)
     except Exception:
         scoped_mats = []
     if scoped_mats:
@@ -886,6 +909,13 @@ def update_ake_light_mode(self, context=None):
         except Exception:
             context = None
     mode = str(getattr(self, "ake_light_mode", "0"))
+    try:
+        from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+        arm = resolve_settings_armature(context)
+        if arm:
+            arm["ake_light_mode"] = str(mode)
+    except Exception:
+        pass
     if mode == "6":
         # Custom starts exactly from the current look (e.g. after Default):
         # pull values and snapshot them so the entry sync applies nothing.

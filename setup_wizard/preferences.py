@@ -39,7 +39,45 @@ class CharacterSetupWizardAddonPreferences(bpy.types.AddonPreferences):
         max=59,
     )
 
+    # Setup isolation preferences
+    setup_execution_mode: bpy.props.EnumProperty(
+        name="Setup Mode",
+        description="Execution mode for Run Entire Setup",
+        items=[
+            (
+                "ISOLATED",
+                "Isolated Safe Setup (Recommended)",
+                "Runs setup in a clean temporary process to eliminate object/shader collisions and viewport lag",
+            ),
+            (
+                "DIRECT",
+                "Direct In-Scene (Legacy)",
+                "Runs setup directly inside the current project scene",
+            ),
+        ],
+        default="ISOLATED",
+    )
+    auto_cleanup_temp_blend: bpy.props.BoolProperty(
+        name="Clean Up Temp Files",
+        description="Automatically delete the temporary .blend file and folder after successful setup",
+        default=True,
+    )
+    keep_log_on_error: bpy.props.BoolProperty(
+        name="Keep Log on Error",
+        description="Preserve the isolated process log if setup encounters an error",
+        default=True,
+    )
+
     def draw(self, context):
         layout: bpy.types.UILayout = self.layout
+
+        iso_box = layout.box()
+        iso_box.label(text="Character Setup Pipeline", icon="MODIFIER")
+        iso_box.prop(self, "setup_execution_mode")
+        row = iso_box.row()
+        row.prop(self, "auto_cleanup_temp_blend")
+        row.prop(self, "keep_log_on_error")
+
+        layout.separator()
         addon_updater_ops.update_settings_ui(self, context)
 

@@ -870,6 +870,29 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
             )
             return {"FINISHED"}
 
+        from setup_wizard.services.isolation import isolation_service
+
+        if (
+            self.invoker_type == "invoke_next_step_ui"
+            and os.environ.get("GACHA_SETUP_ISOLATED_WORKER") != "1"
+            and isolation_service.is_isolated_mode_enabled()
+        ):
+            selected_file = self.filepath if is_character_model_file else ""
+            char_dir = character_model_directory or (
+                os.path.dirname(selected_file) if selected_file else ""
+            )
+            try:
+                return isolation_service.launch_job(
+                    context,
+                    self,
+                    character_dir=char_dir,
+                    selected_model_file=selected_file,
+                    game_type=self.game_type,
+                    high_level_step_name=self.high_level_step_name,
+                )
+            finally:
+                super().clear_custom_properties()
+
         existing_materials = (
             bpy.data.materials.values()
         )  # used to track materials before and after importing character model

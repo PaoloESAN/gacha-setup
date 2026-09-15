@@ -52,9 +52,9 @@ class GI_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties
         return result
 
 
-def setup_wuwa_compositor_nodes(context):
+def setup_wuwa_compositor_nodes(context=None, scene=None):
     """Sets up the Compositor post-processing node tree for Wuthering Waves using GranTurismoWrapper."""
-    scene = context.scene
+    scene = scene or (context.scene if context else bpy.context.scene)
     addon_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     target_blend = os.path.join(addon_dir, "setup_wizard", "shaders", "wuwa", "Gustling Waters.blend")
     if not os.path.exists(target_blend):
@@ -118,7 +118,7 @@ def setup_wuwa_compositor_nodes(context):
             pass
 
     # Clean up any duplicate or leftover scenes so only the active scene remains
-    current_scene = context.scene
+    current_scene = scene
     for sc in list(bpy.data.scenes):
         if sc != current_scene and (sc.name.startswith("Scene.") or "Scene.001" in sc.name or sc.name in ["Scene.001", "Scene.002", "Preview"]):
             try:
@@ -142,9 +142,9 @@ class WW_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
         return {'FINISHED'}
 
 
-def setup_ake_compositor_nodes(context):
+def setup_ake_compositor_nodes(context=None, scene=None):
     """Sets up the Compositor post-processing node tree for Arknights: Endfield."""
-    scene = context.scene
+    scene = scene or (context.scene if context else bpy.context.scene)
     addon_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     target_blend = os.path.join(addon_dir, "setup_wizard", "shaders", "ake", "AKE.blend")
     if not os.path.exists(target_blend):

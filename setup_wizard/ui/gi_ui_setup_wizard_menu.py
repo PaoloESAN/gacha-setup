@@ -82,13 +82,16 @@ class GI_PT_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
         window_manager = context.window_manager
 
         sub_layout = layout.box()
+        run_entire_setup_column = sub_layout.column()
         OperatorFactory.create(
-            sub_layout,
+            run_entire_setup_column,
             'genshin.setup_wizard_ui',
             'Run Entire Setup',
             'PLAY',
             game_type=GameType.GENSHIN_IMPACT.name
         )
+        from setup_wizard.services.isolation import isolation_service
+        isolation_service.draw_setup_status_box(sub_layout, context, run_entire_setup_column)
 
         settings_box = layout.box()
         settings_header = settings_box.row()
@@ -576,6 +579,14 @@ def update_gi_light_mode(self, context=None):
     if _is_updating_gi_props:
         return
     mode = getattr(self, "gi_light_mode", "0")
+    try:
+        from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+        arm = resolve_settings_armature(context)
+        if arm:
+            arm["gi_light_mode"] = str(mode)
+    except Exception:
+        pass
+
     if mode in GI_LIGHT_PRESETS:
         preset = GI_LIGHT_PRESETS[mode]
         _is_updating_gi_props = True
@@ -595,18 +606,18 @@ def update_gi_light_mode(self, context=None):
                 self.gi_rim_shadow_color = preset["rim_shadow"]
         finally:
             _is_updating_gi_props = False
-    sync_genshin_shader_properties(getattr(context, "scene", getattr(bpy.context, "scene", None)))
+    sync_genshin_shader_properties(getattr(context, "scene", getattr(bpy.context, "scene", None)), context=context)
 
 
 def update_gi_lighting(self, context=None):
-    sync_genshin_shader_properties(getattr(context, "scene", getattr(bpy.context, "scene", None)))
+    sync_genshin_shader_properties(getattr(context, "scene", getattr(bpy.context, "scene", None)), context=context)
 
 
 def update_gi_fresnel(self, context=None):
-    sync_genshin_shader_properties(getattr(context, "scene", getattr(bpy.context, "scene", None)))
+    sync_genshin_shader_properties(getattr(context, "scene", getattr(bpy.context, "scene", None)), context=context)
 
 
-def sync_genshin_shader_properties(scene=None):
+def sync_genshin_shader_properties(scene=None, context=None):
     scene = scene or getattr(bpy.context, "scene", None)
     if not scene:
         return
@@ -667,51 +678,67 @@ def sync_genshin_shader_properties(scene=None):
         "Rim Shadow": rim_shadow_col,
     }
 
-    # 1. Update inside Global Material Properties node group
-    g_props = bpy.data.node_groups.get("Global Material Properties")
-    if g_props:
-        out_node = g_props.nodes.get("Global Properties") or g_props.nodes.get("Group Output")
+    # 1. Resolve character materials to keep settings strictly per-character
+    try:
+        from setup_wizard.ui.character_settings_utils import (
+            get_character_materials,
+            ensure_character_node_trees_isolated,
+        )
+        arm, target_materials = get_character_materials(context)
+        if arm and target_materials:
+            ensure_character_node_trees_isolated(arm, target_materials)
+    except Exception:
+        target_materials = []
+
+    # 2. Find target Global Material Properties node group(s)
+    target_trees = set()
+    mats_to_update = target_materials if target_materials else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
+    for mat in mats_to_update:
+        if getattr(mat, "use_nodes", False) and mat.node_tree:
+            for node in mat.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree:
+                    if "global material properties" in node.node_tree.name.lower():
+                        target_trees.add(node.node_tree)
+
+    if not target_trees:
+        for ng in bpy.data.node_groups:
+            if "global material properties" in ng.name.lower():
+                target_trees.add(ng)
+
+    # 3. Update inside each target Global Material Properties node group
+    for tree in target_trees:
+        out_node = tree.nodes.get("Global Properties") or tree.nodes.get("Group Output")
         if out_node:
             for inp in out_node.inputs:
                 if inp.name in prop_map:
                     for l in list(inp.links):
-                        g_props.links.remove(l)
+                        tree.links.remove(l)
                     try:
                         inp.default_value = prop_map[inp.name]
                     except Exception:
                         pass
 
-        if hasattr(g_props, "interface") and hasattr(g_props.interface, "items_tree"):
-            for item in g_props.interface.items_tree:
+        if hasattr(tree, "interface") and hasattr(tree.interface, "items_tree"):
+            for item in tree.interface.items_tree:
                 if item.name in prop_map:
                     try:
                         item.default_value = prop_map[item.name]
                     except Exception:
                         pass
 
-    # 2. Update inside all node groups and materials containing Global Properties
-    def apply_props_to_container(container):
-        if not container or not hasattr(container, "nodes"):
-            return
-        for node in container.nodes:
-            if node.type == 'GROUP' and node.node_tree:
-                nt_name = node.node_tree.name
-                if "Global Material Properties" in nt_name:
-                    for name, val in prop_map.items():
-                        if name in node.inputs:
+    # 4. Also update direct group node inputs on character materials if any exist
+    for mat in mats_to_update:
+        if getattr(mat, "use_nodes", False) and mat.node_tree:
+            for node in mat.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree:
+                    for inp_name, val in prop_map.items():
+                        if inp_name in node.inputs:
                             try:
-                                node.inputs[name].default_value = val
+                                node.inputs[inp_name].default_value = val
                             except Exception:
                                 pass
 
-    for ng in bpy.data.node_groups:
-        apply_props_to_container(ng)
-
-    for mat in bpy.data.materials:
-        if getattr(mat, "use_nodes", False) and mat.node_tree:
-            apply_props_to_container(mat.node_tree)
-
-    # 3. Tag 3D areas for redraw
+    # 5. Tag 3D areas for redraw
     if hasattr(bpy.context, 'window_manager') and bpy.context.window_manager:
         for win in getattr(bpy.context.window_manager, 'windows', []):
             screen = getattr(win, 'screen', None)
@@ -719,6 +746,92 @@ def sync_genshin_shader_properties(scene=None):
                 for area in screen.areas:
                     if area.type == 'VIEW_3D':
                         area.tag_redraw()
+
+
+def pull_gi_panel_values(scene, context, force=False):
+    """Synchronizes UI sliders and lighting mode with the selected character's materials and rig."""
+    global _is_updating_gi_props
+    if _is_updating_gi_props or not scene:
+        return
+    try:
+        from setup_wizard.ui.character_settings_utils import (
+            get_character_materials,
+            has_active_character_changed,
+            ensure_character_node_trees_isolated,
+        )
+        if not force and not has_active_character_changed(context):
+            return
+        arm, mats = get_character_materials(context)
+    except Exception:
+        return
+    if not arm or not mats:
+        return
+
+    ensure_character_node_trees_isolated(arm, mats)
+
+    # 1. Pull lighting mode saved on this armature
+    saved_mode = arm.get("gi_light_mode", "0")
+    if getattr(scene, "gi_light_mode", "") != str(saved_mode):
+        _is_updating_gi_props = True
+        try:
+            scene.gi_light_mode = str(saved_mode)
+        finally:
+            _is_updating_gi_props = False
+
+    # 2. Find target Global Material Properties node group for this character
+    target_tree = None
+    for m in mats:
+        if getattr(m, "node_tree", None):
+            for node in m.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree:
+                    if "global material properties" in node.node_tree.name.lower():
+                        target_tree = node.node_tree
+                        break
+        if target_tree:
+            break
+
+    if not target_tree:
+        return
+
+    out_node = target_tree.nodes.get("Global Properties") or target_tree.nodes.get("Group Output")
+    if not out_node:
+        return
+
+    _is_updating_gi_props = True
+    try:
+        inputs = out_node.inputs
+        if "Use Fresnel" in inputs:
+            scene.gi_use_fresnel = bool(inputs["Use Fresnel"].default_value > 0.5)
+        if "Fresnel Color" in inputs:
+            scene.gi_fresnel_color = tuple(inputs["Fresnel Color"].default_value)[:3]
+        if "Fresnel Power" in inputs:
+            scene.gi_fresnel_power = float(inputs["Fresnel Power"].default_value)
+        if "Fresnel Scaler" in inputs:
+            scene.gi_fresnel_scaler = float(inputs["Fresnel Scaler"].default_value)
+        if "Ambient Colour" in inputs:
+            scene.gi_amb_color = tuple(inputs["Ambient Colour"].default_value)[:3]
+        if "Sharp Lit Colour" in inputs:
+            scene.gi_sharp_lit_color = tuple(inputs["Sharp Lit Colour"].default_value)[:3]
+        if "Soft Lit Colour" in inputs:
+            scene.gi_soft_lit_color = tuple(inputs["Soft Lit Colour"].default_value)[:3]
+        if "Sharp Shadow Colour" in inputs:
+            scene.gi_sharp_shadow_color = tuple(inputs["Sharp Shadow Colour"].default_value)[:3]
+        if "Soft Shadow Colour" in inputs:
+            scene.gi_soft_shadow_color = tuple(inputs["Soft Shadow Colour"].default_value)[:3]
+        if "Shadow Position" in inputs:
+            scene.gi_shadow_position = float(inputs["Shadow Position"].default_value)
+        if "Catch Shadows" in inputs:
+            scene.gi_catch_shadows = bool(inputs["Catch Shadows"].default_value > 0.5)
+        if "Day/Night" in inputs:
+            scene.gi_day_night = float(inputs["Day/Night"].default_value)
+        if "Rim Lit" in inputs:
+            scene.gi_rim_lit_color = tuple(inputs["Rim Lit"].default_value)[:3]
+        if "Rim Shadow" in inputs:
+            scene.gi_rim_shadow_color = tuple(inputs["Rim Shadow"].default_value)[:3]
+    except Exception:
+        pass
+    finally:
+        _is_updating_gi_props = False
 
 
 def update_gi_hair_physics(self, context):
@@ -765,6 +878,11 @@ class GI_PT_Rig_Character_Settings(Panel):
     def draw(self, context):
         layout = self.layout
         scene = context.scene
+
+        try:
+            pull_gi_panel_values(scene, context)
+        except Exception:
+            pass
 
         # 1. Lighting Mode
         col_light = layout.column(align=True)
