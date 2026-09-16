@@ -342,36 +342,101 @@ def resolve_settings_armature(context):
     return target_arm
 
 
-def _iter_rig_meshes(arm):
-    seen = set()
+# Meshes that never belong to a character (widgets, helpers, light rigs).
+_HELPER_MESH_PREFIXES = (
+    "WGT-", "Highlight", "Eye Highlight", "Eye_Highlight", "Sun",
+    "Head Origin", "Head Forward", "Head Up", "Light Direction",
+)
+
+
+def _is_helper_mesh(obj):
     try:
-        for child in getattr(arm, "children_recursive", []) or []:
-            if getattr(child, "type", None) == 'MESH' and child.name not in seen:
-                seen.add(child.name)
-                yield child
+        name = getattr(obj, "name", "") or ""
+    except Exception:
+        return True
+    for prefix in _HELPER_MESH_PREFIXES:
+        if name.startswith(prefix):
+            return True
+    try:
+        for coll in getattr(obj, "users_collection", []) or []:
+            cname = getattr(coll, "name", "") or ""
+            if cname.startswith("WGTS") or cname.lower() == "wgt":
+                return True
     except Exception:
         pass
+    return False
+
+
+def _iter_rig_meshes(arm):
+    """Yields every MESH bound to `arm` (children, parent chain or Armature modifier).
+
+    Meshes rigged with Rigify / imported from uemodel are usually NOT
+    object-children of the rig: they just carry an Armature modifier (or sit
+    next to it in the character collection). All three bindings are scanned
+    so selecting the armature always resolves its character materials
+    (multi-character / Append safe). Helper meshes (widgets, highlights,
+    light rigs) are skipped.
+    """
+    if arm is None:
+        return
+    seen = set()
+
+    def _emit(obj):
+        if obj is None or id(obj) in seen:
+            return None
+        if getattr(obj, "type", None) != 'MESH':
+            return None
+        if _is_helper_mesh(obj):
+            return None
+        seen.add(id(obj))
+        return obj
+
+    # 1. Object children (recursive).
+    try:
+        for child in getattr(arm, "children_recursive", []) or []:
+            mesh = _emit(child)
+            if mesh is not None:
+                yield mesh
+    except Exception:
+        pass
+
+    # 2. Parent-chain walk + Armature-modifier scan over all objects.
+    # (Runs always, not just on error: modifier-bound meshes are the norm.)
+    try:
         import bpy
-        for obj in bpy.data.objects:
-            if getattr(obj, "type", None) != 'MESH' or obj.name in seen:
-                continue
+        all_objs = list(getattr(bpy.data, "objects", []) or [])
+    except Exception:
+        return
+    for obj in all_objs:
+        if obj is None or id(obj) in seen:
+            continue
+        if getattr(obj, "type", None) != 'MESH':
+            continue
+        bound = False
+        try:
             p = getattr(obj, "parent", None)
-            while p:
+            while p is not None:
                 if p == arm:
-                    seen.add(obj.name)
-                    yield obj
+                    bound = True
                     break
                 p = getattr(p, "parent", None)
-            if obj.name in seen:
-                continue
+        except Exception:
+            pass
+        if not bound:
             try:
-                for mod in obj.modifiers:
-                    if mod.type == 'ARMATURE' and getattr(mod, "object", None) == arm:
-                        seen.add(obj.name)
-                        yield obj
-                        break
+                for mod in getattr(obj, "modifiers", []) or []:
+                    try:
+                        if mod.type == 'ARMATURE' and getattr(mod, "object", None) == arm:
+                            bound = True
+                            break
+                    except Exception:
+                        continue
             except Exception:
-                continue
+                pass
+        if bound:
+            mesh = _emit(obj)
+            if mesh is not None:
+                yield mesh
 
 
 def get_character_materials(context=None, arm=None):
@@ -435,7 +500,10 @@ def detect_armature_game(arm):
             return "ZENLESS_ZONE_ZERO"
         if "pbrtoon" in blob or "endfield" in blob or "arknights" in blob:
             return "ARKNIGHTS_ENDFIELD"
-        if "wuwa" in blob or "wuthering" in blob or "gustling" in blob:
+        if "wuwa" in blob or "wuthering" in blob or "gustling" in blob \
+                or "ww -" in blob or "ww_" in blob:
+            # "WW - ..." are WuWa's own per-character materials
+            # (e.g. "WW - MainV2 Camellya", "WW - Face", "WW - Outlines").
             return "WUTHERING_WAVES"
     except Exception:
         pass
@@ -504,8 +572,12 @@ def reset_last_settings_arm():
 
 def ensure_character_node_trees_isolated(arm, mats):
     """
-    Ensures that shader node groups in mats are uniquely owned by this character.
-    If another character's armature already owns a node tree, duplicates it to make it private.
+    Ensures that shader node groups reachable from mats are uniquely owned
+    by this character (Append / multi-character safe).
+
+    Walks the whole GROUP-node chain (materials AND nested node groups):
+    a tree owned by another armature is duplicated so per-character panel
+    updates (e.g. the light selector) never leak into other characters.
     """
     if not arm or not mats:
         return
@@ -513,16 +585,340 @@ def ensure_character_node_trees_isolated(arm, mats):
     if not arm_name:
         return
 
+    remapped = {}
+
+    def _own(tree):
+        owner = tree.get("_owner_armature")
+        if owner is None:
+            tree["_owner_armature"] = arm_name
+            return tree
+        if owner != arm_name:
+            new_tree = tree.copy()
+            new_tree["_owner_armature"] = arm_name
+            return new_tree
+        return tree
+
+    def _isolate_container(container, seen):
+        if container is None or id(container) in seen:
+            return
+        seen.add(id(container))
+        try:
+            nodes = list(getattr(container, "nodes", []) or [])
+        except Exception:
+            return
+        for node in nodes:
+            try:
+                if getattr(node, "type", None) != 'GROUP':
+                    continue
+                tree = getattr(node, "node_tree", None)
+                if tree is None:
+                    continue
+                if id(tree) in remapped:
+                    tree = remapped[id(tree)]
+                    try:
+                        node.node_tree = tree
+                    except Exception:
+                        pass
+                else:
+                    new_tree = _own(tree)
+                    if new_tree is not tree:
+                        remapped[id(tree)] = new_tree
+                        try:
+                            node.node_tree = new_tree
+                        except Exception:
+                            pass
+                        tree = new_tree
+                _isolate_container(tree, seen)
+            except Exception:
+                continue
+
+    seen = set()
     for m in mats:
-        if getattr(m, "node_tree", None):
-            for node in m.node_tree.nodes:
-                if node.type == 'GROUP' and node.node_tree:
-                    tree = node.node_tree
-                    owner = tree.get("_owner_armature")
-                    if owner is None:
-                        tree["_owner_armature"] = arm_name
-                    elif owner != arm_name:
-                        new_tree = tree.copy()
-                        new_tree["_owner_armature"] = arm_name
-                        node.node_tree = new_tree
+        try:
+            tree = getattr(m, "node_tree", None)
+        except Exception:
+            tree = None
+        if tree is not None:
+            _isolate_container(tree, seen)
+
+
+# ---------------------------------------------------------------------------
+# Shared shader-node helpers (per-character panel updates).
+# Used by every game's Character Settings (WuWa, HSR, GI, ZZZ, ...) so the
+# light selector and options resolve the SELECTED character's nodes even when
+# they live nested inside group trees, and write tree-level defaults scoped
+# to that character's isolated trees instead of the global definitions.
+# ---------------------------------------------------------------------------
+
+def _iter_character_group_nodes(mats, *keywords):
+    """Yields GROUP nodes (from the given materials) whose tree name matches.
+
+    Direct (material-level) nodes first, then nodes nested inside the
+    materials' group trees (e.g. inside "WW - Main"). This keeps the
+    Character Settings working per character after Append / with several
+    characters in the same file, mirroring how the other games resolve
+    their nodes.
+    """
+    wanted = [k.lower() for k in keywords]
+    seen_containers = set()
+    direct = []
+    nested = []
+    queue = []
+    for mat in mats or []:
+        try:
+            tree = getattr(mat, "node_tree", None)
+        except Exception:
+            tree = None
+        if tree is not None and id(tree) not in seen_containers:
+            seen_containers.add(id(tree))
+            queue.append((tree, 0))
+    while queue:
+        container, depth = queue.pop(0)
+        try:
+            nodes = list(getattr(container, "nodes", []) or [])
+        except Exception:
+            continue
+        for node in nodes:
+            try:
+                if getattr(node, "type", None) != 'GROUP':
+                    continue
+                subtree = getattr(node, "node_tree", None)
+                if subtree is None:
+                    continue
+                tname = getattr(subtree, "name", "").lower()
+                if any(k in tname for k in wanted):
+                    (direct if depth == 0 else nested).append(node)
+                if id(subtree) not in seen_containers:
+                    seen_containers.add(id(subtree))
+                    queue.append((subtree, depth + 1))
+            except Exception:
+                continue
+    for node in direct:
+        yield node
+    for node in nested:
+        yield node
+
+
+def _iter_character_palette_nodes(mats):
+    """Yields 'Color Palette' GROUP nodes reachable from the given materials."""
+    return _iter_character_group_nodes(mats, "color palette")
+
+
+def _character_group_trees(mats, *keywords):
+    """Unique node-group trees (deduped) reachable from mats matching keywords.
+
+    Used to write tree-level defaults (Group Input / Group Output sockets
+    and interface defaults) scoped to one character's isolated trees,
+    instead of the single global tree definition.
+    """
+    wanted = [k.lower() for k in keywords]
+    seen = set()
+    found = []
+    queue = []
+    for mat in mats or []:
+        try:
+            tree = getattr(mat, "node_tree", None)
+        except Exception:
+            tree = None
+        if tree is not None and id(tree) not in seen:
+            seen.add(id(tree))
+            queue.append(tree)
+    while queue:
+        container = queue.pop(0)
+        try:
+            nodes = list(getattr(container, "nodes", []) or [])
+        except Exception:
+            continue
+        for node in nodes:
+            try:
+                if getattr(node, "type", None) != 'GROUP':
+                    continue
+                subtree = getattr(node, "node_tree", None)
+                if subtree is None or id(subtree) in seen:
+                    continue
+                seen.add(id(subtree))
+                queue.append(subtree)
+                if any(k in getattr(subtree, "name", "").lower() for k in wanted):
+                    found.append(subtree)
+            except Exception:
+                continue
+    return found
+
+
+def _set_group_input_defaults(tree, pairs):
+    """Writes defaults on GROUP_INPUT node outputs inside a node-group tree."""
+    try:
+        nodes = getattr(tree, "nodes", None)
+    except Exception:
+        return
+    if not nodes:
+        return
+    try:
+        node_list = list(nodes)
+    except Exception:
+        return
+    for node in node_list:
+        try:
+            if getattr(node, "type", None) != 'GROUP_INPUT':
+                continue
+            outputs = getattr(node, "outputs", {})
+            for socket_name, val in pairs:
+                try:
+                    if socket_name in outputs:
+                        outputs[socket_name].default_value = val
+                except Exception:
+                    pass
+        except Exception:
+            continue
+
+
+def _set_group_output_defaults(tree, node_names, pairs):
+    """Writes defaults on a Group Output node's inputs inside a tree."""
+    try:
+        nodes = getattr(tree, "nodes", None)
+    except Exception:
+        return
+    if not nodes:
+        return
+    out_node = None
+    try:
+        get_node = getattr(nodes, "get", None)
+        if callable(get_node):
+            for cand in node_names:
+                out_node = get_node(cand)
+                if out_node is not None:
+                    break
+    except Exception:
+        out_node = None
+    if out_node is None:
+        return
+    try:
+        inputs = getattr(out_node, "inputs", {})
+    except Exception:
+        return
+    for socket_name, val in pairs:
+        try:
+            if socket_name in inputs:
+                inputs[socket_name].default_value = val
+        except Exception:
+            pass
+
+
+def _set_interface_defaults(tree, pairs):
+    """Writes interface socket defaults of a node-group tree."""
+    try:
+        interface = getattr(tree, "interface", None)
+        items = getattr(interface, "items_tree", None)
+    except Exception:
+        return
+    if not items:
+        return
+    try:
+        item_list = list(items)
+    except Exception:
+        return
+    wanted = {name: val for name, val in pairs}
+    for item in item_list:
+        try:
+            if getattr(item, "name", None) in wanted:
+                item.default_value = wanted[item.name]
+        except Exception:
+            pass
+
+
+def _read_tree_output_default(tree, node_names, socket_name):
+    """Reads a Group Output node's input default inside a tree (or None)."""
+    try:
+        nodes = getattr(tree, "nodes", None)
+        get_node = getattr(nodes, "get", None)
+        if not callable(get_node):
+            return None
+        for cand in node_names:
+            try:
+                out_node = get_node(cand)
+            except Exception:
+                continue
+            if out_node is None:
+                continue
+            try:
+                inputs = getattr(out_node, "inputs", {})
+                if socket_name in inputs:
+                    return inputs[socket_name].default_value
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return None
+
+
+def _read_tree_group_input_default(tree, socket_name):
+    """Reads a GROUP_INPUT node output default inside a tree (or None)."""
+    try:
+        node_list = list(getattr(tree, "nodes", []) or [])
+    except Exception:
+        return None
+    for node in node_list:
+        try:
+            if getattr(node, "type", None) != 'GROUP_INPUT':
+                continue
+            outputs = getattr(node, "outputs", {})
+            if socket_name in outputs:
+                return outputs[socket_name].default_value
+        except Exception:
+            continue
+    return None
+
+
+def _read_tree_socket_default(tree, socket_name, _seen=None):
+    """Reads a socket default from anywhere inside a tree (or None).
+
+    Scans every node's inputs (descending into nested group trees with
+    cycle protection) first, then the tree interface. Used by panel pull
+    functions as a fallback when the GROUP node instance in the material
+    does not expose the socket (e.g. a "StellarToon" wrapper shadows the
+    inner "GlobalProperties" node).
+    """
+    if _seen is None:
+        _seen = set()
+    if tree is None or id(tree) in _seen:
+        return None
+    _seen.add(id(tree))
+    try:
+        node_list = list(getattr(tree, "nodes", []) or [])
+    except Exception:
+        node_list = []
+    nested = []
+    for node in node_list:
+        try:
+            inputs = getattr(node, "inputs", {})
+            if socket_name in inputs:
+                return inputs[socket_name].default_value
+        except Exception:
+            pass
+        try:
+            if getattr(node, "type", None) == 'GROUP':
+                subtree = getattr(node, "node_tree", None)
+                if subtree is not None and id(subtree) not in _seen:
+                    nested.append(subtree)
+        except Exception:
+            pass
+    for subtree in nested:
+        try:
+            val = _read_tree_socket_default(subtree, socket_name, _seen)
+        except Exception:
+            val = None
+        if val is not None:
+            return val
+    try:
+        interface = getattr(tree, "interface", None)
+        items = getattr(interface, "items_tree", None) or []
+        for item in list(items):
+            try:
+                if getattr(item, "name", None) == socket_name:
+                    return item.default_value
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return None
 
