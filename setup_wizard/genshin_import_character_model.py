@@ -367,6 +367,83 @@ def find_largest_uemodel_file(directory_or_file):
     return largest_file
 
 
+def _derive_nte_character_name(uemodel_path, folder, new_objects):
+    """Derives a clean character name for NTE (folder > uemodel file > armature > mesh)."""
+    try:
+        from setup_wizard.character_rig_setup.rig_ui_utils import extract_clean_character_name
+    except Exception:
+        return "Character"
+
+    generic = {"character", "model", "mesh", "textures", "texture", "materials",
+               "material", "maps", "images", "uemodel", "collection"}
+
+    folder_base = os.path.basename(os.path.normpath(folder)) if folder else ""
+    if folder_base and folder_base.lower() not in generic:
+        cleaned = extract_clean_character_name(folder_base)
+        if cleaned and cleaned.lower() not in generic:
+            return cleaned
+
+    if uemodel_path:
+        stem = os.path.splitext(os.path.basename(uemodel_path))[0]
+        cleaned = extract_clean_character_name(stem)
+        if cleaned and cleaned.lower() not in generic:
+            return cleaned
+
+    armatures = [o for o in (new_objects or []) if getattr(o, "type", None) == "ARMATURE"]
+    if armatures:
+        cleaned = extract_clean_character_name(armatures[0].name)
+        if cleaned and cleaned.lower() not in generic:
+            return cleaned
+
+    meshes = [o for o in (new_objects or []) if getattr(o, "type", None) == "MESH"]
+    if meshes:
+        cleaned = extract_clean_character_name(meshes[0].name)
+        if cleaned and cleaned.lower() not in generic:
+            return cleaned
+
+    return "Character"
+
+
+def _package_nte_import_into_collection(context, uemodel_path, folder, existing_objects):
+    """Moves freshly UEFormat-imported NTE objects into a top-level collection named after the character.
+
+    Mirrors the WuWa import packaging so the isolated worker manifest captures a single
+    '<CharName>' collection and append_result can link it as one unit (multi-character safe).
+    Returns the character/collection name.
+    """
+    scene = context.scene if context and getattr(context, "scene", None) else bpy.context.scene
+    new_objects = [obj for obj in scene.objects if obj not in existing_objects]
+    if not new_objects:
+        return "Character"
+
+    char_name = _derive_nte_character_name(uemodel_path, folder, new_objects) or "Character"
+
+    char_col = bpy.data.collections.get(char_name)
+    if not char_col:
+        char_col = bpy.data.collections.new(char_name)
+    if char_col.name not in scene.collection.children:
+        try:
+            scene.collection.children.link(char_col)
+        except Exception as e_link:
+            print(f"[NTE SETUP] Notice linking character collection '{char_name}': {e_link}")
+
+    for obj in list(new_objects):
+        try:
+            if obj.name not in char_col.objects:
+                char_col.objects.link(obj)
+        except Exception:
+            continue
+        for col in list(obj.users_collection):
+            if col != char_col:
+                try:
+                    col.objects.unlink(obj)
+                except Exception:
+                    pass
+
+    print(f"[NTE SETUP] Packaged {len(new_objects)} imported objects into collection '{char_name}'")
+    return char_name
+
+
 class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
     """Sets Up Character for Neverness to Everness"""
 
@@ -398,6 +475,8 @@ class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
         context.scene["setup_wizard_imported_model_dir"] = folder
         context.scene["setup_wizard_imported_uemodel_path"] = uemodel_path
         print(f"[NTE SETUP] Cached character folder: {folder} (model: {filename})")
+
+        existing_objects = set(context.scene.objects)
 
         if hasattr(bpy.ops, 'uf') and hasattr(bpy.ops.uf, 'import_uemodel'):
             imported_ok = False
@@ -450,6 +529,11 @@ class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
                     self.report({"WARNING"}, f"UEFormat import notice: {e4}")
 
             self.report({"INFO"}, f"Imported NTE character model: {filename}")
+
+            try:
+                _package_nte_import_into_collection(context, uemodel_path, folder, existing_objects)
+            except Exception as e_pkg:
+                print(f"[NTE SETUP] Collection packaging notice: {e_pkg}")
         else:
             self.report({"ERROR"}, "UEFormat add-on is not enabled or available.")
             return {"CANCELLED"}
@@ -979,6 +1063,8 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                 except Exception:
                     pass
 
+            existing_nte_objects = set(bpy.context.scene.objects)
+
             if hasattr(bpy.ops, 'uf') and hasattr(bpy.ops.uf, 'import_uemodel'):
                 imported_ok = False
                 try:
@@ -1018,6 +1104,11 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                         self.report({"WARNING"}, f"UEFormat import notice: {e4}")
 
                 self.report({"INFO"}, f"Imported NTE character model (largest .uemodel): {filename}")
+                try:
+                    _package_nte_import_into_collection(
+                        bpy.context, uemodel_path, folder, existing_nte_objects)
+                except Exception as e_pkg:
+                    print(f"[NTE SETUP] Collection packaging notice: {e_pkg}")
                 return
             else:
                 self.report({"ERROR"}, "UEFormat add-on is not enabled or available.")

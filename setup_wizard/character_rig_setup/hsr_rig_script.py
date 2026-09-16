@@ -12,6 +12,8 @@ from mathutils import Color, Vector
 from setup_wizard.geometry_nodes_setup.lighting_panel_names import LightingPanelNames
 from setup_wizard.character_rig_setup.rig_ui_utils import (
     extract_clean_character_name,
+    resolve_rig_character_name,
+    ensure_character_collection,
     setup_standard_bone_collections,
     distribute_standard_rig_bones,
     modify_and_run_rig_ui_script,
@@ -710,7 +712,10 @@ def rig_character(
             except Exception:
                 pass
 
-    char_name = extract_clean_character_name(original_name)
+    # Character name: FBX armatures are often literally called "Armature", so a
+    # bare extract would create a collection named "Armature". Resolve with
+    # folder/file/mesh fallbacks (Art_Firefly_01.fbx -> Firefly).
+    char_name = resolve_rig_character_name(original_name)
     if "rigify" in bpy.data.objects:
         bpy.data.objects["rigify"].name = char_name + "Rig"
     our_char = bpy.data.objects.get(char_name + "Rig") or rigifyr
@@ -3717,6 +3722,21 @@ def rig_character(
         isolate_wgts_for_character(_rig_final, char_name)
     except Exception as e_wgts:
         print(f"[HSR RIG] Final WGTS sweep notice: {e_wgts}")
+
+    # Final packaging: rig + bound meshes + orphans into top-level '<CharName>'
+    # (isolated manifest only links top-level collections; leftovers in the
+    # default 'Collection' break multi-character append).
+    try:
+        _rig_pkg = bpy.data.objects.get(char_name + "Rig")
+        if _rig_pkg is None:
+            try:
+                _rig_pkg = this_obj
+            except Exception:
+                _rig_pkg = None
+        if _rig_pkg is not None:
+            ensure_character_collection(bpy.context, _rig_pkg, char_name)
+    except Exception as e_pkg:
+        print(f"[HSR RIG] Final collection packaging notice: {e_pkg}")
     
 def setup_neck_and_head_follow(neck_follow_value=1.0, head_follow_value=1.0):
     if bpy.context.object and hasattr(bpy.context.object, "pose") and bpy.context.object.pose:
