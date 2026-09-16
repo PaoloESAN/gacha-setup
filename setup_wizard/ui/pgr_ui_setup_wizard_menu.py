@@ -37,13 +37,16 @@ class PGR_PT_Setup_Wizard_UI_Layout(Panel, PunishingGrayRavenUIRenderChecker):
         window_manager = context.window_manager
 
         sub_layout = layout.box()
+        run_entire_setup_column = sub_layout.column()
         OperatorFactory.create(
-            sub_layout,
+            run_entire_setup_column,
             'punishing_gray_raven.setup_wizard_ui',
             'Run Entire Setup',
             'PLAY',
             game_type=GameType.PUNISHING_GRAY_RAVEN.name
         )
+        from setup_wizard.services.isolation import isolation_service
+        isolation_service.draw_setup_status_box(sub_layout, context, run_entire_setup_column)
 
         settings_box = layout.box()
         settings_header = settings_box.row()

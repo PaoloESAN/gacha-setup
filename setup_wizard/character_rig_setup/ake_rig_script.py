@@ -11,6 +11,8 @@ from mathutils import Vector
 
 from setup_wizard.character_rig_setup.rig_ui_utils import (
     extract_clean_character_name,
+    resolve_rig_character_name,
+    ensure_character_collection,
     setup_standard_bone_collections,
     distribute_standard_rig_bones,
     modify_and_run_rig_ui_script,
@@ -884,22 +886,27 @@ def rig_character(
 
     bpy.ops.object.mode_set(mode="OBJECT")
 
-    # 13. Naming and collection setup
-    char_name = extract_clean_character_name(original_name)
-    if char_name.lower() in ("armature", "character", "root"):
-        for obj_item in bpy.data.objects:
-            if obj_item.type == "MESH" and "actor_" in obj_item.name.lower():
-                m_match = re.search(r"actor_([a-zA-Z0-9]+)_", obj_item.name, re.IGNORECASE)
-                if m_match:
-                    char_name = m_match.group(1).capitalize()
-                    break
+    # 13. Naming and collection setup. FBX armatures are often literally called
+    # "Armature", so resolve with folder/file/mesh fallbacks (Perlica, Lizhiyan)
+    # instead of trusting the armature name alone.
+    char_name = resolve_rig_character_name(
+        original_name,
+        actor_regex=r"actor_([a-zA-Z0-9]+)_",
+    )
 
     try:
-        if rigifyr.users_collection:
-            rigifyr.users_collection[0].name = char_name
+        rigifyr.name = char_name + "Rig"
     except Exception:
         pass
-    rigifyr.name = char_name + "Rig"
+    try:
+        ensure_character_collection(context, rigifyr, char_name)
+    except Exception as ex_pkg:
+        print(f"[AKE RIG] character collection packaging notice: {ex_pkg}")
+        try:
+            if rigifyr.users_collection:
+                rigifyr.users_collection[0].name = char_name
+        except Exception:
+            pass
     try:
         from setup_wizard.ui.character_settings_utils import stamp_rig_game
         stamp_rig_game(rigifyr, "ARKNIGHTS_ENDFIELD", char_name)
@@ -1420,12 +1427,21 @@ def rig_character(
         print(f"[AKE RIG] parent-switch splice notice: {ex_ps}")
     modify_and_run_rig_ui_script(rigifyr, original_name, char_name=char_name, extra_splices=splices)
 
-    # 17. Organize collections: ensure Lighting is nested in WGTS_<Char> and Light is in character collection
+    # 17. Organize collections: Light goes with the character rig, the legacy
+    # Lighting collection is dissolved (never nested in WGTS).
     try:
         from setup_wizard.set_up_head_driver import organize_ake_lighting_collections
         organize_ake_lighting_collections(context, rigifyr)
     except Exception as e_org:
         print(f"[AKE RIG] Notice organizing Lighting and WGTS collections: {e_org}")
+
+    # Final packaging: rig + bound meshes + orphans into top-level '<CharName>'
+    # (isolated manifest only links top-level collections; leftovers in the
+    # default 'Collection' break multi-character append).
+    try:
+        ensure_character_collection(context, rigifyr, char_name)
+    except Exception as e_pkg:
+        print(f"[AKE RIG] Final collection packaging notice: {e_pkg}")
 
     print(f"[AKE RIG] Character '{char_name}' rigged successfully!")
     return rigifyr

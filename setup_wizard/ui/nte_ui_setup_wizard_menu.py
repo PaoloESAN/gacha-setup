@@ -29,6 +29,8 @@ class NTE_PT_Setup_Wizard_UI_Layout(Panel, NevernessToEvernessUIRenderChecker):
             game_type=GameType.NEVERNESS_TO_EVERNESS.name,
             operator_context="INVOKE_DEFAULT",
         )
+        from setup_wizard.services.isolation import isolation_service
+        isolation_service.draw_setup_status_box(sub_layout, context, run_entire_setup_column)
 
         settings_box = layout.box()
         settings_header = settings_box.row()

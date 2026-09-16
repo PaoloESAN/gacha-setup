@@ -3,6 +3,8 @@ import mathutils
 import os
 from setup_wizard.character_rig_setup.rig_ui_utils import (
     extract_clean_character_name,
+    resolve_rig_character_name,
+    ensure_character_collection,
     setup_standard_bone_collections,
     distribute_standard_rig_bones,
     modify_and_run_rig_ui_script,
@@ -764,14 +766,24 @@ def rig_character(
 
     is_version_4 = bpy.app.version[0] >= 4
 
-    char_name = extract_clean_character_name(original_name)
+    # Character name: UEFormat armatures look like "player_075_oneir_skin_LOD0",
+    # so a bare extract would create a "Skeleton"/"lod0" collection. Resolve
+    # with the import collection ("Iroi"), folder and file fallbacks instead.
+    char_name = resolve_rig_character_name(original_name)
     if rigifyr:
         try:
-            if rigifyr.users_collection:
-                rigifyr.users_collection[0].name = char_name
+            rigifyr.name = char_name + "Rig"
         except Exception:
             pass
-        rigifyr.name = char_name + "Rig"
+        try:
+            ensure_nte_character_collection(context, rigifyr, char_name)
+        except Exception as ex_pkg:
+            print(f"[NTE RIG] character collection packaging notice: {ex_pkg}")
+            try:
+                if rigifyr.users_collection:
+                    rigifyr.users_collection[0].name = char_name
+            except Exception:
+                pass
     try:
         from setup_wizard.ui.character_settings_utils import stamp_rig_game
         stamp_rig_game(rigifyr, "NEVERNESS_TO_EVERNESS", char_name)
@@ -999,6 +1011,24 @@ def rig_character(
                     _pb_r.use_custom_shape_bone_size = False
                 except Exception as ex_rsh:
                     print(f"[NTE RIG] root shape notice '{_rb_name}': {ex_rsh}")
+
+        # Created roots copy root.002's color (born after theming with DEFAULT/blue).
+        try:
+            _r2c = rigifyr.pose.bones.get("root.002")
+            if _r2c is not None:
+                for _rb_name in ["root", "root.001"]:
+                    _pb = rigifyr.pose.bones.get(_rb_name)
+                    if _pb is not None and hasattr(_pb, "color"):
+                        try:
+                            _pb.color.palette = _r2c.color.palette
+                            if _r2c.color.palette == 'CUSTOM':
+                                _pb.color.custom.normal = tuple(_r2c.color.custom.normal)
+                                _pb.color.custom.select = tuple(_r2c.color.custom.select)
+                                _pb.color.custom.active = tuple(_r2c.color.custom.active)
+                        except Exception:
+                            pass
+        except Exception as ex_rcol:
+            print(f"[NTE RIG] root color notice: {ex_rcol}")
 
         # torso head_follow/neck_follow -> plate (ZZZ: MCH-ROT retarget a root)
         if rigifyr.animation_data:
@@ -1316,6 +1346,23 @@ def rig_character(
         pass
     modify_and_run_rig_ui_script(rigifyr, original_name, char_name=char_name, extra_splices=_splices)
 
+    # Re-afirma el empaquetado final: tras WGTS isolation y UI script no deben
+    # quedar meshes/rig sueltos fuera de '<CharName>' (el manifest aislado solo
+    # enlaza colecciones top-level; lo suelto rompe el multi-personaje).
+    try:
+        if rigifyr is not None:
+            ensure_nte_character_collection(context, rigifyr, char_name)
+    except Exception as ex_final_pkg:
+        print(f"[NTE RIG] final collection packaging notice: {ex_final_pkg}")
+
+    # NTE no usa Light Direction por ahora: eliminarlo del todo para que no
+    # salga duplicado en la coleccion del personaje.
+    try:
+        if rigifyr is not None:
+            delete_nte_light_empties(context, rigifyr, char_name)
+    except Exception as ex_light:
+        print(f"[NTE RIG] light empties delete notice: {ex_light}")
+
 
 def _ensure_root_trio(rigifyr):
     """Garantiza root/root.001/root.002 con cadena root.002->root.001->root (ZZZ).
@@ -1479,6 +1526,112 @@ def _strip_nte_torso_follow_ui(rigifyr, original_name, char_name):
             print(f"[NTE RIG] torso-follow UI write notice: {ex}")
     else:
         print("[NTE RIG] torso-follow UI strip: nothing matched")
+
+
+def ensure_nte_character_collection(context, rig_obj, char_name):
+    """Empaqueta el personaje NTE en una coleccion top-level con su nombre.
+
+    Delega en el helper compartido (paridad HSR/AKE/Genshin/ZZZ/WuWa); se
+    conserva el nombre para compatibilidad con misc_final_steps.
+    """
+    return ensure_character_collection(context, rig_obj, char_name)
+
+
+_NTE_LIGHT_EMPTY_BASES = ("Light Direction", "Main Light Direction", "Face Light Direction")
+
+
+def _is_nte_light_empty_name(obj_name):
+    import re as _re
+    base = str(obj_name or "")
+    for prefix in _NTE_LIGHT_EMPTY_BASES:
+        if base == prefix or _re.fullmatch(_re.escape(prefix) + r"\.\d+", base):
+            return True
+    return False
+
+
+def delete_nte_light_empties(context, rig_obj, char_name):
+    """Elimina del todo los empties Light Direction de NTE.
+
+    En NTE no hacen nada por ahora y aparecian duplicados (doble link en la
+    coleccion del personaje y en WGTS). Se borra el objeto por completo, lo que
+    quita todas sus filas del outliner de una vez. No toca empties que vivan en
+    la coleccion de OTRO personaje (multi-personaje seguro). El input
+    "Light Direction" del modificador Light Vectors queda entonces vacio, que
+    es equivalente a su estado sin efecto actual.
+    """
+    import bpy as _bpy
+
+    if not char_name:
+        return 0
+    char_name = str(char_name)
+
+    char_coll = _bpy.data.collections.get(char_name)
+    if char_coll is None and rig_obj is not None:
+        try:
+            for coll in list(getattr(rig_obj, "users_collection", []) or []):
+                low = str(getattr(coll, "name", "")).lower()
+                if low not in ("collection", "master collection", "scene collection") \
+                        and not low.startswith(("wgts", "wgt")) and "widget" not in low:
+                    char_coll = coll
+                    break
+        except Exception:
+            pass
+
+    default_names = {"collection", "master collection", "scene collection"}
+
+    def _is_foreign(obj):
+        # True si el objeto vive en la coleccion de OTRO personaje (no borrar).
+        try:
+            for coll in list(getattr(obj, "users_collection", []) or []):
+                if coll == char_coll:
+                    continue
+                low = str(getattr(coll, "name", "")).lower()
+                if low in default_names or low.startswith(("wgts", "wgt")) or "widget" in low:
+                    continue
+                return True
+        except Exception:
+            pass
+        return False
+
+    removed = 0
+    for obj in list(_bpy.data.objects):
+        try:
+            if getattr(obj, "type", None) != "EMPTY" or not _is_nte_light_empty_name(obj.name):
+                continue
+            # No borrar el de otro personaje: si vive en una coleccion con nombre
+            # ajena (no defecto, no widget, no la de este personaje), se deja.
+            if _is_foreign(obj):
+                continue
+            # El empty trae hijos (p.ej. Sun): borrarlos tambien, con la misma
+            # proteccion (un hijo en coleccion ajena se despadra y se conserva).
+            try:
+                descendants = list(getattr(obj, "children_recursive", []) or [])
+            except Exception:
+                descendants = []
+            for child in descendants:
+                try:
+                    if _is_foreign(child):
+                        try:
+                            mw = child.matrix_world.copy()
+                            child.parent = None
+                            child.matrix_world = mw
+                        except Exception:
+                            try:
+                                child.parent = None
+                            except Exception:
+                                pass
+                        continue
+                    _bpy.data.objects.remove(child, do_unlink=True)
+                    removed += 1
+                except Exception:
+                    continue
+            _bpy.data.objects.remove(obj, do_unlink=True)
+            removed += 1
+        except Exception:
+            continue
+    if removed:
+        print(f"[NTE RIG] deleted {removed} light empty object(s)")
+    return removed
 
 
 def move_into_collection(object_name, collection_name):

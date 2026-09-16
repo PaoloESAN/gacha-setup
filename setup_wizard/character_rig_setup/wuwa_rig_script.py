@@ -234,6 +234,25 @@ def _apply_zzz_parity_wuwa(rig_obj, context, orig_arm_name):
             except Exception as ex_rsh:
                 print(f"[WUWA RIG] root shape notice '{_rb_name}': {ex_rsh}")
 
+    # Created roots copy root.002's color (they are born after theming with
+    # DEFAULT/blue while root.002 is themed/red).
+    try:
+        _r2c = rig_obj.pose.bones.get("root.002")
+        if _r2c is not None:
+            for _rb_name in ["root", "root.001"]:
+                _pb = rig_obj.pose.bones.get(_rb_name)
+                if _pb is not None and hasattr(_pb, "color"):
+                    try:
+                        _pb.color.palette = _r2c.color.palette
+                        if _r2c.color.palette == 'CUSTOM':
+                            _pb.color.custom.normal = tuple(_r2c.color.custom.normal)
+                            _pb.color.custom.select = tuple(_r2c.color.custom.select)
+                            _pb.color.custom.active = tuple(_r2c.color.custom.active)
+                    except Exception:
+                        pass
+    except Exception as ex_rcol:
+        print(f"[WUWA RIG] root color notice: {ex_rcol}")
+
     if rig_obj.animation_data:
         for _fc in list(rig_obj.animation_data.drivers):
             try:
@@ -958,6 +977,53 @@ def rig_wuthering_waves_character(context=None):
         elif obj and obj.type == 'ARMATURE':
             print(f"[WUWA RIG] Armature {obj.name} is already a generated rig. Re-organizing bone collections...")
             organize_rigify_bone_collections(obj)
+            # Heal root trio on stale rigs (EDIT + collections only; drivers/
+            # constraints untouched so nothing gets reset).
+            try:
+                context.view_layer.objects.active = obj
+                bpy.ops.object.mode_set(mode='EDIT')
+                ensure_root_trio(obj)
+                bpy.ops.object.mode_set(mode='OBJECT')
+                if hasattr(obj.data, "collections"):
+                    _rc = obj.data.collections.get("Root") or obj.data.collections.new("Root")
+                    for _rn in ["root", "root.001", "root.002"]:
+                        _rb = obj.data.bones.get(_rn)
+                        if _rb is not None:
+                            try:
+                                _rc.assign(_rb)
+                            except Exception:
+                                pass
+                            try:
+                                if "Offsets" in obj.data.collections:
+                                    obj.data.collections["Offsets"].unassign(_rb)
+                            except Exception:
+                                pass
+                    try:
+                        _rc.is_visible = True
+                    except Exception:
+                        pass
+                try:
+                    _r2h = obj.pose.bones.get("root.002")
+                    if _r2h is not None:
+                        for _rn in ["root", "root.001"]:
+                            _ph = obj.pose.bones.get(_rn)
+                            if _ph is not None and hasattr(_ph, "color"):
+                                try:
+                                    _ph.color.palette = _r2h.color.palette
+                                    if _r2h.color.palette == 'CUSTOM':
+                                        _ph.color.custom.normal = tuple(_r2h.color.custom.normal)
+                                        _ph.color.custom.select = tuple(_r2h.color.custom.select)
+                                        _ph.color.custom.active = tuple(_r2h.color.custom.active)
+                                except Exception:
+                                    pass
+                except Exception as ex_hcol:
+                    print(f"[WUWA RIG] root heal color notice: {ex_hcol}")
+            except Exception as ex_heal:
+                print(f"[WUWA RIG] root trio heal notice: {ex_heal}")
+                try:
+                    bpy.ops.object.mode_set(mode='OBJECT')
+                except Exception:
+                    pass
             return True
         else:
             armatures = [o for o in context.scene.objects if o.type == 'ARMATURE']

@@ -27,6 +27,8 @@ class HSR_PT_Setup_Wizard_UI_Layout(Panel, HonkaiStarRailUIRenderChecker):
             "PLAY",
             game_type=GameType.HONKAI_STAR_RAIL.name,
         )
+        from setup_wizard.services.isolation import isolation_service
+        isolation_service.draw_setup_status_box(sub_layout, context, run_entire_setup_column)
 
         settings_box = layout.box()
         settings_header = settings_box.row()
@@ -481,6 +483,14 @@ def update_hsr_light_mode(self, context=None):
     if _is_updating_hsr_props:
         return
     mode = getattr(self, "hsr_light_mode", "0")
+    try:
+        from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+        arm = resolve_settings_armature(context)
+        if arm:
+            arm["hsr_light_mode"] = str(mode)
+    except Exception:
+        pass
+
     if mode in HSR_LIGHT_PRESETS:
         preset = HSR_LIGHT_PRESETS[mode]
         _is_updating_hsr_props = True
@@ -553,25 +563,18 @@ def update_hsr_stellartoon_props(self, context=None):
     }
 
     # 1. Update inside GlobalProperties node group (both its internal nodes and interface)
-    gp_group = bpy.data.node_groups.get("GlobalProperties")
-    if gp_group:
-        if hasattr(gp_group, "nodes"):
-            for node in gp_group.nodes:
-                for name, val in prop_map.items():
-                    if name in node.inputs:
-                        try:
-                            node.inputs[name].default_value = val
-                        except Exception:
-                            pass
-        if hasattr(gp_group, "interface"):
-            for item in gp_group.interface.items_tree:
-                if item.item_type == 'SOCKET' and item.name in prop_map:
-                    try:
-                        item.default_value = prop_map[item.name]
-                    except Exception:
-                        pass
+    try:
+        from setup_wizard.ui.character_settings_utils import (
+            get_character_materials,
+            ensure_character_node_trees_isolated,
+        )
+        arm, target_materials = get_character_materials(context)
+        if arm and target_materials:
+            ensure_character_node_trees_isolated(arm, target_materials)
+    except Exception:
+        target_materials = []
 
-    # 2. Update in all node groups and materials
+    # 2. Update in node groups and materials
     def apply_props_to_container(container):
         if not container or not hasattr(container, "nodes"):
             return
@@ -586,12 +589,104 @@ def update_hsr_stellartoon_props(self, context=None):
                             except Exception:
                                 pass
 
-    for ng in bpy.data.node_groups:
-        apply_props_to_container(ng)
+    if not target_materials:
+        gp_group = bpy.data.node_groups.get("GlobalProperties")
+        if gp_group:
+            if hasattr(gp_group, "nodes"):
+                for node in gp_group.nodes:
+                    for name, val in prop_map.items():
+                        if name in node.inputs:
+                            try:
+                                node.inputs[name].default_value = val
+                            except Exception:
+                                pass
+            if hasattr(gp_group, "interface"):
+                for item in gp_group.interface.items_tree:
+                    if item.item_type == 'SOCKET' and item.name in prop_map:
+                        try:
+                            item.default_value = prop_map[item.name]
+                        except Exception:
+                            pass
+        for ng in bpy.data.node_groups:
+            apply_props_to_container(ng)
 
-    for mat in bpy.data.materials:
-        if mat.node_tree:
+    mats_to_update = target_materials if target_materials else bpy.data.materials
+    for mat in mats_to_update:
+        if getattr(mat, "node_tree", None):
             apply_props_to_container(mat.node_tree)
+
+
+def pull_hsr_panel_values(scene, context, force=False):
+    """Synchronizes UI sliders and lighting mode with the selected character's materials and rig."""
+    global _is_updating_hsr_props
+    if _is_updating_hsr_props or not scene:
+        return
+    try:
+        from setup_wizard.ui.character_settings_utils import (
+            get_character_materials,
+            has_active_character_changed,
+            ensure_character_node_trees_isolated,
+        )
+        if not force and not has_active_character_changed(context):
+            return
+        arm, mats = get_character_materials(context)
+    except Exception:
+        return
+    if not arm or not mats:
+        return
+
+    ensure_character_node_trees_isolated(arm, mats)
+
+    # 1. Pull lighting mode saved on this armature
+    saved_mode = arm.get("hsr_light_mode", "0")
+    if getattr(scene, "hsr_light_mode", "") != str(saved_mode):
+        _is_updating_hsr_props = True
+        try:
+            scene.hsr_light_mode = str(saved_mode)
+        finally:
+            _is_updating_hsr_props = False
+
+    # 2. Pull shader node values
+    target_node = None
+    for m in mats:
+        if getattr(m, "node_tree", None):
+            for node in m.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree:
+                    nt_name = node.node_tree.name
+                    if "GlobalProperties" in nt_name or "StellarToon" in nt_name:
+                        target_node = node
+                        break
+        if target_node:
+            break
+
+    if not target_node:
+        return
+
+    _is_updating_hsr_props = True
+    try:
+        inputs = target_node.inputs
+        if "Expression Cheek Intensity" in inputs:
+            scene.hsr_exp_cheek = float(inputs["Expression Cheek Intensity"].default_value)
+        if "Expression Shy Intensity" in inputs:
+            scene.hsr_exp_shy = float(inputs["Expression Shy Intensity"].default_value)
+        if "Expression Shadow Intensity" in inputs:
+            scene.hsr_exp_shadow = float(inputs["Expression Shadow Intensity"].default_value)
+        if "Eye Can't Be Tinted?" in inputs:
+            scene.hsr_eye_cant_be_tinted = bool(inputs["Eye Can't Be Tinted?"].default_value > 0.5)
+        if "Custom Ambient Color" in inputs:
+            scene.hsr_amb_color = tuple(inputs["Custom Ambient Color"].default_value)[:3]
+        if "Custom Lit Color" in inputs:
+            scene.hsr_lit_color = tuple(inputs["Custom Lit Color"].default_value)[:3]
+        if "Custom Shadow Color" in inputs:
+            scene.hsr_shadow_color = tuple(inputs["Custom Shadow Color"].default_value)[:3]
+        if "Custom Sharp Lit Color" in inputs:
+            scene.hsr_sharp_lit_color = tuple(inputs["Custom Sharp Lit Color"].default_value)[:3]
+        if "Custom Sharp Shadow Color" in inputs:
+            scene.hsr_sharp_shadow_color = tuple(inputs["Custom Sharp Shadow Color"].default_value)[:3]
+    except Exception:
+        pass
+    finally:
+        _is_updating_hsr_props = False
 
 
 class HSR_PT_Rig_Character_Settings(Panel):
@@ -620,6 +715,11 @@ class HSR_PT_Rig_Character_Settings(Panel):
     def draw(self, context):
         layout = self.layout
         scene = context.scene
+
+        try:
+            pull_hsr_panel_values(scene, context)
+        except Exception:
+            pass
 
         # 1. Lighting Mode / Presets
         col_light = layout.column(align=True)

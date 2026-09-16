@@ -44,6 +44,454 @@ def extract_clean_character_name(raw_name):
     return name or "Character"
 
 
+# ---------------------------------------------------------------------------
+# Character name resolution + collection packaging shared by HSR / AKE / NTE.
+#
+# Root cause fixed here: FBX/UEFormat imports often name the armature something
+# generic ("Armature", "Root", "..._Skeleton"), and deriving the character name
+# from it alone produced collections literally called "Armature"/"Skeleton".
+# The resolver below prefers stronger signals first (existing character
+# collection from the import step, model folder, model file stem) and only
+# falls back to the armature name last, mirroring what ZZZ/Genshin/WuWa get
+# for free from their "Avatar_Xxx" armature names.
+# ---------------------------------------------------------------------------
+
+# extract_clean_character_name() results that must NOT become collection names.
+_GENERIC_RIG_NAME_RESULTS = {
+    "armature", "character", "char", "root", "rig", "rigify", "metarig",
+    "skeleton", "skel", "mesh", "model", "object", "collection", "scene",
+    "body", "face", "hair",
+}
+
+# Noise tokens for parsing model/mesh file stems (lowercase).
+_STEM_NOISE_TOKENS = {
+    "avatar", "art", "player", "chr", "s", "actor", "npc",
+    "armature", "model", "mesh", "fbx", "pmx", "uemodel", "uimodel", "uim",
+    "ui", "costume", "root", "rig", "char", "character",
+    "male", "female", "lady", "girl", "boy", "loli",
+    "size01", "size02", "size03", "size04",
+    "base", "main", "common", "high", "low", "grp", "group",
+    "skin", "body", "face", "hair", "eye", "eyes",
+    "lod", "lod0", "lod1", "lod2", "lod3",
+    "skeleton", "skel",
+}
+
+# Folder basenames that carry no character identity (step one level up is also
+# useless, so they are skipped entirely as name sources).
+_ASSET_DIR_NAMES = {
+    "textures", "texture", "materials", "material", "maps", "images",
+    "shaders", "shader", "assets", "asset", "models", "model", "fbx",
+    "blend", "blends", "chars", "characters", "common", "shared",
+}
+
+
+def _capitalize_name_token(token):
+    """Capitalizes all-lowercase tokens (firefly -> Firefly), leaves the rest."""
+    if token and token.islower():
+        return token[:1].upper() + token[1:]
+    return token
+
+
+def _stem_tokens(stem):
+    return [t for t in re.split(r"[_\-\s.]+", str(stem or "")) if t]
+
+
+def _parse_stem_name(stem, prefer="last"):
+    """Reduces a file/mesh stem to a character candidate.
+
+    Drops noise tokens (art/avatar/chr/lod*/digits/...) and returns the last
+    (file stems: Art_Firefly_01 -> Firefly) or first surviving token.
+    Returns "" when nothing meaningful survives.
+    """
+    survivors = [
+        t for t in _stem_tokens(stem)
+        if t.lower() not in _STEM_NOISE_TOKENS and not t.isdigit()
+    ]
+    if not survivors:
+        return ""
+    picked = survivors[0] if prefer == "first" else survivors[-1]
+    return _capitalize_name_token(picked)
+
+
+def _parse_folder_name(folder):
+    """Character candidate from a model folder basename (first survivor).
+
+    "Zankou swimsuit" -> Zankou, "firefly-spring-missive" -> Firefly,
+    "Perlica" -> Perlica. Returns "" for generic asset folders.
+    """
+    base = os.path.basename(os.path.normpath(str(folder or "")))
+    if not base or base.lower() in _ASSET_DIR_NAMES:
+        return ""
+    return _parse_stem_name(base, prefer="first")
+
+
+def _is_generic_rig_name(name):
+    return not name or str(name).strip().lower() in _GENERIC_RIG_NAME_RESULTS
+
+
+def _scene_rig_candidates(original_name, arm_obj):
+    """Locate the pre-rig source armature object for collection inspection."""
+    if arm_obj is not None and getattr(arm_obj, "type", None) == "ARMATURE":
+        return arm_obj
+    try:
+        for obj_name in (original_name, str(original_name or "").replace("Rig", "")):
+            obj = bpy.data.objects.get(obj_name)
+            if obj is not None and getattr(obj, "type", None) == "ARMATURE":
+                return obj
+    except Exception:
+        pass
+    return None
+
+
+def resolve_rig_character_name(original_name, arm_obj=None, mesh_names=None, actor_regex=None):
+    """Derives the character name for rig/collection naming (HSR/AKE/NTE).
+
+    Priority (first non-generic hit wins):
+      1. extract_clean_character_name(armature) when it is meaningful
+         (preserves every currently-working case: Avatar_Xxx, Miyabi...).
+      2. Existing non-default collection already holding the armature/meshes
+         (e.g. "Iroi" created by the NTE import packaging step).
+      3. Model folder basename (Perlica, Iroi, Zankou swimsuit -> Zankou).
+      4. Model file stem from scene import props (Art_Firefly_01 -> Firefly).
+      5. AKE-style actor_ mesh pattern (S_actor_pelica_... -> Pelica).
+      6. Mesh names via stem parsing (most common winner).
+      7. Armature extract result / "Character" as last resort.
+    """
+    try:
+        scene = bpy.context.scene
+    except Exception:
+        scene = None
+
+    arm_extracted = ""
+    try:
+        arm_extracted = extract_clean_character_name(original_name or "")
+    except Exception:
+        arm_extracted = ""
+
+    # 1. Armature name is already meaningful: keep current behavior verbatim.
+    if arm_extracted and not _is_generic_rig_name(arm_extracted):
+        return arm_extracted
+
+    # 2. Existing character collection (import step may have packaged already).
+    try:
+        arm_candidate = _scene_rig_candidates(original_name, arm_obj)
+        pool = []
+        if arm_candidate is not None:
+            pool.append(arm_candidate)
+        try:
+            for mesh in _iter_rig_meshes_for_name(arm_candidate):
+                pool.append(mesh)
+        except Exception:
+            pass
+        if mesh_names:
+            for mesh_name in mesh_names:
+                m_obj = bpy.data.objects.get(str(mesh_name))
+                if m_obj is not None:
+                    pool.append(m_obj)
+        seen_colls = set()
+        for obj in pool:
+            try:
+                user_colls = list(getattr(obj, "users_collection", []) or [])
+            except Exception:
+                continue
+            for coll in user_colls:
+                coll_name = getattr(coll, "name", "")
+                if not coll_name or coll_name in seen_colls:
+                    continue
+                seen_colls.add(coll_name)
+                low = coll_name.lower()
+                if low in ("collection", "master collection", "scene collection"):
+                    continue
+                if low.startswith(("wgts", "wgt")) or "widget" in low:
+                    continue
+                if _is_generic_rig_name(coll_name):
+                    continue
+                # The collection itself may need cleaning (slugs), reuse folder logic.
+                cleaned = _parse_stem_name(coll_name, prefer="first")
+                return cleaned or coll_name
+    except Exception:
+        pass
+
+    # 3. Model folder basename.
+    try:
+        model_dir = (scene.get("setup_wizard_imported_model_dir") if scene else "") or ""
+        folder_hit = _parse_folder_name(model_dir)
+        if folder_hit and not _is_generic_rig_name(folder_hit):
+            return folder_hit
+    except Exception:
+        pass
+
+    # 4. Model file stem recorded at import time.
+    try:
+        for key in ("setup_wizard_imported_fbx_path", "setup_wizard_imported_uemodel_path"):
+            model_file = (scene.get(key) if scene else "") or ""
+            if model_file:
+                stem = os.path.splitext(os.path.basename(model_file))[0]
+                stem_hit = _parse_stem_name(stem)
+                if stem_hit and not _is_generic_rig_name(stem_hit):
+                    return stem_hit
+    except Exception:
+        pass
+
+    # 5. Game-specific actor pattern (AKE: S_actor_pelica_body_01_lod0).
+    try:
+        if actor_regex:
+            pattern = re.compile(actor_regex, re.IGNORECASE)
+            names_to_scan = list(mesh_names or [])
+            try:
+                names_to_scan.extend(
+                    o.name for o in bpy.data.objects if getattr(o, "type", None) == "MESH"
+                )
+            except Exception:
+                pass
+            for mesh_name in names_to_scan:
+                match = pattern.search(str(mesh_name))
+                if match:
+                    candidate = _capitalize_name_token(match.group(1))
+                    if candidate and not _is_generic_rig_name(candidate):
+                        return candidate
+    except Exception:
+        pass
+
+    # 6. Mesh names via stem parsing (most common winner).
+    try:
+        votes = {}
+        names_to_scan = list(mesh_names or [])
+        if not names_to_scan:
+            try:
+                names_to_scan = [
+                    o.name for o in bpy.data.objects if getattr(o, "type", None) == "MESH"
+                ]
+            except Exception:
+                names_to_scan = []
+        for mesh_name in names_to_scan:
+            candidate = _parse_stem_name(os.path.splitext(str(mesh_name))[0])
+            if candidate and not _is_generic_rig_name(candidate):
+                votes[candidate] = votes.get(candidate, 0) + 1
+        if votes:
+            return sorted(votes.items(), key=lambda item: (-item[1], item[0]))[0][0]
+    except Exception:
+        pass
+
+    # 7. Last resort: whatever the armature extract gave (even generic), else Character.
+    return arm_extracted or "Character"
+
+
+def _iter_rig_meshes_for_name(arm):
+    """Meshes parented to / deforming with an armature (name-resolution use)."""
+    if arm is None:
+        return
+    seen = set()
+    try:
+        for child in getattr(arm, "children_recursive", []) or []:
+            if getattr(child, "type", None) == "MESH" and child.name not in seen:
+                seen.add(child.name)
+                yield child
+    except Exception:
+        pass
+    try:
+        for obj in bpy.data.objects:
+            if getattr(obj, "type", None) != "MESH" or obj.name in seen:
+                continue
+            bound = False
+            try:
+                for mod in getattr(obj, "modifiers", []) or []:
+                    if getattr(mod, "type", "") == "ARMATURE" and getattr(mod, "object", None) == arm:
+                        bound = True
+                        break
+            except Exception:
+                pass
+            if bound:
+                seen.add(obj.name)
+                yield obj
+    except Exception:
+        pass
+
+
+def ensure_character_collection(context, rig_obj, char_name):
+    """Packages rig + meshes into a top-level collection named after the character.
+
+    Shared by HSR/AKE/NTE (parity with Genshin/ZZZ/WuWa): the isolated worker
+    manifest only links top-level collections, so everything character-related
+    must live inside '<CharName>' with WGTS_<Char> nested in it — never loose
+    in the Scene Collection nor mixed into the default 'Collection'.
+    Multi-character safe: objects already living in another named (non-default,
+    non-widget) collection are never stolen; only the rig, meshes bound to it,
+    members of default-named collections and scene-root orphans are gathered.
+    Returns the character collection.
+    """
+    if not char_name:
+        char_name = "Character"
+    char_name = str(char_name)
+    try:
+        scene = getattr(context, "scene", None) if context is not None else None
+    except Exception:
+        scene = None
+    if scene is None:
+        scene = bpy.context.scene
+
+    char_coll = bpy.data.collections.get(char_name)
+    if char_coll is None:
+        char_coll = bpy.data.collections.new(char_name)
+    if char_coll.name not in scene.collection.children:
+        try:
+            scene.collection.children.link(char_coll)
+        except Exception:
+            pass
+    # WGTS_<Char> always nested, never at scene root (Append brings only its own).
+    try:
+        from setup_wizard.character_rig_setup.wgts_isolation import get_or_create_char_wgts
+        get_or_create_char_wgts(char_coll, char_name)
+    except Exception:
+        pass
+
+    if rig_obj is None:
+        return char_coll
+
+    default_names = {"collection", "master collection", "scene collection"}
+
+    def _is_wgts(coll):
+        try:
+            n = str(getattr(coll, "name", "")).lower()
+            return n.startswith("wgts") or n.startswith("wgt") or "widget" in n
+        except Exception:
+            return False
+
+    def _is_default(coll):
+        try:
+            return str(getattr(coll, "name", "")).lower() in default_names
+        except Exception:
+            return False
+
+    def _in_foreign_char_collection(obj):
+        """True if the object already belongs to another character's collection."""
+        try:
+            for coll in list(getattr(obj, "users_collection", []) or []):
+                if coll == char_coll or _is_wgts(coll) or _is_default(coll):
+                    continue
+                return True
+        except Exception:
+            pass
+        return False
+
+    def _link_no_dup(coll, obj):
+        try:
+            if obj.name not in coll.objects:
+                coll.objects.link(obj)
+        except Exception:
+            pass
+
+    # 1. Rig always inside the character collection.
+    _link_no_dup(char_coll, rig_obj)
+
+    # 2. Meshes bound to this rig (ARMATURE modifier) + rig children.
+    bound = set()
+    try:
+        for child in getattr(rig_obj, "children_recursive", []) or []:
+            if getattr(child, "type", None) in ("MESH", "CURVE", "EMPTY", "LIGHT"):
+                bound.add(child)
+    except Exception:
+        pass
+    try:
+        for obj in list(bpy.data.objects):
+            if getattr(obj, "type", None) != "MESH":
+                continue
+            try:
+                for mod in getattr(obj, "modifiers", []) or []:
+                    if getattr(mod, "type", "") == "ARMATURE" and getattr(mod, "object", None) == rig_obj:
+                        bound.add(obj)
+                        break
+            except Exception:
+                continue
+    except Exception:
+        pass
+    for obj in list(bound):
+        if not _in_foreign_char_collection(obj):
+            _link_no_dup(char_coll, obj)
+
+    # 3. Members of the rig's previous default-named collections (e.g. the FBX
+    # 'Collection'): migrate rig-related or unclaimed members, never meshes
+    # bound to a different armature.
+    try:
+        previous_colls = list(getattr(rig_obj, "users_collection", []) or [])
+    except Exception:
+        previous_colls = []
+    for old_coll in previous_colls:
+        if old_coll == char_coll or _is_wgts(old_coll) or not _is_default(old_coll):
+            continue
+        for member in list(getattr(old_coll, "objects", []) or []):
+            try:
+                m_type = getattr(member, "type", None)
+                if m_type not in ("MESH", "ARMATURE", "EMPTY", "CURVE", "LIGHT"):
+                    continue
+                if _in_foreign_char_collection(member):
+                    continue
+                if m_type == "MESH" and member not in bound:
+                    claimed = False
+                    try:
+                        for mod in getattr(member, "modifiers", []) or []:
+                            target = getattr(mod, "object", None)
+                            if getattr(mod, "type", "") == "ARMATURE" and target is not None and target != rig_obj:
+                                claimed = True
+                                break
+                    except Exception:
+                        pass
+                    if claimed:
+                        continue
+                _link_no_dup(char_coll, member)
+            except Exception:
+                continue
+
+    # 4. Scene-root orphans (appended shapes, UEFormat leftovers): adopt them
+    # unless they already belong to another character collection.
+    try:
+        root_objects = list(getattr(scene.collection, "objects", []) or [])
+    except Exception:
+        root_objects = []
+    for loose in root_objects:
+        try:
+            if getattr(loose, "type", None) not in ("MESH", "ARMATURE", "EMPTY", "CURVE", "LIGHT"):
+                continue
+            if _in_foreign_char_collection(loose):
+                continue
+            _link_no_dup(char_coll, loose)
+        except Exception:
+            continue
+
+    # 5. Unlink rig + gathered meshes from default-named collections (keep WGTS links).
+    for obj in [rig_obj] + list(bound):
+        try:
+            user_colls = list(getattr(obj, "users_collection", []) or [])
+        except Exception:
+            continue
+        for ucoll in user_colls:
+            if ucoll == char_coll or _is_wgts(ucoll):
+                continue
+            if _is_default(ucoll):
+                try:
+                    ucoll.objects.unlink(obj)
+                except Exception:
+                    pass
+
+    # 6. Remove the default 'Collection' when it ended up empty.
+    try:
+        stray = bpy.data.collections.get("Collection")
+        if stray is not None and stray != char_coll:
+            if len(getattr(stray, "objects", []) or []) == 0 and len(getattr(stray, "children", []) or []) == 0:
+                try:
+                    scene.collection.children.unlink(stray)
+                except Exception:
+                    pass
+                try:
+                    bpy.data.collections.remove(stray, do_unlink=True)
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
+    return char_coll
+
+
 def get_setup_wizard_version():
     """Retrieves setup wizard version tuple and returns formatted string (e.g. 'v3.3.0')."""
     try:

@@ -3,7 +3,7 @@ import os
 bl_info = {
     "name": "Gacha Setup",
     "author": "Mken, OctavoPE, Enthralpy, PaoloESAN",
-    "version": (3, 6, 5),
+    "version": (3, 6, 6),
     "blender": (5, 2, 0),
     "location": "3D View > Sidebar > Genshin Impact / Honkai Star Rail / Zenless Zone Zero / Neverness to Everness / Wuthering Waves / Arknights: Endfield",
     "description": "An addon to streamline the character model setup process for Gacha games in Blender 5.2+",
@@ -30,6 +30,7 @@ else:
 
     import setup_wizard.addon_updater.addon_updater_ops as addon_updater_ops
     import setup_wizard.genshin_setup_wizard
+    import setup_wizard.services.isolation
     import setup_wizard.ui.gi_ui_setup_wizard_menu
     from setup_wizard.character_rig_setup.character_rigger_operator import (
         GI_OT_RigCharacter,
@@ -394,6 +395,7 @@ else:
         register_hsr_properties()
         register_gi_properties()
         register_ake_properties()
+        setup_wizard.services.isolation.register()
         if wuwa_frame_change_handler not in bpy.app.handlers.render_init:
             bpy.app.handlers.render_init.append(wuwa_frame_change_handler)
         if gi_frame_change_handler not in bpy.app.handlers.render_init:
@@ -430,6 +432,7 @@ else:
         unregister_hsr_properties()
         unregister_zzz_properties()
         unregister_ake_properties()
+        setup_wizard.services.isolation.unregister()
         try:
             setup_wizard.genshin_setup_wizard.unregister()
         except Exception:

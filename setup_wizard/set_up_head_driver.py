@@ -831,14 +831,14 @@ def setup_ake_head_driver_system(context=None):
     for c in list(hc.constraints):
         hc.constraints.remove(c)
 
-    # 2. Move HC to the head center and apply rotation (90, -90, -180) deg.
+    # 2. Move HC to the head center and apply rotation (180, -180, -180) deg.
     # HF/HR inherit it as children: their local transforms are left untouched.
     hc.matrix_world = hc_world_before
     hc.matrix_world.translation = head_world_pos
     hc.rotation_mode = 'XYZ'
     hc.rotation_euler = (
-        math.radians(90.0),
-        math.radians(-90.0),
+        math.radians(180.0),
+        math.radians(-180.0),
         math.radians(-180.0),
     )
     context.view_layer.update()
@@ -878,7 +878,7 @@ def setup_ake_head_driver_system(context=None):
         except Exception:
             pass
 
-    # 5. Organization: Nest Lighting collection into WGTS_Armature / WGTS and place Light with character rig
+    # 5. Organization: stash light-control empties in WGTS and dissolve Lighting.
     try:
         organize_ake_lighting_collections(context, arm)
     except Exception as e_org:
@@ -948,28 +948,100 @@ def organize_ake_lighting_collections(context=None, arm=None):
                 wgts_coll = c
                 break
 
-    # 4. Move Light object directly into char_coll (alongside Rig, FaceRig, Meshes)
-    if light_obj and char_coll:
-        if light_obj.name not in char_coll.objects:
-            char_coll.objects.link(light_obj)
-        for c in list(bpy.data.collections):
-            if c != char_coll and light_obj.name in c.objects:
+    # 4. Stash the AKE light-control empties (HC/HF/HR/LC/LF) in WGTS: they drive
+    # the shader, never the viewport, so they travel hidden with the character
+    # instead of cluttering the scene. The main Light empty stays in the
+    # character collection like other games' Light Direction. Never steal ones
+    # already living in another character's collection (multi-character safe).
+    # 'Do not touch' is AKE.blend's container collection (HC/HF/HR/LC/LF live
+    # in it inside the shader file and wm.append preserves that membership):
+    # global container, never another character's collection.
+    _global_containers = {
+        "collection", "master collection", "scene collection", "do not touch",
+    }
+    _stash_target = wgts_coll or char_coll
+    if _stash_target is not None:
+        for _ename in ["HC", "HF", "HR", "LC", "LF"]:
+            _eobj = bpy.data.objects.get(_ename)
+            if _eobj is None:
+                continue
+            _foreign = False
+            for _uc in list(getattr(_eobj, "users_collection", []) or []):
+                if _uc == _stash_target or _uc == char_coll:
+                    continue
+                _ul = str(getattr(_uc, "name", "")).lower()
+                if _ul in _global_containers or _ul.startswith(("wgts", "wgt")) or "widget" in _ul:
+                    continue
+                _foreign = True
+                break
+            if _foreign:
+                continue
+            if _eobj.name not in _stash_target.objects:
                 try:
-                    c.objects.unlink(light_obj)
+                    _stash_target.objects.link(_eobj)
                 except Exception:
                     pass
-        if light_obj.name in context.scene.collection.objects and context.scene.collection != char_coll:
+            for _uc in list(getattr(_eobj, "users_collection", []) or []):
+                if _uc != _stash_target:
+                    try:
+                        _uc.objects.unlink(_eobj)
+                    except Exception:
+                        pass
+            if _eobj.name in context.scene.collection.objects:
+                try:
+                    context.scene.collection.objects.unlink(_eobj)
+                except Exception:
+                    pass
             try:
-                context.scene.collection.objects.unlink(light_obj)
+                _eobj.hide_viewport = True
+                _eobj.hide_render = True
             except Exception:
                 pass
 
-    # 5. Nest Lighting collection inside wgts_coll
-    if light_col and wgts_coll:
-        if light_col.name not in wgts_coll.children:
-            wgts_coll.children.link(light_col)
+    # 4b. The main Light empty stays in the character collection (like other
+    # games' Light Direction), with a single link: out of WGTS, scene root and
+    # default collections. Never steal one living in another character's collection.
+    if light_obj is not None and char_coll is not None and char_coll != context.scene.collection:
+        _foreign_light = False
+        for _uc in list(getattr(light_obj, "users_collection", []) or []):
+            if _uc == char_coll:
+                continue
+            _ul = str(getattr(_uc, "name", "")).lower()
+            if _ul in _global_containers or _ul.startswith(("wgts", "wgt")) or "widget" in _ul:
+                continue
+            _foreign_light = True
+            break
+        if not _foreign_light:
+            if light_obj.name not in char_coll.objects:
+                try:
+                    char_coll.objects.link(light_obj)
+                except Exception:
+                    pass
+            for _uc in list(getattr(light_obj, "users_collection", []) or []):
+                if _uc != char_coll:
+                    try:
+                        _uc.objects.unlink(light_obj)
+                    except Exception:
+                        pass
+            if light_obj.name in context.scene.collection.objects:
+                try:
+                    context.scene.collection.objects.unlink(light_obj)
+                except Exception:
+                    pass
+
+    # 5. Dissolve the legacy 'Lighting' collection (HSR parity): move anything
+    # still in it to WGTS and remove it, so it never shows up nested inside
+    # WGTS_<Char> (or anywhere else) on Append.
+    if light_col:
+        if _stash_target is not None:
+            for obj in list(light_col.objects):
+                if obj.name not in _stash_target.objects:
+                    try:
+                        _stash_target.objects.link(obj)
+                    except Exception:
+                        pass
         for parent_c in list(bpy.data.collections):
-            if parent_c != wgts_coll and light_col.name in parent_c.children:
+            if light_col.name in parent_c.children:
                 try:
                     parent_c.children.unlink(light_col)
                 except Exception:
@@ -979,6 +1051,11 @@ def organize_ake_lighting_collections(context=None, arm=None):
                 context.scene.collection.children.unlink(light_col)
             except Exception:
                 pass
+        if light_col.name in bpy.data.collections:
+            try:
+                bpy.data.collections.remove(light_col, do_unlink=True)
+            except Exception as ex_rm:
+                print(f"[AKE SETUP] Lighting collection dissolve notice: {ex_rm}")
 
 
 register, unregister = bpy.utils.register_classes_factory([

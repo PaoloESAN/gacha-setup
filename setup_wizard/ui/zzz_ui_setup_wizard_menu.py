@@ -37,6 +37,8 @@ class ZZZ_PT_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
             "PLAY",
             game_type=GameType.ZENLESS_ZONE_ZERO.name,
         )
+        from setup_wizard.services.isolation import isolation_service
+        isolation_service.draw_setup_status_box(sub_layout, context, run_entire_setup_column)
 
         settings_box = layout.box()
         settings_header = settings_box.row()
@@ -455,6 +457,14 @@ def update_zzz_light_mode(self, context=None):
     if _is_updating_zzz_props:
         return
     mode = getattr(self, "zzz_light_mode", "0")
+    try:
+        from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+        arm = resolve_settings_armature(context)
+        if arm:
+            arm["zzz_light_mode"] = str(mode)
+    except Exception:
+        pass
+
     if mode in ZZZ_LIGHT_PRESETS:
         preset = ZZZ_LIGHT_PRESETS[mode]
         _is_updating_zzz_props = True
@@ -550,28 +560,42 @@ def update_zzz_kythera_props(self, context=None):
         "Up/Down": rim_up_down,
     }
 
-    # 1. Update in node groups definitions
-    for ng in bpy.data.node_groups:
-        ng_low = ng.name.lower()
-        if "kythera" in ng_low or "rim light" in ng_low or "lit/shadow" in ng_low or "face shader" in ng_low:
-            if hasattr(ng, "interface"):
-                for item in ng.interface.items_tree:
-                    if item.item_type == 'SOCKET' and item.in_out == 'INPUT' and item.name in prop_map:
-                        try:
-                            item.default_value = prop_map[item.name]
-                        except Exception:
-                            pass
-            elif hasattr(ng, "inputs"):
-                for inp in ng.inputs:
-                    if inp.name in prop_map:
-                        try:
-                            inp.default_value = prop_map[inp.name]
-                        except Exception:
-                            pass
+    # 1. Resolve character materials to keep settings strictly per-character
+    try:
+        from setup_wizard.ui.character_settings_utils import (
+            get_character_materials,
+            ensure_character_node_trees_isolated,
+        )
+        arm, target_materials = get_character_materials(context)
+        if arm and target_materials:
+            ensure_character_node_trees_isolated(arm, target_materials)
+    except Exception:
+        target_materials = []
 
-    # 2. Update in all material nodes
-    for m in bpy.data.materials:
-        if m.node_tree:
+    # 2. Update in node groups definitions ONLY if no character is selected
+    if not target_materials:
+        for ng in bpy.data.node_groups:
+            ng_low = ng.name.lower()
+            if "kythera" in ng_low or "rim light" in ng_low or "lit/shadow" in ng_low or "face shader" in ng_low:
+                if hasattr(ng, "interface"):
+                    for item in ng.interface.items_tree:
+                        if item.item_type == 'SOCKET' and item.in_out == 'INPUT' and item.name in prop_map:
+                            try:
+                                item.default_value = prop_map[item.name]
+                            except Exception:
+                                pass
+                elif hasattr(ng, "inputs"):
+                    for inp in ng.inputs:
+                        if inp.name in prop_map:
+                            try:
+                                inp.default_value = prop_map[inp.name]
+                            except Exception:
+                                pass
+
+    # 3. Update targeted materials (scoped to this character only!)
+    mats_to_update = target_materials if target_materials else bpy.data.materials
+    for m in mats_to_update:
+        if getattr(m, "node_tree", None):
             for node in m.node_tree.nodes:
                 if node.type == 'GROUP' and node.node_tree:
                     nt_low = node.node_tree.name.lower()
@@ -582,6 +606,87 @@ def update_zzz_kythera_props(self, context=None):
                                     node.inputs[inp_name].default_value = val
                                 except Exception:
                                     pass
+
+
+def pull_zzz_panel_values(scene, context, force=False):
+    """Synchronizes UI sliders and lighting mode with the selected character's materials and rig."""
+    global _is_updating_zzz_props
+    if _is_updating_zzz_props or not scene:
+        return
+    try:
+        from setup_wizard.ui.character_settings_utils import (
+            get_character_materials,
+            has_active_character_changed,
+            ensure_character_node_trees_isolated,
+        )
+        if not force and not has_active_character_changed(context):
+            return
+        arm, mats = get_character_materials(context)
+    except Exception:
+        return
+    if not arm or not mats:
+        return
+
+    ensure_character_node_trees_isolated(arm, mats)
+
+    # 1. Pull lighting mode saved on this armature
+    saved_mode = arm.get("zzz_light_mode", "0")
+    if getattr(scene, "zzz_light_mode", "") != str(saved_mode):
+        _is_updating_zzz_props = True
+        try:
+            scene.zzz_light_mode = str(saved_mode)
+        finally:
+            _is_updating_zzz_props = False
+
+    # 2. Pull shader node group values
+    target_node = None
+    for m in mats:
+        if getattr(m, "node_tree", None):
+            for node in m.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree:
+                    nt_low = node.node_tree.name.lower()
+                    if "kythera" in nt_low or "face shader" in nt_low or "lit/shadow" in nt_low:
+                        target_node = node
+                        break
+        if target_node:
+            break
+
+    if not target_node:
+        return
+
+    _is_updating_zzz_props = True
+    try:
+        inputs = target_node.inputs
+        if "Lit Brightness" in inputs:
+            scene.zzz_lit_brightness = float(inputs["Lit Brightness"].default_value)
+        if "Shadow Intensity" in inputs:
+            scene.zzz_shadow_intensity = float(inputs["Shadow Intensity"].default_value)
+        if "Fake SSS Intensity" in inputs:
+            scene.zzz_fake_sss_intensity = float(inputs["Fake SSS Intensity"].default_value)
+        if "Ambient Tint" in inputs:
+            scene.zzz_ambient_tint = tuple(inputs["Ambient Tint"].default_value)[:3]
+        elif "Overall Tint" in inputs:
+            scene.zzz_ambient_tint = tuple(inputs["Overall Tint"].default_value)[:3]
+        if "Lit Tint" in inputs:
+            scene.zzz_lit_tint = tuple(inputs["Lit Tint"].default_value)[:3]
+        if "Shadow Tint" in inputs:
+            scene.zzz_shadow_tint = tuple(inputs["Shadow Tint"].default_value)[:3]
+        if "Enable Rim Light" in inputs:
+            scene.zzz_enable_rim_light = bool(inputs["Enable Rim Light"].default_value > 0.5)
+        if "Rim Light Color" in inputs:
+            scene.zzz_rim_light_color = tuple(inputs["Rim Light Color"].default_value)[:3]
+        if "Coverage" in inputs:
+            scene.zzz_rim_coverage = float(inputs["Coverage"].default_value)
+        if "Brightness" in inputs:
+            scene.zzz_rim_brightness = float(inputs["Brightness"].default_value)
+        if "Left/Right" in inputs:
+            scene.zzz_rim_left_right = float(inputs["Left/Right"].default_value)
+        if "Up/Down" in inputs:
+            scene.zzz_rim_up_down = float(inputs["Up/Down"].default_value)
+    except Exception:
+        pass
+    finally:
+        _is_updating_zzz_props = False
 
 
 class ZZZ_PT_Rig_Character_Settings(Panel):
@@ -608,6 +713,11 @@ class ZZZ_PT_Rig_Character_Settings(Panel):
         layout = self.layout
         scene = context.scene
         obj = context.active_object or context.object
+
+        try:
+            pull_zzz_panel_values(scene, context)
+        except Exception:
+            pass
 
         # 1. Lighting Mode / Presets
         col_light = layout.column(align=True)

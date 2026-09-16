@@ -52,9 +52,9 @@ class GI_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties
         return result
 
 
-def setup_wuwa_compositor_nodes(context):
+def setup_wuwa_compositor_nodes(context=None, scene=None):
     """Sets up the Compositor post-processing node tree for Wuthering Waves using GranTurismoWrapper."""
-    scene = context.scene
+    scene = scene or (context.scene if context else bpy.context.scene)
     addon_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     target_blend = os.path.join(addon_dir, "setup_wizard", "shaders", "wuwa", "Gustling Waters.blend")
     if not os.path.exists(target_blend):
@@ -118,7 +118,7 @@ def setup_wuwa_compositor_nodes(context):
             pass
 
     # Clean up any duplicate or leftover scenes so only the active scene remains
-    current_scene = context.scene
+    current_scene = scene
     for sc in list(bpy.data.scenes):
         if sc != current_scene and (sc.name.startswith("Scene.") or "Scene.001" in sc.name or sc.name in ["Scene.001", "Scene.002", "Preview"]):
             try:
@@ -142,9 +142,9 @@ class WW_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
         return {'FINISHED'}
 
 
-def setup_ake_compositor_nodes(context):
+def setup_ake_compositor_nodes(context=None, scene=None):
     """Sets up the Compositor post-processing node tree for Arknights: Endfield."""
-    scene = context.scene
+    scene = scene or (context.scene if context else bpy.context.scene)
     addon_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     target_blend = os.path.join(addon_dir, "setup_wizard", "shaders", "ake", "AKE.blend")
     if not os.path.exists(target_blend):
@@ -493,6 +493,19 @@ class HSR_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorPropertie
         return None
 
     def _derive_model_name(self, context, armature):
+        # Prefer the shared rig-time resolver so Finish never downgrades a good
+        # name (e.g. FireflyRig -> firefly): FBX stem, folder, meshes, armature.
+        try:
+            from setup_wizard.character_rig_setup.rig_ui_utils import (
+                resolve_rig_character_name,
+            )
+            arm_name = getattr(armature, "name", "") or ""
+            resolved = resolve_rig_character_name(arm_name, arm_obj=armature)
+            if resolved and resolved.lower() not in ("character", "armature", "root", "rig"):
+                return resolved
+        except Exception:
+            pass
+
         # 1) Prefer the exact FBX directory captured at model import time.
         model_dir = ""
         scene = context.scene
@@ -897,7 +910,69 @@ class NTE_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorPropertie
     bl_label = "Neverness to Everness: Finish Setup (UI)"
 
     def execute(self, context):
+        try:
+            self._consolidate_nte_character_collection(context)
+        except Exception as e_pkg:
+            print(f"[NTE FINISH] Collection consolidation notice: {e_pkg}")
         return BasicSetupUIOperator.execute(self, context)
+
+    def _consolidate_nte_character_collection(self, context):
+        """Mueve rig/meshes sueltos y el contenido de 'Collection' a '<CharName>'.
+
+        Red de seguridad (paridad WuWa): aunque import/rig ya empaquetan, el
+        Finish garantiza que el manifest aislado vea una sola coleccion
+        top-level con el personaje y no objetos sueltos.
+        """
+        scene = context.scene
+        rig = None
+        for obj in list(scene.objects):
+            if obj.type == "ARMATURE" and obj.name.endswith("Rig"):
+                oname = obj.name.lower()
+                if any(k in oname for k in ("eyerig", "facerig", "lighting", "metarig")):
+                    continue
+                rig = obj
+                break
+        if rig is None:
+            for obj in list(scene.objects):
+                if obj.type == "ARMATURE":
+                    oname = obj.name.lower()
+                    if any(k in oname for k in ("eyerig", "facerig", "lighting", "metarig")):
+                        continue
+                    rig = obj
+                    break
+        if rig is None:
+            return
+
+        try:
+            char_name = rig.name[:-3] if rig.name.endswith("Rig") else rig.name
+            if not char_name:
+                return
+            from setup_wizard.character_rig_setup.nte_rig_script import (
+                ensure_nte_character_collection,
+                delete_nte_light_empties,
+            )
+            ensure_nte_character_collection(context, rig, char_name)
+            # NTE no usa Light Direction por ahora: eliminarlo del todo.
+            try:
+                delete_nte_light_empties(context, rig, char_name)
+            except Exception as e_light:
+                print(f"[NTE FINISH] Light empties delete notice: {e_light}")
+        except Exception:
+            # Fallback minimo: mete lo suelto de la raiz en la coleccion del rig
+            try:
+                target = None
+                for coll in rig.users_collection:
+                    if coll.name.lower() not in ("collection", "master collection", "scene collection"):
+                        target = coll
+                        break
+                if target is None:
+                    return
+                for loose in list(scene.collection.objects):
+                    if loose.type in ("MESH", "ARMATURE", "EMPTY"):
+                        if loose.name not in target.objects:
+                            target.objects.link(loose)
+            except Exception:
+                pass
 
 
 

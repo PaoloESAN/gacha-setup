@@ -112,6 +112,15 @@ def setup_endfield_isaac_face_rig(body_rig, context=None):
     if not context:
         context = bpy.context
 
+    # Idempotency (HSR parity): an already-fused body rig carries the FaceRig
+    # bones itself; fusing again would only spawn .001 dupes.
+    try:
+        if "Eye-Track-Master" in body_rig.data.bones and not bpy.data.objects.get("isaac FaceRig"):
+            print("[AKE FACE RIG] FaceRig already fused into body rig, skipping.")
+            return body_rig
+    except Exception:
+        pass
+
     blend_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'isaacfacerig.blend')
     if not os.path.exists(blend_path):
         print(f"[AKE FACE RIG] Error: File not found: {blend_path}")
@@ -251,20 +260,9 @@ def setup_endfield_isaac_face_rig(body_rig, context=None):
 
     context.view_layer.update()
 
-    # Constrain FaceRig head bone to body head bone
-    pbone_head = facerig_obj.pose.bones.get(facerig_head_bone_name)
-    if pbone_head:
-        c_head = None
-        for c in pbone_head.constraints:
-            if c.type in ['COPY_TRANSFORMS', 'CHILD_OF', 'COPY_LOCATION']:
-                c_head = c
-                break
-        if not c_head:
-            c_head = pbone_head.constraints.new('COPY_TRANSFORMS')
-            c_head.name = "Copy Head Transforms"
-        c_head.target = body_rig
-        c_head.subtarget = body_head_bone_name
-
+    # HSR parity: no head-follow constraint on the FaceRig (it would
+    # self-target after the fuse below). DEF-spine.006 is removed from the
+    # FaceRig instead, right before joining.
     context.view_layer.update()
 
     # Precisely align Eye-Track-Master, Eye-Track, Eye-Track-Follow, and Eye-Scale-Control to character's eye coordinates
@@ -337,22 +335,102 @@ def setup_endfield_isaac_face_rig(body_rig, context=None):
             if orig_active:
                 context.view_layer.objects.active = orig_active
 
-            # Update Child Of inverse_matrix on Eye-Track-Follow so rest pose points perfectly horizontal
-            context.view_layer.update()
-            for bname in ["Eye-Track-Follow.L", "Eye-Track-Follow.R"]:
-                pb = facerig_obj.pose.bones.get(bname)
-                if pb:
-                    c = pb.constraints.get("Child Of")
-                    if c and c.subtarget in facerig_obj.pose.bones:
-                        tgt_pbone = facerig_obj.pose.bones[c.subtarget]
-                        c.inverse_matrix = tgt_pbone.matrix.inverted()
-
-            facerig_obj["ake_facerig_lowered"] = True
+            # NOTE: Child Of inverse on Eye-Track-Follow is fixed AFTER the fuse
+            # (in body-rig space), and the lowered flag moves to the body rig.
             print("[AKE FACE RIG] Perfectly aligned Eye-Track-Master, Eye-Track, Eye-Track-Follow, and Eye-Scale-Control to character eye coordinates.")
     except Exception as align_err:
         print(f"[AKE FACE RIG] Warning while aligning eye widgets: {align_err}")
 
     context.view_layer.update()
+
+    # Fuse the FaceRig into the body rig (HSR parity): a single armature
+    # travels as one collection unit on Append instead of two rigs.
+    # The FaceRig carries junk drivers from the template character in the
+    # .blend (same file HSR fuses), which would clobber rig properties.
+    try:
+        facerig_obj.animation_data_clear()
+    except Exception:
+        pass
+    try:
+        prev_active = context.view_layer.objects.active
+        try:
+            facerig_obj.hide_viewport = False
+            facerig_obj.hide_set(False)
+        except Exception:
+            pass
+        context.view_layer.objects.active = facerig_obj
+        bpy.ops.object.mode_set(mode='EDIT')
+        eb_dupe = facerig_obj.data.edit_bones.get(facerig_head_bone_name)
+        if eb_dupe:
+            facerig_obj.data.edit_bones.remove(eb_dupe)
+            print(f"[AKE FACE RIG] Removed '{facerig_head_bone_name}' from FaceRig to avoid collision on join.")
+        bpy.ops.object.mode_set(mode='OBJECT')
+        if prev_active:
+            try:
+                context.view_layer.objects.active = prev_active
+            except Exception:
+                pass
+    except Exception as ex_undupe:
+        print(f"[AKE FACE RIG] FaceRig dedupe notice: {ex_undupe}")
+        try:
+            bpy.ops.object.mode_set(mode='OBJECT')
+        except Exception:
+            pass
+    try:
+        bpy.ops.object.mode_set(mode='OBJECT')
+    except Exception:
+        pass
+    try:
+        for o in (facerig_obj, body_rig):
+            try:
+                o.hide_viewport = False
+                o.hide_set(False)
+            except Exception:
+                pass
+        bpy.ops.object.select_all(action='DESELECT')
+        facerig_obj.select_set(True)
+        body_rig.select_set(True)
+        context.view_layer.objects.active = body_rig
+        bpy.ops.object.join()
+        print(f"[AKE FACE RIG] Successfully fused FaceRig into '{body_rig.name}'")
+    except Exception as ex_join:
+        print(f"[AKE FACE RIG] Error joining FaceRig into body rig: {ex_join}")
+        return None
+    facerig_obj = body_rig
+    context.view_layer.update()
+
+    # Parent the facial root to the body head bone (HSR parity).
+    try:
+        context.view_layer.objects.active = body_rig
+        bpy.ops.object.mode_set(mode='EDIT')
+        head_eb = body_rig.data.edit_bones.get(body_head_bone_name)
+        if head_eb:
+            for bname in ["joint_face"]:
+                eb = body_rig.data.edit_bones.get(bname)
+                if eb:
+                    eb.parent = head_eb
+                    print(f"[AKE FACE RIG] Parented '{bname}' to '{head_eb.name}'")
+        bpy.ops.object.mode_set(mode='OBJECT')
+    except Exception as ex_parent:
+        print(f"[AKE FACE RIG] Face root parenting notice: {ex_parent}")
+        try:
+            bpy.ops.object.mode_set(mode='OBJECT')
+        except Exception:
+            pass
+
+    # Sanity: warn about mapping bones missing after the fuse.
+    try:
+        wanted = {"Mouth-Master", "Lip-Master", "Eye-Track-Master"}
+        for mapping in ENDFIELD_FACE_MAPPING.values():
+            if mapping.get("deform"):
+                wanted.add(mapping["deform"])
+            if mapping.get("master"):
+                wanted.add(mapping["master"])
+        missing = sorted(b for b in wanted if b and b not in body_rig.data.bones)
+        if missing:
+            print(f"[AKE FACE RIG] Warning: fused rig is missing face bones: {missing}")
+    except Exception:
+        pass
 
     # Bind Endfield facial bones to Isaac FaceRig
     assigned_count = 0
@@ -505,6 +583,21 @@ def setup_endfield_isaac_face_rig(body_rig, context=None):
 
             assigned_count += 3
 
+    # Post-fuse Child Of inverse fix (HSR parity): recompute in body-rig space
+    # so Eye-Track-Follow rests perfectly horizontal.
+    try:
+        context.view_layer.update()
+        for bname in ["Eye-Track-Follow.L", "Eye-Track-Follow.R"]:
+            pb = body_rig.pose.bones.get(bname)
+            if pb:
+                c = pb.constraints.get("Child Of")
+                if c and c.subtarget in body_rig.pose.bones:
+                    tgt_pbone = body_rig.pose.bones[c.subtarget]
+                    c.inverse_matrix = tgt_pbone.matrix.inverted()
+        body_rig["ake_facerig_lowered"] = True
+    except Exception as ex_inv:
+        print(f"[AKE FACE RIG] Post-fuse inverse fix notice: {ex_inv}")
+
     # Hide the "Face" bone collection on the body rig as requested
     if hasattr(body_rig.data, "collections"):
         face_coll = body_rig.data.collections.get("Face")
@@ -512,9 +605,9 @@ def setup_endfield_isaac_face_rig(body_rig, context=None):
             face_coll.is_visible = False
             print("[AKE FACE RIG] Hidden 'Face' bone collection on body rig.")
 
-    print(f"[AKE FACE RIG] Successfully constrained {assigned_count} Endfield face bones to Isaac FaceRig!")
+    print(f"[AKE FACE RIG] Successfully constrained {assigned_count} Endfield face bones to the fused rig!")
     context.view_layer.update()
-    return facerig_obj
+    return body_rig
 
 
 class AKE_OT_SetUpIsaacFaceRig(Operator, BasicSetupUIOperator):
