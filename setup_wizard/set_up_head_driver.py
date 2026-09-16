@@ -831,14 +831,14 @@ def setup_ake_head_driver_system(context=None):
     for c in list(hc.constraints):
         hc.constraints.remove(c)
 
-    # 2. Move HC to the head center and apply rotation (90, -90, -180) deg.
+    # 2. Move HC to the head center and apply rotation (180, -180, -180) deg.
     # HF/HR inherit it as children: their local transforms are left untouched.
     hc.matrix_world = hc_world_before
     hc.matrix_world.translation = head_world_pos
     hc.rotation_mode = 'XYZ'
     hc.rotation_euler = (
-        math.radians(90.0),
-        math.radians(-90.0),
+        math.radians(180.0),
+        math.radians(-180.0),
         math.radians(-180.0),
     )
     context.view_layer.update()
