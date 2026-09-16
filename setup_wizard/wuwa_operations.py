@@ -205,28 +205,250 @@ def update_specular(self, context=None):
                 pass
 
 
+def _iter_character_group_nodes(mats, *keywords):
+    """Yields GROUP nodes (from the given materials) whose tree name matches.
+
+    Direct (material-level) nodes first, then nodes nested inside the
+    materials' group trees (e.g. inside "WW - Main"). This keeps the
+    Character Settings working per character after Append / with several
+    characters in the same file, mirroring how the other games resolve
+    their nodes.
+    """
+    wanted = [k.lower() for k in keywords]
+    seen_containers = set()
+    direct = []
+    nested = []
+    queue = []
+    for mat in mats or []:
+        try:
+            tree = getattr(mat, "node_tree", None)
+        except Exception:
+            tree = None
+        if tree is not None and id(tree) not in seen_containers:
+            seen_containers.add(id(tree))
+            queue.append((tree, 0))
+    while queue:
+        container, depth = queue.pop(0)
+        try:
+            nodes = list(getattr(container, "nodes", []) or [])
+        except Exception:
+            continue
+        for node in nodes:
+            try:
+                if getattr(node, "type", None) != 'GROUP':
+                    continue
+                subtree = getattr(node, "node_tree", None)
+                if subtree is None:
+                    continue
+                tname = getattr(subtree, "name", "").lower()
+                if any(k in tname for k in wanted):
+                    (direct if depth == 0 else nested).append(node)
+                if id(subtree) not in seen_containers:
+                    seen_containers.add(id(subtree))
+                    queue.append((subtree, depth + 1))
+            except Exception:
+                continue
+    for node in direct:
+        yield node
+    for node in nested:
+        yield node
+
+
+def _iter_character_palette_nodes(mats):
+    """Yields 'Color Palette' GROUP nodes reachable from the given materials."""
+    return _iter_character_group_nodes(mats, "color palette")
+
+
+def _character_group_trees(mats, *keywords):
+    """Unique node-group trees (deduped) reachable from mats matching keywords.
+
+    Used to write tree-level defaults (Group Input / Group Output sockets
+    and interface defaults) scoped to one character's isolated trees,
+    instead of the single global tree definition.
+    """
+    wanted = [k.lower() for k in keywords]
+    seen = set()
+    found = []
+    queue = []
+    for mat in mats or []:
+        try:
+            tree = getattr(mat, "node_tree", None)
+        except Exception:
+            tree = None
+        if tree is not None and id(tree) not in seen:
+            seen.add(id(tree))
+            queue.append(tree)
+    while queue:
+        container = queue.pop(0)
+        try:
+            nodes = list(getattr(container, "nodes", []) or [])
+        except Exception:
+            continue
+        for node in nodes:
+            try:
+                if getattr(node, "type", None) != 'GROUP':
+                    continue
+                subtree = getattr(node, "node_tree", None)
+                if subtree is None or id(subtree) in seen:
+                    continue
+                seen.add(id(subtree))
+                queue.append(subtree)
+                if any(k in getattr(subtree, "name", "").lower() for k in wanted):
+                    found.append(subtree)
+            except Exception:
+                continue
+    return found
+
+
+def _set_group_input_defaults(tree, pairs):
+    """Writes defaults on GROUP_INPUT node outputs inside a node-group tree."""
+    try:
+        nodes = getattr(tree, "nodes", None)
+    except Exception:
+        return
+    if not nodes:
+        return
+    try:
+        node_list = list(nodes)
+    except Exception:
+        return
+    for node in node_list:
+        try:
+            if getattr(node, "type", None) != 'GROUP_INPUT':
+                continue
+            outputs = getattr(node, "outputs", {})
+            for socket_name, val in pairs:
+                try:
+                    if socket_name in outputs:
+                        outputs[socket_name].default_value = val
+                except Exception:
+                    pass
+        except Exception:
+            continue
+
+
+def _set_group_output_defaults(tree, node_names, pairs):
+    """Writes defaults on a Group Output node's inputs inside a tree."""
+    try:
+        nodes = getattr(tree, "nodes", None)
+    except Exception:
+        return
+    if not nodes:
+        return
+    out_node = None
+    try:
+        get_node = getattr(nodes, "get", None)
+        if callable(get_node):
+            for cand in node_names:
+                out_node = get_node(cand)
+                if out_node is not None:
+                    break
+    except Exception:
+        out_node = None
+    if out_node is None:
+        return
+    try:
+        inputs = getattr(out_node, "inputs", {})
+    except Exception:
+        return
+    for socket_name, val in pairs:
+        try:
+            if socket_name in inputs:
+                inputs[socket_name].default_value = val
+        except Exception:
+            pass
+
+
+def _set_interface_defaults(tree, pairs):
+    """Writes interface socket defaults of a node-group tree."""
+    try:
+        interface = getattr(tree, "interface", None)
+        items = getattr(interface, "items_tree", None)
+    except Exception:
+        return
+    if not items:
+        return
+    try:
+        item_list = list(items)
+    except Exception:
+        return
+    wanted = {name: val for name, val in pairs}
+    for item in item_list:
+        try:
+            if getattr(item, "name", None) in wanted:
+                item.default_value = wanted[item.name]
+        except Exception:
+            pass
+
+
+def _read_tree_output_default(tree, node_names, socket_name):
+    """Reads a Group Output node's input default inside a tree (or None)."""
+    try:
+        nodes = getattr(tree, "nodes", None)
+        get_node = getattr(nodes, "get", None)
+        if not callable(get_node):
+            return None
+        for cand in node_names:
+            try:
+                out_node = get_node(cand)
+            except Exception:
+                continue
+            if out_node is None:
+                continue
+            try:
+                inputs = getattr(out_node, "inputs", {})
+                if socket_name in inputs:
+                    return inputs[socket_name].default_value
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return None
+
+
+def _read_tree_group_input_default(tree, socket_name):
+    """Reads a GROUP_INPUT node output default inside a tree (or None)."""
+    try:
+        node_list = list(getattr(tree, "nodes", []) or [])
+    except Exception:
+        return None
+    for node in node_list:
+        try:
+            if getattr(node, "type", None) != 'GROUP_INPUT':
+                continue
+            outputs = getattr(node, "outputs", {})
+            if socket_name in outputs:
+                return outputs[socket_name].default_value
+        except Exception:
+            continue
+    return None
+
+
 def update_custom_colors(self, context=None):
     amb = (*getattr(self, "ww_amb_color", (0.5, 0.5, 0.5)), 1.0)
     light = (*getattr(self, "ww_light_color", (1.0, 1.0, 1.0)), 1.0)
     shadow = (*getattr(self, "ww_shadow_color", (0.3, 0.3, 0.4)), 1.0)
     rim = (*getattr(self, "ww_rim_color", (1.0, 1.0, 1.0)), 1.0)
 
-    # 1. Update in Color Palette Node Group definition
-    cp_group = bpy.data.node_groups.get("Color Palette")
-    if cp_group and hasattr(cp_group, "nodes"):
-        for node in cp_group.nodes:
-            if node.type == 'GROUP_INPUT':
-                for socket_name, col_val in [
-                    ("Custom Ambient", amb), ("Amb Color", amb), ("Custom Amb", amb),
-                    ("Custom Light", light), ("Light Color", light),
-                    ("Custom Shadow", shadow), ("Shadow Color", shadow),
-                    ("Custom Rim Tint", rim), ("Custom Rim", rim), ("Rim Color", rim), ("Rim Tint", rim),
-                ]:
-                    if socket_name in node.outputs:
-                        try:
-                            node.outputs[socket_name].default_value = col_val
-                        except Exception:
-                            pass
+    color_pairs = [
+        ("Custom Ambient", amb), ("Amb Color", amb), ("Custom Amb", amb),
+        ("Custom Light", light), ("Light Color", light),
+        ("Custom Shadow", shadow), ("Shadow Color", shadow),
+        ("Custom Rim Tint", rim), ("Custom Rim", rim), ("Rim Color", rim), ("Rim Tint", rim),
+    ]
+
+    # 1. Update in Color Palette Node Group definition (legacy global path)
+    def update_canonical_palette():
+        cp_group = bpy.data.node_groups.get("Color Palette")
+        if cp_group and hasattr(cp_group, "nodes"):
+            for node in cp_group.nodes:
+                if node.type == 'GROUP_INPUT':
+                    for socket_name, col_val in color_pairs:
+                        if socket_name in node.outputs:
+                            try:
+                                node.outputs[socket_name].default_value = col_val
+                            except Exception:
+                                pass
 
     # 2. Update on all Color Palette nodes inside all node groups and materials
     def apply_colors_to_nodes(node_container):
@@ -236,12 +458,7 @@ def update_custom_colors(self, context=None):
             if node.type == 'GROUP' and node.node_tree:
                 tree_name = node.node_tree.name
                 if "Color Palette" in tree_name:
-                    for socket_name, col_val in [
-                        ("Custom Ambient", amb), ("Amb Color", amb), ("Custom Amb", amb),
-                        ("Custom Light", light), ("Light Color", light),
-                        ("Custom Shadow", shadow), ("Shadow Color", shadow),
-                        ("Custom Rim Tint", rim), ("Custom Rim", rim), ("Rim Color", rim), ("Rim Tint", rim),
-                    ]:
+                    for socket_name, col_val in color_pairs:
                         if socket_name in node.inputs:
                             try:
                                 node.inputs[socket_name].default_value = col_val
@@ -249,19 +466,40 @@ def update_custom_colors(self, context=None):
                                 pass
 
     try:
-        from setup_wizard.ui.character_settings_utils import get_character_materials
+        from setup_wizard.ui.character_settings_utils import (
+            get_character_materials,
+            ensure_character_node_trees_isolated,
+        )
         arm, target_materials = get_character_materials(context)
+        if arm and target_materials:
+            ensure_character_node_trees_isolated(arm, target_materials)
     except Exception:
         target_materials = []
 
     if not target_materials:
+        update_canonical_palette()
         for ng in bpy.data.node_groups:
             apply_colors_to_nodes(ng)
 
     mats_to_update = target_materials if target_materials else [m for m in bpy.data.materials if m.use_nodes and m.node_tree]
-    for mat in mats_to_update:
-        if mat.use_nodes and mat.node_tree:
-            apply_colors_to_nodes(mat.node_tree)
+    if target_materials:
+        for node in _iter_character_palette_nodes(mats_to_update):
+            for socket_name, col_val in color_pairs:
+                try:
+                    if socket_name in node.inputs:
+                        node.inputs[socket_name].default_value = col_val
+                except Exception:
+                    pass
+        # Tree-level defaults of this character's isolated palettes, so the
+        # values hold whatever the internal wiring reads (Group Input
+        # defaults, like the legacy canonical write, but scoped per character).
+        for tree in _character_group_trees(mats_to_update, "color palette"):
+            _set_group_input_defaults(tree, color_pairs)
+    else:
+        update_canonical_palette()
+        for mat in mats_to_update:
+            if mat.use_nodes and mat.node_tree:
+                apply_colors_to_nodes(mat.node_tree)
 
 
 def update_shadow_range(self, context=None):
@@ -418,9 +656,29 @@ def update_light_mode(self, context=None):
             apply_light_mode_to_nodes(ng)
 
     mats_to_update = target_materials if target_materials else [m for m in bpy.data.materials if m.use_nodes and m.node_tree]
-    for mat in mats_to_update:
-        if mat.use_nodes and mat.node_tree:
-            apply_light_mode_to_nodes(mat.node_tree)
+    if target_materials:
+        # Per-character: reach Color Palette nodes directly in the materials
+        # or nested inside their (isolated) group trees.
+        for node in _iter_character_palette_nodes(mats_to_update):
+            if "Value" in node.inputs:
+                try:
+                    node.inputs["Value"].default_value = mode_val
+                except Exception:
+                    pass
+            if "Light Mode" in node.inputs:
+                try:
+                    node.inputs["Light Mode"].default_value = mode_val
+                except Exception:
+                    pass
+        # Tree-level defaults of this character's isolated palettes (scoped
+        # version of the legacy canonical Group Input write below).
+        for tree in _character_group_trees(mats_to_update, "color palette"):
+            _set_group_input_defaults(
+                tree, [("Value", mode_val), ("Light Mode", mode_val)])
+    else:
+        for mat in mats_to_update:
+            if mat.use_nodes and mat.node_tree:
+                apply_light_mode_to_nodes(mat.node_tree)
 
     update_custom_colors(self, context)
 
@@ -436,10 +694,37 @@ def update_fresnel(self, context=None):
     strength = float(getattr(scene, "ww_fresnel_strength", 2.0))
 
     try:
-        from setup_wizard.ui.character_settings_utils import get_character_materials
+        from setup_wizard.ui.character_settings_utils import (
+            get_character_materials,
+            ensure_character_node_trees_isolated,
+        )
         arm, target_materials = get_character_materials(context)
+        if arm and target_materials:
+            ensure_character_node_trees_isolated(arm, target_materials)
     except Exception:
         target_materials = []
+
+    def _apply_fresnel_to_node(node):
+        if "Use Fresnel" in node.inputs:
+            try:
+                node.inputs["Use Fresnel"].default_value = use_fresnel
+            except Exception:
+                pass
+        if "Fresnel Color" in node.inputs:
+            try:
+                node.inputs["Fresnel Color"].default_value = col_rgba
+            except Exception:
+                pass
+        if "Fresnel Scale" in node.inputs:
+            try:
+                node.inputs["Fresnel Scale"].default_value = scale
+            except Exception:
+                pass
+        if "Fresnel Strength" in node.inputs:
+            try:
+                node.inputs["Fresnel Strength"].default_value = strength
+            except Exception:
+                pass
 
     def apply_fresnel_to_nodes(node_container):
         if not node_container or not hasattr(node_container, "nodes"):
@@ -448,26 +733,21 @@ def update_fresnel(self, context=None):
             if node.type == 'GROUP' and node.node_tree:
                 tree_name = node.node_tree.name
                 if "Global Material Properties" in tree_name:
-                    if "Use Fresnel" in node.inputs:
-                        try:
-                            node.inputs["Use Fresnel"].default_value = use_fresnel
-                        except Exception:
-                            pass
-                    if "Fresnel Color" in node.inputs:
-                        try:
-                            node.inputs["Fresnel Color"].default_value = col_rgba
-                        except Exception:
-                            pass
-                    if "Fresnel Scale" in node.inputs:
-                        try:
-                            node.inputs["Fresnel Scale"].default_value = scale
-                        except Exception:
-                            pass
-                    if "Fresnel Strength" in node.inputs:
-                        try:
-                            node.inputs["Fresnel Strength"].default_value = strength
-                        except Exception:
-                            pass
+                    _apply_fresnel_to_node(node)
+
+    fresnel_pairs = [
+        ("Use Fresnel", use_fresnel),
+        ("Fresnel Color", col_rgba),
+        ("Fresnel Scale", scale),
+        ("Fresnel Strength", strength),
+    ]
+
+    def apply_fresnel_to_tree(tree):
+        # Tree-level defaults (Group Output inputs + interface), scoped to
+        # one tree: what the legacy global block below does, per character.
+        _set_group_output_defaults(
+            tree, ("Global Properties", "Group Output"), fresnel_pairs)
+        _set_interface_defaults(tree, fresnel_pairs)
 
     if not target_materials:
         g_props = bpy.data.node_groups.get("Global Material Properties Main")
@@ -521,9 +801,21 @@ def update_fresnel(self, context=None):
             apply_fresnel_to_nodes(ng)
 
     mats_to_update = target_materials if target_materials else [m for m in bpy.data.materials if m.use_nodes and m.node_tree]
-    for mat in mats_to_update:
-        if mat.use_nodes and mat.node_tree:
-            apply_fresnel_to_nodes(mat.node_tree)
+    if target_materials:
+        # Per-character: reach "Global Material Properties" nodes directly
+        # in the materials or nested inside their (isolated) group trees,
+        # plus the trees' own defaults (Group Output + interface) so the
+        # values hold whatever the internal wiring reads.
+        for node in _iter_character_group_nodes(
+                mats_to_update, "global material properties"):
+            _apply_fresnel_to_node(node)
+        for tree in _character_group_trees(
+                mats_to_update, "global material properties"):
+            apply_fresnel_to_tree(tree)
+    else:
+        for mat in mats_to_update:
+            if mat.use_nodes and mat.node_tree:
+                apply_fresnel_to_nodes(mat.node_tree)
 
     # Tag 3D viewports for redraw
     if hasattr(bpy.context, 'window_manager') and bpy.context.window_manager:
@@ -582,26 +874,52 @@ def pull_wuwa_panel_values(scene, context, force=False):
         if target_palette and target_blush and target_fresnel:
             break
 
+    # The palette / fresnel nodes may live nested inside the materials'
+    # group trees (e.g. inside "WW - Main") instead of at material level.
+    if not target_palette:
+        for node in _iter_character_palette_nodes(mats):
+            target_palette = node
+            break
+    if not target_fresnel:
+        for node in _iter_character_group_nodes(
+                mats, "global material properties"):
+            target_fresnel = node
+            break
+
     _is_updating_ww_light_props = True
     try:
         if target_palette:
             inputs = target_palette.inputs
-            if "Custom Ambient" in inputs:
-                scene.ww_amb_color = tuple(inputs["Custom Ambient"].default_value)[:3]
-            elif "Amb Color" in inputs:
-                scene.ww_amb_color = tuple(inputs["Amb Color"].default_value)[:3]
-            if "Custom Light" in inputs:
-                scene.ww_light_color = tuple(inputs["Custom Light"].default_value)[:3]
-            elif "Light Color" in inputs:
-                scene.ww_light_color = tuple(inputs["Light Color"].default_value)[:3]
-            if "Custom Shadow" in inputs:
-                scene.ww_shadow_color = tuple(inputs["Custom Shadow"].default_value)[:3]
-            elif "Shadow Color" in inputs:
-                scene.ww_shadow_color = tuple(inputs["Shadow Color"].default_value)[:3]
-            if "Custom Rim Tint" in inputs:
-                scene.ww_rim_color = tuple(inputs["Custom Rim Tint"].default_value)[:3]
-            elif "Rim Color" in inputs:
-                scene.ww_rim_color = tuple(inputs["Rim Color"].default_value)[:3]
+            pal_tree = getattr(target_palette, "node_tree", None)
+
+            def _pal_value(*names):
+                for name in names:
+                    try:
+                        if name in inputs:
+                            return tuple(inputs[name].default_value)[:3]
+                    except Exception:
+                        pass
+                for name in names:
+                    val = _read_tree_group_input_default(pal_tree, name)
+                    if val is not None:
+                        try:
+                            return tuple(val)[:3]
+                        except Exception:
+                            pass
+                return None
+
+            val = _pal_value("Custom Ambient", "Amb Color")
+            if val is not None:
+                scene.ww_amb_color = val
+            val = _pal_value("Custom Light", "Light Color")
+            if val is not None:
+                scene.ww_light_color = val
+            val = _pal_value("Custom Shadow", "Shadow Color")
+            if val is not None:
+                scene.ww_shadow_color = val
+            val = _pal_value("Custom Rim Tint", "Rim Color")
+            if val is not None:
+                scene.ww_rim_color = val
 
         if target_blush:
             for inp in target_blush.inputs:
@@ -612,14 +930,44 @@ def pull_wuwa_panel_values(scene, context, force=False):
 
         if target_fresnel:
             inputs = target_fresnel.inputs
-            if "Use Fresnel" in inputs:
-                scene.ww_use_fresnel = bool(inputs["Use Fresnel"].default_value > 0.5)
-            if "Fresnel Color" in inputs:
-                scene.ww_fresnel_color = tuple(inputs["Fresnel Color"].default_value)[:3]
-            if "Fresnel Scale" in inputs:
-                scene.ww_fresnel_scale = float(inputs["Fresnel Scale"].default_value)
-            if "Fresnel Strength" in inputs:
-                scene.ww_fresnel_strength = float(inputs["Fresnel Strength"].default_value)
+            fr_tree = getattr(target_fresnel, "node_tree", None)
+
+            def _fr_value(name):
+                try:
+                    if name in inputs:
+                        return inputs[name].default_value
+                except Exception:
+                    pass
+                return _read_tree_output_default(
+                    fr_tree, ("Global Properties", "Group Output"), name)
+
+            v = _fr_value("Use Fresnel")
+            if v is not None:
+                try:
+                    scene.ww_use_fresnel = bool(v > 0.5)
+                except Exception:
+                    try:
+                        scene.ww_use_fresnel = bool(v)
+                    except Exception:
+                        pass
+            v = _fr_value("Fresnel Color")
+            if v is not None:
+                try:
+                    scene.ww_fresnel_color = tuple(v)[:3]
+                except Exception:
+                    pass
+            v = _fr_value("Fresnel Scale")
+            if v is not None:
+                try:
+                    scene.ww_fresnel_scale = float(v)
+                except Exception:
+                    pass
+            v = _fr_value("Fresnel Strength")
+            if v is not None:
+                try:
+                    scene.ww_fresnel_strength = float(v)
+                except Exception:
+                    pass
     except Exception:
         pass
     finally:
