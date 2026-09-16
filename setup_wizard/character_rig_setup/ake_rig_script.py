@@ -1427,7 +1427,8 @@ def rig_character(
         print(f"[AKE RIG] parent-switch splice notice: {ex_ps}")
     modify_and_run_rig_ui_script(rigifyr, original_name, char_name=char_name, extra_splices=splices)
 
-    # 17. Organize collections: ensure Lighting is nested in WGTS_<Char> and Light is in character collection
+    # 17. Organize collections: Light goes with the character rig, the legacy
+    # Lighting collection is dissolved (never nested in WGTS).
     try:
         from setup_wizard.set_up_head_driver import organize_ake_lighting_collections
         organize_ake_lighting_collections(context, rigifyr)
