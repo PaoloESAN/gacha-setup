@@ -1722,8 +1722,8 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
     def is_physics_ignored(name):
         if name in physics_ignore_list or name in core_biped_org:
             return True
-        if is_v4 and hasattr(arm_data, "collections") and "Face" in arm_data.collections:
-            if name in arm_data.collections["Face"].bones:
+        if is_v4 and hasattr(arm_data, "collections"):
+            if "Face" in arm_data.collections and name in arm_data.collections["Face"].bones:
                 return True
         low = name.lower()
         if has_skirt_rig and any(k in low for k in ["skirt", "dress", "hem", "qun"]):
@@ -1746,7 +1746,7 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
             or name.startswith("Bone-")
             or name.startswith("Bip001")
             or name.startswith("joint_")
-            or name.startswith("skn_")
+            or (low.startswith("skn_") and "tail" not in low)
             or name.startswith("WGT")
         ):
             return True
@@ -1762,6 +1762,8 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
             clothes_bone_names.update(b.name for b in arm_data.collections["Clothes"].bones if not is_physics_ignored(b.name))
         if "Dress" in arm_data.collections:
             clothes_bone_names.update(b.name for b in arm_data.collections["Dress"].bones if not is_physics_ignored(b.name))
+        if "Tails" in arm_data.collections:
+            clothes_bone_names.update(b.name for b in arm_data.collections["Tails"].bones if not is_physics_ignored(b.name))
 
     # Fallback or additional keyword detection if collections are empty
     hair_keywords = [
@@ -1858,6 +1860,37 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
             return children_list[0]
         return max(children_list, key=lambda c: common_prefix_len(parent_name, c.name))
 
+    def would_create_cycle(source_bone_name, target_bone_name):
+        """Checks if adding a Damped Track from source -> target creates an end-to-start cycle."""
+        if source_bone_name == target_bone_name:
+            return True
+
+        s_pb = armature_obj.pose.bones.get(source_bone_name)
+        t_pb = armature_obj.pose.bones.get(target_bone_name)
+        if not s_pb or not t_pb:
+            return False
+
+        # Reject if target is an ancestor of source (tracking backwards towards root / end-to-start)
+        curr = s_pb.parent
+        while curr:
+            if curr.name == target_bone_name:
+                return True
+            curr = curr.parent
+
+        # Reject if target already has a constraint tracking source or any ancestor of source
+        for c in t_pb.constraints:
+            sub = getattr(c, 'subtarget', None)
+            if sub and sub in armature_obj.pose.bones:
+                if sub == source_bone_name:
+                    return True
+                chk = s_pb
+                while chk:
+                    if chk.name == sub:
+                        return True
+                    chk = chk.parent
+
+        return False
+
     # Align edit bone tails to point directly to child bones so Damped Track does not distort rest pose
     try:
         context.view_layer.objects.active = armature_obj
@@ -1870,9 +1903,10 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
             chain_children = [c for c in eb.children if c.name in (hair_bone_names | clothes_bone_names)]
             if chain_children:
                 best_c = pick_best_child(eb.name, chain_children)
-                vec = best_c.head - eb.head
-                if vec.length > 0.001:
-                    eb.tail = best_c.head
+                if not would_create_cycle(eb.name, best_c.name):
+                    vec = best_c.head - eb.head
+                    if vec.length > 0.001:
+                        eb.tail = best_c.head
             elif eb.parent and eb.parent.name in (hair_bone_names | clothes_bone_names):
                 parent_eb = eb.parent
                 dir_vec = (eb.head - parent_eb.head).normalized()
@@ -1901,6 +1935,9 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
         if hair_children:
             child_pb = pick_best_child(b_name, hair_children)
             if child_pb:
+                if would_create_cycle(b_name, child_pb.name):
+                    print(f"[PHYSICS SKIP] Skipped Damped Track {b_name} -> {child_pb.name} (dependency cycle detected).")
+                    continue
                 dt = pb.constraints.new("DAMPED_TRACK")
                 dt.name = "Hair_Physics_DampedTrack"
                 dt.target = armature_obj
@@ -1921,6 +1958,9 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
         if clothes_children:
             child_pb = pick_best_child(b_name, clothes_children)
             if child_pb:
+                if would_create_cycle(b_name, child_pb.name):
+                    print(f"[PHYSICS SKIP] Skipped Damped Track {b_name} -> {child_pb.name} (dependency cycle detected).")
+                    continue
                 dt = pb.constraints.new("DAMPED_TRACK")
                 dt.name = "Clothes_Physics_DampedTrack"
                 dt.target = armature_obj

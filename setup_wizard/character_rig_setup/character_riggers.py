@@ -1046,20 +1046,7 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
                     pb.custom_shape_scale_xyz = (0.08, 0.08, 0.08)
                     pb.rotation_mode = 'XYZ'
 
-        # Ensure tail_ik retains prop-wgt cube shape
-        prop_wgt = bpy.data.objects.get("prop-wgt")
-        if prop_wgt and hasattr(armature, "pose") and armature.pose:
-            for pb in armature.pose.bones:
-                if "tail_ik" in pb.name.lower():
-                    pb.custom_shape = prop_wgt
-                    pb.use_custom_shape_bone_size = False
-                    pb.custom_shape_scale_xyz = (0.35, 0.35, 0.35)
-                    pb.rotation_mode = 'XYZ'
-                    if hasattr(armature.data, "collections"):
-                        torso_c = armature.data.collections.get("Torso (IK)")
-                        b_ref = armature.data.bones.get(pb.name)
-                        if torso_c and b_ref:
-                            torso_c.assign(b_ref)
+
 
         def refresh_light_vectors_modifiers():
             char_name = armature.name.replace("Rig", "")
