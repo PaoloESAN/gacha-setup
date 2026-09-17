@@ -574,46 +574,62 @@ def update_hsr_stellartoon_props(self, context=None):
     except Exception:
         target_materials = []
 
-    # 2. Update in node groups and materials
-    def apply_props_to_container(container):
-        if not container or not hasattr(container, "nodes"):
-            return
-        for node in container.nodes:
-            if node.type == 'GROUP' and node.node_tree:
-                nt_name = node.node_tree.name
-                if "GlobalProperties" in nt_name or "StellarToon" in nt_name:
-                    for name, val in prop_map.items():
-                        if name in node.inputs:
-                            try:
-                                node.inputs[name].default_value = val
-                            except Exception:
-                                pass
-
-    if not target_materials:
-        gp_group = bpy.data.node_groups.get("GlobalProperties")
-        if gp_group:
-            if hasattr(gp_group, "nodes"):
-                for node in gp_group.nodes:
-                    for name, val in prop_map.items():
-                        if name in node.inputs:
-                            try:
-                                node.inputs[name].default_value = val
-                            except Exception:
-                                pass
-            if hasattr(gp_group, "interface"):
-                for item in gp_group.interface.items_tree:
-                    if item.item_type == 'SOCKET' and item.name in prop_map:
-                        try:
-                            item.default_value = prop_map[item.name]
-                        except Exception:
-                            pass
-        for ng in bpy.data.node_groups:
-            apply_props_to_container(ng)
-
-    mats_to_update = target_materials if target_materials else bpy.data.materials
+    # 2. Find target GlobalProperties node group(s)
+    target_trees = set()
+    mats_to_update = target_materials if target_materials else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
     for mat in mats_to_update:
-        if getattr(mat, "node_tree", None):
-            apply_props_to_container(mat.node_tree)
+        if getattr(mat, "use_nodes", False) and mat.node_tree:
+            for node in mat.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree:
+                    if "globalproperties" in node.node_tree.name.lower():
+                        target_trees.add(node.node_tree)
+
+    if not target_trees:
+        for ng in bpy.data.node_groups:
+            if "globalproperties" in ng.name.lower():
+                target_trees.add(ng)
+
+    # 3. Update inside each target GlobalProperties node group
+    for tree in target_trees:
+        out_node = tree.nodes.get("Group Output") or tree.nodes.get("Global Properties")
+        if out_node:
+            for inp in out_node.inputs:
+                if inp.name in prop_map:
+                    for l in list(inp.links):
+                        tree.links.remove(l)
+                    try:
+                        inp.default_value = prop_map[inp.name]
+                    except Exception:
+                        pass
+
+        if hasattr(tree, "interface") and hasattr(tree.interface, "items_tree"):
+            for item in tree.interface.items_tree:
+                if item.name in prop_map:
+                    try:
+                        item.default_value = prop_map[item.name]
+                    except Exception:
+                        pass
+
+    # 4. Also update direct group node inputs on character materials if any exist
+    for mat in mats_to_update:
+        if getattr(mat, "use_nodes", False) and mat.node_tree:
+            for node in mat.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree:
+                    for inp_name, val in prop_map.items():
+                        if inp_name in node.inputs:
+                            try:
+                                node.inputs[inp_name].default_value = val
+                            except Exception:
+                                pass
+
+    # 5. Tag 3D areas for redraw
+    if hasattr(bpy.context, 'window_manager') and bpy.context.window_manager:
+        for win in getattr(bpy.context.window_manager, 'windows', []):
+            screen = getattr(win, 'screen', None)
+            if screen:
+                for area in screen.areas:
+                    if area.type == 'VIEW_3D':
+                        area.tag_redraw()
 
 
 def pull_hsr_panel_values(scene, context, force=False):
@@ -646,25 +662,34 @@ def pull_hsr_panel_values(scene, context, force=False):
         finally:
             _is_updating_hsr_props = False
 
-    # 2. Pull shader node values
+    # 2. Find target GlobalProperties node group for this character
+    target_tree = None
     target_node = None
     for m in mats:
         if getattr(m, "node_tree", None):
             for node in m.node_tree.nodes:
                 if node.type == 'GROUP' and node.node_tree:
-                    nt_name = node.node_tree.name
-                    if "GlobalProperties" in nt_name or "StellarToon" in nt_name:
+                    nt_name = node.node_tree.name.lower()
+                    if "globalproperties" in nt_name:
+                        target_tree = node.node_tree
                         target_node = node
                         break
-        if target_node:
+        if target_tree:
             break
 
-    if not target_node:
+    if not target_tree and not target_node:
+        return
+
+    out_node = None
+    if target_tree:
+        out_node = target_tree.nodes.get("Group Output") or target_tree.nodes.get("Global Properties")
+
+    inputs = out_node.inputs if out_node else (target_node.inputs if target_node else None)
+    if not inputs:
         return
 
     _is_updating_hsr_props = True
     try:
-        inputs = target_node.inputs
         if "Expression Cheek Intensity" in inputs:
             scene.hsr_exp_cheek = float(inputs["Expression Cheek Intensity"].default_value)
         if "Expression Shy Intensity" in inputs:
