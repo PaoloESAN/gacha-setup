@@ -73,7 +73,11 @@ class CharacterRigger(ABC):
 
 
 def _get_character_armature(context):
-    selected_armatures = [obj for obj in context.selected_objects if obj.type == 'ARMATURE']
+    selected_armatures = [
+        obj for obj in context.selected_objects
+        if obj.type == 'ARMATURE' and not obj.data.get("rig_id") and not obj.name.endswith("Rig")
+        and not any(ign in obj.name.lower() for ign in ['eyerig', 'facerig', 'lighting', 'metarig', 'wgt'])
+    ]
     if selected_armatures:
         return selected_armatures[0]
 
@@ -81,11 +85,14 @@ def _get_character_armature(context):
     view_armatures = [obj for obj in view_layer_objs if obj.type == 'ARMATURE']
 
     for obj in view_armatures:
-        if 'Rig' in obj.name and not any(ign in obj.name.lower() for ign in ['eyerig', 'facerig', 'lighting', 'metarig']):
-            return obj
+        if any(ign in obj.name.lower() for ign in ['eyerig', 'facerig', 'lighting', 'metarig', 'wgt']):
+            continue
+        if obj.data.get("rig_id") or obj.name.endswith("Rig"):
+            continue
+        return obj
 
     for obj in view_armatures:
-        if not any(ign in obj.name.lower() for ign in ['eyerig', 'facerig', 'lighting', 'metarig']):
+        if not any(ign in obj.name.lower() for ign in ['eyerig', 'facerig', 'lighting', 'metarig', 'wgt']):
             return obj
 
     return view_armatures[0] if view_armatures else None

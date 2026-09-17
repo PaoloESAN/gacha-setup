@@ -14,6 +14,8 @@ from setup_wizard.character_rig_setup.rig_ui_utils import (
     setup_standard_bone_collections,
     distribute_standard_rig_bones,
     modify_and_run_rig_ui_script,
+    safe_expykit_extract_metarig,
+    safe_expykit_convert_bone_names,
 )
 
 
@@ -628,27 +630,35 @@ def rig_character(
             pass
 
     try:
-        bpy.ops.object.expykit_convert_bone_names(src_preset='Rigify_Metarig.py', trg_preset='Rigify_Deform.py')
+        safe_expykit_convert_bone_names(src_preset='Rigify_Metarig.py', trg_preset='Rigify_Deform.py')
     except Exception as ex:
         print(f"Notice: Expykit convert_bone_names handled: {ex}")
 
     try:
-        bpy.ops.object.expykit_extract_metarig(rig_preset='Rigify_Metarig.py', assign_metarig=True)
+        safe_expykit_extract_metarig(rig_preset='Rigify_Metarig.py', assign_metarig=True)
     except Exception as ex:
         print(f"Notice: Expykit extract_metarig handled: {ex}")
 
+    metarig_obj = bpy.data.objects.get("metarig")
+
     # Poke's code to turn on the finger's IK.
-    if not kachina:
+    target_pose_obj = metarig_obj if (metarig_obj and getattr(metarig_obj, "pose", None)) else (
+        bpy.context.object if (bpy.context.object and getattr(bpy.context.object, "pose", None)) else None
+    )
+    if not kachina and target_pose_obj and target_pose_obj.pose:
         fuckyou = ["thumb.01", "f_index.01", "f_middle.01", "f_ring.01", "f_pinky.01"]
         for side in [".L", ".R"]:
             for fucks in fuckyou:
-                bpy.context.object.pose.bones[fucks + side].rigify_parameters.make_extra_ik_control = True
+                b = target_pose_obj.pose.bones.get(fucks + side)
+                if b and hasattr(b, "rigify_parameters"):
+                    b.rigify_parameters.make_extra_ik_control = True
 
     ## Fixes the tiddy bones.  Expykit, why did you neglect them
-
-    metarm = bpy.data.objects["metarig"].data
-    bpy.ops.object.mode_set(mode='EDIT')
-    armature = bpy.data.objects[obj.name].data
+    if metarig_obj:
+        metarm = metarig_obj.data
+        bpy.context.view_layer.objects.active = metarig_obj
+        bpy.ops.object.mode_set(mode='EDIT')
+        armature = bpy.data.objects[obj.name].data
 
     ## Left side first, right side's xyz is same as left, but x is negative
     def getboob(bone, tip):

@@ -7,6 +7,7 @@ import re
 import sys
 import time
 import traceback
+from contextlib import nullcontext
 from pathlib import Path
 
 GAME_TO_WIZARD = {
@@ -261,29 +262,55 @@ def run_setup():
 
         write_status("SETUP_RUNNING", "Running setup pipeline...")
 
-        with checked_workflow(import_order, steps):
-            if selected_file and os.path.isfile(selected_file):
-                import_order.set_active_character_directory(character_dir)
-                import_op = import_order.ComponentFunctionFactory.create_component_function(
-                    "import_character_model"
-                )
-                import_op(
-                    "EXEC_DEFAULT",
-                    filepath=selected_file,
-                    file_directory=character_dir,
-                    next_step_idx=1,
-                    invoker_type="invoke_next_step_ui",
-                    high_level_step_name=GAME_TO_WIZARD[game],
-                    game_type=game,
-                )
-            else:
-                import_order.NextStepInvoker().invoke(
-                    0,
-                    "invoke_next_step_ui",
-                    file_path_to_cache=character_dir,
-                    high_level_step_name=GAME_TO_WIZARD[game],
-                    game_type=game,
-                )
+        # Provide a VIEW_3D context override so all steps, operators and third-party addons
+        # (like ExpyKit) have access to valid space_data and areas in headless mode.
+        screens = [bpy.context.screen] if getattr(bpy.context, "screen", None) else []
+        screens.extend([s for s in bpy.data.screens if s not in screens])
+        ov = {}
+        for s in screens:
+            for a in getattr(s, "areas", []):
+                if a.type == "VIEW_3D":
+                    sp = a.spaces.active if a.spaces else None
+                    reg = next((r for r in a.regions if r.type == "WINDOW"), None)
+                    ov = {"screen": s, "area": a}
+                    if sp:
+                        ov["space_data"] = sp
+                    if reg:
+                        ov["region"] = reg
+                    break
+            if ov:
+                break
+
+        override_ctx = (
+            bpy.context.temp_override(**ov)
+            if (ov and hasattr(bpy.context, "temp_override"))
+            else nullcontext()
+        )
+
+        with override_ctx:
+            with checked_workflow(import_order, steps):
+                if selected_file and os.path.isfile(selected_file):
+                    import_order.set_active_character_directory(character_dir)
+                    import_op = import_order.ComponentFunctionFactory.create_component_function(
+                        "import_character_model"
+                    )
+                    import_op(
+                        "EXEC_DEFAULT",
+                        filepath=selected_file,
+                        file_directory=character_dir,
+                        next_step_idx=1,
+                        invoker_type="invoke_next_step_ui",
+                        high_level_step_name=GAME_TO_WIZARD[game],
+                        game_type=game,
+                    )
+                else:
+                    import_order.NextStepInvoker().invoke(
+                        0,
+                        "invoke_next_step_ui",
+                        file_path_to_cache=character_dir,
+                        high_level_step_name=GAME_TO_WIZARD[game],
+                        game_type=game,
+                    )
 
         if bpy.app.background:
             save_and_quit()

@@ -2171,3 +2171,88 @@ def strip_rigify_torso_follow_ui(rigifyr, original_name, char_name):
             return False
     print("[RIG UI] torso-follow UI strip: nothing matched")
     return False
+
+
+def get_view3d_override():
+    """
+    Returns a dict with context members for bpy.context.temp_override(...)
+    targeting an active VIEW_3D space and WINDOW region, even when running
+    in background/headless mode or from other window contexts.
+    """
+    screens = [bpy.context.screen] if getattr(bpy.context, "screen", None) else []
+    screens.extend([s for s in bpy.data.screens if s not in screens])
+    for s in screens:
+        for a in getattr(s, "areas", []):
+            if a.type == "VIEW_3D":
+                sp = a.spaces.active if a.spaces else None
+                reg = next((r for r in a.regions if r.type == "WINDOW"), None)
+                override = {"screen": s, "area": a}
+                if sp:
+                    override["space_data"] = sp
+                if reg:
+                    override["region"] = reg
+                return override
+    return {}
+
+
+def patch_expykit_operators():
+    """
+    Patches ExpyKit operators to ensure their execute methods run with a valid
+    VIEW_3D context override if context.space_data is None.
+    """
+    try:
+        import sys
+        for mod_name, mod in list(sys.modules.items()):
+            if "expy" in mod_name.lower():
+                for attr_name in ("ExtractMetarig", "ConvertBoneNaming"):
+                    cls = getattr(mod, attr_name, None)
+                    if cls and hasattr(cls, "execute") and not getattr(cls.execute, "_gacha_patched", False):
+                        orig_exec = cls.execute
+                        def make_wrapper(orig):
+                            def safe_exec(self, context):
+                                if getattr(context, "space_data", None) is None:
+                                    ov = get_view3d_override()
+                                    if ov and hasattr(context, "temp_override"):
+                                        with context.temp_override(**ov):
+                                            return orig(self, context)
+                                return orig(self, context)
+                            safe_exec._gacha_patched = True
+                            return safe_exec
+                        cls.execute = make_wrapper(orig_exec)
+    except Exception:
+        pass
+
+
+def safe_expykit_extract_metarig(rig_preset="Rigify_Metarig.py", assign_metarig=True):
+    """
+    Executes bpy.ops.object.expykit_extract_metarig with a 3D View context override
+    to prevent crashes in background/isolated mode where context.space_data is None.
+    """
+    patch_expykit_operators()
+    ov = get_view3d_override()
+    if ov and hasattr(bpy.context, "temp_override"):
+        with bpy.context.temp_override(**ov):
+            return bpy.ops.object.expykit_extract_metarig(
+                rig_preset=rig_preset, assign_metarig=assign_metarig
+            )
+    return bpy.ops.object.expykit_extract_metarig(
+        rig_preset=rig_preset, assign_metarig=assign_metarig
+    )
+
+
+def safe_expykit_convert_bone_names(src_preset="Rigify_Metarig.py", trg_preset="Rigify_Deform.py"):
+    """
+    Executes bpy.ops.object.expykit_convert_bone_names with a 3D View context override.
+    """
+    patch_expykit_operators()
+    ov = get_view3d_override()
+    if ov and hasattr(bpy.context, "temp_override"):
+        with bpy.context.temp_override(**ov):
+            return bpy.ops.object.expykit_convert_bone_names(
+                src_preset=src_preset, trg_preset=trg_preset
+            )
+    return bpy.ops.object.expykit_convert_bone_names(
+        src_preset=src_preset, trg_preset=trg_preset
+    )
+
+
