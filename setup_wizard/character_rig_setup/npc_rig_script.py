@@ -12,6 +12,8 @@ from setup_wizard.character_rig_setup.rig_ui_utils import (
     extract_clean_character_name,
     setup_standard_bone_collections,
     modify_and_run_rig_ui_script,
+    safe_expykit_extract_metarig,
+    safe_expykit_convert_bone_names,
 )
 
 def rig_character(
@@ -540,20 +542,22 @@ def rig_character(
             pass
 
     try:
-        bpy.ops.object.expykit_convert_bone_names(src_preset='Rigify_Metarig.py', trg_preset='Rigify_Deform.py')
+        safe_expykit_convert_bone_names(src_preset='Rigify_Metarig.py', trg_preset='Rigify_Deform.py')
     except Exception as ex:
         print(f"Notice: Expykit convert_bone_names handled: {ex}")
 
     try:
-        bpy.ops.object.expykit_extract_metarig(rig_preset='Rigify_Metarig.py', assign_metarig=True)
+        safe_expykit_extract_metarig(rig_preset='Rigify_Metarig.py', assign_metarig=True)
     except Exception as ex:
         print(f"Notice: Expykit extract_metarig handled: {ex}")
 
     ## Fixes the tiddy bones.  Expykit, why did you neglect them
 
-    metarm = bpy.data.objects["metarig"].data
-    bpy.ops.object.mode_set(mode='EDIT')
-    armature = bpy.data.objects[obj.name].data
+    metarig_obj = bpy.data.objects.get("metarig")
+    if metarig_obj:
+        metarm = metarig_obj.data
+        bpy.ops.object.mode_set(mode='EDIT')
+        armature = bpy.data.objects[obj.name].data
 
     ## Left side first, right side's xyz is same as left, but x is negative
     def getboob(bone, tip):

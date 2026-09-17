@@ -17,6 +17,8 @@ from setup_wizard.character_rig_setup.rig_ui_utils import (
     distribute_standard_rig_bones,
     modify_and_run_rig_ui_script,
     strip_rigify_torso_follow_ui,
+    safe_expykit_extract_metarig,
+    safe_expykit_convert_bone_names,
 )
 
 
@@ -333,12 +335,12 @@ def rig_character(
             pass
 
     try:
-        bpy.ops.object.expykit_convert_bone_names(src_preset="Rigify_Metarig.py", trg_preset="Rigify_Deform.py")
+        safe_expykit_convert_bone_names(src_preset="Rigify_Metarig.py", trg_preset="Rigify_Deform.py")
     except Exception as ex:
         print(f"Notice: Expykit convert_bone_names handled: {ex}")
 
     try:
-        bpy.ops.object.expykit_extract_metarig(rig_preset="Rigify_Metarig.py", assign_metarig=True)
+        safe_expykit_extract_metarig(rig_preset="Rigify_Metarig.py", assign_metarig=True)
     except Exception as ex:
         print(f"Notice: Expykit extract_metarig handled: {ex}")
 

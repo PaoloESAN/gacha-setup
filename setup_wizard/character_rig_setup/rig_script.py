@@ -14,6 +14,8 @@ from setup_wizard.character_rig_setup.rig_ui_utils import (
     extract_clean_character_name,
     setup_standard_bone_collections,
     modify_and_run_rig_ui_script,
+    safe_expykit_extract_metarig,
+    safe_expykit_convert_bone_names,
 )
 
 
@@ -38,12 +40,20 @@ def rig_character(
     is_version_4 = bpy.app.version[0] >= 4
 
     head_bone_arm_target = bpy.context.active_object
-
-    # Blender 5.0 compatibility: active_object can be None after certain operations
-    if head_bone_arm_target is None:
-        # Try to find the armature from selected objects first
+    if (
+        head_bone_arm_target is None
+        or head_bone_arm_target.type != "ARMATURE"
+        or head_bone_arm_target.data.get("rig_id")
+        or head_bone_arm_target.name.endswith("Rig")
+        or any(ign in head_bone_arm_target.name.lower() for ign in ['eyerig', 'facerig', 'lighting', 'metarig', 'wgt'])
+    ):
+        # Try to find the unrigged character armature from selected objects first
         armatures = [
-            obj for obj in bpy.context.selected_objects if obj.type == "ARMATURE"
+            obj for obj in bpy.context.selected_objects
+            if obj.type == "ARMATURE"
+            and not obj.data.get("rig_id")
+            and not obj.name.endswith("Rig")
+            and not any(ign in obj.name.lower() for ign in ['eyerig', 'facerig', 'lighting', 'metarig', 'wgt'])
         ]
         if not armatures:
             # Fallback: find any non-rigged armature in the scene
@@ -51,8 +61,9 @@ def rig_character(
                 obj
                 for obj in bpy.data.objects
                 if obj.type == "ARMATURE"
-                and "Rig" not in obj.name
-                and obj.name != "metarig"
+                and not obj.data.get("rig_id")
+                and not obj.name.endswith("Rig")
+                and not any(ign in obj.name.lower() for ign in ['eyerig', 'facerig', 'lighting', 'metarig', 'wgt'])
             ]
         if not armatures:
             # Last resort: any armature
@@ -769,94 +780,92 @@ def rig_character(
             pass
 
     try:
-        bpy.ops.object.expykit_convert_bone_names(
+        safe_expykit_convert_bone_names(
             src_preset="Rigify_Metarig.py", trg_preset="Rigify_Deform.py"
         )
     except Exception as ex:
         print(f"Notice: Expykit convert_bone_names handled: {ex}")
 
     try:
-        bpy.ops.object.expykit_extract_metarig(
+        safe_expykit_extract_metarig(
             rig_preset="Rigify_Metarig.py", assign_metarig=True
         )
     except Exception as ex:
         print(f"Notice: Expykit extract_metarig handled: {ex}")
 
+    metarig_obj = bpy.data.objects.get("metarig")
+
     # Poke's code to turn on the finger's IK.
-    if not kachina:
+    target_pose_obj = metarig_obj if (metarig_obj and getattr(metarig_obj, "pose", None)) else (
+        bpy.context.object if (bpy.context.object and getattr(bpy.context.object, "pose", None)) else None
+    )
+    if not kachina and target_pose_obj and target_pose_obj.pose:
         fuckyou = ["thumb.01", "f_index.01", "f_middle.01", "f_ring.01", "f_pinky.01"]
         for side in [".L", ".R"]:
             for fucks in fuckyou:
-                bpy.context.object.pose.bones[
-                    fucks + side
-                ].rigify_parameters.make_extra_ik_control = True
+                b = target_pose_obj.pose.bones.get(fucks + side)
+                if b and hasattr(b, "rigify_parameters"):
+                    b.rigify_parameters.make_extra_ik_control = True
 
     ## Fixes the tiddy bones.  Expykit, why did you neglect them
+    if metarig_obj:
+        metarm = metarig_obj.data
+        bpy.context.view_layer.objects.active = metarig_obj
+        bpy.ops.object.mode_set(mode="EDIT")
+        armature = bpy.data.objects[obj.name].data
 
-    metarm = bpy.data.objects["metarig"].data
-    bpy.ops.object.mode_set(mode="EDIT")
-    armature = bpy.data.objects[obj.name].data
+        ## Left side first, right side's xyz is same as left, but x is negative
+        def getboob(bone, tip):
+            if tip == "head":
+                return (
+                    armature.edit_bones[bone].head.x,
+                    armature.edit_bones[bone].head.y,
+                    armature.edit_bones[bone].head.z,
+                )
+            else:
+                return (
+                    armature.edit_bones[bone].tail.x,
+                    armature.edit_bones[bone].tail.y,
+                    armature.edit_bones[bone].tail.z,
+                )
 
-    ## Left side first, right side's xyz is same as left, but x is negative
-    def getboob(bone, tip):
-        if tip == "head":
-            return (
-                armature.edit_bones[bone].head.x,
-                armature.edit_bones[bone].head.y,
-                armature.edit_bones[bone].head.z,
-            )
-        else:
-            return (
-                armature.edit_bones[bone].tail.x,
-                armature.edit_bones[bone].tail.y,
-                armature.edit_bones[bone].tail.z,
-            )
+        try:
+            xh, yh, zh = getboob("breast.L", "head")
+            xt, yt, zt = getboob("breast.L", "tail")
 
-    try:
-        xh, yh, zh = getboob("breast.L", "head")
-        xt, yt, zt = getboob("breast.L", "tail")
+            ## Change the meta arm's boob positions
 
-        ## Change the meta arm's boob positions
+            def fixboob(bone, xh, yh, zh, xt, yt, zt):
+                bone.head.x = xh
+                bone.head.y = yh
+                bone.head.z = zh
+                bone.tail.x = xt
+                bone.tail.y = yt
+                bone.tail.z = zt
 
-        def fixboob(bone, xh, yh, zh, xt, yt, zt):
-            bone.head.x = xh
-            bone.head.y = yh
-            bone.head.z = zh
-            bone.tail.x = xt
-            bone.tail.y = yt
-            bone.tail.z = zt
+            boobL = metarm.edit_bones.get("breast.L")
+            boobR = metarm.edit_bones.get("breast.R")
+            if boobL and boobR:
+                fixboob(boobL, xh, yh, zh, xt, yt, zt)
+                fixboob(boobR, -xh, yh, zh, -xt, yt, zt)
+                boobL.roll = armature.edit_bones["breast.L"].roll
+                boobR.roll = -boobL.roll
+        except Exception:
+            # If breast bones dont exist in the orig rig, then delete from the meta rig
+            if metarm.edit_bones.get("breast.L"):
+                metarm.edit_bones.remove(metarm.edit_bones["breast.L"])
+            if metarm.edit_bones.get("breast.R"):
+                metarm.edit_bones.remove(metarm.edit_bones["breast.R"])
 
-        boobL = metarm.edit_bones["breast.L"]
-        fixboob(boobL, xh, yh, zh, xt, yt, zt)
-        boobR = metarm.edit_bones["breast.R"]
-        fixboob(boobR, -xh, yh, zh, -xt, yt, zt)
-
-        boobL.roll = armature.edit_bones["breast.L"].roll
-        boobR.roll = -boobL.roll
-    except Exception:
-        # If breast bones dont exist in the orig rig, then delete from the meta rig
-        metarm.edit_bones.remove(metarm.edit_bones["breast.L"])
-        metarm.edit_bones.remove(metarm.edit_bones["breast.R"])
-
-    # Fixes the finger rolls
-    bpy.ops.object.mode_set(mode="OBJECT")
-    metapose = bpy.data.objects["metarig"].pose
-    if kachina:
+        # Fixes the finger rolls
+        bpy.ops.object.mode_set(mode="OBJECT")
+        metapose = metarig_obj.pose
+        axis_rot = "-X" if kachina else "X"
         for bone_name in ["f_index", "f_middle", "f_ring", "f_pinky"]:
-            metapose.bones[
-                f"{bone_name}.01.L"
-            ].rigify_parameters.primary_rotation_axis = "-X"
-            metapose.bones[
-                f"{bone_name}.01.R"
-            ].rigify_parameters.primary_rotation_axis = "-X"
-    else:
-        for bone_name in ["f_index", "f_middle", "f_ring", "f_pinky"]:
-            metapose.bones[
-                f"{bone_name}.01.L"
-            ].rigify_parameters.primary_rotation_axis = "X"
-            metapose.bones[
-                f"{bone_name}.01.R"
-            ].rigify_parameters.primary_rotation_axis = "X"
+            for side in [".L", ".R"]:
+                b = metapose.bones.get(f"{bone_name}.01{side}")
+                if b and hasattr(b, "rigify_parameters"):
+                    b.rigify_parameters.primary_rotation_axis = axis_rot
 
     ## This part corrects metarm finger rolls
     bpy.ops.object.mode_set(mode="OBJECT")

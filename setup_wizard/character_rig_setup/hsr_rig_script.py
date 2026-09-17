@@ -17,6 +17,7 @@ from setup_wizard.character_rig_setup.rig_ui_utils import (
     setup_standard_bone_collections,
     distribute_standard_rig_bones,
     modify_and_run_rig_ui_script,
+    safe_expykit_extract_metarig,
 )
 
 
@@ -459,7 +460,7 @@ def rig_character(
             pass
 
     try:
-        bpy.ops.object.expykit_extract_metarig(rig_preset='Rigify_Metarig.py', assign_metarig=True)
+        safe_expykit_extract_metarig(rig_preset='Rigify_Metarig.py', assign_metarig=True)
     except Exception as ex:
         print(f"Notice: Expykit extract_metarig handled: {ex}")
 
@@ -620,9 +621,12 @@ def rig_character(
             bone.select_tail = True
             bone.select_head = True
 
+    before_armatures = {o.name for o in bpy.data.objects if o.type == 'ARMATURE'}
     bpy.ops.armature.separate()
+    new_armatures = [o for o in bpy.data.objects if o.type == 'ARMATURE' and o.name not in before_armatures]
+    separated_armature = new_armatures[0] if new_armatures else bpy.data.objects.get(armature.name + ".001")
 
-    metarig_obj = bpy.data.objects.get("metarig")
+    metarig_obj = bpy.context.view_layer.objects.active if (bpy.context.view_layer.objects.active and "metarig" in bpy.context.view_layer.objects.active.name.lower()) else bpy.data.objects.get("metarig")
     if metarig_obj:
         bpy.ops.object.mode_set(mode='OBJECT')
         bpy.ops.object.select_all(action='DESELECT')
@@ -632,18 +636,22 @@ def rig_character(
 
     bpy.ops.pose.rigify_generate()
 
-    bpy.data.objects[obj.name].name = "rigify"
-    bpy.context.view_layer.objects.active = bpy.data.objects[armature.name + ".001"]
+    if obj.name in bpy.data.objects:
+        bpy.data.objects[obj.name].name = "rigify"
+    if separated_armature:
+        bpy.context.view_layer.objects.active = separated_armature
+    elif (armature.name + ".001") in bpy.data.objects:
+        bpy.context.view_layer.objects.active = bpy.data.objects[armature.name + ".001"]
 
     for o in bpy.data.objects:
         if o.name in ("rigify", armature.name):
             o.select_set(True)
 
     bpy.ops.object.mode_set(mode='OBJECT')
-    newrig = armature.name + ".001"
+    newrig = separated_armature.name if separated_armature else (armature.name + ".001")
     objList = bpy.context.selected_objects
     unselected = [o for o in objList if o != context.active_object]
-    rigifyr = unselected[0]
+    rigifyr = unselected[0] if unselected else bpy.data.objects.get("rigify")
 
     obs = [bpy.data.objects[rigifyr.name], bpy.data.objects[newrig]]
     bpy.ops.object.mode_set(mode='OBJECT')

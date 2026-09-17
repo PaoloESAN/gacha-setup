@@ -567,9 +567,6 @@ def update_hsr_stellartoon_props(self, context=None):
         from setup_wizard.ui.character_settings_utils import (
             get_character_materials,
             ensure_character_node_trees_isolated,
-            _iter_character_group_nodes,
-            _character_group_trees,
-            _set_interface_defaults,
         )
         arm, target_materials = get_character_materials(context)
         if arm and target_materials:
@@ -577,84 +574,62 @@ def update_hsr_stellartoon_props(self, context=None):
     except Exception:
         target_materials = []
 
-    # 2. Update in node groups and materials
-    def apply_props_to_container(container):
-        if not container or not hasattr(container, "nodes"):
-            return
-        for node in container.nodes:
-            if node.type == 'GROUP' and node.node_tree:
-                nt_name = node.node_tree.name
-                if "GlobalProperties" in nt_name or "StellarToon" in nt_name:
-                    for name, val in prop_map.items():
-                        if name in node.inputs:
-                            try:
-                                node.inputs[name].default_value = val
-                            except Exception:
-                                pass
+    # 2. Find target GlobalProperties node group(s)
+    target_trees = set()
+    mats_to_update = target_materials if target_materials else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
+    for mat in mats_to_update:
+        if getattr(mat, "use_nodes", False) and mat.node_tree:
+            for node in mat.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree:
+                    if "globalproperties" in node.node_tree.name.lower():
+                        target_trees.add(node.node_tree)
 
-    def apply_props_to_tree(tree):
-        # Tree-level defaults (every node input + interface) scoped to one
-        # of this character's isolated trees: what the legacy global block
-        # below does, but per character.
-        try:
-            sub_nodes = list(getattr(tree, "nodes", []) or [])
-        except Exception:
-            sub_nodes = []
-        for sub in sub_nodes:
-            try:
-                sub_inputs = getattr(sub, "inputs", {})
-            except Exception:
-                continue
-            for name, val in prop_map.items():
-                try:
-                    if name in sub_inputs:
-                        sub_inputs[name].default_value = val
-                except Exception:
-                    pass
-        _set_interface_defaults(tree, list(prop_map.items()))
-
-    if not target_materials:
-        gp_group = bpy.data.node_groups.get("GlobalProperties")
-        if gp_group:
-            if hasattr(gp_group, "nodes"):
-                for node in gp_group.nodes:
-                    for name, val in prop_map.items():
-                        if name in node.inputs:
-                            try:
-                                node.inputs[name].default_value = val
-                            except Exception:
-                                pass
-            if hasattr(gp_group, "interface"):
-                for item in gp_group.interface.items_tree:
-                    if item.item_type == 'SOCKET' and item.name in prop_map:
-                        try:
-                            item.default_value = prop_map[item.name]
-                        except Exception:
-                            pass
+    if not target_trees:
         for ng in bpy.data.node_groups:
-            apply_props_to_container(ng)
+            if "globalproperties" in ng.name.lower():
+                target_trees.add(ng)
 
-    mats_to_update = target_materials if target_materials else bpy.data.materials
-    if target_materials:
-        # Per-character: reach GlobalProperties / StellarToon nodes directly
-        # in the materials or nested inside their (isolated) group trees,
-        # plus the trees' own defaults so values hold whatever the internal
-        # wiring reads.
-        for node in _iter_character_group_nodes(
-                mats_to_update, "globalproperties", "stellartoon"):
-            for name, val in prop_map.items():
-                try:
-                    if name in node.inputs:
-                        node.inputs[name].default_value = val
-                except Exception:
-                    pass
-        for tree in _character_group_trees(
-                mats_to_update, "globalproperties", "stellartoon"):
-            apply_props_to_tree(tree)
-    else:
-        for mat in mats_to_update:
-            if getattr(mat, "node_tree", None):
-                apply_props_to_container(mat.node_tree)
+    # 3. Update inside each target GlobalProperties node group
+    for tree in target_trees:
+        out_node = tree.nodes.get("Group Output") or tree.nodes.get("Global Properties")
+        if out_node:
+            for inp in out_node.inputs:
+                if inp.name in prop_map:
+                    for l in list(inp.links):
+                        tree.links.remove(l)
+                    try:
+                        inp.default_value = prop_map[inp.name]
+                    except Exception:
+                        pass
+
+        if hasattr(tree, "interface") and hasattr(tree.interface, "items_tree"):
+            for item in tree.interface.items_tree:
+                if item.name in prop_map:
+                    try:
+                        item.default_value = prop_map[item.name]
+                    except Exception:
+                        pass
+
+    # 4. Also update direct group node inputs on character materials if any exist
+    for mat in mats_to_update:
+        if getattr(mat, "use_nodes", False) and mat.node_tree:
+            for node in mat.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree:
+                    for inp_name, val in prop_map.items():
+                        if inp_name in node.inputs:
+                            try:
+                                node.inputs[inp_name].default_value = val
+                            except Exception:
+                                pass
+
+    # 5. Tag 3D areas for redraw
+    if hasattr(bpy.context, 'window_manager') and bpy.context.window_manager:
+        for win in getattr(bpy.context.window_manager, 'windows', []):
+            screen = getattr(win, 'screen', None)
+            if screen:
+                for area in screen.areas:
+                    if area.type == 'VIEW_3D':
+                        area.tag_redraw()
 
 
 def pull_hsr_panel_values(scene, context, force=False):
@@ -667,8 +642,6 @@ def pull_hsr_panel_values(scene, context, force=False):
             get_character_materials,
             has_active_character_changed,
             ensure_character_node_trees_isolated,
-            _iter_character_group_nodes,
-            _read_tree_socket_default,
         )
         if not force and not has_active_character_changed(context):
             return
@@ -689,97 +662,52 @@ def pull_hsr_panel_values(scene, context, force=False):
         finally:
             _is_updating_hsr_props = False
 
-    # 2. Pull shader node values (material level first, then nested trees)
+    # 2. Find target GlobalProperties node group for this character
+    target_tree = None
     target_node = None
     for m in mats:
         if getattr(m, "node_tree", None):
             for node in m.node_tree.nodes:
                 if node.type == 'GROUP' and node.node_tree:
-                    nt_name = node.node_tree.name
-                    if "GlobalProperties" in nt_name or "StellarToon" in nt_name:
+                    nt_name = node.node_tree.name.lower()
+                    if "globalproperties" in nt_name:
+                        target_tree = node.node_tree
                         target_node = node
                         break
-        if target_node:
-            break
-    if target_node is None:
-        for node in _iter_character_group_nodes(
-                mats, "globalproperties", "stellartoon"):
-            target_node = node
+        if target_tree:
             break
 
-    if not target_node:
+    if not target_tree and not target_node:
         return
 
-    target_tree = getattr(target_node, "node_tree", None)
+    out_node = None
+    if target_tree:
+        out_node = target_tree.nodes.get("Group Output") or target_tree.nodes.get("Global Properties")
+
+    inputs = out_node.inputs if out_node else (target_node.inputs if target_node else None)
+    if not inputs:
+        return
+
     _is_updating_hsr_props = True
     try:
-        inputs = target_node.inputs
-
-        def _pull_value(name):
-            try:
-                if name in inputs:
-                    return inputs[name].default_value
-            except Exception:
-                pass
-            return _read_tree_socket_default(target_tree, name)
-
-        v = _pull_value("Expression Cheek Intensity")
-        if v is not None:
-            try:
-                scene.hsr_exp_cheek = float(v)
-            except Exception:
-                pass
-        v = _pull_value("Expression Shy Intensity")
-        if v is not None:
-            try:
-                scene.hsr_exp_shy = float(v)
-            except Exception:
-                pass
-        v = _pull_value("Expression Shadow Intensity")
-        if v is not None:
-            try:
-                scene.hsr_exp_shadow = float(v)
-            except Exception:
-                pass
-        v = _pull_value("Eye Can't Be Tinted?")
-        if v is not None:
-            try:
-                scene.hsr_eye_cant_be_tinted = bool(v > 0.5)
-            except Exception:
-                try:
-                    scene.hsr_eye_cant_be_tinted = bool(v)
-                except Exception:
-                    pass
-        v = _pull_value("Custom Ambient Color")
-        if v is not None:
-            try:
-                scene.hsr_amb_color = tuple(v)[:3]
-            except Exception:
-                pass
-        v = _pull_value("Custom Lit Color")
-        if v is not None:
-            try:
-                scene.hsr_lit_color = tuple(v)[:3]
-            except Exception:
-                pass
-        v = _pull_value("Custom Shadow Color")
-        if v is not None:
-            try:
-                scene.hsr_shadow_color = tuple(v)[:3]
-            except Exception:
-                pass
-        v = _pull_value("Custom Sharp Lit Color")
-        if v is not None:
-            try:
-                scene.hsr_sharp_lit_color = tuple(v)[:3]
-            except Exception:
-                pass
-        v = _pull_value("Custom Sharp Shadow Color")
-        if v is not None:
-            try:
-                scene.hsr_sharp_shadow_color = tuple(v)[:3]
-            except Exception:
-                pass
+        if "Expression Cheek Intensity" in inputs:
+            scene.hsr_exp_cheek = float(inputs["Expression Cheek Intensity"].default_value)
+        if "Expression Shy Intensity" in inputs:
+            scene.hsr_exp_shy = float(inputs["Expression Shy Intensity"].default_value)
+        if "Expression Shadow Intensity" in inputs:
+            scene.hsr_exp_shadow = float(inputs["Expression Shadow Intensity"].default_value)
+        if "Eye Can't Be Tinted?" in inputs:
+            scene.hsr_eye_cant_be_tinted = bool(inputs["Eye Can't Be Tinted?"].default_value > 0.5)
+        if "Custom Ambient Color" in inputs:
+            scene.hsr_amb_color = tuple(inputs["Custom Ambient Color"].default_value)[:3]
+        if "Custom Lit Color" in inputs:
+            scene.hsr_lit_color = tuple(inputs["Custom Lit Color"].default_value)[:3]
+        if "Custom Shadow Color" in inputs:
+            scene.hsr_shadow_color = tuple(inputs["Custom Shadow Color"].default_value)[:3]
+        if "Custom Sharp Lit Color" in inputs:
+            scene.hsr_sharp_lit_color = tuple(inputs["Custom Sharp Lit Color"].default_value)[:3]
+        if "Custom Sharp Shadow Color" in inputs:
+            scene.hsr_sharp_shadow_color = tuple(inputs["Custom Sharp Shadow Color"].default_value)[:3]
     except Exception:
         pass
     finally:
