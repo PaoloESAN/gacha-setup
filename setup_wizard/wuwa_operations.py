@@ -77,6 +77,11 @@ def update_alpha_transparency(self, context=None):
                         mat.shadow_method = 'HASHED'
                     except Exception:
                         pass
+                if hasattr(mat, "use_transparency_overlap"):
+                    try:
+                        mat.use_transparency_overlap = False
+                    except Exception:
+                        pass
             else:
                 if hasattr(mat, "surface_render_method"):
                     try:

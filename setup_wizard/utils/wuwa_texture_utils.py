@@ -28,6 +28,7 @@ TEXTURE_TYPE_MAPPINGS_JAREDNYTS = {
     "_FX": ("FX Texture",),
     "_Skin": ("Skin",),
     "_LD": ("Texture_LD", "LD Texture", "LD", "Texture_LD(sRGB) (Channel Packed)"),
+    "_FTM": ("FTM", "Texture_FTM", "Texture FTM", "Texture_FTM (Non-Color) (Channel Packed)"),
 }
 
 _MODEL_PREFIX_PATTERNS = [
@@ -258,6 +259,9 @@ def make_texture_patterns(base_part: str, version: str, suffix: str, original_na
     if base_part in ["Bang", "Bangs"]:
         patterns.append(rf"T_.*?Hair{suffix}.*")
 
+    if suffix == "_FTM":
+        patterns.append(rf"T_.*?{suffix}.*")
+
     patterns.extend([base_pat, ver_pat] if mode else [ver_pat, base_pat])
     return list(dict.fromkeys(patterns))
 
@@ -381,6 +385,10 @@ def classify_wuwa_json_texture(param_name: str, tex_file_stem: str, is_hair_or_b
     # FX / Emissive / HeightLight (_FX)
     if param_low in ["heightlightmap", "em", "pm_emissive", "fx"] or any(sfx in tex_low for sfx in ["_eg", "_em", "_fx"]):
         return "_FX"
+
+    # FTM (_FTM)
+    if "ftm" in param_low or tex_low.endswith("_ftm") or "_ftm" in tex_low:
+        return "_FTM"
 
     return None
 

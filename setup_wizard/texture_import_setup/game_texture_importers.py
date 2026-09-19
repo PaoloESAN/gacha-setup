@@ -1934,6 +1934,41 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
                         has_id_any = True
                         print(f"[WUWA TEXTURES] Fallback: Assigned Face Diffuse ({face_diff_node.image.name}) to {mask_id_node.name} on {mat.name}")
 
+            # Fallback for FTM texture: If no FTM image was assigned, use Diffuse (D) image as fallback
+            ftm_node = (
+                mat.node_tree.nodes.get("FTM")
+                or mat.node_tree.nodes.get("Texture_FTM")
+                or mat.node_tree.nodes.get("Texture FTM")
+            )
+            if not ftm_node:
+                for n in mat.node_tree.nodes:
+                    if n.type == 'TEX_IMAGE':
+                        n_low = (n.name + " " + (n.label or "")).lower()
+                        if "ftm" in n_low:
+                            ftm_node = n
+                            break
+
+            if ftm_node and not ftm_node.image:
+                diff_node = (
+                    mat.node_tree.nodes.get("Base Color")
+                    or mat.node_tree.nodes.get("Hair Diffuse")
+                    or mat.node_tree.nodes.get("Bangs Diffuse")
+                    or mat.node_tree.nodes.get("Face Diffuse")
+                    or mat.node_tree.nodes.get("Body Diffuse")
+                    or mat.node_tree.nodes.get("Eye Diffuse")
+                    or mat.node_tree.nodes.get("Texture_D")
+                )
+                if not diff_node or not diff_node.image:
+                    for n in mat.node_tree.nodes:
+                        if n.type == 'TEX_IMAGE' and n.image and n != ftm_node:
+                            n_low = (n.name + " " + (n.label or "")).lower()
+                            if any(k in n_low for k in ["diffuse", "base color", "_d", "texture_d"]):
+                                diff_node = n
+                                break
+                if diff_node and diff_node.image:
+                    ftm_node.image = diff_node.image
+                    print(f"[WUWA TEXTURES] Fallback: Assigned Diffuse ({diff_node.image.name}) to {ftm_node.name} on {mat.name}")
+
             # Fix Eye UV map
             if "eye" in mat.name.lower() or base_part.lower() in ["eye", "eyes"]:
                 for node in mat.node_tree.nodes:
@@ -2004,6 +2039,11 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
                         mat.shadow_method = 'HASHED'
                     except Exception:
                         pass
+                if hasattr(mat, "use_transparency_overlap"):
+                    try:
+                        mat.use_transparency_overlap = False
+                    except Exception:
+                        pass
 
         # If HET texture was found, enable See Through node groups
         if has_het_any:
@@ -2042,7 +2082,7 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
                         except Exception:
                             pass
 
-            def _configure_outline_mat_nodes(target_mat, ld_img, id_img=None):
+            def _configure_outline_mat_nodes(target_mat, ld_img, id_img=None, d_img=None, ftm_img=None):
                 if not target_mat or not target_mat.node_tree:
                     return
                 nodes = target_mat.node_tree.nodes
@@ -2089,7 +2129,27 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
                     id_img.colorspace_settings.name = 'Non-Color'
                     id_img.alpha_mode = 'CHANNEL_PACKED'
 
-                # 4. Find or create Mix Color nodes for Outline Color 1 and Outline Color 2
+                # 4. Base Color node (Texture_D) in Outlines
+                base_color_node = nodes.get("Base Color") or nodes.get("Texture_D")
+                if not base_color_node:
+                    for n in nodes:
+                        if n.type == 'TEX_IMAGE' and any(k in (n.name + " " + (n.label or "")).lower() for k in ["base color", "texture_d", "diffuse"]):
+                            base_color_node = n
+                            break
+                if base_color_node and d_img:
+                    base_color_node.image = d_img
+
+                # 5. FTM node (Texture_FTM) in Outlines
+                ol_ftm_node = nodes.get("FTM") or nodes.get("Texture_FTM")
+                if not ol_ftm_node:
+                    for n in nodes:
+                        if n.type == 'TEX_IMAGE' and "ftm" in (n.name + " " + (n.label or "")).lower():
+                            ol_ftm_node = n
+                            break
+                if ol_ftm_node:
+                    ol_ftm_node.image = ftm_img or d_img
+
+                # 6. Find or create Mix Color nodes for Outline Color 1 and Outline Color 2
                 mix1 = nodes.get("Mix_Outline_Color_1")
                 if not mix1:
                     mix1 = nodes.new("ShaderNodeMix")
@@ -2251,8 +2311,25 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
                     part_ol_mat = base_outline_mat.copy()
                     part_ol_mat.name = outline_mat_name
                     part_ol_mat.use_fake_user = True
+                d_img = None
+                diff_node = (
+                    mat.node_tree.nodes.get("Base Color")
+                    or mat.node_tree.nodes.get("Hair Diffuse")
+                    or mat.node_tree.nodes.get("Bangs Diffuse")
+                    or mat.node_tree.nodes.get("Face Diffuse")
+                    or mat.node_tree.nodes.get("Body Diffuse")
+                )
+                if diff_node and diff_node.image:
+                    d_img = diff_node.image
 
-                _configure_outline_mat_nodes(part_ol_mat, ld_img, id_img)
+                ftm_img = None
+                mat_ftm_node = mat.node_tree.nodes.get("FTM") or mat.node_tree.nodes.get("Texture_FTM")
+                if mat_ftm_node and mat_ftm_node.image:
+                    ftm_img = mat_ftm_node.image
+                elif d_img:
+                    ftm_img = d_img
+
+                _configure_outline_mat_nodes(part_ol_mat, ld_img, id_img, d_img=d_img, ftm_img=ftm_img)
 
         self.blender_operator.report({'INFO'}, 'Successfully imported and assigned Wuthering Waves textures!')
         NextStepInvoker().invoke(
