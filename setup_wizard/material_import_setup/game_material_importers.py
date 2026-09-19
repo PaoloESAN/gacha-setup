@@ -394,8 +394,8 @@ class ZenlessZoneZeroMaterialImporterFacade(GameMaterialImporter):
         if target_blend_file and os.path.isfile(target_blend_file):
             try:
                 with bpy.data.libraries.load(target_blend_file, link=False) as (data_from, data_to):
-                    data_to.materials = data_from.materials
-                    data_to.node_groups = data_from.node_groups
+                    data_to.materials = [m for m in data_from.materials if m not in bpy.data.materials]
+                    data_to.node_groups = [ng for ng in data_from.node_groups if ng not in bpy.data.node_groups]
 
                 for mat in data_to.materials:
                     if mat:
@@ -428,7 +428,8 @@ class ZenlessZoneZeroMaterialImporterFacade(GameMaterialImporter):
                 with bpy.data.libraries.load(outlines_blend_file, link=False) as (data_from, data_to):
                     data_to.materials = [
                         m for m in data_from.materials
-                        if m in outline_mat_names or 'outline' in m.lower() or 'transp' in m.lower()
+                        if (m in outline_mat_names or 'outline' in m.lower() or 'transp' in m.lower())
+                        and m not in bpy.data.materials
                     ]
                 for mat in data_to.materials:
                     if mat:
