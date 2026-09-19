@@ -698,9 +698,11 @@ def rig_character(
             if "f_" in bone.name or "thumb" in bone.name:
                 armature.edit_bones[whee].roll = -armature.edit_bones[bone.name].roll
 
-    # Set shoulder rolls to point local Z-axis forward (Rigify default)
-    armature.edit_bones["shoulder.L"].align_roll(Vector((0, -1, 0)))
-    armature.edit_bones["shoulder.R"].align_roll(Vector((0, -1, 0)))
+    # Set shoulder rolls so local Z-axis points UP so crescent widgets lie flat on shoulders
+    if "shoulder.L" in armature.edit_bones:
+        armature.edit_bones["shoulder.L"].align_roll(Vector((0, 0, 1)))
+    if "shoulder.R" in armature.edit_bones:
+        armature.edit_bones["shoulder.R"].align_roll(Vector((0, 0, 1)))
 
 
     # Preserve natural finger and thumb bone rolls from model armature
@@ -954,6 +956,11 @@ def rig_character(
             orig_b = armature.edit_bones.get(bone.name) or armature.edit_bones.get("DEF-" + bone.name)
             if orig_b:
                 bone.roll = orig_b.roll
+
+    if "shoulder.L" in metarm.edit_bones:
+        metarm.edit_bones["shoulder.L"].align_roll(Vector((0, 0, 1)))
+    if "shoulder.R" in metarm.edit_bones:
+        metarm.edit_bones["shoulder.R"].align_roll(Vector((0, 0, 1)))
 
     # Fix hand bones being rotated 90 degrees sideways and arm deformation bones being wonky
     if "Loli" in obj.name:
@@ -4796,13 +4803,13 @@ def rig_character(
         if "upper_arm" in bone:
             if ".L" in bone:
                 this_obj.pose.bones[bone].custom_shape_translation = (-0.05, 0.0, 0.0)
-                this_obj.pose.bones[bone].custom_shape_rotation_euler = (0, -1.5708, 0)
+                this_obj.pose.bones[bone].custom_shape_rotation_euler = (0.0, 0.0, 0.0)
                 this_obj.pose.bones[bone].custom_shape_transform = this_obj.pose.bones[
                     "MCH-upper_arm_parent_widget.L"
                 ]
             else:
                 this_obj.pose.bones[bone].custom_shape_translation = (0.05, 0.0, 0.0)
-                this_obj.pose.bones[bone].custom_shape_rotation_euler = (0, -1.5708, 0)
+                this_obj.pose.bones[bone].custom_shape_rotation_euler = (0.0, 0.0, 0.0)
                 this_obj.pose.bones[bone].custom_shape_transform = this_obj.pose.bones[
                     "MCH-upper_arm_parent_widget.R"
                 ]
