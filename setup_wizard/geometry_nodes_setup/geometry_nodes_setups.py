@@ -690,7 +690,8 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
 
     def clone_night_soul_outlines(self):
         materials = [material for material in bpy.data.materials.values() if material.name not in self.GEOMETRY_NODES_MATERIAL_IGNORE_LIST]
-        outline_material = bpy.data.materials.get(self.material_names.NIGHT_SOUL_OUTLINES)
+        outline_material = bpy.data.materials.get(self.material_names.NIGHT_SOUL_OUTLINES) or \
+                           bpy.data.materials.get('HoYoverse - Genshin Night Soul Outlines')
 
         if not outline_material:
             return
@@ -762,6 +763,11 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
 
         if night_soul_outlines_material:
             set_modifier_property(modifier, self.NIGHT_SOUL_OUTLINE_SOCKET, night_soul_outlines_material[0])
+        else:
+            base_ns = bpy.data.materials.get(self.material_names.NIGHT_SOUL_OUTLINES) or \
+                      bpy.data.materials.get('HoYoverse - Genshin Night Soul Outlines')
+            if base_ns:
+                set_modifier_property(modifier, self.NIGHT_SOUL_OUTLINE_SOCKET, base_ns)
 
     def assign_face_lightmap_texture(self, modifier):
         face_lightmap_node_group = bpy.data.node_groups.get(self.texture_node_names.FACE_LIGHTMAP_NODE_GROUP)

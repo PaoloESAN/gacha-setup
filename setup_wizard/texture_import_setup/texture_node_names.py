@@ -88,6 +88,7 @@ class V4_GenshinImpactTextureNodeNames(V3_GenshinImpactTextureNodeNames):
     NIGHT_SOUL_MASK = 'Main_NYXmask'
     FACE_NIGHT_SOUL_MASK = 'Face_NYXmask'
     VFX_DIFFUSE = 'VFX_Diffuse'
+    GLASS_DIFFUSE = 'Glass_Diffuse'
 
 
 class V1_HoYoToonGenshinImpactTextureNodeNames(V4_GenshinImpactTextureNodeNames):

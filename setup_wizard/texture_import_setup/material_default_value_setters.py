@@ -171,20 +171,28 @@ class GenshinImpactMaterialDefaultValueSetter(MaterialDefaultValueSetter):
         material.name = self.material_names.BODY2
 
         body_shader = material.node_tree.nodes.get(self.shader_node_names.BODY_SHADER)
-        body_hair_ramp_switch = body_shader.inputs.get(self.shader_node_names.BODY_HAIR_RAMP_SWITCH)
-        if body_hair_ramp_switch:
-            body_hair_ramp_switch_values: BodyHairRampSwitchValues = BodyHairRampSwitchValues(self.shader_node_names)
-            body_hair_ramp_switch.default_value = body_hair_ramp_switch_values.BODY2
+        if body_shader:
+            body_hair_ramp_switch = body_shader.inputs.get(self.shader_node_names.BODY_HAIR_RAMP_SWITCH) or body_shader.inputs.get('Body / Hair')
+            if body_hair_ramp_switch:
+                if type(body_hair_ramp_switch) is bpy.types.NodeSocketBool:
+                    body_hair_ramp_switch.default_value = False
+                else:
+                    body_hair_ramp_switch_values: BodyHairRampSwitchValues = BodyHairRampSwitchValues(self.shader_node_names)
+                    body_hair_ramp_switch.default_value = body_hair_ramp_switch_values.BODY2
 
     def set_up_hair_material(self, material):
         material.name = self.material_names.HAIR
         material.use_fake_user = True
 
         body_shader = material.node_tree.nodes.get(self.shader_node_names.BODY_SHADER)
-        body_hair_ramp_switch = body_shader.inputs.get(self.shader_node_names.BODY_HAIR_RAMP_SWITCH)
-        if body_hair_ramp_switch:
-            body_hair_ramp_switch_values: BodyHairRampSwitchValues = BodyHairRampSwitchValues(self.shader_node_names)
-            body_hair_ramp_switch.default_value = body_hair_ramp_switch_values.HAIR
+        if body_shader:
+            body_hair_ramp_switch = body_shader.inputs.get(self.shader_node_names.BODY_HAIR_RAMP_SWITCH) or body_shader.inputs.get('Body / Hair')
+            if body_hair_ramp_switch:
+                if type(body_hair_ramp_switch) is bpy.types.NodeSocketBool:
+                    body_hair_ramp_switch.default_value = True
+                else:
+                    body_hair_ramp_switch_values: BodyHairRampSwitchValues = BodyHairRampSwitchValues(self.shader_node_names)
+                    body_hair_ramp_switch.default_value = body_hair_ramp_switch_values.HAIR
 
 
 class HonkaiStarRailMaterialDefaultValueSetter(MaterialDefaultValueSetter):

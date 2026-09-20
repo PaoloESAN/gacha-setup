@@ -84,7 +84,12 @@ class GenshinImpactTextureImporterFacade(GameTextureImporter):
 
         texture_importer_type = ''
         
-        if [material_name for material_name, material in bpy.data.materials.items() if 'Avatar'.lower() in material_name.lower() and 'Avatar_Default_Mat'.lower() not in material_name.lower()]:
+        is_avatar = (
+            any('avatar' in material_name.lower() and 'avatar_default_mat' not in material_name.lower() for material_name in bpy.data.materials.keys()) or
+            any('avatar' in obj.name.lower() for obj in bpy.data.objects) or
+            any(k in bpy.data.materials for k in ['Body', 'Hair', 'Face', 'HoYoverse - Genshin Body', 'HoYoverse - Genshin Hair', 'HoYoverse - Genshin Face'])
+        )
+        if is_avatar:
             texture_importer_type = TextureImporterType.AVATAR
         elif [material_name for material_name, material in bpy.data.materials.items() if 'Monster'.lower() in material_name.lower()]:
             texture_importer_type = TextureImporterType.MONSTER

@@ -730,17 +730,40 @@ def sync_genshin_shader_properties(scene=None, context=None):
                     except Exception:
                         pass
 
-    # 4. Also update direct group node inputs on character materials if any exist
+    # 4. Also update direct group node inputs on character materials if any exist (e.g. PrimoToon v4.0)
+    prop_aliases = {
+        "Use Fresnel": ["Toggle Fresnel", "Use Fresnel"],
+        "Fresnel Color": ["Fresnel Color"],
+        "Fresnel Power": ["Fresnel Power"],
+        "Fresnel Scaler": ["Fresnel Scaler"],
+        "Ambient Colour": ["Ambient Colour", "Ambient Color"],
+        "Sharp Lit Colour": ["Sharp Lit Colour", "Sharp Lit Color"],
+        "Soft Lit Colour": ["Soft Lit Colour", "Soft Lit Color"],
+        "Sharp Shadow Colour": ["Sharp Shadow Colour", "Sharp Shadow Color"],
+        "Soft Shadow Colour": ["Soft Shadow Colour", "Soft Shadow Color"],
+        "Shadow Position": ["Shadow Position", "Shadow Position Offset"],
+        "Catch Shadows": ["Toggle Catch Shadows", "Catch Shadows"],
+        "Day/Night": ["Warm / Cold Ramps", "Day/Night"],
+        "Rim Lit": ["Rim Lit"],
+        "Rim Shadow": ["Rim Shadow"],
+    }
+
     for mat in mats_to_update:
         if getattr(mat, "use_nodes", False) and mat.node_tree:
             for node in mat.node_tree.nodes:
                 if node.type == 'GROUP' and node.node_tree:
-                    for inp_name, val in prop_map.items():
-                        if inp_name in node.inputs:
-                            try:
-                                node.inputs[inp_name].default_value = val
-                            except Exception:
-                                pass
+                    for canonical_name, val in prop_map.items():
+                        aliases = prop_aliases.get(canonical_name, [canonical_name])
+                        for alias in aliases:
+                            if alias in node.inputs:
+                                inp = node.inputs[alias]
+                                try:
+                                    if type(inp) is bpy.types.NodeSocketBool:
+                                        inp.default_value = bool(val > 0.5 if isinstance(val, (int, float)) else val)
+                                    else:
+                                        inp.default_value = val
+                                except Exception:
+                                    pass
 
     # 5. Tag 3D areas for redraw
     if hasattr(bpy.context, 'window_manager') and bpy.context.window_manager:
@@ -762,80 +785,254 @@ def pull_gi_panel_values(scene, context, force=False):
             get_character_materials,
             has_active_character_changed,
             ensure_character_node_trees_isolated,
+            _iter_rig_meshes,
         )
+        from setup_wizard.utils.modifier_utils import get_modifier_property
         if not force and not has_active_character_changed(context):
             return
         arm, mats = get_character_materials(context)
-    except Exception:
-        return
-    if not arm or not mats:
-        return
+        if not arm:
+            return
 
-    ensure_character_node_trees_isolated(arm, mats)
-
-    # 1. Pull lighting mode saved on this armature
-    saved_mode = arm.get("gi_light_mode", "0")
-    if getattr(scene, "gi_light_mode", "") != str(saved_mode):
         _is_updating_gi_props = True
         try:
-            scene.gi_light_mode = str(saved_mode)
+            # 1. Pull Outlines & Night Soul states from character meshes
+            for mesh in _iter_rig_meshes(arm):
+                for mod in getattr(mesh, "modifiers", []):
+                    if mod.type == 'NODES' and mod.node_group and "outlines" in mod.node_group.name.lower():
+                        v24 = get_modifier_property(mod, "Socket_24")
+                        if v24 is None:
+                            v24 = get_modifier_property(mod, "Toggle Outlines")
+                        if v24 is not None:
+                            scene.gi_enable_outlines = bool(v24)
+                        else:
+                            scene.gi_enable_outlines = bool(mod.show_viewport)
+
+                        v23 = get_modifier_property(mod, "Socket_23")
+                        if v23 is None:
+                            v23 = get_modifier_property(mod, "Toggle Night Soul State")
+                        if v23 is not None:
+                            scene.gi_enable_night_soul = bool(v23)
+                        break
+                break
+
+            # 2. Pull lighting mode saved on this armature
+            saved_mode = arm.get("gi_light_mode", "0")
+            if getattr(scene, "gi_light_mode", "") != str(saved_mode):
+                scene.gi_light_mode = str(saved_mode)
+
+            if mats:
+                ensure_character_node_trees_isolated(arm, mats)
+
+                # 3. Find target Global Material Properties node group for this character
+                target_tree = None
+                for m in mats:
+                    if getattr(m, "node_tree", None):
+                        for node in m.node_tree.nodes:
+                            if node.type == 'GROUP' and node.node_tree:
+                                if "global material properties" in node.node_tree.name.lower():
+                                    target_tree = node.node_tree
+                                    break
+                    if target_tree:
+                        break
+
+                if not target_tree:
+                    for m in mats:
+                        if getattr(m, "node_tree", None):
+                            primo_node = m.node_tree.nodes.get("PrimoToon")
+                            if primo_node:
+                                inputs = primo_node.inputs
+                                if "Toggle Fresnel" in inputs:
+                                    scene.gi_use_fresnel = bool(inputs["Toggle Fresnel"].default_value)
+                                elif "Use Fresnel" in inputs:
+                                    scene.gi_use_fresnel = bool(inputs["Use Fresnel"].default_value > 0.5)
+                                if "Fresnel Color" in inputs:
+                                    scene.gi_fresnel_color = tuple(inputs["Fresnel Color"].default_value)[:3]
+                                if "Fresnel Power" in inputs:
+                                    scene.gi_fresnel_power = float(inputs["Fresnel Power"].default_value)
+                                if "Fresnel Scaler" in inputs:
+                                    scene.gi_fresnel_scaler = float(inputs["Fresnel Scaler"].default_value)
+                                if "Ambient Colour" in inputs:
+                                    scene.gi_amb_color = tuple(inputs["Ambient Colour"].default_value)[:3]
+                                if "Sharp Lit Colour" in inputs:
+                                    scene.gi_sharp_lit_color = tuple(inputs["Sharp Lit Colour"].default_value)[:3]
+                                if "Soft Lit Colour" in inputs:
+                                    scene.gi_soft_lit_color = tuple(inputs["Soft Lit Colour"].default_value)[:3]
+                                sharp_shadow = inputs.get("Sharp Shadow Colour") or inputs.get("Sharp Shadow Color")
+                                if sharp_shadow:
+                                    scene.gi_sharp_shadow_color = tuple(sharp_shadow.default_value)[:3]
+                                soft_shadow = inputs.get("Soft Shadow Colour") or inputs.get("Soft Shadow Color")
+                                if soft_shadow:
+                                    scene.gi_soft_shadow_color = tuple(soft_shadow.default_value)[:3]
+                                shadow_pos_inp = inputs.get("Shadow Position Offset") or inputs.get("Shadow Position")
+                                if shadow_pos_inp:
+                                    scene.gi_shadow_position = float(shadow_pos_inp.default_value)
+                                catch_shadow_inp = inputs.get("Toggle Catch Shadows") or inputs.get("Catch Shadows")
+                                if catch_shadow_inp:
+                                    scene.gi_catch_shadows = bool(catch_shadow_inp.default_value)
+                                day_night_inp = inputs.get("Warm / Cold Ramps") or inputs.get("Day/Night")
+                                if day_night_inp:
+                                    scene.gi_day_night = 1.0 if day_night_inp.default_value else 0.0
+                                break
+                else:
+                    out_node = target_tree.nodes.get("Global Properties") or target_tree.nodes.get("Group Output")
+                    if out_node:
+                        inputs = out_node.inputs
+                        if "Use Fresnel" in inputs:
+                            scene.gi_use_fresnel = bool(inputs["Use Fresnel"].default_value > 0.5)
+                        if "Fresnel Color" in inputs:
+                            scene.gi_fresnel_color = tuple(inputs["Fresnel Color"].default_value)[:3]
+                        if "Fresnel Power" in inputs:
+                            scene.gi_fresnel_power = float(inputs["Fresnel Power"].default_value)
+                        if "Fresnel Scaler" in inputs:
+                            scene.gi_fresnel_scaler = float(inputs["Fresnel Scaler"].default_value)
+                        if "Ambient Colour" in inputs:
+                            scene.gi_amb_color = tuple(inputs["Ambient Colour"].default_value)[:3]
+                        if "Sharp Lit Colour" in inputs:
+                            scene.gi_sharp_lit_color = tuple(inputs["Sharp Lit Colour"].default_value)[:3]
+                        if "Soft Lit Colour" in inputs:
+                            scene.gi_soft_lit_color = tuple(inputs["Soft Lit Colour"].default_value)[:3]
+                        if "Sharp Shadow Colour" in inputs:
+                            scene.gi_sharp_shadow_color = tuple(inputs["Sharp Shadow Colour"].default_value)[:3]
+                        if "Soft Shadow Colour" in inputs:
+                            scene.gi_soft_shadow_color = tuple(inputs["Soft Shadow Colour"].default_value)[:3]
+                        if "Shadow Position" in inputs:
+                            scene.gi_shadow_position = float(inputs["Shadow Position"].default_value)
+                        if "Catch Shadows" in inputs:
+                            scene.gi_catch_shadows = bool(inputs["Catch Shadows"].default_value > 0.5)
+                        if "Day/Night" in inputs:
+                            scene.gi_day_night = float(inputs["Day/Night"].default_value)
+                        if "Rim Lit" in inputs:
+                            scene.gi_rim_lit_color = tuple(inputs["Rim Lit"].default_value)[:3]
+                        if "Rim Shadow" in inputs:
+                            scene.gi_rim_shadow_color = tuple(inputs["Rim Shadow"].default_value)[:3]
         finally:
             _is_updating_gi_props = False
-
-    # 2. Find target Global Material Properties node group for this character
-    target_tree = None
-    for m in mats:
-        if getattr(m, "node_tree", None):
-            for node in m.node_tree.nodes:
-                if node.type == 'GROUP' and node.node_tree:
-                    if "global material properties" in node.node_tree.name.lower():
-                        target_tree = node.node_tree
-                        break
-        if target_tree:
-            break
-
-    if not target_tree:
-        return
-
-    out_node = target_tree.nodes.get("Global Properties") or target_tree.nodes.get("Group Output")
-    if not out_node:
-        return
-
-    _is_updating_gi_props = True
-    try:
-        inputs = out_node.inputs
-        if "Use Fresnel" in inputs:
-            scene.gi_use_fresnel = bool(inputs["Use Fresnel"].default_value > 0.5)
-        if "Fresnel Color" in inputs:
-            scene.gi_fresnel_color = tuple(inputs["Fresnel Color"].default_value)[:3]
-        if "Fresnel Power" in inputs:
-            scene.gi_fresnel_power = float(inputs["Fresnel Power"].default_value)
-        if "Fresnel Scaler" in inputs:
-            scene.gi_fresnel_scaler = float(inputs["Fresnel Scaler"].default_value)
-        if "Ambient Colour" in inputs:
-            scene.gi_amb_color = tuple(inputs["Ambient Colour"].default_value)[:3]
-        if "Sharp Lit Colour" in inputs:
-            scene.gi_sharp_lit_color = tuple(inputs["Sharp Lit Colour"].default_value)[:3]
-        if "Soft Lit Colour" in inputs:
-            scene.gi_soft_lit_color = tuple(inputs["Soft Lit Colour"].default_value)[:3]
-        if "Sharp Shadow Colour" in inputs:
-            scene.gi_sharp_shadow_color = tuple(inputs["Sharp Shadow Colour"].default_value)[:3]
-        if "Soft Shadow Colour" in inputs:
-            scene.gi_soft_shadow_color = tuple(inputs["Soft Shadow Colour"].default_value)[:3]
-        if "Shadow Position" in inputs:
-            scene.gi_shadow_position = float(inputs["Shadow Position"].default_value)
-        if "Catch Shadows" in inputs:
-            scene.gi_catch_shadows = bool(inputs["Catch Shadows"].default_value > 0.5)
-        if "Day/Night" in inputs:
-            scene.gi_day_night = float(inputs["Day/Night"].default_value)
-        if "Rim Lit" in inputs:
-            scene.gi_rim_lit_color = tuple(inputs["Rim Lit"].default_value)[:3]
-        if "Rim Shadow" in inputs:
-            scene.gi_rim_shadow_color = tuple(inputs["Rim Shadow"].default_value)[:3]
     except Exception:
         pass
-    finally:
-        _is_updating_gi_props = False
+
+
+def _apply_outlines_and_night_soul(context, outlines_on, ns_on):
+    try:
+        from setup_wizard.ui.character_settings_utils import resolve_settings_armature, _iter_rig_meshes
+        from setup_wizard.utils.modifier_utils import set_modifier_property
+        arm = resolve_settings_armature(context)
+        meshes = list(_iter_rig_meshes(arm)) if arm else [obj for obj in bpy.data.objects if obj.type == 'MESH']
+        should_show = bool(outlines_on or ns_on)
+
+        for mesh in meshes:
+            has_mod = False
+            for mod in getattr(mesh, "modifiers", []):
+                if mod.type == 'NODES' and mod.node_group and "outlines" in mod.node_group.name.lower():
+                    has_mod = True
+                    set_modifier_property(mod, "Socket_24", outlines_on)
+                    set_modifier_property(mod, "Toggle Outlines", outlines_on)
+                    set_modifier_property(mod, "Socket_23", ns_on)
+                    set_modifier_property(mod, "Toggle Night Soul State", ns_on)
+
+                    try:
+                        mod["Socket_24"] = outlines_on
+                    except Exception:
+                        pass
+                    try:
+                        mod["Toggle Outlines"] = outlines_on
+                    except Exception:
+                        pass
+                    try:
+                        mod["Socket_23"] = ns_on
+                    except Exception:
+                        pass
+                    try:
+                        mod["Toggle Night Soul State"] = ns_on
+                    except Exception:
+                        pass
+
+                    # Solo si ambos están desactivados, quitar show_viewport y show_render
+                    mod.show_viewport = should_show
+                    mod.show_render = should_show
+
+            if has_mod:
+                try:
+                    mesh.update_tag()
+                except Exception:
+                    pass
+
+        try:
+            if context and getattr(context, "view_layer", None):
+                context.view_layer.update()
+        except Exception:
+            pass
+
+        for win in getattr(bpy.context.window_manager, 'windows', []):
+            screen = getattr(win, 'screen', None)
+            if screen:
+                for area in screen.areas:
+                    if area.type == 'VIEW_3D':
+                        area.tag_redraw()
+    except Exception:
+        pass
+
+
+def update_gi_outlines(self, context):
+    global _is_updating_gi_props
+    if _is_updating_gi_props:
+        return
+    outlines_on = getattr(self, "gi_enable_outlines", True)
+    ns_on = getattr(self, "gi_enable_night_soul", False)
+    _apply_outlines_and_night_soul(context, outlines_on, ns_on)
+
+
+def update_gi_night_soul(self, context):
+    global _is_updating_gi_props
+    if _is_updating_gi_props:
+        return
+    outlines_on = getattr(self, "gi_enable_outlines", True)
+    ns_on = getattr(self, "gi_enable_night_soul", False)
+    _apply_outlines_and_night_soul(context, outlines_on, ns_on)
+
+
+def character_has_night_soul(context):
+    try:
+        from setup_wizard.ui.character_settings_utils import resolve_settings_armature, _iter_rig_meshes, get_character_materials
+        from setup_wizard.utils.modifier_utils import get_modifier_property
+        arm = resolve_settings_armature(context)
+        if arm:
+            for mesh in _iter_rig_meshes(arm):
+                for mod in getattr(mesh, "modifiers", []):
+                    if mod.type == 'NODES' and mod.node_group and "outlines" in mod.node_group.name.lower():
+                        ns_mat = get_modifier_property(mod, "Socket_10")
+                        if not ns_mat:
+                            ns_mat = get_modifier_property(mod, "Night Soul Outline")
+                        if ns_mat:
+                            return True
+            _, mats = get_character_materials(context, arm)
+            for mat in mats:
+                if not getattr(mat, "node_tree", None):
+                    continue
+                for n_name in ['Main_NYXmask', 'Face_NYXmask']:
+                    n = mat.node_tree.nodes.get(n_name)
+                    if n and getattr(n, 'image', None):
+                        return True
+    except Exception:
+        pass
+
+    for mat in bpy.data.materials:
+        if not getattr(mat, "node_tree", None):
+            continue
+        if "night soul" in mat.name.lower() and getattr(mat, "users", 0) > 0:
+            return True
+        for n_name in ['Main_NYXmask', 'Face_NYXmask']:
+            n = mat.node_tree.nodes.get(n_name)
+            if n and getattr(n, 'image', None):
+                return True
+
+    st = bpy.data.node_groups.get("Shader Textures")
+    if st:
+        nr = st.nodes.get("NYX_Color_Ramp")
+        if nr and getattr(nr, 'image', None):
+            return True
+
+    return False
 
 
 def update_gi_hair_physics(self, context):
@@ -917,7 +1114,15 @@ class GI_PT_Rig_Character_Settings(Panel):
             col_fr_props.prop(scene, "gi_fresnel_power", text="Fresnel Power")
             col_fr_props.prop(scene, "gi_fresnel_scaler", text="Fresnel Scaler")
 
-        # 4. Shadows & Scene Settings (At the bottom)
+        # 4. Outlines Settings
+        box_outlines = layout.box()
+        box_outlines.label(text="Outlines", icon="STROKE")
+        col_outlines = box_outlines.column(align=True)
+        col_outlines.prop(scene, "gi_enable_outlines", text="Enable Outlines")
+        if character_has_night_soul(context):
+            col_outlines.prop(scene, "gi_enable_night_soul", text="Enable Night Soul (Natlan Characters Only)")
+
+        # 5. Shadows & Scene Settings (At the bottom)
         box_shadow = layout.box()
         box_shadow.label(text="Shadow & Scene Settings", icon="SHADING_SOLID")
         col_shadow = box_shadow.column(align=True)
@@ -1116,6 +1321,18 @@ def register_gi_properties():
         precision=2,
         update=update_gi_clothes_physics,
     )
+    bpy.types.Scene.gi_enable_outlines = bpy.props.BoolProperty(
+        name="Enable Outlines",
+        description="Enable or disable character outlines (Toggle Outlines)",
+        default=True,
+        update=update_gi_outlines,
+    )
+    bpy.types.Scene.gi_enable_night_soul = bpy.props.BoolProperty(
+        name="Enable Night Soul (Natlan Characters Only)",
+        description="Enable or disable Night Soul state on outlines for Natlan characters (Toggle Night Soul State)",
+        default=False,
+        update=update_gi_night_soul,
+    )
 
 
 def unregister_gi_properties():
@@ -1124,7 +1341,8 @@ def unregister_gi_properties():
         "gi_amb_color", "gi_sharp_lit_color", "gi_soft_lit_color",
         "gi_sharp_shadow_color", "gi_soft_shadow_color", "gi_shadow_position",
         "gi_catch_shadows", "gi_day_night", "gi_rim_lit_color", "gi_rim_shadow_color",
-        "gi_hair_physics_influence", "gi_clothes_physics_influence"
+        "gi_hair_physics_influence", "gi_clothes_physics_influence",
+        "gi_enable_outlines", "gi_enable_night_soul"
     ]:
         if hasattr(bpy.types.Scene, prop):
             delattr(bpy.types.Scene, prop)

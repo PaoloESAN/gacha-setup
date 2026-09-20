@@ -273,18 +273,41 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             leather_material = self.create_body_material(self.material_names, leather_name)
             if leather_material:
                 material_name = leather_material.name
+                if getattr(leather_material, 'node_tree', None):
+                    primo_node = leather_material.node_tree.nodes.get('PrimoToon')
+                    if primo_node:
+                        toggle_leather = primo_node.inputs.get('Toggle Leather')
+                        if toggle_leather:
+                            toggle_leather.default_value = True
         elif mesh_body_part_name == 'Glass':
-            glass_material = self.create_body_material(self.material_names, self.material_names.GLASS)
+            if 'Mavuika' in material_name or 'mavuika' in material_name.lower():  # Mavuika glasses frame uses Body Shader
+                glass_material = self.create_body_material(self.material_names, self.material_names.GLASS)
+            else:
+                glass_material = self.create_glass_material(self.material_names, self.material_names.GLASS)
+                if glass_material:
+                    self.__set_glass_star_cloak_toggle(glass_material, False)
+                    try:
+                        glass_material.use_backface_culling = True
+                    except Exception:
+                        pass
             if glass_material:
                 material_name = glass_material.name
         elif mesh_body_part_name == 'Glass_Eff':
             glass_material = self.create_glass_material(self.material_names, self.material_names.GLASS_EFF)
             if glass_material:
                 self.__set_glass_star_cloak_toggle(glass_material, False)
-                glass_method_set = True
-                glass_material.blend_method = 'BLEND'
-                glass_material.shadow_method = 'NONE'
-                glass_material.show_transparent_back = False
+                try:
+                    glass_material.blend_method = 'BLEND'
+                except Exception:
+                    pass
+                try:
+                    glass_material.shadow_method = 'NONE'
+                except Exception:
+                    pass
+                try:
+                    glass_material.show_transparent_back = False
+                except Exception:
+                    pass
                 material_name = glass_material.name
         elif mesh_body_part_name and mesh_body_part_name.startswith(ShaderMaterialNameKeywords.SKILLOBJ):
             skillobj_material = self.create_body_material(self.material_names, self.material_names.SKILLOBJ)
@@ -362,10 +385,23 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             return
         vfx_shader_node = material.node_tree.nodes.get(self.shader_node_names.VFX_SHADER)
         if not vfx_shader_node:
+            for node in material.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree and ('vfx' in node.node_tree.name.lower() or 'hoyotoon' in node.node_tree.name.lower() or 'primotoon' in node.node_tree.name.lower()):
+                    vfx_shader_node = node
+                    break
+        if not vfx_shader_node:
             return
         toggle_input = vfx_shader_node.inputs.get(self.shader_node_names.TOGGLE_GLASS_STAR_CLOAK)
+        if not toggle_input:
+            for inp in vfx_shader_node.inputs:
+                if 'glass' in inp.name.lower() and 'cloak' in inp.name.lower():
+                    toggle_input = inp
+                    break
         if toggle_input is not None:
-            toggle_input.default_value = value
+            if toggle_input.type == 'BOOLEAN':
+                toggle_input.default_value = bool(value)
+            else:
+                toggle_input.default_value = value
 
     def __set_star_cloak_type(self, material, original_material_name):
         if not material or not material.use_nodes or not material.node_tree:
@@ -374,10 +410,20 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             if star_cloak_type.lower() in original_material_name.lower():
                 vfx_shader_node = material.node_tree.nodes.get(self.shader_node_names.VFX_SHADER)
                 if not vfx_shader_node:
+                    for node in material.node_tree.nodes:
+                        if node.type == 'GROUP' and node.node_tree and ('vfx' in node.node_tree.name.lower() or 'hoyotoon' in node.node_tree.name.lower() or 'primotoon' in node.node_tree.name.lower()):
+                            vfx_shader_node = node
+                            break
+                if not vfx_shader_node:
                     return
                 type_input = vfx_shader_node.inputs.get(self.shader_node_names.STAR_CLOAK_TYPE)
+                if not type_input:
+                    for inp in vfx_shader_node.inputs:
+                        if 'star cloak' in inp.name.lower() or 'starcloak' in inp.name.lower():
+                            type_input = inp
+                            break
                 if type_input is not None:
-                    type_input.default_value = getattr(StarCloakTypes, star_cloak_type).value
+                    type_input.default_value = float(getattr(StarCloakTypes, star_cloak_type).value)
 
     def create_face_material(self, shader_material_names: ShaderMaterialNames, material_name):
         face_material = bpy.data.materials.get(material_name)
