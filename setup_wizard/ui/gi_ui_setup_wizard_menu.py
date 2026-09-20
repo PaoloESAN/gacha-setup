@@ -75,7 +75,11 @@ class GI_PT_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
     bl_idname = "GI_PT_Setup_Wizard_UI_Layout"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "Character Setup Wizard"
+    bl_category = "Gacha Setup"
+
+    @classmethod
+    def poll(cls, context):
+        return False
 
     def draw(self, context):
         layout = self.layout
@@ -101,10 +105,10 @@ class GI_PT_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
         props = context.scene.character_rigger_props
         enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
         settings_col.prop(props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")
-        sliders_col = settings_col.column()
-        sliders_col.active = enable_physics
-        sliders_col.prop(props, "hair_physics_influence", text="Hair", slider=True)
-        sliders_col.prop(props, "clothes_physics_influence", text="Clothes", slider=True)
+        if enable_physics:
+            sliders_col = settings_col.column()
+            sliders_col.prop(props, "hair_physics_influence", text="Hair", slider=True)
+            sliders_col.prop(props, "clothes_physics_influence", text="Clothes", slider=True)
         settings_col.prop(props, "disable_rigging", text="Disable Rigging")
 
 
@@ -113,14 +117,13 @@ class GI_PT_Basic_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
     bl_idname = 'GI_PT_UI_Basic_Setup_Layout'
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = "Character Setup Wizard"
+    bl_category = "Gacha Setup"
+    bl_order = 2
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
         sub_layout = layout.box()
-
-
 
         OperatorFactory.create(
             sub_layout,
@@ -169,7 +172,8 @@ class GI_PT_Advanced_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker)
     bl_idname = 'GI_PT_UI_Advanced_Setup_Layout'
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
-    bl_category = "Character Setup Wizard"
+    bl_category = "Gacha Setup"
+    bl_order = 3
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
@@ -385,10 +389,10 @@ class GI_PT_UI_Character_Rig_Setup_Menu(Panel, GenshinImpactUIRenderChecker):
         col.prop(character_rigger_props, 'use_head_tracker')
         enable_physics = getattr(character_rigger_props, "enable_hair_clothes_physics", getattr(character_rigger_props, "enable_hair_dress_physics", False))
         col.prop(character_rigger_props, 'enable_hair_clothes_physics', text="Hair & Clothes Physics")
-        sliders_col = col.column()
-        sliders_col.active = enable_physics
-        sliders_col.prop(character_rigger_props, 'hair_physics_influence', text='Hair', slider=True)
-        sliders_col.prop(character_rigger_props, 'clothes_physics_influence', text='Clothes', slider=True)
+        if enable_physics:
+            sliders_col = col.column()
+            sliders_col.prop(character_rigger_props, 'hair_physics_influence', text='Hair', slider=True)
+            sliders_col.prop(character_rigger_props, 'clothes_physics_influence', text='Clothes', slider=True)
 
 
 class GI_PT_UI_Post_Processing_Setup_Menu(Panel, GenshinImpactUIRenderChecker):

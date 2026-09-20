@@ -987,6 +987,8 @@ def update_settings_ui(self, context, element=None):
     split = layout_split(row, factor=0.4)
     sub_col = split.column()
     sub_col.prop(settings, "auto_check_update")
+    if hasattr(settings, "include_beta_updates"):
+        sub_col.prop(settings, "include_beta_updates", text="Include Beta Versions")
     sub_col = split.column()
 
     if not settings.auto_check_update:
@@ -1265,12 +1267,24 @@ def skip_tag_function(self, tag):
     if self.invalid_updater:
         return False
 
-    # ---- write any custom code here, return true to disallow version ---- #
-    #
-    # # Filter out e.g. if 'beta' is in name of release
-    # if 'beta' in tag.lower():
-    # 	return True
-    # ---- write any custom code above, return true to disallow version --- #
+    # Filter out beta / prereleases if user preference is disabled
+    prefs = get_user_preferences()
+    include_beta = getattr(prefs, "include_beta_updates", False) if prefs else False
+
+    is_prerelease = False
+    if isinstance(tag, dict):
+        if tag.get("prerelease", False):
+            is_prerelease = True
+        tag_name = tag.get("name", "").lower()
+        if any(keyword in tag_name for keyword in ("beta", "alpha", "rc")):
+            is_prerelease = True
+    elif isinstance(tag, str):
+        tag_lower = tag.lower()
+        if any(keyword in tag_lower for keyword in ("beta", "alpha", "rc")):
+            is_prerelease = True
+
+    if is_prerelease and not include_beta:
+        return True
 
     if self.include_branches:
         for branch in self.include_branch_list:

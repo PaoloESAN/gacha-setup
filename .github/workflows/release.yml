@@ -3,7 +3,10 @@ name: Release
 on:
   push:
     tags:
-      - '*'
+      - 'v*.*.*'
+      - '!*beta*'
+      - '!*alpha*'
+      - '!*rc*'
 
 jobs:
   release:
@@ -13,6 +16,47 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch All Tags
+        run: git fetch --tags --force
+
+      - name: Generate Commit Changelog
+        run: |
+          python - << 'EOF'
+          import os
+          import subprocess
+
+          current_tag = "${{ github.ref_name }}"
+          # Find tag before this one
+          res_prev = subprocess.run(["git", "describe", "--tags", "--abbrev=0", f"{current_tag}^"], capture_output=True, text=True)
+          prev_tag = res_prev.stdout.strip()
+
+          if prev_tag:
+              res_log = subprocess.run(
+                  ["git", "log", f"{prev_tag}..{current_tag}", "--pretty=format:* %s (%h)", "--no-merges"],
+                  capture_output=True, text=True, encoding="utf-8"
+              )
+              commits_text = res_log.stdout.strip()
+          else:
+              commits_text = ""
+
+          if not commits_text:
+              res_log = subprocess.run(
+                  ["git", "log", "-n", "30", "--pretty=format:* %s (%h)", "--no-merges"],
+                  capture_output=True, text=True, encoding="utf-8"
+              )
+              commits_text = res_log.stdout.strip()
+
+          repo = os.environ.get("GITHUB_REPOSITORY", "PaoloESAN/gacha-setup")
+          changelog_content = "## What's Changed\n\n" + commits_text
+          if prev_tag:
+              changelog_content += f"\n\n**Full Changelog**: https://github.com/{repo}/compare/{prev_tag}...{current_tag}\n"
+
+          with open("changelog.md", "w", encoding="utf-8") as f:
+              f.write(changelog_content)
+          EOF
 
       - name: Create setup wizard zip
         run: |
@@ -24,5 +68,5 @@ jobs:
         with:
           name: ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
-          generate_release_notes: true
+          body_path: changelog.md
           files: Gacha_Setup-${{ github.ref_name }}.zip

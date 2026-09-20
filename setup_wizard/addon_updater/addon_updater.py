@@ -1202,6 +1202,16 @@ class SingletonUpdater:
                 return (text)
         return tuple(segments)
 
+    @staticmethod
+    def normalize_version(v_tuple):
+        """Normalize version tuple so a 3-digit stable version (3, 7, 0)
+        is treated as (3, 7, 0, 999999) to be strictly greater than (3, 7, 0, beta_num)."""
+        if not v_tuple or not isinstance(v_tuple, tuple):
+            return ()
+        if len(v_tuple) == 3:
+            return (v_tuple[0], v_tuple[1], v_tuple[2], 999999)
+        return v_tuple
+
     def check_for_update_async(self, callback=None):
         """Called for running check in a background thread"""
         is_ready = (
@@ -1341,7 +1351,7 @@ class SingletonUpdater:
 
         else:
             # Situation where branches not included.
-            if new_version > self._current_version:
+            if self.normalize_version(new_version) > self.normalize_version(self._current_version):
 
                 self._update_ready = True
                 self._update_version = new_version

@@ -1,0 +1,122 @@
+name: Beta Pre-Release
+
+on:
+  push:
+    branches:
+      - 'feat/**'
+      - 'dev'
+      - 'beta'
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
+      - '.gitignore'
+
+jobs:
+  beta-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch All Tags
+        run: git fetch --tags --force
+
+      - name: Calculate Beta Version and Patch Addon
+        id: versioning
+        run: |
+          python - << 'EOF'
+          import os
+          import re
+          import subprocess
+
+          init_path = "setup_wizard/__init__.py"
+          with open(init_path, "r", encoding="utf-8") as f:
+              content = f.read()
+
+          # Match base version like "version": (3, 7, 0)
+          match = re.search(r'"version":\s*\(([0-9]+),\s*([0-9]+),\s*([0-9]+)\)', content)
+          if not match:
+              raise ValueError("Could not find 'version': (X, Y, Z) in setup_wizard/__init__.py")
+
+          major, minor, patch = match.groups()
+          base_ver = f"{major}.{minor}.{patch}"
+
+          # Query existing beta tags for this base version
+          res = subprocess.run(["git", "tag", "-l", f"v{base_ver}-beta.*"], capture_output=True, text=True)
+          existing_tags = [t.strip() for t in res.stdout.strip().split("\n") if t.strip()]
+
+          # Find highest beta number if any exist
+          beta_numbers = []
+          for t in existing_tags:
+              m = re.search(rf'v{re.escape(base_ver)}-beta\.([0-9]+)', t)
+              if m:
+                  beta_numbers.append(int(m.group(1)))
+
+          beta_num = (max(beta_numbers) + 1) if beta_numbers else 1
+          tag_name = f"v{base_ver}-beta.{beta_num}"
+          release_title = f"v{base_ver} Beta {beta_num}"
+
+          print(f"Base Version: {base_ver}")
+          print(f"New Beta Tag: {tag_name}")
+
+          # Patch __init__.py inside runner before zipping
+          new_version_tuple = f'"version": ({major}, {minor}, {patch}, {beta_num})'
+          new_content = re.sub(r'"version":\s*\([0-9, ]+\)', new_version_tuple, content, count=1)
+
+          with open(init_path, "w", encoding="utf-8") as f:
+              f.write(new_content)
+
+          # Generate commit changelog
+          res_prev = subprocess.run(["git", "describe", "--tags", "--abbrev=0", "HEAD"], capture_output=True, text=True)
+          prev_tag = res_prev.stdout.strip()
+
+          if prev_tag:
+              res_log = subprocess.run(
+                  ["git", "log", f"{prev_tag}..HEAD", "--pretty=format:* %s (%h)", "--no-merges"],
+                  capture_output=True, text=True, encoding="utf-8"
+              )
+              commits_text = res_log.stdout.strip()
+          else:
+              commits_text = ""
+
+          if not commits_text:
+              res_log = subprocess.run(
+                  ["git", "log", "-n", "20", "--pretty=format:* %s (%h)", "--no-merges"],
+                  capture_output=True, text=True, encoding="utf-8"
+              )
+              commits_text = res_log.stdout.strip()
+
+          repo = os.environ.get("GITHUB_REPOSITORY", "PaoloESAN/gacha-setup")
+          changelog_content = "## What's Changed\n\n" + commits_text
+          if prev_tag:
+              changelog_content += f"\n\n**Full Changelog**: https://github.com/{repo}/compare/{prev_tag}...{tag_name}\n"
+
+          with open("changelog.md", "w", encoding="utf-8") as f:
+              f.write(changelog_content)
+
+          # Write outputs for next workflow steps
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"tag_name={tag_name}\n")
+              out.write(f"release_title={release_title}\n")
+          EOF
+
+      - name: Create Setup Wizard Zip
+        run: |
+          zip -r setup_wizard.zip setup_wizard
+          mv setup_wizard.zip "Gacha_Setup-${{ steps.versioning.outputs.tag_name }}.zip"
+
+      - name: Create Pre-Release and Upload Asset
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.versioning.outputs.tag_name }}
+          name: ${{ steps.versioning.outputs.release_title }}
+          prerelease: true
+          body_path: changelog.md
+          files: Gacha_Setup-${{ steps.versioning.outputs.tag_name }}.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
