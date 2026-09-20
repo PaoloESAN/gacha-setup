@@ -1340,8 +1340,34 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
 
                 def get_world_bone_extents(arm):
                     mw = arm.matrix_world
-                    max_wy = max(abs((mw @ b.head_local).y) for b in arm.data.bones) if arm.data.bones else 0
-                    max_wz = max(abs((mw @ b.head_local).z) for b in arm.data.bones) if arm.data.bones else 0
+                    # Check head and pelvis first to accurately detect humanoid posture
+                    head_b = None
+                    pelvis_b = None
+                    for b in arm.data.bones:
+                        name = b.name.lower()
+                        if not head_b and ("head" in name and not any(x in name for x in ["shadow", "hair", "acc", "cloth", "rope", "prop"])):
+                            head_b = b
+                        if not pelvis_b and any(x in name for x in ["pelvis", "hips", "hip"]):
+                            pelvis_b = b
+                    if head_b and pelvis_b:
+                        delta = (mw @ head_b.head_local) - (mw @ pelvis_b.head_local)
+                        # delta.z is vertical height (head above pelvis), abs(delta.y) is horizontal forward/backward displacement
+                        return abs(delta.y), delta.z
+
+                    # Exclude accessory / rope / weapon bones that can stretch along the floor
+                    exclude_keywords = [
+                        "rope", "weapon", "prop", "wep", "cloth", "skirt",
+                        "hair", "tail", "shadow", "fx", "point", "ball"
+                    ]
+                    body_bones = [
+                        b for b in arm.data.bones
+                        if not any(x in b.name.lower() for x in exclude_keywords)
+                    ]
+                    if not body_bones:
+                        body_bones = arm.data.bones
+
+                    max_wy = max(abs((mw @ b.head_local).y) for b in body_bones) if body_bones else 0
+                    max_wz = max((mw @ b.head_local).z for b in body_bones) if body_bones else 0
                     return max_wy, max_wz
 
                 bpy.context.view_layer.update()
@@ -1355,7 +1381,7 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                         top_root.rotation_euler[0] += math.radians(test_deg)
                         bpy.context.view_layer.update()
                         test_y, test_z = get_world_bone_extents(obj)
-                        if test_z > test_y and test_z > 0.5:
+                        if test_z > test_y and test_z > 0.2:
                             best_rot = test_deg
                             break
 

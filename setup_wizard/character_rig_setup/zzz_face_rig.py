@@ -1928,6 +1928,7 @@ def setup_facerig_detail_panel(faceobj, armature, head_name, keyblock):
     faceroot.tail = Vector((1.2417, 0.2, 1.1727))
     faceroot.roll = 0.0
     faceroot.use_deform = False
+    faceroot.parent = None
 
     panel_bone_names = ["Facerig Root"]
 
@@ -2087,27 +2088,27 @@ def setup_facerig_detail_panel(faceobj, armature, head_name, keyblock):
             c.use_transform_limit = True
             c.owner_space = 'LOCAL'
 
-    # Setup Child Of constraint on Facerig Root to follow character head
-    actual_head = head_name
-    if not actual_head or actual_head not in armature.pose.bones:
-        for cand in ["DEF-Head", "Head", "head", "DEF-spine.006", "spine.006", "Bip001 Head"]:
-            if cand in armature.pose.bones:
-                actual_head = cand
-                break
+    # Setup Child Of constraint on Facerig Root targeting root.002
+    target_root = None
+    for cand in ["root.002", "root_2", "root002", "root.001", "root"]:
+        if cand in armature.pose.bones:
+            target_root = cand
+            break
 
-    if root_pb and actual_head and actual_head in armature.pose.bones:
-        con_head = root_pb.constraints.get("Child Of") or root_pb.constraints.new('CHILD_OF')
-        con_head.name = "Child Of"
-        con_head.target = armature
-        con_head.subtarget = actual_head
+    if root_pb and target_root:
+        con_root = root_pb.constraints.get("Child Of") or root_pb.constraints.new('CHILD_OF')
+        con_root.name = "Child Of"
+        con_root.target = armature
+        con_root.subtarget = target_root
         armature.data.bones.active = armature.data.bones["Facerig Root"]
         try:
-            bpy.ops.constraint.childof_set_inverse(constraint=con_head.name, owner='BONE')
+            bpy.ops.constraint.childof_set_inverse(constraint=con_root.name, owner='BONE')
         except Exception:
-            head_bone = armature.data.bones.get(actual_head)
-            root_bone = armature.data.bones.get("Facerig Root")
-            if head_bone and root_bone:
-                con_head.inverse_matrix = head_bone.matrix_local.inverted() @ root_bone.matrix_local
+            root_bone = armature.data.bones.get(target_root)
+            pnl_bone = armature.data.bones.get("Facerig Root")
+            if root_bone and pnl_bone:
+                con_root.inverse_matrix = root_bone.matrix_local.inverted() @ pnl_bone.matrix_local
+        print(f"[ZZZ Face Rig] Set Child Of constraint on 'Facerig Root' targeting '{target_root}'")
 
     bpy.context.view_layer.update()
     bpy.ops.object.mode_set(mode='OBJECT')

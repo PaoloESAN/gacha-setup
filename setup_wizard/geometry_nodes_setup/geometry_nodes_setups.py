@@ -1544,7 +1544,12 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                     mat_weapon_ol = get_outline_mat(mat_weapon) or bpy.data.materials.get("ZZZ Weapon Outlines")
 
                     cam_obj = bpy.data.objects.get("Camera") or getattr(self.context.scene, "camera", None)
-                    outline_thickness = 0.075
+                    is_hair = (
+                        ("hair" in obj.name.lower() and "hairshadow" not in obj.name.lower())
+                        or (obj.data and "hair" in obj.data.name.lower() and "hairshadow" not in obj.data.name.lower())
+                        or any(slot.material and "hair" in slot.material.name.lower() and "shadow" not in slot.material.name.lower() for slot in obj.material_slots)
+                    )
+                    outline_thickness = 0.025 if is_hair else 0.075
 
                     target_settings = [
                         # Base Geometry = True
@@ -1553,7 +1558,7 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                         (["Use Vertex Colors?", "Use Vertex Colors", "Input_13"], True),
                         # Vertex Colors = #000000FF black
                         (["Vertex Colors", "Vertex Color", "Input_3"], (0.0, 0.0, 0.0, 1.0)),
-                        # Outline Thickness = 0.075 for ALL objects
+                        # Outline Thickness = 0.025 for hair, 0.075 for others
                         (["Outline Thickness", "Input_7", "Input_2"], outline_thickness),
                         # Camera
                         (["Camera", "Input_1", "Input_4"], cam_obj),
@@ -1584,18 +1589,57 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                             for key in keys:
                                 set_modifier_property(mod, key, val)
 
-                    if bod and obj != bod:
+                    if is_hair:
                         try:
-                            mod.driver_remove('["Input_7"]')
-                        except:
+                            mod["Input_7"] = 0.025
+                        except Exception:
                             pass
                         try:
-                            d = mod.driver_add('["Input_7"]').driver
-                            d.type = "AVERAGE"
-                            v = d.variables.new()
-                            v.name = "Input_7"
-                            v.targets[0].id = bod
-                            v.targets[0].data_path = 'modifiers["Outlines"]["Input_7"]'
+                            set_modifier_property(mod, "Outline Thickness", 0.025)
+                            set_modifier_property(mod, "Input_7", 0.025)
+                        except Exception:
+                            pass
+                        for d_path in ['["Input_7"]', '["Outline Thickness"]', '["Input_2"]']:
+                            try:
+                                mod.driver_remove(d_path)
+                            except Exception:
+                                pass
+                        if hasattr(mod, "properties") and hasattr(mod.properties, "inputs") and hasattr(mod.properties.inputs, "Input_7"):
+                            try:
+                                mod.properties.inputs.Input_7.driver_remove("value")
+                            except Exception:
+                                pass
+                        if obj.animation_data:
+                            for fcurve in list(obj.animation_data.drivers):
+                                dp = fcurve.data_path
+                                if mod.name in dp and any(k in dp for k in ["Input_7", "Outline Thickness", "Input_2"]):
+                                    try:
+                                        obj.animation_data.drivers.remove(fcurve)
+                                    except Exception:
+                                        pass
+                    elif bod and obj != bod:
+                        try:
+                            mod.driver_remove('["Input_7"]')
+                        except Exception:
+                            pass
+                        try:
+                            d = None
+                            data_path = 'modifiers["Outlines"]["Input_7"]'
+                            if hasattr(mod, "properties") and hasattr(mod.properties, "inputs") and hasattr(mod.properties.inputs, "Input_7"):
+                                try:
+                                    fc = mod.properties.inputs.Input_7.driver_add("value")
+                                    d = fc.driver if hasattr(fc, "driver") else fc
+                                    data_path = 'modifiers["Outlines"].properties.inputs.Input_7.value'
+                                except Exception:
+                                    pass
+                            if not d:
+                                d = mod.driver_add('["Input_7"]').driver
+                            if d:
+                                d.type = "AVERAGE"
+                                v = d.variables.new()
+                                v.name = "Input_7"
+                                v.targets[0].id = bod
+                                v.targets[0].data_path = data_path
                         except Exception as e:
                             print("Error adding outline driver:", e)
 

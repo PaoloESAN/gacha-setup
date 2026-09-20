@@ -1033,6 +1033,39 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
 
         cleanup_facerig_and_props_collections(armature)
 
+        # Ensure Facerig Root has Child Of constraint targeting root.002
+        try:
+            if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+                bpy.ops.object.mode_set(mode='OBJECT')
+            self.context.view_layer.objects.active = armature
+            bpy.ops.object.mode_set(mode='EDIT')
+            eb_faceroot = armature.data.edit_bones.get("Facerig Root")
+            if eb_faceroot:
+                eb_faceroot.parent = None
+            bpy.ops.object.mode_set(mode='POSE')
+            root_pb = armature.pose.bones.get("Facerig Root")
+            target_root = None
+            for cand in ["root.002", "root_2", "root002", "root.001", "root"]:
+                if cand in armature.pose.bones:
+                    target_root = cand
+                    break
+            if root_pb and target_root:
+                con_root = root_pb.constraints.get("Child Of") or root_pb.constraints.new('CHILD_OF')
+                con_root.name = "Child Of"
+                con_root.target = armature
+                con_root.subtarget = target_root
+                armature.data.bones.active = armature.data.bones["Facerig Root"]
+                try:
+                    bpy.ops.constraint.childof_set_inverse(constraint=con_root.name, owner='BONE')
+                except Exception:
+                    r_bone = armature.data.bones.get(target_root)
+                    p_bone = armature.data.bones.get("Facerig Root")
+                    if r_bone and p_bone:
+                        con_root.inverse_matrix = r_bone.matrix_local.inverted() @ p_bone.matrix_local
+            bpy.ops.object.mode_set(mode='OBJECT')
+        except Exception as e_parent:
+            print(f"[ZZZ Rig Warning] Ensure Facerig Root Child Of: {e_parent}")
+
         # Ensure all tail bones have the tweak custom shape (exclude IK bones)
         tweak_shape = (
             next((o for o in bpy.data.objects if o.type == 'MESH' and "tweak_spine" in o.name), None)
@@ -1046,20 +1079,7 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
                     pb.custom_shape_scale_xyz = (0.08, 0.08, 0.08)
                     pb.rotation_mode = 'XYZ'
 
-        # Ensure tail_ik retains prop-wgt cube shape
-        prop_wgt = bpy.data.objects.get("prop-wgt")
-        if prop_wgt and hasattr(armature, "pose") and armature.pose:
-            for pb in armature.pose.bones:
-                if "tail_ik" in pb.name.lower():
-                    pb.custom_shape = prop_wgt
-                    pb.use_custom_shape_bone_size = False
-                    pb.custom_shape_scale_xyz = (0.35, 0.35, 0.35)
-                    pb.rotation_mode = 'XYZ'
-                    if hasattr(armature.data, "collections"):
-                        torso_c = armature.data.collections.get("Torso (IK)")
-                        b_ref = armature.data.bones.get(pb.name)
-                        if torso_c and b_ref:
-                            torso_c.assign(b_ref)
+
 
         def refresh_light_vectors_modifiers():
             char_name = armature.name.replace("Rig", "")

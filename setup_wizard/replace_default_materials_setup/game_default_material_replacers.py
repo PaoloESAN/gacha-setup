@@ -2308,6 +2308,11 @@ class WutheringWavesDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                                 target_mat.shadow_method = 'HASHED'
                             except Exception:
                                 pass
+                        if hasattr(target_mat, "use_transparency_overlap"):
+                            try:
+                                target_mat.use_transparency_overlap = False
+                            except Exception:
+                                pass
 
             # Darken Eye vertex colors if mesh has eye polygons
             self.darken_eye_colors(mesh)

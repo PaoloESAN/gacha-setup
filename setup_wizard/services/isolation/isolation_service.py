@@ -359,6 +359,9 @@ def append_result(
 
     canonical_widgets = face_widget_manager.capture_existing_face_widgets()
 
+    # Detect if this is a Zenless Zone Zero character import
+    is_zzz = ("ZENLESS" in str(game_type).upper() or str(game_type).upper() == "ZZZ")
+
     with bpy.data.libraries.load(result_path, link=False) as (data_from, data_to):
         available_colls = list(data_from.collections)
         if manifest_collections:
@@ -370,6 +373,48 @@ def append_result(
         available_objs = list(data_from.objects)
         if manifest_loose_objects:
             data_to.objects = [o for o in manifest_loose_objects if o in available_objs]
+
+        if not is_zzz:
+            is_zzz = any(
+                m in ("ZZZ Shader Eye", "Kythera's ZZZ Face Shader V1.5", "Kythera's ZZZ Shader V1.5")
+                or (isinstance(m, str) and m.startswith("ZZZ Shader"))
+                for m in getattr(data_from, "materials", [])
+            )
+
+        # Import ZZZ Eye Shader into active scene if not already imported (multi-character deduplication)
+        if is_zzz:
+            zzz_eye_materials = ["ZZZ Shader Eye"]
+            needed_eye_mats = [
+                m for m in zzz_eye_materials
+                if m not in bpy.data.materials and m in getattr(data_from, "materials", [])
+            ]
+            if needed_eye_mats:
+                data_to.materials = needed_eye_mats
+
+    # Ensure imported ZZZ eye materials have fake users so they persist for manual assignment
+    for loaded_mat in (getattr(data_to, "materials", None) or []):
+        if loaded_mat:
+            loaded_mat.use_fake_user = True
+
+    # Fallback: If ZZZ eye material was not present in result_path for any reason, load from bundled shader blend
+    if is_zzz:
+        remaining_eye_mats = [
+            m for m in ["ZZZ Shader Eye"]
+            if m not in bpy.data.materials
+        ]
+        if remaining_eye_mats:
+            try:
+                from setup_wizard.import_order import get_shader_file_path
+                from setup_wizard.domain.game_types import GameType
+                shader_file = get_shader_file_path(GameType.ZENLESS_ZONE_ZERO.name, "main")
+                if shader_file and os.path.isfile(shader_file):
+                    with bpy.data.libraries.load(shader_file, link=False) as (s_from, s_to):
+                        s_to.materials = [m for m in s_from.materials if m in remaining_eye_mats]
+                    for s_mat in (s_to.materials or []):
+                        if s_mat:
+                            s_mat.use_fake_user = True
+            except Exception as ex:
+                print(f"[GACHA SETUP] ZZZ eye shader fallback import notice: {ex}")
 
     target = target_scene or bpy.context.scene
     scene_root = target.collection
