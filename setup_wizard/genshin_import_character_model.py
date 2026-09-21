@@ -370,36 +370,45 @@ def find_largest_uemodel_file(directory_or_file):
 def _derive_nte_character_name(uemodel_path, folder, new_objects):
     """Derives a clean character name for NTE (folder > uemodel file > armature > mesh)."""
     try:
-        from setup_wizard.character_rig_setup.rig_ui_utils import extract_clean_character_name
+        from setup_wizard.character_rig_setup.rig_ui_utils import (
+            extract_clean_character_name,
+            _parse_folder_name,
+            _parse_stem_name,
+            _is_generic_rig_name,
+        )
     except Exception:
         return "Character"
 
     generic = {"character", "model", "mesh", "textures", "texture", "materials",
-               "material", "maps", "images", "uemodel", "collection"}
+               "material", "maps", "images", "uemodel", "collection", "armature", "skeleton"}
 
-    folder_base = os.path.basename(os.path.normpath(folder)) if folder else ""
-    if folder_base and folder_base.lower() not in generic:
-        cleaned = extract_clean_character_name(folder_base)
-        if cleaned and cleaned.lower() not in generic:
+    # 1. Folder basename via folder parser (drops noise tokens, spaces, and digits: e.g. "Iroi rpg 3" -> "Iroi")
+    if folder:
+        cleaned = _parse_folder_name(folder)
+        if cleaned and cleaned.lower() not in generic and not _is_generic_rig_name(cleaned):
             return cleaned
 
+    # 2. Uemodel filename stem
     if uemodel_path:
         stem = os.path.splitext(os.path.basename(uemodel_path))[0]
-        cleaned = extract_clean_character_name(stem)
-        if cleaned and cleaned.lower() not in generic:
+        cleaned = _parse_folder_name(stem) or _parse_stem_name(stem, prefer="first")
+        if cleaned and cleaned.lower() not in generic and not _is_generic_rig_name(cleaned):
             return cleaned
 
+    # 3. Armatures
     armatures = [o for o in (new_objects or []) if getattr(o, "type", None) == "ARMATURE"]
     if armatures:
         cleaned = extract_clean_character_name(armatures[0].name)
-        if cleaned and cleaned.lower() not in generic:
+        if cleaned and cleaned.lower() not in generic and not _is_generic_rig_name(cleaned):
             return cleaned
 
+    # 4. Meshes
     meshes = [o for o in (new_objects or []) if getattr(o, "type", None) == "MESH"]
     if meshes:
-        cleaned = extract_clean_character_name(meshes[0].name)
-        if cleaned and cleaned.lower() not in generic:
-            return cleaned
+        for m in meshes:
+            cleaned = _parse_stem_name(m.name, prefer="first")
+            if cleaned and cleaned.lower() not in generic and not _is_generic_rig_name(cleaned):
+                return cleaned
 
     return "Character"
 
@@ -437,6 +446,20 @@ def _package_nte_import_into_collection(context, uemodel_path, folder, existing_
             if col != char_col:
                 try:
                     col.objects.unlink(obj)
+                except Exception:
+                    pass
+
+    # Clean up any empty collections left over from the import (e.g. from UEFormat)
+    for col in list(bpy.data.collections):
+        if col != char_col and col.name not in ("Collection", "Master Collection", "Scene Collection"):
+            if not col.name.startswith(("WGTS", "wgt")) and len(getattr(col, "objects", []) or []) == 0 and len(getattr(col, "children", []) or []) == 0:
+                try:
+                    if col.name in scene.collection.children:
+                        scene.collection.children.unlink(col)
+                except Exception:
+                    pass
+                try:
+                    bpy.data.collections.remove(col, do_unlink=True)
                 except Exception:
                     pass
 

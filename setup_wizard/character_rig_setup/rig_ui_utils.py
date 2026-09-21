@@ -20,6 +20,8 @@ def extract_clean_character_name(raw_name):
         'Avatar_Daphne_01' -> 'Daphne'
         'Columbina' -> 'Columbina'
         'Paimon' -> 'Paimon'
+        'Iroi rpg 3' -> 'Iroi'
+        'iroi rpg3' -> 'Iroi'
     """
     if not raw_name:
         return "Character"
@@ -28,20 +30,38 @@ def extract_clean_character_name(raw_name):
 
     noise_tokens = {
         "avatar", "armature", "model", "mesh", "ui", "costume", "root", "fbx", "pmx",
-        "00", "01", "02", "03", "04", "000", "grp", "skin", "joint", "rig", "char",
+        "uemodel", "uimodel", "uim", "00", "01", "02", "03", "04", "000", "grp", "group",
+        "skin", "joint", "rig", "char", "character",
         "female", "male", "lady", "girl", "boy", "loli", "size01", "size02", "size03",
-        "size04", "npc", "base", "body", "face", "hair", "eye", "eyes", "eyerig", "facerig",
-        "lighting", "panel", "wgt", "lights", "light", "character"
+        "size04", "npc", "base", "main", "common", "high", "low", "body", "face", "hair",
+        "eye", "eyes", "eyerig", "facerig",
+        "lighting", "panel", "wgt", "wgts", "lights", "light", "lod", "lod0", "lod1", "lod2", "lod3",
+        "skeleton", "skel", "art", "player", "chr", "s", "actor",
+        # Generic variant / release tags (outfit versions, test builds). These
+        # describe WHICH costume/build it is, never WHO the character is.
+        # NOTE: internal character codenames (e.g. NTE 'radio' for Linko,
+        # 'oneiroi' for Iroi) must NOT be listed here: stripping them turns a
+        # consistent codename signal into garbage ('level3', '').
+        "rpg", "game", "cbt", "cbt1", "cbt2", "mod", "patch",
+        "fashion", "level", "style", "variant", "variants",
+        "swimsuit", "outfit", "dress", "morpher", "morph",
     }
 
-    parts = [p for p in name.split("_") if p]
-    filtered = [p for p in parts if p.lower() not in noise_tokens]
+    parts = [p for p in re.split(r"[_\-\s.]+", name) if p]
+    filtered = []
+    for p in parts:
+        low = p.lower()
+        if low.isdigit() or low in noise_tokens:
+            continue
+        base = re.sub(r"\d+$", "", low)
+        if base in noise_tokens:
+            continue
+        filtered.append(p)
 
     if filtered:
-        return filtered[-1]
-    elif parts:
-        return parts[-1]
-    return name or "Character"
+        picked = filtered[0] if len(filtered) == 1 else filtered[-1]
+        return _capitalize_name_token(picked)
+    return "Character"
 
 
 # ---------------------------------------------------------------------------
@@ -57,10 +77,14 @@ def extract_clean_character_name(raw_name):
 # ---------------------------------------------------------------------------
 
 # extract_clean_character_name() results that must NOT become collection names.
+# NOTE: keep this set strictly generic (rig/scene words). Internal character
+# codenames (e.g. NTE 'radio', 'oneiroi') must NOT be listed: rejecting them
+# here only pushes the resolver toward worse fallbacks ('level3', '').
 _GENERIC_RIG_NAME_RESULTS = {
     "armature", "character", "char", "root", "rig", "rigify", "metarig",
     "skeleton", "skel", "mesh", "model", "object", "collection", "scene",
     "body", "face", "hair",
+    "lod", "lod0", "lod1", "lod2", "lod3",
 }
 
 # Noise tokens for parsing model/mesh file stems (lowercase).
@@ -68,12 +92,16 @@ _STEM_NOISE_TOKENS = {
     "avatar", "art", "player", "chr", "s", "actor", "npc",
     "armature", "model", "mesh", "fbx", "pmx", "uemodel", "uimodel", "uim",
     "ui", "costume", "root", "rig", "char", "character",
-    "male", "female", "lady", "girl", "boy", "loli",
+    "female", "male", "lady", "girl", "boy", "loli",
     "size01", "size02", "size03", "size04",
     "base", "main", "common", "high", "low", "grp", "group",
     "skin", "body", "face", "hair", "eye", "eyes",
     "lod", "lod0", "lod1", "lod2", "lod3",
     "skeleton", "skel",
+    # Generic variant / release tags, never character identity (see note above).
+    "rpg", "game", "cbt", "cbt1", "cbt2", "mod", "patch",
+    "fashion", "level", "style", "variant", "variants",
+    "swimsuit", "outfit", "dress", "morpher", "morph",
 }
 
 # Folder basenames that carry no character identity (step one level up is also
@@ -101,15 +129,28 @@ def _parse_stem_name(stem, prefer="last"):
 
     Drops noise tokens (art/avatar/chr/lod*/digits/...) and returns the last
     (file stems: Art_Firefly_01 -> Firefly) or first surviving token.
+    Tokens with glued trailing digits are checked against their digit-free
+    base (fashion1 -> fashion -> noise) so variant tags never win; a picked
+    token like 'radio072' is normalized back to its base ('radio').
     Returns "" when nothing meaningful survives.
     """
-    survivors = [
-        t for t in _stem_tokens(stem)
-        if t.lower() not in _STEM_NOISE_TOKENS and not t.isdigit()
-    ]
+    survivors = []
+    for t in _stem_tokens(stem):
+        low = t.lower()
+        if low in _STEM_NOISE_TOKENS or t.isdigit():
+            continue
+        base = re.sub(r"\d+$", "", low)
+        if base in _STEM_NOISE_TOKENS:
+            continue
+        survivors.append(t)
     if not survivors:
         return ""
     picked = survivors[0] if prefer == "first" else survivors[-1]
+    # Normalize glued asset ids: 'radio072' -> 'radio' (same codename vote as
+    # 'player_072_radio_...'). Tokens whose base is noise were filtered above.
+    base = re.sub(r"\d+$", "", picked)
+    if base and len(base) >= 2:
+        picked = base
     return _capitalize_name_token(picked)
 
 
@@ -127,6 +168,31 @@ def _parse_folder_name(folder):
 
 def _is_generic_rig_name(name):
     return not name or str(name).strip().lower() in _GENERIC_RIG_NAME_RESULTS
+
+
+def _looks_like_technical_rig_name(name):
+    """True when an armature/object name is an engine asset id, not a character.
+
+    UEFormat/UE imports name armatures like 'player_072_radio_fashion1_skin'
+    or 'player_075_oneir_skin_LOD0_Skeleton': engine prefix + numeric asset id
+    + internal codename + variant/LOD suffixes. Deriving a collection name from
+    these yields variant garbage ('Fashion1', 'level3') and duplicate
+    collections. Structural markers only -- no per-character codenames.
+    """
+    low = re.sub(r"\.\d+$", "", str(name or "")).lower()
+    if not low:
+        return False
+    if low.startswith(("player_", "art_", "s_actor", "sactor")):
+        return True
+    if "_player_" in low or "_art_" in low:
+        return True
+    if re.search(r"_\d{2,4}_", low):
+        return True
+    if low.endswith(("_skin", "_skel", "_skeleton", "_lod", "_lod0", "_lod1", "_lod2", "_lod3", "_morph", "_morpher")):
+        return True
+    if "_skin_" in low or "_lod" in low or "_morph" in low:
+        return True
+    return False
 
 
 def _scene_rig_candidates(original_name, arm_obj):
@@ -169,7 +235,12 @@ def resolve_rig_character_name(original_name, arm_obj=None, mesh_names=None, act
         arm_extracted = ""
 
     # 1. Armature name is already meaningful: keep current behavior verbatim.
-    if arm_extracted and not _is_generic_rig_name(arm_extracted):
+    # Skip engine asset ids (UEFormat 'player_072_radio_fashion1_skin'): their
+    # parsed result is variant garbage ('Fashion1'), which would create a
+    # duplicate collection instead of reusing the packaged one ('Linko').
+    # The existing-collection / folder / file steps below resolve those.
+    if arm_extracted and not _is_generic_rig_name(arm_extracted) \
+            and not _looks_like_technical_rig_name(original_name):
         return arm_extracted
 
     # 2. Existing character collection (import step may have packaged already).
@@ -330,24 +401,6 @@ def ensure_character_collection(context, rig_obj, char_name):
     if scene is None:
         scene = bpy.context.scene
 
-    char_coll = bpy.data.collections.get(char_name)
-    if char_coll is None:
-        char_coll = bpy.data.collections.new(char_name)
-    if char_coll.name not in scene.collection.children:
-        try:
-            scene.collection.children.link(char_coll)
-        except Exception:
-            pass
-    # WGTS_<Char> always nested, never at scene root (Append brings only its own).
-    try:
-        from setup_wizard.character_rig_setup.wgts_isolation import get_or_create_char_wgts
-        get_or_create_char_wgts(char_coll, char_name)
-    except Exception:
-        pass
-
-    if rig_obj is None:
-        return char_coll
-
     default_names = {"collection", "master collection", "scene collection"}
 
     def _is_wgts(coll):
@@ -363,11 +416,76 @@ def ensure_character_collection(context, rig_obj, char_name):
         except Exception:
             return False
 
+    def _matches_char(coll_name):
+        if not coll_name or str(coll_name).lower() in default_names:
+            return False
+        clean = _parse_stem_name(coll_name, prefer="first") or extract_clean_character_name(coll_name)
+        if clean and clean.lower() == char_name.lower():
+            return True
+        coll_low = coll_name.lower()
+        char_low = char_name.lower()
+        if coll_low.startswith(char_low):
+            return True
+        # Character name appears as a whole token inside the collection name
+        # (e.g. 'Linko fashion 1' contains 'Linko').
+        try:
+            if char_low in re.split(r"[_\-\s.]+", coll_low):
+                return True
+        except Exception:
+            pass
+        return False
+
+    try:
+        previous_colls = list(getattr(rig_obj, "users_collection", []) or []) if rig_obj is not None else []
+    except Exception:
+        previous_colls = []
+
+    char_coll = bpy.data.collections.get(char_name)
+
+    # If the collection '<char_name>' does not exist yet, check if rig_obj is in an
+    # existing non-default collection whose name matches or cleans to char_name
+    # (e.g. "Iroi rpg 3" -> cleans to "Iroi"). Rename it in place to unify the
+    # collection and avoid creating a duplicate!
+    if char_coll is None and rig_obj is not None:
+        for coll in previous_colls:
+            if not _is_default(coll) and not _is_wgts(coll) and _matches_char(coll.name):
+                old_name = coll.name
+                coll.name = char_name
+                char_coll = coll
+                print(f"[RIG UI] Renamed existing character collection '{old_name}' -> '{char_name}'")
+                break
+
+    if char_coll is None:
+        char_coll = bpy.data.collections.new(char_name)
+    if char_coll.name not in scene.collection.children:
+        try:
+            scene.collection.children.link(char_coll)
+        except Exception:
+            pass
+
+    # WGTS_<Char> always nested, never at scene root (Append brings only its own).
+    try:
+        from setup_wizard.character_rig_setup.wgts_isolation import get_or_create_char_wgts
+        get_or_create_char_wgts(char_coll, char_name)
+    except Exception:
+        pass
+
+    if rig_obj is None:
+        return char_coll
+
+    # Identify any leftover collections from which this character is being migrated
+    # (e.g. if 'Iroi' already existed but 'Iroi rpg 3' was also present).
+    own_colls = set()
+    for coll in previous_colls:
+        if coll != char_coll and not _is_default(coll) and not _is_wgts(coll):
+            if _matches_char(coll.name):
+                own_colls.add(coll)
+
     def _in_foreign_char_collection(obj):
         """True if the object already belongs to another character's collection."""
         try:
             for coll in list(getattr(obj, "users_collection", []) or []):
-                if coll == char_coll or _is_wgts(coll) or _is_default(coll):
+                if coll == char_coll or _is_wgts(coll) or _is_default(coll) or coll in own_colls:
                     continue
                 return True
         except Exception:
@@ -406,16 +524,11 @@ def ensure_character_collection(context, rig_obj, char_name):
     except Exception:
         pass
     for obj in list(bound):
-        if not _in_foreign_char_collection(obj):
-            _link_no_dup(char_coll, obj)
+        _link_no_dup(char_coll, obj)
 
     # 3. Members of the rig's previous default-named collections (e.g. the FBX
     # 'Collection'): migrate rig-related or unclaimed members, never meshes
     # bound to a different armature.
-    try:
-        previous_colls = list(getattr(rig_obj, "users_collection", []) or [])
-    except Exception:
-        previous_colls = []
     for old_coll in previous_colls:
         if old_coll == char_coll or _is_wgts(old_coll) or not _is_default(old_coll):
             continue
@@ -458,7 +571,7 @@ def ensure_character_collection(context, rig_obj, char_name):
         except Exception:
             continue
 
-    # 5. Unlink rig + gathered meshes from default-named collections (keep WGTS links).
+    # 5. Unlink rig + gathered meshes from default-named collections and own_colls.
     for obj in [rig_obj] + list(bound):
         try:
             user_colls = list(getattr(obj, "users_collection", []) or [])
@@ -467,11 +580,38 @@ def ensure_character_collection(context, rig_obj, char_name):
         for ucoll in user_colls:
             if ucoll == char_coll or _is_wgts(ucoll):
                 continue
-            if _is_default(ucoll):
+            if _is_default(ucoll) or ucoll in own_colls:
                 try:
                     ucoll.objects.unlink(obj)
                 except Exception:
                     pass
+
+    # Ensure rig_obj ONLY lives in char_coll (never left in any extra collection except WGTS).
+    for ucoll in list(getattr(rig_obj, "users_collection", []) or []):
+        if ucoll != char_coll and not _is_wgts(ucoll):
+            try:
+                ucoll.objects.unlink(rig_obj)
+            except Exception:
+                pass
+
+    # Clean up empty leftover collections from own_colls (e.g. old 'Iroi rpg 3').
+    for old_c in list(own_colls):
+        if old_c != char_coll and len(getattr(old_c, "objects", []) or []) == 0 and len(getattr(old_c, "children", []) or []) == 0:
+            try:
+                for parent_c in list(bpy.data.collections):
+                    if old_c.name in parent_c.children:
+                        parent_c.children.unlink(old_c)
+            except Exception:
+                pass
+            try:
+                if old_c.name in scene.collection.children:
+                    scene.collection.children.unlink(old_c)
+            except Exception:
+                pass
+            try:
+                bpy.data.collections.remove(old_c, do_unlink=True)
+            except Exception:
+                pass
 
     # 6. Remove the default 'Collection' when it ended up empty.
     try:

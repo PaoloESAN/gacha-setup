@@ -3,14 +3,14 @@ import os
 bl_info = {
     "name": "Gacha Setup",
     "author": "Mken, OctavoPE, Enthralpy, PaoloESAN",
-    "version": (3, 6, 9),
+    "version": (3, 7, 0),
     "blender": (5, 2, 0),
-    "location": "3D View > Sidebar > Genshin Impact / Honkai Star Rail / Zenless Zone Zero / Neverness to Everness / Wuthering Waves / Arknights: Endfield",
+    "location": "3D View > Sidebar > Gacha Setup",
     "description": "An addon to streamline the character model setup process for Gacha games in Blender 5.2+",
     "warning": "",
     "doc_url": "",
     "support": "COMMUNITY",
-    "category": "HoYoverse",
+    "category": "Anime",
     "license": "GPL-3.0-or-later",
     "tracker_url": "",
 }
@@ -31,6 +31,7 @@ else:
     import setup_wizard.addon_updater.addon_updater_ops as addon_updater_ops
     import setup_wizard.genshin_setup_wizard
     import setup_wizard.services.isolation
+    import setup_wizard.ui.addon_icon_manager as addon_icon_manager
     import setup_wizard.ui.gi_ui_setup_wizard_menu
     from setup_wizard.character_rig_setup.character_rigger_operator import (
         GI_OT_RigCharacter,
@@ -231,7 +232,6 @@ else:
         CharacterSetupWizardAddonPreferences,
         CSW_PT_Updater_UI_Layout,
         CSW_PT_Unified_Character_Setup_Wizard_UI_Layout,
-        GI_PT_Setup_Wizard_UI_Layout,
         GI_PT_Basic_Setup_Wizard_UI_Layout,
         GI_PT_Advanced_Setup_Wizard_UI_Layout,
         GI_PT_UI_Character_Model_Menu,
@@ -255,7 +255,6 @@ else:
         GI_OT_ApplyHairClothesPhysicsOperator,
         GI_OT_ApplyHairDressPhysicsOperator,
         GI_OT_PostProcessingCompositingSetup,
-        HSR_PT_Setup_Wizard_UI_Layout,
         HSR_PT_Basic_Setup_Wizard_UI_Layout,
         HSR_PT_Advanced_Setup_Wizard_UI_Layout,
         HSR_PT_UI_Character_Model_Menu,
@@ -270,7 +269,6 @@ else:
         HSR_OT_SetUpMaterials,
         HSR_OT_SetUpOutlines,
         HSR_OT_FinishSetup,
-        ZZZ_PT_Setup_Wizard_UI_Layout,
         ZZZ_PT_Basic_Setup_Wizard_UI_Layout,
         ZZZ_PT_Advanced_Setup_Wizard_UI_Layout,
         ZZZ_PT_UI_Character_Model_Menu,
@@ -288,7 +286,6 @@ else:
         ZZZ_OT_SetUpHeadDriver,
         ZZZ_OT_RenameCollectionAndRig,
         ZZZ_OT_MoveLightingPanelToCharacterCollection,
-        NTE_PT_Setup_Wizard_UI_Layout,
         NTE_PT_Basic_Setup_Wizard_UI_Layout,
         NTE_PT_Advanced_Setup_Wizard_UI_Layout,
         NTE_PT_UI_Character_Model_Menu,
@@ -304,7 +301,6 @@ else:
         NTE_OT_SetupCompositorNodes,
         NTE_OT_FinishSetup,
         # Wuthering Waves (Gustling Waters)
-        WW_PT_Setup_Wizard_UI_Layout,
         WW_PT_Basic_Setup_Wizard_UI_Layout,
         WW_PT_Advanced_Setup_Wizard_UI_Layout,
         WW_PT_UI_Character_Model_Menu,
@@ -331,7 +327,6 @@ else:
         WW_OT_SetPerformanceMode,
         WW_OT_SetQualityMode,
         # Arknights: Endfield
-        AKE_PT_Setup_Wizard_UI_Layout,
         AKE_PT_Basic_Setup_Wizard_UI_Layout,
         AKE_PT_Advanced_Setup_Wizard_UI_Layout,
         AKE_PT_UI_Character_Model_Menu,
@@ -409,10 +404,12 @@ else:
             ensure_all_rig_uis_registered()
         except Exception:
             pass
+        addon_icon_manager.register_icons()
         addon_updater_ops.register(bl_info)
 
 
     def unregister():
+        addon_icon_manager.unregister_icons()
         if gacha_rig_ui_load_post_handler in bpy.app.handlers.load_post:
             bpy.app.handlers.load_post.remove(gacha_rig_ui_load_post_handler)
         if gi_frame_change_handler in bpy.app.handlers.frame_change_post:

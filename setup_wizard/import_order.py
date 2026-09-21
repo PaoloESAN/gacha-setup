@@ -200,6 +200,9 @@ def get_shader_file_path(game_type: str, file_type: str = "main") -> str:
     shaders_dir = os.path.join(addon_dir, 'shaders')
 
     if game_type == GameType.GENSHIN_IMPACT.name:
+        p_v4 = os.path.join(shaders_dir, 'gi', 'HoYoverse - PrimoToon v4.0.blend')
+        if os.path.isfile(p_v4):
+            return p_v4
         if file_type == 'outlines':
             p = os.path.join(shaders_dir, 'gi', 'HoYoverse - Genshin Impact Outlines v3.blend')
             if os.path.isfile(p):

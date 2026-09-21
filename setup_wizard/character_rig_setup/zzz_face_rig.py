@@ -1552,25 +1552,36 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
         bpy.ops.object.mode_set(mode='OBJECT')
         return
 
+    def is_valid_eye_vg(name, is_left):
+        n = name.lower()
+        if any(k in n for k in ['brow', 'lash', 'shadow', 'highlight', 'specular', 'lid', 'corner', 'tear']):
+            return False
+        if is_left:
+            return any(k in n for k in ['skn_l_eye', 'eye.l', 'eye_l', 'l_eye', 'eyeball.l', 'def-eye.l']) or ('eye' in n and any(k in n for k in ['_l', '.l', 'left']))
+        else:
+            return any(k in n for k in ['skn_r_eye', 'eye.r', 'eye_r', 'r_eye', 'eyeball.r', 'def-eye.r']) or ('eye' in n and any(k in n for k in ['_r', '.r', 'right']))
+
     sep = (e_heads[eye_L_name] - e_heads[eye_R_name]).length
     if sep < 1e-6:
         sep = face_size * 0.1
     blen = max(sep * 0.5, face_size * BONE_LEN_F * 2.0)
     offset = min(face_size * EYE_LOOK_FWD_F, sep * 3.0)
-    offv = fwd_arm * offset
 
     parent_bone = eb.get(head_name) if head_name else None
     if parent_bone is None and eye_L_name in eb:
         parent_bone = eb[eye_L_name].parent
 
-    heads = {
-        MASTER: (e_heads[eye_L_name] + e_heads[eye_R_name]) * 0.5 + offv,
-        "CTRL-Eye.L": e_heads[eye_L_name] + offv,
-        "CTRL-Eye.R": e_heads[eye_R_name] + offv,
-    }
+    aim_heads = {}
+    ctrl_heads = {}
+    for eye_name, ctl_name, mch_name in PAIRS:
+        gd = gaze_dirs.get(eye_name, fwd_arm)
+        aim_heads[eye_name] = e_heads[eye_name] + gd * offset
+        ctrl_heads[eye_name] = e_heads[eye_name] + fwd_arm * offset
+
+    master_head = (ctrl_heads[eye_L_name] + ctrl_heads[eye_R_name]) * 0.5
     mb = eb.new(MASTER)
-    mb.head = heads[MASTER]
-    mb.tail = heads[MASTER] + fwd_arm * blen
+    mb.head = master_head
+    mb.tail = master_head + fwd_arm * blen
     try:
         mb.align_roll(up_arm)
     except Exception:
@@ -1580,9 +1591,7 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
     mb.use_connect = False
 
     for eye_name, ctl_name, mch_name in PAIRS:
-        gd = gaze_dirs[eye_name]
-        ch = heads[ctl_name]
-        ah = e_heads[eye_name] + gd * offset
+        ch = ctrl_heads[eye_name]
         cb = eb.new(ctl_name)
         cb.head = ch
         cb.tail = ch + fwd_arm * blen
@@ -1591,11 +1600,13 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
         except Exception:
             pass
         cb.use_deform = False
-        cb.parent = mb
+        cb.parent = parent_bone
         cb.use_connect = False
+
+        ah = aim_heads[eye_name]
         ab = eb.new(mch_name)
         ab.head = ah
-        ab.tail = ah + gd * blen
+        ab.tail = ah + fwd_arm * blen
         try:
             ab.align_roll(up_arm)
         except Exception:
@@ -1603,10 +1614,14 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
         ab.use_deform = False
         ab.parent = cb
         ab.use_connect = False
+        ab.inherit_scale = 'NONE'
     bpy.ops.object.mode_set(mode='OBJECT')
 
     wgt_coll = get_widget_collection()
     bpy.ops.object.mode_set(mode='POSE')
+    sep_ctrl = (ctrl_heads[eye_L_name] - ctrl_heads[eye_R_name]).length
+    sm_x = sep_ctrl / 0.86
+    sm_yz = sep_ctrl / 0.96934
     pbm = armature.pose.bones.get(MASTER)
     if pbm:
         pbm.custom_shape = make_widget('eyemaster', wgt_coll)
@@ -1614,10 +1629,9 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
             pbm.use_custom_shape_bone_size = False
         except Exception:
             pass
-        sm = max(sep / 0.9, face_size * 0.28)
-        pbm.custom_shape_scale_xyz = Vector((sm, sm, sm))
+        pbm.custom_shape_scale_xyz = Vector((sm_x, sm_yz, sm_yz))
         apply_color(armature, pbm, 'Face Eye-Aim', COL_EYEGREEN, {})
-    se = max(sep * 0.45, face_size * 0.12)
+    se = sm_yz * 0.5
     for eye_name, ctl_name, mch_name in PAIRS:
         pbc = armature.pose.bones.get(ctl_name)
         if pbc:
@@ -1628,18 +1642,134 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
                 pass
             pbc.custom_shape_scale_xyz = Vector((se, se, se))
             apply_color(armature, pbc, 'Face Eye-Aim', COL_EYEGREEN, {})
+
+            for con in list(pbc.constraints):
+                if con.name in ("MasterLoc", "MasterRot", "MasterScale"):
+                    pbc.constraints.remove(con)
+            con_loc = pbc.constraints.new('COPY_LOCATION')
+            con_loc.name = "MasterLoc"
+            con_loc.target = armature
+            con_loc.subtarget = MASTER
+            con_loc.target_space = 'LOCAL'
+            con_loc.owner_space = 'LOCAL'
+            con_loc.use_offset = True
+
+            con_rot = pbc.constraints.new('COPY_ROTATION')
+            con_rot.name = "MasterRot"
+            con_rot.target = armature
+            con_rot.subtarget = MASTER
+            con_rot.target_space = 'LOCAL'
+            con_rot.owner_space = 'LOCAL'
+            con_rot.use_offset = True
+
+    depsgraph = bpy.context.evaluated_depsgraph_get()
+    depsgraph.update()
+    centers = {}
+    for eye_name, ctl_name, mch_name in PAIRS:
+        is_l = (eye_name == eye_L_name) or ('.l' in eye_name.lower()) or ('_l' in eye_name.lower()) or ('l_eye' in eye_name.lower())
+        c_world = None
+        for obj in bpy.data.objects:
+            if obj.type != 'MESH':
+                continue
+            is_child = (obj.parent == armature)
+            has_mod = any(m.type == 'ARMATURE' and m.object == armature for m in obj.modifiers)
+            if not (is_child or has_mod):
+                continue
+            target_vg = None
+            for vg in obj.vertex_groups:
+                if is_valid_eye_vg(vg.name, is_l):
+                    target_vg = vg
+                    break
+            if target_vg:
+                eval_obj = obj.evaluated_get(depsgraph)
+                eval_mesh = eval_obj.to_mesh()
+                coords = [eval_obj.matrix_world @ eval_mesh.vertices[v.index].co
+                          for v in obj.data.vertices
+                          if any(g.group == target_vg.index and g.weight > 0.3 for g in v.groups)]
+                eval_obj.to_mesh_clear()
+                if coords:
+                    c_world = sum(coords, Vector((0, 0, 0))) / len(coords)
+                    break
+        if c_world is None:
+            c_world = armature.matrix_world @ (e_heads[eye_name] + fwd_arm * (face_size * 0.05))
+        centers[eye_name] = c_world
+
     for eye_name, ctl_name, mch_name in PAIRS:
         pbe = armature.pose.bones.get(eye_name)
         if not pbe:
             continue
         for con in list(pbe.constraints):
-            if con.name == "CTRL-EyeAim":
+            if con.name in ("CTRL-EyeAim", "CTRL-EyeScale", "CTRL-EyeScale_Master", "CTRL-EyeScalePivot", "CTRL-EyeScalePivot_Master"):
                 pbe.constraints.remove(con)
+
         con = pbe.constraints.new('DAMPED_TRACK')
         con.name = "CTRL-EyeAim"
         con.target = armature
         con.subtarget = mch_name
         con.track_axis = track_axes[eye_name]
+
+        H = pbe.head.copy()
+        c_arm = armature.matrix_world.inverted() @ centers[eye_name]
+        disp = H - c_arm
+
+        cs_m = pbe.constraints.new('COPY_SCALE')
+        cs_m.name = "CTRL-EyeScale_Master"
+        cs_m.target = armature
+        cs_m.subtarget = MASTER
+        cs_m.target_space = 'LOCAL'
+        cs_m.owner_space = 'LOCAL'
+
+        tc_m = pbe.constraints.new('TRANSFORM')
+        tc_m.name = "CTRL-EyeScalePivot_Master"
+        tc_m.target = armature
+        tc_m.subtarget = MASTER
+        tc_m.target_space = 'LOCAL'
+        tc_m.owner_space = 'POSE'
+        tc_m.map_from = 'SCALE'
+        tc_m.map_to = 'LOCATION'
+        tc_m.use_motion_extrapolate = True
+        tc_m.mix_mode = 'ADD'
+        tc_m.map_to_x_from = 'X'
+        tc_m.map_to_y_from = 'X'
+        tc_m.map_to_z_from = 'X'
+        tc_m.from_min_x_scale = 1.0
+        tc_m.from_max_x_scale = 2.0
+        tc_m.to_min_x = 0.0
+        tc_m.to_max_x = disp.x
+        tc_m.to_min_y = 0.0
+        tc_m.to_max_y = disp.y
+        tc_m.to_min_z = 0.0
+        tc_m.to_max_z = disp.z
+
+        cs = pbe.constraints.new('COPY_SCALE')
+        cs.name = "CTRL-EyeScale"
+        cs.target = armature
+        cs.subtarget = ctl_name
+        cs.target_space = 'LOCAL'
+        cs.owner_space = 'LOCAL'
+        cs.use_offset = True
+
+        tc = pbe.constraints.new('TRANSFORM')
+        tc.name = "CTRL-EyeScalePivot"
+        tc.target = armature
+        tc.subtarget = ctl_name
+        tc.target_space = 'LOCAL'
+        tc.owner_space = 'POSE'
+        tc.map_from = 'SCALE'
+        tc.map_to = 'LOCATION'
+        tc.use_motion_extrapolate = True
+        tc.mix_mode = 'ADD'
+        tc.map_to_x_from = 'X'
+        tc.map_to_y_from = 'X'
+        tc.map_to_z_from = 'X'
+        tc.from_min_x_scale = 1.0
+        tc.from_max_x_scale = 2.0
+        tc.to_min_x = 0.0
+        tc.to_max_x = disp.x
+        tc.to_min_y = 0.0
+        tc.to_max_y = disp.y
+        tc.to_min_z = 0.0
+        tc.to_max_z = disp.z
     bpy.ops.object.mode_set(mode='OBJECT')
 
     fcoll = get_facerig_bone_collection(armature)

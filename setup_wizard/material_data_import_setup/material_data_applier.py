@@ -60,6 +60,12 @@ class MaterialDataAppliersFactory:
 
 
 
+class mTexEnvsKeys:
+    def __init__(self, key, m_TexEnvs_key):
+        self.key = key
+        self.m_TexEnvs_key = m_TexEnvs_key
+
+
 class MaterialDataApplier(ABC):
     outline_mapping = {
         '_OutlineColor': 'Outline Color 1',
@@ -68,6 +74,47 @@ class MaterialDataApplier(ABC):
         '_OutlineColor4': 'Outline Color 4',
         '_OutlineColor5': 'Outline Color 5'
     }
+
+    def is_tooltip_TexEnv(self, tooltip):
+        if not tooltip:
+            return False
+        tooltip_keys = tooltip.split(' ')
+        if len(tooltip_keys) == 1:
+            return False
+
+        m_TexEnvs_key = tooltip_keys[1]
+        if m_TexEnvs_key.startswith('(') and m_TexEnvs_key.endswith(')'):
+            return True
+        return False
+
+    def get_TexEnv_Keys(self, tooltip):
+        if not tooltip:
+            return False
+        tooltip_keys = tooltip.split(' ')
+        if len(tooltip_keys) == 1:
+            return False
+
+        key = tooltip_keys[0]
+        m_TexEnvs_key = tooltip_keys[1].replace('(', '').replace(')', '')
+        
+        return mTexEnvsKeys(key, m_TexEnvs_key)
+
+    def has_normal_map(self, material_data_parser) -> bool:
+        try:
+            return bool(material_data_parser.m_texEnvs._BumpMap.get('m_Texture').get('Name'))
+        except Exception:
+            return False
+
+    def set_toggle_normal_map(self, toggle_normal_map_input, value: bool) -> None:
+        if toggle_normal_map_input:
+            toggle_normal_map_input.default_value = value
+
+    def is_not_using_eye_stencil(self) -> bool:
+        return not [material for material in bpy.data.materials if material.name.endswith('_Mat_Pupil')]
+
+    def set_use_eye_stencil(self, use_eye_stencil_input, value: bool) -> None:
+        if use_eye_stencil_input:
+            use_eye_stencil_input.default_value = value
 
     def __init__(self, material_data_parser, outline_material_group: OutlineMaterialGroup, outlines_node_tree_node_name):
         self.material_data_parser = material_data_parser
@@ -341,12 +388,16 @@ class V2_MaterialDataApplier(MaterialDataApplier):
 
         for material_node_name, material_json_value in _MainTexAlphaUse_material_node_dict.items():
             node_input = node_inputs.get(material_node_name)
+            if not node_input:
+                continue
             try:
-                node_input.default_value = material_json_value
-            except AttributeError as ex:
-                print(f'Did not find {material_node_name} in {self.material.name} material using {self} \
-                    Skipped.')
-                continue  # This used to be raise ex, but we're setting to Continue for NPCs using V3 Shader
+                if type(node_input) is bpy.types.NodeSocketBool:
+                    node_input.default_value = bool(material_json_value)
+                else:
+                    node_input.default_value = material_json_value
+            except Exception as ex:
+                print(f'Did not set {material_node_name} in {getattr(self, "material", None)}: {ex}')
+                continue
 
         # If equipment / weapon, always force Use Alpha = 1
         is_equip = getattr(self, 'material', None) and (
@@ -355,9 +406,9 @@ class V2_MaterialDataApplier(MaterialDataApplier):
             any(obj.name.startswith(('Equip_', 'EquipSkin_')) for obj in bpy.data.objects)
         )
         if is_equip:
-            node_input = node_inputs.get("Use Alpha")
+            node_input = node_inputs.get("Use Alpha") or node_inputs.get("Toggle Alpha")
             if node_input:
-                node_input.default_value = 1.0
+                node_input.default_value = True if type(node_input) is bpy.types.NodeSocketBool else 1.0
 
 
 class V3_MaterialDataApplier(V2_MaterialDataApplier):
@@ -494,11 +545,6 @@ class V3_MaterialDataApplier(V2_MaterialDataApplier):
             outline_material_shader_node_tree_inputs
         )
 
-class mTexEnvsKeys:
-    def __init__(self, key, m_TexEnvs_key):
-        self.key = key
-        self.m_TexEnvs_key = m_TexEnvs_key
-
 class V4_MaterialDataApplier(V3_MaterialDataApplier):
     class ShaderNodeType:
         INPUT = auto()
@@ -516,53 +562,85 @@ class V4_MaterialDataApplier(V3_MaterialDataApplier):
 
     _MainTexAlphaUse_mapping = {
         0: {
-            "Toggle Alpha": 0,
-            "Emit / Transparency": 0
+            "Toggle Alpha": False,
+            "Emit / Transparency": 0.0
         },
         1: {
-            "Toggle Alpha": 1,
-            "Emit / Transparency": 1
+            "Toggle Alpha": True,
+            "Emit / Transparency": 1.0
         },
         2: {
-            "Toggle Alpha": 1,
-            "Emit / Transparency": 0
+            "Toggle Alpha": True,
+            "Emit / Transparency": 0.0
         },
         3: {},
     }
 
     def set_up_mesh_material_data(self):
-        shader_node = self.material.node_tree.nodes[self.shader_node_tree_node_name]
-        outline_shader_node = self.outline_material.node_tree.nodes[self.outlines_node_tree_node_name]
-        vfx_shader_node = self.material.node_tree.nodes[self.vfx_shader_node_tree_node_name]
-        night_soul_outlines_shader_node = self.night_soul_outlines_material.node_tree.nodes[self.outlines_node_tree_node_name] if self.night_soul_outlines_material else None
-        global_properties_interface_node = self.material.node_tree.nodes.get(ShaderNodeNames.EXTERNAL_GLOBAL_PROPERTIES)
-        global_properties_inputs_node = global_properties_interface_node.node_tree.nodes.get(ShaderNodeNames.INTERNAL_GLOBAL_PROPERTIES)
+        shader_node = self.material.node_tree.nodes.get(self.shader_node_tree_node_name) if self.material and self.material.node_tree else None
+        outline_shader_node = self.outline_material.node_tree.nodes.get(self.outlines_node_tree_node_name) if self.outline_material and self.outline_material.node_tree else None
+        vfx_shader_node = self.material.node_tree.nodes.get(self.vfx_shader_node_tree_node_name) if self.material and self.material.node_tree else None
+        night_soul_outlines_shader_node = self.night_soul_outlines_material.node_tree.nodes.get(self.outlines_node_tree_node_name) if self.night_soul_outlines_material and self.night_soul_outlines_material.node_tree else None
+        global_properties_interface_node = self.material.node_tree.nodes.get(ShaderNodeNames.EXTERNAL_GLOBAL_PROPERTIES) if self.material and self.material.node_tree else None
+        global_properties_inputs_node = global_properties_interface_node.node_tree.nodes.get(ShaderNodeNames.INTERNAL_GLOBAL_PROPERTIES) if global_properties_interface_node and global_properties_interface_node.node_tree else None
 
-        self.set_up_mesh_material_data_with_tooltips(shader_node, shader_node)
-        self.set_up_mesh_material_data_with_tooltips(outline_shader_node, outline_shader_node, is_outlines=True)
+        if shader_node:
+            self.set_up_mesh_material_data_with_tooltips(shader_node, shader_node)
+        if outline_shader_node:
+            self.set_up_mesh_material_data_with_tooltips(outline_shader_node, outline_shader_node, is_outlines=True)
         if night_soul_outlines_shader_node:
             self.set_up_mesh_material_data_with_tooltips(night_soul_outlines_shader_node, night_soul_outlines_shader_node, is_outlines=True)
-        self.set_up_mesh_material_data_with_tooltips(vfx_shader_node, vfx_shader_node)
-        self.set_up_mesh_material_data_with_tooltips(global_properties_interface_node, global_properties_inputs_node)
+        if vfx_shader_node and vfx_shader_node != shader_node:
+            self.set_up_mesh_material_data_with_tooltips(vfx_shader_node, vfx_shader_node)
+        if global_properties_interface_node and global_properties_inputs_node:
+            self.set_up_mesh_material_data_with_tooltips(global_properties_interface_node, global_properties_inputs_node)
 
     def set_up_mesh_material_data_with_tooltips(self, interface_node, inputs_node, is_outlines=False):
+        if not interface_node or not inputs_node or not getattr(interface_node, "node_tree", None):
+            return
+        if not hasattr(interface_node.node_tree, "interface") or not hasattr(interface_node.node_tree.interface, "items_tree"):
+            return
+
         shader_node_interface_input_items = interface_node.node_tree.interface.items_tree.values()
+        description_to_names = defaultdict(list)
+        for input_item in shader_node_interface_input_items:
+            if hasattr(input_item, 'description') and input_item.description:
+                description_to_names[input_item.description.strip()].append(input_item.name)
+
         for node_interface_input in shader_node_interface_input_items:
+            # Skip panels
+            if hasattr(node_interface_input, 'item_type') and node_interface_input.item_type != 'SOCKET':
+                continue
+            if not hasattr(node_interface_input, 'description') or not node_interface_input.description:
+                continue
+
             material_data_key = node_interface_input.description.strip()  # Tooltip
+            if not material_data_key or material_data_key in ('Custom', 'Options for Shading', 'Options for Textures', 'Options for Outlines', 'Options for Post Processing (Ramps, Fresnel Lighting, Rim)'):
+                continue
+
+            socket_input = inputs_node.inputs.get(node_interface_input.name)
+            if socket_input is None:
+                continue
 
             if self.is_tooltip_TexEnv(material_data_key):
                 m_TexEnvs_keys: mTexEnvsKeys = self.get_TexEnv_Keys(material_data_key)
                 m_TexEnv_values = self.get_value_in_json_parser(self.material_data_parser, m_TexEnvs_keys.m_TexEnvs_key)
                 if m_TexEnv_values:
-                    material_json_value = m_TexEnv_values.get(m_TexEnvs_keys.key)
-                    material_json_value = (
-                        material_json_value.get('X') or 0.0, 
-                        material_json_value.get('Y') or 0.0, 
-                        material_json_value.get('Z') or 0.0
-                    )
+                    val_data = m_TexEnv_values.get(m_TexEnvs_keys.key)
+                    if isinstance(val_data, dict):
+                        material_json_value = (
+                            val_data.get('X', 0.0) or 0.0, 
+                            val_data.get('Y', 0.0) or 0.0, 
+                            val_data.get('Z', 0.0) or 0.0
+                        )
+                    else:
+                        material_json_value = val_data
+                else:
+                    material_json_value = None
             else:
                 material_json_value = self.get_value_in_json_parser(self.material_data_parser, material_data_key)
-            if material_json_value is not None and type(material_json_value) is not dict:  # Explicit None check in case value is falsy
+
+            if material_json_value is not None and type(material_json_value) is not dict:
                 try:
                     material_json_value = self.__manipulate_material_data_to_shader_value(
                         material_data_key, 
@@ -578,21 +656,99 @@ class V4_MaterialDataApplier(V3_MaterialDataApplier):
                             _MainTexAlphaUse_mapping=self._MainTexAlphaUse_mapping
                         )
                     else:
-                        inputs_node.inputs.get(node_interface_input.name).default_value = material_json_value
-                except AttributeError as ex:
-                    print(f'Did not find {node_interface_input.name} in {self.material.name}/{self.outline_material.name} material using {self} \
-                        Falling back to next MaterialDataApplier version')
-                    raise ex
-                except TypeError as ex:
-                    print(f'ERROR: {ex} on {node_interface_input.name} in {self.material.name}/{self.outline_material.name} material using {self} for {material_json_value}')
+                        socket_input.default_value = material_json_value
+
+                        if material_data_key == '_Color' and description_to_names.get('_ColorAlpha'):
+                            for input_name in description_to_names.get('_ColorAlpha'):
+                                color_alpha_inp = inputs_node.inputs.get(input_name)
+                                if color_alpha_inp and isinstance(material_json_value, (list, tuple)) and len(material_json_value) >= 4:
+                                    color_alpha_inp.default_value = float(material_json_value[3])
+                except Exception as ex:
+                    print(f'Warning: {ex} on {node_interface_input.name} in {self.material.name} for {material_json_value}')
+
+        # Special character materials: Leather
+        if 'Leather' in self.material.name:
+            toggle_leather = inputs_node.inputs.get('Toggle Leather')
+            if toggle_leather:
+                toggle_leather.default_value = True
+
+        # Special character materials: Pupil
+        if 'Pupil' in self.material.name:
+            toggle_eye_lit = inputs_node.inputs.get('Toggle Eye Lit')
+            if toggle_eye_lit:
+                toggle_eye_lit.default_value = True
+
+        # Disable Toggle Normal Map if there is no Normal Map texture
+        if not self.has_normal_map(self.material_data_parser):
+            toggle_normal_map_input = inputs_node.inputs.get(self.shader_node_input_names.TOGGLE_NORMAL_MAP)
+            if toggle_normal_map_input:
+                self.set_toggle_normal_map(toggle_normal_map_input, False)
+
+        # VeilShadow (ex. Columbina): no dedicated lightmap/normalmap exists,
+        # but shading must keep the first 4 SHADING OPTIONS toggles enabled.
+        # Everything else stays as parsed from the JSON.
+        try:
+            mat_name_low = (getattr(self.material, 'name', '') or '').lower()
+        except Exception:
+            mat_name_low = ''
+        if 'veilshadow' in mat_name_low:
+            for toggle_name in (
+                'Toggle Lightmap AO',
+                'Toggle Normal Map',
+                'Toggle Vertex Color AO',
+                'Toggle Material 2',
+            ):
+                toggle_input = inputs_node.inputs.get(toggle_name)
+                if toggle_input is not None:
+                    try:
+                        if type(toggle_input) is bpy.types.NodeSocketBool:
+                            toggle_input.default_value = True
+                        else:
+                            toggle_input.default_value = 1.0 if not isinstance(toggle_input.default_value, bool) else True
+                    except Exception:
+                        pass
 
         # Transparency for Glasses
-        if is_outlines and self.outline_material.name == f'{V4_PrimoToonGenshinImpactMaterialNames.GLASS_EFF} Outlines':
+        if is_outlines and self.outline_material and self.outline_material.name == f'{V4_PrimoToonGenshinImpactMaterialNames.GLASS_EFF} Outlines':
             toggle_alpha_node = inputs_node.inputs.get(self.shader_node_input_names.TOGGLE_ALPHA)
             transparency_clip_node = inputs_node.inputs.get(self.shader_node_input_names.TRANSPARENCY_CLIP_THRESHOLD)
+            if toggle_alpha_node:
+                toggle_alpha_node.default_value = True
+            if transparency_clip_node:
+                transparency_clip_node.default_value = 1.0
 
-            toggle_alpha_node.default_value = True
-            transparency_clip_node.default_value = 1.0
+    def __manipulate_material_data_to_shader_value(self, material_data_key, material_json_value, node_interface_input, inputs_node=None):
+        input_object = inputs_node.inputs.get(node_interface_input.name) if inputs_node else node_interface_input
+
+        if type(input_object) is bpy.types.NodeSocketBool:
+            if isinstance(material_json_value, (int, float, str)):
+                try:
+                    return bool(int(round(float(material_json_value))))
+                except (ValueError, TypeError):
+                    return bool(material_json_value)
+            return bool(material_json_value)
+        elif type(input_object) is bpy.types.NodeSocketColor:
+            if isinstance(material_json_value, (list, tuple)):
+                if len(material_json_value) == 3:
+                    return list(material_json_value) + [1.0]
+                elif len(material_json_value) >= 4:
+                    return list(material_json_value[:4])
+        elif type(input_object) is bpy.types.NodeSocketVector:
+            if isinstance(material_json_value, (list, tuple)):
+                return list(material_json_value[:3])
+        elif type(input_object) in (bpy.types.NodeSocketFloat, bpy.types.NodeSocketFloatFactor, bpy.types.NodeSocketFloatAngle, bpy.types.NodeSocketFloatDistance):
+            if isinstance(material_json_value, (int, float, str)):
+                try:
+                    return float(material_json_value)
+                except (ValueError, TypeError):
+                    pass
+        elif type(input_object) is bpy.types.NodeSocketInt:
+            if isinstance(material_json_value, (int, float, str)):
+                try:
+                    return int(round(float(material_json_value)))
+                except (ValueError, TypeError):
+                    pass
+        return material_json_value
 
 
 class V1_HoYoToonMaterialDataApplier(V3_MaterialDataApplier):
@@ -707,6 +863,29 @@ class V1_HoYoToonMaterialDataApplier(V3_MaterialDataApplier):
             toggle_normal_map_input = inputs_node.inputs.get(self.shader_node_input_names.TOGGLE_NORMAL_MAP)
             if toggle_normal_map_input:
                 self.set_toggle_normal_map(toggle_normal_map_input, False)
+
+        # VeilShadow (ex. Columbina): keep the first 4 SHADING OPTIONS toggles
+        # enabled even without dedicated lightmap/normalmap. Rest stays parsed.
+        try:
+            _mat_name_low = (getattr(self.material, 'name', '') or '').lower()
+        except Exception:
+            _mat_name_low = ''
+        if 'veilshadow' in _mat_name_low:
+            for _toggle_name in (
+                'Toggle Lightmap AO',
+                'Toggle Normal Map',
+                'Toggle Vertex Color AO',
+                'Toggle Material 2',
+            ):
+                _toggle_input = inputs_node.inputs.get(_toggle_name)
+                if _toggle_input is not None:
+                    try:
+                        if type(_toggle_input) is bpy.types.NodeSocketBool:
+                            _toggle_input.default_value = True
+                        else:
+                            _toggle_input.default_value = 1.0 if not isinstance(_toggle_input.default_value, bool) else True
+                    except Exception:
+                        pass
 
         # Transparency for Glasses
         if is_outlines and self.outline_material.name == f'{V1_HoYoToonGenshinImpactMaterialNames.GLASS_EFF} Outlines':

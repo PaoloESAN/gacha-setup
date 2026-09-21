@@ -389,10 +389,16 @@ class ShadowRampTypeSetter:
             self.__set_up_body_hair_ramp_switch_value(body_hair_ramp_switch_input, shadow_ramp_type, body_hair_ramp_switch_values)
 
     def __set_up_body_hair_ramp_switch_value(self, switch_input, shadow_ramp_type, switch_values: BodyHairRampSwitchValues):
-        if shadow_ramp_type == 'Hair':  # TODO: Refactor into Enum along side genshin_body_part_deducer.py
-            switch_input.default_value = switch_values.HAIR
-        elif shadow_ramp_type == 'Body':  # TODO: Refactor into Enum along side genshin_body_part_deducer.py
-            switch_input.default_value = switch_values.BODY
+        if type(switch_input) is bpy.types.NodeSocketBool:
+            if shadow_ramp_type == 'Hair':
+                switch_input.default_value = True
+            elif shadow_ramp_type == 'Body':
+                switch_input.default_value = False
+        else:
+            if shadow_ramp_type == 'Hair':  # TODO: Refactor into Enum along side genshin_body_part_deducer.py
+                switch_input.default_value = switch_values.HAIR
+            elif shadow_ramp_type == 'Body':  # TODO: Refactor into Enum along side genshin_body_part_deducer.py
+                switch_input.default_value = switch_values.BODY
 
 
 class HonkaiStarRailMaterialDataImporter(GameMaterialDataImporter):

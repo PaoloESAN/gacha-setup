@@ -171,20 +171,28 @@ class GenshinImpactMaterialDefaultValueSetter(MaterialDefaultValueSetter):
         material.name = self.material_names.BODY2
 
         body_shader = material.node_tree.nodes.get(self.shader_node_names.BODY_SHADER)
-        body_hair_ramp_switch = body_shader.inputs.get(self.shader_node_names.BODY_HAIR_RAMP_SWITCH)
-        if body_hair_ramp_switch:
-            body_hair_ramp_switch_values: BodyHairRampSwitchValues = BodyHairRampSwitchValues(self.shader_node_names)
-            body_hair_ramp_switch.default_value = body_hair_ramp_switch_values.BODY2
+        if body_shader:
+            body_hair_ramp_switch = body_shader.inputs.get(self.shader_node_names.BODY_HAIR_RAMP_SWITCH) or body_shader.inputs.get('Body / Hair')
+            if body_hair_ramp_switch:
+                if type(body_hair_ramp_switch) is bpy.types.NodeSocketBool:
+                    body_hair_ramp_switch.default_value = False
+                else:
+                    body_hair_ramp_switch_values: BodyHairRampSwitchValues = BodyHairRampSwitchValues(self.shader_node_names)
+                    body_hair_ramp_switch.default_value = body_hair_ramp_switch_values.BODY2
 
     def set_up_hair_material(self, material):
         material.name = self.material_names.HAIR
         material.use_fake_user = True
 
         body_shader = material.node_tree.nodes.get(self.shader_node_names.BODY_SHADER)
-        body_hair_ramp_switch = body_shader.inputs.get(self.shader_node_names.BODY_HAIR_RAMP_SWITCH)
-        if body_hair_ramp_switch:
-            body_hair_ramp_switch_values: BodyHairRampSwitchValues = BodyHairRampSwitchValues(self.shader_node_names)
-            body_hair_ramp_switch.default_value = body_hair_ramp_switch_values.HAIR
+        if body_shader:
+            body_hair_ramp_switch = body_shader.inputs.get(self.shader_node_names.BODY_HAIR_RAMP_SWITCH) or body_shader.inputs.get('Body / Hair')
+            if body_hair_ramp_switch:
+                if type(body_hair_ramp_switch) is bpy.types.NodeSocketBool:
+                    body_hair_ramp_switch.default_value = True
+                else:
+                    body_hair_ramp_switch_values: BodyHairRampSwitchValues = BodyHairRampSwitchValues(self.shader_node_names)
+                    body_hair_ramp_switch.default_value = body_hair_ramp_switch_values.HAIR
 
 
 class HonkaiStarRailMaterialDefaultValueSetter(MaterialDefaultValueSetter):
@@ -231,7 +239,26 @@ class ZenlessZoneZeroMaterialDefaultValueSetter(MaterialDefaultValueSetter):
         return
 
     def set_default_values(self):
-        return
+        for obj in bpy.data.objects:
+            if obj.type == 'MESH' and "mask" in obj.name.lower():
+                for slot in obj.material_slots:
+                    m = slot.material
+                    if not m or not m.node_tree:
+                        continue
+                    m["_is_mask"] = True
+                    for node in m.node_tree.nodes:
+                        if node.type == 'GROUP' and node.node_tree:
+                            nt_low = node.node_tree.name.lower()
+                            if "kythera" in nt_low or "zzz" in nt_low:
+                                if "Alpha Threshold" in node.inputs:
+                                    node.inputs["Alpha Threshold"].default_value = 1.0
+                                if "Enable Rim Light" in node.inputs:
+                                    node.inputs["Enable Rim Light"].default_value = False
+                                    if not any(lnk.to_socket == node.inputs["Enable Rim Light"] for lnk in m.node_tree.links):
+                                        val_node = m.node_tree.nodes.new('ShaderNodeValue')
+                                        val_node.name = "LockRimLightZero"
+                                        val_node.outputs[0].default_value = 0.0
+                                        m.node_tree.links.new(val_node.outputs[0], node.inputs["Enable Rim Light"])
 
 
 class NevernessToEvernessMaterialDefaultValueSetter(MaterialDefaultValueSetter):

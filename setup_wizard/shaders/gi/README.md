@@ -7,11 +7,10 @@ This folder contains the shader files for setting up **Genshin Impact** characte
 
 ---
 
-## Included Shader Files
+## Included Shader File
 
-* `HoYoverse - Genshin Impact v3.4.blend` — Main character shader nodes and materials.
-* `HoYoverse - Genshin Impact Outlines v3.blend` — Line thickness and geometry outline node group.
-* `HoYoverse - Genshin Impact Post-Processing.blend` — Compositing node setup for post-processing rendering.
+* `HoYoverse - PrimoToon v4.0.blend` — Unified Genshin Impact shader file containing character shaders (Body, Face, Outlines, VFX), geometry nodes outlines, and compositing post-processing node groups.
+
 
 ---
 

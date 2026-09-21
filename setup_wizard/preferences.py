@@ -12,6 +12,11 @@ class CharacterSetupWizardAddonPreferences(bpy.types.AddonPreferences):
         description="If enabled, auto-check for updates using an interval",
         default=False,
     )
+    include_beta_updates: bpy.props.BoolProperty(
+        name="Include Beta Versions",
+        description="Check for experimental beta releases in addition to stable versions",
+        default=False,
+    )
     updater_interval_months: bpy.props.IntProperty(
         name="Months",
         description="Number of months between checking for updates",

@@ -82,7 +82,7 @@ def find_all_image_nodes_by_category(node_tree, category):
                         found.append(node)
             elif category == 'lightmap':
                 if 'lightmap' in node_id or 'main_lightmap' in node_id:
-                    if not any(k in node_id for k in ['diffuse', 'normal', 'ramp', 'mask']):
+                    if not any(k in node_id for k in ['diffuse', 'normal', 'ramp', 'mask', 'face']):
                         found.append(node)
             elif category == 'normal':
                 if 'normal' in node_id or 'main_normal' in node_id:
@@ -96,8 +96,8 @@ def find_all_image_nodes_by_category(node_tree, category):
     for node in node_tree.nodes:
         if node.type == 'GROUP' and node.node_tree:
             ng_name = node.node_tree.name.lower()
-            # NEVER recurse into Face Factor, Face Shader, or internal calculation node groups
-            if any(ign in ng_name for ign in ['face factor', 'face shader', 'eyeshadow', 'gi face', 'primotoon', 'hoyotoon', 'outline']):
+            # NEVER recurse into Face Factor, Face Shader, Shader Textures, or internal calculation node groups
+            if any(ign in ng_name for ign in ['face factor', 'face shader', 'eyeshadow', 'gi face', 'primotoon', 'hoyotoon', 'outline', 'shader textures']):
                 continue
             sub_found = find_all_image_nodes_by_category(node.node_tree, category)
             for sub_node in sub_found:
@@ -105,6 +105,68 @@ def find_all_image_nodes_by_category(node_tree, category):
                     found.append(sub_node)
 
     return found
+
+
+def make_dedicated_lightmap_copy(src_img, suffix='_Lightmap'):
+    """
+    Returns a dedicated Non-Color copy of src_img for use as a lightmap.
+    Needed when no dedicated lightmap texture exists (ex. Columbina VeilShadow,
+    which only ships a Veil Diffuse) and the diffuse image would otherwise be
+    shared directly: a single image datablock cannot be sRGB (diffuse) and
+    Non-Color (lightmap) at the same time.
+    """
+    if not src_img:
+        return None
+    try:
+        base_name = src_img.name
+    except Exception:
+        return src_img
+    # If it already is a dedicated lightmap copy, just enforce Non-Color.
+    # Covers both pure lightmaps and copies already split from a diffuse
+    # (their names end with the copy suffix).
+    if base_name.lower().endswith(suffix.lower()) or \
+            ('lightmap' in base_name.lower() and 'diffuse' not in base_name.lower()):
+        try:
+            src_img.colorspace_settings.name = 'Non-Color'
+        except Exception:
+            pass
+        try:
+            src_img.alpha_mode = 'CHANNEL_PACKED'
+        except Exception:
+            pass
+        return src_img
+    copy_name = f"{base_name}{suffix}"
+    try:
+        existing = bpy.data.images.get(copy_name)
+    except Exception:
+        existing = None
+    if existing:
+        try:
+            existing.colorspace_settings.name = 'Non-Color'
+        except Exception:
+            pass
+        try:
+            existing.alpha_mode = 'CHANNEL_PACKED'
+        except Exception:
+            pass
+        return existing
+    try:
+        img_copy = src_img.copy()
+    except Exception:
+        return src_img
+    try:
+        img_copy.name = copy_name
+    except Exception:
+        pass
+    try:
+        img_copy.colorspace_settings.name = 'Non-Color'
+    except Exception:
+        pass
+    try:
+        img_copy.alpha_mode = 'CHANNEL_PACKED'
+    except Exception:
+        pass
+    return img_copy
 
 
 def sync_material_category_textures(material):
@@ -125,7 +187,7 @@ def sync_material_category_textures(material):
     normal_nodes = find_all_image_nodes_by_category(material.node_tree, 'normal')
 
     diffuse_img = next((n.image for n in diffuse_nodes if n.image and 'lightmap' not in n.image.name.lower() and 'normal' not in n.image.name.lower()), None)
-    lightmap_img = next((n.image for n in lightmap_nodes if n.image and 'diffuse' not in n.image.name.lower() and 'normal' not in n.image.name.lower()), None)
+    lightmap_img = next((n.image for n in lightmap_nodes if n.image), None)
     normal_img = next((n.image for n in normal_nodes if n.image and 'diffuse' not in n.image.name.lower() and 'lightmap' not in n.image.name.lower()), None)
 
     if diffuse_img:
@@ -133,7 +195,17 @@ def sync_material_category_textures(material):
             n.image = diffuse_img
 
     if lightmap_img:
-        lightmap_img.colorspace_settings.name = 'Non-Color'
+        # If lightmap nodes share the diffuse datablock (ex. VeilShadow fallback),
+        # split into a dedicated Non-Color copy so diffuse stays sRGB.
+        if diffuse_img and lightmap_img.name == diffuse_img.name:
+            lightmap_img = make_dedicated_lightmap_copy(diffuse_img)
+        elif 'diffuse' in lightmap_img.name.lower():
+            lightmap_img = make_dedicated_lightmap_copy(lightmap_img)
+        else:
+            try:
+                lightmap_img.colorspace_settings.name = 'Non-Color'
+            except Exception:
+                pass
         for n in lightmap_nodes:
             n.image = lightmap_img
 
@@ -332,7 +404,7 @@ class TextureImporterFactory:
                 # Not sure why IDE says code is unreachable, it is used
                 material_names = V3_BonnyFestivityGenshinImpactMaterialNames
             else:
-                material_names = V4_PrimoToonGenshinImpactMaterialNames  
+                material_names = V4_PrimoToonGenshinImpactMaterialNames
 
             if texture_importer_type == TextureImporterType.AVATAR:
                 return GenshinAvatarTextureImporter(material_names)
@@ -358,7 +430,7 @@ class TextureImporterFactory:
                 print(f'Unknown TextureImporterType: {texture_importer_type}')
         elif game_type is GameType.PUNISHING_GRAY_RAVEN:
             if texture_importer_type == TextureImporterType.PGR_AVATAR:
-                return PunishingGrayRavenAvatarTextureImporter(JaredNytsPunishingGrayRavenShaderMaterialNames, 
+                return PunishingGrayRavenAvatarTextureImporter(JaredNytsPunishingGrayRavenShaderMaterialNames,
                                                                JaredNytsPunishingGrayRavenTextureNodeNames)
             else:
                 print(f'Unknown TextureImporterType: {texture_importer_type}')
@@ -478,12 +550,13 @@ class GenshinTextureImporter:
                 'Diffuse',
                 'Diffuse UV1',
                 'VFX_Diffuse',
+                'Glass_Diffuse',
                 'Outline_Diffuse',
                 'Image Texture',
                 'Image Texture.001',
             ]
             nodes = find_texture_nodes(material.node_tree, possible_texture_node_names)
-        
+
         for node in nodes:
             if override or not node.image:
                 node.image = img
@@ -498,8 +571,22 @@ class GenshinTextureImporter:
         if not self._is_genshin_shader_material(material):
             return
 
-        if img and 'diffuse' not in img.name.lower():
-            img.colorspace_settings.name = 'Non-Color'
+        if img:
+            # Never share a diffuse datablock as lightmap: Blender stores
+            # colorspace per image, so sharing forces diffuse and lightmap to
+            # use the same colorspace. Use a dedicated Non-Color copy instead
+            # (ex. Columbina VeilShadow only has a Veil Diffuse).
+            if 'diffuse' in img.name.lower():
+                img = make_dedicated_lightmap_copy(img)
+            else:
+                try:
+                    img.colorspace_settings.name = 'Non-Color'
+                except Exception:
+                    pass
+                try:
+                    img.alpha_mode = 'CHANNEL_PACKED'
+                except Exception:
+                    pass
         nodes = find_all_image_nodes_by_category(material.node_tree, 'lightmap')
         if not nodes:
             possible_texture_node_names = [
@@ -644,7 +731,7 @@ class GenshinTextureImporter:
 
         if specular_ramp_node_exists:
             img.colorspace_settings.name='Non-Color'
-            bpy.data.node_groups[f'{type.value} Specular Ramp'].nodes[f'{type.value}_Specular_Ramp'].image = img        
+            bpy.data.node_groups[f'{type.value} Specular Ramp'].nodes[f'{type.value}_Specular_Ramp'].image = img
 
     def set_face_diffuse_texture(self, face_material, img):
         face_material.node_tree.nodes['Face_Diffuse'].image = img
@@ -682,19 +769,45 @@ class GenshinTextureImporter:
         texture_node_names = self.shader_identifier_service.get_shader_texture_node_names(self.genshin_shader_version)
         face_shadow_map_node_group = bpy.data.node_groups.get(texture_node_names.FACE_SHADOW_MAP_NODE_GROUP)
 
-        if face_shadow_map_node_group:
+        if face_shadow_map_node_group and texture_node_names.FACE_SHADOW_MAP in face_shadow_map_node_group.nodes:
             img.colorspace_settings.name='Non-Color'
             face_shadow_map_node_group.nodes[texture_node_names.FACE_SHADOW_MAP].image = img
 
+        shadow_alpha_group = bpy.data.node_groups.get('Shadow Alpha')
+        if shadow_alpha_group and 'Face_Shadow' in shadow_alpha_group.nodes:
+            img.colorspace_settings.name='Non-Color'
+            shadow_alpha_group.nodes['Face_Shadow'].image = img
+
 
     def set_face_lightmap_texture(self, img):
-        # Genshin Impact Shader V1/V2/V4
-        texture_node_names = self.shader_identifier_service.get_shader_texture_node_names(self.genshin_shader_version)
-        face_lightmap_node_group = bpy.data.node_groups.get(texture_node_names.FACE_LIGHTMAP_NODE_GROUP)
+        if not img:
+            return
+        img.colorspace_settings.name = 'Non-Color'
+        try:
+            img.alpha_mode = 'CHANNEL_PACKED'
+        except Exception:
+            pass
 
-        if face_lightmap_node_group:
-            img.colorspace_settings.name='Non-Color'
-            face_lightmap_node_group.nodes[texture_node_names.FACE_LIGHTMAP].image = img
+        # 1. Direct assignment in PrimoToon v4.0 'Shader Textures' node group
+        st_group = bpy.data.node_groups.get('Shader Textures')
+        if st_group and 'Face_Lightmap' in st_group.nodes:
+            st_group.nodes['Face_Lightmap'].image = img
+
+        # 2. Genshin Impact Shader V1/V2/V4 via configured node names
+        try:
+            texture_node_names = self.shader_identifier_service.get_shader_texture_node_names(self.genshin_shader_version)
+            face_lightmap_node_group = bpy.data.node_groups.get(texture_node_names.FACE_LIGHTMAP_NODE_GROUP)
+            if face_lightmap_node_group and texture_node_names.FACE_LIGHTMAP in face_lightmap_node_group.nodes:
+                face_lightmap_node_group.nodes[texture_node_names.FACE_LIGHTMAP].image = img
+        except Exception:
+            pass
+
+        # 3. Direct node in Face material or any other material
+        for mat in bpy.data.materials:
+            if 'face' in mat.name.lower() and mat.use_nodes and mat.node_tree:
+                for node in mat.node_tree.nodes:
+                    if node.name == 'Face_Lightmap' or (node.type == 'TEX_IMAGE' and 'face_lightmap' in node.name.lower()):
+                        node.image = img
 
     def set_metalmap_texture(self, img):
         metallic_matcap_node_exists = bpy.data.node_groups.get('Metallic Matcap')
@@ -703,33 +816,102 @@ class GenshinTextureImporter:
             bpy.data.node_groups['Metallic Matcap'].nodes['MetalMap'].image = img
 
     def set_glass_diffuse_texture(self, material, img):
-        diffuse_node = material.node_tree.nodes.get('Main_Diffuse') 
-        vfx_node = material.node_tree.nodes.get(V4_GenshinImpactTextureNodeNames.VFX_DIFFUSE)
-
-        nodes = [diffuse_node, vfx_node]
+        if not material or not material.use_nodes or not material.node_tree or not img:
+            return
+        img.colorspace_settings.name = 'sRGB'
+        try:
+            img.alpha_mode = 'CHANNEL_PACKED'
+        except Exception:
+            pass
+        nodes = [
+            material.node_tree.nodes.get('Glass_Diffuse'),
+            material.node_tree.nodes.get(V4_GenshinImpactTextureNodeNames.GLASS_DIFFUSE),
+            material.node_tree.nodes.get(V4_GenshinImpactTextureNodeNames.VFX_DIFFUSE),
+            material.node_tree.nodes.get('Main_Diffuse'),
+            material.node_tree.nodes.get('Diffuse (sRGB) (Channel Packed)'),
+        ]
+        assigned = False
         for node in nodes:
-            if material and node:
+            if node:
                 node.image = img
+                assigned = True
+        if not assigned:
+            for node in material.node_tree.nodes:
+                if node.type == 'TEX_IMAGE' and ('diffuse' in node.name.lower() or 'diffuse' in (node.label or '').lower()):
+                    node.image = img
+                    assigned = True
+
+    def set_glass_specular_texture(self, img):
+        if not img:
+            return
+        img.colorspace_settings.name = 'Non-Color'
+        try:
+            img.alpha_mode = 'CHANNEL_PACKED'
+        except Exception:
+            pass
+        for gg_name in ['Genshin Glass', 'HoYoverse - Genshin Glass']:
+            gg_group = bpy.data.node_groups.get(gg_name)
+            if gg_group:
+                for node in gg_group.nodes:
+                    if node.type == 'TEX_IMAGE':
+                        node.image = img
 
     def set_nyx_color_ramp_texture(self, img):
+        if not img:
+            return
+        img.colorspace_settings.name = 'sRGB'
+        try:
+            img.alpha_mode = 'CHANNEL_PACKED'
+        except Exception:
+            pass
         possible_nyx_color_ramp_node_group_names = [
             V4_GenshinImpactTextureNodeNames.SHADER_TEXTURES_NODE_GROUP,
+            'Shader Textures',
         ]
         for nyx_color_ramp_node_group_name in possible_nyx_color_ramp_node_group_names:
             nyx_color_ramp_node_group = bpy.data.node_groups.get(nyx_color_ramp_node_group_name)
             if nyx_color_ramp_node_group:
-                nyx_color_ramp_node = nyx_color_ramp_node_group.nodes.get(V4_GenshinImpactTextureNodeNames.NYX_COLOR_RAMP)
+                nyx_color_ramp_node = nyx_color_ramp_node_group.nodes.get(V4_GenshinImpactTextureNodeNames.NYX_COLOR_RAMP) or \
+                                      nyx_color_ramp_node_group.nodes.get('NYX_Color_Ramp')
                 if nyx_color_ramp_node:
                     nyx_color_ramp_node.image = img
 
     def set_up_night_soul_mask_texture(self, material, img):
-        if material and material.node_tree and material.node_tree.nodes:
-            texture_node_names = self.shader_identifier_service.get_shader_texture_node_names(self.genshin_shader_version)
-            night_soul_mask_texture_node = material.node_tree.nodes.get(texture_node_names.NIGHT_SOUL_MASK) or \
-                material.node_tree.nodes.get(texture_node_names.FACE_NIGHT_SOUL_MASK)
+        if not material or not material.use_nodes or not material.node_tree:
+            return
+        img.colorspace_settings.name = 'Non-Color'
+        try:
+            img.alpha_mode = 'CHANNEL_PACKED'
+        except Exception:
+            pass
+        m_low = material.name.lower()
+        is_face = 'face' in m_low
+        target_node_name = 'Face_NYXmask' if is_face else 'Main_NYXmask'
+        node = material.node_tree.nodes.get(target_node_name) or \
+               material.node_tree.nodes.get('Main_NYXmask') or \
+               material.node_tree.nodes.get('Face_NYXmask')
+        if not node:
+            try:
+                texture_node_names = self.shader_identifier_service.get_shader_texture_node_names(self.genshin_shader_version)
+                node = material.node_tree.nodes.get(texture_node_names.FACE_NIGHT_SOUL_MASK if is_face else texture_node_names.NIGHT_SOUL_MASK)
+            except Exception:
+                pass
+        if node:
+            node.image = img
 
-            if night_soul_mask_texture_node:
-                night_soul_mask_texture_node.image = img
+    def set_nyx_noise_texture(self, img):
+        if not img:
+            return
+        img.colorspace_settings.name = 'Non-Color'
+        try:
+            img.alpha_mode = 'CHANNEL_PACKED'
+        except Exception:
+            pass
+        ns_group = bpy.data.node_groups.get('Night Soul Blessing')
+        if ns_group:
+            for node in ns_group.nodes:
+                if node.type == 'TEX_IMAGE':
+                    node.image = img
 
     def has_dedicated_texture(self, part_name, tex_type):
         if not hasattr(self, 'files') or not self.files:
@@ -738,30 +920,63 @@ class GenshinTextureImporter:
 
     def set_up_night_soul_outlines_material(self):
         night_soul_outline_material = self.create_night_soul_outlines()
-        if not night_soul_outline_material:
+        if not night_soul_outline_material or not night_soul_outline_material.node_tree:
             return None
         shader_node_names: ShaderNodeNames = self.shader_identifier_service.get_shader_node_names(self.genshin_shader_version)
 
-        body_shader = night_soul_outline_material.node_tree.nodes[shader_node_names.BODY_SHADER]
+        body_shader = night_soul_outline_material.node_tree.nodes.get(shader_node_names.BODY_SHADER)
+        if not body_shader:
+            for node in night_soul_outline_material.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree and ('outlines' in node.node_tree.name.lower() or 'hoyotoon' in node.node_tree.name.lower() or 'primotoon' in node.node_tree.name.lower()):
+                    body_shader = node
+                    break
+        if not body_shader:
+            return night_soul_outline_material
+
         output = body_shader.outputs.get(shader_node_names.NIGHT_SOUL_OUTPUT)
-        input = night_soul_outline_material.node_tree.nodes.get(shader_node_names.MATERIAL_OUTPUT_NODE).inputs.get(shader_node_names.MATERIAL_OUTPUT_SHADER_INPUT)
-        night_soul_outline_material.node_tree.links.new(output, input)
-        night_soul_outline_material.use_screen_refraction = True
+        if not output:
+            for out in body_shader.outputs:
+                if 'night' in out.name.lower() and 'soul' in out.name.lower():
+                    output = out
+                    break
+        if not output:
+            return night_soul_outline_material
+
+        out_node = night_soul_outline_material.node_tree.nodes.get(shader_node_names.MATERIAL_OUTPUT_NODE)
+        if not out_node:
+            for node in night_soul_outline_material.node_tree.nodes:
+                if node.type == 'OUTPUT_MATERIAL':
+                    out_node = node
+                    break
+        if out_node:
+            input_sock = out_node.inputs.get(shader_node_names.MATERIAL_OUTPUT_SHADER_INPUT) or out_node.inputs.get('Surface')
+            if input_sock:
+                night_soul_outline_material.node_tree.links.new(output, input_sock)
+        try:
+            night_soul_outline_material.use_screen_refraction = True
+        except Exception:
+            pass
+        return night_soul_outline_material
 
     def create_night_soul_outlines(self):
         shader_material_names: ShaderMaterialNames = self.shader_identifier_service.get_shader_material_names_using_shader(self.genshin_shader_version)
-        outline_material = bpy.data.materials.get(shader_material_names.OUTLINES)
-        if not shader_material_names.NIGHT_SOUL_OUTLINES:
+        ns_name = shader_material_names.NIGHT_SOUL_OUTLINES or f'{getattr(shader_material_names, "MATERIAL_PREFIX", "HoYoverse - Genshin ")}Night Soul Outlines'
+        existing = bpy.data.materials.get(ns_name)
+        if existing:
+            return existing
+
+        outline_material = bpy.data.materials.get(shader_material_names.OUTLINES) or \
+                           bpy.data.materials.get('HoYoverse - Genshin Outlines') or \
+                           bpy.data.materials.get('miHoYo - Genshin Outlines')
+        if not outline_material:
             return None
-        night_soul_outlines_material = bpy.data.materials.get(shader_material_names.NIGHT_SOUL_OUTLINES)
-        if not night_soul_outlines_material:
-            night_soul_outlines_material = outline_material.copy()
-            night_soul_outlines_material.name = shader_material_names.NIGHT_SOUL_OUTLINES
-            night_soul_outlines_material.use_fake_user = True
+        night_soul_outlines_material = outline_material.copy()
+        night_soul_outlines_material.name = ns_name
+        night_soul_outlines_material.use_fake_user = True
         return night_soul_outlines_material
 
     def setup_dress_textures(self, texture_name, texture_img, character_type: TextureImporterType):
-        shader_dress_materials = [material for material in bpy.data.materials if 
+        shader_dress_materials = [material for material in bpy.data.materials if
                                   ('Genshin Dress' in material.name or 'Dress' in material.name) and 'Outlines' not in material.name and not material.name.endswith('_Mat')]
         shader_cloak_materials = [material for material in bpy.data.materials
                                   if 'Genshin Arm' in material.name or 'Genshin Cloak' in material.name]
@@ -932,7 +1147,22 @@ class GenshinTextureImporter:
             except Exception:
                 continue
             raw_name = os.path.splitext(jf)[0]
-            mat_part = raw_name.split('_')[-1]
+            clean_name = raw_name[:-4] if raw_name.lower().endswith('_mat') else raw_name
+            c_low = clean_name.lower()
+            if 'glass_eff' in c_low:
+                mat_part = 'Glass_Eff'
+            elif 'glass' in c_low:
+                mat_part = 'Glass'
+            elif 'starcloak' in c_low or 'star_cloak' in c_low:
+                mat_part = 'StarCloak'
+            elif 'veilshadow' in c_low:
+                mat_part = 'VeilShadow'
+            elif 'effecthair' in c_low:
+                mat_part = 'EffectHair'
+            elif 'helmetemo' in c_low:
+                mat_part = 'HelmetEmo'
+            else:
+                mat_part = clean_name.split('_')[-1]
             json_data_list.append((jf, raw_name, mat_part, data))
 
             tex_envs = data.get('m_SavedProperties', {}).get('m_TexEnvs', {})
@@ -1047,8 +1277,73 @@ class GenshinTextureImporter:
                     self.set_face_diffuse_texture(target_mat, diffuse_img)
                 elif mat_part.lower() in ['pupil', 'pupila', 'new pupil'] or ('pupil' in target_mat.name.lower() and 'outlines' not in target_mat.name.lower()):
                     pass  # Handled below by multi-pupil resolver
+                elif mat_part.lower() in ['glass', 'glass_eff', 'starcloak'] or any(k in target_mat.name.lower() for k in ['glass', 'vfx', 'starcloak']):
+                    self.set_glass_diffuse_texture(target_mat, diffuse_img)
+                    self.set_diffuse_texture(tex_type, target_mat, diffuse_img)
                 else:
                     self.set_diffuse_texture(tex_type, target_mat, diffuse_img)
+                imported_any = True
+
+            # Glass Specular Texture (Eff_Mask_171.png)
+            glass_spec_name = tex_envs.get('_GlassSpecularTex', {}).get('m_Texture', {}).get('Name')
+            if glass_spec_name:
+                g_spec_img = resolve_img(glass_spec_name)
+                if g_spec_img:
+                    self.set_glass_specular_texture(g_spec_img)
+                    imported_any = True
+            elif mat_part.lower() in ['glass', 'glass_eff']:
+                for fname, fpath in image_files:
+                    if 'eff_mask_171' in fname.lower() or 'glassspecular' in fname.lower() or 'glass_specular' in fname.lower():
+                        g_spec_img = resolve_img(os.path.splitext(fname)[0])
+                        if g_spec_img:
+                            self.set_glass_specular_texture(g_spec_img)
+                            imported_any = True
+                            break
+
+            if mat_part.lower() == 'face':
+                # Face Lightmap
+                face_lm_name = tex_envs.get('_FaceMapTex', {}).get('m_Texture', {}).get('Name') or \
+                               tex_envs.get('_FaceLightmap', {}).get('m_Texture', {}).get('Name')
+                face_lm_img = resolve_img(face_lm_name) if face_lm_name else None
+                if not face_lm_img:
+                    for fname, fpath in image_files:
+                        f_low = fname.lower()
+                        if any(k in f_low for k in ['facelightmap', 'face_lightmap', 'face lightmap']):
+                            face_lm_img = resolve_img(os.path.splitext(fname)[0])
+                            if face_lm_img:
+                                break
+                if face_lm_img:
+                    self.set_face_lightmap_texture(face_lm_img)
+                    imported_any = True
+
+                # Face Shadow Map
+                face_shadow_name = tex_envs.get('_LightMapTex', {}).get('m_Texture', {}).get('Name') or \
+                                  tex_envs.get('_FaceShadow', {}).get('m_Texture', {}).get('Name') or \
+                                  tex_envs.get('_FaceShadowMap', {}).get('m_Texture', {}).get('Name')
+                face_shadow_img = resolve_img(face_shadow_name) if face_shadow_name else None
+                if not face_shadow_img:
+                    for fname, fpath in image_files:
+                        f_low = fname.lower()
+                        if ('face' in f_low and 'shadow' in f_low and 'ramp' not in f_low) or 'face_shadow' in f_low:
+                            face_shadow_img = resolve_img(os.path.splitext(fname)[0])
+                            if face_shadow_img:
+                                break
+                if face_shadow_img:
+                    self.set_face_shadow_texture(target_mat, face_shadow_img)
+                    imported_any = True
+
+            # Metal Map (check for all materials, e.g., Face, Glass, Body)
+            metal_name = tex_envs.get('_MTMap', {}).get('m_Texture', {}).get('Name') or \
+                         tex_envs.get('_MetalMap', {}).get('m_Texture', {}).get('Name')
+            metal_img = resolve_img(metal_name) if metal_name else None
+            if not metal_img and mat_part.lower() in ['face', 'glass', 'body']:
+                for fname, fpath in image_files:
+                    if 'metalmap' in fname.lower() or 'metal_map' in fname.lower():
+                        metal_img = resolve_img(os.path.splitext(fname)[0])
+                        if metal_img:
+                            break
+            if metal_img:
+                self.set_metalmap_texture(metal_img)
                 imported_any = True
 
             if mat_part.lower() not in ['face', 'pupil', 'pupila', 'new pupil'] and not any(k in target_mat.name.lower() for k in ['face', 'pupil', 'pupila']):
@@ -1222,6 +1517,104 @@ class GenshinTextureImporter:
                     self.set_stocking_texture(stock_img)
                     imported_any = True
 
+            # Night Soul / NYX Properties
+            nyx_ramp_name = tex_envs.get('_NyxStateOutlineColorRamp', {}).get('m_Texture', {}).get('Name')
+            if nyx_ramp_name:
+                nyx_ramp_img = resolve_img(nyx_ramp_name)
+                if nyx_ramp_img:
+                    self.set_nyx_color_ramp_texture(nyx_ramp_img)
+                    self.set_up_night_soul_outlines_material()
+                    imported_any = True
+
+            nyx_mask_name = tex_envs.get('_TempNyxStatePaintMaskTex', {}).get('m_Texture', {}).get('Name') or \
+                            tex_envs.get('_MaterialMasksTex', {}).get('m_Texture', {}).get('Name')
+            if nyx_mask_name:
+                nyx_mask_img = resolve_img(nyx_mask_name)
+                if nyx_mask_img:
+                    self.set_up_night_soul_mask_texture(target_mat, nyx_mask_img)
+                    # Propagate body mask to other body-like materials (Leather, Clothes, SkillObj)
+                    if any(k in target_mat.name.lower() for k in ['body', 'face']):
+                        for mat in bpy.data.materials:
+                            if mat.use_nodes and 'outlines' not in mat.name.lower():
+                                self.set_up_night_soul_mask_texture(mat, nyx_mask_img)
+                    self.set_up_night_soul_outlines_material()
+                    imported_any = True
+
+            nyx_noise_name = tex_envs.get('_NyxStateOutlineNoise', {}).get('m_Texture', {}).get('Name')
+            if nyx_noise_name:
+                nyx_noise_img = resolve_img(nyx_noise_name)
+                if nyx_noise_img:
+                    self.set_nyx_noise_texture(nyx_noise_img)
+                    self.set_up_night_soul_outlines_material()
+                    imported_any = True
+
+        # Global fallback: ensure Face Lightmap is set if present in image files
+        st_group = bpy.data.node_groups.get('Shader Textures')
+        if st_group and 'Face_Lightmap' in st_group.nodes and not st_group.nodes['Face_Lightmap'].image:
+            for fname, fpath in image_files:
+                f_low = fname.lower()
+                if any(k in f_low for k in ['facelightmap', 'face_lightmap', 'face lightmap']):
+                    flm = resolve_img(os.path.splitext(fname)[0])
+                    if flm:
+                        self.set_face_lightmap_texture(flm)
+                        imported_any = True
+                        break
+
+        # Fallback for Specular Ramp
+        for fname, fpath in image_files:
+            f_low = fname.lower()
+            if 'specular_ramp' in f_low:
+                spec_img = resolve_img(os.path.splitext(fname)[0])
+                if spec_img:
+                    self.set_specular_ramp_texture(TextureType.BODY, spec_img)
+                    imported_any = True
+                    break
+
+        # Fallback for Night Soul (NYX) Color Ramp
+        st_group = bpy.data.node_groups.get('Shader Textures')
+        nyx_node = st_group.nodes.get('NYX_Color_Ramp') if st_group else None
+        if nyx_node and not nyx_node.image:
+            for fname, fpath in image_files:
+                f_low = fname.lower()
+                if ('nyx' in f_low and 'ramp' in f_low) or 'nyxstate_ramp' in f_low:
+                    nyx_img = resolve_img(os.path.splitext(fname)[0])
+                    if nyx_img:
+                        self.set_nyx_color_ramp_texture(nyx_img)
+                        self.set_up_night_soul_outlines_material()
+                        imported_any = True
+                        break
+
+        # Fallback for Night Soul Mask across materials
+        has_any_mask = any(
+            (m.node_tree.nodes.get('Main_NYXmask') and m.node_tree.nodes['Main_NYXmask'].image) or
+            (m.node_tree.nodes.get('Face_NYXmask') and m.node_tree.nodes['Face_NYXmask'].image)
+            for m in bpy.data.materials if m.use_nodes and m.node_tree
+        )
+        if not has_any_mask:
+            for fname, fpath in image_files:
+                f_low = fname.lower()
+                if (('_mask' in f_low or 'nyxmask' in f_low or 'paintmask' in f_low) and
+                    not any(k in f_low for k in ['eff_', 'highlight', 'blend', 'lightmap', 'diffuse', 'specular', 'normal'])):
+                    mask_img = resolve_img(os.path.splitext(fname)[0])
+                    if mask_img:
+                        for mat in bpy.data.materials:
+                            if mat.use_nodes:
+                                self.set_up_night_soul_mask_texture(mat, mask_img)
+                        self.set_up_night_soul_outlines_material()
+                        imported_any = True
+                        break
+
+        # Fallback for Night Soul Outline Noise
+        for fname, fpath in image_files:
+            f_low = fname.lower()
+            if 'nyxstate' in f_low or 'nyx_noise' in f_low or 'eff_avatar_nyxstate' in f_low:
+                noise_img = resolve_img(os.path.splitext(fname)[0])
+                if noise_img:
+                    self.set_nyx_noise_texture(noise_img)
+                    self.set_up_night_soul_outlines_material()
+                    imported_any = True
+                    break
+
         return imported_any
 
     def import_part_texture_to_matching_materials(self, file, img):
@@ -1238,18 +1631,21 @@ class GenshinTextureImporter:
         if not (is_diffuse or is_lightmap or is_normal or is_shadow_ramp):
             return False
 
+        if any(k in f_lower for k in ['facelightmap', 'face_lightmap', 'face lightmap', 'face_shadow', 'face_diffuse']):
+            return False
+
         matched_any = False
 
         # Match equipment / weapon textures directly
         if f_lower.startswith(('equip_', 'equipskin_')) or 'equip' in f_lower:
             equip_materials = [
-                mat for mat in bpy.data.materials 
+                mat for mat in bpy.data.materials
                 if mat.use_nodes and 'outlines' not in mat.name.lower() and 'outline' not in mat.name.lower() and ('body' in mat.name.lower() or 'equip' in mat.name.lower())
                 and self._is_genshin_shader_material(mat)
             ]
             if not equip_materials:
                 equip_materials = [
-                    mat for mat in bpy.data.materials 
+                    mat for mat in bpy.data.materials
                     if mat.use_nodes and 'outlines' not in mat.name.lower() and 'pupil' not in mat.name.lower() and 'face' not in mat.name.lower()
                     and self._is_genshin_shader_material(mat)
                 ]
@@ -1290,7 +1686,7 @@ class GenshinTextureImporter:
                             return False
 
                 matching_materials = [
-                    mat for mat in bpy.data.materials 
+                    mat for mat in bpy.data.materials
                     if mat.use_nodes and 'outlines' not in mat.name.lower() and 'outline' not in mat.name.lower() and is_mat_part_match(mat.name, part)
                     and self._is_genshin_shader_material(mat)
                 ]
@@ -1415,7 +1811,7 @@ class GenshinTextureImporter:
         if shader_material:
             normal_map_node_color_outputs = [node.outputs.get('Color') for node in shader_material.node_tree.nodes \
                 if node.label == label_name and not node.outputs.get('Color').is_linked]
-            
+
             if normal_map_node_color_outputs:
                 normal_map_node_color_output = normal_map_node_color_outputs[0]
                 normal_map_input = shader_material.node_tree.nodes.get(shader_group_material_name).inputs.get('Normal Map')
@@ -1434,7 +1830,9 @@ class GenshinTextureImporter:
             if shadow_ramp_node_group:
                 shader_node_names = self.shader_identifier_service.get_shader_node_names(self.genshin_shader_version)
                 img.colorspace_settings.name='Non-Color'
-                shadow_ramp_node_group.nodes[shader_node_names.STOCKINGS_DETAIL].image = img
+                stocking_node = shadow_ramp_node_group.nodes.get(shader_node_names.STOCKINGS_DETAIL)
+                if stocking_node:
+                    stocking_node.image = img
 
 
     def get_transparent_texture(self, name="Transparent_Texture"):
@@ -1827,9 +2225,9 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                     self.set_shadow_ramp_texture(TextureType.HAIR, img)
                 elif self.is_one_texture_identifier_in_texture_name(
                     [
-                        ShaderMaterialNameKeywords.BODY_DIFFUSE, 
-                        ShaderMaterialNameKeywords.BODY1_DIFFUSE, 
-                        ShaderMaterialNameKeywords.BODY2_DIFFUSE, 
+                        ShaderMaterialNameKeywords.BODY_DIFFUSE,
+                        ShaderMaterialNameKeywords.BODY1_DIFFUSE,
+                        ShaderMaterialNameKeywords.BODY2_DIFFUSE,
                     ], file):
                     selected_body_material = \
                         body_material if ShaderMaterialNameKeywords.BODY_DIFFUSE in file else \
@@ -1859,9 +2257,9 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                         self.set_diffuse_texture(TextureType.BODY, star_cloak_material, img)
                 elif self.is_one_texture_identifier_in_texture_name(
                     [
-                        ShaderMaterialNameKeywords.BODY_LIGHTMAP, 
-                        ShaderMaterialNameKeywords.BODY1_LIGHTMAP, 
-                        ShaderMaterialNameKeywords.BODY2_LIGHTMAP, 
+                        ShaderMaterialNameKeywords.BODY_LIGHTMAP,
+                        ShaderMaterialNameKeywords.BODY1_LIGHTMAP,
+                        ShaderMaterialNameKeywords.BODY2_LIGHTMAP,
                     ], file):
                     selected_body_material = \
                         body_material if ShaderMaterialNameKeywords.BODY_LIGHTMAP in file else \
@@ -1898,7 +2296,7 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                     self.set_face_diffuse_texture(face_material, img)
                 elif self.is_texture_identifiers_in_texture_name(['Face', 'Shadow'], file):
                     self.set_face_shadow_texture(face_material, img)
-                elif "FaceLightmap" in file:
+                elif self.is_texture_identifiers_in_texture_name(['Face', 'Lightmap'], file) or any(k in file.lower() for k in ['facelightmap', 'face_lightmap', 'face lightmap']):
                     self.set_face_lightmap_texture(img)
                 elif "MetalMap" in file:
                     self.set_metalmap_texture(img)
@@ -1941,16 +2339,19 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                         self.set_lightmap_texture(TextureType.HAIR, star_cloak_material, img)
                     else:  # backwards compatible before VFX shader existed, pre-v4.0
                         self.set_lightmap_texture(TextureType.HAIR, dress2_material, img)
-                elif self.is_one_texture_identifier_in_texture_name([  # Nyx Color Ramp
+                elif ('nyx' in file.lower() and 'ramp' in file.lower()) or self.is_one_texture_identifier_in_texture_name([  # Nyx Color Ramp
                     "NyxState_Ramp",
                     "Nyx_Ramp",
                     "Tex_Ramp"
                 ], file):
                     self.set_nyx_color_ramp_texture(img)
                     self.set_up_night_soul_outlines_material()
-                elif self.is_texture_identifiers_in_texture_name(ShaderMaterialNameKeywords.NIGHT_SOUL_MASK_IDENTIFIERS, file):
+                elif ('nyx' in file.lower() and 'mask' in file.lower()) or ('tex_mask' in file.lower()) or \
+                     self.is_texture_identifiers_in_texture_name(ShaderMaterialNameKeywords.NIGHT_SOUL_MASK_IDENTIFIERS, file):
                     for material in bpy.data.materials.values():
                         self.set_up_night_soul_mask_texture(material, img)
+                elif 'nyxstate' in file.lower() or 'nyx_noise' in file.lower():
+                    self.set_nyx_noise_texture(img)
                 elif self.is_texture_identifiers_in_texture_name([ShaderMaterialNameKeywords.STOCKINGS_DETAILMAP], file):
                     self.set_stocking_texture(img)
                 elif f_lower.startswith(('equip_', 'equipskin_')) or (is_equip and ('diffuse' in f_lower or 'lightmap' in f_lower or 'normal' in f_lower or 'shadow_ramp' in f_lower)):
@@ -2016,7 +2417,8 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                     if src_nm:
                         self.set_normalmap_texture(t_type, target_dress_mat, src_nm)
 
-        # Fallback: for any material with unassigned lightmaps, assign the diffuse texture
+        # Fallback: for any material with unassigned lightmaps, assign a dedicated
+        # Non-Color copy of the diffuse texture (never share the datablock).
         for mat in bpy.data.materials:
             if mat.use_nodes and not any(k in mat.name.lower() for k in ['outlines', 'outline', 'face', 'pupil', 'brow', 'eye']):
                 lm_nodes = find_all_image_nodes_by_category(mat.node_tree, 'lightmap')
@@ -2025,8 +2427,9 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                     diff_nodes = find_all_image_nodes_by_category(mat.node_tree, 'diffuse')
                     diff_img = next((n.image for n in diff_nodes if n.image), None)
                     if diff_img:
+                        lm_copy = make_dedicated_lightmap_copy(diff_img)
                         for n in unassigned_lm:
-                            n.image = diff_img
+                            n.image = lm_copy
 
         for mat in bpy.data.materials:
             if mat.use_nodes and not any(k in mat.name.lower() for k in ['outlines', 'outline', 'face', 'pupil', 'brow', 'eye']):
@@ -2140,55 +2543,55 @@ class GenshinNPCTextureImporter(GenshinTextureImporter):
 
                 elif self.is_texture_identifiers_in_texture_name(['Item', 'Diffuse'], file):
                     # Remove the '_Mat' suffix on materials and the MATERIAL_PREFIX, then search if it matches the texture filename
-                    item_materials = [material for material in bpy.data.materials if 
+                    item_materials = [material for material in bpy.data.materials if
                                       material.name.split('_Mat')[0].replace(self.shader_material_names.MATERIAL_PREFIX, '') in file]
                     if item_materials:
                         item_material = item_materials[0]
                         self.set_diffuse_texture(TextureType.BODY, item_material, img)
                 elif self.is_texture_identifiers_in_texture_name(['Item', 'Lightmap'], file):
                     # Remove the '_Mat' suffix on materials and the MATERIAL_PREFIX, then search if it matches the texture filename
-                    item_materials = [material for material in bpy.data.materials if 
+                    item_materials = [material for material in bpy.data.materials if
                                       material.name.split('_Mat')[0].replace(self.shader_material_names.MATERIAL_PREFIX, '') in file]
                     if item_materials:
                         item_material = item_materials[0]
                         self.set_lightmap_texture(TextureType.BODY, item_material, img)
 
                 elif self.is_texture_identifiers_in_texture_name(['Hat', 'Diffuse'], file):
-                    hat_materials = [material for material in bpy.data.materials if 'Hat' in material.name and 
+                    hat_materials = [material for material in bpy.data.materials if 'Hat' in material.name and
                                      self.shader_material_names.MATERIAL_PREFIX in material.name]
                     if hat_materials:
                         hat_material = hat_materials[0]
                         self.set_diffuse_texture(TextureType.BODY, hat_material, img)
                 elif self.is_texture_identifiers_in_texture_name(['Hat', 'Lightmap'], file):
-                    hat_materials = [material for material in bpy.data.materials if 'Hat' in material.name and 
+                    hat_materials = [material for material in bpy.data.materials if 'Hat' in material.name and
                                      self.shader_material_names.MATERIAL_PREFIX in material.name]
                     if hat_materials:
                         hat_material = hat_materials[0]
                         self.set_lightmap_texture(TextureType.BODY, hat_material, img)
 
                 elif self.is_texture_identifiers_in_texture_name(['Screw', 'Diffuse'], file):
-                    screw_materials = [material for material in bpy.data.materials if 'Screw' in material.name and 
+                    screw_materials = [material for material in bpy.data.materials if 'Screw' in material.name and
                                      self.shader_material_names.MATERIAL_PREFIX in material.name]
                     if screw_materials:
                         screw_material = screw_materials[0]
                         self.set_diffuse_texture(TextureType.BODY, screw_material, img)
 
                 elif self.is_texture_identifiers_in_texture_name(['Screw', 'Lightmap'], file):
-                    screw_materials = [material for material in bpy.data.materials if 'Screw' in material.name and 
+                    screw_materials = [material for material in bpy.data.materials if 'Screw' in material.name and
                                      self.shader_material_names.MATERIAL_PREFIX in material.name]
                     if screw_materials:
                         screw_material = screw_materials[0]
                         self.set_lightmap_texture(TextureType.BODY, screw_material, img)
 
                 elif self.is_texture_identifiers_in_texture_name(['Others', 'Diffuse'], file):
-                    others_materials = [material for material in bpy.data.materials if 'Others' in material.name and 
+                    others_materials = [material for material in bpy.data.materials if 'Others' in material.name and
                                      self.shader_material_names.MATERIAL_PREFIX in material.name]
                     if others_materials:
                         others_material = others_materials[0]
                         self.set_diffuse_texture(TextureType.BODY, others_material, img)
 
                 elif self.is_texture_identifiers_in_texture_name(['Others', 'Lightmap'], file):
-                    others_materials = [material for material in bpy.data.materials if 'Others' in material.name and 
+                    others_materials = [material for material in bpy.data.materials if 'Others' in material.name and
                                      self.shader_material_names.MATERIAL_PREFIX in material.name]
                     if others_materials:
                         others_material = others_materials[0]
@@ -2309,7 +2712,7 @@ class HonkaiStarRailTextureImporter(GenshinTextureImporter):
                 if node.type == 'TEX_IMAGE':
                     name_lower = node.name.lower()
                     label_lower = node.label.lower()
-                    
+
                     if type_key == 'diffuse':
                         # Look for diffuse / color / sRGB keywords
                         if ('diffuse' in name_lower or 'diffuse' in label_lower or \
@@ -2417,7 +2820,7 @@ class HonkaiStarRailTextureImporter(GenshinTextureImporter):
         weapon_ramp_node = bpy.data.node_groups[f'{self.texture_node_names.WEAPON_RAMP_NODE_GROUP}'].nodes[
             self.texture_node_names.WEAPON_RAMP
         ]
-        
+
         if override or not weapon_ramp_node.image:
             weapon_ramp_node.image = img
 
@@ -2433,7 +2836,7 @@ class HonkaiStarRailTextureImporter(GenshinTextureImporter):
         face_expression_node_group = bpy.data.node_groups.get(self.texture_node_names.FACE_EXPRESSION_NODE_GROUP)
         if face_expression_node_group:
             face_expression_node_group.nodes[self.texture_node_names.FACE_EXPRESSION_MAP].image = img
-        
+
         # Stellartoon
         face_expression_node = face_material.node_tree.nodes.get(self.texture_node_names.FACE_EXPRESSION_MAP)
         if face_expression_node:
@@ -2484,9 +2887,9 @@ class HonkaiStarRailTextureImporter(GenshinTextureImporter):
 class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
     def __init__(self, material_names: ShaderMaterialNames, texture_node_names: TextureNodeNames):
         super().__init__(
-            GameType.HONKAI_STAR_RAIL, 
-            TextureImporterType.HSR_AVATAR, 
-            material_names, 
+            GameType.HONKAI_STAR_RAIL,
+            TextureImporterType.HSR_AVATAR,
+            material_names,
             texture_node_names
         )
         self.material_names = material_names
@@ -3055,7 +3458,7 @@ class PunishingGrayRavenAvatarTextureImporter(PunishingGrayRavenTextureImporter)
                 img = bpy.data.images.load(filepath = img_path, check_existing=True)
                 img.alpha_mode = 'CHANNEL_PACKED'
 
-                alpha_material = bpy.data.materials.get(f'{self.material_names.ALPHA}') 
+                alpha_material = bpy.data.materials.get(f'{self.material_names.ALPHA}')
                 eye_material = bpy.data.materials.get(f'{self.material_names.EYE}')
 
                 # Implement the texture in the correct node

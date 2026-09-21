@@ -12,7 +12,11 @@ class HSR_PT_Setup_Wizard_UI_Layout(Panel, HonkaiStarRailUIRenderChecker):
     bl_idname = "HSR_PT_Setup_Wizard_UI_Layout"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "Character Setup Wizard"
+    bl_category = "Gacha Setup"
+
+    @classmethod
+    def poll(cls, context):
+        return False
 
     def draw(self, context):
         layout = self.layout
@@ -38,10 +42,10 @@ class HSR_PT_Setup_Wizard_UI_Layout(Panel, HonkaiStarRailUIRenderChecker):
         props = context.scene.character_rigger_props
         enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
         settings_col.prop(props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")
-        sliders_col = settings_col.column()
-        sliders_col.active = enable_physics
-        sliders_col.prop(props, "hair_physics_influence", text="Hair", slider=True)
-        sliders_col.prop(props, "clothes_physics_influence", text="Clothes", slider=True)
+        if enable_physics:
+            sliders_col = settings_col.column()
+            sliders_col.prop(props, "hair_physics_influence", text="Hair", slider=True)
+            sliders_col.prop(props, "clothes_physics_influence", text="Clothes", slider=True)
         settings_col.prop(props, "disable_rigging", text="Disable Rigging")
 
 
@@ -50,7 +54,8 @@ class HSR_PT_Basic_Setup_Wizard_UI_Layout(Panel, HonkaiStarRailUIRenderChecker):
     bl_idname = "HSR_PT_UI_Basic_Setup_Layout"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "Character Setup Wizard"
+    bl_category = "Gacha Setup"
+    bl_order = 2
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
@@ -107,7 +112,8 @@ class HSR_PT_Advanced_Setup_Wizard_UI_Layout(Panel, HonkaiStarRailUIRenderChecke
     bl_idname = "HSR_PT_UI_Advanced_Setup_Layout"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "Character Setup Wizard"
+    bl_category = "Gacha Setup"
+    bl_order = 3
     bl_options = {"DEFAULT_CLOSED"}
 
     def draw(self, context):
@@ -338,10 +344,10 @@ class HSR_PT_UI_Character_Rig_Setup_Menu(Panel, HonkaiStarRailUIRenderChecker):
         col.prop(character_rigger_props, "use_head_tracker")
         enable_physics = getattr(character_rigger_props, "enable_hair_clothes_physics", getattr(character_rigger_props, "enable_hair_dress_physics", False))
         col.prop(character_rigger_props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")
-        sliders_col = col.column()
-        sliders_col.active = enable_physics
-        sliders_col.prop(character_rigger_props, "hair_physics_influence", text="Hair", slider=True)
-        sliders_col.prop(character_rigger_props, "clothes_physics_influence", text="Clothes", slider=True)
+        if enable_physics:
+            sliders_col = col.column()
+            sliders_col.prop(character_rigger_props, "hair_physics_influence", text="Hair", slider=True)
+            sliders_col.prop(character_rigger_props, "clothes_physics_influence", text="Clothes", slider=True)
 
 
 # class HSR_PT_UI_Compositing_Panel_Post_Processing_UI_Layout(Panel, HonkaiStarRailUIRenderChecker):

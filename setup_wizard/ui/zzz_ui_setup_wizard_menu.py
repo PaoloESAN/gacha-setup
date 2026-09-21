@@ -12,7 +12,11 @@ class ZZZ_PT_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
     bl_idname = "ZZZ_PT_Setup_Wizard_UI_Layout"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "Character Setup Wizard"
+    bl_category = "Gacha Setup"
+
+    @classmethod
+    def poll(cls, context):
+        return False
 
     bpy.types.Scene.zzz_shader_type = bpy.props.EnumProperty(
         items=[
@@ -49,10 +53,10 @@ class ZZZ_PT_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
         props = context.scene.character_rigger_props
         enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
         settings_col.prop(props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")
-        sliders_col = settings_col.column()
-        sliders_col.active = enable_physics
-        sliders_col.prop(props, "hair_physics_influence", text="Hair", slider=True)
-        sliders_col.prop(props, "clothes_physics_influence", text="Clothes", slider=True)
+        if enable_physics:
+            sliders_col = settings_col.column()
+            sliders_col.prop(props, "hair_physics_influence", text="Hair", slider=True)
+            sliders_col.prop(props, "clothes_physics_influence", text="Clothes", slider=True)
         settings_col.prop(props, "disable_rigging", text="Disable Rigging")
 
 
@@ -61,7 +65,8 @@ class ZZZ_PT_Basic_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker)
     bl_idname = "ZZZ_PT_UI_Basic_Setup_Layout"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "Character Setup Wizard"
+    bl_category = "Gacha Setup"
+    bl_order = 2
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
@@ -119,7 +124,8 @@ class ZZZ_PT_Advanced_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderCheck
     bl_idname = "ZZZ_PT_UI_Advanced_Setup_Layout"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "Character Setup Wizard"
+    bl_category = "Gacha Setup"
+    bl_order = 3
     bl_options = {"DEFAULT_CLOSED"}
 
     def draw(self, context):
@@ -596,11 +602,14 @@ def update_zzz_kythera_props(self, context=None):
     mats_to_update = target_materials if target_materials else bpy.data.materials
     for m in mats_to_update:
         if getattr(m, "node_tree", None):
+            is_mask = "mask" in m.name.lower() or m.get("_is_mask", False)
             for node in m.node_tree.nodes:
                 if node.type == 'GROUP' and node.node_tree:
                     nt_low = node.node_tree.name.lower()
                     if "kythera" in nt_low or "rim light" in nt_low or "lit/shadow" in nt_low or "face shader" in nt_low:
                         for inp_name, val in prop_map.items():
+                            if is_mask and inp_name in ("Enable Rim Light", "Rim Light Color", "Brightness", "Coverage", "Left/Right", "Up/Down"):
+                                continue
                             if inp_name in node.inputs:
                                 try:
                                     node.inputs[inp_name].default_value = val
