@@ -64,6 +64,91 @@ def is_mat_part_match(mat_name, part):
     return False
 
 
+def is_vodyanitsa_character(directory=None, files=None):
+    """
+    Returns True only for Vodyanitsa (Avatar_Girl_Catalyst_Vodyanitsa).
+    Used to gate the Crystal transparency nodes, which must NOT be applied
+    to every material containing 'crystal' in other characters.
+    Checks (in order): explicit directory, file list, active character
+    directory, and current Blender objects/materials.
+    """
+    if directory:
+        try:
+            if 'vodyanitsa' in str(directory).lower():
+                return True
+        except Exception:
+            pass
+    if files:
+        try:
+            for f in files:
+                try:
+                    if 'vodyanitsa' in str(f).lower():
+                        return True
+                except Exception:
+                    continue
+        except Exception:
+            pass
+    try:
+        from setup_wizard.import_order import get_active_character_directory
+        char_dir = get_active_character_directory()
+        if char_dir and 'vodyanitsa' in str(char_dir).lower():
+            return True
+    except Exception:
+        pass
+    try:
+        for obj in bpy.data.objects:
+            try:
+                if 'vodyanitsa' in obj.name.lower():
+                    return True
+            except Exception:
+                continue
+    except Exception:
+        pass
+    try:
+        for mat in bpy.data.materials:
+            try:
+                if 'vodyanitsa' in mat.name.lower():
+                    return True
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return False
+
+
+def is_night_soul_mask_file(filename):
+    """
+    True only for genuine Night Soul / NYX paint masks.
+    Generic '*_Tex_*_Mask' files (Tail_Mask/GelPlaneTex, pupil matcap masks,
+    Eff masks, face masks, etc.) must NEVER become a Night Soul mask globally.
+    Genuine masks come from _TempNyxStatePaintMaskTex / _MaterialMasksTex JSON
+    (ex. Mavuika_Tex_Mask) or have nyx/night-soul/paint/materialmasks in name.
+    """
+    try:
+        f_low = str(filename).lower()
+    except Exception:
+        return False
+    # Explicit exclusions first: known non-NYX masks
+    if any(k in f_low for k in [
+        'tail_mask', 'tailmask', 'gelplane', 'gel_plane',
+        'magforce', 'stages_magforce', 'pupil', 'pupila', 'matcap',
+        'eyehighlight', 'eye_highlight', 'highlight',
+        'appear_face', 'face_mask', 'facemask', 'face01',
+        'lightmap', 'diffuse', 'normal', 'specular', 'ramp',
+        'eff_mask', 'eff_stages',
+    ]):
+        return False
+    if any(k in f_low for k in [
+        'nyxmask', 'nyx_mask', 'paintmask', 'paint_mask',
+        'materialmasks', 'material_masks', 'night_soul', 'nightsoul',
+        'nyxstate_paint', 'tempnyx',
+    ]):
+        return True
+    if 'nyx' in f_low and 'mask' in f_low:
+        return True
+    return False
+
+
 def find_all_image_nodes_by_category(node_tree, category):
     """
     Recursively finds ALL Image Texture nodes in node_tree and nested GROUP node_trees (e.g. Textures)
@@ -258,9 +343,17 @@ def setup_crystal_material_nodes(crystal_material):
     Applies the Crystal transparency shader setup:
     (Lightmap Color if present, else Diffuse Color) -> Separate Color (Red) -> Greater Than (0.5) -> Mix Shader (Factor)
     with Transparent BSDF (Shader 1) and Body Shader BSDF (Shader 2) -> Material Output (Surface).
+
+    Vodyanitsa-only: this must NOT be applied to every material containing
+    'crystal' in other characters.
     """
     if not crystal_material or not crystal_material.use_nodes or not crystal_material.node_tree:
         return
+    try:
+        if 'crystal' in crystal_material.name.lower() and not is_vodyanitsa_character():
+            return
+    except Exception:
+        pass
 
     tree = crystal_material.node_tree
 
@@ -268,11 +361,7 @@ def setup_crystal_material_nodes(crystal_material):
     if not output_node:
         return
 
-    body_shader = tree.nodes.get('Body Shader') or \
-                  tree.nodes.get('PrimoToon') or \
-                  tree.nodes.get('HoYoToon') or \
-                  tree.nodes.get('Group.001') or \
-                  next((n for n in tree.nodes if n.type == 'GROUP' and 'BSDF' in n.outputs), None)
+    body_shader = tree.nodes.get('PrimoToon')
 
     lightmap_img_nodes = [n for n in tree.nodes if n.type == 'TEX_IMAGE' and 'lightmap' in (n.name + " " + (n.label or "")).lower()]
     has_lightmap_image = any(n.image is not None for n in lightmap_img_nodes)
@@ -351,8 +440,8 @@ def setup_crystal_material_nodes(crystal_material):
     if not mix_node.inputs[1].links:
         tree.links.new(trans_node.outputs[0], mix_node.inputs[1])
 
-    if body_shader and 'BSDF' in body_shader.outputs and not mix_node.inputs[2].links:
-        tree.links.new(body_shader.outputs['BSDF'], mix_node.inputs[2])
+    if body_shader and 'PrimoToon' in body_shader.outputs and not mix_node.inputs[2].links:
+        tree.links.new(body_shader.outputs['PrimoToon'], mix_node.inputs[2])
 
     if not output_node.inputs['Surface'].links or output_node.inputs['Surface'].links[0].from_node != mix_node:
         tree.links.new(mix_node.outputs[0], output_node.inputs['Surface'])
@@ -494,6 +583,21 @@ class GenshinTextureImporter:
                     return False
         return True
 
+    def _is_vodyanitsa_character(self):
+        """True only for Vodyanitsa, so Crystal nodes are not applied globally."""
+        try:
+            directory = getattr(self, 'directory', None)
+        except Exception:
+            directory = None
+        try:
+            files = getattr(self, 'files', None)
+        except Exception:
+            files = None
+        return is_vodyanitsa_character(directory, files)
+
+    def _is_night_soul_mask_file(self, filename):
+        return is_night_soul_mask_file(filename)
+
     def _is_genshin_shader_material(self, material):
         """
         Returns True only for replaced Genshin shader materials.
@@ -561,7 +665,7 @@ class GenshinTextureImporter:
             if override or not node.image:
                 node.image = img
 
-        if material and 'crystal' in material.name.lower():
+        if material and 'crystal' in material.name.lower() and self._is_vodyanitsa_character():
             setup_crystal_material_nodes(material)
 
     def set_lightmap_texture(self, texture_type: TextureType, material, img, override=True):
@@ -611,7 +715,7 @@ class GenshinTextureImporter:
             if override or not node.image:
                 node.image = img
 
-        if material and 'crystal' in material.name.lower():
+        if material and 'crystal' in material.name.lower() and self._is_vodyanitsa_character():
             setup_crystal_material_nodes(material)
 
     def set_normalmap_texture(self, type: TextureType, material, img, override=True):
@@ -1584,7 +1688,11 @@ class GenshinTextureImporter:
                         imported_any = True
                         break
 
-        # Fallback for Night Soul Mask across materials
+        # Fallback for Night Soul Mask across materials.
+        # NOTE: generic '*_Mask' files such as Tail_Mask (GelPlaneTex) or
+        # Eff_Stages_MagForce_13_Mask must NEVER become a NYX mask. Only true
+        # Night Soul masks (nyx / night soul / paintmask / materialmasks) qualify.
+        # Vodyanitsa has no NYX mask at all, so nothing should be assigned.
         has_any_mask = any(
             (m.node_tree.nodes.get('Main_NYXmask') and m.node_tree.nodes['Main_NYXmask'].image) or
             (m.node_tree.nodes.get('Face_NYXmask') and m.node_tree.nodes['Face_NYXmask'].image)
@@ -1592,17 +1700,16 @@ class GenshinTextureImporter:
         )
         if not has_any_mask:
             for fname, fpath in image_files:
-                f_low = fname.lower()
-                if (('_mask' in f_low or 'nyxmask' in f_low or 'paintmask' in f_low) and
-                    not any(k in f_low for k in ['eff_', 'highlight', 'blend', 'lightmap', 'diffuse', 'specular', 'normal'])):
-                    mask_img = resolve_img(os.path.splitext(fname)[0])
-                    if mask_img:
-                        for mat in bpy.data.materials:
-                            if mat.use_nodes:
-                                self.set_up_night_soul_mask_texture(mat, mask_img)
-                        self.set_up_night_soul_outlines_material()
-                        imported_any = True
-                        break
+                if not is_night_soul_mask_file(fname):
+                    continue
+                mask_img = resolve_img(os.path.splitext(fname)[0])
+                if mask_img:
+                    for mat in bpy.data.materials:
+                        if mat.use_nodes:
+                            self.set_up_night_soul_mask_texture(mat, mask_img)
+                    self.set_up_night_soul_outlines_material()
+                    imported_any = True
+                    break
 
         # Fallback for Night Soul Outline Noise
         for fname, fpath in image_files:
@@ -2346,8 +2453,7 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                 ], file):
                     self.set_nyx_color_ramp_texture(img)
                     self.set_up_night_soul_outlines_material()
-                elif ('nyx' in file.lower() and 'mask' in file.lower()) or ('tex_mask' in file.lower()) or \
-                     self.is_texture_identifiers_in_texture_name(ShaderMaterialNameKeywords.NIGHT_SOUL_MASK_IDENTIFIERS, file):
+                elif self._is_night_soul_mask_file(file):
                     for material in bpy.data.materials.values():
                         self.set_up_night_soul_mask_texture(material, img)
                 elif 'nyxstate' in file.lower() or 'nyx_noise' in file.lower():

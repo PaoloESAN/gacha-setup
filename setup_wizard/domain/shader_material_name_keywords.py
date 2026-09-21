@@ -16,7 +16,10 @@ class ShaderMaterialNameKeywords:
     HAIR = 'Hair'
     NORMAL_MAP = 'Normal'  # Normal Map
     SKILLOBJ = 'SkillObj'
-    NIGHT_SOUL_MASK_IDENTIFIERS = ['Tex', 'Mask']
+    # NOTE: must stay specific to Night Soul / NYX paint masks.
+    # ['Tex', 'Mask'] matched ANY '*_Tex_*_Mask' file (ex. Vodyanitsa Tail_Mask
+    # GelPlaneTex, pupil matcap masks) and assigned them as NYX masks globally.
+    NIGHT_SOUL_MASK_IDENTIFIERS = ['Nyx', 'Mask']
 
     STOCKINGS_DETAILMAP = 'Stockings_Detailmap'
 

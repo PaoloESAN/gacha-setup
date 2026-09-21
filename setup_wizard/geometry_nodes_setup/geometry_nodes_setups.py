@@ -782,8 +782,12 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
                 expected_mesh_name = material_slot.material.name.rsplit(' ')[-1]
                 expected_mesh = bpy.data.objects.get(expected_mesh_name)
                 if not expected_mesh or expected_mesh != mesh:
-                    self.__separate_material_from_mesh(mesh, material_slot, expected_mesh_name)
-                    separated_materials += [material_slot.material]
+                    # Only record on SUCCESS: a failed separation ("Nothing
+                    # selected") must keep its slot, otherwise its faces get
+                    # orphaned onto a wrong material (ex. Dress mesh Body01 /
+                    # Dress01 / Crystal01 faces ending up on Dress).
+                    if self.__separate_material_from_mesh(mesh, material_slot, expected_mesh_name):
+                        separated_materials += [material_slot.material]
 
             # If we've separated all of the materials from the mesh, delete the original mesh
             if len(separated_materials) == len(mesh.material_slots):
@@ -793,7 +797,30 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
 
     def __separate_material_from_mesh(self, mesh, material_slot, new_mesh_name):
         print(f'Separating material for: {material_slot.material.name} from {mesh.name}')
+        # Reset selection/object state (a previous join leaves stale active
+        # object and selection, which made material_slot_select select nothing
+        # and the separation fail with "Nothing selected").
+        try:
+            bpy.ops.object.mode_set(mode='OBJECT')
+        except Exception:
+            pass
+        # Isolate selection: a previous join leaves several objects selected,
+        # which puts multiple objects in Edit mode and material_slot_select
+        # ends up selecting nothing ("Nothing selected" on Dress Body01/Dress01).
+        try:
+            bpy.ops.object.select_all(action='DESELECT')
+        except Exception:
+            pass
+        bpy.context.view_layer.objects.active = mesh
+        try:
+            mesh.select_set(True)
+        except Exception:
+            pass
         bpy.ops.object.mode_set(mode='EDIT')
+        try:
+            bpy.ops.mesh.select_all(action='DESELECT')
+        except Exception:
+            pass
         mesh.active_material_index = mesh.material_slots.get(material_slot.material.name).slot_index
         bpy.ops.object.material_slot_select()
         try:
@@ -801,7 +828,11 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
         except RuntimeError as error:
             print(f'Skipping, failed to separate material for: {material_slot.material.name} from {mesh.name}')
             print(error)
-            return
+            try:
+                bpy.ops.object.mode_set(mode='OBJECT')
+            except Exception:
+                pass
+            return False
         bpy.ops.object.mode_set(mode='OBJECT')
 
         # OR-check added for Blender < 4.1 where the separated mesh name is different than the parent mesh name
@@ -825,13 +856,33 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
             bpy.context.view_layer.objects.active = new_mesh_name_mesh
             print(f'Joining {new_separated_mesh} to {new_mesh_name_mesh}')
             bpy.ops.object.join()
-            renamed_mesh_name = new_mesh_name_mesh.material_slots[0].material.name.split(' ')[-1]
+            # The joined mesh must keep the name of the material just merged in,
+            # NOT slot[0] (ex. joining Dress faces into the Dress mesh renamed it
+            # to "Body" because slot[0] was Body, orphaning every later "Dress"
+            # lookup and leaving Body/Body01 faces on wrong meshes).
+            renamed_mesh_name = material_slot.material.name.rsplit(' ')[-1]
             print(f'Renaming {new_mesh_name_mesh.name} to {renamed_mesh_name}')
             new_mesh_name_mesh.name = renamed_mesh_name
+            return True
 
 
     def __remove_material_slots(self, mesh, materials, exclude=False):
         bpy.ops.object.mode_set(mode='OBJECT')
+        # Snapshot face -> material BEFORE removing slots: Blender shifts
+        # polygon material_index down on slot removal without remapping faces
+        # of the removed slot, so surviving faces would point at wrong
+        # materials (ex. Body faces rendering with Body01).
+        mesh_data = mesh.data
+        face_materials = [None] * len(mesh_data.polygons)
+        try:
+            slot_mats = [s.material for s in mesh.material_slots]
+            for poly in mesh_data.polygons:
+                try:
+                    face_materials[poly.index] = slot_mats[poly.material_index] if 0 <= poly.material_index < len(slot_mats) else None
+                except Exception:
+                    face_materials[poly.index] = None
+        except Exception:
+            face_materials = []
         # Reversing is IMPORTANT in order to avoid index errors while removing during runtime
         for material_slot_material in reversed(mesh.material_slots):
             if (not exclude and material_slot_material.material in materials) or (exclude and material_slot_material.material not in materials):
@@ -839,6 +890,32 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
                 print(f'Removing material: {material_slot_material.material.name} from {mesh.name}')
                 bpy.context.view_layer.objects.active = mesh
                 bpy.ops.object.material_slot_remove()
+        # Remap surviving faces back to their original materials
+        if face_materials:
+            try:
+                new_slot_mats = [s.material for s in mesh.material_slots]
+                for poly in mesh_data.polygons:
+                    try:
+                        orig_mat = face_materials[poly.index]
+                    except Exception:
+                        continue
+                    if orig_mat is None:
+                        continue
+                    try:
+                        if poly.material_index < len(new_slot_mats) and new_slot_mats[poly.material_index] == orig_mat:
+                            continue
+                    except Exception:
+                        pass
+                    try:
+                        new_index = new_slot_mats.index(orig_mat)
+                    except ValueError:
+                        continue
+                    try:
+                        poly.material_index = new_index
+                    except Exception:
+                        continue
+            except Exception:
+                pass
 
     '''
     Very targeted method for disabling outlines on Paimon's cloak
