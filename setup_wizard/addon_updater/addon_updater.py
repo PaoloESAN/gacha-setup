@@ -454,9 +454,46 @@ class SingletonUpdater:
     def update_ready(self):
         return self._update_ready
 
+    @staticmethod
+    def format_version(version):
+        if version is None:
+            return ""
+        if isinstance(version, (tuple, list)):
+            v = list(version)
+            if len(v) >= 4 and v[3] not in (0, 999999):
+                return f"v{v[0]}.{v[1]}.{v[2]} beta{v[3]}"
+            elif len(v) >= 3:
+                return f"v{v[0]}.{v[1]}.{v[2]}"
+            elif len(v) == 2:
+                return f"v{v[0]}.{v[1]}.0"
+            elif len(v) == 1:
+                return f"v{v[0]}.0.0"
+            return str(version)
+        elif isinstance(version, str):
+            s = version.strip()
+            if (s.startswith('[') and s.endswith(']')) or (s.startswith('(') and s.endswith(')')):
+                parts = [int(p.strip()) for p in s[1:-1].split(',') if p.strip().isdigit()]
+                if parts:
+                    return SingletonUpdater.format_version(parts)
+            import re
+            m = re.match(r'^v?(\d+)\.(\d+)(?:\.(\d+))?(?:[-_\s]*(beta|b|alpha|a|rc)[-_\.\s]*(\d+)?)?', s, re.IGNORECASE)
+            if m:
+                major, minor, patch, pre_type, pre_num = m.groups()
+                patch = patch or '0'
+                res = f"v{major}.{minor}.{patch}"
+                if pre_type:
+                    pre_name = "beta" if "b" in pre_type.lower() else ("alpha" if "a" in pre_type.lower() else "rc")
+                    num_str = pre_num if pre_num else "1"
+                    res += f" {pre_name}{num_str}"
+                return res
+            if not s.startswith('v') and re.match(r'^\d', s):
+                return f"v{s}"
+            return s
+        return str(version)
+
     @property
     def update_version(self):
-        return self._update_version
+        return self.format_version(self._update_version)
 
     @property
     def use_releases(self):
@@ -1549,7 +1586,7 @@ class SingletonUpdater:
     def save_updater_json(self):
         """Trigger save of current json structure into file within addon"""
         if self._update_ready:
-            if isinstance(self._update_version, tuple):
+            if isinstance(self._update_version, (tuple, list, str)):
                 self._json["update_ready"] = True
                 self._json["version_text"]["link"] = self._update_link
                 self._json["version_text"]["version"] = self._update_version
