@@ -626,12 +626,23 @@ def sync_genshin_shader_properties(scene=None, context=None):
     if not scene:
         return
 
+    # Fresnel = Toggle checkbox + Power slider 0..1 (inverted:
+    # 0 -> Power 10, 1 -> Power 0) + Scaler slider 0..1
+    # (0 -> Scaler 1, 1 -> Scaler 10).
     use_fresnel = 1.0 if getattr(scene, "gi_use_fresnel", False) else 0.0
+    try:
+        fresnel_power_slider = max(0.0, min(1.0, float(getattr(scene, "gi_fresnel_power", 0.0))))
+    except Exception:
+        fresnel_power_slider = 0.0
+    try:
+        fresnel_scaler_slider = max(0.0, min(1.0, float(getattr(scene, "gi_fresnel_scaler", 0.0))))
+    except Exception:
+        fresnel_scaler_slider = 0.0
+    fresnel_power = 10.0 * (1.0 - fresnel_power_slider)
+    fresnel_scaler = 1.0 + 9.0 * fresnel_scaler_slider
     fresnel_col = list(getattr(scene, "gi_fresnel_color", (1.0, 1.0, 1.0)))
     if len(fresnel_col) == 3:
         fresnel_col.append(1.0)
-    fresnel_power = float(getattr(scene, "gi_fresnel_power", 2.0))
-    fresnel_scaler = float(getattr(scene, "gi_fresnel_scaler", 2.0))
 
     amb_col = list(getattr(scene, "gi_amb_color", (1.0, 1.0, 1.0)))
     if len(amb_col) == 3:
@@ -666,7 +677,7 @@ def sync_genshin_shader_properties(scene=None, context=None):
         rim_shadow_col.append(1.0)
 
     prop_map = {
-        "Use Fresnel": use_fresnel,
+        "Toggle Fresnel": use_fresnel,
         "Fresnel Color": fresnel_col,
         "Fresnel Power": fresnel_power,
         "Fresnel Scaler": fresnel_scaler,
@@ -709,6 +720,24 @@ def sync_genshin_shader_properties(scene=None, context=None):
             if "global material properties" in ng.name.lower():
                 target_trees.add(ng)
 
+    def _coerce_value(sock_or_item, value):
+        # Bool sockets/items (ex. "Toggle Fresnel") reject float with
+        # TypeError (expected True/False or 0/1), which used to be swallowed
+        # and the toggle silently never applied.
+        try:
+            if type(sock_or_item) is bpy.types.NodeSocketBool:
+                return bool(value > 0.5 if isinstance(value, (int, float)) else value)
+        except Exception:
+            pass
+        try:
+            if getattr(sock_or_item, "socket_type", "") == "NodeSocketBool" or \
+                    type(sock_or_item).__name__ == "NodeTreeInterfaceSocketBool":
+                v = value
+                return bool(v > 0.5 if isinstance(v, (int, float)) and not isinstance(v, bool) else v)
+        except Exception:
+            pass
+        return value
+
     # 3. Update inside each target Global Material Properties node group
     for tree in target_trees:
         out_node = tree.nodes.get("Global Properties") or tree.nodes.get("Group Output")
@@ -718,7 +747,7 @@ def sync_genshin_shader_properties(scene=None, context=None):
                     for l in list(inp.links):
                         tree.links.remove(l)
                     try:
-                        inp.default_value = prop_map[inp.name]
+                        inp.default_value = _coerce_value(inp, prop_map[inp.name])
                     except Exception:
                         pass
 
@@ -726,16 +755,16 @@ def sync_genshin_shader_properties(scene=None, context=None):
             for item in tree.interface.items_tree:
                 if item.name in prop_map:
                     try:
-                        item.default_value = prop_map[item.name]
+                        item.default_value = _coerce_value(item, prop_map[item.name])
                     except Exception:
                         pass
 
     # 4. Also update direct group node inputs on character materials if any exist (e.g. PrimoToon v4.0)
     prop_aliases = {
-        "Use Fresnel": ["Toggle Fresnel", "Use Fresnel"],
+        "Toggle Fresnel": ["Toggle Fresnel", "Use Fresnel"],
         "Fresnel Color": ["Fresnel Color"],
-        "Fresnel Power": ["Fresnel Power"],
-        "Fresnel Scaler": ["Fresnel Scaler"],
+        "Fresnel Power": ["Fresnel Power", "Fresnel Size"],
+        "Fresnel Scaler": ["Fresnel Scaler", "Fresnel Multiplier"],
         "Ambient Colour": ["Ambient Colour", "Ambient Color"],
         "Sharp Lit Colour": ["Sharp Lit Colour", "Sharp Lit Color"],
         "Soft Lit Colour": ["Soft Lit Colour", "Soft Lit Color"],
@@ -848,10 +877,20 @@ def pull_gi_panel_values(scene, context, force=False):
                                     scene.gi_use_fresnel = bool(inputs["Use Fresnel"].default_value > 0.5)
                                 if "Fresnel Color" in inputs:
                                     scene.gi_fresnel_color = tuple(inputs["Fresnel Color"].default_value)[:3]
-                                if "Fresnel Power" in inputs:
-                                    scene.gi_fresnel_power = float(inputs["Fresnel Power"].default_value)
-                                if "Fresnel Scaler" in inputs:
-                                    scene.gi_fresnel_scaler = float(inputs["Fresnel Scaler"].default_value)
+                                # Power slider is inverted: 0 -> Power 10, 1 -> Power 0.
+                                power_inp = inputs.get("Fresnel Power") or inputs.get("Fresnel Size")
+                                if power_inp:
+                                    try:
+                                        scene.gi_fresnel_power = max(0.0, min(1.0, 1.0 - float(power_inp.default_value) / 10.0))
+                                    except Exception:
+                                        pass
+                                # Scaler slider: 0 -> Scaler 1, 1 -> Scaler 10.
+                                scaler_inp = inputs.get("Fresnel Scaler") or inputs.get("Fresnel Multiplier")
+                                if scaler_inp:
+                                    try:
+                                        scene.gi_fresnel_scaler = max(0.0, min(1.0, (float(scaler_inp.default_value) - 1.0) / 9.0))
+                                    except Exception:
+                                        pass
                                 if "Ambient Colour" in inputs:
                                     scene.gi_amb_color = tuple(inputs["Ambient Colour"].default_value)[:3]
                                 if "Sharp Lit Colour" in inputs:
@@ -878,14 +917,24 @@ def pull_gi_panel_values(scene, context, force=False):
                     out_node = target_tree.nodes.get("Global Properties") or target_tree.nodes.get("Group Output")
                     if out_node:
                         inputs = out_node.inputs
-                        if "Use Fresnel" in inputs:
+                        if "Toggle Fresnel" in inputs:
+                            scene.gi_use_fresnel = bool(inputs["Toggle Fresnel"].default_value)
+                        elif "Use Fresnel" in inputs:
                             scene.gi_use_fresnel = bool(inputs["Use Fresnel"].default_value > 0.5)
                         if "Fresnel Color" in inputs:
                             scene.gi_fresnel_color = tuple(inputs["Fresnel Color"].default_value)[:3]
-                        if "Fresnel Power" in inputs:
-                            scene.gi_fresnel_power = float(inputs["Fresnel Power"].default_value)
-                        if "Fresnel Scaler" in inputs:
-                            scene.gi_fresnel_scaler = float(inputs["Fresnel Scaler"].default_value)
+                        power_inp = inputs.get("Fresnel Power") or inputs.get("Fresnel Size")
+                        if power_inp:
+                            try:
+                                scene.gi_fresnel_power = max(0.0, min(1.0, 1.0 - float(power_inp.default_value) / 10.0))
+                            except Exception:
+                                pass
+                        scaler_inp = inputs.get("Fresnel Scaler") or inputs.get("Fresnel Multiplier")
+                        if scaler_inp:
+                            try:
+                                scene.gi_fresnel_scaler = max(0.0, min(1.0, (float(scaler_inp.default_value) - 1.0) / 9.0))
+                            except Exception:
+                                pass
                         if "Ambient Colour" in inputs:
                             scene.gi_amb_color = tuple(inputs["Ambient Colour"].default_value)[:3]
                         if "Sharp Lit Colour" in inputs:
@@ -1103,16 +1152,16 @@ class GI_PT_Rig_Character_Settings(Panel):
             col_colors.prop(scene, "gi_rim_lit_color", text="Rim Lit")
             col_colors.prop(scene, "gi_rim_shadow_color", text="Rim Shadow")
 
-        # 3. Fresnel
+        # 3. Fresnel (Toggle checkbox + Power slider + Scaler slider)
         col_fresnel = layout.column(align=True)
-        col_fresnel.prop(scene, "gi_use_fresnel", text="Use Fresnel")
+        col_fresnel.prop(scene, "gi_use_fresnel", text="Toggle Fresnel")
         if getattr(scene, "gi_use_fresnel", False):
             box_fr = col_fresnel.box()
             box_fr.label(text="Fresnel Options", icon="SHADING_RENDERED")
             col_fr_props = box_fr.column(align=True)
             col_fr_props.prop(scene, "gi_fresnel_color", text="Fresnel Color")
-            col_fr_props.prop(scene, "gi_fresnel_power", text="Fresnel Power")
-            col_fr_props.prop(scene, "gi_fresnel_scaler", text="Fresnel Scaler")
+            col_fr_props.prop(scene, "gi_fresnel_power", text="Fresnel Power", slider=True)
+            col_fr_props.prop(scene, "gi_fresnel_scaler", text="Fresnel Scaler", slider=True)
 
         # 4. Outlines Settings
         box_outlines = layout.box()
@@ -1176,12 +1225,6 @@ def register_gi_properties():
         update=update_gi_light_mode,
     )
 
-    bpy.types.Scene.gi_use_fresnel = bpy.props.BoolProperty(
-        name="Use Fresnel",
-        description="Toggle Fresnel rim lighting",
-        default=False,
-        update=update_gi_fresnel,
-    )
     bpy.types.Scene.gi_fresnel_color = bpy.props.FloatVectorProperty(
         name="Fresnel Color",
         subtype='COLOR',
@@ -1191,24 +1234,26 @@ def register_gi_properties():
         default=(1.0, 1.0, 1.0),
         update=update_gi_fresnel,
     )
+    bpy.types.Scene.gi_use_fresnel = bpy.props.BoolProperty(
+        name="Toggle Fresnel",
+        description="Toggle Fresnel rim lighting",
+        default=False,
+        update=update_gi_fresnel,
+    )
     bpy.types.Scene.gi_fresnel_power = bpy.props.FloatProperty(
         name="Fresnel Power",
-        description="Fresnel exponent power",
+        description="Fresnel Power slider 0..1 (inverted): 0 sets Power to 10, 1 sets Power to 0",
         min=0.0,
-        max=10.0,
-        default=2.0,
-        step=10,
-        precision=2,
+        max=1.0,
+        default=0.0,
         update=update_gi_fresnel,
     )
     bpy.types.Scene.gi_fresnel_scaler = bpy.props.FloatProperty(
         name="Fresnel Scaler",
-        description="Fresnel scale multiplier",
+        description="Fresnel Scaler slider 0..1: 0 sets Scaler to 1, 1 sets Scaler to 10",
         min=0.0,
-        max=20.0,
-        default=2.0,
-        step=10,
-        precision=2,
+        max=1.0,
+        default=0.0,
         update=update_gi_fresnel,
     )
 
@@ -1337,7 +1382,7 @@ def register_gi_properties():
 
 def unregister_gi_properties():
     for prop in [
-        "gi_light_mode", "gi_use_fresnel", "gi_fresnel_color", "gi_fresnel_power", "gi_fresnel_scaler",
+        "gi_light_mode", "gi_use_fresnel", "gi_fresnel_color", "gi_fresnel_size", "gi_fresnel_power", "gi_fresnel_scaler",
         "gi_amb_color", "gi_sharp_lit_color", "gi_soft_lit_color",
         "gi_sharp_shadow_color", "gi_soft_shadow_color", "gi_shadow_position",
         "gi_catch_shadows", "gi_day_night", "gi_rim_lit_color", "gi_rim_shadow_color",
