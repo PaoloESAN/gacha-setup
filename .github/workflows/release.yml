@@ -29,9 +29,18 @@ jobs:
           import subprocess
 
           current_tag = "${{ github.ref_name }}"
-          # Find tag before this one
-          res_prev = subprocess.run(["git", "describe", "--tags", "--abbrev=0", f"{current_tag}^"], capture_output=True, text=True)
+          # Find previous stable release tag (exclude pre-releases so the final release contains all changes since previous stable)
+          res_prev = subprocess.run(
+              ["git", "describe", "--tags", "--abbrev=0", "--exclude=*beta*", "--exclude=*alpha*", "--exclude=*rc*", f"{current_tag}^"],
+              capture_output=True, text=True
+          )
           prev_tag = res_prev.stdout.strip()
+          if not prev_tag:
+              res_prev_fallback = subprocess.run(
+                  ["git", "describe", "--tags", "--abbrev=0", f"{current_tag}^"],
+                  capture_output=True, text=True
+              )
+              prev_tag = res_prev_fallback.stdout.strip()
 
           if prev_tag:
               res_log = subprocess.run(

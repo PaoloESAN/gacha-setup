@@ -71,9 +71,28 @@ jobs:
           with open(init_path, "w", encoding="utf-8") as f:
               f.write(new_content)
 
-          # Generate commit changelog
-          res_prev = subprocess.run(["git", "describe", "--tags", "--abbrev=0", "HEAD"], capture_output=True, text=True)
-          prev_tag = res_prev.stdout.strip()
+          # Generate commit changelog (between betas: Beta 2 compares to Beta 1, etc.)
+          prev_tag = None
+          if beta_numbers:
+              candidate_tag = f"v{base_ver}-beta.{max(beta_numbers)}"
+              chk = subprocess.run(["git", "rev-parse", "--verify", candidate_tag], capture_output=True, text=True)
+              if chk.returncode == 0:
+                  prev_tag = candidate_tag
+
+          if not prev_tag:
+              res_prev = subprocess.run(
+                  ["git", "describe", "--tags", "--abbrev=0", "--exclude=*beta*", "HEAD"],
+                  capture_output=True, text=True
+              )
+              prev_tag = res_prev.stdout.strip()
+              if not prev_tag:
+                  res_prev_fallback = subprocess.run(
+                      ["git", "describe", "--tags", "--abbrev=0", "HEAD"],
+                      capture_output=True, text=True
+                  )
+                  prev_tag = res_prev_fallback.stdout.strip()
+
+          print(f"Previous Tag for Changelog: {prev_tag}")
 
           if prev_tag:
               res_log = subprocess.run(
@@ -114,6 +133,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.versioning.outputs.tag_name }}
+          target_commitish: ${{ github.sha }}
           name: ${{ steps.versioning.outputs.release_title }}
           prerelease: true
           body_path: changelog.md
