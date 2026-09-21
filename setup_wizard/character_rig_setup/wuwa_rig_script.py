@@ -740,8 +740,102 @@ def lock_bone_transformations(bone, armature=None):
             pbone.lock_location[:] = (False, False, False)
             pbone.lock_rotation_w = False
             pbone.lock_rotation[:] = (False, False, False)
+            pbone.lock_scale[:] = (False, False, False)
+            if hasattr(pbone, "lock_rotations_4d"):
+                pbone.lock_rotations_4d = False
         except Exception:
             pass
+
+
+def unlock_wuwa_secondary_bones(rig_obj):
+    """
+    Unlocks transformation channels (location, rotation, scale) for all secondary bones
+    (skirt, cloth, hair, accessories, props, breast/tail, and arm/leg gear controls)
+    on a generated Rigify rig for Wuthering Waves.
+    Rigify locks all pass-through ORG-* bones and gear controls by default upon generation.
+    """
+    if not rig_obj or rig_obj.type != 'ARMATURE' or not getattr(rig_obj, "pose", None):
+        return 0
+
+    target_collections = {
+        "Hair", "Hair 1", "Hair 2", "Clothes", "Cloth", "Skirt", "Props",
+        "Breast / Tail", "Weapon", "Secondary", "Physics", "Others"
+    }
+    core_biped_org = {
+        "ORG-Pelvis", "ORG-Spine", "ORG-Spine1", "ORG-Spine2",
+        "ORG-neck", "ORG-head",
+        "ORG-shoulder.L", "ORG-shoulder.R",
+        "ORG-upper_arm.L", "ORG-upper_arm.R",
+        "ORG-forearm.L", "ORG-forearm.R",
+        "ORG-hand.L", "ORG-hand.R",
+        "ORG-thigh.L", "ORG-thigh.R",
+        "ORG-shin.L", "ORG-shin.R",
+        "ORG-foot.L", "ORG-foot.R",
+        "ORG-toe_ik.L", "ORG-toe_ik.R",
+        "ORG-Bip001LHeel0", "ORG-Bip001RHeel0",
+        "ORG-Root", "ORG-root", "ORG-Bip001",
+    }
+    for side in [".L", ".R"]:
+        for f in ["thumb", "f_index", "f_middle", "f_ring", "f_pinky"]:
+            for n in ["01", "02", "03"]:
+                core_biped_org.add(f"ORG-{f}.{n}{side}")
+                core_biped_org.add(f"ORG-{f}.{n}{side}.001")
+
+    secondary_keywords = (
+        "skirt", "qunzi", "piao", "cloth", "dress", "ribbon", "sleeve", "strap",
+        "button", "belt", "tail", "hair", "toufa", "bang", "fringe", "ahoge",
+        "ponytail", "earring", "eardrop", "prop", "weapon", "chibang", "wingcase",
+        "hitcase", "hulu", "breast", "chest"
+    )
+
+    unlocked_count = 0
+    for pb in rig_obj.pose.bones:
+        b_name = pb.name
+        if b_name.startswith(("DEF-", "MCH-", "CTRL-", "LABEL-", "WGT-")) or b_name in core_biped_org:
+            continue
+
+        is_secondary = False
+        if hasattr(pb, "bone") and hasattr(pb.bone, "collections"):
+            coll_names = {c.name for c in pb.bone.collections}
+            if coll_names.intersection(target_collections):
+                is_secondary = True
+
+        b_low = b_name.lower()
+        if not is_secondary and any(k in b_low for k in secondary_keywords):
+            is_secondary = True
+
+        if not is_secondary and "bone_" in b_low:
+            is_secondary = True
+
+        if is_secondary:
+            try:
+                pb.lock_location[:] = (False, False, False)
+                pb.lock_rotation[:] = (False, False, False)
+                pb.lock_scale[:] = (False, False, False)
+                pb.lock_rotation_w = False
+                if hasattr(pb, "lock_rotations_4d"):
+                    pb.lock_rotations_4d = False
+                unlocked_count += 1
+            except Exception:
+                pass
+
+    # Unlock arm/leg gear controls (ZZZ/HSR/NTE convention)
+    for gear in ['thigh_parent.L', 'thigh_parent.R', 'upper_arm_parent.L', 'upper_arm_parent.R']:
+        pb = rig_obj.pose.bones.get(gear)
+        if pb:
+            try:
+                pb.lock_location[:] = (False, False, False)
+                pb.lock_rotation[:] = (False, False, False)
+                pb.lock_scale[:] = (False, False, False)
+                pb.lock_rotation_w = False
+                if hasattr(pb, "lock_rotations_4d"):
+                    pb.lock_rotations_4d = False
+                unlocked_count += 1
+            except Exception:
+                pass
+
+    print(f"[WUWA RIG] Unlocked transformations on {unlocked_count} secondary/skirt/cloth/hair bones.")
+    return unlocked_count
 
 
 def select_bone(b):
@@ -1024,6 +1118,7 @@ def rig_wuthering_waves_character(context=None):
                     bpy.ops.object.mode_set(mode='OBJECT')
                 except Exception:
                     pass
+            unlock_wuwa_secondary_bones(obj)
             return True
         else:
             armatures = [o for o in context.scene.objects if o.type == 'ARMATURE']
@@ -2163,6 +2258,8 @@ def rig_wuthering_waves_character(context=None):
                 except Exception:
                     pass
 
+            unlock_wuwa_secondary_bones(RigArmatureObj)
+
     return True
 
 
@@ -2578,7 +2675,10 @@ def organize_rigify_bone_collections(rig_obj, orig_arm_name=None, char_name=None
                 if coll_names.intersection({"Hair", "Clothes", "Props", "Other"}):
                     pbone.color.palette = 'DEFAULT'
 
-    # 6. Apply standard visibility
+    # 6. Unlock transformations for secondary bones (Hair, Clothes/Skirt, Props, Gears)
+    unlock_wuwa_secondary_bones(rig_obj)
+
+    # 7. Apply standard visibility
     apply_wuwa_bone_collection_visibilities(rig_obj)
 
     # 7. Modify and execute the Rig UI script to render the standard Gacha Setup N-panel Rig Layers with stars (★)

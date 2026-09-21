@@ -340,20 +340,24 @@ class WW_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties
             if hasattr(context.scene.eevee, "use_shadows"):
                 context.scene.eevee.use_shadows = True
 
-        # Apply bone collection visibility and viewport display settings on rigs
+        # Apply bone collection visibility and viewport display settings on rigs, and unlock secondary bones
         target_rig = None
         try:
-            from setup_wizard.character_rig_setup.wuwa_rig_script import apply_wuwa_bone_collection_visibilities
+            from setup_wizard.character_rig_setup.wuwa_rig_script import (
+                apply_wuwa_bone_collection_visibilities,
+                unlock_wuwa_secondary_bones,
+            )
             for obj in context.scene.objects:
                 if obj.type == "ARMATURE" and (obj.name.startswith("RIG-") or "rig" in obj.name.lower()):
                     apply_wuwa_bone_collection_visibilities(obj)
+                    unlock_wuwa_secondary_bones(obj)
                     if hasattr(obj, "data") and obj.data:
                         obj.data.display_type = 'STICK'
                         obj.data.show_bone_custom_shapes = True
                     obj.show_in_front = True
                     target_rig = obj
         except Exception as e_vis:
-            print(f"[WUWA FINISH] Notice applying bone collection visibility: {e_vis}")
+            print(f"[WUWA FINISH] Notice applying bone collection visibility and unlocking: {e_vis}")
 
         if target_rig:
             try:
