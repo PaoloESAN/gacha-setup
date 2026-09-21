@@ -602,11 +602,14 @@ def update_zzz_kythera_props(self, context=None):
     mats_to_update = target_materials if target_materials else bpy.data.materials
     for m in mats_to_update:
         if getattr(m, "node_tree", None):
+            is_mask = "mask" in m.name.lower() or m.get("_is_mask", False)
             for node in m.node_tree.nodes:
                 if node.type == 'GROUP' and node.node_tree:
                     nt_low = node.node_tree.name.lower()
                     if "kythera" in nt_low or "rim light" in nt_low or "lit/shadow" in nt_low or "face shader" in nt_low:
                         for inp_name, val in prop_map.items():
+                            if is_mask and inp_name in ("Enable Rim Light", "Rim Light Color", "Brightness", "Coverage", "Left/Right", "Up/Down"):
+                                continue
                             if inp_name in node.inputs:
                                 try:
                                     node.inputs[inp_name].default_value = val

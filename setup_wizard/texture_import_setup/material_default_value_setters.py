@@ -239,7 +239,26 @@ class ZenlessZoneZeroMaterialDefaultValueSetter(MaterialDefaultValueSetter):
         return
 
     def set_default_values(self):
-        return
+        for obj in bpy.data.objects:
+            if obj.type == 'MESH' and "mask" in obj.name.lower():
+                for slot in obj.material_slots:
+                    m = slot.material
+                    if not m or not m.node_tree:
+                        continue
+                    m["_is_mask"] = True
+                    for node in m.node_tree.nodes:
+                        if node.type == 'GROUP' and node.node_tree:
+                            nt_low = node.node_tree.name.lower()
+                            if "kythera" in nt_low or "zzz" in nt_low:
+                                if "Alpha Threshold" in node.inputs:
+                                    node.inputs["Alpha Threshold"].default_value = 1.0
+                                if "Enable Rim Light" in node.inputs:
+                                    node.inputs["Enable Rim Light"].default_value = False
+                                    if not any(lnk.to_socket == node.inputs["Enable Rim Light"] for lnk in m.node_tree.links):
+                                        val_node = m.node_tree.nodes.new('ShaderNodeValue')
+                                        val_node.name = "LockRimLightZero"
+                                        val_node.outputs[0].default_value = 0.0
+                                        m.node_tree.links.new(val_node.outputs[0], node.inputs["Enable Rim Light"])
 
 
 class NevernessToEvernessMaterialDefaultValueSetter(MaterialDefaultValueSetter):

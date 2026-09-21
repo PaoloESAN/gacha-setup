@@ -1248,7 +1248,7 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         
                         # Ensure meaningful name preserving mesh context (e.g. Wing, Dress, Leg, Hair, Body)
                         if mat and mat.name and not mat.name.lower().startswith(("material", "default", "node", "untitled")):
-                            if any(k in mesh.name.lower() for k in ["wing", "ala", "feather", "dress", "cape", "coat", "jacket", "tail", "leg", "shoe", "boot", "weapon", "wpn", "sticker"]) and mesh.name.lower() not in mat.name.lower():
+                            if any(k in mesh.name.lower() for k in ["wing", "ala", "feather", "dress", "cape", "coat", "jacket", "tail", "leg", "shoe", "boot", "weapon", "wpn", "sticker", "mask"]) and mesh.name.lower() not in mat.name.lower():
                                 name_base = f"{mesh.name}_{mat.name}"
                             else:
                                 name_base = mat.name
@@ -1257,6 +1257,22 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 
                         new_mat.name = f"ZZZ {name_base}"
                         new_mat.use_fake_user = True
+                        if "mask" in mesh.name.lower():
+                            new_mat["_is_mask"] = True
+                            if new_mat.node_tree:
+                                for node in new_mat.node_tree.nodes:
+                                    if node.type == 'GROUP' and node.node_tree:
+                                        nt_low = node.node_tree.name.lower()
+                                        if "kythera" in nt_low or "zzz" in nt_low:
+                                            if "Alpha Threshold" in node.inputs:
+                                                node.inputs["Alpha Threshold"].default_value = 1.0
+                                            if "Enable Rim Light" in node.inputs:
+                                                node.inputs["Enable Rim Light"].default_value = False
+                                                if not any(lnk.to_socket == node.inputs["Enable Rim Light"] for lnk in new_mat.node_tree.links):
+                                                    val_node = new_mat.node_tree.nodes.new('ShaderNodeValue')
+                                                    val_node.name = "LockRimLightZero"
+                                                    val_node.outputs[0].default_value = 0.0
+                                                    new_mat.node_tree.links.new(val_node.outputs[0], node.inputs["Enable Rim Light"])
                         slot.material = new_mat
 
             # Fallback for any meshes with empty material slots
@@ -1269,6 +1285,22 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         new_mat = fallback_template.copy()
                         new_mat.name = f"ZZZ {mesh.name}"
                         new_mat.use_fake_user = True
+                        if "mask" in mesh.name.lower():
+                            new_mat["_is_mask"] = True
+                            if new_mat.node_tree:
+                                for node in new_mat.node_tree.nodes:
+                                    if node.type == 'GROUP' and node.node_tree:
+                                        nt_low = node.node_tree.name.lower()
+                                        if "kythera" in nt_low or "zzz" in nt_low:
+                                            if "Alpha Threshold" in node.inputs:
+                                                node.inputs["Alpha Threshold"].default_value = 1.0
+                                            if "Enable Rim Light" in node.inputs:
+                                                node.inputs["Enable Rim Light"].default_value = False
+                                                if not any(lnk.to_socket == node.inputs["Enable Rim Light"] for lnk in new_mat.node_tree.links):
+                                                    val_node = new_mat.node_tree.nodes.new('ShaderNodeValue')
+                                                    val_node.name = "LockRimLightZero"
+                                                    val_node.outputs[0].default_value = 0.0
+                                                    new_mat.node_tree.links.new(val_node.outputs[0], node.inputs["Enable Rim Light"])
                         slot.material = new_mat
 
             self.blender_operator.report({'INFO'}, "Replaced default materials with Kythera's ZZZ Shader materials...")
