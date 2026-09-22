@@ -56,6 +56,14 @@ class HOYOVERSE_OT_rig_character(Operator, ImportHelper, CustomOperatorPropertie
         props = getattr(context.scene, "character_rigger_props", None)
         disable_rigging = getattr(props, "disable_rigging", getattr(context.scene, "disable_rigging", False))
         if disable_rigging:
+            try:
+                from setup_wizard.ui.character_settings_utils import stamp_rig_game, hide_eyestar_if_unrigged
+                for obj in context.scene.objects:
+                    if obj.type == 'ARMATURE':
+                        stamp_rig_game(obj, self.game_type)
+                hide_eyestar_if_unrigged(context)
+            except Exception:
+                pass
             self.report(
                 {'INFO'},
                 'Rigging skipped. Disable Rigging is enabled in Setup Settings.'

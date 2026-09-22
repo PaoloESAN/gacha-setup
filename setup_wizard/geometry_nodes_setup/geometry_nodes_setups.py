@@ -161,6 +161,11 @@ meshes_to_create_light_vectors_on = meshes_to_create_outlines_on + [
 material_keywords_to_not_create_outlines_on = [
     'Eff',
     'Pupil',
+    'EyeStar',
+    'eyestar',
+    'Eye_Star',
+    'EyeSpecular',
+    'Eye_Specular',
 ]
 
 
@@ -208,7 +213,13 @@ class GameGeometryNodesSetupFactory:
 
 
 class GameGeometryNodesSetup(ABC):
-    GEOMETRY_NODES_MATERIAL_IGNORE_LIST = []
+    GEOMETRY_NODES_MATERIAL_IGNORE_LIST = [
+        'EyeStar',
+        'Eye_Star',
+        'eyestar',
+        'EyeSpecular',
+        'Eye_Specular',
+    ]
     DEFAULT_OUTLINE_THICKNESS = 0.25
     ENABLE_TRANSPARENCY = 'Enable Transparency'
 
@@ -223,7 +234,11 @@ class GameGeometryNodesSetup(ABC):
         raise NotImplementedError
 
     def clone_outlines(self, game_material_names: ShaderMaterialNames):
-        materials = [material for material in bpy.data.materials.values() if material.name not in self.GEOMETRY_NODES_MATERIAL_IGNORE_LIST]
+        materials = [
+            material for material in bpy.data.materials.values()
+            if material.name not in self.GEOMETRY_NODES_MATERIAL_IGNORE_LIST
+            and not any(ign.lower() in material.name.lower() for ign in ['eyestar', 'eye_star', 'eyespecular', 'eye_specular'])
+        ]
 
         for material in materials:
             if game_material_names.MATERIAL_PREFIX in material.name and material.name != game_material_names.OUTLINES and \
@@ -383,7 +398,11 @@ class GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
         self.fix_face_outlines_by_reordering_material_slots(face_meshes)
 
     def create_geometry_nodes_modifier(self, mesh_name):
-        mesh = bpy.context.scene.objects[mesh_name]
+        if any(ign in mesh_name.lower() for ign in ['eyestar', 'eye_star', 'eye star', 'eyespecular', 'eye_specular']):
+            return None
+        mesh = bpy.context.scene.objects.get(mesh_name) or bpy.data.objects.get(mesh_name)
+        if not mesh:
+            return None
 
         for outlines_node_group_name in self.outlines_node_group_names:
             outlines_node_group = bpy.data.node_groups.get(outlines_node_group_name)
@@ -472,7 +491,11 @@ class V3_GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
         self.fix_face_outlines_by_reordering_material_slots(face_meshes)
 
     def create_geometry_nodes_modifier(self, mesh_name):
-        mesh = bpy.context.scene.objects[mesh_name]
+        if any(ign in mesh_name.lower() for ign in ['eyestar', 'eye_star', 'eye star', 'eyespecular', 'eye_specular']):
+            return None
+        mesh = bpy.context.scene.objects.get(mesh_name) or bpy.data.objects.get(mesh_name)
+        if not mesh:
+            return None
 
         for outlines_node_group_name in self.outlines_node_group_names:
             outlines_node_group = bpy.data.node_groups.get(outlines_node_group_name)
@@ -562,7 +585,7 @@ class V3_GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
                     mat = found_shader_mat
                     m_low = mat.name.lower()
 
-            if 'outline' in m_low:
+            if 'outline' in m_low or any(ign in m_low for ign in ['eyestar', 'eye_star', 'eyespecular', 'eye_specular']):
                 continue
 
             outline_mat = find_outline_mat(mat)
@@ -656,7 +679,7 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
 
         for mesh in [obj for obj in bpy.data.objects.values() if obj.type == 'MESH']:
             o_lower = mesh.name.lower()
-            if "lightpanelwgt" in o_lower or "lightpanelselector" in o_lower or "wgtplane" in o_lower or "selectorwgt" in o_lower:
+            if any(ign in o_lower for ign in ["lightpanelwgt", "lightpanelselector", "wgtplane", "selectorwgt", "eyestar", "eye_star"]):
                 continue
 
             # Create Light Vectors for ALL mesh parts with material slots
@@ -689,7 +712,11 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
             self.__connect_shader_node_to_vfx_node(starcloak_material, [StarCloakTypes.ASMODA])
 
     def clone_night_soul_outlines(self):
-        materials = [material for material in bpy.data.materials.values() if material.name not in self.GEOMETRY_NODES_MATERIAL_IGNORE_LIST]
+        materials = [
+            material for material in bpy.data.materials.values()
+            if material.name not in self.GEOMETRY_NODES_MATERIAL_IGNORE_LIST
+            and not any(ign.lower() in material.name.lower() for ign in ['eyestar', 'eye_star', 'eyespecular', 'eye_specular'])
+        ]
         outline_material = bpy.data.materials.get(self.material_names.NIGHT_SOUL_OUTLINES) or \
                            bpy.data.materials.get('HoYoverse - Genshin Night Soul Outlines')
 
@@ -1130,7 +1157,11 @@ class HonkaiStarRailGeometryNodesSetup(GameGeometryNodesSetup):
             mesh.update()
 
     def create_geometry_nodes_modifier(self, mesh_name):
-        mesh = bpy.context.scene.objects[mesh_name]
+        if any(ign in mesh_name.lower() for ign in ['eyestar', 'eye_star', 'eye star', 'eyespecular', 'eye_specular']):
+            return None
+        mesh = bpy.context.scene.objects.get(mesh_name) or bpy.data.objects.get(mesh_name)
+        if not mesh:
+            return None
 
         for outlines_node_group_name in self.outlines_node_group_names:
             outlines_node_group = bpy.data.node_groups.get(outlines_node_group_name)
@@ -1318,7 +1349,11 @@ class V2_PunishingGrayRavenGeometryNodesSetup(GameGeometryNodesSetup):
         self.fix_face_outlines_by_reordering_material_slots(face_meshes)
 
     def create_geometry_nodes_modifier(self, mesh_name):
-        mesh = bpy.context.scene.objects[mesh_name]
+        if any(ign in mesh_name.lower() for ign in ['eyestar', 'eye_star', 'eye star', 'eyespecular', 'eye_specular']):
+            return None
+        mesh = bpy.context.scene.objects.get(mesh_name) or bpy.data.objects.get(mesh_name)
+        if not mesh:
+            return None
 
         for outlines_node_group_name in self.outlines_node_group_names:
             outlines_node_group = bpy.data.node_groups.get(outlines_node_group_name)
@@ -1902,7 +1937,7 @@ class WutheringWavesGeometryNodesSetup(GameGeometryNodesSetup):
             'Highlight Bottom': highlight_bottom,
         }
 
-        helper_names = ['highlight top', 'highlight bottom', 'eye highlight', 'sun', 'circle', 'cube', 'light direction', 'head origin', 'head forward', 'head up', 'wgt', 'rootshape', 'isaacfacerig', 'lightingpanel']
+        helper_names = ['highlight top', 'highlight bottom', 'eye highlight', 'sun', 'circle', 'cube', 'light direction', 'head origin', 'head forward', 'head up', 'wgt', 'rootshape', 'isaacfacerig', 'lightingpanel', 'eyestar', 'eye_star', 'eye star']
 
         for mesh in meshes:
             name_low = mesh.name.lower()

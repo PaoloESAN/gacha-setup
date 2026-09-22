@@ -16,6 +16,14 @@ class RigifyCharacterService:
         props = getattr(self.context.scene, "character_rigger_props", None)
         disable_rigging = getattr(props, "disable_rigging", getattr(self.context.scene, "disable_rigging", False))
         if disable_rigging:
+            try:
+                from setup_wizard.ui.character_settings_utils import stamp_rig_game, hide_eyestar_if_unrigged
+                for obj in self.context.scene.objects:
+                    if obj.type == 'ARMATURE':
+                        stamp_rig_game(obj, getattr(self.blender_operator, "game_type", ""))
+                hide_eyestar_if_unrigged(self.context)
+            except Exception:
+                pass
             print("[SETUP WIZARD] Rigging skipped: Disable Rigging is enabled in Setup Settings.")
             if self.blender_operator and hasattr(self.blender_operator, "report"):
                 self.blender_operator.report({'INFO'}, 'Rigging skipped. Disable Rigging is enabled.')

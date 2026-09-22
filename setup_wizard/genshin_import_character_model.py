@@ -1470,12 +1470,13 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                     object.data.uv_layers.new(name="UV1")
 
             for object in bpy.data.objects:
-                if "EffectMesh" in object.name or "EyeStar" in object.name:
+                if "EffectMesh" in object.name or "EyeStar" in object.name or "eyestar" in object.name.lower():
                     try:
-                        bpy.data.objects[object.name].hide_set(True)
-                    except RuntimeError:
-                        bpy.data.objects[object.name].hide_viewport = True
-                    bpy.data.objects[object.name].hide_render = True
+                        object.hide_set(True)
+                    except Exception:
+                        pass
+                    object.hide_viewport = True
+                    object.hide_render = True
 
             return
 
@@ -1505,13 +1506,13 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
         # Quick-fix, just want to shove this in here for now...
         # Hide EffectMesh (gets deleted later on) and EyeStar
         for object in bpy.data.objects:
-            if "EffectMesh" in object.name or "EyeStar" in object.name:
+            if "EffectMesh" in object.name or "EyeStar" in object.name or "eyestar" in object.name.lower():
                 try:
-                    bpy.data.objects[object.name].hide_set(True)
-                except RuntimeError:
-                    # Object is not in the active View Layer, use hide_viewport instead
-                    bpy.data.objects[object.name].hide_viewport = True
-                bpy.data.objects[object.name].hide_render = True
+                    object.hide_set(True)
+                except Exception:
+                    pass
+                object.hide_viewport = True
+                object.hide_render = True
 
         if self.game_type == GameType.ARKNIGHTS_ENDFIELD.name:
             handle_ake_post_import(bpy.context)
@@ -1520,6 +1521,11 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
         for obj in bpy.data.objects:
             if obj.type == "ARMATURE":
                 align_eye_bones(obj)
+                try:
+                    from setup_wizard.ui.character_settings_utils import stamp_rig_game
+                    stamp_rig_game(obj, self.game_type)
+                except Exception:
+                    pass
 
     def fix_zzz_eye_shadow(self):
         faceobj = None

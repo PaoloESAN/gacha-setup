@@ -49,6 +49,25 @@ class GI_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties
         except Exception as e_sync:
             print(f"[GI FINISH] Notice syncing shader properties: {e_sync}")
 
+        try:
+            from setup_wizard.ui.character_settings_utils import stamp_rig_game, hide_eyestar_if_unrigged
+            for obj in context.scene.objects:
+                if obj.type == 'ARMATURE' and not any(ign in obj.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig", "wgt"]):
+                    stamp_rig_game(obj, GameType.GENSHIN_IMPACT.name)
+            
+            is_rigged = any(
+                obj.type == 'ARMATURE' and (
+                    getattr(obj.data, "rig_id", None) or
+                    "Eye-Star-Control" in getattr(obj.data, "bones", {}) or
+                    "root" in getattr(obj.data, "bones", {})
+                )
+                for obj in context.scene.objects
+            )
+            if not is_rigged:
+                hide_eyestar_if_unrigged(context)
+        except Exception:
+            pass
+
         return result
 
 
@@ -319,6 +338,14 @@ class AKE_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorPropertie
         except Exception:
             pass
 
+        try:
+            from setup_wizard.ui.character_settings_utils import stamp_rig_game
+            for obj in context.scene.objects:
+                if obj.type == 'ARMATURE' and not any(ign in obj.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig", "wgt"]):
+                    stamp_rig_game(obj, GameType.ARKNIGHTS_ENDFIELD.name)
+        except Exception:
+            pass
+
         return result
 
 
@@ -427,14 +454,13 @@ class WW_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties
                     except Exception:
                         pass
 
-        # Remove any extra scenes created during append or setup
-        current_scene = context.scene
-        for sc in list(bpy.data.scenes):
-            if sc != current_scene and (sc.name.startswith("Scene.") or "Scene.001" in sc.name or sc.name in ["Scene.001", "Scene.002", "Preview"]):
-                try:
-                    bpy.data.scenes.remove(sc, do_unlink=True)
-                except Exception:
-                    pass
+        try:
+            from setup_wizard.ui.character_settings_utils import stamp_rig_game
+            for obj in context.scene.objects:
+                if obj.type == 'ARMATURE' and not any(ign in obj.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig", "wgt"]):
+                    stamp_rig_game(obj, GameType.WUTHERING_WAVES.name)
+        except Exception:
+            pass
 
         self.report({'INFO'}, "Finished Wuthering Waves setup successfully!")
         return result
@@ -452,6 +478,16 @@ class HSR_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorPropertie
             self._rename_hsr_character_collection_and_rig(context)
         except Exception as err:
             self.report({"WARNING"}, f"HSR rename pass skipped: {err}")
+        try:
+            from setup_wizard.ui.character_settings_utils import stamp_rig_game
+            arm = self._find_target_armature(context)
+            if arm:
+                stamp_rig_game(arm, GameType.HONKAI_STAR_RAIL.name)
+            for obj in context.scene.objects:
+                if obj.type == 'ARMATURE' and not any(ign in obj.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig", "wgt"]):
+                    stamp_rig_game(obj, GameType.HONKAI_STAR_RAIL.name)
+        except Exception:
+            pass
         return result
 
     def _rename_hsr_character_collection_and_rig(self, context):
@@ -591,6 +627,17 @@ class ZZZ_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorPropertie
 
     bl_idname = "zenless_zone_zero.finish_setup"
     bl_label = "Zenless Zone Zero: Finish Setup (UI)"
+
+    def execute(self, context):
+        result = BasicSetupUIOperator.execute(self, context)
+        try:
+            from setup_wizard.ui.character_settings_utils import stamp_rig_game
+            for obj in context.scene.objects:
+                if obj.type == 'ARMATURE' and not any(ign in obj.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig", "wgt"]):
+                    stamp_rig_game(obj, GameType.ZENLESS_ZONE_ZERO.name)
+        except Exception:
+            pass
+        return result
 
 
 class NTE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
@@ -918,6 +965,13 @@ class NTE_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorPropertie
             self._consolidate_nte_character_collection(context)
         except Exception as e_pkg:
             print(f"[NTE FINISH] Collection consolidation notice: {e_pkg}")
+        try:
+            from setup_wizard.ui.character_settings_utils import stamp_rig_game
+            for obj in context.scene.objects:
+                if obj.type == 'ARMATURE' and not any(ign in obj.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig", "wgt"]):
+                    stamp_rig_game(obj, GameType.NEVERNESS_TO_EVERNESS.name)
+        except Exception:
+            pass
         return BasicSetupUIOperator.execute(self, context)
 
     def _consolidate_nte_character_collection(self, context):
