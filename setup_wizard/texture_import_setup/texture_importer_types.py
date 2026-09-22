@@ -1139,6 +1139,7 @@ class GenshinTextureImporter:
         """
         candidates = [
             os.path.join(directory, "Materials"),
+            os.path.join(directory, "Material"),
             directory
         ]
         materials_dir = None
@@ -1269,8 +1270,23 @@ class GenshinTextureImporter:
                 mat_part = clean_name.split('_')[-1]
             json_data_list.append((jf, raw_name, mat_part, data))
 
-            tex_envs = data.get('m_SavedProperties', {}).get('m_TexEnvs', {})
-            if mat_part.lower() in ['hair', 'body', 'body1', 'body2', 'face']:
+            def _get_normalized_tex_envs(d):
+                raw = d.get('m_SavedProperties', {}).get('m_TexEnvs', {})
+                if isinstance(raw, dict):
+                    return raw
+                if isinstance(raw, list):
+                    res = {}
+                    for entry in raw:
+                        if isinstance(entry, dict):
+                            k = entry.get('Key') or (entry.get('first', {}).get('name') if isinstance(entry.get('first'), dict) else entry.get('first'))
+                            v = entry.get('Value') or entry.get('second')
+                            if k:
+                                res[k] = v if isinstance(v, dict) else {}
+                    return res
+                return {}
+
+            tex_envs = _get_normalized_tex_envs(data)
+            if mat_part.lower() in ['hair', 'body', 'body1', 'body2', 'face', 'cloak']:
                 for prop, cat in [
                     ('_MainTex', 'diffuse'), ('_BaseTexV2', 'diffuse'), ('_BaseTex', 'diffuse'),
                     ('_LightMapTex', 'lightmap'),
@@ -1291,7 +1307,7 @@ class GenshinTextureImporter:
                                 path_id_to_img[pid] = img
 
         for jf, raw_name, mat_part, data in json_data_list:
-            tex_envs = data.get('m_SavedProperties', {}).get('m_TexEnvs', {})
+            tex_envs = _get_normalized_tex_envs(data)
 
             target_mat = None
             if mat_part.lower() == 'pupil':
@@ -1300,6 +1316,11 @@ class GenshinTextureImporter:
                              bpy.data.materials.get('miHoYo - Genshin New Pupil') or \
                              bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{mat_part}') or \
                              bpy.data.materials.get('HoYoverse - Genshin Pupil')
+            elif mat_part.lower() == 'cloak':
+                target_mat = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}StarCloak') or \
+                             bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}Cloak') or \
+                             bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}VFX') or \
+                             next((m for m in bpy.data.materials if 'starcloak' in m.name.lower() or 'cloak' in m.name.lower() or 'vfx' in m.name.lower()), None)
             elif hasattr(self, 'material_names') and hasattr(self.material_names, 'MATERIAL_PREFIX'):
                 target_mat = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{mat_part}')
 
@@ -1327,6 +1348,11 @@ class GenshinTextureImporter:
             if not target_mat and mat_part.lower() == 'brow':
                 target_mat = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}Brow') or \
                              bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}Face')
+
+            if not target_mat and mat_part.lower() == 'cloak':
+                target_mat = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}StarCloak') or \
+                             bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}Cloak') or \
+                             bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}VFX')
 
             if not target_mat:
                 for mat in bpy.data.materials:
@@ -2487,6 +2513,14 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                     self.set_normalmap_texture(TextureType.BODY, dress_material, img)
                 elif "Dress_Shadow_Ramp" in file:
                     self.set_shadow_ramp_texture(TextureType.BODY, img)
+                elif self.is_texture_identifiers_in_texture_name(['Cloak', 'Diffuse'], file) or "Cloak_Diffuse" in file:
+                    target_mat = star_cloak_material or dress_material
+                    if target_mat:
+                        self.set_diffuse_texture(TextureType.HAIR, target_mat, img)
+                elif self.is_texture_identifiers_in_texture_name(['Cloak', 'Lightmap'], file) or "Cloak_Lightmap" in file:
+                    target_mat = star_cloak_material or dress_material
+                    if target_mat:
+                        self.set_lightmap_texture(TextureType.HAIR, target_mat, img)
                 elif self.import_part_texture_to_matching_materials(file, img):
                     pass
                 else:

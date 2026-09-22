@@ -325,19 +325,20 @@ class GameGeometryNodesSetup(ABC):
     '''
     def fix_face_outlines_by_reordering_material_slots(self, face_meshes):
         for face_mesh in face_meshes:
-            face_mesh = bpy.data.meshes.get(face_mesh.name)
-            face_mesh_object = bpy.data.objects.get(face_mesh.name)
-
-            if not face_mesh or not face_mesh_object:
-                self.blender_operator.report_message_level = {'ERROR'}
-                self.blender_operator.report_message.append('Failed to reorder face material slots to fix face outlines. Not a catastrophic error. Continuing.')
-                return
-            bpy.context.view_layer.objects.active = face_mesh_object  # Select 'Face' mesh before swapping material slots
-
-            face_mesh.materials.append(None)  # Add a "dummy" empty material slot
-            bpy.ops.object.material_slot_move(direction='DOWN')  # Move the selected material down
-            bpy.ops.object.material_slot_move(direction='UP')  # Return selected material to original position
-            face_mesh.materials.pop()  # Remove "dummy" empty material slot
+            face_mesh_object = bpy.data.objects.get(face_mesh.name) if hasattr(face_mesh, 'name') else None
+            if not face_mesh_object or face_mesh_object.type != 'MESH':
+                continue
+            face_mesh_data = face_mesh_object.data
+            if not face_mesh_data:
+                continue
+            try:
+                bpy.context.view_layer.objects.active = face_mesh_object  # Select 'Face' mesh before swapping material slots
+                face_mesh_data.materials.append(None)  # Add a "dummy" empty material slot
+                bpy.ops.object.material_slot_move(direction='DOWN')  # Move the selected material down
+                bpy.ops.object.material_slot_move(direction='UP')  # Return selected material to original position
+                face_mesh_data.materials.pop()  # Remove "dummy" empty material slot
+            except Exception:
+                pass
 
     def create_light_vectors_modifier(self, mesh_name):
         mesh = bpy.context.scene.objects[mesh_name]
@@ -838,12 +839,44 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
             bpy.ops.object.select_all(action='DESELECT')
         except Exception:
             pass
+
+        was_hidden = False
+        try:
+            was_hidden = mesh.hide_get()
+            if was_hidden:
+                mesh.hide_set(False)
+        except Exception:
+            pass
+
+        was_hide_vp = getattr(mesh, "hide_viewport", False)
+        if was_hide_vp:
+            try:
+                mesh.hide_viewport = False
+            except Exception:
+                pass
+
         bpy.context.view_layer.objects.active = mesh
         try:
             mesh.select_set(True)
         except Exception:
             pass
-        bpy.ops.object.mode_set(mode='EDIT')
+
+        try:
+            bpy.ops.object.mode_set(mode='EDIT')
+        except RuntimeError as error:
+            print(f'Cannot enter EDIT mode on {mesh.name}: {error}')
+            if was_hidden:
+                try:
+                    mesh.hide_set(True)
+                except Exception:
+                    pass
+            if was_hide_vp:
+                try:
+                    mesh.hide_viewport = True
+                except Exception:
+                    pass
+            return False
+
         try:
             bpy.ops.mesh.select_all(action='DESELECT')
         except Exception:
@@ -859,8 +892,28 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
                 bpy.ops.object.mode_set(mode='OBJECT')
             except Exception:
                 pass
+            if was_hidden:
+                try:
+                    mesh.hide_set(True)
+                except Exception:
+                    pass
+            if was_hide_vp:
+                try:
+                    mesh.hide_viewport = True
+                except Exception:
+                    pass
             return False
         bpy.ops.object.mode_set(mode='OBJECT')
+        if was_hidden:
+            try:
+                mesh.hide_set(True)
+            except Exception:
+                pass
+        if was_hide_vp:
+            try:
+                mesh.hide_viewport = True
+            except Exception:
+                pass
 
         # OR-check added for Blender < 4.1 where the separated mesh name is different than the parent mesh name
         # Body [Mesh] --(Hair Material Selected)--> Body.001 [Mesh] (Blender >= 4.1)
@@ -951,9 +1004,17 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
     def __disable_outlines(self, mesh, modifier, character_names):
         for material_slot in mesh.material_slots:
             material = material_slot.material
-
+            if not material or not getattr(material, 'node_tree', None):
+                continue
             for character_name in character_names:
-                if material.name == self.material_names.STAR_CLOAK and character_name in material.node_tree.nodes.get(self.texture_node_names.VFX_DIFFUSE).image.name:
+                vfx_node = material.node_tree.nodes.get(self.texture_node_names.VFX_DIFFUSE)
+                img_name = getattr(getattr(vfx_node, 'image', None), 'name', '')
+                if material.name == self.material_names.STAR_CLOAK and (
+                    character_name.lower() in img_name.lower() or
+                    character_name.lower() in mesh.name.lower() or
+                    character_name.lower() in material.name.lower() or
+                    any(character_name.lower() in o.name.lower() for o in bpy.data.objects)
+                ):
                     set_modifier_property(modifier, self.TOGGLE_OUTLINES_SOCKET, False)
 
     def __connect_shader_node_to_vfx_node(self, material, starcloak_types: List[StarCloakTypes]):
