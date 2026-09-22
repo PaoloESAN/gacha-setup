@@ -565,6 +565,25 @@ def rig_character(
         elif ".L" not in bone.name and ".R" not in bone.name and "f_" not in bone.name and "thumb" not in bone.name:
             armature.edit_bones[bone.name].roll = 0
 
+    # Fix finger and thumb rolls for ZZZ characters
+    # Align finger flexion axes so local Z points towards palm flexion direction (+Y)
+    # and thumb flexion axis points towards opposing palm direction (+X, +Y)
+    palm_curl_vec = Vector((0.0, 1.0, 0.0))
+    for side, sign in [(".L", 1.0), (".R", -1.0)]:
+        thumb_curl_vec = Vector((sign * 0.837, 0.547, 0.0)).normalized()
+        for f in ["f_index", "f_middle", "f_ring", "f_pinky"]:
+            for seg in ["01", "02", "03"]:
+                bn = f"{f}.{seg}{side}"
+                eb = armature.edit_bones.get(bn)
+                if eb:
+                    eb.align_roll(palm_curl_vec)
+        for seg in ["01", "02", "03"]:
+            bn = f"thumb.{seg}{side}"
+            eb = armature.edit_bones.get(bn)
+            if eb:
+                eb.align_roll(thumb_curl_vec)
+
+
             
     ## Fixes the weirdass pelvis/spine bone.  Sets the spine's head and tail X to 0.  
     def realign(bone):
@@ -747,9 +766,11 @@ def rig_character(
             metapose.bones[f"{bone_name}.01.R"].rigify_parameters.primary_rotation_axis = '-X'
     else:
         for bone_name in ['f_index', 'f_middle', 'f_ring', 'f_pinky']:
-            metapose.bones[f"{bone_name}.01.L"].rigify_parameters.primary_rotation_axis = 'X'
-            metapose.bones[f"{bone_name}.01.R"].rigify_parameters.primary_rotation_axis = 'X'
-                                          
+            metapose.bones[f"{bone_name}.01.L"].rigify_parameters.primary_rotation_axis = 'Z'
+            metapose.bones[f"{bone_name}.01.R"].rigify_parameters.primary_rotation_axis = '-Z'
+                                                                           
+        metapose.bones["thumb.01.L"].rigify_parameters.primary_rotation_axis = 'Z'
+        metapose.bones["thumb.01.R"].rigify_parameters.primary_rotation_axis = '-Z'     
 
     ## This part corrects metarm finger rolls
     bpy.ops.object.mode_set(mode='OBJECT')
@@ -762,7 +783,6 @@ def rig_character(
         if o.name in ("metarig", armature.name):
             o.select_set(True)
 
-
     bpy.ops.object.mode_set(mode='EDIT')
     # Align hand.L and hand.R metarig bones straight along forearm vector so hand_ik widget is centered on wrist
     for side in [".L", ".R"]:
@@ -773,72 +793,14 @@ def rig_character(
             hand_eb.tail = hand_eb.head + arm_vec * 0.05
             hand_eb.roll = forearm_eb.roll
 
-    for side in [".L", ".R"]:
-        hand_mb = metarm.edit_bones.get("hand" + side)
-        hand_ab = armature.edit_bones.get("hand" + side) or armature.edit_bones.get("DEF-hand" + side)
-
-        # 1. Determine index finger's plane normal as reference for all fingers
-        index_chain = []
-        for idx in ["01", "02", "03"]:
-            b_meta = metarm.edit_bones.get(f"f_index.{idx}{side}")
-            if b_meta:
-                index_chain.append(b_meta)
-
-        index_plane_normal = None
-        if len(index_chain) >= 2:
-            dir1 = (index_chain[0].tail - index_chain[0].head).normalized()
-            dir2 = (index_chain[1].tail - index_chain[1].head).normalized()
-            cross_vec = dir1.cross(dir2)
-            if cross_vec.length > 0.0001:
-                index_plane_normal = cross_vec.normalized()
-
-        if not index_plane_normal and hand_mb:
-            index_plane_normal = hand_mb.matrix.col[2].normalized()
-        elif not index_plane_normal and hand_ab:
-            index_plane_normal = hand_ab.matrix.col[2].normalized()
-
-        if not index_plane_normal:
-            continue
-
-        # 2. Align f_index, f_middle, f_ring, f_pinky directly to index_plane_normal
-        for fname in ["f_index", "f_middle", "f_ring", "f_pinky"]:
-            chain = []
-            for idx in ["01", "02", "03"]:
-                b_meta = metarm.edit_bones.get(f"{fname}.{idx}{side}")
-                if b_meta:
-                    chain.append(b_meta)
-
-            if not chain:
-                continue
-
-            for b_meta in chain:
-                dir_b = (b_meta.tail - b_meta.head).normalized()
-                z_target = index_plane_normal.cross(dir_b)
-                if z_target.length > 0.0001:
-                    b_meta.align_roll(z_target)
-
-                orig_b = (
-                    armature.edit_bones.get(b_meta.name)
-                    or armature.edit_bones.get("DEF-" + b_meta.name)
-                    or armature.edit_bones.get(b_meta.name.replace(".0", "0"))
-                )
-                if orig_b:
-                    orig_b.roll = b_meta.roll
-
-    thumb_miyabi_rolls = {
-        "thumb.01.L": 2.3441737,
-        "thumb.02.L": 2.1639006,
-        "thumb.03.L": 2.0797312,
-        "thumb.01.R": -2.3441737,
-        "thumb.02.R": -2.1639006,
-        "thumb.03.R": -2.0797312,
-    }
     for bone in metarm.edit_bones:
-        if bone.name in thumb_miyabi_rolls:
-            bone.roll = thumb_miyabi_rolls[bone.name]
-            orig_b = armature.edit_bones.get(bone.name) or armature.edit_bones.get("DEF-" + bone.name)
-            if orig_b:
-                orig_b.roll = thumb_miyabi_rolls[bone.name]
+        if "f_" in bone.name or "thumb" in bone.name:
+            def_name = "DEF-" + bone.name
+            if def_name in armature.edit_bones:
+                bone.roll = armature.edit_bones[def_name].roll
+            elif bone.name in armature.edit_bones:
+                bone.roll = armature.edit_bones[bone.name].roll
+
 
     # Fix hand bones being rotated 90 degrees sideways and arm deformation bones being wonky
     if "Loli" in obj.name:
@@ -1083,91 +1045,7 @@ def rig_character(
             except:
                 pass
 
-    # Setup thumb scaling rotation system exactly like miyabi.blend
-    bpy.ops.object.mode_set(mode='EDIT')
-    for side, sign in [(".L", 1.0), (".R", -1.0)]:
-        rolls = {
-            f"thumb.01{side}": 2.3441737 * sign,
-            f"thumb.02{side}": 2.1639006 * sign,
-            f"thumb.03{side}": 2.0797312 * sign,
-            f"thumb.01_master{side}": 2.3441737 * sign,
-            f"DEF-thumb.01{side}": 2.3441737 * sign,
-            f"DEF-thumb.02{side}": 2.1639006 * sign,
-            f"DEF-thumb.03{side}": 2.0797312 * sign,
-            f"MCH-thumb.01_drv{side}": 2.3441737 * sign,
-            f"MCH-thumb.02_drv{side}": 2.1639006 * sign,
-            f"MCH-thumb.03_drv{side}": 2.0797312 * sign,
-            f"ORG-thumb.01{side}": 2.3441737 * sign,
-            f"ORG-thumb.02{side}": 2.1639006 * sign,
-            f"ORG-thumb.03{side}": 2.0797312 * sign,
-        }
-        for b_name, r in rolls.items():
-            eb = rig.data.edit_bones.get(b_name)
-            if eb:
-                eb.roll = r
 
-    bpy.ops.object.mode_set(mode='POSE')
-    if rig.animation_data and rig.animation_data.drivers:
-        drivers_to_remove = [
-            d for d in rig.animation_data.drivers
-            if 'thumb.02_drv' in d.data_path or 'thumb.03_drv' in d.data_path
-        ]
-        for d in drivers_to_remove:
-            rig.animation_data.drivers.remove(d)
-
-    for side in [".L", ".R"]:
-        master_name = "thumb.01_master" + side
-        pb_master = rig.pose.bones.get(master_name)
-        if pb_master:
-            pb_master.rotation_mode = 'QUATERNION'
-            pb_master.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
-            pb_master.lock_scale[0] = False
-            pb_master.lock_scale[1] = False
-            pb_master.lock_scale[2] = False
-
-        # Segment 02 (middle): rotation on X driven by Y scale (Miyabi system)
-        b02 = rig.pose.bones.get("MCH-thumb.02_drv" + side)
-        if b02:
-            for c in list(b02.constraints):
-                if c.name == "Transformation" or c.type == 'TRANSFORM':
-                    b02.constraints.remove(c)
-            c2 = b02.constraints.new('TRANSFORM')
-            c2.name = "Transformation"
-            c2.target = rig
-            c2.subtarget = master_name
-            c2.map_from = 'SCALE'
-            c2.map_to = 'ROTATION'
-            c2.from_min_y_scale = 0.6
-            c2.from_max_y_scale = 1.0
-            c2.to_min_x_rot = -pi / 2
-            c2.to_max_x_rot = 0.0
-            c2.map_to_x_from = 'Y'
-            c2.mix_mode_rot = 'ADD'
-            c2.target_space = 'LOCAL'
-            c2.owner_space = 'LOCAL'
-            c2.use_motion_extrapolate = True
-
-        # Segment 03 (tip): rotation on X driven by X scale (Miyabi system)
-        b03 = rig.pose.bones.get("MCH-thumb.03_drv" + side)
-        if b03:
-            for c in list(b03.constraints):
-                if c.name == "Transformation" or c.type == 'TRANSFORM':
-                    b03.constraints.remove(c)
-            c3 = b03.constraints.new('TRANSFORM')
-            c3.name = "Transformation"
-            c3.target = rig
-            c3.subtarget = master_name
-            c3.map_from = 'SCALE'
-            c3.map_to = 'ROTATION'
-            c3.from_min_x_scale = 0.7
-            c3.from_max_x_scale = 1.0
-            c3.to_min_x_rot = -pi / 2
-            c3.to_max_x_rot = 0.0
-            c3.map_to_x_from = 'X'
-            c3.mix_mode_rot = 'ADD'
-            c3.target_space = 'LOCAL'
-            c3.owner_space = 'LOCAL'
-            c3.use_motion_extrapolate = True
 
     # Fix face shading being offset 90 degrees
     bpy.ops.object.mode_set(mode='OBJECT')
