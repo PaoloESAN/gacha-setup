@@ -471,9 +471,13 @@ def append_result(
     # 4. Exclude and hide widget collections (unchecks the viewport checkbox in outliner)
     exclude_widget_collections(target)
 
-    # Select primary armature for immediate user interaction
+    # Select primary armature for immediate user interaction and stamp game tag
     try:
+        from setup_wizard.ui.character_settings_utils import stamp_rig_game
         armatures = [o for o in all_imported_objects if o.type == "ARMATURE"]
+        for arm in armatures:
+            if game_type:
+                stamp_rig_game(arm, game_type)
         if armatures:
             bpy.context.view_layer.objects.active = armatures[0]
             armatures[0].select_set(True)
