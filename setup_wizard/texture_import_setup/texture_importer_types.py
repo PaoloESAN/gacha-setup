@@ -2723,14 +2723,35 @@ class GenshinNPCTextureImporter(GenshinTextureImporter):
                         screw_material = screw_materials[0]
                         self.set_lightmap_texture(TextureType.BODY, screw_material, img)
 
-                elif self.is_texture_identifiers_in_texture_name(['Others', 'Diffuse'], file):
+                elif self.is_texture_identifiers_in_texture_name(['Dress', 'Diffuse'], file):
+                    dress_materials = [material for material in bpy.data.materials if 'Dress' in material.name and
+                                     self.shader_material_names.MATERIAL_PREFIX in material.name]
+                    if dress_materials:
+                        self.set_diffuse_texture(TextureType.BODY, dress_materials[0], img)
+
+                elif self.is_texture_identifiers_in_texture_name(['Dress', 'Lightmap'], file):
+                    dress_materials = [material for material in bpy.data.materials if 'Dress' in material.name and
+                                     self.shader_material_names.MATERIAL_PREFIX in material.name]
+                    if dress_materials:
+                        self.set_lightmap_texture(TextureType.BODY, dress_materials[0], img)
+
+                elif self.is_texture_identifiers_in_texture_name(['Dress', 'Normalmap'], file):
+                    dress_materials = [material for material in bpy.data.materials if 'Dress' in material.name and
+                                     self.shader_material_names.MATERIAL_PREFIX in material.name]
+                    if dress_materials:
+                        self.set_normalmap_texture(TextureType.BODY, dress_materials[0], img)
+
+                elif self.is_texture_identifiers_in_texture_name(['Dress', 'Shadow_Ramp'], file):
+                    self.set_shadow_ramp_texture(TextureType.BODY, img)
+
+                elif self.is_texture_identifiers_in_texture_name(['Others', 'Diffuse'], re.sub(r'^NPC_Others_', 'NPC_', file, flags=re.IGNORECASE)):
                     others_materials = [material for material in bpy.data.materials if 'Others' in material.name and
                                      self.shader_material_names.MATERIAL_PREFIX in material.name]
                     if others_materials:
                         others_material = others_materials[0]
                         self.set_diffuse_texture(TextureType.BODY, others_material, img)
 
-                elif self.is_texture_identifiers_in_texture_name(['Others', 'Lightmap'], file):
+                elif self.is_texture_identifiers_in_texture_name(['Others', 'Lightmap'], re.sub(r'^NPC_Others_', 'NPC_', file, flags=re.IGNORECASE)):
                     others_materials = [material for material in bpy.data.materials if 'Others' in material.name and
                                      self.shader_material_names.MATERIAL_PREFIX in material.name]
                     if others_materials:

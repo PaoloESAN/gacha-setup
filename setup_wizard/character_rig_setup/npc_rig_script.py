@@ -1190,6 +1190,11 @@ def rig_character(
     this_obj.pose.bones["shoulder.L"].custom_shape_scale_xyz = (1.6,1.6,1.6)
     this_obj.pose.bones["shoulder.R"].custom_shape_scale_xyz = (1.6,1.6,1.6)
 
+    # Ensure Eye-WinkA-Control is enabled (set to 1 / active) by default
+    pb_wink_a = this_obj.pose.bones.get("Eye-WinkA-Control")
+    if pb_wink_a:
+        pb_wink_a.location.x = 0.3
+
     this_obj.pose.bones["foot_heel_ik.L"].custom_shape_translation = (0.0,0.06,0.0)
     this_obj.pose.bones["foot_heel_ik.R"].custom_shape_translation = (0.0,0.06,0.0)
 

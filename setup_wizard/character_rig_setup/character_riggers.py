@@ -216,7 +216,12 @@ class GenshinImpactCharacterRigger(CharacterRigger):
         refresh_light_vectors_modifiers()
 
         # Ensure all 3 root bones (root, root.001, root.002) and plate-settings are in Root collection and visible
-        target_rig = _get_character_armature(self.context)
+        target_rig = (
+            bpy.data.objects.get(f"{armature.name}Rig")
+            or bpy.data.objects.get(f"{armature.name.replace('Rig', '')}Rig")
+            or next((o for o in bpy.data.objects if o.type == 'ARMATURE' and o.name.endswith("Rig")), None)
+            or _get_character_armature(self.context)
+        )
         if target_rig and hasattr(target_rig.data, "collections"):
             colls = target_rig.data.collections
             root_coll = colls.get("Root") or colls.new("Root")
@@ -233,6 +238,15 @@ class GenshinImpactCharacterRigger(CharacterRigger):
                     if r_name == "plate-settings" and face_coll:
                         face_coll.unassign(rb)
             root_coll.is_visible = True
+
+        # Ensure Eye-WinkA-Control is set
+        try:
+            if target_rig and hasattr(target_rig, "pose") and target_rig.pose:
+                pb_wink_a = target_rig.pose.bones.get("Eye-WinkA-Control")
+                if pb_wink_a:
+                    pb_wink_a.location.x = 0.3
+        except Exception as e_post:
+            print(f"[GI RIGGER] Post-rig setup notice: {e_post}")
 
 
         if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):

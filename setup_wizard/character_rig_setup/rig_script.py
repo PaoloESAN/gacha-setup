@@ -1773,6 +1773,11 @@ def rig_character(
     this_obj.pose.bones["shoulder.L"].custom_shape_scale_xyz = (1.6, 1.6, 1.6)
     this_obj.pose.bones["shoulder.R"].custom_shape_scale_xyz = (1.6, 1.6, 1.6)
 
+    # Ensure Eye-WinkA-Control is enabled (set to 1 / active) by default
+    pb_wink_a = this_obj.pose.bones.get("Eye-WinkA-Control")
+    if pb_wink_a:
+        pb_wink_a.location.x = 0.3
+
     this_obj.pose.bones["foot_heel_ik.L"].custom_shape_translation = (0.0, 0.06, 0.0)
     this_obj.pose.bones["foot_heel_ik.R"].custom_shape_translation = (0.0, 0.06, 0.0)
 
@@ -5560,6 +5565,12 @@ def rig_character(
                 _rig_final = rig_obj
             except Exception:
                 _rig_final = None
+
+        if _rig_final and hasattr(_rig_final, "pose") and _rig_final.pose:
+            pb_wink_a = _rig_final.pose.bones.get("Eye-WinkA-Control")
+            if pb_wink_a:
+                pb_wink_a.location.x = 0.3
+
         isolate_wgts_for_character(_rig_final, char_name)
     except Exception as e_wgts:
         print(f"[GI RIG] Final WGTS sweep notice: {e_wgts}")

@@ -300,6 +300,14 @@ class GameGeometryNodesSetup(ABC):
         set_modifier_property(modifier, 'Vertex Color_attribute_name', 'Col')
         set_modifier_property(modifier, OUTLINE_THICKNESS_INPUT, self.DEFAULT_OUTLINE_THICKNESS)
 
+        # Toggle Screen Space Scaling must always be disabled (False) by default
+        set_modifier_property(modifier, 'Toggle Screen Space Scaling', False)
+        set_modifier_property(modifier, 'Input_6', False)
+        try:
+            modifier['Input_6'] = False
+        except Exception:
+            pass
+
         for (mask_input, material_input), material in zip(outline_mask_to_material_mapping.items(), mesh.material_slots):
             if bpy.data.materials.get(material.name) and bpy.data.materials.get(f'{material.name} Outlines'):
                 if material.name not in self.GEOMETRY_NODES_MATERIAL_IGNORE_LIST:
@@ -523,6 +531,14 @@ class V3_GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
         set_modifier_property(modifier, 'Input_3_attribute_name', 'Col')
         set_modifier_property(modifier, 'Vertex Colors_attribute_name', 'Col')
         set_modifier_property(modifier, 'Vertex Color_attribute_name', 'Col')
+
+        # Toggle Screen Space Scaling must always be disabled (False) by default
+        set_modifier_property(modifier, 'Toggle Screen Space Scaling', False)
+        set_modifier_property(modifier, 'Input_6', False)
+        try:
+            modifier['Input_6'] = False
+        except Exception:
+            pass
 
         self.assign_all_genshin_outline_modifier_slots(modifier, mesh)
 
