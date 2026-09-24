@@ -234,8 +234,9 @@ def apply_spine_rest_pose(armature):
                 low = pbone.name.lower().strip()
                 low_clean = low.replace("-", " ").replace("_", " ")
                 if low in target_names or low_clean in target_names or ("spine" in low and ("1" in low or low.endswith("spine"))):
-                    pbone.select = True
-                    if hasattr(pbone.bone, "select"):
+                    if hasattr(pbone, "select"):
+                        pbone.select = True
+                    if hasattr(pbone, "bone") and hasattr(pbone.bone, "select"):
                         pbone.bone.select = True
                     selected_any = True
 

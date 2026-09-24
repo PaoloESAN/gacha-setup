@@ -5517,7 +5517,10 @@ def rig_character(
             for bname in target_bones:
                 pbone = rig_obj.pose.bones.get(bname)
                 if pbone:
-                    pbone.select = True
+                    if hasattr(pbone, "select"):
+                        pbone.select = True
+                    if hasattr(pbone, "bone") and hasattr(pbone.bone, "select"):
+                        pbone.bone.select = True
 
             bpy.ops.pose.armature_apply(selected=True)
 
