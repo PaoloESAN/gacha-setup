@@ -69,7 +69,8 @@ class PGR_PT_Basic_Setup_Wizard_UI_Layout(Panel, PunishingGrayRavenUIRenderCheck
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = "Gacha Setup"
-    bl_order = 2
+    bl_parent_id = 'CSW_PT_Old_Setup_UI_Layout'
+    bl_order = 1
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
@@ -162,7 +163,8 @@ class PGR_PT_Advanced_Setup_Wizard_UI_Layout(Panel, PunishingGrayRavenUIRenderCh
     bl_space_type = 'VIEW_3D'
     bl_region_type = 'UI'
     bl_category = "Gacha Setup"
-    bl_order = 3
+    bl_parent_id = 'CSW_PT_Old_Setup_UI_Layout'
+    bl_order = 2
     bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):

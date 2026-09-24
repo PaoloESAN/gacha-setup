@@ -196,6 +196,9 @@ else:
     from setup_wizard.ui.unified_ui_setup_wizard_menu import (
         CSW_PT_Updater_UI_Layout,
         CSW_PT_Unified_Character_Setup_Wizard_UI_Layout,
+        CSW_PT_Utilities_UI_Layout,
+        CSW_PT_Old_Setup_UI_Layout,
+        CSW_OT_JideehCamera,
     )
 
     # HSR_PT_UI_Compositing_Panel_Post_Processing_UI_Layout
@@ -232,6 +235,9 @@ else:
         CharacterSetupWizardAddonPreferences,
         CSW_PT_Updater_UI_Layout,
         CSW_PT_Unified_Character_Setup_Wizard_UI_Layout,
+        CSW_PT_Utilities_UI_Layout,
+        CSW_OT_JideehCamera,
+        CSW_PT_Old_Setup_UI_Layout,
         GI_PT_Basic_Setup_Wizard_UI_Layout,
         GI_PT_Advanced_Setup_Wizard_UI_Layout,
         GI_PT_UI_Character_Model_Menu,

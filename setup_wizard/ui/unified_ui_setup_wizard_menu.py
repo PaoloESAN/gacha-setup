@@ -203,3 +203,43 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
                 sliders_col.prop(props, "hair_physics_influence", text="Hair", slider=True)
                 sliders_col.prop(props, "clothes_physics_influence", text="Clothes", slider=True)
             settings_col.prop(props, "disable_rigging", text="Disable Rigging")
+
+
+class CSW_OT_JideehCamera(bpy.types.Operator):
+    bl_idname = "setup_wizard.jideeh_camera"
+    bl_label = "Jideeh Camera (TODO)"
+    bl_description = "Jideeh Camera setup (pending implementation)"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        self.report({'INFO'}, "Jideeh Camera (TODO) - Pending implementation")
+        return {'FINISHED'}
+
+
+class CSW_PT_Utilities_UI_Layout(Panel):
+    bl_label = "Utilities"
+    bl_idname = 'CSW_PT_Utilities_UI_Layout'
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Gacha Setup"
+    bl_order = 2
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw(self, context):
+        layout = self.layout
+        col = layout.column(align=True)
+        col.operator("setup_wizard.jideeh_camera", text="Jideeh Camera (TODO)", icon="CAMERA_DATA")
+
+
+class CSW_PT_Old_Setup_UI_Layout(Panel):
+    bl_label = "Old Setup"
+    bl_idname = 'CSW_PT_Old_Setup_UI_Layout'
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Gacha Setup"
+    bl_order = 3
+    bl_options = {'DEFAULT_CLOSED'}
+
+    def draw(self, context):
+        pass
+
