@@ -199,6 +199,8 @@ else:
         CSW_PT_Utilities_UI_Layout,
         CSW_PT_Old_Setup_UI_Layout,
         CSW_OT_JideehCamera,
+        CSW_OT_CreateCameraPro,
+        CSW_OT_CreateJideehCamrig,
     )
 
     # HSR_PT_UI_Compositing_Panel_Post_Processing_UI_Layout
@@ -237,6 +239,8 @@ else:
         CSW_PT_Unified_Character_Setup_Wizard_UI_Layout,
         CSW_PT_Utilities_UI_Layout,
         CSW_OT_JideehCamera,
+        CSW_OT_CreateCameraPro,
+        CSW_OT_CreateJideehCamrig,
         CSW_PT_Old_Setup_UI_Layout,
         GI_PT_Basic_Setup_Wizard_UI_Layout,
         GI_PT_Advanced_Setup_Wizard_UI_Layout,

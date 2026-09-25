@@ -205,15 +205,27 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
             settings_col.prop(props, "disable_rigging", text="Disable Rigging")
 
 
+from setup_wizard.camera_rig.jideeh_cam_rig import (
+    build as build_jideeh_camrig,
+    CSW_OT_CreateCameraPro,
+    CSW_OT_CreateJideehCamrig,
+)
+
+
 class CSW_OT_JideehCamera(bpy.types.Operator):
     bl_idname = "setup_wizard.jideeh_camera"
-    bl_label = "Jideeh Camera (TODO)"
-    bl_description = "Jideeh Camera setup (pending implementation)"
+    bl_label = "Camera Pro"
+    bl_description = "Create Camera Pro in the active scene"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        self.report({'INFO'}, "Jideeh Camera (TODO) - Pending implementation")
-        return {'FINISHED'}
+        try:
+            rig, cam = build_jideeh_camrig(context)
+            self.report({'INFO'}, f"Successfully created Camera Pro: '{rig.name}'")
+            return {'FINISHED'}
+        except Exception as e:
+            self.report({'ERROR'}, f"Failed to create Camera Pro: {e}")
+            return {'CANCELLED'}
 
 
 class CSW_PT_Utilities_UI_Layout(Panel):
@@ -228,7 +240,7 @@ class CSW_PT_Utilities_UI_Layout(Panel):
     def draw(self, context):
         layout = self.layout
         col = layout.column(align=True)
-        col.operator("setup_wizard.jideeh_camera", text="Jideeh Camera (TODO)", icon="CAMERA_DATA")
+        col.operator("setup_wizard.create_camera_pro", text="Jideeh's Camera", icon="CAMERA_DATA")
 
 
 class CSW_PT_Old_Setup_UI_Layout(Panel):
