@@ -396,6 +396,27 @@ def append_result(
         if loaded_mat:
             loaded_mat.use_fake_user = True
 
+    # Import FBX animation actions (takes) too. The collections/objects load
+    # above only pulls those datablocks (+ their direct dependencies), so
+    # 0-user take actions from the worker file would be silently lost and the
+    # character would end up with no animations in the main file.
+    try:
+        with bpy.data.libraries.load(result_path, link=False) as (a_from, a_to):
+            existing_actions = set(bpy.data.actions.keys())
+            a_to.actions = [
+                a for a in a_from.actions
+                if a not in existing_actions
+            ]
+    except Exception as ex:
+        print(f"[GACHA SETUP] Actions append notice: {ex}")
+        a_to = None
+    for loaded_action in (getattr(a_to, "actions", None) or []):
+        if loaded_action:
+            try:
+                loaded_action.use_fake_user = True
+            except Exception:
+                pass
+
     # Fallback: If ZZZ eye material was not present in result_path for any reason, load from bundled shader blend
     if is_zzz:
         remaining_eye_mats = [
@@ -450,9 +471,13 @@ def append_result(
     # 4. Exclude and hide widget collections (unchecks the viewport checkbox in outliner)
     exclude_widget_collections(target)
 
-    # Select primary armature for immediate user interaction
+    # Select primary armature for immediate user interaction and stamp game tag
     try:
+        from setup_wizard.ui.character_settings_utils import stamp_rig_game
         armatures = [o for o in all_imported_objects if o.type == "ARMATURE"]
+        for arm in armatures:
+            if game_type:
+                stamp_rig_game(arm, game_type)
         if armatures:
             bpy.context.view_layer.objects.active = armatures[0]
             armatures[0].select_set(True)

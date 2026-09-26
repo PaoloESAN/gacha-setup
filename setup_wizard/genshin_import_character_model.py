@@ -57,7 +57,7 @@ def is_rigging_disabled(context=None):
 
 def _execute_fbx_import(filepath):
     """
-    Executes FBX import using the new experimental C++ wm.fbx_import.
+    Executes FBX import using the experimental C++ wm.fbx_import.
     Falls back to import_scene.fbx if wm.fbx_import is not available.
     """
     if hasattr(bpy.ops.wm, "fbx_import"):
@@ -86,6 +86,55 @@ def _execute_fbx_import(filepath):
             force_connect_children=True,
             automatic_bone_orientation=True,
         )
+
+
+def connect_armature_bone_chains(armature):
+    """
+    Connects edit bone chains where parent tails do not connect to child heads
+    (such as models imported via wm.fbx_import). Specifically ensures finger,
+    thumb, and single-child chains point accurately from joint to joint,
+    and tip/leaf bones extend cleanly along their parent chain.
+    """
+    if not armature or armature.type != 'ARMATURE':
+        return
+
+    orig_mode = bpy.context.object.mode if bpy.context.object else 'OBJECT'
+
+    try:
+        if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        armature.hide_viewport = False
+        armature.hide_set(False)
+        armature.select_set(True)
+        bpy.context.view_layer.objects.active = armature
+
+        bpy.ops.object.mode_set(mode='EDIT')
+        ebs = armature.data.edit_bones
+
+        # 1. Connect parent tail to child head for single-child bones (e.g. finger segments)
+        for eb in ebs:
+            if len(eb.children) == 1:
+                child = eb.children[0]
+                vec = child.head - eb.head
+                if vec.length > 0.0005:
+                    eb.tail = child.head.copy()
+
+        # 2. For leaf bones with a parent (e.g. fingertip bones), extend along parent bone direction
+        for eb in ebs:
+            if len(eb.children) == 0 and eb.parent:
+                p = eb.parent
+                p_vec = p.tail - p.head
+                if p_vec.length > 0.0005:
+                    eb.tail = eb.head + p_vec.normalized() * p_vec.length
+    except Exception as ex:
+        print(f"[CONNECT BONE CHAINS] Warning: {ex}")
+    finally:
+        try:
+            if bpy.ops.object.mode_set.poll():
+                bpy.ops.object.mode_set(mode=orig_mode if orig_mode in ('OBJECT', 'EDIT', 'POSE') else 'OBJECT')
+        except Exception:
+            pass
 
 
 def align_eye_bones(armature):
@@ -185,8 +234,9 @@ def apply_spine_rest_pose(armature):
                 low = pbone.name.lower().strip()
                 low_clean = low.replace("-", " ").replace("_", " ")
                 if low in target_names or low_clean in target_names or ("spine" in low and ("1" in low or low.endswith("spine"))):
-                    pbone.select = True
-                    if hasattr(pbone.bone, "select"):
+                    if hasattr(pbone, "select"):
+                        pbone.select = True
+                    if hasattr(pbone, "bone") and hasattr(pbone.bone, "select"):
                         pbone.bone.select = True
                     selected_any = True
 
@@ -265,6 +315,9 @@ def reorient_armature_bones(armature):
     if not armature or armature.type != 'ARMATURE':
         return
 
+    # Connect bone chains from joint to joint (e.g. for wm.fbx_import)
+    connect_armature_bone_chains(armature)
+
     # First apply spine rest pose to fix torso offset on models with altered rest pose
     apply_spine_rest_pose(armature)
 
@@ -298,6 +351,9 @@ def reorient_armature_bones(armature):
                     length = bone.length if bone.length > 0.001 else 0.05
                     bone.tail = bone.head + p_dir.normalized() * length
 
+        for bone in edit_bones:
+            b_low = bone.name.lower()
+            bone.select = not any(k in b_low for k in ['finger', 'thumb', 'f_'])
         bpy.ops.armature.calculate_roll(type='GLOBAL_POS_Y')
     except Exception as e:
         print(f"[REORIENT BONES] Notice: {e}")
@@ -1470,12 +1526,13 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                     object.data.uv_layers.new(name="UV1")
 
             for object in bpy.data.objects:
-                if "EffectMesh" in object.name or "EyeStar" in object.name:
+                if "EffectMesh" in object.name or "EyeStar" in object.name or "eyestar" in object.name.lower():
                     try:
-                        bpy.data.objects[object.name].hide_set(True)
-                    except RuntimeError:
-                        bpy.data.objects[object.name].hide_viewport = True
-                    bpy.data.objects[object.name].hide_render = True
+                        object.hide_set(True)
+                    except Exception:
+                        pass
+                    object.hide_viewport = True
+                    object.hide_render = True
 
             return
 
@@ -1505,21 +1562,27 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
         # Quick-fix, just want to shove this in here for now...
         # Hide EffectMesh (gets deleted later on) and EyeStar
         for object in bpy.data.objects:
-            if "EffectMesh" in object.name or "EyeStar" in object.name:
+            if "EffectMesh" in object.name or "EyeStar" in object.name or "eyestar" in object.name.lower():
                 try:
-                    bpy.data.objects[object.name].hide_set(True)
-                except RuntimeError:
-                    # Object is not in the active View Layer, use hide_viewport instead
-                    bpy.data.objects[object.name].hide_viewport = True
-                bpy.data.objects[object.name].hide_render = True
+                    object.hide_set(True)
+                except Exception:
+                    pass
+                object.hide_viewport = True
+                object.hide_render = True
 
         if self.game_type == GameType.ARKNIGHTS_ENDFIELD.name:
             handle_ake_post_import(bpy.context)
 
-        # Align eye bones if imported FBX has eye bone offsets
+        # Align eye bones and connect bone chains if imported FBX has offsets
         for obj in bpy.data.objects:
             if obj.type == "ARMATURE":
+                connect_armature_bone_chains(obj)
                 align_eye_bones(obj)
+                try:
+                    from setup_wizard.ui.character_settings_utils import stamp_rig_game
+                    stamp_rig_game(obj, self.game_type)
+                except Exception:
+                    pass
 
     def fix_zzz_eye_shadow(self):
         faceobj = None

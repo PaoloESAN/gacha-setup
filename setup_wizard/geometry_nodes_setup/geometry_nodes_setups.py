@@ -161,6 +161,11 @@ meshes_to_create_light_vectors_on = meshes_to_create_outlines_on + [
 material_keywords_to_not_create_outlines_on = [
     'Eff',
     'Pupil',
+    'EyeStar',
+    'eyestar',
+    'Eye_Star',
+    'EyeSpecular',
+    'Eye_Specular',
 ]
 
 
@@ -208,7 +213,13 @@ class GameGeometryNodesSetupFactory:
 
 
 class GameGeometryNodesSetup(ABC):
-    GEOMETRY_NODES_MATERIAL_IGNORE_LIST = []
+    GEOMETRY_NODES_MATERIAL_IGNORE_LIST = [
+        'EyeStar',
+        'Eye_Star',
+        'eyestar',
+        'EyeSpecular',
+        'Eye_Specular',
+    ]
     DEFAULT_OUTLINE_THICKNESS = 0.25
     ENABLE_TRANSPARENCY = 'Enable Transparency'
 
@@ -223,7 +234,11 @@ class GameGeometryNodesSetup(ABC):
         raise NotImplementedError
 
     def clone_outlines(self, game_material_names: ShaderMaterialNames):
-        materials = [material for material in bpy.data.materials.values() if material.name not in self.GEOMETRY_NODES_MATERIAL_IGNORE_LIST]
+        materials = [
+            material for material in bpy.data.materials.values()
+            if material.name not in self.GEOMETRY_NODES_MATERIAL_IGNORE_LIST
+            and not any(ign.lower() in material.name.lower() for ign in ['eyestar', 'eye_star', 'eyespecular', 'eye_specular'])
+        ]
 
         for material in materials:
             if game_material_names.MATERIAL_PREFIX in material.name and material.name != game_material_names.OUTLINES and \
@@ -285,6 +300,14 @@ class GameGeometryNodesSetup(ABC):
         set_modifier_property(modifier, 'Vertex Color_attribute_name', 'Col')
         set_modifier_property(modifier, OUTLINE_THICKNESS_INPUT, self.DEFAULT_OUTLINE_THICKNESS)
 
+        # Toggle Screen Space Scaling must always be disabled (False) by default
+        set_modifier_property(modifier, 'Toggle Screen Space Scaling', False)
+        set_modifier_property(modifier, 'Input_6', False)
+        try:
+            modifier['Input_6'] = False
+        except Exception:
+            pass
+
         for (mask_input, material_input), material in zip(outline_mask_to_material_mapping.items(), mesh.material_slots):
             if bpy.data.materials.get(material.name) and bpy.data.materials.get(f'{material.name} Outlines'):
                 if material.name not in self.GEOMETRY_NODES_MATERIAL_IGNORE_LIST:
@@ -310,19 +333,20 @@ class GameGeometryNodesSetup(ABC):
     '''
     def fix_face_outlines_by_reordering_material_slots(self, face_meshes):
         for face_mesh in face_meshes:
-            face_mesh = bpy.data.meshes.get(face_mesh.name)
-            face_mesh_object = bpy.data.objects.get(face_mesh.name)
-
-            if not face_mesh or not face_mesh_object:
-                self.blender_operator.report_message_level = {'ERROR'}
-                self.blender_operator.report_message.append('Failed to reorder face material slots to fix face outlines. Not a catastrophic error. Continuing.')
-                return
-            bpy.context.view_layer.objects.active = face_mesh_object  # Select 'Face' mesh before swapping material slots
-
-            face_mesh.materials.append(None)  # Add a "dummy" empty material slot
-            bpy.ops.object.material_slot_move(direction='DOWN')  # Move the selected material down
-            bpy.ops.object.material_slot_move(direction='UP')  # Return selected material to original position
-            face_mesh.materials.pop()  # Remove "dummy" empty material slot
+            face_mesh_object = bpy.data.objects.get(face_mesh.name) if hasattr(face_mesh, 'name') else None
+            if not face_mesh_object or face_mesh_object.type != 'MESH':
+                continue
+            face_mesh_data = face_mesh_object.data
+            if not face_mesh_data:
+                continue
+            try:
+                bpy.context.view_layer.objects.active = face_mesh_object  # Select 'Face' mesh before swapping material slots
+                face_mesh_data.materials.append(None)  # Add a "dummy" empty material slot
+                bpy.ops.object.material_slot_move(direction='DOWN')  # Move the selected material down
+                bpy.ops.object.material_slot_move(direction='UP')  # Return selected material to original position
+                face_mesh_data.materials.pop()  # Remove "dummy" empty material slot
+            except Exception:
+                pass
 
     def create_light_vectors_modifier(self, mesh_name):
         mesh = bpy.context.scene.objects[mesh_name]
@@ -383,7 +407,11 @@ class GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
         self.fix_face_outlines_by_reordering_material_slots(face_meshes)
 
     def create_geometry_nodes_modifier(self, mesh_name):
-        mesh = bpy.context.scene.objects[mesh_name]
+        if any(ign in mesh_name.lower() for ign in ['eyestar', 'eye_star', 'eye star', 'eyespecular', 'eye_specular']):
+            return None
+        mesh = bpy.context.scene.objects.get(mesh_name) or bpy.data.objects.get(mesh_name)
+        if not mesh:
+            return None
 
         for outlines_node_group_name in self.outlines_node_group_names:
             outlines_node_group = bpy.data.node_groups.get(outlines_node_group_name)
@@ -472,7 +500,11 @@ class V3_GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
         self.fix_face_outlines_by_reordering_material_slots(face_meshes)
 
     def create_geometry_nodes_modifier(self, mesh_name):
-        mesh = bpy.context.scene.objects[mesh_name]
+        if any(ign in mesh_name.lower() for ign in ['eyestar', 'eye_star', 'eye star', 'eyespecular', 'eye_specular']):
+            return None
+        mesh = bpy.context.scene.objects.get(mesh_name) or bpy.data.objects.get(mesh_name)
+        if not mesh:
+            return None
 
         for outlines_node_group_name in self.outlines_node_group_names:
             outlines_node_group = bpy.data.node_groups.get(outlines_node_group_name)
@@ -499,6 +531,14 @@ class V3_GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
         set_modifier_property(modifier, 'Input_3_attribute_name', 'Col')
         set_modifier_property(modifier, 'Vertex Colors_attribute_name', 'Col')
         set_modifier_property(modifier, 'Vertex Color_attribute_name', 'Col')
+
+        # Toggle Screen Space Scaling must always be disabled (False) by default
+        set_modifier_property(modifier, 'Toggle Screen Space Scaling', False)
+        set_modifier_property(modifier, 'Input_6', False)
+        try:
+            modifier['Input_6'] = False
+        except Exception:
+            pass
 
         self.assign_all_genshin_outline_modifier_slots(modifier, mesh)
 
@@ -562,7 +602,7 @@ class V3_GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
                     mat = found_shader_mat
                     m_low = mat.name.lower()
 
-            if 'outline' in m_low:
+            if 'outline' in m_low or any(ign in m_low for ign in ['eyestar', 'eye_star', 'eyespecular', 'eye_specular']):
                 continue
 
             outline_mat = find_outline_mat(mat)
@@ -656,7 +696,7 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
 
         for mesh in [obj for obj in bpy.data.objects.values() if obj.type == 'MESH']:
             o_lower = mesh.name.lower()
-            if "lightpanelwgt" in o_lower or "lightpanelselector" in o_lower or "wgtplane" in o_lower or "selectorwgt" in o_lower:
+            if any(ign in o_lower for ign in ["lightpanelwgt", "lightpanelselector", "wgtplane", "selectorwgt", "eyestar", "eye_star"]):
                 continue
 
             # Create Light Vectors for ALL mesh parts with material slots
@@ -689,7 +729,11 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
             self.__connect_shader_node_to_vfx_node(starcloak_material, [StarCloakTypes.ASMODA])
 
     def clone_night_soul_outlines(self):
-        materials = [material for material in bpy.data.materials.values() if material.name not in self.GEOMETRY_NODES_MATERIAL_IGNORE_LIST]
+        materials = [
+            material for material in bpy.data.materials.values()
+            if material.name not in self.GEOMETRY_NODES_MATERIAL_IGNORE_LIST
+            and not any(ign.lower() in material.name.lower() for ign in ['eyestar', 'eye_star', 'eyespecular', 'eye_specular'])
+        ]
         outline_material = bpy.data.materials.get(self.material_names.NIGHT_SOUL_OUTLINES) or \
                            bpy.data.materials.get('HoYoverse - Genshin Night Soul Outlines')
 
@@ -782,8 +826,12 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
                 expected_mesh_name = material_slot.material.name.rsplit(' ')[-1]
                 expected_mesh = bpy.data.objects.get(expected_mesh_name)
                 if not expected_mesh or expected_mesh != mesh:
-                    self.__separate_material_from_mesh(mesh, material_slot, expected_mesh_name)
-                    separated_materials += [material_slot.material]
+                    # Only record on SUCCESS: a failed separation ("Nothing
+                    # selected") must keep its slot, otherwise its faces get
+                    # orphaned onto a wrong material (ex. Dress mesh Body01 /
+                    # Dress01 / Crystal01 faces ending up on Dress).
+                    if self.__separate_material_from_mesh(mesh, material_slot, expected_mesh_name):
+                        separated_materials += [material_slot.material]
 
             # If we've separated all of the materials from the mesh, delete the original mesh
             if len(separated_materials) == len(mesh.material_slots):
@@ -793,7 +841,62 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
 
     def __separate_material_from_mesh(self, mesh, material_slot, new_mesh_name):
         print(f'Separating material for: {material_slot.material.name} from {mesh.name}')
-        bpy.ops.object.mode_set(mode='EDIT')
+        # Reset selection/object state (a previous join leaves stale active
+        # object and selection, which made material_slot_select select nothing
+        # and the separation fail with "Nothing selected").
+        try:
+            bpy.ops.object.mode_set(mode='OBJECT')
+        except Exception:
+            pass
+        # Isolate selection: a previous join leaves several objects selected,
+        # which puts multiple objects in Edit mode and material_slot_select
+        # ends up selecting nothing ("Nothing selected" on Dress Body01/Dress01).
+        try:
+            bpy.ops.object.select_all(action='DESELECT')
+        except Exception:
+            pass
+
+        was_hidden = False
+        try:
+            was_hidden = mesh.hide_get()
+            if was_hidden:
+                mesh.hide_set(False)
+        except Exception:
+            pass
+
+        was_hide_vp = getattr(mesh, "hide_viewport", False)
+        if was_hide_vp:
+            try:
+                mesh.hide_viewport = False
+            except Exception:
+                pass
+
+        bpy.context.view_layer.objects.active = mesh
+        try:
+            mesh.select_set(True)
+        except Exception:
+            pass
+
+        try:
+            bpy.ops.object.mode_set(mode='EDIT')
+        except RuntimeError as error:
+            print(f'Cannot enter EDIT mode on {mesh.name}: {error}')
+            if was_hidden:
+                try:
+                    mesh.hide_set(True)
+                except Exception:
+                    pass
+            if was_hide_vp:
+                try:
+                    mesh.hide_viewport = True
+                except Exception:
+                    pass
+            return False
+
+        try:
+            bpy.ops.mesh.select_all(action='DESELECT')
+        except Exception:
+            pass
         mesh.active_material_index = mesh.material_slots.get(material_slot.material.name).slot_index
         bpy.ops.object.material_slot_select()
         try:
@@ -801,8 +904,32 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
         except RuntimeError as error:
             print(f'Skipping, failed to separate material for: {material_slot.material.name} from {mesh.name}')
             print(error)
-            return
+            try:
+                bpy.ops.object.mode_set(mode='OBJECT')
+            except Exception:
+                pass
+            if was_hidden:
+                try:
+                    mesh.hide_set(True)
+                except Exception:
+                    pass
+            if was_hide_vp:
+                try:
+                    mesh.hide_viewport = True
+                except Exception:
+                    pass
+            return False
         bpy.ops.object.mode_set(mode='OBJECT')
+        if was_hidden:
+            try:
+                mesh.hide_set(True)
+            except Exception:
+                pass
+        if was_hide_vp:
+            try:
+                mesh.hide_viewport = True
+            except Exception:
+                pass
 
         # OR-check added for Blender < 4.1 where the separated mesh name is different than the parent mesh name
         # Body [Mesh] --(Hair Material Selected)--> Body.001 [Mesh] (Blender >= 4.1)
@@ -825,13 +952,33 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
             bpy.context.view_layer.objects.active = new_mesh_name_mesh
             print(f'Joining {new_separated_mesh} to {new_mesh_name_mesh}')
             bpy.ops.object.join()
-            renamed_mesh_name = new_mesh_name_mesh.material_slots[0].material.name.split(' ')[-1]
+            # The joined mesh must keep the name of the material just merged in,
+            # NOT slot[0] (ex. joining Dress faces into the Dress mesh renamed it
+            # to "Body" because slot[0] was Body, orphaning every later "Dress"
+            # lookup and leaving Body/Body01 faces on wrong meshes).
+            renamed_mesh_name = material_slot.material.name.rsplit(' ')[-1]
             print(f'Renaming {new_mesh_name_mesh.name} to {renamed_mesh_name}')
             new_mesh_name_mesh.name = renamed_mesh_name
+            return True
 
 
     def __remove_material_slots(self, mesh, materials, exclude=False):
         bpy.ops.object.mode_set(mode='OBJECT')
+        # Snapshot face -> material BEFORE removing slots: Blender shifts
+        # polygon material_index down on slot removal without remapping faces
+        # of the removed slot, so surviving faces would point at wrong
+        # materials (ex. Body faces rendering with Body01).
+        mesh_data = mesh.data
+        face_materials = [None] * len(mesh_data.polygons)
+        try:
+            slot_mats = [s.material for s in mesh.material_slots]
+            for poly in mesh_data.polygons:
+                try:
+                    face_materials[poly.index] = slot_mats[poly.material_index] if 0 <= poly.material_index < len(slot_mats) else None
+                except Exception:
+                    face_materials[poly.index] = None
+        except Exception:
+            face_materials = []
         # Reversing is IMPORTANT in order to avoid index errors while removing during runtime
         for material_slot_material in reversed(mesh.material_slots):
             if (not exclude and material_slot_material.material in materials) or (exclude and material_slot_material.material not in materials):
@@ -839,6 +986,32 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
                 print(f'Removing material: {material_slot_material.material.name} from {mesh.name}')
                 bpy.context.view_layer.objects.active = mesh
                 bpy.ops.object.material_slot_remove()
+        # Remap surviving faces back to their original materials
+        if face_materials:
+            try:
+                new_slot_mats = [s.material for s in mesh.material_slots]
+                for poly in mesh_data.polygons:
+                    try:
+                        orig_mat = face_materials[poly.index]
+                    except Exception:
+                        continue
+                    if orig_mat is None:
+                        continue
+                    try:
+                        if poly.material_index < len(new_slot_mats) and new_slot_mats[poly.material_index] == orig_mat:
+                            continue
+                    except Exception:
+                        pass
+                    try:
+                        new_index = new_slot_mats.index(orig_mat)
+                    except ValueError:
+                        continue
+                    try:
+                        poly.material_index = new_index
+                    except Exception:
+                        continue
+            except Exception:
+                pass
 
     '''
     Very targeted method for disabling outlines on Paimon's cloak
@@ -847,9 +1020,17 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
     def __disable_outlines(self, mesh, modifier, character_names):
         for material_slot in mesh.material_slots:
             material = material_slot.material
-
+            if not material or not getattr(material, 'node_tree', None):
+                continue
             for character_name in character_names:
-                if material.name == self.material_names.STAR_CLOAK and character_name in material.node_tree.nodes.get(self.texture_node_names.VFX_DIFFUSE).image.name:
+                vfx_node = material.node_tree.nodes.get(self.texture_node_names.VFX_DIFFUSE)
+                img_name = getattr(getattr(vfx_node, 'image', None), 'name', '')
+                if material.name == self.material_names.STAR_CLOAK and (
+                    character_name.lower() in img_name.lower() or
+                    character_name.lower() in mesh.name.lower() or
+                    character_name.lower() in material.name.lower() or
+                    any(character_name.lower() in o.name.lower() for o in bpy.data.objects)
+                ):
                     set_modifier_property(modifier, self.TOGGLE_OUTLINES_SOCKET, False)
 
     def __connect_shader_node_to_vfx_node(self, material, starcloak_types: List[StarCloakTypes]):
@@ -1053,7 +1234,11 @@ class HonkaiStarRailGeometryNodesSetup(GameGeometryNodesSetup):
             mesh.update()
 
     def create_geometry_nodes_modifier(self, mesh_name):
-        mesh = bpy.context.scene.objects[mesh_name]
+        if any(ign in mesh_name.lower() for ign in ['eyestar', 'eye_star', 'eye star', 'eyespecular', 'eye_specular']):
+            return None
+        mesh = bpy.context.scene.objects.get(mesh_name) or bpy.data.objects.get(mesh_name)
+        if not mesh:
+            return None
 
         for outlines_node_group_name in self.outlines_node_group_names:
             outlines_node_group = bpy.data.node_groups.get(outlines_node_group_name)
@@ -1241,7 +1426,11 @@ class V2_PunishingGrayRavenGeometryNodesSetup(GameGeometryNodesSetup):
         self.fix_face_outlines_by_reordering_material_slots(face_meshes)
 
     def create_geometry_nodes_modifier(self, mesh_name):
-        mesh = bpy.context.scene.objects[mesh_name]
+        if any(ign in mesh_name.lower() for ign in ['eyestar', 'eye_star', 'eye star', 'eyespecular', 'eye_specular']):
+            return None
+        mesh = bpy.context.scene.objects.get(mesh_name) or bpy.data.objects.get(mesh_name)
+        if not mesh:
+            return None
 
         for outlines_node_group_name in self.outlines_node_group_names:
             outlines_node_group = bpy.data.node_groups.get(outlines_node_group_name)
@@ -1825,7 +2014,7 @@ class WutheringWavesGeometryNodesSetup(GameGeometryNodesSetup):
             'Highlight Bottom': highlight_bottom,
         }
 
-        helper_names = ['highlight top', 'highlight bottom', 'eye highlight', 'sun', 'circle', 'cube', 'light direction', 'head origin', 'head forward', 'head up', 'wgt', 'rootshape', 'isaacfacerig', 'lightingpanel']
+        helper_names = ['highlight top', 'highlight bottom', 'eye highlight', 'sun', 'circle', 'cube', 'light direction', 'head origin', 'head forward', 'head up', 'wgt', 'rootshape', 'isaacfacerig', 'lightingpanel', 'eyestar', 'eye_star', 'eye star']
 
         for mesh in meshes:
             name_low = mesh.name.lower()

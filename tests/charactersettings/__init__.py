@@ -1,0 +1,1 @@
+# Character settings test suite

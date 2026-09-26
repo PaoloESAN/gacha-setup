@@ -20,10 +20,31 @@ from setup_wizard.domain.shader_identifier_service import GenshinImpactShaders, 
 from setup_wizard.domain.shader_material_names import StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, V2_FestivityGenshinImpactMaterialNames, \
     ShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, JaredNytsPunishingGrayRavenShaderMaterialNames, V4_PrimoToonGenshinImpactMaterialNames, \
     ZenlessZoneZeroShaderMaterialNames
-from setup_wizard.texture_import_setup.texture_importer_types import TextureImporterType, find_all_image_nodes_by_category
+from setup_wizard.texture_import_setup.texture_importer_types import TextureImporterType, find_all_image_nodes_by_category, is_vodyanitsa_character
 from setup_wizard.domain.shader_material_name_keywords import ShaderMaterialNameKeywords
 from setup_wizard.utils.genshin_body_part_deducer import get_monster_body_part_name, \
     get_npc_mesh_body_part_name
+
+
+def _is_vodyanitsa_for_crystal(material_name=None, mesh=None):
+    """Gate Crystal transparency nodes to Vodyanitsa only."""
+    try:
+        if material_name and 'vodyanitsa' in str(material_name).lower():
+            return True
+    except Exception:
+        pass
+    try:
+        if mesh is not None and 'vodyanitsa' in str(getattr(mesh, 'name', '')).lower():
+            return True
+        parent = getattr(mesh, 'parent', None) if mesh is not None else None
+        if parent is not None and 'vodyanitsa' in str(getattr(parent, 'name', '')).lower():
+            return True
+    except Exception:
+        pass
+    try:
+        return bool(is_vodyanitsa_character())
+    except Exception:
+        return False
 
 class GameDefaultMaterialReplacer(ABC):
     @abstractmethod
@@ -340,9 +361,16 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             if new_material:
                 material_name = new_material.name
         elif mesh_body_part_name and 'crystal' in mesh_body_part_name.lower():
-            crystal_material = self.create_crystal_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
-            if crystal_material:
-                material_name = crystal_material.name
+            # Crystal transparency is Vodyanitsa-only. Other characters with a
+            # part containing 'crystal' must get a plain Body material instead.
+            if _is_vodyanitsa_for_crystal(material_name, mesh):
+                crystal_material = self.create_crystal_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
+                if crystal_material:
+                    material_name = crystal_material.name
+            else:
+                body_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
+                if body_material:
+                    material_name = body_material.name
         elif mesh_body_part_name and mesh_body_part_name not in ['Face', 'Body', 'Hair', 'Eye', 'Dress', 'Arm', 'Cloak', 'VFX', 'StarCloak', 'Pupil', 'Pupila', 'New Pupil']:
             # Fallback for completely unknown materials (like 'Stockings', 'Wings', etc)
             new_material = self.create_body_material(self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
@@ -488,9 +516,16 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         Applies the Crystal transparency shader setup:
         (Lightmap Color if present, else Diffuse Color) -> Separate Color (Red) -> Greater Than (0.5) -> Mix Shader (Factor)
         with Transparent BSDF (Shader 1) and Body Shader BSDF (Shader 2) -> Material Output (Surface).
+
+        Vodyanitsa-only: never apply to other characters.
         """
         if not crystal_material or not crystal_material.use_nodes or not crystal_material.node_tree:
             return
+        try:
+            if 'crystal' in crystal_material.name.lower() and not _is_vodyanitsa_for_crystal(crystal_material.name, None):
+                return
+        except Exception:
+            pass
 
         tree = crystal_material.node_tree
 
@@ -498,11 +533,7 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         if not output_node:
             return
 
-        body_shader = tree.nodes.get('Body Shader') or \
-                      tree.nodes.get('PrimoToon') or \
-                      tree.nodes.get('HoYoToon') or \
-                      tree.nodes.get('Group.001') or \
-                      next((n for n in tree.nodes if n.type == 'GROUP' and 'BSDF' in n.outputs), None)
+        body_shader = tree.nodes.get('PrimoToon')
 
         lightmap_img_nodes = [n for n in tree.nodes if n.type == 'TEX_IMAGE' and 'lightmap' in (n.name + " " + (n.label or "")).lower()]
         has_lightmap_image = any(n.image is not None for n in lightmap_img_nodes)
@@ -581,8 +612,8 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         if not mix_node.inputs[1].links:
             tree.links.new(trans_node.outputs[0], mix_node.inputs[1])
 
-        if body_shader and 'BSDF' in body_shader.outputs and not mix_node.inputs[2].links:
-            tree.links.new(body_shader.outputs['BSDF'], mix_node.inputs[2])
+        if body_shader and 'PrimoToon' in body_shader.outputs and not mix_node.inputs[2].links:
+            tree.links.new(body_shader.outputs['PrimoToon'], mix_node.inputs[2])
 
         if not output_node.inputs['Surface'].links or output_node.inputs['Surface'].links[0].from_node != mix_node:
             tree.links.new(mix_node.outputs[0], output_node.inputs['Surface'])

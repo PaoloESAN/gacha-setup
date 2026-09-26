@@ -3,10 +3,10 @@ import os
 bl_info = {
     "name": "Gacha Setup",
     "author": "Mken, OctavoPE, Enthralpy, PaoloESAN",
-    "version": (3, 7, 0),
-    "blender": (5, 2, 0),
+    "version": (3, 7, 1),
+    "blender": (4, 1, 0),
     "location": "3D View > Sidebar > Gacha Setup",
-    "description": "An addon to streamline the character model setup process for Gacha games in Blender 5.2+",
+    "description": "An addon to streamline the character model setup process for Gacha games in Blender 4.1+",
     "warning": "",
     "doc_url": "",
     "support": "COMMUNITY",
@@ -196,6 +196,11 @@ else:
     from setup_wizard.ui.unified_ui_setup_wizard_menu import (
         CSW_PT_Updater_UI_Layout,
         CSW_PT_Unified_Character_Setup_Wizard_UI_Layout,
+        CSW_PT_Utilities_UI_Layout,
+        CSW_PT_Old_Setup_UI_Layout,
+        CSW_OT_JideehCamera,
+        CSW_OT_CreateCameraPro,
+        CSW_OT_CreateJideehCamrig,
     )
 
     # HSR_PT_UI_Compositing_Panel_Post_Processing_UI_Layout
@@ -232,6 +237,11 @@ else:
         CharacterSetupWizardAddonPreferences,
         CSW_PT_Updater_UI_Layout,
         CSW_PT_Unified_Character_Setup_Wizard_UI_Layout,
+        CSW_PT_Utilities_UI_Layout,
+        CSW_OT_JideehCamera,
+        CSW_OT_CreateCameraPro,
+        CSW_OT_CreateJideehCamrig,
+        CSW_PT_Old_Setup_UI_Layout,
         GI_PT_Basic_Setup_Wizard_UI_Layout,
         GI_PT_Advanced_Setup_Wizard_UI_Layout,
         GI_PT_UI_Character_Model_Menu,

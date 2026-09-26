@@ -255,19 +255,22 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
         self.validate_UI_inputs_for_targeted_material_data_import()
         material_data_directory: MaterialDataDirectory = self.get_material_data_files()
 
-        caller_is_advanced_setup = self.blender_operator.setup_mode == 'ADVANCED'
+        caller_is_advanced_setup = getattr(self.blender_operator, "setup_mode", "") == 'ADVANCED'
         no_material_data_files = not material_data_directory.exists and \
             (not self.blender_operator.filepath or not self.blender_operator.files)
-        if caller_is_advanced_setup or no_material_data_files:
-            bpy.ops.genshin.import_material_data(
-                'INVOKE_DEFAULT',
-                next_step_idx=self.blender_operator.next_step_idx, 
-                file_directory=self.blender_operator.file_directory,
-                invoker_type=self.blender_operator.invoker_type,
-                high_level_step_name=self.blender_operator.high_level_step_name,
-                game_type=self.blender_operator.game_type,
-            )
-            return {'SKIP'}
+        if no_material_data_files:
+            if caller_is_advanced_setup and not bpy.app.background:
+                bpy.ops.genshin.import_material_data(
+                    'INVOKE_DEFAULT',
+                    next_step_idx=self.blender_operator.next_step_idx, 
+                    file_directory=self.blender_operator.file_directory,
+                    invoker_type=self.blender_operator.invoker_type,
+                    high_level_step_name=self.blender_operator.high_level_step_name,
+                    game_type=self.blender_operator.game_type,
+                )
+                return {'SKIP'}
+            print("[SETUP WIZARD] No Material Data JSON files found. Skipping.")
+            return {'FINISHED'}
 
         self.validate_num_of_file_inputs_for_targeted_material_data_import(material_data_directory.files)
 

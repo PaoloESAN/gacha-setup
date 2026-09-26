@@ -112,11 +112,13 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
 
         if head_bone_names:
             head_bone_name = head_bone_names[0]  # expecting 1 Head bone
+            saved_loc = head_driver_object.location.copy()
             saved_matrix = head_driver_object.matrix_world.copy()
             self.set_contraint_target_and_bone(
                 child_of_constraint, armature, head_bone_name
             )
             self.set_inverse(head_driver_object, child_of_constraint.name)
+            head_driver_object.location = saved_loc
             head_driver_object.matrix_world = saved_matrix
         else:
             self.report({"WARNING"}, "No head bone found for head-driver setup.")
@@ -245,23 +247,40 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
         except Exception:
             pass
 
+        try:
+            if bpy.context.object and bpy.context.object.mode != "OBJECT":
+                bpy.ops.object.mode_set(mode="OBJECT")
+        except Exception:
+            pass
+
         previous_active = bpy.context.view_layer.objects.active
         previous_selected = list(bpy.context.selected_objects)
 
         try:
-            bpy.ops.object.select_all(action="DESELECT")
+            for s in list(bpy.context.selected_objects):
+                s.select_set(False)
             obj.select_set(True)
             bpy.context.view_layer.objects.active = obj
             bpy.ops.constraint.childof_set_inverse(
                 constraint=constraint_name, owner="OBJECT"
             )
         except Exception as err:
-            self.report(
-                {"WARNING"}, f"Could not set Child Of inverse on '{obj.name}': {err}"
-            )
+            try:
+                con = obj.constraints.get(constraint_name)
+                if con and con.target:
+                    if con.subtarget and con.target.type == 'ARMATURE' and con.target.pose and con.subtarget in con.target.pose.bones:
+                        tmat = con.target.matrix_world @ con.target.pose.bones[con.subtarget].matrix
+                    else:
+                        tmat = con.target.matrix_world
+                    con.inverse_matrix = tmat.inverted()
+            except Exception:
+                self.report(
+                    {"WARNING"}, f"Could not set Child Of inverse on '{obj.name}': {err}"
+                )
         finally:
             try:
-                bpy.ops.object.select_all(action="DESELECT")
+                for s in list(bpy.context.selected_objects):
+                    s.select_set(False)
                 for selected in previous_selected:
                     if selected and selected.name in bpy.context.view_layer.objects:
                         selected.select_set(True)
@@ -341,11 +360,13 @@ class ZZZ_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
                 ]
                 if head_bone_names:
                     head_bone_name = head_bone_names[0]
+                    saved_loc = head_driver_object.location.copy()
                     saved_matrix = head_driver_object.matrix_world.copy()
                     self.set_contraint_target_and_bone(
                         child_of_constraint, armature, head_bone_name
                     )
                     self.set_inverse(head_driver_object, child_of_constraint.name)
+                    head_driver_object.location = saved_loc
                     head_driver_object.matrix_world = saved_matrix
 
         move_lighting_and_head_driver_to_lights(head_driver_object)
@@ -394,23 +415,40 @@ class ZZZ_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
         except Exception:
             pass
 
+        try:
+            if bpy.context.object and bpy.context.object.mode != "OBJECT":
+                bpy.ops.object.mode_set(mode="OBJECT")
+        except Exception:
+            pass
+
         previous_active = bpy.context.view_layer.objects.active
         previous_selected = list(bpy.context.selected_objects)
 
         try:
-            bpy.ops.object.select_all(action="DESELECT")
+            for s in list(bpy.context.selected_objects):
+                s.select_set(False)
             obj.select_set(True)
             bpy.context.view_layer.objects.active = obj
             bpy.ops.constraint.childof_set_inverse(
                 constraint=constraint_name, owner="OBJECT"
             )
         except Exception as err:
-            self.report(
-                {"WARNING"}, f"Could not set Child Of inverse on '{obj.name}': {err}"
-            )
+            try:
+                con = obj.constraints.get(constraint_name)
+                if con and con.target:
+                    if con.subtarget and con.target.type == 'ARMATURE' and con.target.pose and con.subtarget in con.target.pose.bones:
+                        tmat = con.target.matrix_world @ con.target.pose.bones[con.subtarget].matrix
+                    else:
+                        tmat = con.target.matrix_world
+                    con.inverse_matrix = tmat.inverted()
+            except Exception:
+                self.report(
+                    {"WARNING"}, f"Could not set Child Of inverse on '{obj.name}': {err}"
+                )
         finally:
             try:
-                bpy.ops.object.select_all(action="DESELECT")
+                for s in list(bpy.context.selected_objects):
+                    s.select_set(False)
                 for selected in previous_selected:
                     if selected and selected.name in bpy.context.view_layer.objects:
                         selected.select_set(True)
@@ -637,10 +675,12 @@ class WW_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
                         break
 
             if matched_bone:
+                saved_loc = head_origin.location.copy()
                 saved_matrix = head_origin.matrix_world.copy()
                 child_of_con.target = armature
                 child_of_con.subtarget = matched_bone
                 self.set_inverse(head_origin, child_of_con.name)
+                head_origin.location = saved_loc
                 head_origin.matrix_world = saved_matrix
 
         # 3. Ensure Light Direction has no constraints (pure world sun direction)
@@ -740,23 +780,40 @@ class WW_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
         previous_hide_viewport = getattr(obj, "hide_viewport", False)
         obj.hide_viewport = False
 
+        try:
+            if bpy.context.object and bpy.context.object.mode != "OBJECT":
+                bpy.ops.object.mode_set(mode="OBJECT")
+        except Exception:
+            pass
+
         previous_active = bpy.context.view_layer.objects.active
         previous_selected = list(bpy.context.selected_objects)
 
         try:
-            bpy.ops.object.select_all(action="DESELECT")
+            for s in list(bpy.context.selected_objects):
+                s.select_set(False)
             obj.select_set(True)
             bpy.context.view_layer.objects.active = obj
             bpy.ops.constraint.childof_set_inverse(
                 constraint=constraint_name, owner="OBJECT"
             )
         except Exception as err:
-            self.report(
-                {"WARNING"}, f"Could not set Child Of inverse on '{obj.name}': {err}"
-            )
+            try:
+                con = obj.constraints.get(constraint_name)
+                if con and con.target:
+                    if con.subtarget and con.target.type == 'ARMATURE' and con.target.pose and con.subtarget in con.target.pose.bones:
+                        tmat = con.target.matrix_world @ con.target.pose.bones[con.subtarget].matrix
+                    else:
+                        tmat = con.target.matrix_world
+                    con.inverse_matrix = tmat.inverted()
+            except Exception:
+                self.report(
+                    {"WARNING"}, f"Could not set Child Of inverse on '{obj.name}': {err}"
+                )
         finally:
             try:
-                bpy.ops.object.select_all(action="DESELECT")
+                for s in list(bpy.context.selected_objects):
+                    s.select_set(False)
                 for selected in previous_selected:
                     if selected and selected.name in bpy.context.view_layer.objects:
                         selected.select_set(True)

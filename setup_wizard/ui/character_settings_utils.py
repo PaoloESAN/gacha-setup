@@ -7,7 +7,7 @@ GACHA_CHAR_KEY = "gacha_character"
 
 
 def stamp_rig_game(rig_obj, game_name, char_name=None):
-    """Tags a rig armature so its Character Settings panel can be resolved after Append."""
+    """Tags a rig armature or character object so its Character Settings panel can be resolved after Append / Setup."""
     if rig_obj is None:
         return
     try:
@@ -19,13 +19,32 @@ def stamp_rig_game(rig_obj, game_name, char_name=None):
             rig_obj[GACHA_CHAR_KEY] = str(char_name)
         except Exception:
             pass
-    # Also tag armature data (survives some Append/Link paths)
+    # Also tag armature/mesh data (survives some Append/Link paths)
     try:
         data = getattr(rig_obj, "data", None)
         if data is not None:
             data[GACHA_GAME_KEY] = str(game_name)
+            if char_name:
+                data[GACHA_CHAR_KEY] = str(char_name)
     except Exception:
         pass
+
+
+def hide_eyestar_if_unrigged(context=None):
+    """When setup runs without rigging for Genshin, ensure EyeStar has hide_viewport and hide_render set to True."""
+    import bpy
+    for obj in bpy.data.objects:
+        if "eyestar" in obj.name.lower() or "eye_star" in obj.name.lower():
+            try:
+                obj.hide_set(True)
+            except Exception:
+                pass
+            obj.hide_viewport = True
+            obj.hide_render = True
+
+
+# Backward-compatible alias
+unhide_and_reset_eyestar = hide_eyestar_if_unrigged
 
 
 _registered_rig_ids = set()
@@ -289,7 +308,7 @@ def ensure_all_rig_uis_registered(target_armature=None):
 
 
 def resolve_settings_armature(context):
-    """Returns the armature targeted by selection (None if none). Never falls back to scene."""
+    """Returns the armature targeted by selection (None if none). Falls back to active mesh or scene armature."""
     if context is None:
         return None
     try:
@@ -331,6 +350,22 @@ def resolve_settings_armature(context):
             target_arm = parent
             break
 
+    # If no armature found directly from selection, check if selected object is a character mesh
+    # and find any character armature in the scene / active collection
+    if target_arm is None and candidates:
+        import bpy
+        for cand in candidates:
+            if getattr(cand, "type", None) == 'MESH':
+                for o in getattr(context.scene, "objects", []):
+                    if o.type == 'ARMATURE' and not any(ign in o.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig", "wgt"]):
+                        target_arm = o
+                        break
+                if target_arm is None:
+                    # Mesh-only model without armature: return the mesh object as the settings target
+                    if cand.get(GACHA_GAME_KEY) or any(slot.material for slot in getattr(cand, "material_slots", [])):
+                        target_arm = cand
+                break
+
     if target_arm is not None:
         try:
             r_id = getattr(getattr(target_arm, "data", None), "get", lambda k: None)("rig_id")
@@ -344,6 +379,14 @@ def resolve_settings_armature(context):
 
 def _iter_rig_meshes(arm):
     seen = set()
+    if arm is None:
+        return
+    if getattr(arm, "type", None) == 'MESH':
+        if arm.name not in seen:
+            seen.add(arm.name)
+            yield arm
+        return
+
     try:
         for child in getattr(arm, "children_recursive", []) or []:
             if getattr(child, "type", None) == 'MESH' and child.name not in seen:
@@ -351,27 +394,28 @@ def _iter_rig_meshes(arm):
                 yield child
     except Exception:
         pass
-        import bpy
-        for obj in bpy.data.objects:
-            if getattr(obj, "type", None) != 'MESH' or obj.name in seen:
-                continue
-            p = getattr(obj, "parent", None)
-            while p:
-                if p == arm:
+
+    import bpy
+    for obj in bpy.data.objects:
+        if getattr(obj, "type", None) != 'MESH' or obj.name in seen:
+            continue
+        p = getattr(obj, "parent", None)
+        while p:
+            if p == arm:
+                seen.add(obj.name)
+                yield obj
+                break
+            p = getattr(p, "parent", None)
+        if obj.name in seen:
+            continue
+        try:
+            for mod in getattr(obj, "modifiers", []) or []:
+                if mod.type == 'ARMATURE' and getattr(mod, "object", None) == arm:
                     seen.add(obj.name)
                     yield obj
                     break
-                p = getattr(p, "parent", None)
-            if obj.name in seen:
-                continue
-            try:
-                for mod in obj.modifiers:
-                    if mod.type == 'ARMATURE' and getattr(mod, "object", None) == arm:
-                        seen.add(obj.name)
-                        yield obj
-                        break
-            except Exception:
-                continue
+        except Exception:
+            continue
 
 
 def get_character_materials(context=None, arm=None):
@@ -395,7 +439,7 @@ def detect_armature_game(arm):
     """Detects GameType.name for an armature: stamped tag first, then per-rig heuristics."""
     if arm is None:
         return None
-    # 1. Stamped tag (set at rig time, survives Append)
+    # 1. Stamped tag (set at rig/setup time, survives Append)
     try:
         g = arm.get(GACHA_GAME_KEY)
         if g:
@@ -416,7 +460,23 @@ def detect_armature_game(arm):
             return "WUTHERING_WAVES"
     except Exception:
         pass
-    # 3. Per-rig materials (scoped to this rig, never global bpy.data.materials)
+    # 3. Modifiers on meshes linked to this armature
+    try:
+        for mesh in _iter_rig_meshes(arm):
+            for mod in getattr(mesh, "modifiers", []):
+                if mod.type == 'NODES' and mod.node_group:
+                    ng_name = mod.node_group.name.lower()
+                    if "ww - outlines" in ng_name or "resonatorstar" in ng_name:
+                        return "WUTHERING_WAVES"
+                    if "zzz outlines" in ng_name or "extra fx" in ng_name:
+                        return "ZENLESS_ZONE_ZERO"
+                    if "stellartoon" in ng_name or "nya222" in ng_name:
+                        return "HONKAI_STAR_RAIL"
+                    if "bonny festivity" in ng_name or "primotoon" in ng_name:
+                        return "GENSHIN_IMPACT"
+    except Exception:
+        pass
+    # 4. Per-rig materials (scoped to this rig, never global bpy.data.materials)
     try:
         mat_names = []
         for mesh in _iter_rig_meshes(arm):
@@ -425,18 +485,21 @@ def detect_armature_game(arm):
                 if mat is not None:
                     mat_names.append(mat.name.lower())
         blob = " ".join(mat_names)
-        if not blob:
-            return None
-        if "stellartoon" in blob or "hsr" in blob:
-            return "HONKAI_STAR_RAIL"
-        if "hoyoverse - genshin" in blob or "hoyoverse - gi" in blob or "genshin" in blob:
-            return "GENSHIN_IMPACT"
-        if "kythera" in blob or blob.strip().startswith("zzz ") or " zzz " in f" {blob} ":
-            return "ZENLESS_ZONE_ZERO"
-        if "pbrtoon" in blob or "endfield" in blob or "arknights" in blob:
-            return "ARKNIGHTS_ENDFIELD"
-        if "wuwa" in blob or "wuthering" in blob or "gustling" in blob:
-            return "WUTHERING_WAVES"
+        if blob:
+            if any(k in blob for k in ["stellartoon", "hsr", "star rail", "star_rail", "nya222"]):
+                return "HONKAI_STAR_RAIL"
+            if any(k in blob for k in ["kythera", "zzz ", " zzz", "zenless"]) or blob.strip() == "zzz":
+                return "ZENLESS_ZONE_ZERO"
+            if any(k in blob for k in ["pbrtoon", "endfield", "arknights", "ake"]):
+                return "ARKNIGHTS_ENDFIELD"
+            if any(k in blob for k in ["wuwa", "wuthering", "gustling"]):
+                return "WUTHERING_WAVES"
+            if any(k in blob for k in ["nte", "neverness"]):
+                return "NEVERNESS_TO_EVERNESS"
+            if any(k in blob for k in ["pgr", "punishing", "jarednyts"]):
+                return "PUNISHING_GRAY_RAVEN"
+            if any(k in blob for k in ["genshin", "festivity", "primotoon", "hoyoverse", "mihoyo"]):
+                return "GENSHIN_IMPACT"
     except Exception:
         pass
     return None

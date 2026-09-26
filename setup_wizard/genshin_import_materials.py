@@ -87,6 +87,8 @@ class AKE_OT_SetUpOutlines(Operator, BasicSetupUIOperator, CustomOperatorPropert
 
         for o in bpy.data.objects:
             if o.type == 'MESH':
+                if any(ign in o.name.lower() for ign in ['eyestar', 'eye_star', 'eye star', 'eyespecular', 'eye_specular']):
+                    continue
                 mesh = o.data
                 if 'Color' not in mesh.color_attributes:
                     try:
@@ -444,8 +446,8 @@ def copy_nte_modifiers_to_character_models():
     ng_light = next((ng for ng in bpy.data.node_groups if any(k in ng.name for k in ["Light Vectors", "灯光矢量"])), None)
     ng_outline = next((ng for ng in bpy.data.node_groups if any(k in ng.name for k in ["几何节点描边", "描边", "Outline", "Outlines"])), None)
 
-    # Character mesh objects: all character meshes, excluding temp template/sphere meshes
-    temp_mesh_names = ["球体", "sphere", "template", "shader"]
+    # Character mesh objects: all character meshes, excluding temp template/sphere meshes and eyestar
+    temp_mesh_names = ["球体", "sphere", "template", "shader", "eyestar", "eye_star", "eye star", "eyespecular", "eye_specular"]
     char_meshes = [
         o for o in bpy.context.scene.objects
         if o.type == 'MESH' and not o.name.startswith("append_") and not any(t in o.name.lower() for t in temp_mesh_names)
