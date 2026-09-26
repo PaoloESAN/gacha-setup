@@ -106,4 +106,19 @@ def assert_facerig(game, char_dir):
             else f"Child Of constraint missing or invalid on '{driver_obj.name}'",
         })
 
+        if has_valid_child_of:
+            bpy.context.view_layer.update()
+            head_pbone = rig.pose.bones.get(child_of.subtarget)
+            if head_pbone:
+                bone_world_pos = rig.matrix_world @ head_pbone.head
+                driver_world_pos = driver_obj.matrix_world.to_translation()
+                distance = (driver_world_pos - bone_world_pos).length
+                # Distance should be near 0 when Child Of inverse_matrix is correctly aligned to head bone
+                is_aligned = distance < 0.25
+                checks.append({
+                    "name": "Head Driver Position Alignment",
+                    "passed": is_aligned,
+                    "message": f"Distance to head bone '{child_of.subtarget}': {distance:.4f}m (driver: {driver_world_pos.to_tuple(3)}, bone: {bone_world_pos.to_tuple(3)})",
+                })
+
     return checks

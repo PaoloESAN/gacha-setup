@@ -275,7 +275,7 @@ def run_setup():
                     ov = {"screen": s, "area": a}
                     if sp:
                         ov["space_data"] = sp
-                    if reg:
+                    if reg and not bpy.app.background:
                         ov["region"] = reg
                     break
             if ov:

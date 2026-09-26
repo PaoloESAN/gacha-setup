@@ -10,7 +10,9 @@ class ShaderMaterialNameKeywords:
     BODY2_LIGHTMAP = 'Body2_Lightmap'
 
     BODY_SHADOW_RAMP = 'Body_Shadow_Ramp'
+    BODY01_SHADOW_RAMP = 'Body01_Shadow_Ramp'
     BODY1_SHADOW_RAMP = 'Body1_Shadow_Ramp'
+    BODY02_SHADOW_RAMP = 'Body02_Shadow_Ramp'
     BODY2_SHADOW_RAMP = 'Body2_Shadow_Ramp'
 
     HAIR = 'Hair'

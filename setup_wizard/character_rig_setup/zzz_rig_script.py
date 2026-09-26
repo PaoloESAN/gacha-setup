@@ -251,7 +251,7 @@ def rig_character(
                     bpy.ops.object.vertex_group_deselect()
                 else:
                     bpy.ops.transform.translate(value=transformation_1, orient_type='LOCAL', orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='LOCAL', constraint_axis=(False, True, False), mirror=True, use_proportional_edit=False, proportional_edit_falloff='SMOOTH', proportional_size=1, use_proportional_connected=False, use_proportional_projected=False, snap=False, snap_elements={'INCREMENT'}, use_snap_project=False, snap_target='CLOSEST', use_snap_self=True, use_snap_edit=True, use_snap_nonedit=True, use_snap_selectable=False)
-                    bpy.ops.transform.resize(override, value=transformation_2)
+                    bpy.ops.transform.resize(value=transformation_2)
                     bpy.ops.object.vertex_group_deselect()                
 
         except:
@@ -304,7 +304,7 @@ def rig_character(
                     bpy.ops.object.vertex_group_deselect()
                 else:
                     bpy.ops.transform.translate(value=transformation_1, orient_type='LOCAL', orient_matrix=((1, 0, 0), (0, 1, 0), (0, 0, 1)), orient_matrix_type='LOCAL', constraint_axis=(False, True, False), mirror=True, use_proportional_edit=False, proportional_edit_falloff='SMOOTH', proportional_size=1, use_proportional_connected=False, use_proportional_projected=False, snap=False, snap_elements={'INCREMENT'}, use_snap_project=False, snap_target='CLOSEST', use_snap_self=True, use_snap_edit=True, use_snap_nonedit=True, use_snap_selectable=False)
-                    bpy.ops.transform.resize(override, value=transformation_2)
+                    bpy.ops.transform.resize(value=transformation_2)
                     bpy.ops.object.vertex_group_deselect()                
         except:
             pass

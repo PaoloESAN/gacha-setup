@@ -354,7 +354,7 @@ def rig_character(
                         use_snap_nonedit=True,
                         use_snap_selectable=False,
                     )
-                    bpy.ops.transform.resize(override, value=transformation_2)
+                    bpy.ops.transform.resize(value=transformation_2)
                     bpy.ops.object.vertex_group_deselect()
 
         except:
@@ -503,7 +503,7 @@ def rig_character(
                         use_snap_nonedit=True,
                         use_snap_selectable=False,
                     )
-                    bpy.ops.transform.resize(override, value=transformation_2)
+                    bpy.ops.transform.resize(value=transformation_2)
                     bpy.ops.object.vertex_group_deselect()
         except:
             pass
@@ -4801,26 +4801,28 @@ def rig_character(
         this_obj.pose.bones[bone].lock_scale[2] = False
 
         # Customize bones
-        this_obj.pose.bones[bone].custom_shape = bpy.data.objects["setting-circle"]
-        this_obj.pose.bones[bone].custom_shape_scale_xyz = (0.5, 0.5, 0.5)
-        this_obj.pose.bones[bone].use_custom_shape_bone_size = False
+        setting_circle = bpy.data.objects.get("setting-circle")
+        if setting_circle:
+            this_obj.pose.bones[bone].custom_shape = setting_circle
+            this_obj.pose.bones[bone].custom_shape_scale_xyz = (0.5, 0.5, 0.5)
+            this_obj.pose.bones[bone].use_custom_shape_bone_size = False
 
         if "upper_arm" in bone:
             if ".L" in bone:
-                this_obj.pose.bones[bone].custom_shape_translation = (-0.05, 0.0, 0.0)
-                this_obj.pose.bones[bone].custom_shape_rotation_euler = (0.0, 0.0, 0.0)
+                this_obj.pose.bones[bone].custom_shape_translation = (-0.02, 0.0, 0.0)
+                this_obj.pose.bones[bone].custom_shape_rotation_euler = (0, -1.5708, 0)
                 this_obj.pose.bones[bone].custom_shape_transform = this_obj.pose.bones[
                     "MCH-upper_arm_parent_widget.L"
                 ]
             else:
-                this_obj.pose.bones[bone].custom_shape_translation = (0.05, 0.0, 0.0)
-                this_obj.pose.bones[bone].custom_shape_rotation_euler = (0.0, 0.0, 0.0)
+                this_obj.pose.bones[bone].custom_shape_translation = (0.02, 0.0, 0.0)
+                this_obj.pose.bones[bone].custom_shape_rotation_euler = (0, -1.5708, 0)
                 this_obj.pose.bones[bone].custom_shape_transform = this_obj.pose.bones[
                     "MCH-upper_arm_parent_widget.R"
                 ]
         else:
             if ".L" in bone:
-                this_obj.pose.bones[bone].custom_shape_translation = (0.1, 0, 0)
+                this_obj.pose.bones[bone].custom_shape_translation = (0.02, 0, 0)
                 this_obj.pose.bones[bone].custom_shape_rotation_euler = (
                     -0.0820305,
                     -1.5708,
@@ -4830,7 +4832,7 @@ def rig_character(
                     "MCH-thigh_parent_widget.L"
                 ]
             else:
-                this_obj.pose.bones[bone].custom_shape_translation = (-0.1, 0, 0)
+                this_obj.pose.bones[bone].custom_shape_translation = (-0.02, 0, 0)
                 this_obj.pose.bones[bone].custom_shape_rotation_euler = (
                     -0.0820305,
                     1.5708,

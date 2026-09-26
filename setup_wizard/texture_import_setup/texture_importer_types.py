@@ -771,22 +771,11 @@ class GenshinTextureImporter:
         img.colorspace_settings.name = 'sRGB'
 
         img_name_low = (img.name or "").lower()
-        if 'hair' in img_name_low and 'body' not in img_name_low:
-            is_hair = True
-            is_body = False
-            is_body2 = False
-        elif 'body2' in img_name_low or type == TextureType.BODY2:
-            is_hair = False
-            is_body = False
-            is_body2 = True
-        elif 'body' in img_name_low and 'hair' not in img_name_low:
-            is_hair = False
-            is_body = True
-            is_body2 = False
-        else:
-            is_hair = (type == TextureType.HAIR)
-            is_body2 = (type == TextureType.BODY2)
-            is_body = (type == TextureType.BODY)
+        is_hair = ('hair' in img_name_low and 'body' not in img_name_low) or type == TextureType.HAIR
+        is_body2 = any(k in img_name_low for k in ['body2', 'body_2', 'body02', 'body_02', 'body1', 'body_1', 'body01', 'body_01']) or type == TextureType.BODY2
+        is_aux_name = any(k in img_name_low for k in ['dress', 'shell', 'cloth', 'skirt', 'tail', 'cloak', 'gauze', 'crystal'])
+        is_canonical_body = ('body' in img_name_low and not is_body2 and not is_hair and not is_aux_name) or (type == TextureType.BODY and not is_body2 and not is_hair and not is_aux_name)
+        is_aux = not (is_hair or is_body2 or is_canonical_body)
 
         def is_valid_shadow_ramp_node(n):
             n_id = f"{n.name} {n.label or ''}".lower()
@@ -805,12 +794,25 @@ class GenshinTextureImporter:
             for n in ng.nodes:
                 if n.type == 'TEX_IMAGE' and is_valid_shadow_ramp_node(n):
                     node_title = f"{n.name} {n.label or ''}".lower()
-                    if is_hair and ('hair' in node_title or ('hair' in ng_low and 'body' not in node_title)):
-                        n.image = img
-                    elif is_body2 and 'body2' in node_title:
-                        n.image = img
-                    elif is_body and ('body' in node_title or ('body' in ng_low and 'hair' not in node_title)):
-                        n.image = img
+                    if 'hair' in node_title or ('hair' in ng_low and 'body' not in node_title):
+                        if is_hair:
+                            n.image = img
+                        elif n.image is None and is_aux:
+                            n.image = img
+                    elif any(k in node_title for k in ['body2', 'body02', 'body_2', 'body1', 'body01', 'body_1']):
+                        if is_body2:
+                            n.image = img
+                    elif 'body' in node_title or ('body' in ng_low and 'hair' not in node_title):
+                        if is_canonical_body:
+                            # Highest authority: canonical body ramp always takes precedence
+                            n.image = img
+                        elif is_aux or is_body2:
+                            # Only assign as fallback if node has no image or current image is not a canonical body ramp
+                            cur_name = (n.image.name.lower() if n.image else "")
+                            has_canonical = n.image and ('body' in cur_name and not any(k in cur_name for k in ['body2', 'body02', 'body_2', 'body1', 'body01', 'body_1', 'dress', 'shell', 'hair', 'cloth', 'cloak', 'gauze', 'crystal']))
+                            if not has_canonical:
+                                if n.image is None or 'dress' in img_name_low:
+                                    n.image = img
 
         # 2. Target materials
         for mat in bpy.data.materials:
@@ -825,9 +827,11 @@ class GenshinTextureImporter:
                     node_title = f"{n.name} {n.label or ''}".lower()
                     if is_hair and ('hair' in node_title or ('hair' in m_low and 'body' not in node_title)):
                         n.image = img
-                    elif is_body2 and 'body2' in node_title:
+                    elif is_body2 and any(k in node_title for k in ['body2', 'body02', 'body_2', 'body1', 'body01', 'body_1']):
                         n.image = img
-                    elif is_body and ('body' in node_title or ('body' in m_low and 'hair' not in node_title)):
+                    elif is_canonical_body and ('body' in node_title or ('body' in m_low and 'hair' not in node_title)):
+                        n.image = img
+                    elif is_aux and any(p in img_name_low and p in m_low for p in ['dress', 'shell', 'cloth', 'skirt', 'tail', 'cloak', 'gauze', 'crystal']):
                         n.image = img
 
     def set_specular_ramp_texture(self, type: TextureType, img):
@@ -2416,12 +2420,19 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                 elif self.is_one_texture_identifier_in_texture_name(
                     [
                         ShaderMaterialNameKeywords.BODY_SHADOW_RAMP,
+                        ShaderMaterialNameKeywords.BODY01_SHADOW_RAMP,
                         ShaderMaterialNameKeywords.BODY1_SHADOW_RAMP,
+                        ShaderMaterialNameKeywords.BODY02_SHADOW_RAMP,
                         ShaderMaterialNameKeywords.BODY2_SHADOW_RAMP,
                     ], file):
-                    if ShaderMaterialNameKeywords.BODY2_SHADOW_RAMP in file:
+                    if any(k in file for k in [
+                        ShaderMaterialNameKeywords.BODY2_SHADOW_RAMP,
+                        ShaderMaterialNameKeywords.BODY02_SHADOW_RAMP,
+                        ShaderMaterialNameKeywords.BODY1_SHADOW_RAMP,
+                        ShaderMaterialNameKeywords.BODY01_SHADOW_RAMP,
+                    ]):
                         self.set_shadow_ramp_texture(TextureType.BODY2, img)
-                    else:  # Body/Body1
+                    else:  # Body
                         self.set_shadow_ramp_texture(TextureType.BODY, img)
                 elif "Body_Specular_Ramp" in file or "Tex_Specular_Ramp" in file:
                     self.set_specular_ramp_texture(TextureType.BODY, img)
