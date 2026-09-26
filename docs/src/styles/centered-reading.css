@@ -278,7 +278,7 @@
 
 
         /* When mobile menu button is pressed, reveal the site sidebar */
-        body[data-mobile-menu-expanded] .sidebar-pane {
+        body:has(#starlight__sidebar:popover-open) .sidebar-pane {
             transform: translateX(0);
         }
     }
@@ -306,28 +306,20 @@
         }
 
         /* Restyle the menu button to not be contained within a circle */
-        starlight-menu-button {
+        .sl-menu-button {
             flex-shrink: 0;
             margin-left: auto;
+            scale: 1.5;
+            position: unset;
+            display: flex;
 
-            :is(.inc-spec, button) {
-                scale: 1.5;
-                position: unset;
-                display: flex;
+            height: fit-content;
+            width: fit-content;
+            padding: unset;
 
-                height: fit-content;
-                width: fit-content;
-                padding: unset;
-
-                color: var(--sl-color-gray-5);
-                background: unset;
-                box-shadow: unset;
-            }
-
-            &[aria-expanded="true"] :is(.inc-spec, button) {
-                background-color: unset;
-                color: var(--sl-color-accent);
-            }
+            color: var(--sl-color-gray-5);
+            background: unset;
+            box-shadow: unset;
         }
 
 
@@ -363,5 +355,11 @@
                 }
             }
         }
+    }
+
+    /* Highlight the menu button while the mobile sidebar popover is open */
+    body:has(#starlight__sidebar:popover-open) .mobile-header .sl-menu-button {
+        background-color: unset;
+        color: var(--sl-color-accent);
     }
 }

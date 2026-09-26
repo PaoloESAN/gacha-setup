@@ -965,7 +965,7 @@ pre, expressive-code {
 	padding-inline: 1rem !important;
 }
 
-starlight-menu-button {
+.mobile-header .sl-menu-button {
 	flex-shrink: 0 !important;
 	margin-left: auto !important;
 	display: flex !important;
@@ -974,8 +974,7 @@ starlight-menu-button {
 	height: 100% !important;
 }
 
-starlight-menu-button button,
-starlight-menu-button :is(.inc-spec, button) {
+.mobile-header .sl-menu-button {
 	position: relative !important;
 	top: auto !important;
 	bottom: auto !important;
@@ -988,7 +987,7 @@ starlight-menu-button :is(.inc-spec, button) {
 	height: 2.25rem !important;
 	border-radius: 9999px !important;
 	padding: 0 !important;
-	margin: 0 !important;
+	margin: 0 0 0 auto !important;
 	scale: 1 !important;
 	color: #ffffff !important;
 	background-color: rgba(255, 255, 255, 0.1) !important;
@@ -998,31 +997,29 @@ starlight-menu-button :is(.inc-spec, button) {
 	transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.15s ease !important;
 }
 
-starlight-menu-button button:hover,
-starlight-menu-button :is(.inc-spec, button):hover {
+.mobile-header .sl-menu-button:hover {
 	background-color: rgba(255, 112, 36, 0.22) !important;
 	border-color: rgba(255, 112, 36, 0.45) !important;
 	color: #ffffff !important;
 	transform: scale(1.05) !important;
 }
 
-starlight-menu-button[aria-expanded="true"] button,
-starlight-menu-button[aria-expanded="true"] :is(.inc-spec, button) {
+body:has(#starlight__sidebar:popover-open) .mobile-header .sl-menu-button {
 	background-color: rgba(255, 112, 36, 0.25) !important;
 	border-color: var(--sl-color-accent) !important;
 	color: var(--sl-color-accent-high) !important;
 }
 
-:root[data-theme='light'] starlight-menu-button button,
-[data-theme='light'] starlight-menu-button button {
+:root[data-theme='light'] .mobile-header .sl-menu-button,
+[data-theme='light'] .mobile-header .sl-menu-button {
 	color: #c2410c !important;
 	background-color: rgba(234, 88, 12, 0.08) !important;
 	border: 1px solid rgba(234, 88, 12, 0.2) !important;
 	box-shadow: 0 2px 8px rgba(234, 88, 12, 0.08) !important;
 }
 
-:root[data-theme='light'] starlight-menu-button button:hover,
-[data-theme='light'] starlight-menu-button button:hover {
+:root[data-theme='light'] .mobile-header .sl-menu-button:hover,
+[data-theme='light'] .mobile-header .sl-menu-button:hover {
 	background-color: rgba(234, 88, 12, 0.15) !important;
 	border-color: rgba(234, 88, 12, 0.35) !important;
 	color: #ea580c !important;

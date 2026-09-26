@@ -78,7 +78,7 @@
 	function handleClick(event: MouseEvent) {
 		const target = event.target as HTMLElement | null;
 		if (!target) return;
-		const anchor = target.closest?.('a.sl-anchor-link, .right-sidebar a, starlight-toc a, mobile-starlight-toc a, .sl-markdown-content a[href^="#"]');
+		const anchor = target.closest?.('a.sl-anchor-link');
 		if (!(anchor instanceof HTMLAnchorElement)) return;
 		const fullUrl = isSamePageHashLink(anchor);
 		if (!fullUrl) return;
