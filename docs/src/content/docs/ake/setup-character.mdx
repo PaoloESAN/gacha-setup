@@ -1,0 +1,55 @@
+---
+title: "Arknights: Endfield Character Setup"
+description: "Step-by-step setup guide for Arknights: Endfield character models in Blender 5.2+."
+---
+
+import { Image } from 'astro:assets';
+import akePanel from '../../../assets/content/ake/ake-panel.png';
+import akeCharacter from '../../../assets/content/ake/ake-character.png';
+import akeScene from '../../../assets/content/ake/ake-scene.png';
+
+## 1. Opening the Setup Wizard
+
+1. Press `N` in the 3D Viewport to open the sidebar.
+2. Navigate to the **Character Setup Wizard** tab.
+3. In the **Game** drop-down menu, select **Arknights: Endfield**.
+
+<Image src={akePanel} alt="Arknights: Endfield Setup Wizard N-Panel (v3.7.1)" loading="eager" />
+
+---
+
+## 2. Importing Your Character
+
+You can set up your model in one click using **Run Entire Setup** or step-by-step via **Old Setup**.
+
+1. *(Optional)* Under **Setup Settings**, enable **Hair & Clothes Physics** to add dynamic physics to the hair and clothing. Enable **Disable Rigging** to skip rig generation and import materials + outlines only.
+2. Click **Run Entire Setup** (or **Set Up Character** under Old Setup).
+3. A file browser window will appear. Navigate to your [character folder](/character-models/#ake---arknights-endfield) containing the `.fbx` model (`chr_XXXX_name_uimodel.fbx`, e.g. `chr_0032_lizhiyan_uimodel.fbx`), the `Materials` subfolder, and textures.
+4. Click **Select Character Folder**.
+
+<Image src={akeCharacter} alt="Blender File View selecting Arknights: Endfield character model folder" loading="lazy" />
+
+---
+
+## 3. Automated Setup Pipeline
+
+When running the setup, the add-on executes the following automated steps for Arknights: Endfield:
+
+- **Set Up Character**: Imports the `.fbx` mesh, cleans vertex groups, and standardizes bone hierarchies.
+- **Set Up Materials**: Replaces default Blender materials with custom **Arknights: Endfield PBRToon** shader nodes (`Arknights: Endfield_PBRToonBase`, `BaseFace`, `BaseHair`), binding body, cloth, face, hair, iris, and alpha materials.
+- **Setup Outlines**: Applies inverted-hull outline modifiers (`Dots Stroke`) to all character meshes for crisp line art rendering.
+- **Rig Character**: Configures the Rigify armature, the **Isaac Face Rig** adaptation for Endfield, and the head driver system.
+- **Setup Compositor Nodes**: Configures the compositing node tree for real-time head shadow rendering.
+- **Finish Setup**: Switches Color Management to **Standard** to preserve raw texture color accuracy.
+
+<Image src={akeScene} alt="Arknights: Endfield character imported into 3D scene (Setup completed successfully)" loading="lazy" />
+
+---
+
+## 4. Viewport Shading & Compositor Settings
+
+To view the PBRToon shaders and real-time head shadow compositing in the viewport:
+
+1. Open the **Viewport Shading** menu (top right of the 3D Viewport).
+2. Under **Lighting**, enable **Scene Lights** and **Scene World**.
+3. Under **Compositor**, set the dropdown mode to **Always** (or **Camera**).

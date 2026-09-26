@@ -1,0 +1,130 @@
+---
+// Component: AnchorCopy.astro
+// Copies the full URL (with #hash) to the clipboard when clicking
+// heading anchor links (a.sl-anchor-link) or same-page TOC links.
+---
+
+<div id="anchor-copy-toast" class="anchor-copy-toast" role="status" aria-live="polite"></div>
+
+<script>
+	function getToastEl() {
+		return document.getElementById('anchor-copy-toast');
+	}
+
+	function showToast(message: string) {
+		const toast = getToastEl();
+		if (!toast) return;
+		toast.textContent = message;
+		toast.classList.add('show');
+		window.clearTimeout((window as any).__anchorCopyToastTimer);
+		(window as any).__anchorCopyToastTimer = window.setTimeout(() => {
+			toast.classList.remove('show');
+		}, 1800);
+	}
+
+	function getMessage() {
+		const lang = document.documentElement.lang || '';
+		return lang.toLowerCase().startsWith('es') ? '¡Enlace copiado!' : 'Link copied!';
+	}
+
+	async function copyText(text: string): Promise<boolean> {
+		try {
+			if (navigator.clipboard?.writeText) {
+				await navigator.clipboard.writeText(text);
+				return true;
+			}
+		} catch {
+			// fall through to legacy fallback
+		}
+		try {
+			const ta = document.createElement('textarea');
+			ta.value = text;
+			ta.setAttribute('readonly', '');
+			ta.style.position = 'fixed';
+			ta.style.opacity = '0';
+			document.body.appendChild(ta);
+			ta.select();
+			const ok = document.execCommand('copy');
+			document.body.removeChild(ta);
+			return ok;
+		} catch {
+			return false;
+		}
+	}
+
+	function isSamePageHashLink(anchor: HTMLAnchorElement): string | null {
+		const rawHref = anchor.getAttribute('href');
+		if (!rawHref) return null;
+		// Only interested in links that resolve to a hash on the current page.
+		// Covers: "#id", "?query#id" is excluded, "/same-page#id", full URL with same path.
+		let url: URL;
+		try {
+			url = new URL(rawHref, window.location.href);
+		} catch {
+			return null;
+		}
+		if (!url.hash || url.hash.length < 2) return null;
+		const current = window.location;
+		if (url.origin !== current.origin) return null;
+		if (url.pathname !== current.pathname) return null;
+		return url.href;
+	}
+
+	function flashAnchor(anchor: HTMLAnchorElement) {
+		anchor.classList.add('anchor-copied');
+		window.setTimeout(() => anchor.classList.remove('anchor-copied'), 1200);
+	}
+
+	function handleClick(event: MouseEvent) {
+		const target = event.target as HTMLElement | null;
+		if (!target) return;
+		const anchor = target.closest?.('a.sl-anchor-link, .right-sidebar a, starlight-toc a, mobile-starlight-toc a, .sl-markdown-content a[href^="#"]');
+		if (!(anchor instanceof HTMLAnchorElement)) return;
+		const fullUrl = isSamePageHashLink(anchor);
+		if (!fullUrl) return;
+		// Do NOT preventDefault: let the browser update the URL hash + scroll.
+		// Just fire-and-forget the clipboard copy.
+		void copyText(fullUrl).then((ok) => {
+			if (ok) {
+				showToast(getMessage());
+				flashAnchor(anchor);
+			}
+		});
+	}
+
+	// Register once globally (survives Astro View Transitions / ClientRouter swaps).
+	if (!(window as any).__anchorCopyRegistered) {
+		(window as any).__anchorCopyRegistered = true;
+		document.addEventListener('click', handleClick);
+	}
+</script>
+
+<style>
+	.anchor-copy-toast {
+		position: fixed;
+		bottom: 1.5rem;
+		left: 50%;
+		transform: translateX(-50%) translateY(0.5rem);
+		background: var(--sl-color-bg-sidebar, #111013);
+		color: var(--sl-color-white, #faf8fc);
+		border: 1px solid var(--sl-color-accent, #ff7024);
+		border-radius: 9999px;
+		padding: 0.55rem 1.1rem;
+		font-size: 0.85rem;
+		font-weight: 600;
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity 0.2s ease, transform 0.2s ease;
+		z-index: 9999;
+		white-space: nowrap;
+	}
+
+	.anchor-copy-toast.show {
+		opacity: 1;
+		transform: translateX(-50%) translateY(0);
+	}
+
+	:global(a.sl-anchor-link.anchor-copied) {
+		color: var(--sl-color-accent, #ff7024) !important;
+	}
+</style>

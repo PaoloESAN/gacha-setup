@@ -1,0 +1,49 @@
+---
+title: "Arknights: Endfield Rigging & Bone Collections"
+description: "Face rig panel, hair & clothes physics, and bone collections for Arknights: Endfield character models in Blender 5.2+."
+---
+
+import { Image } from 'astro:assets';
+import akeFacerig from '../../../assets/content/ake/ake-facerig.png';
+import akeBonecoll from '../../../assets/content/ake/ake-bonecoll.png';
+
+## 1. 3D Facial Expression Control Panel
+
+Upon importing and rigging an Arknights: Endfield character, the add-on builds the adapted **Isaac Face Rig** with direct on-face manipulation widgets:
+
+- **Eyebrow & Eyelid Controls**: Direct widgets positioned over the face for precise posing of eyebrows and blinking.
+- **Pupil & Eye Tracking**: Dedicated gaze widgets and dynamic drivers.
+- **Mouth & Lip Phonemes**: Controllers for mouth opening, smiles, frowns, and speech phonemes.
+
+<Image src={akeFacerig} alt="Arknights: Endfield 3D Facial Rig control widgets" loading="eager" />
+
+---
+
+## 2. Hair & Clothes Physics (Damped Track)
+
+The add-on automatically generates a dynamic physics rig using Blender's native **Damped Track** constraints:
+
+1. Enable **Hair & Clothes Physics** in the Setup Settings before running the setup (or apply it afterwards via the Character Settings panel > **Apply Physics**).
+2. Adjust the **Hair** and **Clothes** influence sliders in the N-panel to customize the responsiveness and damping strength of the dynamic secondary motion.
+
+---
+
+## 3. Bone Collections & Rig Layers
+
+Character armatures are organized into structured groups within the **Bone Collections / Rig Layers** tab (Blender 5.2+), making it easy to isolate and animate specific body parts.
+
+<Image src={akeBonecoll} alt="Rig Layers panel for Arknights: Endfield character (Face, Torso IK/FK, Fingers, Arm IK/FK, Leg IK/FK, Hair, Clothes)" loading="lazy" />
+
+### Rig Layers Overview
+
+- **Face (Primary / Secondary)**: Eyebrow, eye, eyelid, pupil, nose, and mouth controllers.
+- **Torso (IK / FK)**: Spine, chest, neck, and head handles.
+- **Arm.L / Arm.R (IK & FK)**: Left and right arm chains with individual IK target pins.
+- **Leg.L / Leg.R (IK & FK)**: Left and right leg chains with foot roll and knee target controls.
+- **Fingers (Detail)**: Hand and finger bone controllers.
+- **Hair / Clothes / Cage / Other**: Dynamic secondary bones for hair strands, coats, and accessories.
+- **Lighting / Tweaks / Pivots & Pins / Offsets / Weapon**: Utility and weapon control layers.
+
+:::tip
+Use the **star icon** in the Rig Layers tab to solo/isolate a specific collection, or click the **eye icons** to toggle visibility while animating.
+:::

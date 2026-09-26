@@ -1,0 +1,55 @@
+---
+title: "Setup de Personaje Arknights: Endfield"
+description: "Guía paso a paso para configurar modelos de Arknights: Endfield en Blender 5.2+."
+---
+
+import { Image } from 'astro:assets';
+import akePanel from '../../../../assets/content/ake/ake-panel.png';
+import akeCharacter from '../../../../assets/content/ake/ake-character.png';
+import akeScene from '../../../../assets/content/ake/ake-scene.png';
+
+## 1. Abrir el Setup Wizard
+
+1. Presiona `N` en la Vista 3D para abrir la barra lateral.
+2. Ve a la pestaña **Character Setup Wizard**.
+3. En el desplegable **Game**, selecciona **Arknights: Endfield**.
+
+<Image src={akePanel} alt="Panel N-Panel del Setup Wizard de Arknights: Endfield (v3.7.1)" loading="eager" />
+
+---
+
+## 2. Importar tu Personaje
+
+Puedes configurar tu modelo con un solo clic usando **Run Entire Setup** o paso a paso mediante **Old Setup**.
+
+1. *(Opcional)* En **Setup Settings**, activa **Hair & Clothes Physics** para añadir físicas dinámicas al cabello y la ropa. Activa **Disable Rigging** para omitir el rig e importar solo materiales + outlines.
+2. Haz clic en **Run Entire Setup** (o **Set Up Character** en Old Setup).
+3. Se abrirá el explorador de archivos. Navega a tu [carpeta de personaje](/es/character-models/#ake---arknights-endfield) con el modelo `.fbx` (`chr_XXXX_nombre_uimodel.fbx`, p. ej. `chr_0032_lizhiyan_uimodel.fbx`), la subcarpeta `Materials` y las texturas.
+4. Haz clic en **Select Character Folder**.
+
+<Image src={akeCharacter} alt="Vista de archivos de Blender seleccionando la carpeta del personaje de Arknights: Endfield" loading="lazy" />
+
+---
+
+## 3. Flujo Automatizado de Setup
+
+Al ejecutar la configuración, el add-on realiza estos pasos automáticos para Arknights: Endfield:
+
+- **Set Up Character**: Importa la malla `.fbx`, limpia vertex groups y estandariza la jerarquía de huesos.
+- **Set Up Materials**: Reemplaza los materiales por defecto con los nodos del shader **Arknights: Endfield PBRToon** (`Arknights: Endfield_PBRToonBase`, `BaseFace`, `BaseHair`), enlazando cuerpo, ropa, cara, cabello, iris y alfas.
+- **Setup Outlines**: Aplica modificadores de outline de casco invertido (`Dots Stroke`) a todas las mallas para un delineado nítido.
+- **Rig Character**: Configura el armature Rigify, la adaptación del **Isaac Face Rig** para Endfield y el sistema de head drivers.
+- **Setup Compositor Nodes**: Configura el árbol de nodos de compositing para sombras de cabeza en tiempo real.
+- **Finish Setup**: Cambia el Color Management a **Standard** para preservar la precisión de color de las texturas.
+
+<Image src={akeScene} alt="Personaje de Arknights: Endfield importado en la escena 3D (Setup completed successfully)" loading="lazy" />
+
+---
+
+## 4. Ajustes de Viewport Shading y Compositor
+
+Para ver los shaders PBRToon y el compositing de sombras en el viewport:
+
+1. Abre el menú **Viewport Shading** (arriba a la derecha de la Vista 3D).
+2. En **Lighting**, activa **Scene Lights** y **Scene World**.
+3. En **Compositor**, pon el desplegable en **Always** (o **Camera**).

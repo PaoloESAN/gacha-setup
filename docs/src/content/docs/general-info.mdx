@@ -1,0 +1,58 @@
+---
+title: General Info
+description: General information about the Character Setup Wizard panel, Character Settings, and community resources.
+---
+
+import { Image } from 'astro:assets';
+import panelLegend from '../../assets/content/overview/panel-legend.webp';
+
+## Wizard Panel Legend
+
+<Image src={panelLegend} alt="Character Setup Wizard panel legend" loading="eager" />
+
+1. **Add-on info**: Shows the installed Gacha Setup version, **Check for Updates** button with last check date, plus **Auto-check for Updates** and **Include Beta Versions** options.
+2. **Character Setup Wizard**: Select your game (Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Neverness to Everness, Wuthering Waves, Arknights: Endfield), click **Run Entire Setup** to execute the complete automated import, shaders, outlines, rigging, and compositing pipeline in one click, and adjust **Setup Settings** beforehand (**Hair & Clothes Physics** for dynamic Damped Track physics, **Disable Rigging** to skip rig and facial rig generation).
+3. **Utilities**: Extra helper operators, such as **Jideeh's Camera**.
+4. **Old Setup**: Legacy step-by-step sections (Basic / Advanced Setup) to run each setup stage individually from top to bottom (only for advanced users).
+
+---
+
+## Character Settings (Item Panel)
+
+Once your character is set up, select the character armature or mesh and press `N` in the 3D Viewport. Open the **Item** tab to access the **Character Settings** panel, with real-time controls that vary slightly per game (no need to edit shader node trees manually):
+
+- **Lighting Mode**: Switch between built-in lighting presets — `Default`, `Sunrise`, `Day`, `Sunset`, `Night`, `Rainy` — or choose `Custom` to fine-tune each color channel of the shader.
+- **Hair & Clothes Physics**: Apply or adjust the dynamic Damped Track physics on hair and clothing.
+- **Rig Layers**: Organized bone collections (Face, Torso, Arms, Legs, Fingers, Hair, Clothes, Lighting, and more) to isolate body parts while animating.
+- **Light direction object**: A dedicated object is created in the scene collection to rotate the light vector (adjust its **Rotation** XYZ values in the Item Transform panel).
+
+For the exact options of each game, see its **Lights & Coloramp** guide:
+
+- [Genshin Impact](/genshin/lights-coloramp/)
+- [Honkai: Star Rail](/hsr/lights-coloramp/)
+- [Zenless Zone Zero](/zzz/lights-coloramp/)
+- [Neverness to Everness](/nte/lights-coloramp/)
+- [Wuthering Waves](/wuwa/lights-coloramp/)
+- [Arknights: Endfield](/ake/lights-coloramp/)
+
+---
+
+## Community & Feedback
+
+### Omatsuri Discord
+
+Join the **Omatsuri Discord** community! It is an active hub where you can find people to help you and where creators share the latest news, resources, and workflows for 3D anime games (Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Wuthering Waves, and more).
+
+Additionally, there is a dedicated post in the **sharing** section for **Gacha Setup** where you can report bugs, suggest new features, ask questions, and share your feedback!
+
+**[Join the Omatsuri Discord Server](https://discord.com/invite/85rP9SpAkF)**
+
+---
+
+## Changelog (Where to See Changes)
+
+Version history and release notes are published on GitHub. To see what changed in each version:
+
+**[View all releases on GitHub](https://github.com/PaoloESAN/gacha-setup/releases)**
+
+The latest available version is always at **[Latest Release](https://github.com/PaoloESAN/gacha-setup/releases/latest)**.

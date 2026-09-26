@@ -29,3 +29,7 @@ Aquí puedes encontrar los lugares donde descargar los assets de los personajes,
 ### WUWA
 
 - [Assets de Personajes](https://drive.google.com/drive/folders/1VdKZLOTSUDFXrsHaSKq_B_CF_nMeqxVU) de **hiragara**
+
+### AKE - Arknights: Endfield
+
+- [Assets de Personajes](https://drive.google.com/drive/folders/1bvR4iPoGw9v5Arcj2BQBHNnQX_eBDQ7y) de **hiragara**

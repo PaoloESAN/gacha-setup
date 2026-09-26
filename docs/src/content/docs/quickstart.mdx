@@ -4,11 +4,17 @@ description: Get started with Gacha Setup for Blender 5.2+.
 ---
 
 import { Image } from 'astro:assets';
+import { CardGrid } from '@astrojs/starlight/components';
 import mainPanel from '../../assets/content/overview/main-panel.png';
 import selectCharacter from '../../assets/content/overview/select-character.png';
 import characterEscene from '../../assets/content/overview/character-escene.png';
-import panelLegend from '../../assets/content/overview/panel-legend.webp';
 import physicsVideo from '../../assets/content/overview/physics.mp4';
+import genshinIcon from '../../assets/icons/genshin-icon.webp';
+import hsrIcon from '../../assets/icons/hsr-icon.webp';
+import zzzIcon from '../../assets/icons/zzz-icon.jpg';
+import nteIcon from '../../assets/icons/nte-icon.jpg';
+import wuwaIcon from '../../assets/icons/wuwa-icon.webp';
+import akeIcon from '../../assets/icons/ake-icon.jpg';
 
 :::note[Blender Compatibility]
 Gacha Setup is designed for **Blender 5.2+**. Older Blender versions or Goo Blender are not supported.
@@ -26,29 +32,76 @@ Gacha Setup is designed for **Blender 5.2+**. Older Blender versions or Goo Blen
 
 1. Press `N` in the 3D Viewport to open the **Character Setup Wizard** sidebar panel.
 
-<Image src={mainPanel} alt="Character Setup Wizard main panel" loading="eager" />
+<Image src={mainPanel} alt="Character Setup Wizard main panel (v3.7.1)" loading="eager" />
 
-2. Select your game.
-3. *(Optional)* Under **Setup Settings**, enable **Hair & Clothes Physics** to add dynamic physics to the hair and clothing when the character moves, and adjust the influence sliders if desired.
+2. Select your game (Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Neverness to Everness, Wuthering Waves, Arknights: Endfield).
+3. *(Optional)* Under **Setup Settings**, enable **Hair & Clothes Physics** to add dynamic physics to the hair and clothing when the character moves. Enable **Disable Rigging** to skip rig generation and import the character with materials and outlines only.
 
 <video autoplay loop muted playsinline controls style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
   <source src={physicsVideo} type="video/mp4" />
 </video>
 
-4. Click **Run Entire Setup** (or run the steps one by one under **Basic Setup**).
+4. Click **Run Entire Setup** (or run the steps one by one under **Old Setup**).
 5. Select your [character folder](/character-models/) and click **Select Character Folder**.
 
 <Image src={selectCharacter} alt="Select Character Folder" loading="lazy" />
 
 6. Wait a few seconds and your character will be ready in the scene.
 
-<Image src={characterEscene} alt="Character ready in the scene" loading="lazy" />
+<Image src={characterEscene} alt="Character ready in the scene (Setup completed successfully)" loading="lazy" />
 
-## Legend
 
-<Image src={panelLegend} alt="Character Setup Wizard panel legend" loading="lazy" />
+## Set Up Each Game's Characters
 
-1. **Add-on Updater**: Allows checking for new add-on updates and enabling automatic background update checks.
-2. **Game selector & Run Entire Setup**: Select your game (Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Neverness to Everness, Wuthering Waves) and click **Run Entire Setup** to execute the complete automated import, shaders, outlines, rigging, and compositing pipeline in one click.
-3. **Setup Settings**: Optional settings before running setup. Enable **Hair & Clothes Physics** to generate dynamic Damped Track physics on the hair and clothing when the character moves, and calibrate the Hair and Clothes influence sliders.
-4. **Basic Setup & Advanced Setup**: **Basic Setup** allows running each setup step individually from top to bottom. **Advanced Setup** provides low-level control for fine-tuning individual components (only for advanced users).
+If you want info on how to set up each game's characters, check here:
+
+<CardGrid>
+	<a href="/genshin/setup-character/" class="game-card-link">
+		<div class="card">
+			<div class="title">
+				<Image src={genshinIcon} alt="Genshin Impact" class="game-icon-img" loading="lazy" />
+				<span>Genshin Impact</span>
+			</div>
+		</div>
+	</a>
+	<a href="/hsr/setup-character/" class="game-card-link">
+		<div class="card">
+			<div class="title">
+				<Image src={hsrIcon} alt="Honkai: Star Rail" class="game-icon-img" loading="lazy" />
+				<span>Honkai: Star Rail</span>
+			</div>
+		</div>
+	</a>
+	<a href="/zzz/setup-character/" class="game-card-link">
+		<div class="card">
+			<div class="title">
+				<Image src={zzzIcon} alt="Zenless Zone Zero" class="game-icon-img" loading="lazy" />
+				<span>Zenless Zone Zero</span>
+			</div>
+		</div>
+	</a>
+	<a href="/nte/setup-character/" class="game-card-link">
+		<div class="card">
+			<div class="title">
+				<Image src={nteIcon} alt="Neverness to Everness" class="game-icon-img" loading="lazy" />
+				<span>Neverness to Everness</span>
+			</div>
+		</div>
+	</a>
+	<a href="/wuwa/setup-character/" class="game-card-link">
+		<div class="card">
+			<div class="title">
+				<Image src={wuwaIcon} alt="Wuthering Waves" class="game-icon-img" loading="lazy" />
+				<span>Wuthering Waves</span>
+			</div>
+		</div>
+	</a>
+	<a href="/ake/setup-character/" class="game-card-link">
+		<div class="card">
+			<div class="title">
+				<Image src={akeIcon} alt="Arknights: Endfield" class="game-icon-img" loading="lazy" />
+				<span>Arknights: Endfield</span>
+			</div>
+		</div>
+	</a>
+</CardGrid>

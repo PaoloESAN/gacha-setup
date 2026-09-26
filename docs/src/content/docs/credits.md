@@ -13,7 +13,7 @@ description: Acknowledgements, contributors, and assets credits.
 - **[@BonnyAnimations](https://github.com/BonnyAnimations)** — ZZZ Shader · [GitHub](https://github.com/BonnyAnimations) · [YouTube](https://www.youtube.com/@BonnyAnimations) · [X](https://x.com/BonnyAnimations)
 - **Enthralpy** — ZZZ Rigging & scripting · [YouTube](https://www.youtube.com/@Enthralpy) · [X](https://x.com/Enthralpy)
 - **[@OctavoPE](https://github.com/OctavoPE)** — [GitHub](https://github.com/OctavoPE) · [X](https://x.com/Llama3D)
-- **Mken**
+- **Mken** — Original creator of Character Setup Wizard
 - **Meliodas**
 - **Manashiku**
 - **[@fnoji](https://github.com/fnoji)** — WuWa Base Setup & Rigging · [GitHub](https://github.com/fnoji)
@@ -32,12 +32,17 @@ description: Acknowledgements, contributors, and assets credits.
 - **Omatsuri** — NTE Shader · [Discord](https://discord.com/invite/85rP9SpAkF)
 - **矩阵映画** — NTE Rig
 - **[thewindlead](https://www.youtube.com/@thewindlead)** — Hair & Clothes physics · [YouTube](https://www.youtube.com/@thewindlead)
-- **VANS** — Sandrone Pupil
+- **VANS** — Genshin review
 - **nedarb183** — Genshin pupil highlight
 - **Hiragara** — Character assets
 - **HoyoToon** — Assets · [Discord](https://discord.com/invite/hoyotoon)
+- **Xiyang** — AKE setup
+- **starriia** — Model references
+- **VaSTuan** — Multi-character support
+- **zmecyyyy** — Rig review
+- **crabnuts** — Rig reference
 - **Logo Icon** — <a href="https://www.flaticon.com/free-icons/star" title="star icons">Star icons created by Magnific - Flaticon</a>
 
 <div class="disclaimer-text">
-  <strong>Disclaimer:</strong> This tool is an independent, open-source project and is not affiliated with, endorsed, or sponsored by HoYoverse, Kuro Games, Hotta Studio, or Perfect World Games. All game assets, trademarks, and character names belong to their respective owners. No copyrighted assets or models are included with this addon.
+  <strong>Disclaimer:</strong> This tool is an independent, open-source project and is not affiliated with, endorsed, or sponsored by HoYoverse, Kuro Games, Hotta Studio, Perfect World Games, or Hypergryph. All game assets, trademarks, and character names belong to their respective owners. No copyrighted assets or models are included with this addon.
 </div>

@@ -1,0 +1,49 @@
+---
+title: "Rigging y Bone Collections de Arknights: Endfield"
+description: "Panel de face rig, físicas de cabello y ropa, y bone collections para modelos de Arknights: Endfield en Blender 5.2+."
+---
+
+import { Image } from 'astro:assets';
+import akeFacerig from '../../../../assets/content/ake/ake-facerig.png';
+import akeBonecoll from '../../../../assets/content/ake/ake-bonecoll.png';
+
+## 1. Panel 3D de Expresiones Faciales
+
+Tras importar y riggear un personaje de Arknights: Endfield, el add-on genera la adaptación del **Isaac Face Rig** con widgets directos sobre la cara:
+
+- **Controles de cejas y párpados**: Widgets directos sobre la cara para posar cejas y parpadeos con precisión.
+- **Pupilas y mirada**: Widgets de mirada y drivers dinámicos.
+- **Fonemas de boca y labios**: Controles de apertura, sonrisas, ceños y fonemas de voz.
+
+<Image src={akeFacerig} alt="Widgets del Face Rig 3D de Arknights: Endfield" loading="eager" />
+
+---
+
+## 2. Físicas de Cabello y Ropa (Damped Track)
+
+El add-on genera un rig dinámico de físicas usando constraints nativos **Damped Track** de Blender:
+
+1. Activa **Hair & Clothes Physics** en Setup Settings antes de iniciar (o aplícalo después desde Character Settings > **Apply Physics**).
+2. Ajusta los deslizadores de influencia **Hair** y **Clothes** en el N-panel para calibrar la respuesta y amortiguación del movimiento secundario.
+
+---
+
+## 3. Bone Collections y Rig Layers
+
+Los armatures se organizan en grupos estructurados en la pestaña **Bone Collections / Rig Layers** (Blender 5.2+) para aislar y animar cada parte fácilmente.
+
+<Image src={akeBonecoll} alt="Panel Rig Layers del personaje de Arknights: Endfield (Face, Torso IK/FK, Fingers, Arm IK/FK, Leg IK/FK, Hair, Clothes)" loading="lazy" />
+
+### Resumen de Rig Layers
+
+- **Face (Primary / Secondary)**: Controles de cejas, ojos, párpados, pupilas, nariz y boca.
+- **Torso (IK / FK)**: Columna, pecho, cuello y cabeza.
+- **Arm.L / Arm.R (IK & FK)**: Cadenas de brazos con pines IK.
+- **Leg.L / Leg.R (IK & FK)**: Cadenas de piernas con foot roll y rodillas.
+- **Fingers (Detail)**: Huesos de manos y dedos.
+- **Hair / Clothes / Cage / Other**: Huesos secundarios dinámicos de cabello, abrigos y accesorios.
+- **Lighting / Tweaks / Pivots & Pins / Offsets / Weapon**: Capas de utilidades y arma.
+
+:::tip
+Usa el icono de **estrella** en Rig Layers para aislar una colección, o los iconos de **ojo** para mostrar/ocultar mientras animas.
+:::

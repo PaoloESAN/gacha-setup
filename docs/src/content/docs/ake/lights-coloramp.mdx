@@ -1,0 +1,59 @@
+---
+title: "Lights & Coloramp Configuration"
+description: "Controlling light direction, presets, custom palette colors, and shader settings for Arknights: Endfield models."
+---
+
+import { Image } from 'astro:assets';
+import akeLightdir from '../../../assets/content/ake/ake-lightdir.png';
+import akeLight1 from '../../../assets/content/ake/ake-light1.png';
+import akeLight2 from '../../../assets/content/ake/ake-light2.png';
+
+## 1. Controlling Light & Shadow Direction
+
+During character setup, a dedicated `Light` / `Light Direction_<Character>` object is created in your scene collection.
+
+1. Locate the light object in the **Outliner** panel.
+2. Open the **Item Transform** panel in Object Properties.
+3. Adjust the **Rotation** values (XYZ Euler) to rotate the light vector:
+   - **Rotation Z**: Rotates the sun angle horizontally around the character.
+   - **Rotation Y**: Adjusts the horizontal tilt of the light across the character.
+   - **Rotation X**: Adjusts the vertical pitch of the shadow line.
+
+<Image src={akeLightdir} alt="Adjusting Light object rotation in Outliner for Arknights: Endfield" loading="eager" />
+
+---
+
+## 2. Character Settings (Item Panel)
+
+Select your character mesh or armature and press `N` in the 3D Viewport. Open the **Item** tab to access the **Character Settings** panel, providing real-time controls without having to manually edit shader node trees:
+
+- **Lighting Mode**: Switch between built-in lighting presets (`Default`, `Sunrise`, `Day`, `Sunset`, `Night`, `Rainy`) or choose `Custom` to tune individual color channels.
+- **General Shading**: `Smoothness Max` (0–2, default 2.0) and `Normal Strength` (0–5, default 1.5) for body/cloth/face materials.
+- **Hair Shading**: `Hair Smoothness Max` (0–1, default 1.0) and `Hair Normal Strength` (0–5, default 1.5).
+- **Eyes**: `Eyes Brightness` slider (1–20, default 1.0).
+- **Weather**: `Enable Rain` toggles the rain shading path on the body and skin.
+- **Hair & Clothes Physics**: `Apply Physics` button (or Hair/Clothes influence sliders once physics exists).
+
+<Image src={akeLight1} alt="Character Settings panel for Arknights: Endfield" loading="lazy" />
+
+### Lighting Modes & Presets
+
+- **Default**: Original game lighting baseline.
+- **Sunrise**: Warm, soft morning glow.
+- **Day**: Crisp, balanced daylight illumination.
+- **Sunset**: Golden-hour tones with warm highlights.
+- **Night**: Dim cool moonlight tones.
+- **Rainy**: Overcast, diffused atmospheric shading.
+- **Custom**: Unlocks granular control over Ambient, DirLight, Specular, Base Color, and Fresnel colors.
+
+<Image src={akeLight2} alt="Arknights: Endfield Lighting Mode preset dropdown (Rainy)" loading="lazy" />
+
+### Custom Colors (Custom Mode)
+
+When **Lighting Mode** is set to **Custom**, fine-tune each channel of the Endfield PBRToon shader:
+
+- **Ambient**: Base ambient illumination tint.
+- **Light (DirLight)**: Color tint applied to fully lit regions.
+- **Specular**: Specular highlight color.
+- **Base Color**: Base albedo tint multiplier.
+- **Fresnel Inside / Outside**: Rim fresnel gradient colors.

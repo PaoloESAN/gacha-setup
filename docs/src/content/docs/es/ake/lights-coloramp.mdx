@@ -1,0 +1,59 @@
+---
+title: "Configuración de Luces y Coloramp"
+description: "Control de dirección de luz, presets, colores personalizados y ajustes del shader para modelos de Arknights: Endfield."
+---
+
+import { Image } from 'astro:assets';
+import akeLightdir from '../../../../assets/content/ake/ake-lightdir.png';
+import akeLight1 from '../../../../assets/content/ake/ake-light1.png';
+import akeLight2 from '../../../../assets/content/ake/ake-light2.png';
+
+## 1. Controlar la Dirección de Luz y Sombras
+
+Durante la configuración se crea un objeto `Light` / `Light Direction_<Personaje>` en la colección de la escena.
+
+1. Localiza el objeto de luz en el panel **Outliner**.
+2. Abre el panel **Item > Transform** en las propiedades del objeto.
+3. Ajusta los valores de **Rotation** (Euler XYZ) para rotar el vector de luz:
+   - **Rotation Z**: Rota el ángulo del sol horizontalmente alrededor del personaje.
+   - **Rotation Y**: Ajusta la inclinación horizontal de la luz.
+   - **Rotation X**: Ajusta la inclinación vertical de la línea de sombra.
+
+<Image src={akeLightdir} alt="Ajuste de rotación del objeto Light en el Outliner para Arknights: Endfield" loading="eager" />
+
+---
+
+## 2. Character Settings (Panel Item)
+
+Selecciona la malla o el armature del personaje y presiona `N` en la Vista 3D. Abre la pestaña **Item** para acceder al panel **Character Settings**, con controles en tiempo real sin editar nodos:
+
+- **Lighting Mode**: Cambia entre presets (`Default`, `Sunrise`, `Day`, `Sunset`, `Night`, `Rainy`) o elige `Custom` para ajustar cada canal.
+- **General Shading**: `Smoothness Max` (0–2, por defecto 2.0) y `Normal Strength` (0–5, por defecto 1.5) para cuerpo/ropa/cara.
+- **Hair Shading**: `Hair Smoothness Max` (0–1, por defecto 1.0) y `Hair Normal Strength` (0–5, por defecto 1.5).
+- **Eyes**: Deslizador `Eyes Brightness` (1–20, por defecto 1.0).
+- **Weather**: `Enable Rain` activa el sombreado de lluvia en cuerpo y piel.
+- **Hair & Clothes Physics**: Botón `Apply Physics` (o deslizadores de influencia una vez creada la física).
+
+<Image src={akeLight1} alt="Panel Character Settings de Arknights: Endfield" loading="lazy" />
+
+### Modos y Presets de Iluminación
+
+- **Default**: Iluminación original del juego.
+- **Sunrise**: Amanecer cálido y suave.
+- **Day**: Luz de día nítida y balanceada.
+- **Sunset**: Atardecer dorado con brillos cálidos.
+- **Night**: Luz nocturna fría y tenue.
+- **Rainy**: Clima nublado y atmósfera difusa.
+- **Custom**: Desbloquea Ambient, DirLight, Specular, Base Color y Fresnel.
+
+<Image src={akeLight2} alt="Desplegable de Lighting Mode en Arknights: Endfield (Rainy)" loading="lazy" />
+
+### Colores Personalizados (Modo Custom)
+
+Cuando **Lighting Mode** está en **Custom**, ajusta cada canal del shader PBRToon de Endfield:
+
+- **Ambient**: Tinte de iluminación ambiental base.
+- **Light (DirLight)**: Tinte de las zonas totalmente iluminadas.
+- **Specular**: Color del brillo especular.
+- **Base Color**: Multiplicador del albedo base.
+- **Fresnel Inside / Outside**: Colores del degradado fresnel del rim.

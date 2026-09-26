@@ -12,9 +12,9 @@ export default defineConfig({
 				starlightLlmsTxt({
 					projectName: 'Gacha Setup for Blender',
 					description:
-						'Gacha Setup is an open-source Blender add-on (Blender 5.2+) that automates character model importing, anime toon shading (Festivity, StellarToon, ZZZ Shader, NTE Shader, Gustling Waters), outline setup, facial driver controls, hair & cloth physics, and rigging for Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Neverness to Everness, and Wuthering Waves.',
+						'Gacha Setup is an open-source Blender add-on (Blender 5.2+) that automates character model importing, anime toon shading (Festivity, StellarToon, ZZZ Shader, NTE Shader, Gustling Waters, Endfield PBRToon), outline setup, facial driver controls, hair & cloth physics, and rigging for Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Neverness to Everness, Wuthering Waves, and Arknights: Endfield.',
 					details: `
-- **Supported Games:** Genshin Impact (GI), Honkai: Star Rail (HSR), Zenless Zone Zero (ZZZ), Neverness to Everness (NTE), Wuthering Waves (WuWa).
+- **Supported Games:** Genshin Impact (GI), Honkai: Star Rail (HSR), Zenless Zone Zero (ZZZ), Neverness to Everness (NTE), Wuthering Waves (WuWa), Arknights: Endfield (AKE).
 - **Blender Compatibility:** Blender 5.2 and newer official releases.
 - **Key Features:** One-click setup wizard, bundled anime toon shaders, hair & cloth physics with Damped Track, 3D facial driver control boards, automated addon dependency installation (ExpyKit, UEFormat), and weapon support.
 `.trim(),
@@ -66,9 +66,14 @@ export default defineConfig({
 							description: 'Character importing, Gustling Waters shader, face rig panel, and lighting for Wuthering Waves.',
 							paths: ['wuwa/**', 'es/wuwa/**'],
 						},
+						{
+							label: 'Arknights: Endfield',
+							description: 'Character importing, Endfield PBRToon shader, Isaac face rig, and lighting for Arknights: Endfield.',
+							paths: ['ake/**', 'es/ake/**'],
+						},
 					],
-					promote: ['index*', 'quickstart*', 'es/index*', 'es/quickstart*'],
-					demote: ['credits*', 'es/credits*', 'changelog*', 'es/changelog*'],
+					promote: ['index*', 'quickstart*', 'general-info*', 'es/index*', 'es/quickstart*', 'es/general-info*'],
+					demote: ['credits*', 'es/credits*'],
 				}),
 			],
 			title: 'Gacha Setup for Blender',
@@ -124,9 +129,9 @@ export default defineConfig({
 					translations: { es: 'Visión General' },
 					items: [
 						{ label: 'Quickstart', slug: 'quickstart', translations: { es: 'Guía Rápida' } },
+						{ label: 'General Info', slug: 'general-info', translations: { es: 'Información General' } },
 						{ label: 'Character Assets', slug: 'character-models', translations: { es: 'Assets de Personajes' } },
 						{ label: 'Utilities', slug: 'utilities', translations: { es: 'Utilidades' } },
-						{ label: 'Changelog', slug: 'changelog', translations: { es: 'Registro de Cambios' } },
 						{ label: 'Credits', slug: 'credits', translations: { es: 'Créditos' } },
 					],
 				},
@@ -178,6 +183,16 @@ export default defineConfig({
 						{ label: 'Lights & Coloramp', slug: 'wuwa/lights-coloramp', translations: { es: 'Luces y Coloramp' } },
 						{ label: 'Bugs & Solutions', slug: 'wuwa/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
 						{ label: 'Rigging', slug: 'wuwa/rigging', translations: { es: 'Rigging' } },
+					],
+				},
+				{
+					label: 'Arknights: Endfield',
+					collapsed: true,
+					items: [
+						{ label: 'Setup Character', slug: 'ake/setup-character', translations: { es: 'Setup Character' } },
+						{ label: 'Lights & Coloramp', slug: 'ake/lights-coloramp', translations: { es: 'Luces y Coloramp' } },
+						{ label: 'Bugs & Solutions', slug: 'ake/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
+						{ label: 'Rigging', slug: 'ake/rigging', translations: { es: 'Rigging' } },
 					],
 				},
 			],

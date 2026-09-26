@@ -1,0 +1,62 @@
+---
+title: Información General
+description: Información general sobre el panel Character Setup Wizard, Character Settings y recursos de la comunidad.
+---
+
+import { Image } from 'astro:assets';
+import panelLegend from '../../../assets/content/overview/panel-legend.webp';
+
+## Leyenda del Panel del Wizard
+
+<Image src={panelLegend} alt="Leyenda del panel Character Setup Wizard" loading="eager" />
+
+1. **Add-on info**: Muestra la versión instalada de Gacha Setup, el botón **Check for Updates** con la fecha de última comprobación, y las opciones **Auto-check for Updates** e **Include Beta Versions**.
+2. **Character Setup Wizard**: Selecciona tu juego (Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Neverness to Everness, Wuthering Waves, Arknights: Endfield), haz clic en **Run Entire Setup** para ejecutar el flujo completo automatizado (importación, materiales, delineados, rig y posprocesado) con un solo clic, y ajusta antes **Setup Settings** (**Hair & Clothes Physics** para físicas dinámicas Damped Track, **Disable Rigging** para omitir el rig y el face rig).
+3. **Utilities**: Operadores auxiliares extra, como **Jideeh's Camera**.
+4. **Old Setup**: Secciones clásicas paso a paso (Basic / Advanced Setup) para ejecutar cada etapa individualmente de arriba a abajo (solo recomendado para usuarios avanzados).
+
+---
+
+## Character Settings (Panel Item)
+
+Cuando tu personaje esté configurado, selecciona el armature o la malla y presiona `N` en la Vista 3D. Abre la pestaña **Item** para acceder al panel **Character Settings**, con controles en tiempo real que varían un poco según el juego (sin necesidad de editar nodos manualmente):
+
+- **Lighting Mode**: Cambia entre presets de iluminación — `Default`, `Sunrise`, `Day`, `Sunset`, `Night`, `Rainy` — o elige `Custom` para ajustar cada canal de color del shader.
+- **Hair & Clothes Physics**: Aplica o ajusta las físicas dinámicas Damped Track del cabello y la ropa.
+- **Rig Layers**: Colecciones de huesos organizadas (Face, Torso, Arms, Legs, Fingers, Hair, Clothes, Lighting y más) para aislar partes del cuerpo al animar.
+- **Objeto de dirección de luz**: Se crea un objeto dedicado en la colección de la escena para rotar el vector de luz (ajusta su **Rotation** XYZ en el panel Item Transform).
+
+Para las opciones exactas de cada juego, consulta su guía de **Luces y Coloramp**:
+
+- [Genshin Impact](/es/genshin/lights-coloramp/)
+- [Honkai: Star Rail](/es/hsr/lights-coloramp/)
+- [Zenless Zone Zero](/es/zzz/lights-coloramp/)
+- [Neverness to Everness](/es/nte/lights-coloramp/)
+- [Wuthering Waves](/es/wuwa/lights-coloramp/)
+- [Arknights: Endfield](/es/ake/lights-coloramp/)
+
+---
+
+## Comunidad y Feedback
+
+### Discord de Omatsuri
+
+¡Únete a la comunidad de **Omatsuri en Discord** (servidor en inglés)! Es un gran espacio donde hay personas que te pueden ayudar y donde se comparten constantemente novedades, recursos y herramientas sobre todo el mundo del 3D de diversos juegos de anime (Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Wuthering Waves, etc.).
+
+Además, tengo un post en la sección de **sharing** dedicado a **Gacha Setup** donde puedes reportar bugs, sugerir nuevas funciones, resolver dudas y dejar tus sugerencias.
+
+:::note
+Ten en cuenta que el servidor de Omatsuri es una comunidad de habla **inglesa**.
+:::
+
+**[Unirse al servidor de Discord de Omatsuri](https://discord.com/invite/85rP9SpAkF)**
+
+---
+
+## Changelog (Dónde Ver los Cambios)
+
+El historial de versiones y las notas de cada release se publican en GitHub. Para ver qué cambió en cada versión:
+
+**[Ver todos los releases en GitHub](https://github.com/PaoloESAN/gacha-setup/releases)**
+
+La última versión disponible siempre está en **[Latest Release](https://github.com/PaoloESAN/gacha-setup/releases/latest)**.
