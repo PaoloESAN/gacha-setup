@@ -14,8 +14,9 @@
 * **Genshin Impact**
 * **Honkai: Star Rail (HSR)**
 * **Zenless Zone Zero (ZZZ)**
-* **Neverness to Everness (NTE)** *(Face rig missing)*
+* **Neverness to Everness (NTE)**
 * **Wuthering Waves (WuWa)**
+* **Arknights: Endfield (AKE)**
 * **Silver Palace** *(Soon)*
 * **Honkai Impact 3rd** *(Soon)*
 
@@ -45,7 +46,7 @@ The following add-on dependencies are bundled in the `dependencies` directory an
 This project is an unofficial community tool built for Blender. 
 
 - **No Game Assets Included:** This repository does NOT contain, host, or distribute any 3D models, textures, or proprietary files from any game. Users are responsible for importing their own legally acquired assets.
-- **Trademarks:** All game titles (*Genshin Impact*, *Honkai: Star Rail*, *Zenless Zone Zero*, *Wuthering Waves*, *Neverness to Everness*), logos, and character names are registered trademarks of their respective owners (miHoYo / HoYoverse, Kuro Games, Hotta Studio, Perfect World Games).
+- **Trademarks:** All game titles (*Genshin Impact*, *Honkai: Star Rail*, *Zenless Zone Zero*, *Wuthering Waves*, *Neverness to Everness*, *Arknights: Endfield*), logos, and character names are registered trademarks of their respective owners (miHoYo / HoYoverse, Kuro Games, Hotta Studio, Perfect World Games, Hypergryph).
 - **Affiliation:** This project is an independent community tool and is not affiliated with, sponsored by, or endorsed by the game publishers or studios mentioned above.
 
 ---
@@ -74,9 +75,15 @@ Thanks to all those who collaborated on the original project:
 
 ### Additional Credits & Acknowledgments (This Project)
 
+* **Mken** — Original creator of Character Setup Wizard
+* **Xiyang** — AKE setup
+* **starriia** — Model references
+* **VaSTuan** — Multi-character support
+* **zmecyyyy** — Rig review
+* **crabnuts** — Rig reference
 * **Genshin Impact**:
   * **Shader**: [Blender-miHoYo-Shaders](https://github.com/festivize/Blender-miHoYo-Shaders) by Festivity
-  * **Sandrone Pupil**: VANS
+  * **Genshin review**: VANS
   * **Pupil Highlight**: nedarb183
 * **HSR**:
   * **Shader**: [Blender-StellarToon](https://github.com/festivities/Blender-StellarToon) by Festivity
@@ -95,6 +102,10 @@ Thanks to all those who collaborated on the original project:
 * **WuWa / Wuthering Waves**:
   * **Shader**: [Gustling Waters](https://github.com/nytsjared/Gustling-Waters) by [@nytsjared](https://github.com/nytsjared)
   * **Base Addon & Rigging**: [Blender-WuWa-Character-Setup](https://github.com/fnoji/Blender-WuWa-Character-Setup) by [@fnoji](https://github.com/fnoji)
+* **AKE / Arknights: Endfield**:
+  * **Setup**: Xiyang
+  * **Shader**: Endfield PBRToon
+  * **Face Rig**: Isaac (adaptation)
 * **Hair & Clothes Physics**:
   * [thewindlead](https://www.youtube.com/@thewindlead)
 * **Assets**:
