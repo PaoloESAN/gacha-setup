@@ -19,6 +19,73 @@ from setup_wizard.character_rig_setup.rig_ui_utils import (
 )
 
 
+def create_pole_arrow_widget(name, radius=1.125, length=1.5):
+    """Create a 4-sided wireframe pyramid arrowhead widget matching Miyabi IK pole widget."""
+    obj = bpy.data.objects.get(name)
+    mesh = bpy.data.meshes.get(name)
+    if not mesh:
+        mesh = bpy.data.meshes.new(name)
+    else:
+        mesh.clear_geometry()
+
+    verts = [
+        (0.0, length, 0.0),       # 0: reference vert (matching Miyabi)
+        (0.0, 0.0, -radius),      # 1: base -Z
+        (radius, 0.0, 0.0),       # 2: base +X
+        (0.0, 0.0, radius),       # 3: base +Z
+        (-radius, 0.0, 0.0),      # 4: base -X
+        (0.0, -length, 0.0),      # 5: apex tip (pointing outward away from joint)
+    ]
+    edges = [
+        (1, 2), (2, 3), (3, 4), (1, 4),  # base diamond
+        (1, 5), (2, 5), (3, 5), (4, 5),  # pyramid sides to apex
+    ]
+    mesh.from_pydata(verts, edges, [])
+    mesh.update()
+
+    if not obj:
+        obj = bpy.data.objects.new(name, mesh)
+        wgts_colls = [c for c in bpy.data.collections if c.name.startswith("WGTS")]
+        if wgts_colls:
+            wgts_colls[0].objects.link(obj)
+        elif bpy.context.scene.collection:
+            bpy.context.scene.collection.objects.link(obj)
+    else:
+        obj.data = mesh
+    return obj
+
+
+def create_pole_line_widget(name):
+    """Create a 1-segment line widget from (0,0,0) to (0,1,0) for VIS stretch bones."""
+    obj = bpy.data.objects.get(name)
+    mesh = bpy.data.meshes.get(name)
+    if not mesh:
+        mesh = bpy.data.meshes.new(name)
+    else:
+        mesh.clear_geometry()
+
+    verts = [
+        (0.0, 0.0, 0.0),
+        (0.0, 1.0, 0.0),
+    ]
+    edges = [
+        (0, 1),
+    ]
+    mesh.from_pydata(verts, edges, [])
+    mesh.update()
+
+    if not obj:
+        obj = bpy.data.objects.new(name, mesh)
+        wgts_colls = [c for c in bpy.data.collections if c.name.startswith("WGTS")]
+        if wgts_colls:
+            wgts_colls[0].objects.link(obj)
+        elif bpy.context.scene.collection:
+            bpy.context.scene.collection.objects.link(obj)
+    else:
+        obj.data = mesh
+    return obj
+
+
 def rig_character(
         file_path,
         lighting_panel_version, 
@@ -919,8 +986,8 @@ def rig_character(
 
     rigifyr.pose.bones["upper_arm_parent.L"]["pole_parent"] = 2
     rigifyr.pose.bones["upper_arm_parent.R"]["pole_parent"] = 2
-    rigifyr.pose.bones["thigh_parent.L"]["pole_parent"] = 2
-    rigifyr.pose.bones["thigh_parent.R"]["pole_parent"] = 2
+    rigifyr.pose.bones["thigh_parent.L"]["pole_parent"] = 6
+    rigifyr.pose.bones["thigh_parent.R"]["pole_parent"] = 6
 
     bpy.ops.object.mode_set(mode='OBJECT')
     #change active object to rigifyr
@@ -1292,21 +1359,6 @@ def rig_character(
     this_obj.pose.bones["foot_ik.L"].custom_shape = bpy.data.objects["foot1"]
     this_obj.pose.bones["foot_ik.R"].custom_shape = bpy.data.objects["foot1"]
 
-    try:
-        primo_joint = bpy.data.objects["primo-joint"]
-        this_obj.pose.bones["thigh_ik_target.L"].custom_shape = primo_joint
-        this_obj.pose.bones["thigh_ik_target.R"].custom_shape = primo_joint
-        this_obj.pose.bones["upper_arm_ik_target.R"].custom_shape = primo_joint
-        this_obj.pose.bones["upper_arm_ik_target.L"].custom_shape = primo_joint
-    except KeyError:
-        pass
-
-    this_obj.pose.bones["thigh_ik_target.L"].custom_shape_scale_xyz[0] = 0.75
-    this_obj.pose.bones["thigh_ik_target.L"].custom_shape_scale_xyz[1] = 0.75
-    this_obj.pose.bones["thigh_ik_target.L"].custom_shape_scale_xyz[2] = 0.75
-    this_obj.pose.bones["thigh_ik_target.R"].custom_shape_scale_xyz[0] = 0.75
-    this_obj.pose.bones["thigh_ik_target.R"].custom_shape_scale_xyz[1] = 0.75
-    this_obj.pose.bones["thigh_ik_target.R"].custom_shape_scale_xyz[2] = 0.75
 
     this_obj.pose.bones["torso"].custom_shape = bpy.data.objects["pelvis2"]
     this_obj.pose.bones["torso"].use_custom_shape_bone_size = False
@@ -1514,6 +1566,25 @@ def rig_character(
     armature.edit_bones['mch-hand-ik-wrist-R'].parent = armature.edit_bones['hand_ik.R']    
     armature.edit_bones['MCH-upper_arm_ik_target.L'].parent = armature.edit_bones['mch-hand-ik-wrist-L']    
     armature.edit_bones['MCH-upper_arm_ik_target.R'].parent = armature.edit_bones['mch-hand-ik-wrist-R']
+
+    # IK Pole Visualizer Stretch Bones (matching Miyabi 2-part dynamic pole arrow system)
+    vis_pole_pairs = [
+        ("VIS-thigh_ik_target.L", "thigh_ik_target.L", "MCH-shin_ik.L"),
+        ("VIS-thigh_ik_target.R", "thigh_ik_target.R", "MCH-shin_ik.R"),
+        ("VIS-upper_arm_ik_target.L", "upper_arm_ik_target.L", "MCH-forearm_ik.L"),
+        ("VIS-upper_arm_ik_target.R", "upper_arm_ik_target.R", "MCH-forearm_ik.R"),
+    ]
+    for vis_name, pole_name, joint_name in vis_pole_pairs:
+        pole_eb = armature.edit_bones.get(pole_name)
+        joint_eb = armature.edit_bones.get(joint_name)
+        if pole_eb and joint_eb:
+            vis_eb = armature.edit_bones.get(vis_name) or armature.edit_bones.new(vis_name)
+            vis_eb.head = pole_eb.head.copy()
+            vis_eb.tail = joint_eb.head.copy()
+            if (vis_eb.tail - vis_eb.head).length < 1e-4:
+                vis_eb.tail = vis_eb.head + Vector((0.0, 0.1, 0.0))
+            vis_eb.parent = pole_eb
+            vis_eb.use_connect = False
     
     # Shoulders setup (matching Miyabi reference rig):
     # shoulder.L and shoulder.R are parented directly to chest/spine with NO damped track / follow constraints
@@ -3134,6 +3205,7 @@ def rig_character(
     # Left Arm BG
     assign_bone_to_group("hand_ik.L", "Limbs L")
     assign_bone_to_group("upper_arm_ik_target.L", "Limbs L")
+    assign_bone_to_group("VIS-upper_arm_ik_target.L", "Limbs L")
     assign_bone_to_group("shoulder.L", "Limbs L")
     assign_bone_to_group("hand-ik-pivot-L", "Limbs L")
     assign_bone_to_group("hand-ik-L", "Limbs L")
@@ -3146,6 +3218,7 @@ def rig_character(
     # Right Arm BG
     assign_bone_to_group("hand_ik.R", "Limbs R")
     assign_bone_to_group("upper_arm_ik_target.R", "Limbs R")
+    assign_bone_to_group("VIS-upper_arm_ik_target.R", "Limbs R")
     assign_bone_to_group("shoulder.R", "Limbs R")
     assign_bone_to_group("hand-ik-pivot-R", "Limbs R")
     assign_bone_to_group("hand-ik-R", "Limbs R")
@@ -3161,6 +3234,7 @@ def rig_character(
     assign_bone_to_group("foot_spin_ik.L", "Limbs L")
     assign_bone_to_group("foot_heel_ik.L", "Limbs L")
     assign_bone_to_group("thigh_ik_target.L", "Limbs L")
+    assign_bone_to_group("VIS-thigh_ik_target.L", "Limbs L")
     assign_bone_to_group("ik-pivot-L", "Limbs L")
     assign_bone_to_group("ik-sub-pivot-L", "Limbs L")
     assign_bone_to_group("thigh_parent.L", "Limbs L")
@@ -3174,6 +3248,7 @@ def rig_character(
     assign_bone_to_group("foot_spin_ik.R", "Limbs R")
     assign_bone_to_group("foot_heel_ik.R", "Limbs R")
     assign_bone_to_group("thigh_ik_target.R", "Limbs R")
+    assign_bone_to_group("VIS-thigh_ik_target.R", "Limbs R")
     assign_bone_to_group("ik-pivot-R", "Limbs R")
     assign_bone_to_group("ik-sub-pivot-R", "Limbs R")
     assign_bone_to_group("thigh_parent.R", "Limbs R")
@@ -4040,12 +4115,14 @@ def rig_character(
     bone_to_layer("hand_ik_wrist.L",26,"Offsets")
     bone_to_layer("upper_arm_parent.L",[7,8],"Arm.L (IK)","Arm.L (FK)")
     bone_to_layer("upper_arm_ik_target.L",7,"Arm.L (IK)")
+    bone_to_layer("VIS-upper_arm_ik_target.L",7,"Arm.L (IK)")
     bone_to_layer("shoulder.L",[7,8],"Arm.L (IK)","Arm.L (FK)")
     
     bone_to_layer("hand_ik.R",10,"Arm.R (IK)")
     bone_to_layer("upper_arm_parent.R",[10,11],"Arm.R (IK)","Arm.R (FK)")
     bone_to_layer("hand_ik_wrist.R",26,"Offsets")
     bone_to_layer("upper_arm_ik_target.R",10,"Arm.R (IK)")
+    bone_to_layer("VIS-upper_arm_ik_target.R",10,"Arm.R (IK)")
     bone_to_layer("shoulder.R",[10,11],"Arm.R (IK)","Arm.R (FK)")
     
     bone_to_layer("upper_arm_fk.L",8,"Arm.L (FK)")
@@ -4059,6 +4136,7 @@ def rig_character(
     bone_to_layer("foot_ik.L",13,"Leg.L (IK)")
     bone_to_layer("thigh_parent.L",[13,14],"Leg.L (IK)","Leg.L (FK)")
     bone_to_layer("thigh_ik_target.L",13,"Leg.L (IK)")
+    bone_to_layer("VIS-thigh_ik_target.L",13,"Leg.L (IK)")
     bone_to_layer("foot_ik_sub.L",26,"Offsets")
     bone_to_layer("foot_spin_ik.L",13,"Leg.L (IK)")
     bone_to_layer("foot_heel_ik.L",13,"Leg.L (IK)")
@@ -4071,6 +4149,7 @@ def rig_character(
     bone_to_layer("foot_ik.R",16,"Leg.R (IK)")
     bone_to_layer("thigh_parent.R",[16,17],"Leg.R (IK)","Leg.R (FK)")    
     bone_to_layer("thigh_ik_target.R",16,"Leg.R (IK)")
+    bone_to_layer("VIS-thigh_ik_target.R",16,"Leg.R (IK)")
     bone_to_layer("foot_ik_sub.R",26,"Offsets")
     bone_to_layer("foot_spin_ik.R",16,"Leg.R (IK)")
     bone_to_layer("foot_heel_ik.R",16,"Leg.R (IK)")
@@ -4346,9 +4425,91 @@ def rig_character(
                 pb.custom_shape_scale_xyz = (0.08, 0.08, 0.08)
                 pb.rotation_mode = 'XYZ'
 
+    # Setup ZZZ 2-part dynamic pole targets (arrowhead pyramid + dynamic stretching visualizer line, matching Miyabi reference)
+    def setup_zzz_pole_targets(rig_obj):
+        wgt_leg_pole = create_pole_arrow_widget("WGT-IK_Leg_Pole", radius=1.125, length=1.5)
+        wgt_arm_pole = create_pole_arrow_widget("WGT-IK_Arm_Pole", radius=0.70125, length=0.935)
+        wgt_vis_leg = create_pole_line_widget("WGT-VIS-IK_Leg_Pole")
+        wgt_vis_arm = create_pole_line_widget("WGT-VIS-IK_Arm_Pole")
 
+        pole_configs = [
+            # (pole_name, vis_name, joint_name, parent_name, arrow_wgt, vis_wgt, scale_xyz)
+            ("thigh_ik_target.L", "VIS-thigh_ik_target.L", "MCH-shin_ik.L", "thigh_parent.L", wgt_leg_pole, wgt_vis_leg, (1.0, 1.0, 1.0)),
+            ("thigh_ik_target.R", "VIS-thigh_ik_target.R", "MCH-shin_ik.R", "thigh_parent.R", wgt_leg_pole, wgt_vis_leg, (-1.0, 1.0, 1.0)),
+            ("upper_arm_ik_target.L", "VIS-upper_arm_ik_target.L", "MCH-forearm_ik.L", "upper_arm_parent.L", wgt_arm_pole, wgt_vis_arm, (1.0, 1.0, 1.0)),
+            ("upper_arm_ik_target.R", "VIS-upper_arm_ik_target.R", "MCH-forearm_ik.R", "upper_arm_parent.R", wgt_arm_pole, wgt_vis_arm, (-1.0, 1.0, 1.0)),
+        ]
 
-    # Clean up any leftover RIG_LOG text block
+        for pole_name, vis_name, joint_name, parent_name, arrow_wgt, vis_wgt, scale_xyz in pole_configs:
+            pb_pole = rig_obj.pose.bones.get(pole_name)
+            pb_vis = rig_obj.pose.bones.get(vis_name)
+
+            if pb_vis:
+                pb_vis.bone.hide_select = True
+                pb_vis.custom_shape = vis_wgt
+                pb_vis.use_custom_shape_bone_size = True
+                pb_vis.custom_shape_scale_xyz = (1.0, 1.0, 1.0)
+                pb_vis.custom_shape_translation = (0.0, 0.0, 0.0)
+                pb_vis.custom_shape_rotation_euler = (0.0, 0.0, 0.0)
+
+                # STRETCH_TO constraint targeting the joint bone
+                c = pb_vis.constraints.get("Stretch To") or pb_vis.constraints.new('STRETCH_TO')
+                c.name = "Stretch To"
+                c.target = rig_obj
+                c.subtarget = joint_name
+                c.volume = 'NO_VOLUME'
+                c.keep_axis = 'SWING_Y'
+
+                # Hide driver: VIS line hides whenever pole bone hides or when pole_vector is False
+                try:
+                    if rig_obj.animation_data:
+                        for d_b in list(rig_obj.animation_data.drivers):
+                            if d_b.data_path == f'pose.bones["{vis_name}"].hide':
+                                rig_obj.animation_data.drivers.remove(d_b)
+                    pb_vis.hide = False
+
+                    fcurve = pb_vis.driver_add('hide')
+                    d = fcurve.driver
+                    d.type = 'SCRIPTED'
+                    for v in list(d.variables):
+                        d.variables.remove(v)
+
+                    v_pv = d.variables.new()
+                    v_pv.name = 'pv'
+                    v_pv.type = 'SINGLE_PROP'
+                    v_pv.targets[0].id = rig_obj
+                    v_pv.targets[0].data_path = f'pose.bones["{parent_name}"]["pole_vector"]'
+
+                    v_ph = d.variables.new()
+                    v_ph.name = 'ph'
+                    v_ph.type = 'SINGLE_PROP'
+                    v_ph.targets[0].id = rig_obj
+                    v_ph.targets[0].data_path = f'pose.bones["{pole_name}"].hide'
+
+                    d.expression = 'bool(ph) or (1.0 - pv > 0.5)'
+                except Exception as e_drv:
+                    print(f"[ZZZ RIG] VIS pole hide driver notice: {e_drv}")
+                    _rig_log.append(f"VIS pole hide driver error: {e_drv}")
+
+            if pb_pole:
+                pb_pole.custom_shape = arrow_wgt
+                if pb_vis:
+                    pb_pole.custom_shape_transform = pb_vis
+                pb_pole.use_custom_shape_bone_size = True
+                pb_pole.custom_shape_scale_xyz = scale_xyz
+                pb_pole.custom_shape_translation = (0.0, 0.0, 0.0)
+                pb_pole.custom_shape_rotation_euler = (0.0, 0.0, 0.0)
+
+        # Sync any legacy WGT objects created by Rigify
+        for wgt_name in [obj.name for obj in bpy.data.objects if ("thigh_ik_target" in obj.name or "upper_arm_ik_target" in obj.name) and obj.name.startswith("WGT-")]:
+            wobj = bpy.data.objects.get(wgt_name)
+            if wobj and wobj.data and not wobj.name.startswith("WGT-IK_") and not wobj.name.startswith("WGT-VIS-"):
+                if "thigh" in wgt_name:
+                    wobj.data = wgt_leg_pole.data
+                else:
+                    wobj.data = wgt_arm_pole.data
+
+    setup_zzz_pole_targets(this_obj)
     log_text = bpy.data.texts.get("RIG_LOG")
     if log_text:
         bpy.data.texts.remove(log_text)

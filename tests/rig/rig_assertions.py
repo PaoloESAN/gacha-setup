@@ -71,6 +71,10 @@ def assert_rig(game, char_dir):
     integrity_checks = test_rig_integrity(rig)
     checks.extend(integrity_checks)
 
+    # --- 4. ZZZ SPECIFIC POLE & FOOT-KNEE TESTS ---
+    if game == "zzz":
+        checks.extend(test_zzz_pole_and_foot(rig))
+
     # Reset rig to neutral rest pose
     reset_rig_pose(rig)
 
@@ -378,3 +382,150 @@ def reset_rig_pose(rig):
         else:
             pb.rotation_euler = Euler((0.0, 0.0, 0.0))
     bpy.context.view_layer.update()
+
+
+def test_zzz_pole_and_foot(rig):
+    """Test ZZZ knee pole follows foot IK and pole targets use arrow custom shapes."""
+    checks = []
+
+    # 1. Check pole_parent defaults and foot IK lifting knee
+    thigh_p_L = rig.pose.bones.get("thigh_parent.L")
+    thigh_p_R = rig.pose.bones.get("thigh_parent.R")
+    val_L = thigh_p_L.get("pole_parent") if thigh_p_L else None
+    val_R = thigh_p_R.get("pole_parent") if thigh_p_R else None
+
+    foot = rig.pose.bones.get("foot_ik.L")
+    knee = rig.pose.bones.get("thigh_ik_target.L")
+    followed = False
+    diff = 0.0
+    if foot and knee:
+        k_z_before = knee.matrix.translation.z
+        orig_foot_loc = foot.location.copy()
+        foot.location.z += 0.5
+        bpy.context.view_layer.update()
+        k_z_after = knee.matrix.translation.z
+        diff = k_z_after - k_z_before
+        followed = abs(diff - 0.5) < 0.05
+        foot.location = orig_foot_loc
+        bpy.context.view_layer.update()
+
+    checks.append({
+        "name": "ZZZ Knee Follows Foot IK",
+        "passed": val_L == 6 and val_R == 6 and followed,
+        "message": f"thigh_parent pole_parent L={val_L} R={val_R}, knee lift diff={diff:.4f}m",
+    })
+
+    # Check Toggle Pole synchronization (both arrowhead and elastic line show/hide together)
+    pb_pole = rig.pose.bones.get("thigh_ik_target.L")
+    pb_vis = rig.pose.bones.get("VIS-thigh_ik_target.L")
+    pb_parent = rig.pose.bones.get("thigh_parent.L")
+
+    pole_sync_ok = False
+    pole_sync_msg = ""
+    if pb_pole and pb_vis and pb_parent:
+        orig_pv = pb_parent.get("pole_vector")
+
+        # Toggle OFF (0.0)
+        pb_parent["pole_vector"] = False
+        rig.update_tag()
+        bpy.context.view_layer.update()
+        state_off = (pb_pole.hide, pb_vis.hide)
+        off_ok = (pb_pole.hide is True) and (pb_vis.hide is True)
+
+        # Toggle ON (1.0)
+        pb_parent["pole_vector"] = True
+        rig.update_tag()
+        bpy.context.view_layer.update()
+        state_on = (pb_pole.hide, pb_vis.hide)
+        on_ok = (pb_pole.hide is False) and (pb_vis.hide is False)
+
+        # Restore
+        pb_parent["pole_vector"] = orig_pv
+        rig.update_tag()
+        bpy.context.view_layer.update()
+
+        vis_drv = None
+        if rig.animation_data:
+            for d in rig.animation_data.drivers:
+                if d.data_path == f'pose.bones["{pb_vis.name}"].hide':
+                    vis_drv = d
+                    break
+        vis_drv_info = f"Driver expr={vis_drv.driver.expression}" if vis_drv else "NO DRIVER"
+
+        pole_sync_ok = off_ok and on_ok
+        pole_sync_msg = f"Toggle Pole OFF -> state={state_off}; ON -> state={state_on} (vis_drv: {vis_drv_info})" if not pole_sync_ok else "Both arrowhead and elastic line hide when Toggle Pole is OFF, and show when ON"
+
+
+
+
+    checks.append({
+        "name": "ZZZ Pole Toggle Synchronization",
+        "passed": pole_sync_ok,
+        "message": pole_sync_msg,
+    })
+
+    # 2. Check pole target arrow widgets (Part 1: Arrowhead control bone)
+    arrow_pairs = [
+        ("thigh_ik_target.L", "VIS-thigh_ik_target.L"),
+        ("thigh_ik_target.R", "VIS-thigh_ik_target.R"),
+        ("upper_arm_ik_target.L", "VIS-upper_arm_ik_target.L"),
+        ("upper_arm_ik_target.R", "VIS-upper_arm_ik_target.R"),
+    ]
+    missing_shapes = []
+    invalid_shapes = []
+    missing_transforms = []
+    for pole_name, vis_name in arrow_pairs:
+        pb = rig.pose.bones.get(pole_name)
+        if not pb or not pb.custom_shape:
+            missing_shapes.append(pole_name)
+            continue
+        mesh = pb.custom_shape.data
+        if len(mesh.vertices) != 6 or len(mesh.edges) != 8:
+            invalid_shapes.append(f"{pole_name}:{pb.custom_shape.name}(v={len(mesh.vertices)},e={len(mesh.edges)})")
+        if not pb.custom_shape_transform or pb.custom_shape_transform.name != vis_name:
+            curr_tf = pb.custom_shape_transform.name if pb.custom_shape_transform else "None"
+            missing_transforms.append(f"{pole_name}(transform={curr_tf}, expected={vis_name})")
+
+    checks.append({
+        "name": "ZZZ Pole Target Arrow Widgets",
+        "passed": len(missing_shapes) == 0 and len(invalid_shapes) == 0 and len(missing_transforms) == 0,
+        "message": f"Arrow widgets or transforms invalid (missing: {missing_shapes}, invalid: {invalid_shapes}, transforms: {missing_transforms})" if (missing_shapes or invalid_shapes or missing_transforms) else "All 4 pole targets have 4-sided wireframe pyramid widgets transformed by VIS bones",
+    })
+
+    # 3. Check VIS stretch bones (Part 2: Visualizer line bone)
+    vis_configs = [
+        ("VIS-thigh_ik_target.L", "thigh_ik_target.L", "MCH-shin_ik.L"),
+        ("VIS-thigh_ik_target.R", "thigh_ik_target.R", "MCH-shin_ik.R"),
+        ("VIS-upper_arm_ik_target.L", "upper_arm_ik_target.L", "MCH-forearm_ik.L"),
+        ("VIS-upper_arm_ik_target.R", "upper_arm_ik_target.R", "MCH-forearm_ik.R"),
+    ]
+    vis_missing = []
+    vis_issues = []
+    for vis_name, pole_name, joint_name in vis_configs:
+        pb_vis = rig.pose.bones.get(vis_name)
+        if not pb_vis:
+            vis_missing.append(vis_name)
+            continue
+        # Check parent
+        if not pb_vis.parent or pb_vis.parent.name != pole_name:
+            p_curr = pb_vis.parent.name if pb_vis.parent else "None"
+            vis_issues.append(f"{vis_name}: parent is {p_curr}, expected {pole_name}")
+        # Check hide_select
+        if not pb_vis.bone.hide_select:
+            vis_issues.append(f"{vis_name}: hide_select is False")
+        # Check widget (1 segment line)
+        if not pb_vis.custom_shape or len(pb_vis.custom_shape.data.vertices) != 2 or len(pb_vis.custom_shape.data.edges) != 1:
+            vis_issues.append(f"{vis_name}: custom_shape missing or not 2-vert 1-edge line")
+        # Check STRETCH_TO constraint
+        stretch_c = next((c for c in pb_vis.constraints if c.type == 'STRETCH_TO'), None)
+        if not stretch_c or stretch_c.subtarget != joint_name:
+            st_curr = stretch_c.subtarget if stretch_c else "None"
+            vis_issues.append(f"{vis_name}: STRETCH_TO target is {st_curr}, expected {joint_name}")
+
+    checks.append({
+        "name": "ZZZ Pole Target Stretch Visualizers",
+        "passed": len(vis_missing) == 0 and len(vis_issues) == 0,
+        "message": f"VIS stretch bones issues (missing: {vis_missing}, issues: {vis_issues})" if (vis_missing or vis_issues) else "All 4 VIS stretch bones present, parented to pole targets, unselectable, with line widgets and STRETCH_TO constraints to joints",
+    })
+
+    return checks
