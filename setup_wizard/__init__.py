@@ -81,6 +81,7 @@ else:
         ZZZ_OT_SetUpOutlines,
         WW_OT_SetUpOutlines,
     )
+    from setup_wizard.genshin_animate_mode import GI_OT_ToggleAnimateMode
     from setup_wizard.genshin_setup_wizard import (
         GI_OT_GenshinSetupWizardUI,
         HSR_OT_HonkaiStarRailSetupWizardUI,
@@ -260,6 +261,7 @@ else:
         GI_OT_ReorientBones,
         GI_OT_SetUpMaterials,
         GI_OT_SetUpOutlines,
+        GI_OT_ToggleAnimateMode,
         GI_OT_FixTransformations,
         GI_OT_FinishSetup,
         GI_OT_RigCharacter,

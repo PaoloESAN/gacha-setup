@@ -827,7 +827,11 @@ def pull_gi_panel_values(scene, context, force=False):
 
         _is_updating_gi_props = True
         try:
-            # 1. Pull Outlines & Night Soul states from character meshes
+            # 1. Pull Outlines & Night Soul states from character meshes.
+            # Scan all rig meshes until the first outline modifier is found
+            # (old code broke out after the very first mesh even when it had
+            # no outline modifier, leaving the checkbox out of sync).
+            found_outlines = False
             for mesh in _iter_rig_meshes(arm):
                 for mod in getattr(mesh, "modifiers", []):
                     if mod.type == 'NODES' and mod.node_group and "outlines" in mod.node_group.name.lower():
@@ -844,8 +848,10 @@ def pull_gi_panel_values(scene, context, force=False):
                             v23 = get_modifier_property(mod, "Toggle Night Soul State")
                         if v23 is not None:
                             scene.gi_enable_night_soul = bool(v23)
+                        found_outlines = True
                         break
-                break
+                if found_outlines:
+                    break
 
             # 2. Pull lighting mode saved on this armature
             saved_mode = arm.get("gi_light_mode", "0")
@@ -970,43 +976,43 @@ def _apply_outlines_and_night_soul(context, outlines_on, ns_on):
         arm = resolve_settings_armature(context)
         meshes = list(_iter_rig_meshes(arm)) if arm else [obj for obj in bpy.data.objects if obj.type == 'MESH']
         should_show = bool(outlines_on or ns_on)
+        dirty_meshes = []
 
         for mesh in meshes:
             has_mod = False
             for mod in getattr(mesh, "modifiers", []):
                 if mod.type == 'NODES' and mod.node_group and "outlines" in mod.node_group.name.lower():
                     has_mod = True
+                    # Single write per socket via set_modifier_property (it already
+                    # handles Blender 5 properties.inputs + legacy fallbacks).
+                    # The old code additionally wrote mod["Socket_xx"] directly,
+                    # doubling depsgraph updates per modifier.
                     set_modifier_property(mod, "Socket_24", outlines_on)
                     set_modifier_property(mod, "Toggle Outlines", outlines_on)
                     set_modifier_property(mod, "Socket_23", ns_on)
                     set_modifier_property(mod, "Toggle Night Soul State", ns_on)
 
+                    # show_viewport=False skips GN evaluation entirely: this is
+                    # the fast path that makes "outlines off" much faster.
+                    # Only touch it when it actually changes to avoid a
+                    # depsgraph rebuild per modifier.
+                    if mod.show_viewport != should_show:
+                        mod.show_viewport = should_show
                     try:
-                        mod["Socket_24"] = outlines_on
+                        if mod.show_render != should_show:
+                            mod.show_render = should_show
                     except Exception:
                         pass
-                    try:
-                        mod["Toggle Outlines"] = outlines_on
-                    except Exception:
-                        pass
-                    try:
-                        mod["Socket_23"] = ns_on
-                    except Exception:
-                        pass
-                    try:
-                        mod["Toggle Night Soul State"] = ns_on
-                    except Exception:
-                        pass
-
-                    # Solo si ambos están desactivados, quitar show_viewport y show_render
-                    mod.show_viewport = should_show
-                    mod.show_render = should_show
 
             if has_mod:
-                try:
-                    mesh.update_tag()
-                except Exception:
-                    pass
+                dirty_meshes.append(mesh)
+
+        # Batch tags: one pass at the end instead of per-mesh update + redraw.
+        for mesh in dirty_meshes:
+            try:
+                mesh.update_tag()
+            except Exception:
+                pass
 
         try:
             if context and getattr(context, "view_layer", None):
@@ -1043,10 +1049,21 @@ def update_gi_night_soul(self, context):
 
 
 def character_has_night_soul(context):
+    # Fast path: per-armature cache. character_has_night_soul() runs on every
+    # Character Settings panel draw, so a global scan of bpy.data.materials
+    # on each redraw is wasted work. The Night Soul state of a character never
+    # changes after setup, so stamp it once.
     try:
         from setup_wizard.ui.character_settings_utils import resolve_settings_armature, _iter_rig_meshes, get_character_materials
         from setup_wizard.utils.modifier_utils import get_modifier_property
         arm = resolve_settings_armature(context)
+        if arm is not None:
+            try:
+                cached = arm.get("gacha_has_night_soul")
+                if cached is not None:
+                    return bool(cached)
+            except Exception:
+                pass
         if arm:
             for mesh in _iter_rig_meshes(arm):
                 for mod in getattr(mesh, "modifiers", []):
@@ -1055,7 +1072,29 @@ def character_has_night_soul(context):
                         if not ns_mat:
                             ns_mat = get_modifier_property(mod, "Night Soul Outline")
                         if ns_mat:
-                            return True
+                            # A Night Soul outline material is always bound by
+                            # setup (base fallback), so only count it when the
+                            # character actually has NYX textures.
+                            has_nyx = False
+                            try:
+                                _, _mats = get_character_materials(context, arm)
+                                for mat in _mats:
+                                    if not getattr(mat, "node_tree", None):
+                                        continue
+                                    for n_name in ['Main_NYXmask', 'Face_NYXmask']:
+                                        n = mat.node_tree.nodes.get(n_name)
+                                        if n and getattr(n, 'image', None):
+                                            has_nyx = True
+                                            break
+                                    if has_nyx:
+                                        break
+                            except Exception:
+                                pass
+                            try:
+                                arm["gacha_has_night_soul"] = bool(has_nyx)
+                            except Exception:
+                                pass
+                            return bool(has_nyx)
             _, mats = get_character_materials(context, arm)
             for mat in mats:
                 if not getattr(mat, "node_tree", None):
@@ -1063,7 +1102,16 @@ def character_has_night_soul(context):
                 for n_name in ['Main_NYXmask', 'Face_NYXmask']:
                     n = mat.node_tree.nodes.get(n_name)
                     if n and getattr(n, 'image', None):
+                        try:
+                            arm["gacha_has_night_soul"] = True
+                        except Exception:
+                            pass
                         return True
+            try:
+                arm["gacha_has_night_soul"] = False
+            except Exception:
+                pass
+            return False
     except Exception:
         pass
 
@@ -1135,6 +1183,14 @@ class GI_PT_Rig_Character_Settings(Panel):
             pull_gi_panel_values(scene, context)
         except Exception:
             pass
+
+        # 0. Animate Mode (fast playback: lightweight materials, no outlines)
+        is_anim = scene.get("gi_animate_mode", False)
+        layout.operator(
+            "genshin.toggle_animate_mode",
+            text="Disable Animate Mode" if is_anim else "Enable Animate Mode",
+            icon="SHADING_TEXTURE" if is_anim else "RESTRICT_RENDER_OFF"
+        )
 
         # 1. Lighting Mode
         col_light = layout.column(align=True)

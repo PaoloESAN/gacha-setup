@@ -109,6 +109,24 @@ class MaterialDataApplier(ABC):
         if toggle_normal_map_input:
             toggle_normal_map_input.default_value = value
 
+    def has_lightmap_image(self) -> bool:
+        try:
+            mat = getattr(self, 'material', None)
+            tree = getattr(mat, 'node_tree', None)
+            if not tree:
+                return False
+            for node in tree.nodes:
+                if node.type == 'TEX_IMAGE' and 'lightmap' in (getattr(node, 'name', '') or '').lower():
+                    if getattr(node, 'image', None):
+                        return True
+            return False
+        except Exception:
+            return False
+
+    def set_toggle_lightmap_ao(self, toggle_lightmap_ao_input, value: bool) -> None:
+        if toggle_lightmap_ao_input:
+            toggle_lightmap_ao_input.default_value = value
+
     def is_not_using_eye_stencil(self) -> bool:
         return not [material for material in bpy.data.materials if material.name.endswith('_Mat_Pupil')]
 
@@ -718,6 +736,15 @@ class V4_MaterialDataApplier(V3_MaterialDataApplier):
             if toggle_normal_map_input:
                 self.set_toggle_normal_map(toggle_normal_map_input, False)
 
+        # Disable Toggle Lightmap AO if there is no Lightmap texture bound
+        # (ex. Columbina Pupil: game data sets _UseLightMapColorAO=1 but ships
+        # no Pupil lightmap, so the shader would sample an empty image node).
+        if not self.has_lightmap_image():
+            toggle_lightmap_ao_input = inputs_node.inputs.get('Toggle Lightmap AO') or \
+                inputs_node.inputs.get('Use Lightmap AO')
+            if toggle_lightmap_ao_input is not None:
+                self.set_toggle_lightmap_ao(toggle_lightmap_ao_input, False)
+
         # VeilShadow (ex. Columbina): no dedicated lightmap/normalmap exists,
         # but shading must keep the first 4 SHADING OPTIONS toggles enabled.
         # Everything else stays as parsed from the JSON.
@@ -897,6 +924,15 @@ class V1_HoYoToonMaterialDataApplier(V3_MaterialDataApplier):
             toggle_normal_map_input = inputs_node.inputs.get(self.shader_node_input_names.TOGGLE_NORMAL_MAP)
             if toggle_normal_map_input:
                 self.set_toggle_normal_map(toggle_normal_map_input, False)
+
+        # Disable Toggle Lightmap AO if there is no Lightmap texture bound
+        # (ex. Columbina Pupil: game data sets _UseLightMapColorAO=1 but ships
+        # no Pupil lightmap, so the shader would sample an empty image node).
+        if not self.has_lightmap_image():
+            toggle_lightmap_ao_input = inputs_node.inputs.get('Toggle Lightmap AO') or \
+                inputs_node.inputs.get('Use Lightmap AO')
+            if toggle_lightmap_ao_input is not None:
+                self.set_toggle_lightmap_ao(toggle_lightmap_ao_input, False)
 
         # VeilShadow (ex. Columbina): keep the first 4 SHADING OPTIONS toggles
         # enabled even without dedicated lightmap/normalmap. Rest stays parsed.

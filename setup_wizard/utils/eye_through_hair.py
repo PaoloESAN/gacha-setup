@@ -343,15 +343,34 @@ def get_or_create_compositor_tree(scene: bpy.types.Scene) -> bpy.types.NodeTree:
         return getattr(scene, "node_tree", None)
 
 
+def _link_replace(links, from_socket, to_socket):
+    """Links from_socket -> to_socket, first removing any existing links into
+    to_socket (Blender does not reliably auto-replace, and legacy trees may
+    hold stale links)."""
+    if not from_socket or not to_socket:
+        return
+    try:
+        for l in list(to_socket.links):
+            links.remove(l)
+    except Exception:
+        pass
+    try:
+        getattr(links, "new")(from_socket, to_socket)
+    except Exception:
+        pass
+
+
 def setup_compositor_nodes(scene: bpy.types.Scene) -> bool:
     """
-    Configures compositor nodes:
+    Configures compositor nodes with the Eye Through Hair mix FIRST in the
+    chain (right after Render Layers) so every downstream node (post
+    processing, color grading, ...) applies to the already-mixed result:
     - Finds or creates Render Layers node.
-    - Finds the final output node (Composite or Group Output).
-    - Intercepts existing input to final output.
-    - Creates Multiply Math node (Eye mask * 0.5).
-    - Creates Mix Color node (A: prev_output, B: Eye color, Factor: Multiply).
-    - Connects Mix Result to final output node.
+    - Finds or creates Multiply Math node (Eye mask * 0.5).
+    - Finds or creates Mix Color node ('Eye Through Hair Mix').
+    - Mix A <- Render Layers Image, Mix B <- Render Layers Eye color,
+      Mix Factor <- Multiply(Eye mask) output.
+    - Mix Result -> every node previously fed by Render Layers Image.
     """
     tree = get_or_create_compositor_tree(scene)
     if not tree:
@@ -360,15 +379,23 @@ def setup_compositor_nodes(scene: bpy.types.Scene) -> bool:
     nodes = tree.nodes
     links = tree.links
 
+    MIX_LABELS = ("Eye Through Hair Mix", "See-Through Mix")
+    MATH_NAME = "Math (Eye Through Hair Multiply)"
+    MIX_NAME = "Mix (Eye Through Hair)"
+
     # 1. Render Layers node
     rl_node = next((n for n in nodes if n.type == 'R_LAYERS'), None)
     if not rl_node:
         rl_node = nodes.new(type="CompositorNodeRLayers")
         rl_node.location = (-420, 200)
 
-    # 2. Output node
+    rl_image_socket = rl_node.outputs.get("Image")
+    if not rl_image_socket:
+        return False
+
+    # 2. Output node (only needed as fallback / legacy-restore target)
     out_node = next(
-        (n for n in nodes if getattr(n, "type", "") in ("COMPOSITE", "GROUP_OUTPUT", "OUTPUT_GROUP") 
+        (n for n in nodes if getattr(n, "type", "") in ("COMPOSITE", "GROUP_OUTPUT", "OUTPUT_GROUP")
          or "Composite" in n.bl_idname or "GroupOutput" in n.bl_idname),
         None
     )
@@ -386,62 +413,45 @@ def setup_compositor_nodes(scene: bpy.types.Scene) -> bool:
 
     out_input_socket = out_node.inputs.get("Image") or (out_node.inputs[0] if out_node.inputs else None)
 
-    # Determine previous source connected to output (or fallback to Render Layers Image)
-    prev_source_socket = None
-    if out_input_socket and out_input_socket.is_linked:
-        first_link = out_input_socket.links[0]
-        # If already linked to a Mix node with label 'Eye Through Hair Mix', avoid infinite re-chaining
-        if getattr(first_link.from_node, "label", "") in ("Eye Through Hair Mix", "See-Through Mix"):
-            return True
-        prev_source_socket = first_link.from_socket
-        # Unlink the old direct connection to the output node
-        for l in list(out_input_socket.links):
-            links.remove(l)
-
-    if not prev_source_socket and rl_node.outputs.get("Image"):
-        prev_source_socket = rl_node.outputs.get("Image")
-
-    # 3. Create Multiply Math node (ShaderNodeMath in B5+, CompositorNodeMath in B4 / Goo)
-    math_node = None
-    for ntype in ["ShaderNodeMath", "CompositorNodeMath"]:
-        try:
-            math_node = nodes.new(type=ntype)
-            break
-        except Exception:
-            pass
+    # 3. Find or create Multiply Math node (ShaderNodeMath in B5+, CompositorNodeMath in B4 / Goo)
+    math_node = next((n for n in nodes if n.name == MATH_NAME), None)
+    if not math_node:
+        for ntype in ["ShaderNodeMath", "CompositorNodeMath"]:
+            try:
+                math_node = nodes.new(type=ntype)
+                break
+            except Exception:
+                pass
+        # Default Value 2 = 0.500 only on creation; re-running must keep
+        # the user's adjusted value.
+        if math_node and len(math_node.inputs) > 1:
+            math_node.inputs[1].default_value = 0.500
 
     if not math_node:
         return False
 
-    math_node.name = "Math (Eye Through Hair Multiply)"
+    math_node.name = MATH_NAME
     math_node.label = "Multiply"
     math_node.operation = 'MULTIPLY'
-    math_node.location = (-100, 20)
 
-    # Value 2 input = 0.500
-    if len(math_node.inputs) > 1:
-        math_node.inputs[1].default_value = 0.500
-
-    # Connect Render Layers "Eye mask" -> Multiply input 0
-    eye_mask_socket = rl_node.outputs.get("Eye mask") or rl_node.outputs.get("Eye Mask")
-    if eye_mask_socket and len(math_node.inputs) > 0:
-        links.new(eye_mask_socket, math_node.inputs[0])
-
-    # 4. Create Mix Color node (ShaderNodeMix in B5+, CompositorNodeMixRGB in B4 / Goo)
-    mix_node = None
-    for ntype in ["ShaderNodeMix", "CompositorNodeMixRGB", "CompositorNodeMix"]:
-        try:
-            mix_node = nodes.new(type=ntype)
-            break
-        except Exception:
-            pass
+    # 4. Find or create Mix Color node (ShaderNodeMix in B5+, CompositorNodeMixRGB in B4 / Goo)
+    mix_node = next(
+        (n for n in nodes if n.name == MIX_NAME or getattr(n, "label", "") in MIX_LABELS),
+        None
+    )
+    if not mix_node:
+        for ntype in ["ShaderNodeMix", "CompositorNodeMixRGB", "CompositorNodeMix"]:
+            try:
+                mix_node = nodes.new(type=ntype)
+                break
+            except Exception:
+                pass
 
     if not mix_node:
         return False
 
-    mix_node.name = "Mix (Eye Through Hair)"
+    mix_node.name = MIX_NAME
     mix_node.label = "Eye Through Hair Mix"
-    mix_node.location = (200, 200)
 
     if hasattr(mix_node, "data_type"):
         mix_node.data_type = 'RGBA'
@@ -451,6 +461,25 @@ def setup_compositor_nodes(scene: bpy.types.Scene) -> bool:
         mix_node.clamp_factor = True
     if hasattr(mix_node, "clamp_result"):
         mix_node.clamp_result = False
+
+    mix_result_output = (
+        _get_socket(mix_node.outputs, identifier="Result_Color")
+        or _get_socket(mix_node.outputs, identifier="Image")
+        or _get_socket(mix_node.outputs, name="Result")
+        or mix_node.outputs[0]
+    )
+
+    # 5. Insert at the FRONT: collect everything fed by Render Layers Image
+    # (excluding our own nodes) and re-feed it from the Mix Result.
+    downstream_links = [
+        (l.to_socket, l.from_socket) for l in list(rl_image_socket.links)
+        if l.to_node not in (mix_node, math_node)
+    ]
+
+    # Connect Render Layers "Eye mask" -> Multiply input 0
+    eye_mask_socket = rl_node.outputs.get("Eye mask") or rl_node.outputs.get("Eye Mask")
+    if eye_mask_socket and len(math_node.inputs) > 0:
+        _link_replace(links, eye_mask_socket, math_node.inputs[0])
 
     # Connect Factor from Math output
     mix_fac_input = (
@@ -462,9 +491,9 @@ def setup_compositor_nodes(scene: bpy.types.Scene) -> bool:
     )
     math_output_socket = _get_socket(math_node.outputs, identifier="Value") or math_node.outputs[0]
     if mix_fac_input and math_output_socket:
-        links.new(math_output_socket, mix_fac_input)
+        _link_replace(links, math_output_socket, mix_fac_input)
 
-    # Connect Input A: from prev_source_socket
+    # Connect Input A: straight from Render Layers Image
     mix_a_input = (
         _get_socket(mix_node.inputs, identifier="A_Color")
         or _get_socket(mix_node.inputs, identifier="Image")
@@ -472,8 +501,8 @@ def setup_compositor_nodes(scene: bpy.types.Scene) -> bool:
         or _get_socket(mix_node.inputs, name="A")
         or (mix_node.inputs[1] if len(mix_node.inputs) > 1 else None)
     )
-    if prev_source_socket and mix_a_input:
-        links.new(prev_source_socket, mix_a_input)
+    if mix_a_input:
+        _link_replace(links, rl_image_socket, mix_a_input)
 
     # Connect Input B: from Render Layers "Eye color"
     mix_b_input = (
@@ -485,23 +514,26 @@ def setup_compositor_nodes(scene: bpy.types.Scene) -> bool:
     )
     eye_color_socket = rl_node.outputs.get("Eye color") or rl_node.outputs.get("Eye Color")
     if eye_color_socket and mix_b_input:
-        links.new(eye_color_socket, mix_b_input)
+        _link_replace(links, eye_color_socket, mix_b_input)
 
-    # Connect Result to final output node
-    mix_result_output = (
-        _get_socket(mix_node.outputs, identifier="Result_Color")
-        or _get_socket(mix_node.outputs, identifier="Image")
-        or _get_socket(mix_node.outputs, name="Result")
-        or mix_node.outputs[0]
-    )
-    if out_input_socket and mix_result_output:
-        links.new(mix_result_output, out_input_socket)
+    # Re-feed former Render Layers consumers from the Mix Result
+    for to_socket, _from_socket in downstream_links:
+        try:
+            _link_replace(links, mix_result_output, to_socket)
+        except Exception:
+            pass
 
-    # Connect to Viewer node if present
-    viewer_node = next((n for n in nodes if getattr(n, "type", "") == 'VIEWER'), None)
-    if viewer_node and viewer_node.inputs:
-        v_in = viewer_node.inputs.get("Image") or viewer_node.inputs[0]
-        links.new(mix_result_output, v_in)
+    # Fallback: nothing consumed Render Layers Image (fresh tree) -> feed
+    # the final output directly so the result stays visible.
+    if not downstream_links and out_input_socket and not out_input_socket.is_linked:
+        try:
+            _link_replace(links, mix_result_output, out_input_socket)
+        except Exception:
+            pass
+
+    # Layout: right after Render Layers, matching the reference setup.
+    math_node.location = (rl_node.location.x + 220, rl_node.location.y - 160)
+    mix_node.location = (rl_node.location.x + 460, rl_node.location.y - 20)
 
     return True
 
