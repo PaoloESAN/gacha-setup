@@ -30,6 +30,50 @@ hair_mat = bpy.data.materials.new(name="M_Hair")
 hair_mat.use_nodes = True
 hair_obj.data.materials.append(hair_mat)
 
+# Create NTE mrim outline material with use_transparency_overlap = True
+mrim_mat = bpy.data.materials.new(name="mrim")
+mrim_mat.use_nodes = True
+if hasattr(mrim_mat, "use_transparency_overlap"):
+    mrim_mat.use_transparency_overlap = True
+
+# Create HSR Hair Mesh material
+hsr_hair_mat = bpy.data.materials.new(name="StellarToon - Hair")
+hsr_hair_mat.use_nodes = True
+if hasattr(hsr_hair_mat, "use_transparency_overlap"):
+    hsr_hair_mat.use_transparency_overlap = True
+
+# Create HSR Hair Outlines material
+hsr_hair_ol_mat = bpy.data.materials.new(name="StellarToon - Hair Outlines")
+hsr_hair_ol_mat.use_nodes = True
+if hasattr(hsr_hair_ol_mat, "use_transparency_overlap"):
+    hsr_hair_ol_mat.use_transparency_overlap = False
+
+# Test HSR hair transparency configuration step
+from setup_wizard.geometry_nodes_setup.geometry_nodes_setups import configure_hsr_hair_transparency
+configure_hsr_hair_transparency()
+
+# Verify HSR Hair Mesh: BLENDED and use_transparency_overlap = False
+if hasattr(hsr_hair_mat, "surface_render_method"):
+    assert hsr_hair_mat.surface_render_method == 'BLENDED'
+if hasattr(hsr_hair_mat, "blend_method"):
+    assert hsr_hair_mat.blend_method == 'BLEND'
+if hasattr(hsr_hair_mat, "use_transparency_overlap"):
+    assert hsr_hair_mat.use_transparency_overlap is False, f"HSR Hair mesh overlap was {hsr_hair_mat.use_transparency_overlap}"
+print("✔ HSR Hair Mesh setup step verified (BLENDED and use_transparency_overlap = False)!")
+
+# Verify HSR Hair Outlines: BLENDED and use_transparency_overlap = True
+if hasattr(hsr_hair_ol_mat, "surface_render_method"):
+    assert hsr_hair_ol_mat.surface_render_method == 'BLENDED'
+if hasattr(hsr_hair_ol_mat, "blend_method"):
+    assert hsr_hair_ol_mat.blend_method == 'BLEND'
+if hasattr(hsr_hair_ol_mat, "use_transparency_overlap"):
+    assert hsr_hair_ol_mat.use_transparency_overlap is True, f"HSR Hair outlines overlap was {hsr_hair_ol_mat.use_transparency_overlap}"
+print("✔ HSR Hair Outlines setup step verified (BLENDED and use_transparency_overlap = True)!")
+
+# Ensure hair_mat has use_transparency_overlap = True before operator to verify it gets set to False
+if hasattr(hair_mat, "use_transparency_overlap"):
+    hair_mat.use_transparency_overlap = True
+
 # Create Face mesh with pupil material containing INTERNAL Shader to RGB
 bpy.ops.mesh.primitive_grid_add(x_subdivisions=4, y_subdivisions=4, location=(0, 0, 0))
 face_obj = bpy.context.active_object
@@ -112,6 +156,24 @@ if hasattr(hair_mat, "blend_method"):
 if hasattr(hair_mat, "use_transparency_overlap"):
     assert hair_mat.use_transparency_overlap is False, f"Hair use_transparency_overlap was {hair_mat.use_transparency_overlap}"
 print("✔ Hair material settings verified (BLENDED and use_transparency_overlap = False)!")
+
+# Verify NTE mrim material settings (BLENDED, but use_transparency_overlap left untouched as True)
+if hasattr(mrim_mat, "surface_render_method"):
+    assert mrim_mat.surface_render_method == 'BLENDED', f"mrim render method was {mrim_mat.surface_render_method}"
+if hasattr(mrim_mat, "blend_method"):
+    assert mrim_mat.blend_method == 'BLEND', f"mrim blend method was {mrim_mat.blend_method}"
+if hasattr(mrim_mat, "use_transparency_overlap"):
+    assert mrim_mat.use_transparency_overlap is True, f"mrim use_transparency_overlap should remain True, was {mrim_mat.use_transparency_overlap}"
+print("✔ NTE mrim material settings verified (BLENDED and use_transparency_overlap untouched as True)!")
+
+# Verify HSR Hair Outlines material settings (BLENDED, and use_transparency_overlap left untouched as True)
+if hasattr(hsr_hair_ol_mat, "surface_render_method"):
+    assert hsr_hair_ol_mat.surface_render_method == 'BLENDED', f"HSR Hair outlines render method was {hsr_hair_ol_mat.surface_render_method}"
+if hasattr(hsr_hair_ol_mat, "blend_method"):
+    assert hsr_hair_ol_mat.blend_method == 'BLEND', f"HSR Hair outlines blend method was {hsr_hair_ol_mat.blend_method}"
+if hasattr(hsr_hair_ol_mat, "use_transparency_overlap"):
+    assert hsr_hair_ol_mat.use_transparency_overlap is True, f"HSR Hair outlines use_transparency_overlap should remain True, was {hsr_hair_ol_mat.use_transparency_overlap}"
+print("✔ HSR Hair Outlines settings verified (BLENDED and use_transparency_overlap untouched as True)!")
 
 print("✔ Internal Shader to RGB fully intact and untouched!")
 print("✔ Dedicated Eye Through Hair Shader to RGB created with zero cycles!")

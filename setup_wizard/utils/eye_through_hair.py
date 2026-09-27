@@ -235,50 +235,58 @@ def isolate_and_assign_eye_through_hair_materials(obj: bpy.types.Object) -> List
 
 def configure_hair_materials_blended(context: bpy.types.Context) -> int:
     """
-    Finds hair objects and materials in the scene and ensures they use 'BLENDED'
-    (Eevee Next) / 'BLEND' (legacy Eevee) render method, and sets use_transparency_overlap to False.
+    Finds hair objects and materials in the scene (including NTE 'mrim' material)
+    and ensures they use 'BLENDED' (Eevee Next) / 'BLEND' (legacy Eevee) render method.
+    Sets use_transparency_overlap to False ONLY on hair mesh materials, leaving
+    outline materials untouched.
     """
     count = 0
-    hair_keywords = ("hair", "pelo", "bangs")
+    hair_keywords = ("hair", "pelo", "bangs", "mrim")
+    outline_keywords = ("outline", "_ol", "mrim")
+    processed_materials = set()
+
+    def process_material(mat: bpy.types.Material, is_hair_mesh_obj: bool, is_outline_obj: bool):
+        nonlocal count
+        if not mat or mat.name in processed_materials:
+            return
+        processed_materials.add(mat.name)
+
+        is_outline = is_outline_obj or any(k in mat.name.lower() for k in outline_keywords)
+        modified = False
+
+        if hasattr(mat, "surface_render_method") and mat.surface_render_method != 'BLENDED':
+            mat.surface_render_method = 'BLENDED'
+            modified = True
+        if hasattr(mat, "blend_method") and mat.blend_method != 'BLEND':
+            mat.blend_method = 'BLEND'
+            modified = True
+
+        # Only hair mesh materials get use_transparency_overlap = False; outlines are left untouched
+        if not is_outline:
+            if hasattr(mat, "use_transparency_overlap") and mat.use_transparency_overlap:
+                mat.use_transparency_overlap = False
+                modified = True
+
+        if modified:
+            count += 1
 
     # 1. Check all mesh objects with hair in their name
     for o in context.scene.objects:
         if o.type == 'MESH':
             is_hair_obj = any(k in o.name.lower() for k in hair_keywords)
+            is_outline_obj = any(k in o.name.lower() for k in outline_keywords)
             for slot in o.material_slots:
                 mat = slot.material
                 if not mat:
                     continue
                 is_hair_mat = any(k in mat.name.lower() for k in hair_keywords)
                 if is_hair_obj or is_hair_mat:
-                    modified = False
-                    if hasattr(mat, "surface_render_method") and mat.surface_render_method != 'BLENDED':
-                        mat.surface_render_method = 'BLENDED'
-                        modified = True
-                    if hasattr(mat, "blend_method") and mat.blend_method != 'BLEND':
-                        mat.blend_method = 'BLEND'
-                        modified = True
-                    if hasattr(mat, "use_transparency_overlap") and mat.use_transparency_overlap:
-                        mat.use_transparency_overlap = False
-                        modified = True
-                    if modified:
-                        count += 1
+                    process_material(mat, is_hair_mesh_obj=is_hair_obj and not is_outline_obj, is_outline_obj=is_outline_obj)
 
     # 2. Check all materials in bpy.data.materials as fallback
     for mat in bpy.data.materials:
         if any(k in mat.name.lower() for k in hair_keywords):
-            modified = False
-            if hasattr(mat, "surface_render_method") and mat.surface_render_method != 'BLENDED':
-                mat.surface_render_method = 'BLENDED'
-                modified = True
-            if hasattr(mat, "blend_method") and mat.blend_method != 'BLEND':
-                mat.blend_method = 'BLEND'
-                modified = True
-            if hasattr(mat, "use_transparency_overlap") and mat.use_transparency_overlap:
-                mat.use_transparency_overlap = False
-                modified = True
-            if modified:
-                count += 1
+            process_material(mat, is_hair_mesh_obj=True, is_outline_obj=False)
 
     return count
 

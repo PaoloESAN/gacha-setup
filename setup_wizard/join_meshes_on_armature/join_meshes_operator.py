@@ -22,6 +22,7 @@ class GI_OT_JoinMeshesOnArmature(Operator, CustomOperatorProperties):
 
         if join_meshes:
             self.__join_face_meshes()
+            self.__join_pupil_meshes()
             self.__delete_brow_material_from_material_slot()
 
         if self.next_step_idx:
@@ -32,6 +33,15 @@ class GI_OT_JoinMeshesOnArmature(Operator, CustomOperatorProperties):
                 game_type=self.game_type,
             )
         return {'FINISHED'}
+
+    def __join_pupil_meshes(self):
+        try:
+            from setup_wizard.replace_default_materials_setup.game_default_material_replacers import join_pupil_and_highlight_meshes
+            shader_identifier_service: ShaderIdentifierService = ShaderIdentifierServiceFactory.create(self.game_type)
+            shader_material_names: ShaderMaterialNames = shader_identifier_service.get_shader_material_names(self.game_type, bpy.data.materials, bpy.data.node_groups)
+            join_pupil_and_highlight_meshes(shader_material_names)
+        except Exception as ex:
+            print(f"Notice: __join_pupil_meshes: {ex}")
 
     def __join_face_meshes(self):
         face_mesh = bpy.data.objects.get(MeshNames.FACE)

@@ -70,11 +70,19 @@ class GameMaterialImporter:
         shader_blend_file_path = os.path.join(target_blend_file, self.MATERIAL_PATH_INSIDE_BLEND_FILE)
         shader_blend_node_tree_file_path = os.path.join(target_blend_file, self.NODE_TREE_PATH_INSIDE_BLEND_FILE)
         light_direction_empties_file_path = os.path.join(target_blend_file, self.OBJECT_PATH_INSIDE_BLEND_FILE)
+        # Deduplicate materials to avoid blender append crashes
+        unique_materials = []
+        seen_names = set()
+        for item in self.names_of_game_materials:
+            mat_name = item.get('name') if isinstance(item, dict) else str(item)
+            if mat_name and mat_name not in seen_names:
+                seen_names.add(mat_name)
+                unique_materials.append({'name': mat_name})
 
         try:
             bpy.ops.wm.append(
                 directory=shader_blend_file_path,
-                files=self.names_of_game_materials,
+                files=unique_materials,
                 set_fake=True
             )
             self.import_light_vectors_geometry_node(shader_blend_node_tree_file_path, light_direction_empties_file_path)
@@ -147,6 +155,7 @@ class GenshinImpactMaterialImporterFacade(GameMaterialImporter):
         {'name': V3_BonnyFestivityGenshinImpactMaterialNames.OUTLINES},
         {'name': V3_BonnyFestivityGenshinImpactMaterialNames.PUPIL},
         {'name': V3_BonnyFestivityGenshinImpactMaterialNames.NEW_PUPIL},
+        {'name': V3_BonnyFestivityGenshinImpactMaterialNames.HIGHLIGHT},
         {'name': V4_PrimoToonGenshinImpactMaterialNames.VFX},
     ]
     OUTLINES_FILE_PATH = GENSHIN_IMPACT_OUTLINES_FILE_PATH
