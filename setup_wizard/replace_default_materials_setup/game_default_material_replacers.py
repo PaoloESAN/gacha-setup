@@ -87,15 +87,25 @@ def classify_pupil_faces(mesh_obj):
     if avg_normal.length < 1e-4:
         avg_normal = Vector((0, 0, 1))
 
+    uv_lay = bm.loops.layers.uv.active
+
     island_info = []
     for isl in islands:
         center = sum((f.calc_center_median() for f in isl), Vector()) / len(isl)
         depth = center.dot(avg_normal)
+        uv_span = 0.0
+        if uv_lay:
+            uvs = [l[uv_lay].uv for f in isl for l in f.loops]
+            if uvs:
+                u_span = max(u.x for u in uvs) - min(u.x for u in uvs)
+                v_span = max(u.y for u in uvs) - min(u.y for u in uvs)
+                uv_span = max(u_span, v_span)
         island_info.append({
             'face_indices': [f.index for f in isl],
             'center': center,
             'depth': depth,
-            'face_count': len(isl)
+            'face_count': len(isl),
+            'uv_span': uv_span
         })
 
     # Group by eye (left vs right) based on lateral X coordinate
@@ -116,9 +126,30 @@ def classify_pupil_faces(mesh_obj):
             for info in side_islands:
                 inner_faces.update(info['face_indices'])
             continue
-        outer_cand = max(side_islands, key=lambda x: x['depth'])
+
+        has_100 = any(info['face_count'] == 100 for info in side_islands)
+        has_uv_contrast = (
+            any(info['uv_span'] < 0.35 for info in side_islands) and
+            any(info['uv_span'] > 0.70 for info in side_islands)
+        )
+
+        side_outer = []
+        if has_uv_contrast:
+            # Highlight parts (like Durin) mapped to small UV region (< 0.35) while base pupil spans full 0..1
+            for info in side_islands:
+                if info['uv_span'] < 0.35:
+                    side_outer.append(info)
+        elif has_100:
+            # Standard 100-face highlight discs (Vodyanitsa, Odette, Anastasya)
+            for info in side_islands:
+                if info['face_count'] == 100:
+                    side_outer.append(info)
+        else:
+            outer_cand = max(side_islands, key=lambda x: x['depth'])
+            side_outer.append(outer_cand)
+
         for info in side_islands:
-            if info == outer_cand or (info['face_count'] == 100 and len(side_islands) > 1):
+            if info in side_outer:
                 outer_faces.update(info['face_indices'])
             else:
                 inner_faces.update(info['face_indices'])
@@ -154,8 +185,7 @@ def join_pupil_and_highlight_meshes(material_names=None):
     if not candidate_meshes:
         return None
 
-    if len(candidate_meshes) == 1:
-        setup_new_pupil_highlight_layer(candidate_meshes[0], material_names)
+    if len(candidate_meshes) <= 1:
         return candidate_meshes[0]
 
     primary = next((m for m in candidate_meshes if m.name.lower() == 'pupil'), None)
