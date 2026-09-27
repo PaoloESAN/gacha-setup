@@ -141,8 +141,8 @@ export default defineConfig({
 					items: [
 						{ label: 'Setup Character', slug: 'genshin/setup-character', translations: { es: 'Setup Character' } },
 						{ label: 'Lights & Coloramp', slug: 'genshin/lights-coloramp', translations: { es: 'Luces y Coloramp' } },
-						{ label: 'Bugs & Solutions', slug: 'genshin/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
 						{ label: 'Rigging', slug: 'genshin/rigging', translations: { es: 'Rigging' } },
+						{ label: 'Bugs & Solutions', slug: 'genshin/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
 					],
 				},
 				{
@@ -151,8 +151,8 @@ export default defineConfig({
 					items: [
 						{ label: 'Setup Character', slug: 'hsr/setup-character', translations: { es: 'Setup Character' } },
 						{ label: 'Lights & Coloramp', slug: 'hsr/lights-coloramp', translations: { es: 'Luces y Coloramp' } },
-						{ label: 'Bugs & Solutions', slug: 'hsr/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
 						{ label: 'Rigging', slug: 'hsr/rigging', translations: { es: 'Rigging' } },
+						{ label: 'Bugs & Solutions', slug: 'hsr/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
 					],
 				},
 				{
@@ -161,8 +161,8 @@ export default defineConfig({
 					items: [
 						{ label: 'Setup Character', slug: 'zzz/setup-character', translations: { es: 'Setup Character' } },
 						{ label: 'Lights & Coloramp', slug: 'zzz/lights-coloramp', translations: { es: 'Luces y Coloramp' } },
-						{ label: 'Bugs & Solutions', slug: 'zzz/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
 						{ label: 'Rigging', slug: 'zzz/rigging', translations: { es: 'Rigging' } },
+						{ label: 'Bugs & Solutions', slug: 'zzz/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
 					],
 				},
 				{
@@ -171,8 +171,8 @@ export default defineConfig({
 					items: [
 						{ label: 'Setup Character', slug: 'nte/setup-character', translations: { es: 'Setup Character' } },
 						{ label: 'Lights & Coloramp', slug: 'nte/lights-coloramp', translations: { es: 'Luces y Coloramp' } },
-						{ label: 'Bugs & Solutions', slug: 'nte/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
 						{ label: 'Rigging', slug: 'nte/rigging', translations: { es: 'Rigging' } },
+						{ label: 'Bugs & Solutions', slug: 'nte/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
 					],
 				},
 				{
@@ -181,8 +181,8 @@ export default defineConfig({
 					items: [
 						{ label: 'Setup Character', slug: 'wuwa/setup-character', translations: { es: 'Setup Character' } },
 						{ label: 'Lights & Coloramp', slug: 'wuwa/lights-coloramp', translations: { es: 'Luces y Coloramp' } },
-						{ label: 'Bugs & Solutions', slug: 'wuwa/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
 						{ label: 'Rigging', slug: 'wuwa/rigging', translations: { es: 'Rigging' } },
+						{ label: 'Bugs & Solutions', slug: 'wuwa/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
 					],
 				},
 				{
@@ -191,8 +191,8 @@ export default defineConfig({
 					items: [
 						{ label: 'Setup Character', slug: 'ake/setup-character', translations: { es: 'Setup Character' } },
 						{ label: 'Lights & Coloramp', slug: 'ake/lights-coloramp', translations: { es: 'Luces y Coloramp' } },
-						{ label: 'Bugs & Solutions', slug: 'ake/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
 						{ label: 'Rigging', slug: 'ake/rigging', translations: { es: 'Rigging' } },
+						{ label: 'Bugs & Solutions', slug: 'ake/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
 					],
 				},
 			],

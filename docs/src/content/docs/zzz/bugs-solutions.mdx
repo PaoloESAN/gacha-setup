@@ -3,8 +3,31 @@ title: "Zenless Zone Zero Bugs & Solutions"
 description: "Troubleshooting guide for common Zenless Zone Zero model, texture, and shader issues in Blender 5.2+."
 ---
 
+import { Image } from 'astro:assets';
+import zzzEyeshadow1 from '../../../assets/content/zzz/zzz-eyeshadow1.png';
+import zzzEyeshadow2 from '../../../assets/content/zzz/zzz-eyeshadow2.png';
+import zzzEyeshadow3 from '../../../assets/content/zzz/zzz-eyeshadow3.png';
+
 :::note
 Found an undocumented bug or issue? Please report it by opening a [new issue on GitHub](https://github.com/PaoloESAN/gacha-setup/issues/new).
 :::
 
-Coming soon.
+## Missing Eyeshadow Material
+
+If your character is missing the eyeshadow material assignment:
+
+### Solution
+
+1. Select the character's face mesh and press `Tab` to enter **Edit Mode**.
+2. Hover over the eyeshadow geometry and press `L` to select the eyeshadow mesh components.
+3. In the **Material Properties** tab, click the `+` button to create a new material slot.
+
+<Image src={zzzEyeshadow1} alt="Selecting eyeshadow mesh in Edit Mode and adding a new material slot" loading="lazy" />
+
+4. Assign the **ZZZ Shader Eye** material to the newly created slot.
+
+<Image src={zzzEyeshadow2} alt="Assigning ZZZ Shader Eye material to slot" loading="lazy" />
+
+5. Click the **Assign** button to apply the material to the selected eyeshadow mesh.
+
+<Image src={zzzEyeshadow3} alt="Clicking Assign button to apply eyeshadow material" loading="lazy" />

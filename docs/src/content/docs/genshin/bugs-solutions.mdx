@@ -3,8 +3,20 @@ title: "Genshin Impact Bugs & Solutions"
 description: "Troubleshooting guide for common Genshin Impact model, texture, and shader issues in Blender 5.2+."
 ---
 
+import genshinFaceVideo from '../../../assets/content/genshin/genshin-face.mp4';
+
 :::note
 Found an undocumented bug or issue? Please report it by opening a [new issue on GitHub](https://github.com/PaoloESAN/gacha-setup/issues/new).
 :::
 
-Coming soon.
+## Extra Face Mesh Covering the Eyes
+
+Some newer characters import with an extra face mesh layer that covers the eyes.
+
+### Solution
+
+Remove the extra mesh following the process shown in the video:
+
+<video loop muted playsinline controls preload="metadata" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={genshinFaceVideo} type="video/mp4" />
+</video>

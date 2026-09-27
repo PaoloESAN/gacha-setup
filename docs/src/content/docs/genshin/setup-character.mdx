@@ -8,6 +8,7 @@ import genshinPanel from '../../../assets/content/genshin/genshin-panel.png';
 import genshinCharacter from '../../../assets/content/genshin/genshin-character.png';
 import genshinScene from '../../../assets/content/genshin/genshin-scene.png';
 import genshinCompositor from '../../../assets/content/genshin/genshin-compositor.png';
+import genshinFaceVideo from '../../../assets/content/genshin/genshin-face.mp4';
 
 
 ## 1. Opening the Setup Wizard
@@ -57,3 +58,13 @@ To view Festivity shaders and real-time head shadow compositing in the viewport:
 3. Under **Compositor**, set the dropdown mode to **Always** (or **Camera**).
 
 <Image src={genshinCompositor} alt="Viewport Shading compositor settings set to Always" loading="lazy" />
+
+---
+
+## 5. Optional: Face Fix for New Characters
+
+Some newer characters import with an extra face mesh layer that covers the eyes, as shown in the video:
+
+<video loop muted playsinline controls preload="metadata" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={genshinFaceVideo} type="video/mp4" />
+</video>

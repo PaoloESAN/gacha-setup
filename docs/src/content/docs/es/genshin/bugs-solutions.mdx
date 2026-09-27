@@ -3,8 +3,20 @@ title: "Bugs y Soluciones en Genshin Impact"
 description: "Guía de resolución de problemas comunes con modelos, texturas y shaders de Genshin Impact en Blender 5.2+."
 ---
 
+import genshinFaceVideo from '../../../../assets/content/genshin/genshin-face.mp4';
+
 :::note
 ¿Encontraste un problema o bug no documentado? Por favor, repórtalo creando una [nueva issue en GitHub](https://github.com/PaoloESAN/gacha-setup/issues/new).
 :::
 
-Próximamente.
+## Capa Extra de Malla Cubriendo los Ojos
+
+Algunos personajes nuevos se importan con una capa extra de malla en la cara que cubre los ojos.
+
+### Solución
+
+Elimina la malla extra siguiendo el proceso mostrado en el video:
+
+<video loop muted playsinline controls preload="metadata" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={genshinFaceVideo} type="video/mp4" />
+</video>

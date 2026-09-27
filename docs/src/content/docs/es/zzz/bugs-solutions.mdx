@@ -3,8 +3,31 @@ title: "Bugs y Soluciones en Zenless Zone Zero"
 description: "Guía de resolución de problemas comunes con modelos, texturas y shaders de Zenless Zone Zero en Blender 5.2+."
 ---
 
+import { Image } from 'astro:assets';
+import zzzEyeshadow1 from '../../../../assets/content/zzz/zzz-eyeshadow1.png';
+import zzzEyeshadow2 from '../../../../assets/content/zzz/zzz-eyeshadow2.png';
+import zzzEyeshadow3 from '../../../../assets/content/zzz/zzz-eyeshadow3.png';
+
 :::note
 ¿Encontraste un problema o bug no documentado? Por favor, repórtalo creando una [nueva issue en GitHub](https://github.com/PaoloESAN/gacha-setup/issues/new).
 :::
 
-Próximamente.
+## Falta el Material Eyeshadow
+
+Si a tu personaje le falta la asignación del material de sombra de ojos (eyeshadow):
+
+### Solución
+
+1. Selecciona la malla del rostro del personaje y presiona `Tab` para entrar en **Modo Edición**.
+2. Coloca el cursor sobre la geometría del eyeshadow y presiona `L` para seleccionar las caras correspondientes.
+3. En la pestaña **Propiedades de Material**, haz clic en el botón `+` para añadir un nuevo slot de material.
+
+<Image src={zzzEyeshadow1} alt="Selección de malla de eyeshadow en Modo Edición y creación de slot de material" loading="lazy" />
+
+4. Asigna el material **ZZZ Shader Eye** al nuevo slot creado.
+
+<Image src={zzzEyeshadow2} alt="Asignación del material ZZZ Shader Eye al slot" loading="lazy" />
+
+5. Haz clic en el botón **Assign** para aplicar el material a la geometría seleccionada.
+
+<Image src={zzzEyeshadow3} alt="Clic en el botón Assign para aplicar el material de eyeshadow" loading="lazy" />
