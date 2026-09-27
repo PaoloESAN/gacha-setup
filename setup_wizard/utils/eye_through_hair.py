@@ -71,6 +71,14 @@ def configure_material_eye_through_hair_nodes(mat: bpy.types.Material) -> bool:
         except Exception:
             pass
 
+    if hasattr(mat, "surface_render_method"):
+        mat.surface_render_method = 'DITHERED'
+    if hasattr(mat, "blend_method"):
+        try:
+            mat.blend_method = 'HASHED'
+        except Exception:
+            pass
+
     tree = getattr(mat, "node_tree", None)
     if not tree:
         return False
@@ -211,6 +219,13 @@ def isolate_and_assign_eye_through_hair_materials(obj: bpy.types.Object) -> List
                     new_slot_idx = len(obj.material_slots) - 1
 
         configure_material_eye_through_hair_nodes(new_mat)
+        if hasattr(new_mat, "surface_render_method"):
+            new_mat.surface_render_method = 'DITHERED'
+        if hasattr(new_mat, "blend_method"):
+            try:
+                new_mat.blend_method = 'HASHED'
+            except Exception:
+                pass
         created_materials.append(new_mat)
 
         # Reassign faces to new material slot
@@ -239,6 +254,8 @@ def configure_hair_materials_blended(context: bpy.types.Context) -> int:
     and ensures they use 'BLENDED' (Eevee Next) / 'BLEND' (legacy Eevee) render method.
     Sets use_transparency_overlap to False ONLY on hair mesh materials, leaving
     outline materials untouched.
+    Explicitly ignores eye-through-hair materials (_EyeThroughHair, _SeeThrough) so they
+    remain DITHERED.
     """
     count = 0
     hair_keywords = ("hair", "pelo", "bangs", "mrim")
@@ -248,6 +265,8 @@ def configure_hair_materials_blended(context: bpy.types.Context) -> int:
     def process_material(mat: bpy.types.Material, is_hair_mesh_obj: bool, is_outline_obj: bool):
         nonlocal count
         if not mat or mat.name in processed_materials:
+            return
+        if "_eyethroughhair" in mat.name.lower() or "_seethrough" in mat.name.lower():
             return
         processed_materials.add(mat.name)
 
@@ -279,12 +298,16 @@ def configure_hair_materials_blended(context: bpy.types.Context) -> int:
                 mat = slot.material
                 if not mat:
                     continue
+                if "_eyethroughhair" in mat.name.lower() or "_seethrough" in mat.name.lower():
+                    continue
                 is_hair_mat = any(k in mat.name.lower() for k in hair_keywords)
                 if is_hair_obj or is_hair_mat:
                     process_material(mat, is_hair_mesh_obj=is_hair_obj and not is_outline_obj, is_outline_obj=is_outline_obj)
 
     # 2. Check all materials in bpy.data.materials as fallback
     for mat in bpy.data.materials:
+        if "_eyethroughhair" in mat.name.lower() or "_seethrough" in mat.name.lower():
+            continue
         if any(k in mat.name.lower() for k in hair_keywords):
             process_material(mat, is_hair_mesh_obj=True, is_outline_obj=False)
 
@@ -568,6 +591,25 @@ def execute_eye_through_hair(context: bpy.types.Context) -> Tuple[bool, str]:
     # Step 3: Hair materials to BLENDED
     hair_count = configure_hair_materials_blended(context)
 
+    # Step 3b: Ensure all eye through hair materials are set to DITHERED
+    for mat in all_created_materials:
+        if hasattr(mat, "surface_render_method"):
+            mat.surface_render_method = 'DITHERED'
+        if hasattr(mat, "blend_method"):
+            try:
+                mat.blend_method = 'HASHED'
+            except Exception:
+                pass
+    for mat in bpy.data.materials:
+        if "_eyethroughhair" in mat.name.lower() or "_seethrough" in mat.name.lower():
+            if hasattr(mat, "surface_render_method"):
+                mat.surface_render_method = 'DITHERED'
+            if hasattr(mat, "blend_method"):
+                try:
+                    mat.blend_method = 'HASHED'
+                except Exception:
+                    pass
+
     # Step 4: Compositor setup
     comp_ok = setup_compositor_nodes(context.scene)
     if not comp_ok:
@@ -579,7 +621,7 @@ def execute_eye_through_hair(context: bpy.types.Context) -> Tuple[bool, str]:
     obj_names_str = ", ".join(processed_objects)
     return True, (
         f"Successfully applied Eye Through Hair on {len(processed_objects)} object(s) [{obj_names_str}] "
-        f"({len(all_created_materials)} materials isolated, {hair_count} hair materials set to Blended). "
+        f"({len(all_created_materials)} materials isolated as Dithered, {hair_count} hair materials set to Blended). "
         f"Viewport Compositor set to ALWAYS."
     )
 
