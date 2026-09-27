@@ -241,6 +241,7 @@ class CSW_PT_Utilities_UI_Layout(Panel):
         layout = self.layout
         col = layout.column(align=True)
         col.operator("setup_wizard.create_camera_pro", text="Jideeh's Camera", icon="CAMERA_DATA")
+        col.operator("setup_wizard.eye_through_hair", text="Eye Through Hair", icon="HIDE_OFF")
 
 
 class CSW_PT_Old_Setup_UI_Layout(Panel):
