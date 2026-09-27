@@ -170,7 +170,7 @@ def test_arms(rig):
 
 
 def test_fingers(rig):
-    """Test finger control presence, scaling, and rotation for all 5 digits on L and R."""
+    """Test finger control presence, scaling, rotation, master controls, and curl for all 5 digits on L and R."""
     checks = []
     digits = ["thumb", "f_index", "f_middle", "f_ring", "f_pinky"]
     sides = ["L", "R"]
@@ -178,21 +178,36 @@ def test_fingers(rig):
     missing_controls = []
     scaling_errors = []
     rotation_errors = []
+    master_rest_errors = []
+    master_curl_errors = []
 
     for side in sides:
         for digit in digits:
-            # Check segments 01, 02, 03
+            # Check segments 01, 02, 03 and master control
             seg1 = rig.pose.bones.get(f"{digit}.01.{side}")
             seg2 = rig.pose.bones.get(f"{digit}.02.{side}")
             seg3 = rig.pose.bones.get(f"{digit}.03.{side}")
             master = rig.pose.bones.get(f"{digit}.01_master.{side}") or rig.pose.bones.get(f"{digit}_master.{side}")
 
-            if not (seg1 and seg2 and seg3):
+            if not (seg1 and seg2 and seg3 and master):
                 missing_controls.append(f"{digit}.*.{side}")
                 continue
 
-            # Test scaling propagation
             def_seg1 = rig.pose.bones.get(f"DEF-{digit}.01.{side}") or rig.pose.bones.get(f"{digit}.01.{side}")
+            def_seg2 = rig.pose.bones.get(f"DEF-{digit}.02.{side}") or rig.pose.bones.get(f"{digit}.02.{side}")
+            def_seg3 = rig.pose.bones.get(f"DEF-{digit}.03.{side}") or rig.pose.bones.get(f"{digit}.03.{side}")
+
+            # 1. Master control rest pose neutrality (verifies no hardcoded pre-rotations or rest pose tampering)
+            if master.rotation_mode == "QUATERNION":
+                q = master.rotation_quaternion
+                if abs(q.w - 1.0) > 0.05 or abs(q.x) > 0.05 or abs(q.y) > 0.05 or abs(q.z) > 0.05:
+                    master_rest_errors.append(f"{master.name} non-neutral rest quat: ({q.w:.3f}, {q.x:.3f}, {q.y:.3f}, {q.z:.3f})")
+            else:
+                e = master.rotation_euler
+                if any(abs(v) > 0.05 for v in e):
+                    master_rest_errors.append(f"{master.name} non-neutral rest euler: ({e.x:.3f}, {e.y:.3f}, {e.z:.3f})")
+
+            # 2. Individual segment scaling propagation
             if def_seg1:
                 initial_scale = def_seg1.matrix.to_scale()
                 seg1.scale = Vector((1.5, 1.5, 1.5))
@@ -208,9 +223,10 @@ def test_fingers(rig):
                 seg1.scale = Vector((1.0, 1.0, 1.0))
                 bpy.context.view_layer.update()
 
-            # Test rotation propagation
+            # 3. Individual FK rotation propagation
             if def_seg1:
                 initial_rot = def_seg1.matrix.to_euler()
+                orig_mode = seg1.rotation_mode
                 seg1.rotation_mode = "XYZ"
                 seg1.rotation_euler = Euler((0.4, 0.0, 0.0), "XYZ")
                 bpy.context.view_layer.update()
@@ -223,13 +239,54 @@ def test_fingers(rig):
                     rotation_errors.append(f"{digit}.01.{side} (rot_diff={rot_diff:.4f}, nan={has_nan})")
 
                 seg1.rotation_euler = Euler((0.0, 0.0, 0.0), "XYZ")
+                seg1.rotation_mode = orig_mode
+                bpy.context.view_layer.update()
+
+            # 4. Master Control Curl & Rotation (Flexion Test)
+            if master and def_seg1 and def_seg2:
+                init_def1_rot = def_seg1.matrix.to_euler()
+                init_def2_rot = def_seg2.matrix.to_euler()
+                orig_master_scale = master.scale.copy()
+
+                # Scale master to curl (Rigify finger superscale)
+                master.scale = Vector((0.5, 0.5, 0.5))
+                bpy.context.view_layer.update()
+
+                curled_def2_rot = def_seg2.matrix.to_euler()
+                curl_diff2 = max(abs(a - b) for a, b in zip(curled_def2_rot, init_def2_rot))
+                has_nan_curl = any(math.isnan(v) for v in curled_def2_rot)
+
+                if has_nan_curl or curl_diff2 < 0.2:
+                    master_curl_errors.append(f"{master.name} curl fail (def2 rot_diff={curl_diff2:.4f}, nan={has_nan_curl})")
+
+                master.scale = orig_master_scale
+                bpy.context.view_layer.update()
+
+                # Test master rotation along primary flexion axis (Z)
+                orig_rot_mode = master.rotation_mode
+                orig_euler = master.rotation_euler.copy()
+                master.rotation_mode = "XYZ"
+
+                # Rotate master around primary curl axis (Z for .L, -Z for .R)
+                master.rotation_euler = Euler((0.0, 0.0, 0.4 if side == "L" else -0.4), "XYZ")
+                bpy.context.view_layer.update()
+
+                rotated_def1 = def_seg1.matrix.to_euler()
+                rot_diff1 = max(abs(a - b) for a, b in zip(rotated_def1, init_def1_rot))
+                has_nan_rot = any(math.isnan(v) for v in rotated_def1)
+
+                if has_nan_rot or rot_diff1 < 0.1:
+                    master_curl_errors.append(f"{master.name} master Z-rot fail (def1 rot_diff={rot_diff1:.4f}, nan={has_nan_rot})")
+
+                master.rotation_euler = orig_euler
+                master.rotation_mode = orig_rot_mode
                 bpy.context.view_layer.update()
 
     # Finger Presence Check
     checks.append({
         "name": "Finger Controls Presence (All 10 Digits)",
         "passed": len(missing_controls) == 0,
-        "message": f"Missing: {missing_controls}" if missing_controls else "All thumb, index, middle, ring, pinky controls present (L & R)",
+        "message": f"Missing: {missing_controls}" if missing_controls else "All thumb, index, middle, ring, pinky controls present (L & R, including masters)",
     })
 
     # Finger Scaling Check
@@ -239,11 +296,25 @@ def test_fingers(rig):
         "message": f"Errors: {scaling_errors}" if scaling_errors else "All finger bones scale cleanly without NaN or zero-determinant",
     })
 
-    # Finger Rotation Check
+    # Finger Rotation Propagation
     checks.append({
         "name": "Finger Rotation Propagation",
         "passed": len(rotation_errors) == 0,
         "message": f"Errors: {rotation_errors}" if rotation_errors else "All finger joints rotate cleanly and propagate to deformation chain",
+    })
+
+    # Master Controls Rest Pose Neutrality
+    checks.append({
+        "name": "Finger Master Rest Pose Neutrality",
+        "passed": len(master_rest_errors) == 0,
+        "message": f"Rest pose errors: {master_rest_errors}" if master_rest_errors else "All 10 finger master controls have clean neutral rest poses (no hardcoded pre-rotations)",
+    })
+
+    # Master Controls Curl & Flexion Response
+    checks.append({
+        "name": "Finger Master Curl & Flexion Response",
+        "passed": len(master_curl_errors) == 0,
+        "message": f"Curl errors: {master_curl_errors}" if master_curl_errors else "All 10 finger master controls curl and rotate deformation chains properly along flexion axes",
     })
 
     # Finger Symmetry / Roll Comparison
