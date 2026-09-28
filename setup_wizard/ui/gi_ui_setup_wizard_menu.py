@@ -616,10 +616,14 @@ def update_gi_light_mode(self, context=None):
 
 
 def update_gi_lighting(self, context=None):
+    if _is_updating_gi_props:
+        return
     sync_genshin_shader_properties(getattr(context, "scene", getattr(bpy.context, "scene", None)), context=context)
 
 
 def update_gi_fresnel(self, context=None):
+    if _is_updating_gi_props:
+        return
     sync_genshin_shader_properties(getattr(context, "scene", getattr(bpy.context, "scene", None)), context=context)
 
 
@@ -667,8 +671,13 @@ def sync_genshin_shader_properties(scene=None, context=None):
         soft_shadow_col.append(1.0)
 
     shadow_pos = float(getattr(scene, "gi_shadow_position", 0.55))
-    catch_shadows = 1.0 if getattr(scene, "gi_catch_shadows", False) else 0.0
+    catch_shadows_on = bool(getattr(scene, "gi_catch_shadows", False))
+    catch_shadows = 1.0 if catch_shadows_on else 0.0
     day_night = float(getattr(scene, "gi_day_night", 0.0))
+    try:
+        blush_strength = max(0.0, min(1.0, float(getattr(scene, "gi_blush_strength", 0.0))))
+    except Exception:
+        blush_strength = 0.0
 
     rim_lit_col = list(getattr(scene, "gi_rim_lit_color", (1.0, 1.0, 1.0)))
     if len(rim_lit_col) == 3:
@@ -689,8 +698,12 @@ def sync_genshin_shader_properties(scene=None, context=None):
         "Sharp Shadow Colour": sharp_shadow_col,
         "Soft Shadow Colour": soft_shadow_col,
         "Shadow Position": shadow_pos,
+        # New shader uses boolean "Toggle Catch Shadows"; keep legacy
+        # float "Catch Shadows" for older shader versions.
+        "Toggle Catch Shadows": catch_shadows_on,
         "Catch Shadows": catch_shadows,
         "Day/Night": day_night,
+        "Warm / Cold Ramps": day_night,
         "Rim Lit": rim_lit_col,
         "Rim Shadow": rim_shadow_col,
     }
@@ -773,8 +786,10 @@ def sync_genshin_shader_properties(scene=None, context=None):
         "Sharp Shadow Colour": ["Sharp Shadow Colour", "Sharp Shadow Color"],
         "Soft Shadow Colour": ["Soft Shadow Colour", "Soft Shadow Color"],
         "Shadow Position": ["Shadow Position", "Shadow Position Offset"],
+        "Toggle Catch Shadows": ["Toggle Catch Shadows", "Catch Shadows"],
         "Catch Shadows": ["Toggle Catch Shadows", "Catch Shadows"],
         "Day/Night": ["Warm / Cold Ramps", "Day/Night"],
+        "Warm / Cold Ramps": ["Warm / Cold Ramps", "Day/Night"],
         "Rim Lit": ["Rim Lit"],
         "Rim Shadow": ["Rim Shadow"],
     }
@@ -795,6 +810,21 @@ def sync_genshin_shader_properties(scene=None, context=None):
                                         inp.default_value = val
                                 except Exception:
                                     pass
+
+    # 4b. Blush Strength lives on the face material's shader node
+    # (e.g. HoYoToon/PrimoToon "Blush Strength", 0..1), not in Global Properties.
+    # Only face shader node groups expose this input, so setting it wherever
+    # the socket exists is inherently face-scoped.
+    for mat in mats_to_update:
+        if getattr(mat, "use_nodes", False) and mat.node_tree:
+            for node in mat.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree:
+                    blush_inp = node.inputs.get("Blush Strength") or node.inputs.get("Face Blush Strength")
+                    if blush_inp is not None:
+                        try:
+                            blush_inp.default_value = float(blush_strength)
+                        except Exception:
+                            pass
 
     # 5. Tag 3D areas for redraw
     if hasattr(bpy.context, 'window_manager') and bpy.context.window_manager:
@@ -876,7 +906,11 @@ def pull_gi_panel_values(scene, context, force=False):
                 if not target_tree:
                     for m in mats:
                         if getattr(m, "node_tree", None):
-                            primo_node = m.node_tree.nodes.get("PrimoToon")
+                            primo_node = (
+                                m.node_tree.nodes.get("HoYoToon")
+                                or m.node_tree.nodes.get("PrimoToon")
+                                or m.node_tree.nodes.get("Body Shader")
+                            )
                             if primo_node:
                                 inputs = primo_node.inputs
                                 if "Toggle Fresnel" in inputs:
@@ -916,10 +950,17 @@ def pull_gi_panel_values(scene, context, force=False):
                                     scene.gi_shadow_position = float(shadow_pos_inp.default_value)
                                 catch_shadow_inp = inputs.get("Toggle Catch Shadows") or inputs.get("Catch Shadows")
                                 if catch_shadow_inp:
-                                    scene.gi_catch_shadows = bool(catch_shadow_inp.default_value)
+                                    try:
+                                        v = catch_shadow_inp.default_value
+                                        scene.gi_catch_shadows = bool(v > 0.5 if isinstance(v, (int, float)) and not isinstance(v, bool) else v)
+                                    except Exception:
+                                        scene.gi_catch_shadows = bool(catch_shadow_inp.default_value)
                                 day_night_inp = inputs.get("Warm / Cold Ramps") or inputs.get("Day/Night")
                                 if day_night_inp:
-                                    scene.gi_day_night = 1.0 if day_night_inp.default_value else 0.0
+                                    try:
+                                        scene.gi_day_night = max(0.0, min(1.0, float(day_night_inp.default_value)))
+                                    except Exception:
+                                        pass
                                 break
                 else:
                     out_node = target_tree.nodes.get("Global Properties") or target_tree.nodes.get("Group Output")
@@ -955,14 +996,44 @@ def pull_gi_panel_values(scene, context, force=False):
                             scene.gi_soft_shadow_color = tuple(inputs["Soft Shadow Colour"].default_value)[:3]
                         if "Shadow Position" in inputs:
                             scene.gi_shadow_position = float(inputs["Shadow Position"].default_value)
-                        if "Catch Shadows" in inputs:
-                            scene.gi_catch_shadows = bool(inputs["Catch Shadows"].default_value > 0.5)
-                        if "Day/Night" in inputs:
-                            scene.gi_day_night = float(inputs["Day/Night"].default_value)
+                        catch_shadow_inp = inputs.get("Toggle Catch Shadows") or inputs.get("Catch Shadows")
+                        if catch_shadow_inp:
+                            try:
+                                v = catch_shadow_inp.default_value
+                                scene.gi_catch_shadows = bool(v > 0.5 if isinstance(v, (int, float)) and not isinstance(v, bool) else v)
+                            except Exception:
+                                pass
+                        day_night_inp = inputs.get("Warm / Cold Ramps") or inputs.get("Day/Night")
+                        if day_night_inp:
+                            try:
+                                scene.gi_day_night = max(0.0, min(1.0, float(day_night_inp.default_value)))
+                            except Exception:
+                                pass
                         if "Rim Lit" in inputs:
                             scene.gi_rim_lit_color = tuple(inputs["Rim Lit"].default_value)[:3]
                         if "Rim Shadow" in inputs:
                             scene.gi_rim_shadow_color = tuple(inputs["Rim Shadow"].default_value)[:3]
+                # Blush Strength is face-material only: pull from the first
+                # shader node exposing it (face materials).
+                try:
+                    for m in mats:
+                        if not getattr(m, "node_tree", None):
+                            continue
+                        found_blush = False
+                        for node in m.node_tree.nodes:
+                            if node.type == 'GROUP' and node.node_tree:
+                                blush_inp = node.inputs.get("Blush Strength") or node.inputs.get("Face Blush Strength")
+                                if blush_inp is not None:
+                                    try:
+                                        scene.gi_blush_strength = max(0.0, min(1.0, float(blush_inp.default_value)))
+                                    except Exception:
+                                        pass
+                                    found_blush = True
+                                    break
+                        if found_blush:
+                            break
+                except Exception:
+                    pass
         finally:
             _is_updating_gi_props = False
     except Exception:
@@ -1236,6 +1307,7 @@ class GI_PT_Rig_Character_Settings(Panel):
         col_shadow.prop(scene, "gi_shadow_position", text="Shadow Position", slider=True)
         col_shadow.prop(scene, "gi_catch_shadows", text="Catch Shadows")
         col_shadow.prop(scene, "gi_day_night", text="Day / Night", slider=True)
+        col_shadow.prop(scene, "gi_blush_strength", text="Blush Strength", slider=True)
 
         # 5. Hair & Clothes Physics (Below Shadow & Scene Settings)
         box_physics = layout.box()
@@ -1386,6 +1458,16 @@ def register_gi_properties():
         precision=2,
         update=update_gi_lighting,
     )
+    bpy.types.Scene.gi_blush_strength = bpy.props.FloatProperty(
+        name="Blush Strength",
+        description="Blush Strength (face material only)",
+        min=0.0,
+        max=1.0,
+        default=0.0,
+        step=10,
+        precision=2,
+        update=update_gi_lighting,
+    )
     bpy.types.Scene.gi_rim_lit_color = bpy.props.FloatVectorProperty(
         name="Rim Lit",
         subtype='COLOR',
@@ -1443,7 +1525,8 @@ def unregister_gi_properties():
         "gi_light_mode", "gi_use_fresnel", "gi_fresnel_color", "gi_fresnel_size", "gi_fresnel_power", "gi_fresnel_scaler",
         "gi_amb_color", "gi_sharp_lit_color", "gi_soft_lit_color",
         "gi_sharp_shadow_color", "gi_soft_shadow_color", "gi_shadow_position",
-        "gi_catch_shadows", "gi_day_night", "gi_rim_lit_color", "gi_rim_shadow_color",
+        "gi_catch_shadows", "gi_day_night", "gi_blush_strength",
+        "gi_rim_lit_color", "gi_rim_shadow_color",
         "gi_hair_physics_influence", "gi_clothes_physics_influence",
         "gi_enable_outlines", "gi_enable_night_soul"
     ]:
