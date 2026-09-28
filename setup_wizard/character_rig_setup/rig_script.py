@@ -862,12 +862,11 @@ def rig_character(
         # Fixes the finger rolls
         bpy.ops.object.mode_set(mode="OBJECT")
         metapose = metarig_obj.pose
-        axis_rot = "-X" if kachina else "X"
-        for bone_name in ["f_index", "f_middle", "f_ring", "f_pinky"]:
+        for fname in ["thumb", "f_index", "f_middle", "f_ring", "f_pinky"]:
             for side in [".L", ".R"]:
-                b = metapose.bones.get(f"{bone_name}.01{side}")
+                b = metapose.bones.get(f"{fname}.01{side}")
                 if b and hasattr(b, "rigify_parameters"):
-                    b.rigify_parameters.primary_rotation_axis = axis_rot
+                    b.rigify_parameters.primary_rotation_axis = "X"
 
     ## This part corrects metarm finger rolls
     bpy.ops.object.mode_set(mode="OBJECT")
@@ -1432,23 +1431,67 @@ def rig_character(
         for this in sizethis:
             rigifyr.data.edit_bones[this].length *= 0.08
 
-        # This corrects the drivers on the superscale control. Without this fix, the scales operate opposite to how they should.
         bpy.ops.object.mode_set(mode="POSE")
-        for oDrv in rigifyr.animation_data.drivers:
-            for variable in oDrv.driver.variables:
-                for target in variable.targets:
-                    if (
-                        "MCH-f_middle.02_drv" in oDrv.data_path
-                        or "MCH-f_index.02_drv" in oDrv.data_path
-                    ):
-                        oDrv.driver.expression += "* -1"
-    else:
-        # Fix scaling for finger tips.
-        for oDrv in rig.animation_data.drivers:
+
+    # Correct finger drivers for all characters so scaling master down curls down (toward palm)
+    # and scaling up rotates up (toward back of hand).
+    # NOTE: the required expression sign depends on each model's finger orientation (metarig
+    # rolls): e.g. Diluc and Citlali curl opposite directions with the same expression, so no
+    # static sign works for every character. The polarity is therefore verified functionally
+    # per side: f_middle master is posed at 0.9 and the DEF fingertip must move toward the
+    # palm side (derived from rest geometry + hand chirality); otherwise that side's f_*
+    # drivers are flipped. Thumbs keep the default sign (verified palm-ward).
+    FINGER_DIGITS = ("f_index", "f_middle", "f_ring", "f_pinky")
+    bpy.ops.object.mode_set(mode="POSE")
+    target_rig = rigifyr if (kachina and "rigifyr" in locals() and rigifyr) else rig
+    if target_rig and target_rig.animation_data:
+        for oDrv in target_rig.animation_data.drivers:
+            if "_drv" in oDrv.data_path and "rotation_euler" in oDrv.data_path:
+                oDrv.array_index = 0
+                oDrv.driver.expression = "-((1-sy)*pi)"
             for variable in oDrv.driver.variables:
                 for target in variable.targets:
                     if ".03" in oDrv.data_path and target.data_path[-7:] == "scale.y":
                         target.data_path = target.data_path[:-1] + "x"
+
+    try:
+        if target_rig and target_rig.animation_data:
+            bpy.context.view_layer.objects.active = target_rig
+            for side in (".L", ".R"):
+                db = target_rig.data.bones
+                kn = db.get(f"DEF-f_middle.01{side}")
+                tp = db.get(f"DEF-f_middle.03{side}") or db.get(f"DEF-f_middle.02{side}")
+                th = db.get(f"DEF-thumb.03{side}") or db.get(f"DEF-thumb.02{side}")
+                master = target_rig.pose.bones.get(f"f_middle.01_master{side}")
+                tip_pb = target_rig.pose.bones.get(tp.name) if tp else None
+                if not (kn and tp and th and master and tip_pb):
+                    continue
+                fv = tp.tail_local - kn.head_local
+                tv = th.tail_local - kn.head_local
+                if fv.length < 1e-6 or tv.length < 1e-6:
+                    continue
+                fv.normalize()
+                tv.normalize()
+                palm = fv.cross(tv) if side == ".L" else tv.cross(fv)
+                if palm.length < 1e-6:
+                    continue
+                palm.normalize()
+                bpy.context.view_layer.update()
+                p0 = (target_rig.matrix_world @ tip_pb.tail).copy()
+                master.scale = (1.0, 0.9, 1.0)
+                bpy.context.view_layer.update()
+                d = (target_rig.matrix_world @ tip_pb.tail) - p0
+                master.scale = (1.0, 1.0, 1.0)
+                bpy.context.view_layer.update()
+                if d.length < 1e-6:
+                    continue
+                if d.normalized().dot(palm) < 0.0:
+                    for oDrv in target_rig.animation_data.drivers:
+                        dp = oDrv.data_path
+                        if "_drv" in dp and "rotation_euler" in dp and side in dp and any(g in dp for g in FINGER_DIGITS):
+                            oDrv.driver.expression = "((1-sy)*pi)"
+    except Exception as ex_finger_polarity:
+        print(f"[RIG] finger polarity check notice: {ex_finger_polarity}")
 
     fingerlist = [
         "thumb.01_master",

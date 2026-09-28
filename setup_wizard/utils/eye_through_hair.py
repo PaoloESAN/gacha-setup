@@ -2,6 +2,41 @@ import bpy
 import bmesh
 from typing import List, Optional, Tuple, Set
 
+try:
+    from .modifier_utils import set_modifier_property
+except ImportError:
+    try:
+        from setup_wizard.utils.modifier_utils import set_modifier_property
+    except ImportError:
+        set_modifier_property = None
+
+
+def _assign_to_genshin_other_material_option(obj: bpy.types.Object, mat: bpy.types.Material) -> None:
+    if not obj or not getattr(obj, "modifiers", None) or not mat:
+        return
+    for mod in obj.modifiers:
+        if getattr(mod, "type", None) != 'NODES':
+            continue
+        ng = getattr(mod, "node_group", None)
+        if not ng:
+            continue
+        ng_name = (getattr(ng, "name", "") or "").lower()
+        mod_name = (getattr(mod, "name", "") or "").lower()
+        if "genshin impact" in ng_name or "genshin impact" in mod_name:
+            if set_modifier_property:
+                set_modifier_property(mod, 'Input_26', mat)
+            try:
+                if hasattr(mod, "properties") and hasattr(mod.properties, "inputs"):
+                    if 'Input_26' in mod.properties.inputs:
+                        mod.properties.inputs['Input_26']['value'] = mat
+            except Exception:
+                pass
+            try:
+                mod['Input_26'] = mat
+            except Exception:
+                pass
+
+
 EYE_THROUGH_HAIR_S2RGB_LABEL = "Eye Through Hair Shader to RGB"
 EYE_THROUGH_HAIR_AOV_COLOR_LABEL = "Eye Through Hair Color"
 EYE_THROUGH_HAIR_AOV_MASK_LABEL = "Eye Through Hair Mask"
@@ -227,6 +262,7 @@ def isolate_and_assign_eye_through_hair_materials(obj: bpy.types.Object) -> List
             except Exception:
                 pass
         created_materials.append(new_mat)
+        _assign_to_genshin_other_material_option(obj, new_mat)
 
         # Reassign faces to new material slot
         target_indices_set = set(face_indices)
