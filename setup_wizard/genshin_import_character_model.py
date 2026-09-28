@@ -141,7 +141,9 @@ def align_eye_bones(armature):
     """
     Fixes asymmetric or skewed eye pivot bones (e.g. from experimental wm.fbx_import)
     where +EyeBone L/R A01 midpoints do not match the pupil bones +EyeBone L/R A02.
-    Centers A01 pivots along X to match A02, aligns height, and points A01 tail to A02.
+    Snaps A02 heads to the pupil mesh centers (pupil resizer drivers scale these
+    bones, and bone scale pivots on the head), then centers A01 pivots along X to
+    match A02, aligns height, and points A01 tail to A02.
     Detects coordinate orientation (whether Y or Z is vertical height).
     """
     if not armature or armature.type != 'ARMATURE':
@@ -165,6 +167,58 @@ def align_eye_bones(armature):
         eye_r1 = eb.get("+EyeBone R A01") or eb.get("+EyeBoneA01.R")
         eye_l2 = eb.get("+EyeBone L A02") or eb.get("+EyeBoneA02.L")
         eye_r2 = eb.get("+EyeBone R A02") or eb.get("+EyeBoneA02.R")
+
+        if eye_l2 and eye_r2:
+            # Snap A02 heads to the actual pupil mesh centers. The pupil
+            # resizer drivers scale these bones, and bone scale pivots on the
+            # head: on some models (e.g. Columbina) the FBX A02 heads sit
+            # centimeters away from the pupil, so scaling translates the pupil
+            # instead of resizing it in place. Translate head AND tail by the
+            # same delta to preserve bone orientation (local-space drivers).
+            try:
+                bpy.context.view_layer.update()
+            except Exception:
+                pass
+            try:
+                arm_inv = armature.matrix_world.inverted()
+            except Exception:
+                arm_inv = None
+            if arm_inv is not None:
+                for a02 in (eye_l2, eye_r2):
+                    try:
+                        acc = Vector((0.0, 0.0, 0.0))
+                        wsum = 0.0
+                        for obj in bpy.data.objects:
+                            if obj.type != 'MESH' or not getattr(obj, "data", None):
+                                continue
+                            vg = obj.vertex_groups.get(a02.name)
+                            if vg is None:
+                                continue
+                            try:
+                                to_arm = arm_inv @ obj.matrix_world
+                            except Exception:
+                                continue
+                            gi = vg.index
+                            verts = obj.data.vertices
+                            for v in verts:
+                                w = 0.0
+                                for g in v.groups:
+                                    if g.group == gi:
+                                        w = g.weight
+                                        break
+                                if w > 0.001:
+                                    co = to_arm @ v.co
+                                    acc += co * w
+                                    wsum += w
+                        if wsum > 1e-6:
+                            center = acc / wsum
+                            delta = center - a02.head
+                            if delta.length > 0.003:
+                                print(f"[ALIGN EYE BONES] Snapping {a02.name} head to pupil center (offset: {delta.length:.6f})")
+                                a02.head = center.copy()
+                                a02.tail = a02.tail + delta
+                    except Exception as e:
+                        print(f"[ALIGN EYE BONES] Notice snapping {getattr(a02, 'name', '?')}: {e}")
 
         if eye_l1 and eye_r1 and eye_l2 and eye_r2:
             center_x_1 = (eye_l1.head.x + eye_r1.head.x) / 2.0
