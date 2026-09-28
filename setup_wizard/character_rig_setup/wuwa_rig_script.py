@@ -1811,11 +1811,16 @@ def rig_wuthering_waves_character(context=None):
                 if "Eye" in slot.name:
                     target_material_name = slot.name
                     break
+            if not target_material_name:
+                for slot in eye_mesh.material_slots:
+                    if "face" in slot.name.lower():
+                        target_material_name = slot.name
+                        break
 
         offset_connected = Vector((0.0, -0.001, 0.0))
         offset_unconnected = Vector((0.0, 0.001, 0.0))
 
-        if eye_mesh and eye_mesh.data.shape_keys and target_material_name:
+        if eye_mesh and eye_mesh.data.shape_keys:
             CharacterMesh = eye_mesh
             keys = CharacterMesh.data.shape_keys.key_blocks
             basis = CharacterMesh.data.shape_keys.reference_key
@@ -1827,14 +1832,23 @@ def rig_wuthering_waves_character(context=None):
 
             mat_slots = CharacterMesh.material_slots
             relevant_face_vert_indices = set()
-            for poly in CharacterMesh.data.polygons:
-                if poly.material_index < len(mat_slots) and mat_slots[poly.material_index].name == target_material_name:
-                    relevant_face_vert_indices.update(poly.vertices)
-
-            if relevant_face_vert_indices:
-                connectivity = defaultdict(set)
+            if target_material_name:
                 for poly in CharacterMesh.data.polygons:
                     if poly.material_index < len(mat_slots) and mat_slots[poly.material_index].name == target_material_name:
+                        relevant_face_vert_indices.update(poly.vertices)
+
+            if not relevant_face_vert_indices and basis and hasattr(basis, "data"):
+                for sk_n in source_shape_keys:
+                    sk = keys.get(sk_n)
+                    if sk and hasattr(sk, "data"):
+                        for i, pt in enumerate(sk.data):
+                            if (pt.co - basis.data[i].co).length > 1e-5:
+                                relevant_face_vert_indices.add(i)
+
+            if relevant_face_vert_indices and any(sk_n in keys for sk_n in source_shape_keys):
+                connectivity = defaultdict(set)
+                for poly in CharacterMesh.data.polygons:
+                    if not target_material_name or (poly.material_index < len(mat_slots) and mat_slots[poly.material_index].name == target_material_name):
                         verts = poly.vertices
                         for i in range(len(verts)):
                             for j in range(i + 1, len(verts)):
@@ -1888,377 +1902,377 @@ def rig_wuthering_waves_character(context=None):
 
                     bpy.ops.object.select_all(action='DESELECT')
 
-            # Eye Tracker Bone Creation
-            context.view_layer.objects.active = RigArmatureObj
-            bpy.ops.object.mode_set(mode='EDIT')
-            target_bone = RigArmatureObj.data.edit_bones.get("ORG-head")
-            if target_bone:
-                new_bone = RigArmatureObj.data.edit_bones.new("EyeTracker")
-                new_bone.head = target_bone.head.copy()
-                new_bone.head.y -= 0.10
-                new_bone.head.z += 0.03
-                new_bone.tail = new_bone.head + Vector((0, 0, 0.03))
-                new_bone.parent = target_bone
-                new_bone.use_connect = False
+        # Eye Tracker Bone Creation
+        context.view_layer.objects.active = RigArmatureObj
+        bpy.ops.object.mode_set(mode='EDIT')
+        target_bone = RigArmatureObj.data.edit_bones.get("ORG-head")
+        if target_bone:
+            new_bone = RigArmatureObj.data.edit_bones.new("EyeTracker")
+            new_bone.head = target_bone.head.copy()
+            new_bone.head.y -= 0.10
+            new_bone.head.z += 0.03
+            new_bone.tail = new_bone.head + Vector((0, 0, 0.03))
+            new_bone.parent = target_bone
+            new_bone.use_connect = False
 
-                et_head = new_bone.head
-                y_off = new_bone.tail.y - new_bone.head.y
-                z_off = new_bone.tail.z - new_bone.head.z
+            et_head = new_bone.head
+            y_off = new_bone.tail.y - new_bone.head.y
+            z_off = new_bone.tail.z - new_bone.head.z
 
-                eye_l = RigArmatureObj.data.edit_bones.new("Eye.L")
-                eye_l.head = et_head + Vector((0.03, 0, 0))
-                eye_l.tail = eye_l.head + Vector((0, y_off, z_off))
-                eye_l.parent = new_bone
-                eye_l.use_connect = False
+            eye_l = RigArmatureObj.data.edit_bones.new("Eye.L")
+            eye_l.head = et_head + Vector((0.03, 0, 0))
+            eye_l.tail = eye_l.head + Vector((0, y_off, z_off))
+            eye_l.parent = new_bone
+            eye_l.use_connect = False
 
-                eye_r = RigArmatureObj.data.edit_bones.new("Eye.R")
-                eye_r.head = et_head + Vector((-0.03, 0, 0))
-                eye_r.tail = eye_r.head + Vector((0, y_off, z_off))
-                eye_r.parent = new_bone
-                eye_r.use_connect = False
+            eye_r = RigArmatureObj.data.edit_bones.new("Eye.R")
+            eye_r.head = et_head + Vector((-0.03, 0, 0))
+            eye_r.tail = eye_r.head + Vector((0, y_off, z_off))
+            eye_r.parent = new_bone
+            eye_r.use_connect = False
 
-            bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.mode_set(mode='OBJECT')
 
-            # Custom Shapes / Widgets
-            create_circle_widget("WGT-rig_eye.L", radius=0.1, location=(-0.3, 0, 0))
-            create_circle_widget("WGT-rig_eye.R", radius=0.1, location=(0.3, 0, 0))
-            create_double_capsule_widget("WGT-rig_eyes", inner_radius=0.14, outer_radius=0.17, spacing=0.6)
+        # Custom Shapes / Widgets
+        create_circle_widget("WGT-rig_eye.L", radius=0.1, location=(-0.3, 0, 0))
+        create_circle_widget("WGT-rig_eye.R", radius=0.1, location=(0.3, 0, 0))
+        create_double_capsule_widget("WGT-rig_eyes", inner_radius=0.14, outer_radius=0.17, spacing=0.6)
 
-            context.view_layer.objects.active = RigArmatureObj
-            bpy.ops.object.mode_set(mode='POSE')
-            custom_shapes = {"EyeTracker": "WGT-rig_eyes", "Eye.L": "WGT-rig_eye.L", "Eye.R": "WGT-rig_eye.R"}
-            for b_name, s_name in custom_shapes.items():
-                if b_name in RigArmatureObj.pose.bones and s_name in bpy.data.objects:
-                    RigArmatureObj.pose.bones[b_name].custom_shape = bpy.data.objects[s_name]
-                    RigArmatureObj.pose.bones[b_name].custom_shape_scale_xyz = (4.0, 4.0, 4.0)
+        context.view_layer.objects.active = RigArmatureObj
+        bpy.ops.object.mode_set(mode='POSE')
+        custom_shapes = {"EyeTracker": "WGT-rig_eyes", "Eye.L": "WGT-rig_eye.L", "Eye.R": "WGT-rig_eye.R"}
+        for b_name, s_name in custom_shapes.items():
+            if b_name in RigArmatureObj.pose.bones and s_name in bpy.data.objects:
+                RigArmatureObj.pose.bones[b_name].custom_shape = bpy.data.objects[s_name]
+                RigArmatureObj.pose.bones[b_name].custom_shape_scale_xyz = (4.0, 4.0, 4.0)
 
-            # Drivers for Pupils
-            if CharacterMesh and CharacterMesh.data and CharacterMesh.data.shape_keys:
-                shape_key_names = {
-                    "Pupil_L": "LOC_X", "Pupil_R": "LOC_X",
-                    "Pupil_Up": "LOC_Y", "Pupil_Down": "LOC_Y"
-                }
-                expressions = {
-                    "Pupil_L": 'max(min((bone_x * 10), 1), 0) if bone_x > 0 else 0',
-                    "Pupil_R": 'max(min((-bone_x * 10), 1), 0) if bone_x < 0 else 0',
-                    "Pupil_Up": 'max(min((bone_y * 10), 1), 0) if bone_y > 0 else 0',
-                    "Pupil_Down": 'max(min((-bone_y * 10), 1), 0) if bone_y < 0 else 0'
-                }
+        # Drivers for Pupils
+        if CharacterMesh and CharacterMesh.data and CharacterMesh.data.shape_keys:
+            shape_key_names = {
+                "Pupil_L": "LOC_X", "Pupil_R": "LOC_X",
+                "Pupil_Up": "LOC_Y", "Pupil_Down": "LOC_Y"
+            }
+            expressions = {
+                "Pupil_L": 'max(min((bone_x * 10), 1), 0) if bone_x > 0 else 0',
+                "Pupil_R": 'max(min((-bone_x * 10), 1), 0) if bone_x < 0 else 0',
+                "Pupil_Up": 'max(min((bone_y * 10), 1), 0) if bone_y > 0 else 0',
+                "Pupil_Down": 'max(min((-bone_y * 10), 1), 0) if bone_y < 0 else 0'
+            }
 
-                for shape_key_name, transform_axis in shape_key_names.items():
-                    if shape_key_name in CharacterMesh.data.shape_keys.key_blocks:
-                        shape_key = CharacterMesh.data.shape_keys.key_blocks[shape_key_name]
-                        try:
-                            shape_key.driver_remove('value')
-                        except Exception:
-                            pass
-                        driver = shape_key.driver_add('value').driver
-                        driver.type = 'SCRIPTED'
-                        var = driver.variables.new()
-                        var.name = 'bone_' + transform_axis[-1].lower()
-                        var.type = 'TRANSFORMS'
-                        var.targets[0].id = RigArmatureObj
-                        var.targets[0].bone_target = "EyeTracker"
-                        var.targets[0].transform_type = transform_axis
-                        var.targets[0].transform_space = 'LOCAL_SPACE'
-                        driver.expression = expressions[shape_key_name]
-
-            # Pupil Scale Driver
-            if CharacterMesh and CharacterMesh.data and CharacterMesh.data.shape_keys and "Pupil_Scale" in CharacterMesh.data.shape_keys.key_blocks:
-                shape_key = CharacterMesh.data.shape_keys.key_blocks["Pupil_Scale"]
-                try:
-                    shape_key.driver_remove('value')
-                except Exception:
-                    pass
-                driver = shape_key.driver_add('value').driver
-                driver.type = 'SCRIPTED'
-                var = driver.variables.new()
-                var.name = 'bone_scale'
-                var.type = 'TRANSFORMS'
-                var.targets[0].id = RigArmatureObj
-                var.targets[0].bone_target = "EyeTracker"
-                var.targets[0].transform_type = 'SCALE_Y'
-                var.targets[0].transform_space = 'LOCAL_SPACE'
-                driver.expression = 'max(min((1.0 - bone_scale), 1.0), -1.0)'
-
-            # Left and Right Eye Independent Combined Drivers
-            if CharacterMesh and CharacterMesh.data and CharacterMesh.data.shape_keys:
-                side_driver_map = {
-                    "Pupil_L.L": ("Eye.L", "+X"),
-                    "Pupil_R.L": ("Eye.L", "-X"),
-                    "Pupil_Up.L": ("Eye.L", "+Y"),
-                    "Pupil_Down.L": ("Eye.L", "-Y"),
-                    "Pupil_L.R": ("Eye.R", "+X"),
-                    "Pupil_R.R": ("Eye.R", "-X"),
-                    "Pupil_Up.R": ("Eye.R", "+Y"),
-                    "Pupil_Down.R": ("Eye.R", "-Y"),
-                }
-                for sk_name, (indep_bone, dir_axis) in side_driver_map.items():
-                    if sk_name in CharacterMesh.data.shape_keys.key_blocks:
-                        shape_key = CharacterMesh.data.shape_keys.key_blocks[sk_name]
-                        try:
-                            shape_key.driver_remove('value')
-                        except Exception:
-                            pass
-                        driver = shape_key.driver_add('value').driver
-                        driver.type = 'SCRIPTED'
-
-                        axis = 'LOC_' + dir_axis[1]
-                        v_master = driver.variables.new()
-                        v_master.name = "v_m"
-                        v_master.type = 'TRANSFORMS'
-                        v_master.targets[0].id = RigArmatureObj
-                        v_master.targets[0].bone_target = "EyeTracker"
-                        v_master.targets[0].transform_type = axis
-                        v_master.targets[0].transform_space = 'LOCAL_SPACE'
-
-                        v_indep = driver.variables.new()
-                        v_indep.name = "v_i"
-                        v_indep.type = 'TRANSFORMS'
-                        v_indep.targets[0].id = RigArmatureObj
-                        v_indep.targets[0].bone_target = indep_bone
-                        v_indep.targets[0].transform_type = axis
-                        v_indep.targets[0].transform_space = 'LOCAL_SPACE'
-
-                        sign = "+" if dir_axis[0] == "+" else "-"
-                        driver.expression = f"max(min(({sign}(v_m + v_i) * 10.0), 1.0), 0.0)"
-
-            bpy.ops.object.mode_set(mode='OBJECT')
-
-            # Move Widgets to per-character WGTS_<Char> nested in char collection (Append-safe)
-            try:
-                from setup_wizard.character_rig_setup.wgts_isolation import isolate_wgts_for_character
-                _char_coll = char_collection if 'char_collection' in locals() else None
-                _char_name = char_base_name if 'char_base_name' in locals() else None
-                isolate_wgts_for_character(RigArmatureObj, _char_name, _char_coll)
-            except Exception as e_wgts:
-                print(f"[WUWA RIG] WGTS isolation notice: {e_wgts}")
-                wgts_collection = None
-                for col in bpy.data.collections:
-                    if col.name.startswith("WGTS_RIG-") or col.name.startswith("WGTS"):
-                        wgts_collection = col
-                        break
-                if not wgts_collection:
-                    wgts_collection = bpy.data.collections.new("WGTS_Custom")
-                    context.scene.collection.children.link(wgts_collection)
-
-                for n in ["WGT-rig_eyes", "WGT-rig_eye.R", "WGT-rig_eye.L"]:
-                    o = bpy.data.objects.get(n)
-                    if o:
-                        if o.name not in wgts_collection.objects:
-                            wgts_collection.objects.link(o)
-                        for col in list(o.users_collection):
-                            if col != wgts_collection:
-                                col.objects.unlink(o)
-
-                wgts_collection.hide_viewport = True
-
-            # IK Pole property (paridad ZZZ/NTE: solo con flags, default OFF)
-            _pole_props = getattr(context.scene, "character_rigger_props", None)
-            _pole_arm = getattr(_pole_props, "use_arm_ik_poles", False) if _pole_props else False
-            _pole_leg = getattr(_pole_props, "use_leg_ik_poles", False) if _pole_props else False
-            for b_name in ["upper_arm_parent.L", "upper_arm_parent.R"]:
-                bone = RigArmatureObj.pose.bones.get(b_name)
-                if bone and "pole_vector" in bone:
+            for shape_key_name, transform_axis in shape_key_names.items():
+                if shape_key_name in CharacterMesh.data.shape_keys.key_blocks:
+                    shape_key = CharacterMesh.data.shape_keys.key_blocks[shape_key_name]
                     try:
-                        bone["pole_vector"] = bool(_pole_arm)
+                        shape_key.driver_remove('value')
                     except Exception:
                         pass
-            for b_name in ["thigh_parent.L", "thigh_parent.R"]:
-                bone = RigArmatureObj.pose.bones.get(b_name)
-                if bone and "pole_vector" in bone:
-                    try:
-                        bone["pole_vector"] = bool(_pole_leg)
-                    except Exception:
-                        pass
-            # Themes for Eye controls (All red THEME01)
-            theme_assignments = {"EyeTracker": "THEME01", "Eye.L": "THEME01", "Eye.R": "THEME01"}
-            for b_name, theme in theme_assignments.items():
-                bone = RigArmatureObj.pose.bones.get(b_name)
-                if bone and hasattr(bone, "color"):
-                    bone.color.palette = theme
-
-            # Create FK toe bones (toe_fk.L/R)
-            bpy.ops.object.mode_set(mode='EDIT')
-            arm = RigArmatureObj.data
-            for side in ['.L', '.R']:
-                org_toe = arm.edit_bones.get(f'ORG-toe_ik{side}')
-                foot_fk = arm.edit_bones.get(f'foot_fk{side}')
-                if org_toe and foot_fk:
-                    new_bone = arm.edit_bones.new(f'toe_fk{side}')
-                    new_bone.head = org_toe.head.copy()
-                    new_bone.tail = org_toe.tail.copy()
-                    new_bone.roll = org_toe.roll
-                    new_bone.parent = foot_fk
-                    new_bone.use_connect = True
-            bpy.ops.object.mode_set(mode='POSE')
-
-            foot_fk_l = RigArmatureObj.pose.bones.get('foot_fk.L')
-            for side in ['.L', '.R']:
-                toe_fk = RigArmatureObj.pose.bones.get(f'toe_fk{side}')
-                if toe_fk and foot_fk_l:
-                    toe_fk.custom_shape = foot_fk_l.custom_shape
-                    if hasattr(toe_fk, "color"):
-                        toe_fk.color.palette = 'THEME03'
-
-            for side in ['.L', '.R']:
-                toe_fk_bone = RigArmatureObj.pose.bones.get(f'toe_fk{side}')
-                org_toe = RigArmatureObj.pose.bones.get(f'ORG-toe_ik{side}')
-                toe_ik_bone = RigArmatureObj.pose.bones.get(f'toe_ik{side}')
-                thigh_parent = RigArmatureObj.pose.bones.get(f'thigh_parent{side}')
-
-                if toe_fk_bone and org_toe and thigh_parent and toe_ik_bone:
-                    for con in org_toe.constraints:
-                        if con.type == 'COPY_TRANSFORMS' and con.subtarget == f'toe_ik{side}':
-                            ik_driver = con.driver_add('influence').driver
-                            ik_driver.type = 'SCRIPTED'
-                            ik_var = ik_driver.variables.new()
-                            ik_var.name = 'ik_fk'
-                            ik_var.type = 'SINGLE_PROP'
-                            ik_var.targets[0].id = RigArmatureObj
-                            ik_var.targets[0].data_path = f'pose.bones["thigh_parent{side}"]["IK_FK"]'
-                            ik_driver.expression = '1 - ik_fk'
-                            break
-
-                    fk_constraint = org_toe.constraints.new('COPY_ROTATION')
-                    fk_constraint.name = 'Copy Rotation FK'
-                    fk_constraint.target = RigArmatureObj
-                    fk_constraint.subtarget = f'toe_fk{side}'
-                    fk_constraint.target_space = 'LOCAL'
-                    fk_constraint.owner_space = 'LOCAL'
-
-                    driver = fk_constraint.driver_add('influence').driver
+                    driver = shape_key.driver_add('value').driver
                     driver.type = 'SCRIPTED'
                     var = driver.variables.new()
-                    var.name = 'ik_fk'
-                    var.type = 'SINGLE_PROP'
+                    var.name = 'bone_' + transform_axis[-1].lower()
+                    var.type = 'TRANSFORMS'
                     var.targets[0].id = RigArmatureObj
-                    var.targets[0].data_path = f'pose.bones["thigh_parent{side}"]["IK_FK"]'
-                    driver.expression = 'ik_fk'
+                    var.targets[0].bone_target = "EyeTracker"
+                    var.targets[0].transform_type = transform_axis
+                    var.targets[0].transform_space = 'LOCAL_SPACE'
+                    driver.expression = expressions[shape_key_name]
 
-            # Move toe_fk bones to FK leg collections
-            assign_bone_to_collection(RigArmatureObj, 'toe_fk.L', 'Leg.L (FK)')
-            assign_bone_to_collection(RigArmatureObj, 'toe_fk.R', 'Leg.R (FK)')
-
-            # Neck Tweak
-            bpy.ops.object.mode_set(mode='EDIT')
-            arm = RigArmatureObj.data
-            if 'ORG-Bip001Neck' in arm.edit_bones:
-                arm.edit_bones['ORG-Bip001Neck'].name = 'Bip001Neck'
-            if 'ORG-Bip001Head' in arm.edit_bones:
-                arm.edit_bones['ORG-Bip001Head'].name = 'Bip001Head'
-
-            if 'Bip001Neck' in arm.edit_bones:
-                neck_bone = arm.edit_bones['Bip001Neck']
-                new_bone = arm.edit_bones.new('Bip001Neck._fk')
-                new_bone.head = neck_bone.head.copy()
-                new_bone.tail = neck_bone.tail.copy()
-                new_bone.roll = neck_bone.roll
-                new_bone.parent = neck_bone.parent
-                rot_mat = mathutils.Matrix.Rotation(-1.5708, 4, 'X')
-                new_bone.tail = new_bone.head + rot_mat @ (new_bone.tail - new_bone.head)
-                new_bone.tail.z = new_bone.head.z
-                new_bone.tail = new_bone.head + (new_bone.tail - new_bone.head).normalized() * 0.05
-                neck_bone.use_connect = False
-                neck_bone.parent = new_bone
-
-            if 'Bip001Head' in arm.edit_bones:
-                head_bone = arm.edit_bones['Bip001Head']
-                new_bone = arm.edit_bones.new('Bip001Head._fk')
-                new_bone.head = head_bone.head.copy()
-                new_bone.tail = head_bone.tail.copy()
-                new_bone.roll = head_bone.roll
-                new_bone.parent = head_bone.parent
-                rot_mat = mathutils.Matrix.Rotation(-1.5708, 4, 'X')
-                new_bone.tail = new_bone.head + rot_mat @ (new_bone.tail - new_bone.head)
-                new_bone.tail.z = new_bone.head.z
-                new_bone.tail = new_bone.head + (new_bone.tail - new_bone.head).normalized() * 0.05
-                head_bone.use_connect = False
-                head_bone.parent = new_bone
-
-            bpy.ops.object.mode_set(mode='POSE')
-            spine2_fk = RigArmatureObj.pose.bones.get("Spine2_fk")
-            if "Bip001Neck._fk" in RigArmatureObj.pose.bones:
-                tb = RigArmatureObj.pose.bones["Bip001Neck._fk"]
-                if spine2_fk:
-                    tb.custom_shape = spine2_fk.custom_shape
-                tb.custom_shape_transform = RigArmatureObj.pose.bones.get("Bip001Neck")
-            if "Bip001Head._fk" in RigArmatureObj.pose.bones:
-                tb = RigArmatureObj.pose.bones["Bip001Head._fk"]
-                if spine2_fk:
-                    tb.custom_shape = spine2_fk.custom_shape
-                tb.custom_shape_transform = RigArmatureObj.pose.bones.get("Bip001Head")
-
-            assign_bone_to_collection(RigArmatureObj, 'Bip001Neck', 'Torso')
-            assign_bone_to_collection(RigArmatureObj, 'Bip001Head', 'Torso')
-            assign_bone_to_collection(RigArmatureObj, 'Bip001Neck._fk', 'Torso (Tweak)')
-            assign_bone_to_collection(RigArmatureObj, 'Bip001Head._fk', 'Torso (Tweak)')
-
-            # Final cleanups
-            bpy.ops.object.mode_set(mode='OBJECT')
-            RigArmatureObj.data.display_type = 'STICK'
-            RigArmatureObj.data.show_bone_custom_shapes = True
-            RigArmatureObj.show_in_front = True
-
-            # Ensure character meshes maintain proper armature modifier and parenting
-            for m_obj in char_meshes:
-                for mod in m_obj.modifiers:
-                    if mod.type == 'ARMATURE':
-                        mod.object = RigArmatureObj
-                m_obj.parent = RigArmatureObj
-                m_obj.matrix_parent_inverse = RigArmatureObj.matrix_world.inverted()
-
-            # Create breast circle controls for character
-            create_wuwa_breast_controls(RigArmatureObj)
-
-            # First organize Rigify collections and UI
-            clean_name = extract_clean_character_name(OrigArmature)
-            organize_rigify_bone_collections(RigArmatureObj, orig_arm_name=OrigArmature, char_name=clean_name)
-
-            # Then build Face Rig controls, drivers and widgets
+        # Pupil Scale Driver
+        if CharacterMesh and CharacterMesh.data and CharacterMesh.data.shape_keys and "Pupil_Scale" in CharacterMesh.data.shape_keys.key_blocks:
+            shape_key = CharacterMesh.data.shape_keys.key_blocks["Pupil_Scale"]
             try:
-                from setup_wizard.character_rig_setup.wuwa_face_panel import wuwa_face_rig_main
-                wuwa_face_rig_main(RigArmatureObj)
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                print(f"[WUWA FACE RIG] Notice: {e}")
+                shape_key.driver_remove('value')
+            except Exception:
+                pass
+            driver = shape_key.driver_add('value').driver
+            driver.type = 'SCRIPTED'
+            var = driver.variables.new()
+            var.name = 'bone_scale'
+            var.type = 'TRANSFORMS'
+            var.targets[0].id = RigArmatureObj
+            var.targets[0].bone_target = "EyeTracker"
+            var.targets[0].transform_type = 'SCALE_Y'
+            var.targets[0].transform_space = 'LOCAL_SPACE'
+            driver.expression = 'max(min((1.0 - bone_scale), 1.0), -1.0)'
 
-            # Ensure Face collection is visible
-            if hasattr(RigArmatureObj.data, "collections"):
-                for fc in ["Face", "Face (Primary)"]:
-                    if fc in RigArmatureObj.data.collections:
-                        RigArmatureObj.data.collections[fc].is_visible = True
+        # Left and Right Eye Independent Combined Drivers
+        if CharacterMesh and CharacterMesh.data and CharacterMesh.data.shape_keys:
+            side_driver_map = {
+                "Pupil_L.L": ("Eye.L", "+X"),
+                "Pupil_R.L": ("Eye.L", "-X"),
+                "Pupil_Up.L": ("Eye.L", "+Y"),
+                "Pupil_Down.L": ("Eye.L", "-Y"),
+                "Pupil_L.R": ("Eye.R", "+X"),
+                "Pupil_R.R": ("Eye.R", "-X"),
+                "Pupil_Up.R": ("Eye.R", "+Y"),
+                "Pupil_Down.R": ("Eye.R", "-Y"),
+            }
+            for sk_name, (indep_bone, dir_axis) in side_driver_map.items():
+                if sk_name in CharacterMesh.data.shape_keys.key_blocks:
+                    shape_key = CharacterMesh.data.shape_keys.key_blocks[sk_name]
+                    try:
+                        shape_key.driver_remove('value')
+                    except Exception:
+                        pass
+                    driver = shape_key.driver_add('value').driver
+                    driver.type = 'SCRIPTED'
 
-            # Apply Hair & Clothes physics if enabled in setup settings
-            props = getattr(context.scene, "character_rigger_props", None)
-            enable_physics = False
-            if props:
-                enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
-            if not enable_physics:
-                enable_physics = getattr(context.scene, "enable_hair_clothes_physics", getattr(context.scene, "enable_hair_dress_physics", False))
+                    axis = 'LOC_' + dir_axis[1]
+                    v_master = driver.variables.new()
+                    v_master.name = "v_m"
+                    v_master.type = 'TRANSFORMS'
+                    v_master.targets[0].id = RigArmatureObj
+                    v_master.targets[0].bone_target = "EyeTracker"
+                    v_master.targets[0].transform_type = axis
+                    v_master.targets[0].transform_space = 'LOCAL_SPACE'
 
-            if enable_physics and RigArmatureObj:
-                from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
-                apply_hair_and_clothes_physics(RigArmatureObj, context)
+                    v_indep = driver.variables.new()
+                    v_indep.name = "v_i"
+                    v_indep.type = 'TRANSFORMS'
+                    v_indep.targets[0].id = RigArmatureObj
+                    v_indep.targets[0].bone_target = indep_bone
+                    v_indep.targets[0].transform_type = axis
+                    v_indep.targets[0].transform_space = 'LOCAL_SPACE'
 
-            # ZZZ/NTE parity: plate-settings + head-controller + 3-tier roots + UI.
-            # Face rig propio (wuwa_face_panel) no se toca.
-            try:
-                _apply_zzz_parity_wuwa(RigArmatureObj, context, OrigArmature)
-            except Exception as ex_parity:
-                import traceback
-                traceback.print_exc()
-                print(f"[WUWA RIG] parity notice: {ex_parity}")
+                    sign = "+" if dir_axis[0] == "+" else "-"
+                    driver.expression = f"max(min(({sign}(v_m + v_i) * 10.0), 1.0), 0.0)"
 
-            orig_arm = bpy.data.objects.get(OrigArmature)
-            if orig_arm and orig_arm != RigArmatureObj:
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        # Move Widgets to per-character WGTS_<Char> nested in char collection (Append-safe)
+        try:
+            from setup_wizard.character_rig_setup.wgts_isolation import isolate_wgts_for_character
+            _char_coll = char_collection if 'char_collection' in locals() else None
+            _char_name = char_base_name if 'char_base_name' in locals() else None
+            isolate_wgts_for_character(RigArmatureObj, _char_name, _char_coll)
+        except Exception as e_wgts:
+            print(f"[WUWA RIG] WGTS isolation notice: {e_wgts}")
+            wgts_collection = None
+            for col in bpy.data.collections:
+                if col.name.startswith("WGTS_RIG-") or col.name.startswith("WGTS"):
+                    wgts_collection = col
+                    break
+            if not wgts_collection:
+                wgts_collection = bpy.data.collections.new("WGTS_Custom")
+                context.scene.collection.children.link(wgts_collection)
+
+            for n in ["WGT-rig_eyes", "WGT-rig_eye.R", "WGT-rig_eye.L"]:
+                o = bpy.data.objects.get(n)
+                if o:
+                    if o.name not in wgts_collection.objects:
+                        wgts_collection.objects.link(o)
+                    for col in list(o.users_collection):
+                        if col != wgts_collection:
+                            col.objects.unlink(o)
+
+            wgts_collection.hide_viewport = True
+
+        # IK Pole property (paridad ZZZ/NTE: solo con flags, default OFF)
+        _pole_props = getattr(context.scene, "character_rigger_props", None)
+        _pole_arm = getattr(_pole_props, "use_arm_ik_poles", False) if _pole_props else False
+        _pole_leg = getattr(_pole_props, "use_leg_ik_poles", False) if _pole_props else False
+        for b_name in ["upper_arm_parent.L", "upper_arm_parent.R"]:
+            bone = RigArmatureObj.pose.bones.get(b_name)
+            if bone and "pole_vector" in bone:
                 try:
-                    bpy.data.objects.remove(orig_arm, do_unlink=True)
+                    bone["pole_vector"] = bool(_pole_arm)
                 except Exception:
                     pass
+        for b_name in ["thigh_parent.L", "thigh_parent.R"]:
+            bone = RigArmatureObj.pose.bones.get(b_name)
+            if bone and "pole_vector" in bone:
+                try:
+                    bone["pole_vector"] = bool(_pole_leg)
+                except Exception:
+                    pass
+        # Themes for Eye controls (All red THEME01)
+        theme_assignments = {"EyeTracker": "THEME01", "Eye.L": "THEME01", "Eye.R": "THEME01"}
+        for b_name, theme in theme_assignments.items():
+            bone = RigArmatureObj.pose.bones.get(b_name)
+            if bone and hasattr(bone, "color"):
+                bone.color.palette = theme
 
-            unlock_wuwa_secondary_bones(RigArmatureObj)
+        # Create FK toe bones (toe_fk.L/R)
+        bpy.ops.object.mode_set(mode='EDIT')
+        arm = RigArmatureObj.data
+        for side in ['.L', '.R']:
+            org_toe = arm.edit_bones.get(f'ORG-toe_ik{side}')
+            foot_fk = arm.edit_bones.get(f'foot_fk{side}')
+            if org_toe and foot_fk:
+                new_bone = arm.edit_bones.new(f'toe_fk{side}')
+                new_bone.head = org_toe.head.copy()
+                new_bone.tail = org_toe.tail.copy()
+                new_bone.roll = org_toe.roll
+                new_bone.parent = foot_fk
+                new_bone.use_connect = True
+        bpy.ops.object.mode_set(mode='POSE')
+
+        foot_fk_l = RigArmatureObj.pose.bones.get('foot_fk.L')
+        for side in ['.L', '.R']:
+            toe_fk = RigArmatureObj.pose.bones.get(f'toe_fk{side}')
+            if toe_fk and foot_fk_l:
+                toe_fk.custom_shape = foot_fk_l.custom_shape
+                if hasattr(toe_fk, "color"):
+                    toe_fk.color.palette = 'THEME03'
+
+        for side in ['.L', '.R']:
+            toe_fk_bone = RigArmatureObj.pose.bones.get(f'toe_fk{side}')
+            org_toe = RigArmatureObj.pose.bones.get(f'ORG-toe_ik{side}')
+            toe_ik_bone = RigArmatureObj.pose.bones.get(f'toe_ik{side}')
+            thigh_parent = RigArmatureObj.pose.bones.get(f'thigh_parent{side}')
+
+            if toe_fk_bone and org_toe and thigh_parent and toe_ik_bone:
+                for con in org_toe.constraints:
+                    if con.type == 'COPY_TRANSFORMS' and con.subtarget == f'toe_ik{side}':
+                        ik_driver = con.driver_add('influence').driver
+                        ik_driver.type = 'SCRIPTED'
+                        ik_var = ik_driver.variables.new()
+                        ik_var.name = 'ik_fk'
+                        ik_var.type = 'SINGLE_PROP'
+                        ik_var.targets[0].id = RigArmatureObj
+                        ik_var.targets[0].data_path = f'pose.bones["thigh_parent{side}"]["IK_FK"]'
+                        ik_driver.expression = '1 - ik_fk'
+                        break
+
+                fk_constraint = org_toe.constraints.new('COPY_ROTATION')
+                fk_constraint.name = 'Copy Rotation FK'
+                fk_constraint.target = RigArmatureObj
+                fk_constraint.subtarget = f'toe_fk{side}'
+                fk_constraint.target_space = 'LOCAL'
+                fk_constraint.owner_space = 'LOCAL'
+
+                driver = fk_constraint.driver_add('influence').driver
+                driver.type = 'SCRIPTED'
+                var = driver.variables.new()
+                var.name = 'ik_fk'
+                var.type = 'SINGLE_PROP'
+                var.targets[0].id = RigArmatureObj
+                var.targets[0].data_path = f'pose.bones["thigh_parent{side}"]["IK_FK"]'
+                driver.expression = 'ik_fk'
+
+        # Move toe_fk bones to FK leg collections
+        assign_bone_to_collection(RigArmatureObj, 'toe_fk.L', 'Leg.L (FK)')
+        assign_bone_to_collection(RigArmatureObj, 'toe_fk.R', 'Leg.R (FK)')
+
+        # Neck Tweak
+        bpy.ops.object.mode_set(mode='EDIT')
+        arm = RigArmatureObj.data
+        if 'ORG-Bip001Neck' in arm.edit_bones:
+            arm.edit_bones['ORG-Bip001Neck'].name = 'Bip001Neck'
+        if 'ORG-Bip001Head' in arm.edit_bones:
+            arm.edit_bones['ORG-Bip001Head'].name = 'Bip001Head'
+
+        if 'Bip001Neck' in arm.edit_bones:
+            neck_bone = arm.edit_bones['Bip001Neck']
+            new_bone = arm.edit_bones.new('Bip001Neck._fk')
+            new_bone.head = neck_bone.head.copy()
+            new_bone.tail = neck_bone.tail.copy()
+            new_bone.roll = neck_bone.roll
+            new_bone.parent = neck_bone.parent
+            rot_mat = mathutils.Matrix.Rotation(-1.5708, 4, 'X')
+            new_bone.tail = new_bone.head + rot_mat @ (new_bone.tail - new_bone.head)
+            new_bone.tail.z = new_bone.head.z
+            new_bone.tail = new_bone.head + (new_bone.tail - new_bone.head).normalized() * 0.05
+            neck_bone.use_connect = False
+            neck_bone.parent = new_bone
+
+        if 'Bip001Head' in arm.edit_bones:
+            head_bone = arm.edit_bones['Bip001Head']
+            new_bone = arm.edit_bones.new('Bip001Head._fk')
+            new_bone.head = head_bone.head.copy()
+            new_bone.tail = head_bone.tail.copy()
+            new_bone.roll = head_bone.roll
+            new_bone.parent = head_bone.parent
+            rot_mat = mathutils.Matrix.Rotation(-1.5708, 4, 'X')
+            new_bone.tail = new_bone.head + rot_mat @ (new_bone.tail - new_bone.head)
+            new_bone.tail.z = new_bone.head.z
+            new_bone.tail = new_bone.head + (new_bone.tail - new_bone.head).normalized() * 0.05
+            head_bone.use_connect = False
+            head_bone.parent = new_bone
+
+        bpy.ops.object.mode_set(mode='POSE')
+        spine2_fk = RigArmatureObj.pose.bones.get("Spine2_fk")
+        if "Bip001Neck._fk" in RigArmatureObj.pose.bones:
+            tb = RigArmatureObj.pose.bones["Bip001Neck._fk"]
+            if spine2_fk:
+                tb.custom_shape = spine2_fk.custom_shape
+            tb.custom_shape_transform = RigArmatureObj.pose.bones.get("Bip001Neck")
+        if "Bip001Head._fk" in RigArmatureObj.pose.bones:
+            tb = RigArmatureObj.pose.bones["Bip001Head._fk"]
+            if spine2_fk:
+                tb.custom_shape = spine2_fk.custom_shape
+            tb.custom_shape_transform = RigArmatureObj.pose.bones.get("Bip001Head")
+
+        assign_bone_to_collection(RigArmatureObj, 'Bip001Neck', 'Torso')
+        assign_bone_to_collection(RigArmatureObj, 'Bip001Head', 'Torso')
+        assign_bone_to_collection(RigArmatureObj, 'Bip001Neck._fk', 'Torso (Tweak)')
+        assign_bone_to_collection(RigArmatureObj, 'Bip001Head._fk', 'Torso (Tweak)')
+
+        # Final cleanups
+        bpy.ops.object.mode_set(mode='OBJECT')
+        RigArmatureObj.data.display_type = 'STICK'
+        RigArmatureObj.data.show_bone_custom_shapes = True
+        RigArmatureObj.show_in_front = True
+
+        # Ensure character meshes maintain proper armature modifier and parenting
+        for m_obj in char_meshes:
+            for mod in m_obj.modifiers:
+                if mod.type == 'ARMATURE':
+                    mod.object = RigArmatureObj
+            m_obj.parent = RigArmatureObj
+            m_obj.matrix_parent_inverse = RigArmatureObj.matrix_world.inverted()
+
+        # Create breast circle controls for character
+        create_wuwa_breast_controls(RigArmatureObj)
+
+        # First organize Rigify collections and UI
+        clean_name = extract_clean_character_name(OrigArmature)
+        organize_rigify_bone_collections(RigArmatureObj, orig_arm_name=OrigArmature, char_name=clean_name)
+
+        # Then build Face Rig controls, drivers and widgets
+        try:
+            from setup_wizard.character_rig_setup.wuwa_face_panel import wuwa_face_rig_main
+            wuwa_face_rig_main(RigArmatureObj)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"[WUWA FACE RIG] Notice: {e}")
+
+        # Ensure Face collection is visible
+        if hasattr(RigArmatureObj.data, "collections"):
+            for fc in ["Face", "Face (Primary)"]:
+                if fc in RigArmatureObj.data.collections:
+                    RigArmatureObj.data.collections[fc].is_visible = True
+
+        # Apply Hair & Clothes physics if enabled in setup settings
+        props = getattr(context.scene, "character_rigger_props", None)
+        enable_physics = False
+        if props:
+            enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
+        if not enable_physics:
+            enable_physics = getattr(context.scene, "enable_hair_clothes_physics", getattr(context.scene, "enable_hair_dress_physics", False))
+
+        if enable_physics and RigArmatureObj:
+            from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics
+            apply_hair_and_clothes_physics(RigArmatureObj, context)
+
+        # ZZZ/NTE parity: plate-settings + head-controller + 3-tier roots + UI.
+        # Face rig propio (wuwa_face_panel) no se toca.
+        try:
+            _apply_zzz_parity_wuwa(RigArmatureObj, context, OrigArmature)
+        except Exception as ex_parity:
+            import traceback
+            traceback.print_exc()
+            print(f"[WUWA RIG] parity notice: {ex_parity}")
+
+        orig_arm = bpy.data.objects.get(OrigArmature)
+        if orig_arm and orig_arm != RigArmatureObj:
+            try:
+                bpy.data.objects.remove(orig_arm, do_unlink=True)
+            except Exception:
+                pass
+
+        unlock_wuwa_secondary_bones(RigArmatureObj)
 
     return True
 
