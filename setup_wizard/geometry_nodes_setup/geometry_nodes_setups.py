@@ -103,6 +103,23 @@ gi_meshes_to_create_outlines_on = [
 ]
 
 hsr_meshes_to_create_outlines_on = [
+    'Basis',
+    'basis',
+    'Base',
+    'base',
+    'Body',
+    'Body1',
+    'Body2',
+    'Body3',
+    'Body4',
+    'Body01',
+    'Body02',
+    'Body03',
+    'Body04',
+    'Body_01',
+    'Body_02',
+    'Body_03',
+    'Body_04',
     'Hair',
     'Weapon',
     'Weapon01',
@@ -1127,7 +1144,13 @@ class HonkaiStarRailGeometryNodesSetup(GameGeometryNodesSetup):
         self.clone_outlines(self.material_names)
         for mesh_name in meshes_to_create_outlines_on:
             for object_name, object_data in bpy.context.scene.objects.items():
-                if object_data.type == 'MESH' and (mesh_name == object_name or f'_{mesh_name}' in object_name):
+                object_name_matches = (
+                    mesh_name.lower() == object_name.lower()
+                    or object_name.lower().startswith(f"{mesh_name.lower()}.")
+                    or f'_{mesh_name.lower()}' in object_name.lower()
+                    or object_name.lower().startswith(f"{mesh_name.lower()}_")
+                )
+                if object_data.type == 'MESH' and object_name_matches:
                     self.create_geometry_nodes_modifier(f'{object_name}{BODY_PART_SUFFIX}')
                     self.fix_meshes_by_setting_genshin_materials(object_name)
 
@@ -1339,7 +1362,13 @@ class StellarToonGeometryNodesSetup(HonkaiStarRailGeometryNodesSetup):
                         self.__set_light_vectors_default_output_attributes(light_vectors_modifier)
         for mesh_name in meshes_to_create_outlines_on:
             for object_name, object_data in bpy.context.scene.objects.items():
-                if object_data.type == 'MESH' and (mesh_name == object_name or f'_{mesh_name}' in object_name):
+                object_name_matches = (
+                    mesh_name.lower() == object_name.lower()
+                    or object_name.lower().startswith(f"{mesh_name.lower()}.")
+                    or f'_{mesh_name.lower()}' in object_name.lower()
+                    or object_name.lower().startswith(f"{mesh_name.lower()}_")
+                )
+                if object_data.type == 'MESH' and object_name_matches:
                     self.create_geometry_nodes_modifier(f'{object_name}{BODY_PART_SUFFIX}')
                     self.fix_meshes_by_setting_genshin_materials(object_name)
 
