@@ -418,6 +418,199 @@ class HonkaiStarRailMaterialDataImporter(GameMaterialDataImporter):
         self.material_names = material_names
         self.shader_node_names = shader_node_names
 
+    @staticmethod
+    def deduce_hsr_body_part(filename: str) -> str:
+        stem = PurePosixPath(filename).stem
+        stem_lower = stem.lower()
+
+        if 'eyeshadow' in stem_lower or 'eyespecular' in stem_lower or 'eye_specular' in stem_lower or 'eyestar' in stem_lower:
+            return 'EyeShadow'
+        if 'facemask' in stem_lower:
+            return 'FaceMask'
+        if 'hair' in stem_lower:
+            return 'Hair'
+        if 'face' in stem_lower:
+            return 'Face'
+        if 'handbag' in stem_lower:
+            return 'Handbag'
+        if 'kendama' in stem_lower:
+            return 'Kendama'
+        if 'coat' in stem_lower:
+            return 'Coat'
+
+        if 'weapon' in stem_lower or 'wpn' in stem_lower:
+            if 'crystal' in stem_lower:
+                return 'Weapon_Crystal'
+            if 'trans' in stem_lower:
+                return 'Weapon_Trans'
+            return 'Weapon'
+
+        if 'crystal' in stem_lower:
+            return 'Crystal'
+
+        if stem_lower.startswith('eff_') or '_eff_' in stem_lower:
+            if '_Mat_' in stem:
+                return stem.split('_Mat_')[-1]
+            return stem
+
+        if 'body' in stem_lower:
+            is_trans = 'trans' in stem_lower
+            is_d = stem_lower.endswith(('_d', '_mat_d')) or '_d_' in stem_lower or '_body_d' in stem_lower
+            is_s = stem_lower.endswith(('_s', '_mat_s')) or '_s_' in stem_lower or '_body_s' in stem_lower
+
+            if 'body3' in stem_lower:
+                return 'Body3'
+            if 'body2' in stem_lower:
+                if is_trans:
+                    return 'Body2_Trans'
+                if is_d:
+                    return 'Body2_D'
+                if is_s:
+                    return 'Body2_S'
+                return 'Body2'
+            if 'body1' in stem_lower:
+                if is_d:
+                    return 'Body1_D'
+                if is_s:
+                    return 'Body1_S'
+                return 'Body1'
+
+            if is_trans:
+                return 'Body_Trans'
+            if is_d:
+                return 'Body_D'
+            if is_s:
+                return 'Body_S'
+            return 'Body'
+
+        if '_Mat_' in stem:
+            part = stem.split('_Mat_')[-1]
+            tokens = part.split('_')
+            if len(tokens) > 1 and tokens[-1].isdigit():
+                part = '_'.join(tokens[:-1])
+            if part:
+                return part
+
+        parts = stem.split('_')
+        return parts[-1] if parts else stem
+
+    def find_hsr_material_and_outlines(self, body_part: str, filename: str):
+        mat = self.material
+        ol_mat = self.outlines_material
+
+        prefix = getattr(self.material_names, 'MATERIAL_PREFIX', '') or ''
+        prefix_after = getattr(self.material_names, 'MATERIAL_PREFIX_AFTER_RENAME', '') or ''
+
+        candidate_mat_names = []
+        if body_part in ('Body_D', 'Body_S'):
+            candidate_mat_names.extend([
+                f'{prefix}{body_part}',
+                f'{prefix}Body',
+                f'{prefix}Base',
+                f'{prefix}Body1',
+                f'{prefix_after}{body_part}',
+                f'{prefix_after}Body',
+                f'{prefix_after}Base',
+            ])
+        elif body_part == 'Body_Trans':
+            candidate_mat_names.extend([
+                f'{prefix}Body_Trans',
+                f'{prefix}Body2_Trans',
+                f'{prefix}Body',
+                f'{prefix}Base',
+                f'{prefix_after}Body_Trans',
+                f'{prefix_after}Body2_Trans',
+            ])
+        elif body_part in ('Body', 'Base'):
+            candidate_mat_names.extend([
+                f'{prefix}Body',
+                f'{prefix}Base',
+                f'{prefix}Body_D',
+                f'{prefix}Body1',
+                f'{prefix_after}Body',
+                f'{prefix_after}Base',
+            ])
+        elif 'Weapon' in body_part:
+            candidate_mat_names.extend([
+                f'{prefix}{body_part}',
+                f'{prefix}Weapon',
+                f'{prefix}Weapon01',
+                f'{prefix}Weapon1',
+                f'{prefix_after}{body_part}',
+                f'{prefix_after}Weapon',
+            ])
+        elif body_part == 'EyeShadow':
+            candidate_mat_names.extend([
+                f'{prefix}EyeShadow',
+                f'{prefix}Eye_Shadow',
+                f'{prefix}Eye',
+                f'{prefix_after}EyeShadow',
+            ])
+        else:
+            candidate_mat_names.extend([
+                f'{prefix}{body_part}',
+                f'{prefix_after}{body_part}',
+            ])
+
+        stem = PurePosixPath(filename).stem
+        candidate_mat_names.append(f'{prefix}{stem}')
+        if '_Mat_' in stem:
+            candidate_mat_names.append(f"{prefix}{stem.split('_Mat_')[-1]}")
+
+        # Find mesh material
+        if not mat:
+            for cand in candidate_mat_names:
+                if cand:
+                    found = bpy.data.materials.get(cand)
+                    if found and not found.name.endswith('Outlines'):
+                        mat = found
+                        break
+
+        if not mat:
+            for m in bpy.data.materials.values():
+                if m.name.endswith('Outlines'):
+                    continue
+                if (prefix and prefix in m.name) or (prefix_after and prefix_after in m.name):
+                    if body_part.lower() in m.name.lower():
+                        mat = m
+                        break
+
+        # Find outline material
+        if not ol_mat and mat:
+            ol_mat = bpy.data.materials.get(f'{mat.name} Outlines')
+
+        if not ol_mat:
+            for cand in candidate_mat_names:
+                if cand:
+                    found_ol = bpy.data.materials.get(f'{cand} Outlines')
+                    if found_ol:
+                        ol_mat = found_ol
+                        break
+
+        if not ol_mat:
+            if 'body' in body_part.lower():
+                ol_mat = (bpy.data.materials.get(f'{prefix}Base Outlines') or
+                          bpy.data.materials.get(f'{prefix}Outlines') or
+                          bpy.data.materials.get(f'{prefix_after}Outlines'))
+            elif 'weapon' in body_part.lower():
+                ol_mat = (bpy.data.materials.get(f'{prefix}Weapon Outlines') or
+                          bpy.data.materials.get(f'{prefix_after}Weapon Outlines'))
+            elif body_part == 'Hair':
+                ol_mat = (bpy.data.materials.get(f'{prefix}Hair Outlines') or
+                          bpy.data.materials.get(f'{prefix_after}Hair Outlines'))
+            elif body_part == 'Face':
+                ol_mat = (bpy.data.materials.get(f'{prefix}Face Outlines') or
+                          bpy.data.materials.get(f'{prefix_after}Face Outlines'))
+
+        if not ol_mat:
+            for m in bpy.data.materials.values():
+                if 'outlines' in m.name.lower() and ((prefix and prefix in m.name) or (prefix_after and prefix_after in m.name)):
+                    if body_part.lower() in m.name.lower():
+                        ol_mat = m
+                        break
+
+        return (mat, ol_mat, None)
+
     def import_material_data(self):
         self.validate_UI_inputs_for_targeted_material_data_import()
         material_data_directory: MaterialDataDirectory = self.get_material_data_files()
@@ -439,26 +632,22 @@ class HonkaiStarRailMaterialDataImporter(GameMaterialDataImporter):
         self.validate_num_of_file_inputs_for_targeted_material_data_import(material_data_directory.files)
 
         for file in material_data_directory.files:
-            is_firefly = PurePosixPath(file.name).stem.split('_')[-1] == 'D' or PurePosixPath(file.name).stem.split('_')[-1] == 'S'
-
-            body_part = PurePosixPath(file.name).stem.split('_Mat_')[1] if PurePosixPath(file.name).stem.split('_')[-1] == 'Trans' \
-                else PurePosixPath(file.name).stem.split('_')[-2] if is_firefly \
-                else PurePosixPath(file.name).stem.split('_')[-1]
+            body_part = self.deduce_hsr_body_part(file.name)
             character_type = CharacterType.HSR_AVATAR
 
-            json_material_data = self.open_and_load_json_data(material_data_directory.file_path, file)
-
-            material, outlines_material, __ = self.find_material_and_outline_material_for_body_part(body_part)
+            material, outlines_material, __ = self.find_hsr_material_and_outlines(body_part, file.name)
             outline_material_group: OutlineMaterialGroup = OutlineMaterialGroup(material, outlines_material)
 
-            if not material or not outlines_material:
-                self.blender_operator.report({'WARNING'}, \
-                    f'Continuing to apply other material data, but: \n'
-                    f'* Type: {character_type}\n'
-                    f'* Material Data JSON "{file.name}" was selected, but unable to determine material to apply this to.\n'
-                    f'* Expected Materials "{self.material_names.MATERIAL_PREFIX}{body_part}" and "{self.material_names.MATERIAL_PREFIX}{body_part} Outlines"')
+            if not material and not outlines_material:
+                if body_part not in ('FaceMask', 'DefaultMat'):
+                    self.blender_operator.report({'WARNING'}, \
+                        f'Continuing to apply other material data, but: \n'
+                        f'* Type: {character_type}\n'
+                        f'* Material Data JSON "{file.name}" was selected, but unable to determine material to apply this to.\n'
+                        f'* Expected Materials "{self.material_names.MATERIAL_PREFIX}{body_part}" and "{self.material_names.MATERIAL_PREFIX}{body_part} Outlines"')
                 continue
 
+            json_material_data = self.open_and_load_json_data(material_data_directory.file_path, file)
             material_data_parser = self.get_material_data_json_parser(json_material_data)
             material_data_appliers = MaterialDataAppliersFactory.create(
                 self.blender_operator.game_type,

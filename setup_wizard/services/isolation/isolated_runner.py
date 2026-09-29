@@ -201,12 +201,37 @@ def save_and_quit():
         top_level_collections = [c.name for c in scene.collection.children]
         loose_objects = [o.name for o in scene.collection.objects]
 
-        write_status(
-            "SAVING",
-            "Writing temporary .blend...",
-            collections=top_level_collections,
-            loose_objects=loose_objects,
-        )
+        # Only pack textures if the character model was imported from an archive (.zip/.7z)
+        # Normal folders must keep their external file paths without packing.
+        if JOB.get("is_archive", False):
+            write_status(
+                "SAVING",
+                "Packing textures into .blend...",
+                collections=top_level_collections,
+                loose_objects=loose_objects,
+            )
+            try:
+                for img in bpy.data.images:
+                    if img.source in ('FILE', 'SEQUENCE') and not getattr(img, 'packed_file', None):
+                        try:
+                            img.pack()
+                        except Exception as e_p:
+                            print(f"[GACHA SETUP WORKER] Notice packing {img.name}: {e_p}")
+                if hasattr(bpy.ops.file, "pack_all"):
+                    try:
+                        bpy.ops.file.pack_all()
+                    except Exception:
+                        pass
+            except Exception as e_pack:
+                print(f"[GACHA SETUP WORKER] Notice in pack textures: {e_pack}")
+        else:
+            write_status(
+                "SAVING",
+                "Writing temporary .blend...",
+                collections=top_level_collections,
+                loose_objects=loose_objects,
+            )
+
         bpy.ops.wm.save_as_mainfile(filepath=str(RESULT_PATH))
 
         write_status(
@@ -241,12 +266,22 @@ def run_setup():
         if game not in GAME_TO_WIZARD:
             raise RuntimeError(f"Unsupported game: {game}")
 
+        from setup_wizard.utils.archive_extractor import is_archive_file, extract_character_archive
+
         character_dir = JOB["character_directory"]
+        selected_file = JOB.get("selected_model_file", "")
+
+        if (selected_file and is_archive_file(selected_file)) or (character_dir and is_archive_file(character_dir)):
+            archive_to_extract = selected_file if (selected_file and is_archive_file(selected_file)) else character_dir
+            extracted_folder = os.path.join(os.path.dirname(str(RESULT_PATH)), "extracted_runner")
+            char_dir, m_file = extract_character_archive(archive_to_extract, extracted_folder)
+            character_dir = char_dir
+            selected_file = m_file
+
         if not os.path.isdir(character_dir):
             raise RuntimeError(f"Character directory does not exist: {character_dir}")
 
         import_order = importlib.import_module(JOB["gacha_module"] + ".import_order")
-        selected_file = JOB.get("selected_model_file", "")
         if selected_file and not os.path.isfile(selected_file):
             raise RuntimeError(f"Selected model file does not exist: {selected_file}")
 

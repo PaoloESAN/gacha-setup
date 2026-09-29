@@ -417,6 +417,12 @@ class HonkaiStarRailOutlineTextureImporter(OutlineTextureImporter):
                         self.assign_lightmap_texture(character_model_folder_file_path, lightmap_files, body_part_material_name, actual_material_part_name)
             break  # IMPORTANT: We os.walk which also traverses through folders...we just want the files
 
+        try:
+            from setup_wizard.geometry_nodes_setup.geometry_nodes_setups import configure_hsr_hair_outlines_transparency
+            configure_hsr_hair_outlines_transparency()
+        except Exception:
+            pass
+
         if cache_enabled and character_model_folder_file_path:
             cache_using_cache_key(get_cache(cache_enabled), CHARACTER_MODEL_FOLDER_FILE_PATH, character_model_folder_file_path)
 

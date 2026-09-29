@@ -1256,6 +1256,8 @@ class GenshinTextureImporter:
             except Exception:
                 continue
             raw_name = os.path.splitext(jf)[0]
+            if raw_name.lower().endswith('.mat'):
+                raw_name = raw_name[:-4]
             clean_name = raw_name[:-4] if raw_name.lower().endswith('_mat') else raw_name
             c_low = clean_name.lower()
             if 'glass_eff' in c_low:
@@ -1625,7 +1627,8 @@ class GenshinTextureImporter:
                                      tex_envs.get('_HighlightMask', {}).get('m_Texture', {}).get('Name') or \
                                      tex_envs.get('_EyeLightTex', {}).get('m_Texture', {}).get('Name') or \
                                      tex_envs.get('_HighlightTex', {}).get('m_Texture', {}).get('Name') or \
-                                     tex_envs.get('_EyeHighlight', {}).get('m_Texture', {}).get('Name')
+                                     tex_envs.get('_EyeHighlight', {}).get('m_Texture', {}).get('Name') or \
+                                     tex_envs.get('_SDFGradientMap', {}).get('m_Texture', {}).get('Name')
                 h_img = resolve_img(highlight_tex_name) if highlight_tex_name else None
                 if not h_img:
                     for fname, fpath in image_files:
@@ -1641,7 +1644,30 @@ class GenshinTextureImporter:
                 if new_pupil_mat and new_pupil_mat not in target_mats:
                     target_mats.append(new_pupil_mat)
                 for tmat in target_mats:
-                    self.set_new_pupil_material_textures(tmat, pupil_imgs, pupil_ramp_img, h_img)
+                    self.set_new_pupil_material_textures(tmat, pupil_imgs, pupil_ramp_img, None)
+                if h_img:
+                    hl_mats = [
+                        m for m in bpy.data.materials
+                        if m.use_nodes and 'highlight' in m.name.lower() and 'outlines' not in m.name.lower()
+                    ]
+                    if not hl_mats:
+                        hl_mat = bpy.data.materials.get(getattr(self.material_names, 'HIGHLIGHT', f'{self.material_names.MATERIAL_PREFIX}Highlight')) or \
+                                 bpy.data.materials.get('HoYoverse - Genshin Highlight') or \
+                                 bpy.data.materials.get('Genshin Highlight')
+                        if hl_mat:
+                            hl_mats = [hl_mat]
+                    for hl_mat in hl_mats:
+                        self.set_highlight_mask_texture(hl_mat, h_img)
+
+                try:
+                    from setup_wizard.replace_default_materials_setup.game_default_material_replacers import setup_new_pupil_highlight_layer
+                    for obj in bpy.data.objects:
+                        if obj.type == 'MESH':
+                            mats = [s.material for s in obj.material_slots if s.material]
+                            if any('new pupil' in m.name.lower() for m in mats) and not any('highlight' in m.name.lower() for m in mats):
+                                setup_new_pupil_highlight_layer(obj, self.material_names)
+                except Exception as e_hl_split:
+                    print(f"[HIGHLIGHT LAYER] Notice ensuring pupil highlight layer: {e_hl_split}")
                 imported_any = True
 
             stockings_name = tex_envs.get('_ShiningCustomIDMask_V2', {}).get('m_Texture', {}).get('Name')
@@ -2020,8 +2046,8 @@ class GenshinTextureImporter:
 
         transparent_img = self.get_transparent_texture("Transparent_Texture")
 
-        # 1. Outside group in material: Highlight Mask
-        self.set_highlight_mask_texture(material, highlight_img)
+        # 1. Outside group in material: Highlight Mask (inner layer no longer gets highlight)
+        self.set_highlight_mask_texture(material, None)
 
         # 2. Inside group (PupilaTodo only):
         group_trees = []
@@ -2280,7 +2306,7 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                     if new_pupil_mat:
                         target_pupil_mats = [new_pupil_mat]
                 for target_pupil_mat in target_pupil_mats:
-                    self.set_new_pupil_material_textures(target_pupil_mat, pupil_diffuse_images, pupil_ramp_img, highlight_img)
+                    self.set_new_pupil_material_textures(target_pupil_mat, pupil_diffuse_images, pupil_ramp_img, None)
                 if target_pupil_mats:
                     primary_pupil_mat = target_pupil_mats[0]
                     for obj in bpy.data.objects:
@@ -2288,8 +2314,34 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                             for slot in obj.material_slots:
                                 if slot.material and slot.material not in target_pupil_mats:
                                     m_low = slot.material.name.lower()
-                                    if ('pupil' in m_low or 'pupila' in m_low) and not any(x in m_low for x in ['face', 'eyestar', 'eyeshadow', 'brow', 'outlines']):
+                                    if ('pupil' in m_low or 'pupila' in m_low) and not any(x in m_low for x in ['face', 'eyestar', 'eyeshadow', 'brow', 'outlines', 'highlight']):
                                         slot.material = primary_pupil_mat
+
+                # Outer layer: Genshin Highlight material receives highlight texture
+                hl_mats = [
+                    m for m in bpy.data.materials
+                    if m.use_nodes and 'highlight' in m.name.lower() and 'outlines' not in m.name.lower()
+                ]
+                if not hl_mats:
+                    hl_mat = bpy.data.materials.get(getattr(self.material_names, 'HIGHLIGHT', f'{self.material_names.MATERIAL_PREFIX}Highlight')) or \
+                             bpy.data.materials.get('HoYoverse - Genshin Highlight') or \
+                             bpy.data.materials.get('Genshin Highlight')
+                    if hl_mat:
+                        hl_mats = [hl_mat]
+
+                if highlight_img and hl_mats:
+                    for hl_mat in hl_mats:
+                        self.set_highlight_mask_texture(hl_mat, highlight_img)
+
+                try:
+                    from setup_wizard.replace_default_materials_setup.game_default_material_replacers import setup_new_pupil_highlight_layer
+                    for obj in bpy.data.objects:
+                        if obj.type == 'MESH':
+                            mats = [s.material for s in obj.material_slots if s.material]
+                            if any('new pupil' in m.name.lower() for m in mats) and not any('highlight' in m.name.lower() for m in mats):
+                                setup_new_pupil_highlight_layer(obj, self.material_names)
+                except Exception as e_hl_split:
+                    print(f"[HIGHLIGHT LAYER] Notice ensuring pupil highlight layer: {e_hl_split}")
             elif highlight_img:
                 for mat_candidate in [
                     bpy.data.materials.get(getattr(self.material_names, 'NEW_PUPIL', None)),
@@ -2404,14 +2456,21 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                         body2_material if ShaderMaterialNameKeywords.BODY2_LIGHTMAP in file else body_material
                     self.set_lightmap_texture(TextureType.BODY, selected_body_material, img)
                 elif any(k in file.lower() for k in ['eyehighlight', 'eyelight', 'eye_highlight', 'eye_light']) or ('highlight' in file.lower() and ('diffuse' in file.lower() or 'mask' in file.lower())):
-                    for p_name in [getattr(self.material_names, 'NEW_PUPIL', None), 'HoYoverse - Genshin New Pupil', 'HoYoverse - Genshin Pupil']:
-                        if p_name:
-                            p_mat = bpy.data.materials.get(p_name)
-                            if p_mat:
-                                self.set_highlight_mask_texture(p_mat, img)
-                    for mat in bpy.data.materials:
-                        if 'pupil' in mat.name.lower() and 'outlines' not in mat.name.lower():
-                            self.set_highlight_mask_texture(mat, img)
+                    if has_new_pupil_setup:
+                        hl_mat = bpy.data.materials.get(getattr(self.material_names, 'HIGHLIGHT', f'{self.material_names.MATERIAL_PREFIX}Highlight')) or \
+                                 bpy.data.materials.get('HoYoverse - Genshin Highlight') or \
+                                 bpy.data.materials.get('Genshin Highlight')
+                        if hl_mat:
+                            self.set_highlight_mask_texture(hl_mat, img)
+                    else:
+                        for p_name in [getattr(self.material_names, 'PUPIL', None), 'HoYoverse - Genshin Pupil']:
+                            if p_name:
+                                p_mat = bpy.data.materials.get(p_name)
+                                if p_mat:
+                                    self.set_highlight_mask_texture(p_mat, img)
+                        for mat in bpy.data.materials:
+                            if 'pupil' in mat.name.lower() and 'outlines' not in mat.name.lower() and 'new pupil' not in mat.name.lower():
+                                self.set_highlight_mask_texture(mat, img)
                 elif "Pupil" in file and "Diffuse" in file:
                     if not has_new_pupil_setup:
                         self.set_diffuse_texture(TextureType.BODY, pupil_material, img)
@@ -2770,14 +2829,22 @@ class GenshinNPCTextureImporter(GenshinTextureImporter):
                         self.set_lightmap_texture(TextureType.BODY, others_material, img)
 
                 elif any(k in file.lower() for k in ['eyehighlight', 'eyelight', 'eye_highlight', 'eye_light']) or ('highlight' in file.lower() and ('diffuse' in file.lower() or 'mask' in file.lower())):
-                    for p_name in [getattr(self.material_names, 'NEW_PUPIL', None), 'HoYoverse - Genshin New Pupil', 'HoYoverse - Genshin Pupil']:
-                        if p_name:
-                            p_mat = bpy.data.materials.get(p_name)
-                            if p_mat:
-                                self.set_highlight_mask_texture(p_mat, img)
-                    for mat in bpy.data.materials:
-                        if 'pupil' in mat.name.lower() and 'outlines' not in mat.name.lower():
-                            self.set_highlight_mask_texture(mat, img)
+                    has_new_pupil = any('new pupil' in m.name.lower() for m in bpy.data.materials)
+                    if has_new_pupil:
+                        hl_mat = bpy.data.materials.get(getattr(self.material_names, 'HIGHLIGHT', f'{self.material_names.MATERIAL_PREFIX}Highlight')) or \
+                                 bpy.data.materials.get('HoYoverse - Genshin Highlight') or \
+                                 bpy.data.materials.get('Genshin Highlight')
+                        if hl_mat:
+                            self.set_highlight_mask_texture(hl_mat, img)
+                    else:
+                        for p_name in [getattr(self.material_names, 'PUPIL', None), 'HoYoverse - Genshin Pupil']:
+                            if p_name:
+                                p_mat = bpy.data.materials.get(p_name)
+                                if p_mat:
+                                    self.set_highlight_mask_texture(p_mat, img)
+                        for mat in bpy.data.materials:
+                            if 'pupil' in mat.name.lower() and 'outlines' not in mat.name.lower() and 'new pupil' not in mat.name.lower():
+                                self.set_highlight_mask_texture(mat, img)
                 elif self.import_part_texture_to_matching_materials(file, img):
                     pass
                 else:
@@ -3197,7 +3264,7 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
                     'lightmap': extract_tex_name(['_LightMapTex', '_LightMap', '_Lightmap', '_LightmapTex', '_MainLightmap', '_LightTex']),
                     'warm_ramp': extract_tex_name(['_WarmRampTex', '_WarmRamp', '_ShadowRampTex', '_PackedShadowRampTex', '_Body_Warm_Ramp', '_Hair_Warm_Ramp', '_RampTex']),
                     'cool_ramp': extract_tex_name(['_CoolRampTex', '_CoolRamp', '_Body_Cool_Ramp', '_Hair_Cool_Ramp']),
-                    'stockings': extract_tex_name(['_StockingsTex', '_StockingTex', '_Stockings', '_Body_Stockings']),
+                    'stockings': extract_tex_name(['_StockingsTex', '_StockingTex', '_Stockings', '_Body_Stockings', '_StockRangeTex', '_StockRange', '_StockingRangeTex']),
                     'facemap': extract_tex_name(['_FaceMapTex', '_FaceMap', '_FaceLightMap', '_Face_LightMap', '_FaceShadow']),
                     'expression': extract_tex_name(['_ExpressionMap', '_Face_ExpressionMap', '_FaceExpressionMap', '_Expression']),
                     'normal': extract_tex_name(['_BumpMap', '_NormalMap', '_NormalTex']),
@@ -3397,6 +3464,16 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
                                bpy.data.materials.get(self.material_names.BODY1) or \
                                bpy.data.materials.get(self.material_names.BODY2) or \
                                bpy.data.materials.get(f"{getattr(self.material_names, 'MATERIAL_PREFIX', '')}Body_Stockings")
+                    if body_mat is None:
+                        # Characters with Body variants (Body_D/Body_S/Body_D1/...) have
+                        # no plain BODY/BODY1/BODY2 material; use any Body material so
+                        # the shared Stockings group still gets the texture.
+                        prefix = getattr(self.material_names, 'MATERIAL_PREFIX', '')
+                        for mat in bpy.data.materials:
+                            if mat.name.startswith(prefix) and 'body' in mat.name.lower() \
+                                    and 'outline' not in mat.name.lower():
+                                body_mat = mat
+                                break
                     if body_mat:
                         self.set_stocking_texture(TextureType.BODY, body_mat, img)
 
@@ -3509,7 +3586,7 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
                 if not diffuse_img:
                     for fname, fpath in image_files:
                         f_low = fname.lower()
-                        if part_kw.lower() in f_low and any(k in f_low for k in ['color', 'diffuse']) and not any(k in f_low for k in ['ramp', 'eff', 'lightmap', 'mask']):
+                        if part_kw.lower() in f_low and any(k in f_low for k in ['color', 'diffuse']) and not any(k in f_low for k in ['ramp', 'eff', 'lightmap', 'mask', 'stocking', 'matcap']):
                             diffuse_img = self._resolve_image(fname, image_files)
                             if diffuse_img:
                                 self.set_diffuse_texture(tex_type, material, diffuse_img)

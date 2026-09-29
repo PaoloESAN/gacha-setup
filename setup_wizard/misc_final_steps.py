@@ -21,6 +21,23 @@ from setup_wizard.setup_wizard_operator_base_classes import (
 )
 
 
+def cleanup_temp_extracted_archive(context=None):
+    if context is None:
+        context = bpy.context
+    scene = getattr(context, "scene", None)
+    if not scene:
+        return
+    temp_dir = scene.get("setup_wizard_temp_extract_dir")
+    if temp_dir and os.path.isdir(temp_dir):
+        try:
+            import shutil
+            shutil.rmtree(temp_dir, ignore_errors=True)
+            print(f"[GACHA SETUP] Cleaned up temporary extracted archive directory: {temp_dir}")
+            del scene["setup_wizard_temp_extract_dir"]
+        except Exception as e:
+            print(f"[GACHA SETUP] Notice cleaning up temp archive directory: {e}")
+
+
 class GI_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties):
     """Finish Setup"""
 
@@ -67,6 +84,8 @@ class GI_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties
                 hide_eyestar_if_unrigged(context)
         except Exception:
             pass
+
+        cleanup_temp_extracted_archive(context)
 
         return result
 

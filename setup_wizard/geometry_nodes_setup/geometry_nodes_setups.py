@@ -103,6 +103,23 @@ gi_meshes_to_create_outlines_on = [
 ]
 
 hsr_meshes_to_create_outlines_on = [
+    'Basis',
+    'basis',
+    'Base',
+    'base',
+    'Body',
+    'Body1',
+    'Body2',
+    'Body3',
+    'Body4',
+    'Body01',
+    'Body02',
+    'Body03',
+    'Body04',
+    'Body_01',
+    'Body_02',
+    'Body_03',
+    'Body_04',
     'Hair',
     'Weapon',
     'Weapon01',
@@ -1060,6 +1077,61 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
         input = vfx_shader_node.inputs.get(vfx_shader_input_name)
         material.node_tree.links.new(output, input)
 
+def configure_hsr_hair_transparency():
+    """
+    Step for HSR outlines:
+    - Hair outline materials: render method BLENDED, use_transparency_overlap = True.
+    - Hair mesh materials: render method BLENDED, use_transparency_overlap = False.
+    Only applies to HSR.
+    """
+    processed = set()
+    hair_keywords = ('hair', 'pelo', 'bangs')
+    outline_keywords = ('outline', '_ol')
+
+    def apply_settings(mat, is_outline: bool):
+        if not mat or mat.name in processed:
+            return
+        processed.add(mat.name)
+
+        if hasattr(mat, "surface_render_method"):
+            try:
+                mat.surface_render_method = 'BLENDED'
+            except Exception:
+                pass
+        if hasattr(mat, "blend_method"):
+            try:
+                mat.blend_method = 'BLEND'
+            except Exception:
+                pass
+        if hasattr(mat, "use_transparency_overlap"):
+            try:
+                mat.use_transparency_overlap = True if is_outline else False
+            except Exception:
+                pass
+
+    # 1. Check mesh objects in scene
+    for obj in bpy.context.scene.objects:
+        if obj.type == 'MESH':
+            is_hair_obj = any(h in obj.name.lower() for h in hair_keywords)
+            is_outline_obj = any(ol in obj.name.lower() for ol in outline_keywords)
+            if is_hair_obj:
+                for slot in obj.material_slots:
+                    if slot.material:
+                        is_mat_outline = is_outline_obj or any(ol in slot.material.name.lower() for ol in outline_keywords)
+                        apply_settings(slot.material, is_outline=is_mat_outline)
+
+    # 2. Check bpy.data.materials
+    for mat in bpy.data.materials:
+        m_low = mat.name.lower()
+        if any(h in m_low for h in hair_keywords):
+            is_mat_outline = any(ol in m_low for ol in outline_keywords)
+            apply_settings(mat, is_outline=is_mat_outline)
+
+
+# Alias for backward compatibility
+configure_hsr_hair_outlines_transparency = configure_hsr_hair_transparency
+
+
 class HonkaiStarRailGeometryNodesSetup(GameGeometryNodesSetup):
     GEOMETRY_NODES_MATERIAL_IGNORE_LIST = []
 
@@ -1072,13 +1144,23 @@ class HonkaiStarRailGeometryNodesSetup(GameGeometryNodesSetup):
         self.clone_outlines(self.material_names)
         for mesh_name in meshes_to_create_outlines_on:
             for object_name, object_data in bpy.context.scene.objects.items():
-                if object_data.type == 'MESH' and (mesh_name == object_name or f'_{mesh_name}' in object_name):
+                object_name_matches = (
+                    mesh_name.lower() == object_name.lower()
+                    or object_name.lower().startswith(f"{mesh_name.lower()}.")
+                    or f'_{mesh_name.lower()}' in object_name.lower()
+                    or object_name.lower().startswith(f"{mesh_name.lower()}_")
+                )
+                if object_data.type == 'MESH' and object_name_matches:
                     self.create_geometry_nodes_modifier(f'{object_name}{BODY_PART_SUFFIX}')
                     self.fix_meshes_by_setting_genshin_materials(object_name)
 
         face_meshes = [mesh for mesh_name, mesh in bpy.data.meshes.items() if 'Face' in mesh_name and 'Face_Mask' not in mesh_name]
         self.fix_face_outlines_by_reordering_material_slots(face_meshes)
         self.apply_hsr_hair_cleanup_and_vertex_paint()
+        self.configure_hair_outlines_transparency()
+
+    def configure_hair_outlines_transparency(self):
+        configure_hsr_hair_outlines_transparency()
 
     def set_up_modifier_default_values(self, modifier, mesh):
         super().set_up_modifier_default_values(modifier, mesh)
@@ -1280,13 +1362,20 @@ class StellarToonGeometryNodesSetup(HonkaiStarRailGeometryNodesSetup):
                         self.__set_light_vectors_default_output_attributes(light_vectors_modifier)
         for mesh_name in meshes_to_create_outlines_on:
             for object_name, object_data in bpy.context.scene.objects.items():
-                if object_data.type == 'MESH' and (mesh_name == object_name or f'_{mesh_name}' in object_name):
+                object_name_matches = (
+                    mesh_name.lower() == object_name.lower()
+                    or object_name.lower().startswith(f"{mesh_name.lower()}.")
+                    or f'_{mesh_name.lower()}' in object_name.lower()
+                    or object_name.lower().startswith(f"{mesh_name.lower()}_")
+                )
+                if object_data.type == 'MESH' and object_name_matches:
                     self.create_geometry_nodes_modifier(f'{object_name}{BODY_PART_SUFFIX}')
                     self.fix_meshes_by_setting_genshin_materials(object_name)
 
         face_meshes = [mesh for mesh_name, mesh in bpy.data.meshes.items() if 'Face' in mesh_name and 'Face_Mask' not in mesh_name]
         self.fix_face_outlines_by_reordering_material_slots(face_meshes)
         self.apply_hsr_hair_cleanup_and_vertex_paint()
+        self.configure_hair_outlines_transparency()
 
     def __set_light_vectors_default_output_attributes(self, light_vectors_modifier):
         set_modifier_property(light_vectors_modifier, self.LIGHTDIR_OUTPUT_ATTRIBUTE, 'lightDir')
@@ -1586,6 +1675,21 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                 # Outlines vs Solidify
                 is_zzz_game = self.blender_operator.game_type == GameType.ZENLESS_ZONE_ZERO.name
                 is_face = "face" in obj.name.lower()
+                is_brow = ("eyebrow" in o_lower or "brow" in o_lower or "眉" in o_lower) or any(
+                    slot.material and any(kw in slot.material.name.lower() for kw in ["eyebrow", "brow", "眉"])
+                    for slot in obj.material_slots
+                )
+
+                if is_zzz_game and is_brow and not is_face:
+                    # Eyebrows in ZZZ should NOT have outlines
+                    for mod_name in ["Outlines", "Solidify"]:
+                        mod_to_rem = obj.modifiers.get(mod_name)
+                        if mod_to_rem:
+                            try:
+                                obj.modifiers.remove(mod_to_rem)
+                            except Exception:
+                                pass
+                    continue
 
                 if is_zzz_game and is_face:
                     # Consolidate all face polygons to material slot 0 (main face material) before creating outline slot

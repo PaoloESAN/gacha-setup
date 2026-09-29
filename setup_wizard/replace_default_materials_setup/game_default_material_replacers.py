@@ -46,6 +46,260 @@ def _is_vodyanitsa_for_crystal(material_name=None, mesh=None):
     except Exception:
         return False
 
+
+def classify_pupil_faces(mesh_obj):
+    """
+    Classifies pupil mesh faces into outer layer (front/highlight) and inner layer (back/base pupil).
+    In Genshin characters with the new eye system, each eye has an outer highlight layer
+    and an inner base pupil layer.
+    """
+    import bmesh
+    from mathutils import Vector
+
+    if not mesh_obj or mesh_obj.type != 'MESH' or not mesh_obj.data.polygons:
+        return set(), set()
+
+    bm = bmesh.new()
+    bm.from_mesh(mesh_obj.data)
+    visited = set()
+    islands = []
+    for face in bm.faces:
+        if face.index in visited:
+            continue
+        island = []
+        queue = [face]
+        visited.add(face.index)
+        while queue:
+            fl = queue.pop()
+            island.append(fl)
+            for edge in fl.edges:
+                for linked_f in edge.link_faces:
+                    if linked_f.index not in visited:
+                        visited.add(linked_f.index)
+                        queue.append(linked_f)
+        islands.append(island)
+
+    if not islands:
+        bm.free()
+        return set(), set()
+
+    avg_normal = sum((f.normal for f in bm.faces), Vector()).normalized() if bm.faces else Vector((0, 0, 1))
+    if avg_normal.length < 1e-4:
+        avg_normal = Vector((0, 0, 1))
+
+    uv_lay = bm.loops.layers.uv.active
+
+    island_info = []
+    for isl in islands:
+        center = sum((f.calc_center_median() for f in isl), Vector()) / len(isl)
+        depth = center.dot(avg_normal)
+        uv_span = 0.0
+        if uv_lay:
+            uvs = [l[uv_lay].uv for f in isl for l in f.loops]
+            if uvs:
+                u_span = max(u.x for u in uvs) - min(u.x for u in uvs)
+                v_span = max(u.y for u in uvs) - min(u.y for u in uvs)
+                uv_span = max(u_span, v_span)
+        island_info.append({
+            'face_indices': [f.index for f in isl],
+            'center': center,
+            'depth': depth,
+            'face_count': len(isl),
+            'uv_span': uv_span
+        })
+
+    # Group by eye (left vs right) based on lateral X coordinate
+    xs = [info['center'].x for info in island_info]
+    if min(xs) < 0 and max(xs) > 0:
+        split_x = 0.0
+    else:
+        split_x = (min(xs) + max(xs)) / 2.0
+
+    left_islands = [info for info in island_info if info['center'].x < split_x]
+    right_islands = [info for info in island_info if info['center'].x >= split_x]
+
+    outer_faces = set()
+    inner_faces = set()
+
+    for side_islands in [left_islands, right_islands]:
+        if len(side_islands) <= 1:
+            for info in side_islands:
+                inner_faces.update(info['face_indices'])
+            continue
+
+        has_100 = any(info['face_count'] == 100 for info in side_islands)
+        has_uv_contrast = (
+            any(info['uv_span'] < 0.35 for info in side_islands) and
+            any(info['uv_span'] > 0.70 for info in side_islands)
+        )
+
+        side_outer = []
+        if has_uv_contrast:
+            # Highlight parts (like Durin) mapped to small UV region (< 0.35) while base pupil spans full 0..1
+            for info in side_islands:
+                if info['uv_span'] < 0.35:
+                    side_outer.append(info)
+        elif has_100:
+            # Standard 100-face highlight discs (Vodyanitsa, Odette, Anastasya)
+            for info in side_islands:
+                if info['face_count'] == 100:
+                    side_outer.append(info)
+        else:
+            outer_cand = max(side_islands, key=lambda x: x['depth'])
+            side_outer.append(outer_cand)
+
+        for info in side_islands:
+            if info in side_outer:
+                outer_faces.update(info['face_indices'])
+            else:
+                inner_faces.update(info['face_indices'])
+
+    bm.free()
+    return outer_faces, inner_faces
+
+
+def join_pupil_and_highlight_meshes(material_names=None):
+    """
+    If separate mesh objects exist for pupil inner and outer/highlight layers,
+    joins them into a single mesh object named 'Pupil' with 2 materials.
+    Returns the unified mesh object (or None).
+    """
+    candidate_meshes = []
+    for obj in bpy.context.scene.objects:
+        if obj.type != 'MESH':
+            continue
+        n_low = obj.name.lower()
+        mat_names_low = [slot.material.name.lower() for slot in obj.material_slots if slot.material]
+
+        if any(ex in n_low for ex in ['eyestar', 'star', 'brow', 'face_eye', 'body', 'hair', 'bang', 'dress', 'mic', 'tail', 'ribbon']):
+            continue
+
+        is_pupil = ('pupil' in n_low or 'pupila' in n_low or
+                    any('pupil' in m or 'pupila' in m for m in mat_names_low))
+        is_highlight = ('highlight' in n_low or
+                        any('highlight' in m for m in mat_names_low))
+
+        if is_pupil or is_highlight:
+            candidate_meshes.append(obj)
+
+    if not candidate_meshes:
+        return None
+
+    if len(candidate_meshes) <= 1:
+        return candidate_meshes[0]
+
+    primary = next((m for m in candidate_meshes if m.name.lower() == 'pupil'), None)
+    if not primary:
+        primary = max(candidate_meshes, key=lambda m: len(m.data.vertices))
+
+    others = [m for m in candidate_meshes if m != primary]
+
+    try:
+        if bpy.context.view_layer.objects.active and bpy.context.view_layer.objects.active.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+    except Exception:
+        pass
+
+    for o in bpy.context.selected_objects:
+        o.select_set(False)
+
+    for o in others:
+        o.select_set(True)
+    primary.select_set(True)
+    bpy.context.view_layer.objects.active = primary
+
+    print(f"[GENSHIN SETUP] Joining separate pupil/highlight meshes {[o.name for o in others]} into '{primary.name}'")
+    try:
+        bpy.ops.object.join()
+    except Exception as e:
+        print(f"[GENSHIN SETUP] Error joining pupil meshes: {e}")
+
+    primary.name = "Pupil"
+    setup_new_pupil_highlight_layer(primary, material_names)
+    return primary
+
+
+def setup_new_pupil_highlight_layer(mesh, material_names=None):
+    """
+    Separates the pupil mesh into inner layer (Slot 0: New Pupil) and
+    outer layer (Slot 1: Genshin Highlight) by reassigning polygon material_index.
+    Ensures the mesh is unified and has exactly 2 materials.
+    """
+    if not mesh or mesh.type != 'MESH':
+        return
+
+    # Check if there are other separate pupil/highlight mesh objects in the scene to join into this mesh
+    other_pupil_meshes = [
+        o for o in bpy.context.scene.objects
+        if o.type == 'MESH' and o != mesh and (
+            'pupil' in o.name.lower() or 'pupila' in o.name.lower() or 'highlight' in o.name.lower() or
+            any('pupil' in s.name.lower() or 'highlight' in s.name.lower() for s in o.material_slots if s.material)
+        ) and not any(ex in o.name.lower() for ex in ['eyestar', 'star', 'brow', 'face_eye', 'body', 'hair', 'bang', 'dress', 'mic', 'tail', 'ribbon'])
+    ]
+    if other_pupil_meshes:
+        try:
+            if bpy.context.view_layer.objects.active and bpy.context.view_layer.objects.active.mode != 'OBJECT':
+                bpy.ops.object.mode_set(mode='OBJECT')
+        except Exception:
+            pass
+        for o in bpy.context.selected_objects:
+            o.select_set(False)
+        for o in other_pupil_meshes:
+            o.select_set(True)
+        mesh.select_set(True)
+        bpy.context.view_layer.objects.active = mesh
+        try:
+            bpy.ops.object.join()
+        except Exception as e:
+            print(f"[GENSHIN SETUP] Notice joining pupil meshes into {mesh.name}: {e}")
+
+    prefix = getattr(material_names, 'MATERIAL_PREFIX', 'HoYoverse - Genshin ') if material_names else 'HoYoverse - Genshin '
+    prefix_renamed = getattr(material_names, 'MATERIAL_PREFIX_AFTER_RENAME', 'HoYoverse - ') if material_names else 'HoYoverse - '
+    highlight_mat_name = getattr(material_names, 'HIGHLIGHT', f'{prefix}Highlight') if material_names else f'{prefix}Highlight'
+
+    highlight_material = (
+        bpy.data.materials.get(highlight_mat_name) or
+        bpy.data.materials.get(f'{prefix_renamed}Highlight') or
+        bpy.data.materials.get('HoYoverse - Genshin Highlight') or
+        bpy.data.materials.get('Genshin Highlight')
+    )
+    if not highlight_material:
+        v4_highlight = bpy.data.materials.get('HoYoverse - Genshin Highlight')
+        if v4_highlight:
+            highlight_material = v4_highlight
+        else:
+            return
+
+    # Ensure slot 0 has New Pupil if available
+    new_pupil_name = getattr(material_names, 'NEW_PUPIL', f'{prefix}New Pupil') if material_names else f'{prefix}New Pupil'
+    new_pupil_mat = (
+        bpy.data.materials.get(new_pupil_name) or
+        bpy.data.materials.get(f'{prefix_renamed}New Pupil') or
+        bpy.data.materials.get('HoYoverse - Genshin New Pupil') or
+        bpy.data.materials.get(f'{prefix}Pupil') or
+        bpy.data.materials.get('HoYoverse - Genshin Pupil')
+    )
+
+    # Ensure mesh has exactly 2 material slots: Slot 0 = New Pupil, Slot 1 = Highlight
+    while len(mesh.material_slots) < 2:
+        mesh.data.materials.append(None)
+
+    mesh.material_slots[0].material = new_pupil_mat
+    mesh.material_slots[1].material = highlight_material
+
+    # Remove any extra material slots past index 1
+    while len(mesh.material_slots) > 2:
+        mesh.data.materials.pop(index=len(mesh.material_slots) - 1)
+
+    outer_faces, inner_faces = classify_pupil_faces(mesh)
+    if outer_faces:
+        for poly in mesh.data.polygons:
+            if poly.index in outer_faces:
+                poly.material_index = 1
+            elif poly.index in inner_faces:
+                poly.material_index = 0
+
+
 class GameDefaultMaterialReplacer(ABC):
     @abstractmethod
     def replace_default_materials(self):
@@ -102,15 +356,20 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         self.shader_node_names = shader_node_names
 
     def replace_default_materials(self):
+        try:
+            join_pupil_and_highlight_meshes(self.material_names)
+        except Exception as e:
+            print(f"[GENSHIN SETUP] Notice in join_pupil_and_highlight_meshes: {e}")
+
         mesh_ignore_list = []
         meshes = [mesh for mesh in bpy.context.scene.objects if mesh.type == 'MESH' and mesh.name not in mesh_ignore_list]
 
         for mesh in meshes:
-            for material_slot in mesh.material_slots:
+            for material_slot in list(mesh.material_slots):
                 material_name = material_slot.name
                 
                 # If it already has our shader prefix, it was processed previously (e.g. earlier character).
-                if material_name.startswith(self.material_names.MATERIAL_PREFIX):
+                if material_name.startswith(self.material_names.MATERIAL_PREFIX) or 'highlight' in material_name.lower():
                     continue
 
                 mesh_body_part_name = None
@@ -157,6 +416,26 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 
                 is_pupil_part = ('pupil' in material_name.lower() or 'pupila' in material_name.lower()) or (mesh_body_part_name and ('pupil' in mesh_body_part_name.lower() or 'pupila' in mesh_body_part_name.lower()))
 
+                if not is_numbered_pupil and is_pupil_part:
+                    char_dir = get_active_character_directory() or bpy.context.scene.get("setup_wizard_imported_fbx_path", "")
+                    if char_dir:
+                        folder = char_dir if os.path.isdir(char_dir) else os.path.dirname(char_dir)
+                        if os.path.isdir(folder):
+                            try:
+                                files_in_dir = os.listdir(folder)
+                                if any(('pupil01' in f.lower() or 'pupil_01' in f.lower() or 'pupil 01' in f.lower() or 'pupil02' in f.lower()) for f in files_in_dir):
+                                    is_numbered_pupil = True
+                            except Exception:
+                                pass
+
+                if not is_numbered_pupil and is_pupil_part and mesh and mesh.type == 'MESH':
+                    try:
+                        o_faces, _ = classify_pupil_faces(mesh)
+                        if len(o_faces) >= 100:
+                            is_numbered_pupil = True
+                    except Exception:
+                        pass
+
                 if mesh_body_part_name in ['Eye', 'EyeStar', 'Eyes', 'EyeShadow']:
                     mesh_body_part_name = 'Face'
                 elif is_pupil_part:
@@ -186,6 +465,8 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                                 for sub_node in n.node_tree.nodes:
                                     if 'Use Alpha' in sub_node.inputs:
                                         sub_node.inputs['Use Alpha'].default_value = 1.0
+                    if mesh_body_part_name == 'New Pupil':
+                        setup_new_pupil_highlight_layer(mesh, self.material_names)
                 elif mesh_body_part_name and ('Dress' in mesh_body_part_name or 'Arm' in mesh_body_part_name or 'Cloak' in mesh_body_part_name):
                     # Xiao is the only character with an Arm material
                     # Dainsleif and Paimon are the only characters with Cloak materials

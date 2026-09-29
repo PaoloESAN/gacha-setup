@@ -235,12 +235,20 @@ class CSW_PT_Utilities_UI_Layout(Panel):
     bl_region_type = "UI"
     bl_category = "Gacha Setup"
     bl_order = 2
-    bl_options = {'DEFAULT_CLOSED'}
 
     def draw(self, context):
         layout = self.layout
         col = layout.column(align=True)
-        col.operator("setup_wizard.create_camera_pro", text="Jideeh's Camera", icon="CAMERA_DATA")
+
+        row_cam = col.row(align=True)
+        row_cam.operator("setup_wizard.create_camera_pro", text="Jideeh's Camera", icon="CAMERA_DATA")
+        doc_cam = row_cam.operator("wm.url_open", text="", icon="TEXT")
+        doc_cam.url = "https://gacha-setup.pages.dev/utilities/#jideehs-camera"
+
+        row_eye = col.row(align=True)
+        row_eye.operator("setup_wizard.eye_through_hair", text="Eye Through Hair", icon="HIDE_OFF")
+        doc_eye = row_eye.operator("wm.url_open", text="", icon="TEXT")
+        doc_eye.url = "https://gacha-setup.pages.dev/utilities/#eye-through-hair"
 
 
 class CSW_PT_Old_Setup_UI_Layout(Panel):

@@ -242,19 +242,15 @@ class GI_OT_RenameShaderMaterials(Operator, CustomOperatorProperties):
         # 1. GI, PGR
         # 2. HSR-Nya222
         # 3. HSR-StellarToon
-        body_material: Material = bpy.data.materials.get(shader_material_names.BODY) or \
-            bpy.data.materials.get(shader_material_names.BODY1) or bpy.data.materials.get(shader_material_names.BASE)
         texture_node_names: TextureNodeNames = shader_identifier_service.get_shader_texture_node_names(shader)
 
-        body_diffuse_node_name = self.__get_body_diffuse_node_name(body_material, texture_node_names)
+        body_diffuse_filename = self.__find_body_diffuse_filename(shader_material_names, texture_node_names)
 
-        if body_material and body_diffuse_node_name:
-            body_diffuse_texture = body_material.node_tree.nodes.get(body_diffuse_node_name).image
-            if body_diffuse_texture:
-                materials_to_check = [material for material in bpy.data.materials if \
+        if body_diffuse_filename:
+            materials_to_check = [material for material in bpy.data.materials if \
                                     material.name.startswith(shader_material_names.MATERIAL_PREFIX)]
-                for material in materials_to_check:
-                    self.__set_material_names(self.game_type, material, shader_material_names, body_diffuse_texture.name)
+            for material in materials_to_check:
+                self.__set_material_names(self.game_type, material, shader_material_names, body_diffuse_filename)
 
         if self.next_step_idx:
             NextStepInvoker().invoke(
@@ -264,6 +260,69 @@ class GI_OT_RenameShaderMaterials(Operator, CustomOperatorProperties):
                 game_type=self.game_type,
             )
         return {'FINISHED'}
+
+    def __find_body_diffuse_filename(self, shader_material_names, texture_node_names):
+        '''Finds a representative body diffuse texture name for character-name extraction.
+
+        Prefers real body materials (BODY/BODY1/BODY2/BODY3, then any Body* variant
+        actually assigned from the FBX) over the untouched BASE template. Skips
+        non-diffuse images (stockings, ramps, lightmaps, masks, matcaps) so a stray
+        shared texture (ex. Avatar_Nihilux_00_Body_Color_Stockings on Robin) can not
+        leak another character's name into every material.
+        '''
+        prefix = shader_material_names.MATERIAL_PREFIX or ''
+        exact_candidates = [
+            shader_material_names.BODY,
+            getattr(shader_material_names, 'BODY1', ''),
+            getattr(shader_material_names, 'BODY2', ''),
+            getattr(shader_material_names, 'BODY3', ''),
+        ]
+        body_variants = [
+            mat for mat in bpy.data.materials
+            if mat.name.startswith(prefix)
+            and 'outlines' not in mat.name.lower()
+            and 'outline' not in mat.name.lower()
+            and 'body' in mat.name.lower()
+        ]
+        # Real FBX-assigned body materials first, untouched template (BASE) last.
+        body_variants.sort(key=lambda m: (m.get('_original_material_name') is None, m.name))
+        ordered = []
+        for name in exact_candidates:
+            mat = bpy.data.materials.get(name) if name else None
+            if mat is not None and mat not in ordered:
+                ordered.append(mat)
+        for mat in body_variants:
+            if mat not in ordered:
+                ordered.append(mat)
+        base_mat = bpy.data.materials.get(shader_material_names.BASE) if shader_material_names.BASE else None
+        if base_mat is not None and base_mat not in ordered:
+            ordered.append(base_mat)
+
+        for mat in ordered:
+            node_name = self.__get_body_diffuse_node_name(mat, texture_node_names)
+            if node_name and mat.node_tree:
+                node = mat.node_tree.nodes.get(node_name)
+                img = node.image if node else None
+                if img and img.name and self.__is_valid_body_diffuse_image(img.name):
+                    return img.name
+        # Fallback: original FBX texture recorded during replace_default_materials.
+        for mat in ordered:
+            orig_tex = mat.get('_original_fbx_texture')
+            if orig_tex and self.__is_valid_body_diffuse_image(orig_tex):
+                return orig_tex
+        return None
+
+    @staticmethod
+    def __is_valid_body_diffuse_image(image_name):
+        low = image_name.lower()
+        if low.startswith('white_'):
+            return False
+        # Shared/auxiliary textures that must never decide the character name.
+        if any(k in low for k in ('stocking', 'ramp', 'lightmap', 'ligthmap', 'mask',
+                                  'matcap', 'eff_', '_eff', 'lut', 'curve', 'materialid',
+                                  'expression', 'facemap')):
+            return False
+        return True
 
     # TODO: Oof, this should be refactored, but it's a little tricky with Genshin Shader v4.0
     # We could create a shared variable across all TextureNodeNames, but we need to be able to differentiate v3 from v4.0
@@ -285,7 +344,11 @@ class GI_OT_RenameShaderMaterials(Operator, CustomOperatorProperties):
 
     def __set_material_names(self, game_type: GameType, material: Material, shader_material_names: ShaderMaterialNames, body_diffuse_filename):
         if game_type == GameType.HONKAI_STAR_RAIL.name:
-            character_name = body_diffuse_filename.split('_')[1]
+            parts = body_diffuse_filename.split('_')
+            # Expected: Avatar_<CharacterName>_... (ex. Avatar_RobinS_00_Body_Color_A_L.png)
+            if len(parts) < 2 or not parts[1]:
+                return
+            character_name = parts[1]
         elif game_type == GameType.GENSHIN_IMPACT.name:
             body_diffuse_filename_lowercased = body_diffuse_filename.lower()
             if 'monster' in body_diffuse_filename_lowercased:

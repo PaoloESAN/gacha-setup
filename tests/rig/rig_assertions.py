@@ -71,6 +71,10 @@ def assert_rig(game, char_dir):
     integrity_checks = test_rig_integrity(rig)
     checks.extend(integrity_checks)
 
+    # --- 4. ZZZ SPECIFIC POLE & FOOT-KNEE TESTS ---
+    if game == "zzz":
+        checks.extend(test_zzz_pole_and_foot(rig))
+
     # Reset rig to neutral rest pose
     reset_rig_pose(rig)
 
@@ -170,7 +174,7 @@ def test_arms(rig):
 
 
 def test_fingers(rig):
-    """Test finger control presence, scaling, and rotation for all 5 digits on L and R."""
+    """Test finger control presence, scaling, rotation, master controls, and curl for all 5 digits on L and R."""
     checks = []
     digits = ["thumb", "f_index", "f_middle", "f_ring", "f_pinky"]
     sides = ["L", "R"]
@@ -178,21 +182,36 @@ def test_fingers(rig):
     missing_controls = []
     scaling_errors = []
     rotation_errors = []
+    master_rest_errors = []
+    master_curl_errors = []
 
     for side in sides:
         for digit in digits:
-            # Check segments 01, 02, 03
+            # Check segments 01, 02, 03 and master control
             seg1 = rig.pose.bones.get(f"{digit}.01.{side}")
             seg2 = rig.pose.bones.get(f"{digit}.02.{side}")
             seg3 = rig.pose.bones.get(f"{digit}.03.{side}")
             master = rig.pose.bones.get(f"{digit}.01_master.{side}") or rig.pose.bones.get(f"{digit}_master.{side}")
 
-            if not (seg1 and seg2 and seg3):
+            if not (seg1 and seg2 and seg3 and master):
                 missing_controls.append(f"{digit}.*.{side}")
                 continue
 
-            # Test scaling propagation
             def_seg1 = rig.pose.bones.get(f"DEF-{digit}.01.{side}") or rig.pose.bones.get(f"{digit}.01.{side}")
+            def_seg2 = rig.pose.bones.get(f"DEF-{digit}.02.{side}") or rig.pose.bones.get(f"{digit}.02.{side}")
+            def_seg3 = rig.pose.bones.get(f"DEF-{digit}.03.{side}") or rig.pose.bones.get(f"{digit}.03.{side}")
+
+            # 1. Master control rest pose neutrality (verifies no hardcoded pre-rotations or rest pose tampering)
+            if master.rotation_mode == "QUATERNION":
+                q = master.rotation_quaternion
+                if abs(q.w - 1.0) > 0.05 or abs(q.x) > 0.05 or abs(q.y) > 0.05 or abs(q.z) > 0.05:
+                    master_rest_errors.append(f"{master.name} non-neutral rest quat: ({q.w:.3f}, {q.x:.3f}, {q.y:.3f}, {q.z:.3f})")
+            else:
+                e = master.rotation_euler
+                if any(abs(v) > 0.05 for v in e):
+                    master_rest_errors.append(f"{master.name} non-neutral rest euler: ({e.x:.3f}, {e.y:.3f}, {e.z:.3f})")
+
+            # 2. Individual segment scaling propagation
             if def_seg1:
                 initial_scale = def_seg1.matrix.to_scale()
                 seg1.scale = Vector((1.5, 1.5, 1.5))
@@ -208,9 +227,10 @@ def test_fingers(rig):
                 seg1.scale = Vector((1.0, 1.0, 1.0))
                 bpy.context.view_layer.update()
 
-            # Test rotation propagation
+            # 3. Individual FK rotation propagation
             if def_seg1:
                 initial_rot = def_seg1.matrix.to_euler()
+                orig_mode = seg1.rotation_mode
                 seg1.rotation_mode = "XYZ"
                 seg1.rotation_euler = Euler((0.4, 0.0, 0.0), "XYZ")
                 bpy.context.view_layer.update()
@@ -223,13 +243,54 @@ def test_fingers(rig):
                     rotation_errors.append(f"{digit}.01.{side} (rot_diff={rot_diff:.4f}, nan={has_nan})")
 
                 seg1.rotation_euler = Euler((0.0, 0.0, 0.0), "XYZ")
+                seg1.rotation_mode = orig_mode
+                bpy.context.view_layer.update()
+
+            # 4. Master Control Curl & Rotation (Flexion Test)
+            if master and def_seg1 and def_seg2:
+                init_def1_rot = def_seg1.matrix.to_euler()
+                init_def2_rot = def_seg2.matrix.to_euler()
+                orig_master_scale = master.scale.copy()
+
+                # Scale master to curl (Rigify finger superscale)
+                master.scale = Vector((0.5, 0.5, 0.5))
+                bpy.context.view_layer.update()
+
+                curled_def2_rot = def_seg2.matrix.to_euler()
+                curl_diff2 = max(abs(a - b) for a, b in zip(curled_def2_rot, init_def2_rot))
+                has_nan_curl = any(math.isnan(v) for v in curled_def2_rot)
+
+                if has_nan_curl or curl_diff2 < 0.2:
+                    master_curl_errors.append(f"{master.name} curl fail (def2 rot_diff={curl_diff2:.4f}, nan={has_nan_curl})")
+
+                master.scale = orig_master_scale
+                bpy.context.view_layer.update()
+
+                # Test master rotation along primary flexion axis (Z)
+                orig_rot_mode = master.rotation_mode
+                orig_euler = master.rotation_euler.copy()
+                master.rotation_mode = "XYZ"
+
+                # Rotate master around primary curl axis (Z for .L, -Z for .R)
+                master.rotation_euler = Euler((0.0, 0.0, 0.4 if side == "L" else -0.4), "XYZ")
+                bpy.context.view_layer.update()
+
+                rotated_def1 = def_seg1.matrix.to_euler()
+                rot_diff1 = max(abs(a - b) for a, b in zip(rotated_def1, init_def1_rot))
+                has_nan_rot = any(math.isnan(v) for v in rotated_def1)
+
+                if has_nan_rot or rot_diff1 < 0.1:
+                    master_curl_errors.append(f"{master.name} master Z-rot fail (def1 rot_diff={rot_diff1:.4f}, nan={has_nan_rot})")
+
+                master.rotation_euler = orig_euler
+                master.rotation_mode = orig_rot_mode
                 bpy.context.view_layer.update()
 
     # Finger Presence Check
     checks.append({
         "name": "Finger Controls Presence (All 10 Digits)",
         "passed": len(missing_controls) == 0,
-        "message": f"Missing: {missing_controls}" if missing_controls else "All thumb, index, middle, ring, pinky controls present (L & R)",
+        "message": f"Missing: {missing_controls}" if missing_controls else "All thumb, index, middle, ring, pinky controls present (L & R, including masters)",
     })
 
     # Finger Scaling Check
@@ -239,11 +300,25 @@ def test_fingers(rig):
         "message": f"Errors: {scaling_errors}" if scaling_errors else "All finger bones scale cleanly without NaN or zero-determinant",
     })
 
-    # Finger Rotation Check
+    # Finger Rotation Propagation
     checks.append({
         "name": "Finger Rotation Propagation",
         "passed": len(rotation_errors) == 0,
         "message": f"Errors: {rotation_errors}" if rotation_errors else "All finger joints rotate cleanly and propagate to deformation chain",
+    })
+
+    # Master Controls Rest Pose Neutrality
+    checks.append({
+        "name": "Finger Master Rest Pose Neutrality",
+        "passed": len(master_rest_errors) == 0,
+        "message": f"Rest pose errors: {master_rest_errors}" if master_rest_errors else "All 10 finger master controls have clean neutral rest poses (no hardcoded pre-rotations)",
+    })
+
+    # Master Controls Curl & Flexion Response
+    checks.append({
+        "name": "Finger Master Curl & Flexion Response",
+        "passed": len(master_curl_errors) == 0,
+        "message": f"Curl errors: {master_curl_errors}" if master_curl_errors else "All 10 finger master controls curl and rotate deformation chains properly along flexion axes",
     })
 
     # Finger Symmetry / Roll Comparison
@@ -307,3 +382,150 @@ def reset_rig_pose(rig):
         else:
             pb.rotation_euler = Euler((0.0, 0.0, 0.0))
     bpy.context.view_layer.update()
+
+
+def test_zzz_pole_and_foot(rig):
+    """Test ZZZ knee pole follows foot IK and pole targets use arrow custom shapes."""
+    checks = []
+
+    # 1. Check pole_parent defaults and foot IK lifting knee
+    thigh_p_L = rig.pose.bones.get("thigh_parent.L")
+    thigh_p_R = rig.pose.bones.get("thigh_parent.R")
+    val_L = thigh_p_L.get("pole_parent") if thigh_p_L else None
+    val_R = thigh_p_R.get("pole_parent") if thigh_p_R else None
+
+    foot = rig.pose.bones.get("foot_ik.L")
+    knee = rig.pose.bones.get("thigh_ik_target.L")
+    followed = False
+    diff = 0.0
+    if foot and knee:
+        k_z_before = knee.matrix.translation.z
+        orig_foot_loc = foot.location.copy()
+        foot.location.z += 0.5
+        bpy.context.view_layer.update()
+        k_z_after = knee.matrix.translation.z
+        diff = k_z_after - k_z_before
+        followed = abs(diff - 0.5) < 0.05
+        foot.location = orig_foot_loc
+        bpy.context.view_layer.update()
+
+    checks.append({
+        "name": "ZZZ Knee Follows Foot IK",
+        "passed": val_L == 6 and val_R == 6 and followed,
+        "message": f"thigh_parent pole_parent L={val_L} R={val_R}, knee lift diff={diff:.4f}m",
+    })
+
+    # Check Toggle Pole synchronization (both arrowhead and elastic line show/hide together)
+    pb_pole = rig.pose.bones.get("thigh_ik_target.L")
+    pb_vis = rig.pose.bones.get("VIS-thigh_ik_target.L")
+    pb_parent = rig.pose.bones.get("thigh_parent.L")
+
+    pole_sync_ok = False
+    pole_sync_msg = ""
+    if pb_pole and pb_vis and pb_parent:
+        orig_pv = pb_parent.get("pole_vector")
+
+        # Toggle OFF (0.0)
+        pb_parent["pole_vector"] = False
+        rig.update_tag()
+        bpy.context.view_layer.update()
+        state_off = (pb_pole.hide, pb_vis.hide)
+        off_ok = (pb_pole.hide is True) and (pb_vis.hide is True)
+
+        # Toggle ON (1.0)
+        pb_parent["pole_vector"] = True
+        rig.update_tag()
+        bpy.context.view_layer.update()
+        state_on = (pb_pole.hide, pb_vis.hide)
+        on_ok = (pb_pole.hide is False) and (pb_vis.hide is False)
+
+        # Restore
+        pb_parent["pole_vector"] = orig_pv
+        rig.update_tag()
+        bpy.context.view_layer.update()
+
+        vis_drv = None
+        if rig.animation_data:
+            for d in rig.animation_data.drivers:
+                if d.data_path == f'pose.bones["{pb_vis.name}"].hide':
+                    vis_drv = d
+                    break
+        vis_drv_info = f"Driver expr={vis_drv.driver.expression}" if vis_drv else "NO DRIVER"
+
+        pole_sync_ok = off_ok and on_ok
+        pole_sync_msg = f"Toggle Pole OFF -> state={state_off}; ON -> state={state_on} (vis_drv: {vis_drv_info})" if not pole_sync_ok else "Both arrowhead and elastic line hide when Toggle Pole is OFF, and show when ON"
+
+
+
+
+    checks.append({
+        "name": "ZZZ Pole Toggle Synchronization",
+        "passed": pole_sync_ok,
+        "message": pole_sync_msg,
+    })
+
+    # 2. Check pole target arrow widgets (Part 1: Arrowhead control bone)
+    arrow_pairs = [
+        ("thigh_ik_target.L", "VIS-thigh_ik_target.L"),
+        ("thigh_ik_target.R", "VIS-thigh_ik_target.R"),
+        ("upper_arm_ik_target.L", "VIS-upper_arm_ik_target.L"),
+        ("upper_arm_ik_target.R", "VIS-upper_arm_ik_target.R"),
+    ]
+    missing_shapes = []
+    invalid_shapes = []
+    missing_transforms = []
+    for pole_name, vis_name in arrow_pairs:
+        pb = rig.pose.bones.get(pole_name)
+        if not pb or not pb.custom_shape:
+            missing_shapes.append(pole_name)
+            continue
+        mesh = pb.custom_shape.data
+        if len(mesh.vertices) != 6 or len(mesh.edges) != 8:
+            invalid_shapes.append(f"{pole_name}:{pb.custom_shape.name}(v={len(mesh.vertices)},e={len(mesh.edges)})")
+        if not pb.custom_shape_transform or pb.custom_shape_transform.name != vis_name:
+            curr_tf = pb.custom_shape_transform.name if pb.custom_shape_transform else "None"
+            missing_transforms.append(f"{pole_name}(transform={curr_tf}, expected={vis_name})")
+
+    checks.append({
+        "name": "ZZZ Pole Target Arrow Widgets",
+        "passed": len(missing_shapes) == 0 and len(invalid_shapes) == 0 and len(missing_transforms) == 0,
+        "message": f"Arrow widgets or transforms invalid (missing: {missing_shapes}, invalid: {invalid_shapes}, transforms: {missing_transforms})" if (missing_shapes or invalid_shapes or missing_transforms) else "All 4 pole targets have 4-sided wireframe pyramid widgets transformed by VIS bones",
+    })
+
+    # 3. Check VIS stretch bones (Part 2: Visualizer line bone)
+    vis_configs = [
+        ("VIS-thigh_ik_target.L", "thigh_ik_target.L", "MCH-shin_ik.L"),
+        ("VIS-thigh_ik_target.R", "thigh_ik_target.R", "MCH-shin_ik.R"),
+        ("VIS-upper_arm_ik_target.L", "upper_arm_ik_target.L", "MCH-forearm_ik.L"),
+        ("VIS-upper_arm_ik_target.R", "upper_arm_ik_target.R", "MCH-forearm_ik.R"),
+    ]
+    vis_missing = []
+    vis_issues = []
+    for vis_name, pole_name, joint_name in vis_configs:
+        pb_vis = rig.pose.bones.get(vis_name)
+        if not pb_vis:
+            vis_missing.append(vis_name)
+            continue
+        # Check parent
+        if not pb_vis.parent or pb_vis.parent.name != pole_name:
+            p_curr = pb_vis.parent.name if pb_vis.parent else "None"
+            vis_issues.append(f"{vis_name}: parent is {p_curr}, expected {pole_name}")
+        # Check hide_select
+        if not pb_vis.bone.hide_select:
+            vis_issues.append(f"{vis_name}: hide_select is False")
+        # Check widget (1 segment line)
+        if not pb_vis.custom_shape or len(pb_vis.custom_shape.data.vertices) != 2 or len(pb_vis.custom_shape.data.edges) != 1:
+            vis_issues.append(f"{vis_name}: custom_shape missing or not 2-vert 1-edge line")
+        # Check STRETCH_TO constraint
+        stretch_c = next((c for c in pb_vis.constraints if c.type == 'STRETCH_TO'), None)
+        if not stretch_c or stretch_c.subtarget != joint_name:
+            st_curr = stretch_c.subtarget if stretch_c else "None"
+            vis_issues.append(f"{vis_name}: STRETCH_TO target is {st_curr}, expected {joint_name}")
+
+    checks.append({
+        "name": "ZZZ Pole Target Stretch Visualizers",
+        "passed": len(vis_missing) == 0 and len(vis_issues) == 0,
+        "message": f"VIS stretch bones issues (missing: {vis_missing}, issues: {vis_issues})" if (vis_missing or vis_issues) else "All 4 VIS stretch bones present, parented to pole targets, unselectable, with line widgets and STRETCH_TO constraints to joints",
+    })
+
+    return checks

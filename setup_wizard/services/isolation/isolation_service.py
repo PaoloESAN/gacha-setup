@@ -157,21 +157,56 @@ def launch_job(
             operator.report({"WARNING"}, "A setup process is already running.")
         return {"CANCELLED"}
 
-    character_dir = os.path.abspath(bpy.path.abspath(character_dir)) if character_dir else ""
-    if selected_model_file:
-        selected_model_file = os.path.abspath(bpy.path.abspath(selected_model_file))
-        if not character_dir and os.path.isfile(selected_model_file):
-            character_dir = os.path.dirname(selected_model_file)
+    from setup_wizard.utils.archive_extractor import is_archive_file, extract_character_archive
+
+    archive_file = ""
+    if selected_model_file and is_archive_file(selected_model_file):
+        archive_file = selected_model_file
+    elif character_dir and is_archive_file(character_dir):
+        archive_file = character_dir
+
+    job_dir = Path(tempfile.mkdtemp(prefix="GachaSetup_"))
+
+    if archive_file:
+        extracted_root = job_dir / "extracted"
+        extracted_root.mkdir(parents=True, exist_ok=True)
+        try:
+            char_dir, model_file = extract_character_archive(archive_file, str(extracted_root))
+            character_dir = char_dir
+            selected_model_file = model_file
+            print(f"[GACHA SETUP] Decompressed archive '{os.path.basename(archive_file)}' into '{character_dir}' (model: '{os.path.basename(selected_model_file)}')")
+        except Exception as e_ext:
+            if operator:
+                operator.report({"ERROR"}, f"Failed to extract archive: {e_ext}")
+            try:
+                shutil.rmtree(job_dir, ignore_errors=True)
+            except Exception:
+                pass
+            return {"CANCELLED"}
+    else:
+        character_dir = os.path.abspath(bpy.path.abspath(character_dir)) if character_dir else ""
+        if selected_model_file:
+            selected_model_file = os.path.abspath(bpy.path.abspath(selected_model_file))
+            if not character_dir and os.path.isfile(selected_model_file):
+                character_dir = os.path.dirname(selected_model_file)
 
     if not character_dir or not os.path.isdir(character_dir):
         if operator:
-            operator.report({"ERROR"}, "Please select a valid character folder or model file.")
+            operator.report({"ERROR"}, "Please select a valid character folder, archive (.zip/.7z), or model file.")
+        try:
+            shutil.rmtree(job_dir, ignore_errors=True)
+        except Exception:
+            pass
         return {"CANCELLED"}
 
     runner = _runner_path()
     if not runner.is_file():
         if operator:
             operator.report({"ERROR"}, "isolated_runner.py not found.")
+        try:
+            shutil.rmtree(job_dir, ignore_errors=True)
+        except Exception:
+            pass
         return {"CANCELLED"}
 
     # Determine module root and addon parent
@@ -179,7 +214,6 @@ def launch_job(
     module_name = module_root.name
     addon_parent = str(module_root.parent)
 
-    job_dir = Path(tempfile.mkdtemp(prefix="GachaSetup_"))
     job_json = job_dir / "job.json"
     status_path = job_dir / "status.json"
     result_path = job_dir / "character_result.blend"
@@ -190,6 +224,8 @@ def launch_job(
         {
             "character_directory": character_dir,
             "selected_model_file": selected_model_file or "",
+            "is_archive": bool(archive_file),
+            "archive_path": archive_file or "",
             "gacha_module": module_name,
             "gacha_addon_parent": addon_parent,
             "status_path": str(status_path),
@@ -238,12 +274,16 @@ def launch_job(
         "log_handle": log_handle,
         "originating_scene_name": context.scene.name,
         "game_type": game_type or job.get("game_type", ""),
+        "is_archive": bool(archive_file),
     }
 
     scene = context.scene
-    scene.gacha_setup_is_running = True
-    scene.gacha_setup_status = "Starting background setup..."
-    scene.gacha_setup_last_log = str(log_path)
+    if hasattr(bpy.types.Scene, "gacha_setup_is_running"):
+        scene.gacha_setup_is_running = True
+    if hasattr(bpy.types.Scene, "gacha_setup_status"):
+        scene.gacha_setup_status = "Starting background setup..."
+    if hasattr(bpy.types.Scene, "gacha_setup_last_log"):
+        scene.gacha_setup_last_log = str(log_path)
 
     _ensure_poll_timer()
     if operator:
@@ -316,6 +356,15 @@ def _poll_job():
                 game_type=effective_game_type,
             )
             scene.gacha_setup_status = "Setup completed successfully."
+
+            # Only pack textures if character was imported from an archive (.zip/.7z)
+            if _ACTIVE_JOB.get("is_archive", False):
+                for img in bpy.data.images:
+                    if img.source in ('FILE', 'SEQUENCE') and not getattr(img, 'packed_file', None):
+                        try:
+                            img.pack()
+                        except Exception:
+                            pass
 
             # Automatically clean up temporary blend file and directory if enabled
             if should_auto_cleanup():

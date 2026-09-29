@@ -3,7 +3,7 @@ import os
 bl_info = {
     "name": "Gacha Setup",
     "author": "Mken, OctavoPE, Enthralpy, PaoloESAN",
-    "version": (3, 7, 1),
+    "version": (3, 7, 2),
     "blender": (4, 1, 0),
     "location": "3D View > Sidebar > Gacha Setup",
     "description": "An addon to streamline the character model setup process for Gacha games in Blender 4.1+",
@@ -81,6 +81,7 @@ else:
         ZZZ_OT_SetUpOutlines,
         WW_OT_SetUpOutlines,
     )
+    from setup_wizard.genshin_animate_mode import GI_OT_ToggleAnimateMode
     from setup_wizard.genshin_setup_wizard import (
         GI_OT_GenshinSetupWizardUI,
         HSR_OT_HonkaiStarRailSetupWizardUI,
@@ -202,6 +203,7 @@ else:
         CSW_OT_CreateCameraPro,
         CSW_OT_CreateJideehCamrig,
     )
+    from setup_wizard.utils.eye_through_hair import CSW_OT_EyeThroughHair
 
     # HSR_PT_UI_Compositing_Panel_Post_Processing_UI_Layout
     from setup_wizard.ui.zzz_ui_setup_wizard_menu import (
@@ -241,6 +243,7 @@ else:
         CSW_OT_JideehCamera,
         CSW_OT_CreateCameraPro,
         CSW_OT_CreateJideehCamrig,
+        CSW_OT_EyeThroughHair,
         CSW_PT_Old_Setup_UI_Layout,
         GI_PT_Basic_Setup_Wizard_UI_Layout,
         GI_PT_Advanced_Setup_Wizard_UI_Layout,
@@ -258,6 +261,7 @@ else:
         GI_OT_ReorientBones,
         GI_OT_SetUpMaterials,
         GI_OT_SetUpOutlines,
+        GI_OT_ToggleAnimateMode,
         GI_OT_FixTransformations,
         GI_OT_FinishSetup,
         GI_OT_RigCharacter,

@@ -265,15 +265,24 @@ def rig_character(
         armature.edit_bones["shoulder.R"].align_roll(Vector((0, 0, 1)))
 
 
-    # Remove Bip001 if present, reparenting children to spine
+    # Remove Bip001 and dummy UE IK/weapon bones (these models don't use weapons)
     for bone in list(armature.edit_bones):
-        if bone.name in ["Bip001", "Bip001.001"]:
+        b_low = bone.name.lower()
+        if (
+            bone.name.startswith(("IK_", "ik_"))
+            or "weapon" in b_low
+            or b_low in ["prop.l", "prop.r"]
+        ):
+            armature.edit_bones.remove(bone)
+        elif bone.name in ["Bip001", "Bip001.001"]:
             for child in bone.children:
                 if child.name != "spine" and "spine" in armature.edit_bones:
                     child.parent = armature.edit_bones["spine"]
             armature.edit_bones.remove(bone)
         elif ".L" not in bone.name and ".R" not in bone.name and "f_" not in bone.name and "thumb" not in bone.name:
             bone.roll = 0
+
+    # Finger rolls are aligned accurately on metarig using dorsal normal and copied back to DEF- bones
 
     def realign(bone):
         if bone:
@@ -347,27 +356,7 @@ def rig_character(
     # 5. Metarig adjustments
     metarig_obj = bpy.data.objects.get("metarig")
     if metarig_obj:
-        # Extra IK control on fingers
-        for side in [".L", ".R"]:
-            for fname in ["thumb.01", "f_index.01", "f_middle.01", "f_ring.01", "f_pinky.01"]:
-                bone = metarig_obj.pose.bones.get(fname + side)
-                if bone and hasattr(bone, "rigify_parameters"):
-                    bone.rigify_parameters.make_extra_ik_control = True
-
-        # Finger primary rotation axis
-        for fname in ["f_index", "f_middle", "f_ring", "f_pinky"]:
-            for side in [".L", ".R"]:
-                b = metarig_obj.pose.bones.get(f"{fname}.01{side}")
-                if b and hasattr(b, "rigify_parameters"):
-                    b.rigify_parameters.primary_rotation_axis = "X"
-
-        # Thumb primary rotation axis (inverted -X so it curls inward toward the palm)
-        for side in [".L", ".R"]:
-            b = metarig_obj.pose.bones.get(f"thumb.01{side}")
-            if b and hasattr(b, "rigify_parameters"):
-                b.rigify_parameters.primary_rotation_axis = "-X"
-
-        # Align hand metarig bones straight along forearm vector & copy thumb rolls
+        # Align hand metarig bones straight along forearm vector
         bpy.ops.object.mode_set(mode="EDIT")
         for side in [".L", ".R"]:
             forearm_eb = metarig_obj.data.edit_bones.get("forearm" + side)
@@ -377,11 +366,74 @@ def rig_character(
                 hand_eb.tail = hand_eb.head + arm_vec * 0.05
                 hand_eb.roll = forearm_eb.roll
 
+        # Align finger rolls so local Z is the true dorsal normal (perpendicular to fingernails, 90 deg rotated from hinge)
+        # and local X is the knuckle hinge axis (parallel to fingernails, allowing natural curl into palm)
+        for side in [".L", ".R"]:
+            index_chain = [metarig_obj.data.edit_bones.get(f"f_index.{idx}{side}") for idx in ["01", "02", "03"]]
+            hinge_axis = None
+            if len(index_chain) >= 2 and all(index_chain):
+                dir1 = (index_chain[0].tail - index_chain[0].head).normalized()
+                dir2 = (index_chain[1].tail - index_chain[1].head).normalized()
+                cross_vec = dir1.cross(dir2)
+                if cross_vec.length > 0.0001:
+                    hinge_axis = cross_vec.normalized()
+            if not hinge_axis:
+                f_idx = metarig_obj.data.edit_bones.get(f"f_index.01{side}")
+                f_pnk = metarig_obj.data.edit_bones.get(f"f_pinky.01{side}")
+                if f_idx and f_pnk:
+                    knuckle_vec = (f_pnk.head - f_idx.head).normalized()
+                    hinge_axis = knuckle_vec
+            if not hinge_axis:
+                hand_eb = metarig_obj.data.edit_bones.get("hand" + side)
+                if hand_eb:
+                    hinge_axis = hand_eb.matrix.col[2].normalized()
+
+            if hinge_axis:
+                for fname in ["f_index", "f_middle", "f_ring", "f_pinky"]:
+                    for idx in ["01", "02", "03"]:
+                        bm = metarig_obj.data.edit_bones.get(f"{fname}.{idx}{side}")
+                        if bm:
+                            dir_b = (bm.tail - bm.head).normalized()
+                            d_target = hinge_axis.cross(dir_b)
+                            if d_target.length > 0.0001:
+                                bm.align_roll(d_target.normalized())
+
+            # Fix thumb rolls matching ZZZ:
+            # Align thumb flexion axis so local Z points towards opposing palm direction (+X, +Y)
+            sign = 1.0 if side == ".L" else -1.0
+            thumb_curl_vec = Vector((sign * 0.837, 0.547, 0.0)).normalized()
+            for idx in ["01", "02", "03"]:
+                t_meta = metarig_obj.data.edit_bones.get(f"thumb.{idx}{side}")
+                if t_meta:
+                    t_meta.align_roll(thumb_curl_vec)
+
+        # Copy rolls from metarig to character armature deformation bones
         for bone in metarig_obj.data.edit_bones:
-            if "thumb" in bone.name:
-                orig_b = armature.bones.get(bone.name) or armature.bones.get("DEF-" + bone.name)
-                if orig_b:
-                    bone.roll = orig_b.matrix_local.to_euler().y
+            if "f_" in bone.name or "thumb" in bone.name:
+                for cand in [bone.name, "DEF-" + bone.name]:
+                    if cand in armature.edit_bones:
+                        armature.edit_bones[cand].roll = bone.roll
+
+        # Set primary rotation axis in Pose mode:
+        # Fingers keep "X" (curling into palm)
+        bpy.ops.object.mode_set(mode="POSE")
+        for fname in ["f_index.01", "f_middle.01", "f_ring.01", "f_pinky.01"]:
+            for side in [".L", ".R"]:
+                bone = metarig_obj.pose.bones.get(fname + side)
+                if bone and hasattr(bone, "rigify_parameters"):
+                    bone.rigify_parameters.make_extra_ik_control = True
+                    bone.rigify_parameters.primary_rotation_axis = "X"
+
+        # Thumb primary rotation axis matching ZZZ ('Z' on L, '-Z' on R)
+        b_thumb_l = metarig_obj.pose.bones.get("thumb.01.L")
+        if b_thumb_l and hasattr(b_thumb_l, "rigify_parameters"):
+            b_thumb_l.rigify_parameters.make_extra_ik_control = True
+            b_thumb_l.rigify_parameters.primary_rotation_axis = "Z"
+        b_thumb_r = metarig_obj.pose.bones.get("thumb.01.R")
+        if b_thumb_r and hasattr(b_thumb_r, "rigify_parameters"):
+            b_thumb_r.rigify_parameters.make_extra_ik_control = True
+            b_thumb_r.rigify_parameters.primary_rotation_axis = "-Z"
+        bpy.ops.object.mode_set(mode="EDIT")
 
         # Align metarig breast bones to character's actual breast bones
         boob_b_L = armature.bones.get("DEF-breast.L") or armature.bones.get("breast.L")
@@ -571,7 +623,7 @@ def rig_character(
     try:
         if file_path:
             path_to_file = file_path if "/Collection" in file_path else file_path + "/Collection"
-            for coll_name in ["append_Root", "append_Eyes", "append_Pelvis", "append_Foot", "append_Hand", "append_Props", "append_Face Plate"]:
+            for coll_name in ["append_Root", "append_Eyes", "append_Pelvis", "append_Foot", "append_Hand", "append_Face Plate"]:
                 try:
                     bpy.ops.wm.append(filename=coll_name, directory=path_to_file)
                 except Exception:
@@ -661,18 +713,16 @@ def rig_character(
             except Exception:
                 pass
 
-    # Check for real weapons and remove unused prop.L / prop.R if character has no weapons
-    weapon_keywords = ["propbone", "weapon", "sword", "gun", "staff", "equip"]
-    has_weapon_bones = any(
-        any(k in b.name.lower() for k in weapon_keywords)
-        for b in eb
-        if b.name not in ["prop.L", "prop.R"]
-    )
-    if not has_weapon_bones:
-        for p_name in ["prop.L", "prop.R"]:
-            if p_name in eb:
-                eb.remove(eb[p_name])
-        print("[AKE RIG] No weapon bones detected: removed unused 'prop.L' and 'prop.R'")
+    # Remove all dummy UE IK bones, weapon bones, and prop bones (AKE characters do not carry weapon bones)
+    for b in list(eb):
+        b_low = b.name.lower()
+        if (
+            b.name.startswith(("IK_", "ik_"))
+            or "weapon" in b_low
+            or b.name in ["prop.L", "prop.R"]
+            or b_low.startswith(("prop.", "ik_weapon"))
+        ):
+            eb.remove(b)
 
     bpy.ops.object.mode_set(mode="POSE")
 
@@ -856,36 +906,15 @@ def rig_character(
                     if ".03" in oDrv.data_path and target.data_path[-7:] == "scale.y":
                         target.data_path = target.data_path[:-1] + "x"
 
+    # Master finger controls setup
     fingerlist = ["thumb.01_master", "f_index.01_master", "f_middle.01_master", "f_ring.01_master", "f_pinky.01_master"]
     for side in [".L", ".R"]:
         for bone in fingerlist:
-            if bone + side in rigifyr.pose.bones:
-                rigifyr.pose.bones[bone + side].lock_scale[0] = False
+            pb = rigifyr.pose.bones.get(bone + side)
+            if pb:
+                pb.lock_scale[0] = False
 
-    # Apply exact requested Quaternion rotation to thumb.01_master controls and apply as rest pose
-    bpy.ops.object.mode_set(mode="POSE")
-    if "thumb.01_master.L" in rigifyr.pose.bones:
-        pb_l = rigifyr.pose.bones["thumb.01_master.L"]
-        pb_l.rotation_mode = 'QUATERNION'
-        pb_l.rotation_quaternion = (0.93056, 0.0, -0.366139, 0.0)
-
-    if "thumb.01_master.R" in rigifyr.pose.bones:
-        pb_r = rigifyr.pose.bones["thumb.01_master.R"]
-        pb_r.rotation_mode = 'QUATERNION'
-        pb_r.rotation_quaternion = (0.93056, 0.0, 0.366139, 0.0)
-
-    # Apply selected pose as rest pose so "Clear Transform" (Alt+R) retains this alignment
-    try:
-        bpy.ops.pose.select_all(action="DESELECT")
-        if "thumb.01_master.L" in rigifyr.pose.bones:
-            rigifyr.pose.bones["thumb.01_master.L"].bone.select_set(True)
-        if "thumb.01_master.R" in rigifyr.pose.bones:
-            rigifyr.pose.bones["thumb.01_master.R"].bone.select_set(True)
-        bpy.ops.pose.armature_apply(selected=True)
-        bpy.ops.pose.select_all(action="DESELECT")
-    except Exception as e:
-        print(f"[AKE RIG] Notice applying rest pose for thumb controls: {e}")
-
+    # Clean master thumb controls: no hardcoded pose or rest pose tampering needed (parity with ZZZ)
     bpy.ops.object.mode_set(mode="OBJECT")
 
     # 13. Naming and collection setup. FBX armatures are often literally called
@@ -980,7 +1009,7 @@ def rig_character(
             except Exception:
                 pass
 
-    for coll_name in ["append_Root", "append_Eyes", "append_Pelvis", "append_Foot", "append_Hand", "append_Props", "append_Face Plate"]:
+    for coll_name in ["append_Root", "append_Eyes", "append_Pelvis", "append_Foot", "append_Hand", "append_Face Plate"]:
         coll = bpy.data.collections.get(coll_name)
         if coll:
             for c_obj in list(coll.objects):

@@ -141,7 +141,9 @@ def align_eye_bones(armature):
     """
     Fixes asymmetric or skewed eye pivot bones (e.g. from experimental wm.fbx_import)
     where +EyeBone L/R A01 midpoints do not match the pupil bones +EyeBone L/R A02.
-    Centers A01 pivots along X to match A02, aligns height, and points A01 tail to A02.
+    Snaps A02 heads to the pupil mesh centers (pupil resizer drivers scale these
+    bones, and bone scale pivots on the head), then centers A01 pivots along X to
+    match A02, aligns height, and points A01 tail to A02.
     Detects coordinate orientation (whether Y or Z is vertical height).
     """
     if not armature or armature.type != 'ARMATURE':
@@ -165,6 +167,58 @@ def align_eye_bones(armature):
         eye_r1 = eb.get("+EyeBone R A01") or eb.get("+EyeBoneA01.R")
         eye_l2 = eb.get("+EyeBone L A02") or eb.get("+EyeBoneA02.L")
         eye_r2 = eb.get("+EyeBone R A02") or eb.get("+EyeBoneA02.R")
+
+        if eye_l2 and eye_r2:
+            # Snap A02 heads to the actual pupil mesh centers. The pupil
+            # resizer drivers scale these bones, and bone scale pivots on the
+            # head: on some models (e.g. Columbina) the FBX A02 heads sit
+            # centimeters away from the pupil, so scaling translates the pupil
+            # instead of resizing it in place. Translate head AND tail by the
+            # same delta to preserve bone orientation (local-space drivers).
+            try:
+                bpy.context.view_layer.update()
+            except Exception:
+                pass
+            try:
+                arm_inv = armature.matrix_world.inverted()
+            except Exception:
+                arm_inv = None
+            if arm_inv is not None:
+                for a02 in (eye_l2, eye_r2):
+                    try:
+                        acc = Vector((0.0, 0.0, 0.0))
+                        wsum = 0.0
+                        for obj in bpy.data.objects:
+                            if obj.type != 'MESH' or not getattr(obj, "data", None):
+                                continue
+                            vg = obj.vertex_groups.get(a02.name)
+                            if vg is None:
+                                continue
+                            try:
+                                to_arm = arm_inv @ obj.matrix_world
+                            except Exception:
+                                continue
+                            gi = vg.index
+                            verts = obj.data.vertices
+                            for v in verts:
+                                w = 0.0
+                                for g in v.groups:
+                                    if g.group == gi:
+                                        w = g.weight
+                                        break
+                                if w > 0.001:
+                                    co = to_arm @ v.co
+                                    acc += co * w
+                                    wsum += w
+                        if wsum > 1e-6:
+                            center = acc / wsum
+                            delta = center - a02.head
+                            if delta.length > 0.003:
+                                print(f"[ALIGN EYE BONES] Snapping {a02.name} head to pupil center (offset: {delta.length:.6f})")
+                                a02.head = center.copy()
+                                a02.tail = a02.tail + delta
+                    except Exception as e:
+                        print(f"[ALIGN EYE BONES] Notice snapping {getattr(a02, 'name', '?')}: {e}")
 
         if eye_l1 and eye_r1 and eye_l2 and eye_r2:
             center_x_1 = (eye_l1.head.x + eye_r1.head.x) / 2.0
@@ -527,7 +581,7 @@ class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
     """Sets Up Character for Neverness to Everness"""
 
     bl_idname = "neverness_to_everness.set_up_character"
-    bl_label = "Select NTE Character Folder or .uemodel"
+    bl_label = "Select NTE Character Folder, Archive (.zip/.7z), or .uemodel"
 
     filename_ext = "*.*"
     filter_glob: StringProperty(
@@ -539,6 +593,17 @@ class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
     def execute(self, context):
         if not self.filepath:
             return {"CANCELLED"}
+
+        from setup_wizard.utils.archive_extractor import is_archive_file, extract_character_archive
+        if is_archive_file(self.filepath):
+            try:
+                char_dir, m_file = extract_character_archive(self.filepath)
+                self.filepath = m_file or char_dir
+                context.scene["setup_wizard_temp_extract_dir"] = char_dir
+                print(f"[NTE SETUP] Extracted archive to {char_dir}")
+            except Exception as e_ext:
+                self.report({"ERROR"}, f"Failed to extract archive: {e_ext}")
+                return {"CANCELLED"}
 
         uemodel_path = find_largest_uemodel_file(self.filepath)
         if not uemodel_path or not os.path.isfile(uemodel_path):
@@ -624,7 +689,7 @@ class WW_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
     """Sets Up Character for Wuthering Waves"""
 
     bl_idname = "wuthering_waves.set_up_character"
-    bl_label = "Select WuWa Character Folder, .uemodel, or .fbx"
+    bl_label = "Select WuWa Character Folder, Archive (.zip/.7z), .uemodel, or .fbx"
 
     filename_ext = "*.*"
     filter_glob: StringProperty(
@@ -636,6 +701,17 @@ class WW_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
     def execute(self, context):
         if not self.filepath:
             return {"CANCELLED"}
+
+        from setup_wizard.utils.archive_extractor import is_archive_file, extract_character_archive
+        if is_archive_file(self.filepath):
+            try:
+                char_dir, m_file = extract_character_archive(self.filepath)
+                self.filepath = m_file or char_dir
+                context.scene["setup_wizard_temp_extract_dir"] = char_dir
+                print(f"[WW SETUP] Extracted archive to {char_dir}")
+            except Exception as e_ext:
+                self.report({"ERROR"}, f"Failed to extract archive: {e_ext}")
+                return {"CANCELLED"}
 
         folder = self.filepath if os.path.isdir(self.filepath) else os.path.dirname(self.filepath)
         uemodel_path = find_largest_uemodel_file(self.filepath)
@@ -919,7 +995,7 @@ class AKE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
     """Sets Up Character for Arknights: Endfield"""
 
     bl_idname = "arknights_endfield.set_up_character"
-    bl_label = "Select Arknights Endfield Character Folder or .fbx"
+    bl_label = "Select Arknights Endfield Character Folder, Archive (.zip/.7z), or .fbx"
 
     filename_ext = "*.*"
     filter_glob: StringProperty(
@@ -931,6 +1007,17 @@ class AKE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
     def execute(self, context):
         if not self.filepath:
             return {"CANCELLED"}
+
+        from setup_wizard.utils.archive_extractor import is_archive_file, extract_character_archive
+        if is_archive_file(self.filepath):
+            try:
+                char_dir, m_file = extract_character_archive(self.filepath)
+                self.filepath = m_file or char_dir
+                context.scene["setup_wizard_temp_extract_dir"] = char_dir
+                print(f"[AKE SETUP] Extracted archive to {char_dir}")
+            except Exception as e_ext:
+                self.report({"ERROR"}, f"Failed to extract archive: {e_ext}")
+                return {"CANCELLED"}
 
         folder = self.filepath if os.path.isdir(self.filepath) else os.path.dirname(self.filepath)
         fbx_path = None
@@ -983,14 +1070,14 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
     """Select the folder with the desired model to import"""
 
     bl_idname = "genshin.import_model"  # important since its how we chain file dialogs
-    bl_label = "Select Character Folder"
+    bl_label = "Select Character Folder or Archive (.zip, .7z)"
 
     # ImportHelper mixin class uses this
     filename_ext = "*.*"
 
     import_path: StringProperty(
         name="Path",
-        description="Path to the folder of the Model",
+        description="Path to the folder or archive of the Model",
         default="",
         subtype="DIR_PATH",
     )
@@ -1012,6 +1099,9 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
 
     def execute(self, context):
         self.clean_up_scene()
+        from setup_wizard.utils.archive_extractor import is_archive_file, extract_character_archive
+
+        is_archive = is_archive_file(self.filepath)
         is_character_model_file = not os.path.isdir(self.filepath) and self.filepath
         character_model_directory = (
             os.path.dirname(self.filepath) or self.file_directory
@@ -1055,6 +1145,17 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                 )
             finally:
                 super().clear_custom_properties()
+
+        if is_archive:
+            try:
+                char_dir, m_file = extract_character_archive(self.filepath)
+                character_model_directory = char_dir
+                character_model_file_path_or_directory = m_file or char_dir
+                is_character_model_file = bool(m_file)
+                context.scene["setup_wizard_temp_extract_dir"] = char_dir
+            except Exception as e_ext:
+                self.report({"ERROR"}, f"Failed to extract archive: {e_ext}")
+                return {"CANCELLED"}
 
         existing_materials = (
             bpy.data.materials.values()

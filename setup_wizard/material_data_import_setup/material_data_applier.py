@@ -109,6 +109,24 @@ class MaterialDataApplier(ABC):
         if toggle_normal_map_input:
             toggle_normal_map_input.default_value = value
 
+    def has_lightmap_image(self) -> bool:
+        try:
+            mat = getattr(self, 'material', None)
+            tree = getattr(mat, 'node_tree', None)
+            if not tree:
+                return False
+            for node in tree.nodes:
+                if node.type == 'TEX_IMAGE' and 'lightmap' in (getattr(node, 'name', '') or '').lower():
+                    if getattr(node, 'image', None):
+                        return True
+            return False
+        except Exception:
+            return False
+
+    def set_toggle_lightmap_ao(self, toggle_lightmap_ao_input, value: bool) -> None:
+        if toggle_lightmap_ao_input:
+            toggle_lightmap_ao_input.default_value = value
+
     def is_not_using_eye_stencil(self) -> bool:
         return not [material for material in bpy.data.materials if material.name.endswith('_Mat_Pupil')]
 
@@ -130,8 +148,27 @@ class MaterialDataApplier(ABC):
     def set_up_outline_material_data(self, body_part, file):
         pass
 
+    def _get_outline_shader_node(self):
+        if not self.outline_material or not self.outline_material.node_tree:
+            return None
+        nodes = self.outline_material.node_tree.nodes
+        node = nodes.get(self.outlines_node_tree_node_name)
+        if node:
+            return node
+        for n in nodes:
+            if n.type == 'GROUP' and n.node_tree:
+                nt_name = n.node_tree.name.lower()
+                if 'outline' in nt_name:
+                    return n
+                if any('outline color' in inp.name.lower() for inp in n.inputs):
+                    return n
+        return None
+
     def set_up_outline_colors(self):
-        outlines_shader_node_inputs = self.outline_material.node_tree.nodes.get(self.outlines_node_tree_node_name).inputs
+        outline_node = self._get_outline_shader_node()
+        if not outline_node:
+            return
+        outlines_shader_node_inputs = outline_node.inputs
 
         self.apply_material_data(
             self.outline_mapping, 
@@ -156,6 +193,21 @@ class MaterialDataApplier(ABC):
                         node_input = stockings_color_inputs[1]
                 else:
                     node_input = node_inputs.get(material_node_name)
+                    if node_input is None and material_node_name.startswith('Outline Color '):
+                        # Handle 0-indexed vs 1-indexed fallback (e.g. Outline Color 0 <-> Outline Color 1)
+                        try:
+                            idx = int(material_node_name.split('Outline Color ')[1].strip())
+                            for alt_idx in (idx + 1, idx - 1):
+                                alt_name = f'Outline Color {alt_idx}'
+                                if alt_name in node_inputs:
+                                    node_input = node_inputs.get(alt_name)
+                                    break
+                        except Exception:
+                            pass
+
+                if node_input is None:
+                    continue
+
                 try:
                     # Convert to sRGB to Hex to RGB for Nya222 Shader 
                     # Currently it doesn't do a conversion from gamma-corrected RGB to linear color space
@@ -163,7 +215,7 @@ class MaterialDataApplier(ABC):
                         material_json_value = self.convert_color_srgb_to_hex_to_rgb(material_json_value)
                     node_input.default_value = material_json_value
                 except AttributeError as ex:
-                    print(f'Did not find {material_node_name} in {self.material.name}/{self.outline_material.name} material using {self} \
+                    print(f'Did not find {material_node_name} in {self.material.name if self.material else "None"}/{self.outline_material.name if self.outline_material else "None"} material using {self} \
                         Falling back to next MaterialDataApplier version')
                     raise ex
 
@@ -684,6 +736,15 @@ class V4_MaterialDataApplier(V3_MaterialDataApplier):
             if toggle_normal_map_input:
                 self.set_toggle_normal_map(toggle_normal_map_input, False)
 
+        # Disable Toggle Lightmap AO if there is no Lightmap texture bound
+        # (ex. Columbina Pupil: game data sets _UseLightMapColorAO=1 but ships
+        # no Pupil lightmap, so the shader would sample an empty image node).
+        if not self.has_lightmap_image():
+            toggle_lightmap_ao_input = inputs_node.inputs.get('Toggle Lightmap AO') or \
+                inputs_node.inputs.get('Use Lightmap AO')
+            if toggle_lightmap_ao_input is not None:
+                self.set_toggle_lightmap_ao(toggle_lightmap_ao_input, False)
+
         # VeilShadow (ex. Columbina): no dedicated lightmap/normalmap exists,
         # but shading must keep the first 4 SHADING OPTIONS toggles enabled.
         # Everything else stays as parsed from the JSON.
@@ -863,6 +924,15 @@ class V1_HoYoToonMaterialDataApplier(V3_MaterialDataApplier):
             toggle_normal_map_input = inputs_node.inputs.get(self.shader_node_input_names.TOGGLE_NORMAL_MAP)
             if toggle_normal_map_input:
                 self.set_toggle_normal_map(toggle_normal_map_input, False)
+
+        # Disable Toggle Lightmap AO if there is no Lightmap texture bound
+        # (ex. Columbina Pupil: game data sets _UseLightMapColorAO=1 but ships
+        # no Pupil lightmap, so the shader would sample an empty image node).
+        if not self.has_lightmap_image():
+            toggle_lightmap_ao_input = inputs_node.inputs.get('Toggle Lightmap AO') or \
+                inputs_node.inputs.get('Use Lightmap AO')
+            if toggle_lightmap_ao_input is not None:
+                self.set_toggle_lightmap_ao(toggle_lightmap_ao_input, False)
 
         # VeilShadow (ex. Columbina): keep the first 4 SHADING OPTIONS toggles
         # enabled even without dedicated lightmap/normalmap. Rest stays parsed.
@@ -1118,11 +1188,17 @@ class V2_HSR_MaterialDataApplier(V2_MaterialDataApplier):
     def __init__(self, material_data_parser, outline_material_group: OutlineMaterialGroup):
         super().__init__(material_data_parser, outline_material_group)
 
-        if 'Face' in self.material.name:
+        mat_name = self.material.name if self.material else (self.outline_material.name if self.outline_material else '')
+        if 'Face' in mat_name:
             self.outline_mapping = self.face_outline_mapping
 
     def set_up_mesh_material_data(self):
-        shader_node_tree_inputs = self.material.node_tree.nodes[self.shader_node_tree_node_name].inputs
+        if not self.material or not self.material.node_tree:
+            return
+        node = self.material.node_tree.nodes.get(self.shader_node_tree_node_name)
+        if not node:
+            return
+        shader_node_tree_inputs = node.inputs
 
         super().apply_material_data(
             self.local_material_mapping,
@@ -1213,11 +1289,33 @@ class StellarToon_MaterialDataApplier(V2_MaterialDataApplier):
     def __init__(self, material_data_parser, outline_material_group: OutlineMaterialGroup):
         super().__init__(material_data_parser, outline_material_group)
 
-        if 'Face' in self.material.name:
+        mat_name = self.material.name if self.material else (self.outline_material.name if self.outline_material else '')
+        if 'Face' in mat_name:
             self.outline_mapping = self.face_outline_mapping
 
+    def _get_mesh_shader_node(self):
+        if not self.material or not self.material.node_tree:
+            return None
+        nodes = self.material.node_tree.nodes
+        node = nodes.get(self.shader_node_tree_node_name)
+        if node:
+            return node
+        for n in nodes:
+            if n.type == 'GROUP' and n.node_tree:
+                nt_name = n.node_tree.name.lower()
+                if 'stellartoon' in nt_name:
+                    return n
+                if any(inp in n.inputs for inp in ('Specular Color 1', 'Warm Shadow Color', 'Eye Shadow Color')):
+                    return n
+        return None
+
     def set_up_mesh_material_data(self):
-        shader_node_tree_inputs = self.material.node_tree.nodes[self.shader_node_tree_node_name].inputs
+        if not self.material or not self.material.node_tree:
+            return
+        shader_node = self._get_mesh_shader_node()
+        if not shader_node:
+            return
+        shader_node_tree_inputs = shader_node.inputs
 
         if 'Hair' in self.material.name:
             super().apply_material_data(
@@ -1229,7 +1327,9 @@ class StellarToon_MaterialDataApplier(V2_MaterialDataApplier):
                 self.face_material_mapping,
                 shader_node_tree_inputs,
             )
-            self.material.node_tree.nodes.get(self.shader_node_tree_node_name).inputs.get('Enable Emission').default_value = 1.0
+            enable_em = shader_node.inputs.get('Enable Emission')
+            if enable_em:
+                enable_em.default_value = 1.0
         else:
             super().apply_material_data(
                 self.local_material_mapping,
