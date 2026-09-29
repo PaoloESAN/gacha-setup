@@ -1,0 +1,86 @@
+---
+title: Utilidades
+description: Guías útiles, tutoriales y recursos de la comunidad para trabajar con personajes y shaders en Blender.
+---
+
+import eyeThroughHair1 from '../../../assets/content/utilities/eye-through-hair1.mp4';
+import eyeThroughHair2 from '../../../assets/content/utilities/eye-through-hair2.mp4';
+
+## Jideeh's Camera
+
+### Cómo usar (How to use)
+
+- **Yellow L corners / AIM (Esquinas amarillas en L)**: Es escalable. La cámara sigue este widget para apuntar. Si se escala, el FOV se ajustará.
+- **Orange Circle / FOCUS (Círculo naranja)**: Controla la profundidad de campo (Depth of Field) — hacia dónde o qué tan cerca/lejos debe enfocar la cámara.
+- **Purple Circle / PIVOT (Círculo morado)**: Controla alrededor de dónde debe orbitar la cámara.
+- **Curved Yellow Line / FREQ (Línea curva amarilla)**: Controla la frecuencia del temblor (shake).
+- **Vertical Yellow Slider / SHAKE_Y (Deslizador vertical amarillo)**: Controla la intensidad del temblor en el eje Y.
+- **Horizontal Yellow Slider / SHAKE_X (Deslizador horizontal amarillo)**: Controla la intensidad del temblor en el eje X.
+- **The one with the F widget / DOF (Widget con la F)**: Un interruptor (toggle) para la profundidad de campo.
+- **ROOT**: Controlador maestro (Master Controller) de la cámara.
+- **CAM (detrás de la cámara)**: Actúa como un estabilizador de cámara. Puedes mover la cámara sin cambiar hacia dónde está apuntando.
+
+### Video de referencia
+
+<div class="video-container">
+  <iframe
+    src="https://www.youtube-nocookie.com/embed/uU-YNxzpVE8"
+    title="Jideeh's Camera Reference"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    referrerpolicy="strict-origin-when-cross-origin"
+    allowfullscreen>
+  </iframe>
+</div>
+
+---
+
+## Eye Through Hair (Ojos a Través del Cabello)
+
+Permite que los ojos y cejas del personaje se vean a través de la geometría del cabello.
+
+### Automático:
+
+<video loop muted playsinline controls preload="metadata" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={eyeThroughHair1} type="video/mp4" />
+</video>
+
+### Cómo controlar la opacidad:
+
+<video loop muted playsinline controls preload="metadata" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={eyeThroughHair2} type="video/mp4" />
+</video>
+
+### Manual
+
+Para quienes deseen configurarlo de forma manual o aprender el flujo paso a paso con Shader to RGB y pases AOV:
+
+<div class="video-container">
+  <iframe
+    src="https://www.youtube-nocookie.com/embed/ZEjIt1ubZKU"
+    title="How to see the eyes through the hair [Blender 5.2] - Blender Tutorial"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    referrerpolicy="strict-origin-when-cross-origin"
+    allowfullscreen>
+  </iframe>
+</div>
+
+---
+
+## Tutoriales y Guías
+
+### Movimiento de Cabello y Ropa (Damped Track)
+
+Gracias a este video pude implementar el sistema de físicas para este add-on.
+
+<div class="video-container">
+  <iframe
+    src="https://www.youtube-nocookie.com/embed/tQV_wPQ8rBk"
+    title="Movimiento de cabello/ropa - Damped Track"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    referrerpolicy="strict-origin-when-cross-origin"
+    allowfullscreen>
+  </iframe>
+</div>
