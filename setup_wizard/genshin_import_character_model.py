@@ -372,8 +372,11 @@ def reorient_armature_bones(armature):
     # Connect bone chains from joint to joint (e.g. for wm.fbx_import)
     connect_armature_bone_chains(armature)
 
-    # First apply spine rest pose to fix torso offset on models with altered rest pose
-    apply_spine_rest_pose(armature)
+    # Reset any imported pose offsets to rest (do NOT bake them).
+    # Baking spine pose into rest (old apply_spine_rest_pose) displaced
+    # head/arms by ~20cm on models like Remielle-Origin whose FBX carries
+    # a non-identity Spine/Spine1 pose offset. Clearing restores the FBX rest.
+    clear_armature_pose(armature)
 
     # Align eye bones if they have import offset
     align_eye_bones(armature)
@@ -394,7 +397,11 @@ def reorient_armature_bones(armature):
 
         for bone in edit_bones:
             if bone.children:
-                avg_child_pos = sum((child.head for child in bone.children), bone.children[0].head * 0) / len(bone.children)
+                # Prefer main Bip001 chain children over accessory (Skn_/Ctr_/wing/cloth)
+                # so wings or twists don't pull spine/arm tails away from the body.
+                main_children = [c for c in bone.children if c.name.startswith("Bip001")]
+                use_children = main_children if main_children else list(bone.children)
+                avg_child_pos = sum((child.head for child in use_children), use_children[0].head * 0) / len(use_children)
                 if (avg_child_pos - bone.head).length > 0.001:
                     bone.tail = avg_child_pos
 
