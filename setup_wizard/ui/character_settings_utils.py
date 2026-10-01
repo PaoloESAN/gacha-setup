@@ -424,6 +424,7 @@ def get_character_materials(context=None, arm=None):
         arm = resolve_settings_armature(context)
     if arm is None:
         return None, []
+    import bpy
     mats = []
     seen = set()
     for mesh in _iter_rig_meshes(arm):
@@ -432,6 +433,12 @@ def get_character_materials(context=None, arm=None):
             if mat and mat.name not in seen:
                 seen.add(mat.name)
                 mats.append(mat)
+            if mat and mat.name.endswith("_Low"):
+                orig_name = mat.name[:-4]
+                orig_mat = bpy.data.materials.get(orig_name)
+                if orig_mat and orig_mat.name not in seen:
+                    seen.add(orig_mat.name)
+                    mats.append(orig_mat)
     return arm, mats
 
 

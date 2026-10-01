@@ -870,7 +870,7 @@ def pull_gi_panel_values(scene, context, force=False):
                             v24 = get_modifier_property(mod, "Toggle Outlines")
                         if v24 is not None:
                             scene.gi_enable_outlines = bool(v24)
-                        else:
+                        elif not arm.get("gi_animate_mode", False):
                             scene.gi_enable_outlines = bool(mod.show_viewport)
 
                         v23 = get_modifier_property(mod, "Socket_23")
@@ -887,6 +887,10 @@ def pull_gi_panel_values(scene, context, force=False):
             saved_mode = arm.get("gi_light_mode", "0")
             if getattr(scene, "gi_light_mode", "") != str(saved_mode):
                 scene.gi_light_mode = str(saved_mode)
+
+            # Pull animate mode saved on this armature
+            from setup_wizard.genshin_animate_mode import is_genshin_animate_mode
+            scene["gi_animate_mode"] = bool(is_genshin_animate_mode(arm, context=context))
 
             if mats:
                 ensure_character_node_trees_isolated(arm, mats)
@@ -1040,11 +1044,12 @@ def pull_gi_panel_values(scene, context, force=False):
         pass
 
 
-def _apply_outlines_and_night_soul(context, outlines_on, ns_on):
+def _apply_outlines_and_night_soul(context, outlines_on, ns_on, arm=None):
     try:
         from setup_wizard.ui.character_settings_utils import resolve_settings_armature, _iter_rig_meshes
         from setup_wizard.utils.modifier_utils import set_modifier_property
-        arm = resolve_settings_armature(context)
+        if arm is None:
+            arm = resolve_settings_armature(context)
         meshes = list(_iter_rig_meshes(arm)) if arm else [obj for obj in bpy.data.objects if obj.type == 'MESH']
         should_show = bool(outlines_on or ns_on)
         dirty_meshes = []
@@ -1256,7 +1261,10 @@ class GI_PT_Rig_Character_Settings(Panel):
             pass
 
         # 0. Animate Mode (fast playback: lightweight materials, no outlines)
-        is_anim = scene.get("gi_animate_mode", False)
+        from setup_wizard.genshin_animate_mode import is_genshin_animate_mode
+        from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+        arm = resolve_settings_armature(context)
+        is_anim = is_genshin_animate_mode(arm, context=context)
         layout.operator(
             "genshin.toggle_animate_mode",
             text="Disable Animate Mode" if is_anim else "Enable Animate Mode",
