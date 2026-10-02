@@ -562,7 +562,7 @@ class V3_MaterialDataApplier(V2_MaterialDataApplier):
 
     def __init__(self, material_data_parser, outline_material_group: OutlineMaterialGroup):
         super().__init__(material_data_parser, outline_material_group, self.outlines_node_tree_node_name)
-        self.shader_node_tree_node_name = self.face_shader_node_tree_node_name if 'Face' in self.material.name else \
+        self.shader_node_tree_node_name = self.face_shader_node_tree_node_name if (self.material and 'Face' in self.material.name) else \
             self.body_shader_node_tree_node_name
 
     def set_up_mesh_material_data(self):

@@ -313,8 +313,12 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
 
             # Skirk's Dress2 material data JSON is for her StarCloak
             if body_part == 'Dress2' and 'Skirk' in file.name:
-                body_part_based_on_version = body_part_based_on_version_map.get(self.material_names, 'StarCloak')
-                self.__customized_skirk_starcloak_material_data_setup(material_data_parser, character_type, file, body_part_based_on_version)
+                body_part_based_on_version = body_part_based_on_version_map.get(
+                    type(self.material_names),
+                    body_part_based_on_version_map.get(self.material_names, 'StarCloak')
+                )
+                if body_part_based_on_version != body_part:
+                    self.__customized_skirk_starcloak_material_data_setup(material_data_parser, character_type, file, body_part_based_on_version)
 
             if not material or not outlines_material:
                 self.blender_operator.report({'WARNING'}, \
@@ -338,6 +342,8 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
 
     def __customized_skirk_starcloak_material_data_setup(self, material_data_parser, character_type, file, body_part):
         material, outlines_material, night_soul_outlines_material = self.find_material_and_outline_material_for_body_part(body_part)
+        if not material or not outlines_material:
+            return
         outline_material_group: OutlineMaterialGroup = OutlineMaterialGroup(material, outlines_material, night_soul_outlines_material)
 
         material_data_appliers = MaterialDataAppliersFactory.create(
