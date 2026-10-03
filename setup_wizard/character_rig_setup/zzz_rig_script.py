@@ -686,10 +686,10 @@ def rig_character(
 
     ## Points toe bones in correct direction
     if toe_bones_exist:
-        armature.edit_bones['toe.L'].tail.z = 0
+        armature.edit_bones['toe.L'].tail.z = armature.edit_bones['toe.L'].head.z
         armature.edit_bones['toe.L'].tail.y -= 0.05
 
-        armature.edit_bones['toe.R'].tail.z = 0
+        armature.edit_bones['toe.R'].tail.z = armature.edit_bones['toe.R'].head.z
         armature.edit_bones['toe.R'].tail.y -= 0.05
             
     bpy.ops.armature.select_all(action='DESELECT')
@@ -859,6 +859,14 @@ def rig_character(
             arm_vec = (forearm_eb.tail - forearm_eb.head).normalized()
             hand_eb.tail = hand_eb.head + arm_vec * 0.05
             hand_eb.roll = forearm_eb.roll
+
+        heel_eb = metarm.edit_bones.get("heel.02" + side)
+        if heel_eb:
+            toe_eb = metarm.edit_bones.get("toe" + side)
+            foot_eb = metarm.edit_bones.get("foot" + side)
+            sole_z = toe_eb.head.z if toe_eb else (foot_eb.tail.z if foot_eb else 0.0)
+            heel_eb.head.z = sole_z
+            heel_eb.tail.z = sole_z
 
     for bone in metarm.edit_bones:
         if "f_" in bone.name or "thumb" in bone.name:
@@ -1535,11 +1543,13 @@ def rig_character(
            
     # Fixing Foot spin bone pos for chars with generated feet bones.
     if not toe_bones_exist:
-        armature.edit_bones['foot_spin_ik.L'].head.z = 0
-        armature.edit_bones['foot_spin_ik.L'].tail.z = 0
+        sole_z_l = armature.edit_bones['foot.L'].tail.z if 'foot.L' in armature.edit_bones else 0.0
+        armature.edit_bones['foot_spin_ik.L'].head.z = sole_z_l
+        armature.edit_bones['foot_spin_ik.L'].tail.z = sole_z_l
         
-        armature.edit_bones['foot_spin_ik.R'].head.z = 0
-        armature.edit_bones['foot_spin_ik.R'].tail.z = 0
+        sole_z_r = armature.edit_bones['foot.R'].tail.z if 'foot.R' in armature.edit_bones else 0.0
+        armature.edit_bones['foot_spin_ik.R'].head.z = sole_z_r
+        armature.edit_bones['foot_spin_ik.R'].tail.z = sole_z_r
     
     # SET RELATIONSHIPS as needed after bringing in new bones  
     if 'root' in armature.edit_bones and 'root-inner' in armature.edit_bones:
@@ -1641,6 +1651,8 @@ def rig_character(
     for b in armature.edit_bones:
         b_low = b.name.lower()
         if "box" in b_low or "weaponbox" in b_low:
+            continue
+        if "footprop" in b_low or "foot_prop" in b_low:
             continue
         if b.name in ["prop.L", "prop.R"]:
             continue
