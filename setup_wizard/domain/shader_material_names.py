@@ -1,6 +1,18 @@
 # Author: michael-gh1
 
 
+# Durin-specific eye materials (Durin only). The Pupil mesh uses two dedicated
+# materials so the eyes are easy to find and toggle:
+# - Slot 0: dark base eyes (New Pupil copy with PupilaTodo).
+# - Slot 1: normal/special eyes (New Pupil copy with the Hair diffuse texture
+#   wired directly to the shader's Diffuse Color).
+# They keep the 'HoYoverse - ' prefix so outline creation and the other
+# prefix-based pipeline steps keep treating them as shader materials.
+DURIN_DARK_EYE_MATERIAL_NAME = 'HoYoverse - Durin Dark Eye'
+DURIN_NORMAL_EYE_MATERIAL_NAME = 'HoYoverse - Durin Normal Eye'
+DURIN_EYE_MATERIAL_NAMES = (DURIN_DARK_EYE_MATERIAL_NAME, DURIN_NORMAL_EYE_MATERIAL_NAME)
+
+
 class ShaderMaterialNames:
     EMISSIVE_TEMPLATE_MATERIAL_NAME = 'HoYoverse - HELPER Template'
     MATERIAL_PREFIX = ''

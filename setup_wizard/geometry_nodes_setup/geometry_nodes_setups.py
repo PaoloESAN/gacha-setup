@@ -13,7 +13,7 @@ from setup_wizard.domain.shader_material_name_keywords import ShaderMaterialName
 from setup_wizard.domain.shader_material import ShaderMaterial
 from setup_wizard.domain.shader_node_names import ShaderNodeNames, StellarToonShaderNodeNames, V3_GenshinShaderNodeNames, V4_PrimoToonShaderNodeNames
 from setup_wizard.domain.shader_identifier_service import GenshinImpactShaders, HonkaiStarRailShaders, ShaderIdentifierService, ShaderIdentifierServiceFactory
-from setup_wizard.domain.shader_material_names import JaredNytsPunishingGrayRavenShaderMaterialNames, StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, V2_FestivityGenshinImpactMaterialNames, ShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, V4_PrimoToonGenshinImpactMaterialNames
+from setup_wizard.domain.shader_material_names import JaredNytsPunishingGrayRavenShaderMaterialNames, StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, V2_FestivityGenshinImpactMaterialNames, ShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, V4_PrimoToonGenshinImpactMaterialNames, DURIN_DARK_EYE_MATERIAL_NAME, DURIN_NORMAL_EYE_MATERIAL_NAME
 
 from setup_wizard.domain.game_types import GameType
 from setup_wizard.material_import_setup.empty_names import LightDirectionEmptyNames
@@ -100,6 +100,10 @@ gi_meshes_to_create_outlines_on = [
     'Hat',  # Aranara
     'StarCloak',
     'Tail',
+    'Wing',
+    'Wing01',
+    'Wing02',
+    'Wings',
 ]
 
 hsr_meshes_to_create_outlines_on = [
@@ -135,6 +139,16 @@ pgr_meshes_to_create_outlines_on = [
 
 mesh_keywords_to_create_geometry_nodes_on = [
     ShaderMaterialNameKeywords.SKILLOBJ,
+]
+
+# Meshes that represent a single toggleable character part (e.g. Durin's
+# Wing01/Wing02) must keep all of their materials as one mesh object.
+# Splitting them by material dissolves the part into generic Hair/Dress
+# meshes (wing faces get joined into the back-hair / horns meshes),
+# making the part impossible to toggle on/off.
+# Matched case-insensitively as a substring of the mesh object name.
+meshes_to_keep_intact_keywords = [
+    'wing',
 ]
 
 # HSR outline depth offset socket in the StellarToon outline node group.
@@ -183,6 +197,10 @@ material_keywords_to_not_create_outlines_on = [
     'Eye_Star',
     'EyeSpecular',
     'Eye_Specular',
+    # Durin's dedicated eye materials (renamed from New Pupil): pupils get no
+    # outlines, same as before the rename.
+    DURIN_DARK_EYE_MATERIAL_NAME,
+    DURIN_NORMAL_EYE_MATERIAL_NAME,
 ]
 
 
@@ -836,6 +854,14 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
             set_modifier_property(modifier, self.FACE_LIGHTMAP_SOCKET, face_lightmap_node_group.nodes[self.texture_node_names.FACE_LIGHTMAP].image)
 
     def __separate_materials_into_unique_meshes(self, mesh):
+        # Keep toggleable part meshes (e.g. Durin Wing01/Wing02) intact:
+        # they are named after the body part, not after a material, so
+        # separating them by material would dissolve them into the generic
+        # Hair/Dress meshes and the wings could no longer be toggled.
+        mesh_name_low = (getattr(mesh, "name", "") or "").lower()
+        if any(kw in mesh_name_low for kw in meshes_to_keep_intact_keywords):
+            print(f'Keeping part mesh intact (skipping material separation): {mesh.name}')
+            return
         if len(mesh.material_slots) > 1:
             separated_materials = []
             for material_slot in mesh.material_slots:

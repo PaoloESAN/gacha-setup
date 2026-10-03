@@ -4,6 +4,7 @@ import bpy
 from bpy.types import Panel, UILayout
 
 from setup_wizard.domain.game_types import GameType
+from setup_wizard.domain.shader_material_names import DURIN_NORMAL_EYE_MATERIAL_NAME
 from setup_wizard.ui.ui_render_checker import GenshinImpactUIRenderChecker
 
 class UI_Properties:
@@ -1001,6 +1002,7 @@ def sync_genshin_shader_properties(scene=None, context=None):
                         except Exception:
                             pass
 
+
     # 5. Tag 3D areas for redraw
     if hasattr(bpy.context, 'window_manager') and bpy.context.window_manager:
         for win in getattr(bpy.context.window_manager, 'windows', []):
@@ -1215,6 +1217,40 @@ def pull_gi_panel_values(scene, context, force=False):
                             break
                 except Exception:
                     pass
+
+            # 6. Durin Dark Eyes (pulled directly from second slot material Mix Shader)
+            try:
+                if is_durin(context):
+                    d_mesh, d_mat1, d_mat2 = get_durin_pupil_materials(context, arm)
+                    target_mat = d_mat2
+                    if not target_mat or not getattr(target_mat, 'node_tree', None):
+                        if d_mesh and len(d_mesh.material_slots) > 1 and d_mesh.material_slots[1].material:
+                            target_mat = d_mesh.material_slots[1].material
+                        else:
+                            target_mat = bpy.data.materials.get(DURIN_NORMAL_EYE_MATERIAL_NAME)
+                            if target_mat is not None and not getattr(target_mat, 'node_tree', None):
+                                target_mat = None
+                            if target_mat is None:
+                                for m in bpy.data.materials:
+                                    m_low = m.name.lower()
+                                    if ('pupil' in m_low or 'pupila' in m_low) and (m.name.endswith('.001') or 'two' in m_low) and getattr(m, 'node_tree', None):
+                                        target_mat = m
+                                        break
+                    if target_mat and getattr(target_mat, 'node_tree', None):
+                        mix_n = target_mat.node_tree.nodes.get('Mix Shader')
+                        if not mix_n:
+                            for n in target_mat.node_tree.nodes:
+                                if n.type == 'MIX_SHADER':
+                                    mix_n = n
+                                    break
+                        if mix_n and len(mix_n.inputs) > 0:
+                            scene.gi_dark_eyes = bool(mix_n.inputs[0].default_value > 0.5)
+                        else:
+                            scene.gi_dark_eyes = False
+                    else:
+                        scene.gi_dark_eyes = False
+            except Exception:
+                pass
         finally:
             _is_updating_gi_props = False
     except Exception:
@@ -1405,6 +1441,163 @@ def update_gi_clothes_physics(self, context):
         pass
 
 
+def is_durin(context):
+    try:
+        from setup_wizard.ui.character_settings_utils import resolve_settings_armature, resolve_character_name, _iter_rig_meshes
+        arm = resolve_settings_armature(context)
+        if arm is not None:
+            cached = arm.get("gacha_is_durin")
+            if cached is not None:
+                return bool(cached)
+            char_name = resolve_character_name(arm, "")
+            if char_name and "durin" in str(char_name).lower():
+                arm["gacha_is_durin"] = True
+                return True
+            if "durin" in arm.name.lower():
+                arm["gacha_is_durin"] = True
+                return True
+            for mesh in _iter_rig_meshes(arm):
+                if "durin" in mesh.name.lower():
+                    arm["gacha_is_durin"] = True
+                    return True
+                for slot in getattr(mesh, "material_slots", []):
+                    if slot.material and "durin" in slot.material.name.lower():
+                        arm["gacha_is_durin"] = True
+                        return True
+            for mesh in _iter_rig_meshes(arm):
+                for slot in getattr(mesh, "material_slots", []):
+                    if slot.material and "pupil" in slot.material.name.lower():
+                        import bpy
+                        if any("durin" in m.name.lower() for m in bpy.data.materials) or any("durin" in o.name.lower() for o in bpy.data.objects) or any("durin" in img.name.lower() for img in bpy.data.images):
+                            arm["gacha_is_durin"] = True
+                            return True
+            arm["gacha_is_durin"] = False
+            return False
+        import bpy
+        obj = getattr(context, "active_object", None) or getattr(context, "object", None)
+        if obj and "durin" in obj.name.lower():
+            return True
+        for m in bpy.data.materials:
+            if "durin" in m.name.lower():
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def get_durin_pupil_materials(context=None, arm=None):
+    from setup_wizard.ui.character_settings_utils import resolve_settings_armature, _iter_rig_meshes
+    import bpy
+    if arm is None:
+        arm = resolve_settings_armature(context)
+    if not arm:
+        obj = getattr(bpy.context, "active_object", None) or getattr(bpy.context, "object", None)
+        if obj and obj.type == 'MESH':
+            meshes = [obj]
+        else:
+            meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+    else:
+        meshes = list(_iter_rig_meshes(arm))
+
+    pupil_mesh = None
+    for mesh in meshes:
+        n_low = mesh.name.lower()
+        if ('pupil' in n_low or 'pupila' in n_low or any('pupil' in s.name.lower() for s in mesh.material_slots if s.material)) and not any(ex in n_low for ex in ['face', 'eyestar', 'star', 'brow']):
+            pupil_mesh = mesh
+            break
+
+    if not pupil_mesh:
+        for mesh in meshes:
+            for s in mesh.material_slots:
+                if s.material and ('pupil' in s.material.name.lower() or 'pupila' in s.material.name.lower()) and not any(ex in s.material.name.lower() for ex in ['face', 'eyestar', 'star', 'brow']):
+                    pupil_mesh = mesh
+                    break
+            if pupil_mesh:
+                break
+
+    if not pupil_mesh:
+        return None, None, None
+
+    mat1 = pupil_mesh.material_slots[0].material if len(pupil_mesh.material_slots) > 0 else None
+    mat2 = pupil_mesh.material_slots[1].material if len(pupil_mesh.material_slots) > 1 else None
+    return pupil_mesh, mat1, mat2
+
+
+def apply_durin_dark_eyes(context=None, enabled=False):
+    from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+    import bpy
+    arm = resolve_settings_armature(context)
+    mesh, mat1, mat2 = get_durin_pupil_materials(context, arm)
+
+    target_val = 1.0 if enabled else 0.0
+
+    # Ensure slot 1 (mat1) NEVER has transparent Mix Shader (always 0.0)
+    if mat1 and getattr(mat1, 'node_tree', None):
+        mix_n1 = mat1.node_tree.nodes.get('Mix Shader')
+        if not mix_n1:
+            for n in mat1.node_tree.nodes:
+                if n.type == 'MIX_SHADER':
+                    mix_n1 = n
+                    break
+        if mix_n1 and len(mix_n1.inputs) > 0:
+            try:
+                mix_n1.inputs[0].driver_remove('default_value')
+            except Exception:
+                pass
+            mix_n1.inputs[0].default_value = 0.0
+
+    # Target ONLY the second slot (mat2)
+    target_mat = mat2
+    if not target_mat or not getattr(target_mat, 'node_tree', None):
+        if mesh and len(mesh.material_slots) > 1 and mesh.material_slots[1].material:
+            target_mat = mesh.material_slots[1].material
+        else:
+            target_mat = bpy.data.materials.get(DURIN_NORMAL_EYE_MATERIAL_NAME)
+            if target_mat is not None and not getattr(target_mat, 'node_tree', None):
+                target_mat = None
+            if target_mat is None:
+                for m in bpy.data.materials:
+                    m_low = m.name.lower()
+                    if ('pupil' in m_low or 'pupila' in m_low) and (m.name.endswith('.001') or 'two' in m_low) and getattr(m, 'node_tree', None):
+                        target_mat = m
+                        break
+
+    if target_mat and getattr(target_mat, 'node_tree', None):
+        nt = target_mat.node_tree
+        mix_node = nt.nodes.get('Mix Shader')
+        if not mix_node:
+            for n in nt.nodes:
+                if n.type == 'MIX_SHADER':
+                    mix_node = n
+                    break
+        if mix_node and len(mix_node.inputs) > 0:
+            try:
+                mix_node.inputs[0].driver_remove('default_value')
+            except Exception:
+                pass
+            mix_node.inputs[0].default_value = target_val
+            target_mat.blend_method = 'HASHED'
+            if hasattr(target_mat, 'surface_render_method'):
+                target_mat.surface_render_method = 'DITHERED'
+
+    # Tag redraw on 3D viewports so the change shows immediately
+    if hasattr(bpy.context, 'window_manager') and bpy.context.window_manager:
+        for win in getattr(bpy.context.window_manager, 'windows', []):
+            screen = getattr(win, 'screen', None)
+            if screen:
+                for area in screen.areas:
+                    if area.type == 'VIEW_3D':
+                        area.tag_redraw()
+
+
+def update_gi_dark_eyes(self, context):
+    global _is_updating_gi_props
+    if _is_updating_gi_props:
+        return
+    enabled = getattr(self, "gi_dark_eyes", False)
+    apply_durin_dark_eyes(context, enabled)
+
+
 class GI_PT_Rig_Character_Settings(Panel):
     bl_label = "Character Settings"
     bl_idname = "GI_PT_Rig_Character_Settings_Main"
@@ -1500,6 +1693,13 @@ class GI_PT_Rig_Character_Settings(Panel):
         col_outlines.prop(scene, "gi_enable_outlines", text="Enable Outlines")
         if character_has_night_soul(context):
             col_outlines.prop(scene, "gi_enable_night_soul", text="Enable Night Soul (Natlan Characters Only)")
+
+        # Dark Eyes (Durin Only)
+        if is_durin(context):
+            box_durin = layout.box()
+            box_durin.label(text="Durin Settings", icon="HIDE_OFF")
+            col_durin = box_durin.column(align=True)
+            col_durin.prop(scene, "gi_dark_eyes", text="Dark Eyes")
 
         # 5. Shadows & Scene Settings (At the bottom)
         box_shadow = layout.box()
@@ -1745,6 +1945,12 @@ def register_gi_properties():
         default=False,
         update=update_gi_night_soul,
     )
+    bpy.types.Scene.gi_dark_eyes = bpy.props.BoolProperty(
+        name="Dark Eyes",
+        description="Toggle Durin's dark eyes. When enabled (1), sets Mix Shader Fac to 1 (transparent BSDF, revealing slot 1 dark eyes). When disabled (0), sets Mix Shader Fac to 0",
+        default=False,
+        update=update_gi_dark_eyes,
+    )
 
 
 def unregister_gi_properties():
@@ -1758,7 +1964,7 @@ def unregister_gi_properties():
         "gi_catch_shadows", "gi_day_night", "gi_blush_strength",
         "gi_rim_lit_color", "gi_rim_shadow_color",
         "gi_hair_physics_influence", "gi_clothes_physics_influence",
-        "gi_enable_outlines", "gi_enable_night_soul"
+        "gi_enable_outlines", "gi_enable_night_soul", "gi_dark_eyes"
     ]:
         if hasattr(bpy.types.Scene, prop):
             delattr(bpy.types.Scene, prop)

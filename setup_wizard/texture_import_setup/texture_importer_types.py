@@ -10,7 +10,7 @@ from setup_wizard.domain.game_types import GameType
 from setup_wizard.domain.shader_identifier_service import GenshinImpactShaders, HonkaiStarRailShaders, ShaderIdentifierService, \
     ShaderIdentifierServiceFactory
 from setup_wizard.domain.shader_material_names import JaredNytsPunishingGrayRavenShaderMaterialNames, StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, V2_FestivityGenshinImpactMaterialNames, \
-    ShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, V4_PrimoToonGenshinImpactMaterialNames
+    ShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, V4_PrimoToonGenshinImpactMaterialNames, DURIN_DARK_EYE_MATERIAL_NAME, DURIN_EYE_MATERIAL_NAMES
 from setup_wizard.domain.shader_node_names import JaredNyts_PunishingGrayRavenNodeNames, ShaderNodeNames, StellarToonShaderNodeNames
 from setup_wizard.domain.shader_material_name_keywords import ShaderMaterialNameKeywords
 
@@ -1664,7 +1664,7 @@ class GenshinTextureImporter:
                     for obj in bpy.data.objects:
                         if obj.type == 'MESH':
                             mats = [s.material for s in obj.material_slots if s.material]
-                            if any('new pupil' in m.name.lower() for m in mats) and not any('highlight' in m.name.lower() for m in mats):
+                            if any('new pupil' in m.name.lower() or m.name in DURIN_EYE_MATERIAL_NAMES for m in mats) and not any('highlight' in m.name.lower() for m in mats):
                                 setup_new_pupil_highlight_layer(obj, self.material_names)
                 except Exception as e_hl_split:
                     print(f"[HIGHLIGHT LAYER] Notice ensuring pupil highlight layer: {e_hl_split}")
@@ -2291,12 +2291,22 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                             break
 
             has_multiple_pupil_diffuse = len(pupil_diffuse_images) > 1
-            has_new_pupil_setup = has_multiple_pupil_diffuse or is_sandrone or any('new pupil' in m.name.lower() for m in bpy.data.materials)
+            has_new_pupil_setup = has_multiple_pupil_diffuse or is_sandrone or any('new pupil' in m.name.lower() or m.name in DURIN_EYE_MATERIAL_NAMES for m in bpy.data.materials)
 
             if has_new_pupil_setup:
+                # Durin's slot 0 ("Durin Dark Eye") receives pupil textures like
+                # New Pupil; slot 1 ("Durin Normal Eye") keeps its Hair diffuse
+                # wired by setup and is intentionally excluded from targets.
+                def _is_pupil_texture_target(m):
+                    n_low = m.name.lower()
+                    if 'outlines' in n_low:
+                        return False
+                    if m.name == DURIN_DARK_EYE_MATERIAL_NAME:
+                        return True
+                    return 'new pupil' in n_low and not m.name.endswith('.001') and 'two' not in n_low
                 target_pupil_mats = [
                     m for m in bpy.data.materials
-                    if m.use_nodes and 'new pupil' in m.name.lower() and 'outlines' not in m.name.lower()
+                    if m.use_nodes and _is_pupil_texture_target(m)
                 ]
                 if not target_pupil_mats:
                     new_pupil_mat = bpy.data.materials.get(getattr(self.material_names, 'NEW_PUPIL', f'{self.material_names.MATERIAL_PREFIX}New Pupil')) or \
@@ -2314,6 +2324,8 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                             for slot in obj.material_slots:
                                 if slot.material and slot.material not in target_pupil_mats:
                                     m_low = slot.material.name.lower()
+                                    if m_low.endswith('.001') or 'two' in m_low:
+                                        continue
                                     if ('pupil' in m_low or 'pupila' in m_low) and not any(x in m_low for x in ['face', 'eyestar', 'eyeshadow', 'brow', 'outlines', 'highlight']):
                                         slot.material = primary_pupil_mat
 
@@ -2338,7 +2350,7 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                     for obj in bpy.data.objects:
                         if obj.type == 'MESH':
                             mats = [s.material for s in obj.material_slots if s.material]
-                            if any('new pupil' in m.name.lower() for m in mats) and not any('highlight' in m.name.lower() for m in mats):
+                            if any('new pupil' in m.name.lower() or m.name in DURIN_EYE_MATERIAL_NAMES for m in mats) and not any('highlight' in m.name.lower() for m in mats):
                                 setup_new_pupil_highlight_layer(obj, self.material_names)
                 except Exception as e_hl_split:
                     print(f"[HIGHLIGHT LAYER] Notice ensuring pupil highlight layer: {e_hl_split}")
@@ -2829,7 +2841,7 @@ class GenshinNPCTextureImporter(GenshinTextureImporter):
                         self.set_lightmap_texture(TextureType.BODY, others_material, img)
 
                 elif any(k in file.lower() for k in ['eyehighlight', 'eyelight', 'eye_highlight', 'eye_light']) or ('highlight' in file.lower() and ('diffuse' in file.lower() or 'mask' in file.lower())):
-                    has_new_pupil = any('new pupil' in m.name.lower() for m in bpy.data.materials)
+                    has_new_pupil = any('new pupil' in m.name.lower() or m.name in DURIN_EYE_MATERIAL_NAMES for m in bpy.data.materials)
                     if has_new_pupil:
                         hl_mat = bpy.data.materials.get(getattr(self.material_names, 'HIGHLIGHT', f'{self.material_names.MATERIAL_PREFIX}Highlight')) or \
                                  bpy.data.materials.get('HoYoverse - Genshin Highlight') or \
