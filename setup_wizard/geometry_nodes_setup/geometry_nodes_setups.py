@@ -777,7 +777,11 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
 
         for material in materials:
             if self.material_names.MATERIAL_PREFIX in material.name and material.name != self.material_names.NIGHT_SOUL_OUTLINES and \
-                not material.name.endswith('Outlines'):
+                not material.name.endswith('Outlines') and \
+                'Eff_' not in material.name:
+                # Note: 'Eff_' effect materials are excluded on purpose (same
+                # as the 'Eff' outline ignore keyword): transparent effects
+                # get no outline modifiers nor outline materials.
                 new_outline_name = f'{material.name} {self.material_names.NIGHT_SOUL_OUTLINES_SUFFIX}'
 
                 if not bpy.data.materials.get(new_outline_name) and not ShaderMaterial(material, self.shader_node_names).get_night_soul_outlines_material():

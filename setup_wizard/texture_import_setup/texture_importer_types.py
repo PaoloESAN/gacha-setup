@@ -56,7 +56,7 @@ def is_mat_part_match(mat_name, part):
     """
     m_low = mat_name.lower()
     part_clean = part.lower().replace('_', '')
-    if bool(re.search(rf'(?:^|[\s\-_]){re.escape(part)}$', m_low)):
+    if bool(re.search(rf'(?:^|[\s\-_]){re.escape(part.lower())}$', m_low)):
         return True
     m_tokens = re.split(r'[\s\-_]+', m_low)
     if m_tokens and m_tokens[-1].replace('_', '') == part_clean:
@@ -1272,6 +1272,16 @@ class GenshinTextureImporter:
                 mat_part = 'EffectHair'
             elif 'helmetemo' in c_low:
                 mat_part = 'HelmetEmo'
+            elif c_low.startswith('avatarobj'):
+                # Quest object materials (ex. AvatarObj_Ani_Quest_IkhorLight_01_Mat):
+                # keep the full object name so each maps to its own dedicated
+                # shader material instead of collapsing to a bare index ('01').
+                mat_part = clean_name
+            elif c_low.startswith('eff_'):
+                # Effect object materials (ex. Eff_Fresnel_048_NO_00): keep the
+                # full name so each effect maps to its own dedicated shader
+                # material instead of collapsing to a bare index ('00').
+                mat_part = clean_name
             else:
                 mat_part = clean_name.split('_')[-1]
             json_data_list.append((jf, raw_name, mat_part, data))

@@ -75,6 +75,32 @@ class MaterialDataApplier(ABC):
         '_OutlineColor5': 'Outline Color 5'
     }
 
+    # Tag stamped on outline materials while the diffuse fallback links below
+    # are in place, so they can be removed again if outline colors show up.
+    OUTLINE_DIFFUSE_FALLBACK_TAG = 'gacha_outline_diffuse_fallback'
+
+    # Template sentinel outline colors (Outline Color 1..5). When every one of
+    # these inputs still holds exactly its template default (AND AND AND), the
+    # JSONs provided no outline colors and the diffuse fallback may link them.
+    OUTLINE_SENTINEL_SRGB_HEX = ('FF0000FF', 'E7FF00FF', '00FFAAFF', '00AAFFFF', 'E700FFFF')
+    OUTLINE_SENTINEL_EPS = 1e-4
+
+    @staticmethod
+    def _srgb_channel_to_linear(c):
+        if c <= 0.04045:
+            return c / 12.92
+        return ((c + 0.055) / 1.055) ** 2.4
+
+    @classmethod
+    def _sentinel_rgba(cls, encoding):
+        values = []
+        for hex_color in cls.OUTLINE_SENTINEL_SRGB_HEX:
+            channels = [int(hex_color[i:i + 2], 16) / 255.0 for i in (0, 2, 4, 6)]
+            if encoding == 'linear':
+                channels[:3] = [cls._srgb_channel_to_linear(c) for c in channels[:3]]
+            values.append(tuple(channels))
+        return tuple(values)
+
     def is_tooltip_TexEnv(self, tooltip):
         if not tooltip:
             return False
@@ -174,6 +200,244 @@ class MaterialDataApplier(ABC):
             self.outline_mapping, 
             outlines_shader_node_inputs,
         )
+
+        # Diffuse fallback if and only if every Outline Color input still holds
+        # exactly its template sentinel color (AND AND AND). Otherwise any
+        # fallback links left by a previous run are maintained or removed.
+        indexed = self._get_indexed_outline_color_inputs(outline_node)
+        if self._defaults_match_sentinels(indexed):
+            targets = [indexed[i] for i in (1, 2, 3, 4, 5)]
+            if all(len(list(inp.links)) == 0 for inp in targets):
+                self._apply_diffuse_outline_color_fallback(outline_node, targets)
+            else:
+                self._maintain_diffuse_outline_color_fallback(outline_node, targets)
+        else:
+            self._clear_diffuse_outline_color_fallback(outline_node)
+
+    @staticmethod
+    def _color_close(value, expected, eps=None):
+        try:
+            vals = tuple(float(v) for v in value)
+        except Exception:
+            return False
+        if len(vals) < 4:
+            return False
+        tolerance = MaterialDataApplier.OUTLINE_SENTINEL_EPS if eps is None else eps
+        return all(abs(a - b) <= tolerance for a, b in zip(vals[:4], expected))
+
+    def _get_indexed_outline_color_inputs(self, outline_node):
+        """'Outline Color' color inputs keyed by their trailing index."""
+        indexed = {}
+        for inp in self._outline_color_inputs(outline_node):
+            try:
+                idx = int(inp.name.split('Outline Color')[1].strip())
+            except Exception:
+                continue
+            if idx not in indexed:
+                indexed[idx] = inp
+        return indexed
+
+    def _defaults_match_sentinels(self, indexed):
+        """True only when inputs 1..5 all hold exactly the template sentinel colors."""
+        for key in (1, 2, 3, 4, 5):
+            if key not in indexed:
+                return False
+        for encoding in ('linear', 'srgb'):
+            sentinels = self._sentinel_rgba(encoding)
+            if all(self._color_close(getattr(indexed[i], 'default_value', None), sentinels[i - 1]) for i in (1, 2, 3, 4, 5)):
+                return True
+        return False
+
+    def _find_outline_diffuse_node(self, outline_tree):
+        """Finds the diffuse image texture node in an outline material tree."""
+        if outline_tree is None:
+            return None
+        try:
+            nodes = list(outline_tree.nodes)
+        except Exception:
+            return None
+        candidates = []
+        for node in nodes:
+            try:
+                if getattr(node, 'type', '') != 'TEX_IMAGE':
+                    continue
+                node_id = ((getattr(node, 'name', '') or '') + ' ' + (getattr(node, 'label', '') or '')).lower()
+            except Exception:
+                continue
+            if 'diffuse' not in node_id:
+                continue
+            if any(k in node_id for k in ['lightmap', 'normal', 'ramp', 'mask']):
+                continue
+            candidates.append(node)
+        if not candidates:
+            return None
+        with_image = [n for n in candidates if getattr(n, 'image', None)]
+        pool = with_image or candidates
+        for node in pool:
+            try:
+                node_id = ((getattr(node, 'name', '') or '') + ' ' + (getattr(node, 'label', '') or '')).lower()
+            except Exception:
+                continue
+            if 'outline' in node_id:
+                return node
+        return pool[0]
+
+    def _mirror_main_diffuse_image(self, diffuse_node):
+        """Shares the main material's diffuse image on an empty outline diffuse node."""
+        try:
+            main_tree = getattr(self.material, 'node_tree', None)
+        except Exception:
+            main_tree = None
+        if main_tree is None or diffuse_node is None:
+            return
+        main_diffuse = self._find_outline_diffuse_node(main_tree)
+        if main_diffuse is not None and getattr(main_diffuse, 'image', None):
+            try:
+                diffuse_node.image = main_diffuse.image
+            except Exception:
+                pass
+
+    def _outline_color_inputs(self, outline_node):
+        """All 'Outline Color' color inputs of an outline shader node."""
+        found = []
+        for inp in getattr(outline_node, 'inputs', []) or []:
+            try:
+                name = inp.name or ''
+            except Exception:
+                continue
+            if not name.startswith('Outline Color'):
+                continue
+            socket_type = getattr(inp, 'type', '') or ''
+            bl_idname = getattr(inp, 'bl_idname', '') or ''
+            if socket_type == 'RGBA' or 'color' in bl_idname.lower():
+                found.append(inp)
+        return found
+
+    def _get_fallback_diffuse_color_output(self):
+        """Unhidden diffuse Color output with an image, or None.
+
+        Uses the outline material's own diffuse node, mirroring the main
+        material's diffuse image onto it when it has none.
+        """
+        outline_tree = getattr(self.outline_material, 'node_tree', None)
+        if outline_tree is None:
+            return None
+        diffuse_node = self._find_outline_diffuse_node(outline_tree)
+        if diffuse_node is None:
+            return None
+        if not getattr(diffuse_node, 'image', None):
+            self._mirror_main_diffuse_image(diffuse_node)
+        if not getattr(diffuse_node, 'image', None):
+            print(f'[OUTLINES] No diffuse image for outline fallback on '
+                  f'\'{getattr(self.outline_material, "name", "?")}\'; leaving outline colors untouched')
+            return None
+        try:
+            outputs = diffuse_node.outputs
+            color_out = outputs.get('Color') if hasattr(outputs, 'get') else None
+            if color_out is None:
+                color_out = outputs[0]
+        except Exception:
+            return None
+        try:
+            color_out.hide = False
+        except Exception:
+            pass
+        return color_out
+
+    def _link_diffuse_to_outline_input(self, color_out, inp):
+        """Links the diffuse Color output to one outline color input. Returns True on success."""
+        outline_tree = getattr(self.outline_material, 'node_tree', None)
+        if outline_tree is None:
+            return False
+        try:
+            inp.hide = False
+        except Exception:
+            pass
+        try:
+            for link in list(inp.links):
+                outline_tree.links.remove(link)
+        except Exception:
+            pass
+        try:
+            outline_tree.links.new(color_out, inp)
+            return True
+        except Exception as ex:
+            print(f'[OUTLINES] Notice linking diffuse to \'{getattr(inp, "name", "?")}\': {ex}')
+            return False
+
+    def _apply_diffuse_outline_color_fallback(self, outline_node, targets):
+        """Fallback: drive every Outline Color input from the diffuse Color output.
+
+        Only runs when all Outline Color inputs still hold exactly the
+        template sentinel colors. Unhides the diffuse Color socket as needed
+        before linking.
+        """
+        _ = outline_node
+        color_out = self._get_fallback_diffuse_color_output()
+        if color_out is None:
+            return
+        linked = 0
+        for inp in targets:
+            if self._link_diffuse_to_outline_input(color_out, inp):
+                linked += 1
+        if linked:
+            try:
+                self.outline_material[self.OUTLINE_DIFFUSE_FALLBACK_TAG] = True
+            except Exception:
+                pass
+            print(f'[OUTLINES] Fallback: template sentinel outline colors found; linked diffuse Color to '
+                  f'{linked} outline color input(s) on \'{getattr(self.outline_material, "name", "?")}\'')
+
+    def _maintain_diffuse_outline_color_fallback(self, outline_node, targets):
+        """Repairs fallback links left by a previous run (idempotency).
+
+        Only touches unlinked inputs; anything the user wired manually is
+        left alone. Runs only while the tag from a previous fallback is set.
+        """
+        _ = outline_node
+        try:
+            if not self.outline_material.get(self.OUTLINE_DIFFUSE_FALLBACK_TAG):
+                return
+        except Exception:
+            return
+        color_out = self._get_fallback_diffuse_color_output()
+        if color_out is None:
+            return
+        for inp in targets:
+            try:
+                has_links = len(list(inp.links)) > 0
+            except Exception:
+                continue
+            if not has_links:
+                self._link_diffuse_to_outline_input(color_out, inp)
+
+    def _clear_diffuse_outline_color_fallback(self, outline_node):
+        """Removes fallback links so the current input values drive the outlines again."""
+        try:
+            if not self.outline_material.get(self.OUTLINE_DIFFUSE_FALLBACK_TAG):
+                return
+        except Exception:
+            return
+        outline_tree = getattr(self.outline_material, 'node_tree', None)
+        if outline_tree is None:
+            return
+        for inp in self._outline_color_inputs(outline_node):
+            try:
+                for link in list(inp.links):
+                    try:
+                        from_node = link.from_node
+                    except Exception:
+                        from_node = None
+                    if from_node is not None and getattr(from_node, 'type', '') == 'TEX_IMAGE':
+                        outline_tree.links.remove(link)
+            except Exception:
+                pass
+        try:
+            still_linked = any(len(list(inp.links)) > 0 for inp in self._outline_color_inputs(outline_node))
+            if not still_linked and self.OUTLINE_DIFFUSE_FALLBACK_TAG in self.outline_material:
+                del self.outline_material[self.OUTLINE_DIFFUSE_FALLBACK_TAG]
+        except Exception:
+            pass
 
     def apply_material_data(self, material_mapping, node_inputs):
         for material_json_name, material_node_name in material_mapping.items():

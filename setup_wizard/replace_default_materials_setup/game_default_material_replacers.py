@@ -682,6 +682,23 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 elif material_name.startswith(('Equip_', 'EquipSkin_')) or (mesh and mesh.name.startswith(('Equip_', 'EquipSkin_'))):
                     mesh_body_part_name = 'Body'
                     character_type = TextureImporterType.AVATAR
+                elif material_name.startswith('AvatarObj') and material_name.endswith('_Mat'):
+                    # Quest object materials (ex. AvatarObj_Ani_Quest_IkhorLight_01_Mat):
+                    # keep the full object name as the part so each object gets
+                    # its own dedicated material. Using only the last token
+                    # ('Mat') would make every object share a single material
+                    # whose textures get overwritten by the last processed object.
+                    mesh_body_part_name = material_name[:-len('_Mat')]
+                    character_type = TextureImporterType.AVATAR
+                elif material_name.startswith('Eff_'):
+                    # Effect object materials (ex. Eff_Fresnel_048_NO_00): keep
+                    # the full name as the part so each effect gets its own
+                    # dedicated material instead of sharing one per trailing
+                    # token ('00'). The 'Eff' outline ignore keyword then
+                    # excludes these transparent effects from outline creation
+                    # by design (no outline modifier nor outline materials).
+                    mesh_body_part_name = material_name
+                    character_type = TextureImporterType.AVATAR
                 else:
                     mesh_body_part_name = material_name.split('_')[-1]
                     character_type = TextureImporterType.AVATAR
