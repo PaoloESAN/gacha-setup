@@ -580,6 +580,168 @@ GI_LIGHT_PRESETS = {
 _is_updating_gi_props = False
 
 
+def _is_preset_matching(values, preset, tol_col=0.04, tol_val=0.06):
+    def col_close(c1, c2):
+        if not c1 or not c2:
+            return True
+        return all(abs(float(a) - float(b)) <= tol_col for a, b in zip(c1[:3], c2[:3]))
+
+    def val_close(v1, v2):
+        if v1 is None or v2 is None:
+            return True
+        return abs(float(v1) - float(v2)) <= tol_val
+
+    if "ambient" in values and not col_close(values["ambient"], preset["ambient"]):
+        return False
+    if "sharp_lit" in values and not col_close(values["sharp_lit"], preset["sharp_lit"]):
+        return False
+    if "sharp_shadow" in values and not col_close(values["sharp_shadow"], preset["sharp_shadow"]):
+        return False
+    if "soft_lit" in values and not col_close(values["soft_lit"], preset["soft_lit"]):
+        return False
+    if "soft_shadow" in values and not col_close(values["soft_shadow"], preset["soft_shadow"]):
+        return False
+    if "day_night" in values and not val_close(values["day_night"], preset["day_night"]):
+        return False
+    if "rim_lit" in values and not col_close(values["rim_lit"], preset["rim_lit"]):
+        return False
+    if "rim_shadow" in values and not col_close(values["rim_shadow"], preset["rim_shadow"]):
+        return False
+    return True
+
+
+def match_lighting_preset(values):
+    if not values:
+        return "0"
+    for key in ["0", "1", "2", "3", "4", "5"]:
+        if _is_preset_matching(values, GI_LIGHT_PRESETS[key]):
+            return key
+    return "6"  # Custom
+
+
+def extract_character_lighting_inputs(arm=None, mats=None, context=None):
+    if arm is None and context is not None:
+        try:
+            from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+            arm = resolve_settings_armature(context)
+        except Exception:
+            pass
+    if arm is None:
+        try:
+            from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+            arm = resolve_settings_armature(getattr(bpy, "context", None))
+        except Exception:
+            pass
+
+    if mats is None and arm is not None:
+        try:
+            from setup_wizard.ui.character_settings_utils import get_character_materials
+            _, mats = get_character_materials(context, arm)
+        except Exception:
+            mats = []
+
+    if not mats:
+        return {}
+
+    target_tree = None
+    for m in mats:
+        if getattr(m, "node_tree", None):
+            for node in m.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree:
+                    if "global material properties" in node.node_tree.name.lower():
+                        target_tree = node.node_tree
+                        break
+        if target_tree:
+            break
+
+    values = {}
+    if target_tree:
+        out_node = target_tree.nodes.get("Global Properties") or target_tree.nodes.get("Group Output")
+        inputs = out_node.inputs if out_node else {}
+        for inp_name, target_key in [
+            ("Ambient Colour", "ambient"), ("Ambient Color", "ambient"),
+            ("Sharp Lit Colour", "sharp_lit"), ("Sharp Lit Color", "sharp_lit"),
+            ("Soft Lit Colour", "soft_lit"), ("Soft Lit Color", "soft_lit"),
+            ("Sharp Shadow Colour", "sharp_shadow"), ("Sharp Shadow Color", "sharp_shadow"),
+            ("Soft Shadow Colour", "soft_shadow"), ("Soft Shadow Color", "soft_shadow"),
+            ("Shadow Position", "shadow_position"), ("Shadow Position Offset", "shadow_position"),
+            ("Day/Night", "day_night"), ("Warm / Cold Ramps", "day_night"),
+            ("Rim Lit", "rim_lit"),
+            ("Rim Shadow", "rim_shadow"),
+        ]:
+            if inp_name in inputs and target_key not in values:
+                val = inputs[inp_name].default_value
+                if hasattr(val, "__len__"):
+                    values[target_key] = tuple(val)[:3]
+                else:
+                    values[target_key] = float(val)
+
+    if not values:
+        for m in mats:
+            if getattr(m, "node_tree", None):
+                for node in m.node_tree.nodes:
+                    if node.type == 'GROUP' and any(k in (node.name.lower() + " " + getattr(node.node_tree, "name", "").lower()) for k in ["hoyotoon", "primotoon", "body shader"]):
+                        inputs = node.inputs
+                        for inp_name, target_key in [
+                            ("Ambient Colour", "ambient"), ("Ambient Color", "ambient"),
+                            ("Sharp Lit Colour", "sharp_lit"), ("Sharp Lit Color", "sharp_lit"),
+                            ("Soft Lit Colour", "soft_lit"), ("Soft Lit Color", "soft_lit"),
+                            ("Sharp Shadow Colour", "sharp_shadow"), ("Sharp Shadow Color", "sharp_shadow"),
+                            ("Soft Shadow Colour", "soft_shadow"), ("Soft Shadow Color", "soft_shadow"),
+                            ("Shadow Position", "shadow_position"), ("Shadow Position Offset", "shadow_position"),
+                            ("Day/Night", "day_night"), ("Warm / Cold Ramps", "day_night"),
+                            ("Rim Lit", "rim_lit"),
+                            ("Rim Shadow", "rim_shadow"),
+                        ]:
+                            if inp_name in inputs and target_key not in values:
+                                val = inputs[inp_name].default_value
+                                if hasattr(val, "__len__"):
+                                    values[target_key] = tuple(val)[:3]
+                                else:
+                                    values[target_key] = float(val)
+                        if values:
+                            break
+            if values:
+                break
+
+    return values
+
+
+def detect_character_light_mode(arm=None, mats=None, context=None) -> str:
+    """Detects the lighting mode preset for the character based on shader node values and saved properties."""
+    if arm is None and context is not None:
+        try:
+            from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+            arm = resolve_settings_armature(context)
+        except Exception:
+            pass
+    if arm is None:
+        try:
+            from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+            arm = resolve_settings_armature(getattr(bpy, "context", None))
+        except Exception:
+            pass
+
+    values = extract_character_lighting_inputs(arm=arm, mats=mats, context=context)
+    if not values:
+        if arm is not None:
+            return str(arm.get("gi_light_mode", "0"))
+        scene = getattr(bpy.context, "scene", None) if hasattr(bpy, "context") else None
+        return str(getattr(scene, "gi_light_mode", "0")) if scene else "0"
+
+    matched = match_lighting_preset(values)
+    saved_mode = str(arm.get("gi_light_mode")) if (arm is not None and arm.get("gi_light_mode") is not None) else None
+    if saved_mode is not None:
+        if saved_mode == "6":
+            if matched == "6":
+                return "6"
+        elif saved_mode in GI_LIGHT_PRESETS:
+            if _is_preset_matching(values, GI_LIGHT_PRESETS[saved_mode]):
+                return saved_mode
+
+    return matched
+
+
 def update_gi_light_mode(self, context=None):
     global _is_updating_gi_props
     if _is_updating_gi_props:
@@ -616,8 +778,21 @@ def update_gi_light_mode(self, context=None):
 
 
 def update_gi_lighting(self, context=None):
+    global _is_updating_gi_props
     if _is_updating_gi_props:
         return
+    try:
+        from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+        arm = resolve_settings_armature(context)
+        if arm:
+            arm["gi_light_mode"] = "6"
+        _is_updating_gi_props = True
+        try:
+            self.gi_light_mode = "6"
+        finally:
+            _is_updating_gi_props = False
+    except Exception:
+        pass
     sync_genshin_shader_properties(getattr(context, "scene", getattr(bpy.context, "scene", None)), context=context)
 
 
@@ -730,7 +905,7 @@ def sync_genshin_shader_properties(scene=None, context=None):
                     if "global material properties" in node.node_tree.name.lower():
                         target_trees.add(node.node_tree)
 
-    if not target_trees:
+    if not target_trees and not target_materials:
         for ng in bpy.data.node_groups:
             if "global material properties" in ng.name.lower():
                 target_trees.add(ng)
@@ -855,6 +1030,9 @@ def pull_gi_panel_values(scene, context, force=False):
         if not arm:
             return
 
+        if mats:
+            ensure_character_node_trees_isolated(arm, mats)
+
         _is_updating_gi_props = True
         try:
             # 1. Pull Outlines & Night Soul states from character meshes.
@@ -883,18 +1061,17 @@ def pull_gi_panel_values(scene, context, force=False):
                 if found_outlines:
                     break
 
-            # 2. Pull lighting mode saved on this armature
-            saved_mode = arm.get("gi_light_mode", "0")
-            if getattr(scene, "gi_light_mode", "") != str(saved_mode):
-                scene.gi_light_mode = str(saved_mode)
+            # 2. Detect & pull lighting mode for this character
+            detected_mode = detect_character_light_mode(arm, mats=mats, context=context)
+            arm["gi_light_mode"] = str(detected_mode)
+            if getattr(scene, "gi_light_mode", "") != str(detected_mode):
+                scene.gi_light_mode = str(detected_mode)
 
             # Pull animate mode saved on this armature
             from setup_wizard.genshin_animate_mode import is_genshin_animate_mode
             scene["gi_animate_mode"] = bool(is_genshin_animate_mode(arm, context=context))
 
             if mats:
-                ensure_character_node_trees_isolated(arm, mats)
-
                 # 3. Find target Global Material Properties node group for this character
                 target_tree = None
                 for m in mats:
@@ -1255,15 +1432,30 @@ class GI_PT_Rig_Character_Settings(Panel):
         layout = self.layout
         scene = context.scene
 
-        try:
-            pull_gi_panel_values(scene, context)
-        except Exception:
-            pass
+        from setup_wizard.ui.character_settings_utils import resolve_settings_armature, has_active_character_changed
+        arm = resolve_settings_armature(context)
+
+        # Defer property pull to avoid illegal ID write in draw context
+        if has_active_character_changed(context):
+            def _deferred_pull():
+                try:
+                    pull_gi_panel_values(bpy.context.scene, bpy.context, force=True)
+                    for win in getattr(bpy.context.window_manager, 'windows', []):
+                        screen = getattr(win, 'screen', None)
+                        if screen:
+                            for area in screen.areas:
+                                if area.type == 'VIEW_3D':
+                                    area.tag_redraw()
+                except Exception:
+                    pass
+                return None
+            try:
+                bpy.app.timers.register(_deferred_pull, first_interval=0.0)
+            except Exception:
+                pass
 
         # 0. Animate Mode (fast playback: lightweight materials, no outlines)
         from setup_wizard.genshin_animate_mode import is_genshin_animate_mode
-        from setup_wizard.ui.character_settings_utils import resolve_settings_armature
-        arm = resolve_settings_armature(context)
         is_anim = is_genshin_animate_mode(arm, context=context)
         layout.operator(
             "genshin.toggle_animate_mode",
@@ -1275,6 +1467,7 @@ class GI_PT_Rig_Character_Settings(Panel):
         col_light = layout.column(align=True)
         col_light.label(text="Lighting Mode:")
         col_light.prop(scene, "gi_light_mode", text="")
+
 
         # 2. Custom Colors (Shown ONLY when in Custom mode "6")
         if getattr(scene, "gi_light_mode", "0") == "6":
@@ -1334,7 +1527,32 @@ class GI_PT_Rig_Character_Settings(Panel):
             col_physics.operator("hoyoverse.apply_hair_clothes_physics", text="Apply Physics", icon="FILE_REFRESH")
 
 
+_LAST_CHECKED_ACTIVE = None
+
+
+@bpy.app.handlers.persistent
+def _on_character_selection_change(scene, depsgraph=None):
+    global _LAST_CHECKED_ACTIVE
+    try:
+        act = getattr(bpy.context.view_layer.objects, "active", None)
+        if act == _LAST_CHECKED_ACTIVE:
+            return
+        _LAST_CHECKED_ACTIVE = act
+
+        from setup_wizard.ui.character_settings_utils import has_active_character_changed, is_game_armature
+        context = bpy.context
+        if has_active_character_changed(context):
+            if is_game_armature(context, "GENSHIN_IMPACT"):
+                pull_gi_panel_values(scene, context, force=True)
+    except Exception:
+        pass
+
+
+
 def register_gi_properties():
+    if _on_character_selection_change not in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.append(_on_character_selection_change)
+
     for cls_name in dir(bpy.types):
         if cls_name.startswith("VIEW3D_PT_"):
             cls_prop = getattr(bpy.types, cls_name, None)
@@ -1350,6 +1568,7 @@ def register_gi_properties():
     bpy.types.Scene.gi_light_mode = bpy.props.EnumProperty(
         items=[
             ("0", "Default", "Default Genshin lighting"),
+
             ("1", "Sunrise", "Sunrise lighting"),
             ("2", "Day", "Bright daytime lighting"),
             ("3", "Sunset", "Sunset lighting"),
@@ -1529,6 +1748,9 @@ def register_gi_properties():
 
 
 def unregister_gi_properties():
+    if _on_character_selection_change in bpy.app.handlers.depsgraph_update_post:
+        bpy.app.handlers.depsgraph_update_post.remove(_on_character_selection_change)
+
     for prop in [
         "gi_light_mode", "gi_use_fresnel", "gi_fresnel_color", "gi_fresnel_size", "gi_fresnel_power", "gi_fresnel_scaler",
         "gi_amb_color", "gi_sharp_lit_color", "gi_soft_lit_color",
