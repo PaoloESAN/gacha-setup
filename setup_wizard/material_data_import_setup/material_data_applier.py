@@ -1033,6 +1033,24 @@ class V4_MaterialDataApplier(V3_MaterialDataApplier):
                     except Exception:
                         pass
 
+        # Character-specific shader overrides (e.g. Danica face shadow colors 2 & 3)
+        if not is_outlines:
+            try:
+                from setup_wizard.replace_default_materials_setup.game_default_material_replacers import (
+                    CHARACTER_SHADER_OVERRIDES,
+                    is_specific_character,
+                )
+                for char_name, parts_config in CHARACTER_SHADER_OVERRIDES.items():
+                    if is_specific_character(char_name, material=self.material):
+                        for part, socket_overrides in parts_config.items():
+                            if part in mat_name_low:
+                                for sock_name, val in socket_overrides.items():
+                                    sock = inputs_node.inputs.get(sock_name)
+                                    if sock is not None:
+                                        sock.default_value = val
+            except Exception:
+                pass
+
         # Transparency for Glasses
         if is_outlines and self.outline_material and self.outline_material.name == f'{V4_PrimoToonGenshinImpactMaterialNames.GLASS_EFF} Outlines':
             toggle_alpha_node = inputs_node.inputs.get(self.shader_node_input_names.TOGGLE_ALPHA)
@@ -1220,6 +1238,24 @@ class V1_HoYoToonMaterialDataApplier(V3_MaterialDataApplier):
                             _toggle_input.default_value = 1.0 if not isinstance(_toggle_input.default_value, bool) else True
                     except Exception:
                         pass
+
+        # Character-specific shader overrides (e.g. Danica face shadow colors 2 & 3)
+        if not is_outlines:
+            try:
+                from setup_wizard.replace_default_materials_setup.game_default_material_replacers import (
+                    CHARACTER_SHADER_OVERRIDES,
+                    is_specific_character,
+                )
+                for char_name, parts_config in CHARACTER_SHADER_OVERRIDES.items():
+                    if is_specific_character(char_name, material=self.material):
+                        for part, socket_overrides in parts_config.items():
+                            if part in _mat_name_low:
+                                for sock_name, val in socket_overrides.items():
+                                    sock = inputs_node.inputs.get(sock_name)
+                                    if sock is not None:
+                                        sock.default_value = val
+            except Exception:
+                pass
 
         # Transparency for Glasses
         if is_outlines and self.outline_material.name == f'{V1_HoYoToonGenshinImpactMaterialNames.GLASS_EFF} Outlines':

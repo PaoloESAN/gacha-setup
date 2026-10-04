@@ -219,36 +219,101 @@ def join_pupil_and_highlight_meshes(material_names=None):
     return primary
 
 
-def is_durin_character(mesh=None):
-    """Detects if the character model or context corresponds to Durin."""
-    import os
-    if mesh:
-        if 'durin' in mesh.name.lower():
+def is_specific_character(character_name: str, mesh=None, material=None) -> bool:
+    """Detects if the character model, material, or context matches character_name."""
+    if not character_name:
+        return False
+    target = character_name.strip().lower()
+
+    if material:
+        m_name = getattr(material, 'name', '') or ''
+        if target in m_name.lower():
             return True
-        if mesh.parent and 'durin' in mesh.parent.name.lower():
+
+    if mesh:
+        if target in mesh.name.lower():
+            return True
+        if mesh.parent and target in mesh.parent.name.lower():
             return True
         for slot in getattr(mesh, "material_slots", []):
-            if slot.material and 'durin' in slot.material.name.lower():
+            if slot.material and target in slot.material.name.lower():
                 return True
 
     try:
         from setup_wizard.import_order import get_active_character_directory
         char_dir = get_active_character_directory() or bpy.context.scene.get("setup_wizard_imported_fbx_path", "")
-        if char_dir and 'durin' in str(char_dir).lower():
+        if char_dir and target in str(char_dir).lower():
             return True
     except Exception:
         pass
 
-    for m in bpy.data.materials:
-        if 'durin' in m.name.lower():
-            return True
-    for o in bpy.data.objects:
-        if 'durin' in o.name.lower():
-            return True
-    for img in bpy.data.images:
-        if 'durin' in img.name.lower():
-            return True
+    if material is None and mesh is None:
+        for m in bpy.data.materials:
+            if target in m.name.lower():
+                return True
+        for o in bpy.data.objects:
+            if target in o.name.lower():
+                return True
+        for img in bpy.data.images:
+            if target in img.name.lower():
+                return True
     return False
+
+
+def is_durin_character(mesh=None):
+    """Detects if the character model or context corresponds to Durin."""
+    return is_specific_character('durin', mesh=mesh)
+
+
+def is_danica_character(mesh=None, material=None):
+    """Detects if the character model, material, or context corresponds strictly to Danica."""
+    return is_specific_character('danica', mesh=mesh, material=material)
+
+
+# Centralized registry for character-specific shader socket overrides:
+# { character_name: { target_body_part: { socket_name: default_value } } }
+CHARACTER_SHADER_OVERRIDES = {
+    'danica': {
+        'face': {
+            'Cold Shadow Color 2': (1.0, 1.0, 1.0, 1.0),
+            'Cold Shadow Color 3': (1.0, 1.0, 1.0, 1.0),
+            'Warm Shadow Color 2': (1.0, 1.0, 1.0, 1.0),
+            'Warm Shadow Color 3': (1.0, 1.0, 1.0, 1.0),
+        }
+    }
+}
+
+
+def apply_character_shader_overrides(material=None, mesh=None, char_name=None):
+    """Scalable applier for character-specific shader overrides from CHARACTER_SHADER_OVERRIDES registry."""
+    for character, parts_config in CHARACTER_SHADER_OVERRIDES.items():
+        if char_name:
+            if char_name.lower() != character:
+                continue
+        elif not is_specific_character(character, mesh=mesh, material=material):
+            continue
+
+        for part, socket_overrides in parts_config.items():
+            mats = [material] if material else [
+                m for m in bpy.data.materials
+                if getattr(m, 'use_nodes', False) and m.node_tree and part in m.name.lower()
+            ]
+            for mat in mats:
+                if not mat or not getattr(mat, 'node_tree', None) or part not in mat.name.lower():
+                    continue
+                for node in mat.node_tree.nodes:
+                    if node.type == 'GROUP' and node.node_tree:
+                        for sock_name, val in socket_overrides.items():
+                            sock = node.inputs.get(sock_name)
+                            if sock is not None:
+                                sock.default_value = val
+
+
+def apply_danica_face_shadow_colors(material=None):
+    """Sets Cold/Warm Shadow Color 2 and 3 to (1.0, 1.0, 1.0, 1.0) on Danica's face material(s)."""
+    apply_character_shader_overrides(material=material, char_name='danica')
+
+
 
 
 def _is_shader_eye_material(mat):
@@ -841,6 +906,11 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             sync_genshin_shader_properties()
         except Exception as e_sync:
             print(f"[GI MATERIALS] Notice syncing shader properties: {e_sync}")
+
+        try:
+            apply_character_shader_overrides()
+        except Exception:
+            pass
 
         self.blender_operator.report({'INFO'}, 'Replaced default materials with Genshin shader materials...')
 

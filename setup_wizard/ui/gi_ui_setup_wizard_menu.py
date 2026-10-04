@@ -1002,6 +1002,12 @@ def sync_genshin_shader_properties(scene=None, context=None):
                         except Exception:
                             pass
 
+    # 4c. Character-specific shader overrides (e.g. Danica face Cold/Warm Shadow Color 2 & 3 pure white)
+    try:
+        from setup_wizard.replace_default_materials_setup.game_default_material_replacers import apply_character_shader_overrides
+        apply_character_shader_overrides()
+    except Exception:
+        pass
 
     # 5. Tag 3D areas for redraw
     if hasattr(bpy.context, 'window_manager') and bpy.context.window_manager:

@@ -167,6 +167,12 @@ class GenshinImpactMaterialDefaultValueSetter(MaterialDefaultValueSetter):
         if body2_material:
             self.set_up_body2_material(body2_material)
 
+        try:
+            from setup_wizard.replace_default_materials_setup.game_default_material_replacers import apply_character_shader_overrides
+            apply_character_shader_overrides()
+        except Exception:
+            pass
+
     def set_up_body2_material(self, material):
         material.name = self.material_names.BODY2
 
