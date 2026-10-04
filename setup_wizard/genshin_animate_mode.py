@@ -78,6 +78,10 @@ def _ensure_low_material_setup(low_mat, src_mat):
 
 def _get_low_material(mat):
     """Returns (creating if needed) the lightweight counterpart of a material."""
+    try:
+        mat.use_fake_user = True
+    except Exception:
+        pass
     low_name = mat.name + ANIMATE_MODE_SUFFIX
     low_mat = bpy.data.materials.get(low_name)
     if not low_mat:
@@ -99,6 +103,100 @@ def _is_helper_object(obj):
     except Exception:
         pass
     return False
+
+
+def _get_mesh_armature(mesh):
+    """Finds the armature object associated with a mesh, if any."""
+    if not mesh or getattr(mesh, "type", None) != 'MESH':
+        return None
+    if mesh.get(ANIMATE_MODE_SCENE_KEY) is not None:
+        return mesh
+    try:
+        arm = mesh.find_armature()
+        if arm and getattr(arm, "type", None) == 'ARMATURE':
+            return arm
+    except Exception:
+        pass
+    for mod in getattr(mesh, "modifiers", []) or []:
+        try:
+            if mod.type == 'ARMATURE' and getattr(mod, "object", None) and mod.object.type == 'ARMATURE':
+                return mod.object
+        except Exception:
+            continue
+    p = getattr(mesh, "parent", None)
+    while p:
+        if getattr(p, "type", None) == 'ARMATURE':
+            return p
+        p = getattr(p, "parent", None)
+    return None
+
+
+def _mesh_has_low_materials(mesh) -> bool:
+    """Returns True if the mesh has any material ending with _Low."""
+    if not mesh or getattr(mesh, "type", None) != 'MESH':
+        return False
+    for slot in getattr(mesh, "material_slots", []) or []:
+        mat = getattr(slot, "material", None)
+        if mat and mat.name.endswith(ANIMATE_MODE_SUFFIX):
+            return True
+    return False
+
+
+def _restore_mesh_materials(mesh) -> bool:
+    """Restores original materials and modifiers for a mesh with _Low materials."""
+    if not mesh or getattr(mesh, "type", None) != 'MESH':
+        return False
+    restored_any = False
+    for slot in getattr(mesh, "material_slots", []) or []:
+        mat = getattr(slot, "material", None)
+        if not mat or not mat.name.endswith(ANIMATE_MODE_SUFFIX):
+            continue
+        try:
+            mat.use_fake_user = False
+        except Exception:
+            pass
+        orig_name = mat.name[:-len(ANIMATE_MODE_SUFFIX)]
+        orig_mat = bpy.data.materials.get(orig_name)
+        if not orig_mat:
+            for m in bpy.data.materials:
+                if m.name == orig_name or m.name.startswith(orig_name + "."):
+                    orig_mat = m
+                    break
+        if orig_mat:
+            slot.material = orig_mat
+            restored_any = True
+    if restored_any:
+        _set_gn_modifiers_visible(True, meshes=[mesh])
+        try:
+            from setup_wizard.utils.modifier_utils import set_modifier_property
+            for mod in getattr(mesh, "modifiers", []) or []:
+                if mod.type == 'NODES' and mod.node_group and "outline" in mod.node_group.name.lower():
+                    set_modifier_property(mod, "Socket_24", True)
+                    set_modifier_property(mod, "Toggle Outlines", True)
+        except Exception:
+            pass
+    return restored_any
+
+
+def _redraw_view3d(context=None):
+    try:
+        ctx = context or getattr(bpy, "context", None)
+        if ctx and getattr(ctx, "view_layer", None):
+            ctx.view_layer.update()
+    except Exception:
+        pass
+    try:
+        wm = getattr(bpy.context, "window_manager", None)
+        if wm:
+            for win in getattr(wm, 'windows', []) or []:
+                screen = getattr(win, 'screen', None)
+                if screen:
+                    for area in screen.areas:
+                        if area.type == 'VIEW_3D':
+                            area.tag_redraw()
+    except Exception:
+        pass
+
 
 
 def _set_gn_modifiers_visible(visible, meshes=None):
@@ -161,7 +259,9 @@ def is_genshin_animate_mode(arm=None, context=None) -> bool:
 
 
 def set_genshin_animate_mode(enable: bool, arm=None, context=None):
-    """Swaps materials to lightweight versions and toggles GN modifiers for the selected character."""
+    """Swaps materials to lightweight versions and toggles GN modifiers for the selected character.
+    Includes fallback / migration for legacy global animate mode so that props, scenery,
+    and legacy characters are not left stuck in _Low forever."""
     if arm is None and context is not None:
         try:
             from setup_wizard.ui.character_settings_utils import resolve_settings_armature
@@ -192,11 +292,24 @@ def set_genshin_animate_mode(enable: bool, arm=None, context=None):
             if enable:
                 if mat.name.endswith(ANIMATE_MODE_SUFFIX):
                     continue
+                try:
+                    mat.use_fake_user = True
+                except Exception:
+                    pass
                 slot.material = _get_low_material(mat)
             else:
                 if mat.name.endswith(ANIMATE_MODE_SUFFIX):
+                    try:
+                        mat.use_fake_user = False
+                    except Exception:
+                        pass
                     orig_name = mat.name[:-len(ANIMATE_MODE_SUFFIX)]
                     orig_mat = bpy.data.materials.get(orig_name)
+                    if not orig_mat:
+                        for m in bpy.data.materials:
+                            if m.name == orig_name or m.name.startswith(orig_name + "."):
+                                orig_mat = m
+                                break
                     if orig_mat:
                         slot.material = orig_mat
 
@@ -240,6 +353,24 @@ def set_genshin_animate_mode(enable: bool, arm=None, context=None):
         except Exception:
             pass
 
+        # FALLBACK / MIGRATION FOR LEGACY SCENES & OTHER OBJECTS:
+        # If any other mesh in the scene has _Low materials:
+        # If it belongs to NO armature, or belongs to an armature where gi_animate_mode is NOT True
+        # (e.g. legacy global animate mode file), restore it so it's not stuck in _Low forever!
+        target_meshes_set = set(target_meshes)
+        for obj in bpy.data.objects:
+            if getattr(obj, "type", None) != 'MESH' or _is_helper_object(obj) or obj in target_meshes_set:
+                continue
+            if _mesh_has_low_materials(obj):
+                mesh_arm = _get_mesh_armature(obj)
+                if mesh_arm is None or not mesh_arm.get(ANIMATE_MODE_SCENE_KEY, False):
+                    _restore_mesh_materials(obj)
+                    if mesh_arm is not None:
+                        try:
+                            mesh_arm[ANIMATE_MODE_SCENE_KEY] = False
+                        except Exception:
+                            pass
+
     try:
         arm[ANIMATE_MODE_SCENE_KEY] = bool(enable)
     except Exception:
@@ -251,24 +382,7 @@ def set_genshin_animate_mode(enable: bool, arm=None, context=None):
     except Exception:
         pass
 
-    try:
-        ctx = context or getattr(bpy, "context", None)
-        if ctx and getattr(ctx, "view_layer", None):
-            ctx.view_layer.update()
-    except Exception:
-        pass
-    try:
-        wm = getattr(bpy.context, "window_manager", None)
-        if wm:
-            for win in getattr(wm, 'windows', []) or []:
-                screen = getattr(win, 'screen', None)
-                if screen:
-                    for area in screen.areas:
-                        if area.type == 'VIEW_3D':
-                            area.tag_redraw()
-    except Exception:
-        pass
-
+    _redraw_view3d(context)
     return True
 
 
