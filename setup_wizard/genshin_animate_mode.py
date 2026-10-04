@@ -32,18 +32,110 @@ def _find_diffuse_image(mat):
     return diff_img
 
 
+def _find_pupilatodo_node(mat):
+    """Finds the PupilaTodo node inside a material."""
+    if not getattr(mat, "use_nodes", False) or not mat.node_tree:
+        return None
+    for node in mat.node_tree.nodes:
+        if node.type == 'GROUP' and node.node_tree:
+            g_name = node.node_tree.name.lower()
+            if "pupilatodo" in g_name or "pupila_todo" in g_name:
+                return node
+        elif "pupilatodo" in node.name.lower() or "pupila_todo" in node.name.lower():
+            return node
+    return None
+
+
+def _is_new_pupil(mat) -> bool:
+    if not mat:
+        return False
+    name_low = mat.name.lower()
+    return "new pupil" in name_low or "newpupil" in name_low or (_find_pupilatodo_node(mat) is not None)
+
+
+def _is_color_wheel(obj_or_mat) -> bool:
+    if not obj_or_mat:
+        return False
+    name_low = getattr(obj_or_mat, "name", "").lower()
+    return "colorwheel" in name_low or "color-wheel" in name_low or "color_wheel" in name_low
+
+
 def _ensure_low_material_setup(low_mat, src_mat):
     """Wires the diffuse straight into Material Output Surface (unlit
-    passthrough, no BSDF). Idempotent, and upgrades _Low materials created
-    by the previous Principled-based version: reuses their image and drops
-    the now pointless Principled node."""
+    passthrough, no BSDF).
+    For New Pupil materials, wires PupilaTodo straight into Material Output
+    Surface instead of a texture.
+    Idempotent, and upgrades _Low materials created previously."""
     tree = getattr(low_mat, "node_tree", None)
     if not tree:
         return
     output = tree.nodes.get("Material Output")
-    if not output or "Surface" not in output.inputs:
+    if not output:
+        output = tree.nodes.new("ShaderNodeOutputMaterial")
+    if "Surface" not in output.inputs:
         return
     surface = output.inputs["Surface"]
+
+    # Special handling for New Pupil: wire PupilaTodo directly to Material Output Surface
+    src_pt = _find_pupilatodo_node(src_mat)
+    if src_pt or _is_new_pupil(src_mat):
+        for n in list(tree.nodes):
+            if n.type in ('TEX_IMAGE', 'BSDF_PRINCIPLED'):
+                tree.nodes.remove(n)
+
+        low_pt = _find_pupilatodo_node(low_mat)
+        if not low_pt:
+            low_pt = tree.nodes.new("ShaderNodeGroup")
+            if src_pt and src_pt.node_tree:
+                low_pt.node_tree = src_pt.node_tree
+            else:
+                ng = bpy.data.node_groups.get("PupilaTodo")
+                if not ng:
+                    for g in bpy.data.node_groups:
+                        if "pupilatodo" in g.name.lower():
+                            ng = g
+                            break
+                if ng:
+                    low_pt.node_tree = ng
+            low_pt.name = "PupilaTodo"
+
+        out_socket = (
+            low_pt.outputs.get("Result")
+            or low_pt.outputs.get("Color")
+            or (low_pt.outputs[0] if low_pt.outputs else None)
+        )
+        if out_socket:
+            for l in list(surface.links):
+                if l.from_socket != out_socket:
+                    tree.links.remove(l)
+            if not any(l.from_socket == out_socket for l in surface.links):
+                tree.links.new(out_socket, surface)
+
+        if "Vector" in low_pt.inputs and not low_pt.inputs["Vector"].links:
+            uv_lerp_src = src_mat.node_tree.nodes.get("UV Lerp") if (src_mat and src_mat.node_tree) else None
+            if uv_lerp_src and uv_lerp_src.node_tree:
+                low_uv_lerp = tree.nodes.get("UV Lerp")
+                if not low_uv_lerp:
+                    low_uv_lerp = tree.nodes.new("ShaderNodeGroup")
+                    low_uv_lerp.node_tree = uv_lerp_src.node_tree
+                    low_uv_lerp.name = "UV Lerp"
+                tree.links.new(low_uv_lerp.outputs["UV"], low_pt.inputs["Vector"])
+
+                uv0 = tree.nodes.get("UV0") or tree.nodes.new("ShaderNodeUVMap")
+                uv0.name = "UV0"
+                uv0.uv_map = "UV0"
+                uv1 = tree.nodes.get("UV1") or tree.nodes.new("ShaderNodeUVMap")
+                uv1.name = "UV1"
+                uv1.uv_map = "UV1"
+                if "UV0" in low_uv_lerp.inputs and not low_uv_lerp.inputs["UV0"].links:
+                    tree.links.new(uv0.outputs["UV"], low_uv_lerp.inputs["UV0"])
+                if "UV1" in low_uv_lerp.inputs and not low_uv_lerp.inputs["UV1"].links:
+                    tree.links.new(uv1.outputs["UV"], low_uv_lerp.inputs["UV1"])
+            else:
+                uv_node = tree.nodes.get("UV Map") or tree.nodes.new("ShaderNodeUVMap")
+                uv_node.name = "UV Map"
+                tree.links.new(uv_node.outputs["UV"], low_pt.inputs["Vector"])
+        return
 
     tex_node = None
     try:
@@ -91,14 +183,50 @@ def _get_low_material(mat):
     return low_mat
 
 
+def _is_exempt_from_animate_mode(mat, obj=None) -> bool:
+    """Returns True if the material should NOT be replaced by Animate Mode.
+    Exempts eye highlight materials and Color-Wheel objects/materials."""
+    if not mat:
+        return True
+    if _is_color_wheel(mat):
+        return True
+    if obj is not None and (_is_color_wheel(obj) or _is_helper_object(obj)):
+        return True
+
+    name_low = mat.name.lower()
+    exempt_keywords = [
+        "highlight",
+        "eyelight",
+        "eye_highlight",
+        "eyehighlight",
+        "colorwheel",
+        "color-wheel",
+        "color_wheel",
+    ]
+    if any(k in name_low for k in exempt_keywords):
+        return True
+
+    if obj is not None and getattr(obj, "type", None) == 'MESH':
+        obj_name_low = obj.name.lower()
+        if any(k in obj_name_low for k in ["highlight", "eyelight"]):
+            if any(k in name_low for k in ["highlight", "eye"]):
+                return True
+
+    return False
+
+
 def _is_helper_object(obj):
+    if not obj:
+        return False
     name_low = obj.name.lower()
     if name_low.startswith('wgt-'):
+        return True
+    if _is_color_wheel(obj):
         return True
     try:
         for coll in obj.users_collection:
             c_low = coll.name.lower()
-            if c_low == "wgt" or c_low.startswith("wgts_"):
+            if c_low == "wgt" or c_low.startswith("wgts_") or "wheel" in c_low:
                 return True
     except Exception:
         pass
@@ -249,7 +377,8 @@ def is_genshin_animate_mode(arm=None, context=None) -> bool:
                 for slot in getattr(mesh, "material_slots", []) or []:
                     mat = getattr(slot, "material", None)
                     if mat and mat.name.endswith(ANIMATE_MODE_SUFFIX):
-                        return True
+                        if not _is_exempt_from_animate_mode(mat, obj=mesh):
+                            return True
         except Exception:
             pass
         return False
@@ -287,6 +416,20 @@ def set_genshin_animate_mode(enable: bool, arm=None, context=None):
         for slot in getattr(obj, "material_slots", []) or []:
             mat = slot.material
             if not mat:
+                continue
+
+            if _is_exempt_from_animate_mode(mat, obj=obj):
+                # If an exempt material had previously been turned into _Low, restore it
+                if mat.name.endswith(ANIMATE_MODE_SUFFIX):
+                    orig_name = mat.name[:-len(ANIMATE_MODE_SUFFIX)]
+                    orig_mat = bpy.data.materials.get(orig_name)
+                    if not orig_mat:
+                        for m in bpy.data.materials:
+                            if m.name == orig_name or m.name.startswith(orig_name + "."):
+                                orig_mat = m
+                                break
+                    if orig_mat:
+                        slot.material = orig_mat
                 continue
 
             if enable:

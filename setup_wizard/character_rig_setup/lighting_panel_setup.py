@@ -379,23 +379,43 @@ def is_lighting_panel_visible(arm) -> bool:
 
 def set_lighting_panel_visibility(arm, visible: bool = True):
     """Sets visibility of Lighting Panel bone collection, bones, and helper objects."""
-    if not arm or arm.type != 'ARMATURE' or not arm.data:
-        return
-    if hasattr(arm.data, "collections"):
-        coll = arm.data.collections.get("Lighting")
-        if coll:
-            coll.is_visible = visible
-    b = arm.data.bones.get(LightingPanelNames.Bones.LIGHTING_PANEL)
-    if b:
-        b.hide = not visible
+    if arm and arm.type == 'ARMATURE' and arm.data:
+        if hasattr(arm.data, "collections"):
+            coll = arm.data.collections.get("Lighting")
+            if coll:
+                coll.is_visible = visible
+        b = arm.data.bones.get(LightingPanelNames.Bones.LIGHTING_PANEL)
+        if b:
+            b.hide = not visible
 
     for obj in bpy.data.objects:
         o_low = obj.name.lower()
-        if any(k in o_low for k in ["colorwheel", "colorpicker", "slider-", "origin-"]):
+        if any(k in o_low for k in ["lighting panel", "lightingpanel", "colorwheel", "colorpicker", "slider-", "origin-"]):
             try:
                 obj.hide_viewport = not visible
+                obj.hide_set(not visible)
             except Exception:
                 pass
+
+    for coll in bpy.data.collections:
+        c_low = coll.name.lower()
+        if "lighting panel" in c_low or "lightingpanel" in c_low:
+            try:
+                coll.hide_viewport = not visible
+            except Exception:
+                pass
+
+    try:
+        wm = getattr(bpy.context, "window_manager", None)
+        if wm:
+            for win in getattr(wm, 'windows', []) or []:
+                screen = getattr(win, 'screen', None)
+                if screen:
+                    for area in screen.areas:
+                        if area.type == 'VIEW_3D':
+                            area.tag_redraw()
+    except Exception:
+        pass
 
 
 def move_into_collection(obj_or_name, collection_name, include_children=True):

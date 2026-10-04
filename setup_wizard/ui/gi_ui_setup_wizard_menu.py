@@ -722,20 +722,14 @@ def detect_character_light_mode(arm=None, mats=None, context=None) -> str:
         except Exception:
             pass
 
-    # Check if materials have Lighting Panel connected
-    from setup_wizard.character_rig_setup.lighting_panel_setup import is_lighting_panel_connected
-    if is_lighting_panel_connected(target_materials=mats):
-        return "7"
-
-    if arm is not None and str(arm.get("gi_light_mode")) == "7":
-        return "7"
-
     values = extract_character_lighting_inputs(arm=arm, mats=mats, context=context)
     if not values:
         if arm is not None:
-            return str(arm.get("gi_light_mode", "0"))
+            saved = str(arm.get("gi_light_mode", "0"))
+            return "0" if saved == "7" else saved
         scene = getattr(bpy.context, "scene", None) if hasattr(bpy, "context") else None
-        return str(getattr(scene, "gi_light_mode", "0")) if scene else "0"
+        saved = str(getattr(scene, "gi_light_mode", "0")) if scene else "0"
+        return "0" if saved == "7" else saved
 
     matched = match_lighting_preset(values)
     saved_mode = str(arm.get("gi_light_mode")) if (arm is not None and arm.get("gi_light_mode") is not None) else None
@@ -748,6 +742,83 @@ def detect_character_light_mode(arm=None, mats=None, context=None) -> str:
                 return saved_mode
 
     return matched
+
+
+def update_gi_lighting_control_type(self, context=None):
+    global _is_updating_gi_props
+    if _is_updating_gi_props:
+        return
+    ctrl_type = getattr(self, "gi_lighting_control_type", "PANEL")
+    arm = None
+    try:
+        from setup_wizard.ui.character_settings_utils import resolve_settings_armature, get_character_materials
+        arm = resolve_settings_armature(context)
+        if arm:
+            arm["gi_lighting_control_type"] = str(ctrl_type)
+    except Exception:
+        arm = None
+
+    from setup_wizard.character_rig_setup.lighting_panel_setup import (
+        LightingPanel,
+        disconnect_lighting_panel_nodes_from_global_material_properties,
+        set_lighting_panel_visibility,
+    )
+
+    try:
+        _, mats = get_character_materials(context, arm)
+    except Exception:
+        mats = []
+
+    if ctrl_type == "PANEL":
+        # Lighting Panel mode: connect nodes inside Global Material Properties and show in 3D
+        lp = LightingPanel("")
+        lp.connect_lighting_panel_nodes_to_global_material_properties(target_materials=mats)
+        if arm:
+            set_lighting_panel_visibility(arm, True)
+    else:
+        # This Panel mode: hide lighting panel in 3D and disconnect incoming links
+        if arm:
+            set_lighting_panel_visibility(arm, False)
+        disconnect_lighting_panel_nodes_from_global_material_properties(target_materials=mats)
+
+        # Restore / apply preset from This Panel
+        current_mode = arm.get("gi_light_mode", "0") if arm else getattr(self, "gi_light_mode", "0")
+        if str(current_mode) == "7" or (str(current_mode) not in GI_LIGHT_PRESETS and str(current_mode) != "6"):
+            current_mode = "0"
+            if arm:
+                arm["gi_light_mode"] = "0"
+            _is_updating_gi_props = True
+            try:
+                self.gi_light_mode = "0"
+            finally:
+                _is_updating_gi_props = False
+
+        if str(current_mode) in GI_LIGHT_PRESETS:
+            preset = GI_LIGHT_PRESETS[str(current_mode)]
+            _is_updating_gi_props = True
+            try:
+                if "ambient" in preset:
+                    self.gi_amb_color = preset["ambient"]
+                if "sharp_lit" in preset:
+                    self.gi_sharp_lit_color = preset["sharp_lit"]
+                if "soft_lit" in preset:
+                    self.gi_soft_lit_color = preset["soft_lit"]
+                if "sharp_shadow" in preset:
+                    self.gi_sharp_shadow_color = preset["sharp_shadow"]
+                if "soft_shadow" in preset:
+                    self.gi_soft_shadow_color = preset["soft_shadow"]
+                if "shadow_position" in preset:
+                    self.gi_shadow_position = preset["shadow_position"]
+                if "day_night" in preset:
+                    self.gi_day_night = preset["day_night"]
+                if "rim_lit" in preset:
+                    self.gi_rim_lit_color = preset["rim_lit"]
+                if "rim_shadow" in preset:
+                    self.gi_rim_shadow_color = preset["rim_shadow"]
+            finally:
+                _is_updating_gi_props = False
+
+    sync_genshin_shader_properties(getattr(context, "scene", getattr(bpy.context, "scene", None)), context=context)
 
 
 def update_gi_light_mode(self, context=None):
@@ -765,9 +836,7 @@ def update_gi_light_mode(self, context=None):
         arm = None
 
     from setup_wizard.character_rig_setup.lighting_panel_setup import (
-        LightingPanel,
         disconnect_lighting_panel_nodes_from_global_material_properties,
-        set_lighting_panel_visibility,
     )
 
     try:
@@ -775,35 +844,28 @@ def update_gi_light_mode(self, context=None):
     except Exception:
         mats = []
 
-    if mode == "7":
-        # Lighting Panel mode: connect nodes inside Global Material Properties
-        lp = LightingPanel("")
-        lp.connect_lighting_panel_nodes_to_global_material_properties(target_materials=mats)
-        if arm:
-            set_lighting_panel_visibility(arm, True)
-    else:
-        # Normal preset or custom mode: disconnect incoming links from lighting panel
-        disconnect_lighting_panel_nodes_from_global_material_properties(target_materials=mats)
+    # Normal preset or custom mode: disconnect incoming links from lighting panel
+    disconnect_lighting_panel_nodes_from_global_material_properties(target_materials=mats)
 
-        if mode in GI_LIGHT_PRESETS:
-            preset = GI_LIGHT_PRESETS[mode]
-            _is_updating_gi_props = True
-            try:
-                self.gi_amb_color = preset["ambient"]
-                self.gi_sharp_lit_color = preset["sharp_lit"]
-                self.gi_soft_lit_color = preset["soft_lit"]
-                self.gi_sharp_shadow_color = preset["sharp_shadow"]
-                self.gi_soft_shadow_color = preset["soft_shadow"]
-                if "shadow_position" in preset:
-                    self.gi_shadow_position = preset["shadow_position"]
-                if "day_night" in preset:
-                    self.gi_day_night = preset["day_night"]
-                if "rim_lit" in preset:
-                    self.gi_rim_lit_color = preset["rim_lit"]
-                if "rim_shadow" in preset:
-                    self.gi_rim_shadow_color = preset["rim_shadow"]
-            finally:
-                _is_updating_gi_props = False
+    if mode in GI_LIGHT_PRESETS:
+        preset = GI_LIGHT_PRESETS[mode]
+        _is_updating_gi_props = True
+        try:
+            self.gi_amb_color = preset["ambient"]
+            self.gi_sharp_lit_color = preset["sharp_lit"]
+            self.gi_soft_lit_color = preset["soft_lit"]
+            self.gi_sharp_shadow_color = preset["sharp_shadow"]
+            self.gi_soft_shadow_color = preset["soft_shadow"]
+            if "shadow_position" in preset:
+                self.gi_shadow_position = preset["shadow_position"]
+            if "day_night" in preset:
+                self.gi_day_night = preset["day_night"]
+            if "rim_lit" in preset:
+                self.gi_rim_lit_color = preset["rim_lit"]
+            if "rim_shadow" in preset:
+                self.gi_rim_shadow_color = preset["rim_shadow"]
+        finally:
+            _is_updating_gi_props = False
 
     sync_genshin_shader_properties(getattr(context, "scene", getattr(bpy.context, "scene", None)), context=context)
 
@@ -965,7 +1027,7 @@ def sync_genshin_shader_properties(scene=None, context=None):
             pass
         return value
 
-    is_lp_mode = (getattr(scene, "gi_light_mode", "") == "7")
+    is_lp_mode = (getattr(scene, "gi_lighting_control_type", "PANEL") == "PANEL")
     lp_inputs_to_preserve = {
         "Ambient Colour", "Ambient Color", "Sharp Lit Colour", "Sharp Lit Color",
         "Soft Lit Colour", "Soft Lit Color", "Sharp Shadow Colour", "Sharp Shadow Color",
@@ -1125,11 +1187,32 @@ def pull_gi_panel_values(scene, context, force=False):
                 if found_outlines:
                     break
 
-            # 2. Detect & pull lighting mode for this character
+            # 2. Detect & pull lighting control type and preset for this character
+            from setup_wizard.character_rig_setup.lighting_panel_setup import is_lighting_panel_connected
+            lp_connected = is_lighting_panel_connected(target_materials=mats)
+            saved_ctrl = arm.get("gi_lighting_control_type")
+            if saved_ctrl in ("PANEL", "THIS_PANEL"):
+                ctrl_type = saved_ctrl
+            else:
+                ctrl_type = "PANEL" if lp_connected else "THIS_PANEL"
+
+            scene.gi_lighting_control_type = ctrl_type
+            arm["gi_lighting_control_type"] = ctrl_type
+
             detected_mode = detect_character_light_mode(arm, mats=mats, context=context)
-            arm["gi_light_mode"] = str(detected_mode)
-            if getattr(scene, "gi_light_mode", "") != str(detected_mode):
-                scene.gi_light_mode = str(detected_mode)
+            saved_mode = arm.get("gi_light_mode")
+            if saved_mode is not None:
+                saved_mode = str(saved_mode)
+                if saved_mode == "7" or (saved_mode not in GI_LIGHT_PRESETS and saved_mode != "6"):
+                    saved_mode = None
+
+            final_mode = saved_mode if saved_mode is not None else str(detected_mode)
+            if final_mode not in GI_LIGHT_PRESETS and final_mode != "6":
+                final_mode = "0"
+
+            arm["gi_light_mode"] = final_mode
+            if getattr(scene, "gi_light_mode", "") != final_mode:
+                scene.gi_light_mode = final_mode
 
             # Pull animate mode saved on this armature
             from setup_wizard.genshin_animate_mode import is_genshin_animate_mode
@@ -1704,8 +1787,10 @@ class GI_OT_SetupLightingPanel(Operator):
             lp = LightingPanel("")
             lp.connect_lighting_panel_nodes_to_global_material_properties(target_materials=mats)
             set_lighting_panel_visibility(arm, True)
-            arm["gi_light_mode"] = "7"
-            context.scene.gi_light_mode = "7"
+            arm["gi_lighting_control_type"] = "PANEL"
+            context.scene.gi_lighting_control_type = "PANEL"
+            arm["gi_light_mode"] = "0"
+            context.scene.gi_light_mode = "0"
             self.report({'INFO'}, "Lighting Panel already present in rig. Connected to shaders!")
             return {'FINISHED'}
 
@@ -1816,8 +1901,10 @@ class GI_OT_SetupLightingPanel(Operator):
         lp = LightingPanel("")
         lp.connect_lighting_panel_nodes_to_global_material_properties(target_materials=mats)
 
-        arm["gi_light_mode"] = "7"
-        context.scene.gi_light_mode = "7"
+        arm["gi_lighting_control_type"] = "PANEL"
+        context.scene.gi_lighting_control_type = "PANEL"
+        arm["gi_light_mode"] = "0"
+        context.scene.gi_light_mode = "0"
 
         for win in getattr(context.window_manager, 'windows', []):
             screen = getattr(win, 'screen', None)
@@ -1965,55 +2052,52 @@ class GI_PT_Rig_Character_Settings(Panel):
             icon="SHADING_TEXTURE" if is_anim else "RESTRICT_RENDER_OFF"
         )
 
-        # 1. Lighting Mode
-        col_light = layout.column(align=True)
-        col_light.label(text="Lighting Mode:")
-        col_light.prop(scene, "gi_light_mode", text="")
+        # 1. Lighting Type
+        col_type = layout.column(align=False)
+        col_type.label(text="Lighting Type:")
+        row_btn = col_type.row(align=True)
+        row_btn.prop(scene, "gi_lighting_control_type", expand=True)
+
+        is_lp_mode = (getattr(scene, "gi_lighting_control_type", "PANEL") == "PANEL")
 
         from setup_wizard.character_rig_setup.lighting_panel_setup import (
             armature_has_lighting_panel,
-            is_lighting_panel_visible,
         )
         has_lp = armature_has_lighting_panel(arm)
 
-        # 2a. Lighting Panel Controls (Shown when Lighting Panel mode "7" is active)
-        if getattr(scene, "gi_light_mode", "0") == "7":
-            box_lp = col_light.box()
-            box_lp.label(text="3D Lighting Panel (Active)", icon="LIGHT")
-            if has_lp:
-                row_lp = box_lp.row(align=True)
-                row_lp.operator("genshin.select_lighting_panel", text="Select Controls in 3D View", icon="RESTRICT_SELECT_OFF")
-                is_vis = is_lighting_panel_visible(arm)
-                row_lp.operator("genshin.toggle_lighting_panel_visibility", text="Hide in 3D" if is_vis else "Show in 3D", icon="HIDE_OFF" if is_vis else "HIDE_ON")
-            else:
-                box_lp.label(text="Lighting Panel bone not found in this rig.", icon="INFO")
-                box_lp.operator("genshin.setup_lighting_panel", text="Attach Lighting Panel to Rig", icon="IMPORT")
-        elif not has_lp:
-            col_light.operator("genshin.setup_lighting_panel", text="Add 3D Lighting Panel to Rig", icon="LIGHT")
-
-        # 2b. Custom Colors (Shown ONLY when in Custom mode "6")
-        if getattr(scene, "gi_light_mode", "0") == "6":
-            box_col = col_light.box()
-            box_col.label(text="Custom Colors", icon="COLOR")
-            col_colors = box_col.column(align=True)
-            col_colors.prop(scene, "gi_amb_color", text="Ambient")
-            col_colors.prop(scene, "gi_sharp_lit_color", text="Sharp Lit")
-            col_colors.prop(scene, "gi_soft_lit_color", text="Soft Lit")
-            col_colors.prop(scene, "gi_sharp_shadow_color", text="Sharp Shadow")
-            col_colors.prop(scene, "gi_soft_shadow_color", text="Soft Shadow")
-            col_colors.prop(scene, "gi_rim_lit_color", text="Rim Lit")
-            col_colors.prop(scene, "gi_rim_shadow_color", text="Rim Shadow")
+        if is_lp_mode:
+            # Lighting Panel mode: controls are in 3D viewport, remove 3D active box/select/hide buttons
+            if not has_lp:
+                col_type.operator("genshin.setup_lighting_panel", text="Add 3D Lighting Panel to Rig", icon="LIGHT")
+        else:
+            # This Panel mode: show Lighting Mode label and preset dropdown
+            col_preset = layout.column(align=True)
+            col_preset.label(text="Lighting Mode:")
+            col_preset.prop(scene, "gi_light_mode", text="")
+            if getattr(scene, "gi_light_mode", "0") == "6":
+                box_col = col_preset.box()
+                box_col.label(text="Custom Colors", icon="COLOR")
+                col_colors = box_col.column(align=True)
+                col_colors.prop(scene, "gi_amb_color", text="Ambient")
+                col_colors.prop(scene, "gi_sharp_lit_color", text="Sharp Lit")
+                col_colors.prop(scene, "gi_soft_lit_color", text="Soft Lit")
+                col_colors.prop(scene, "gi_sharp_shadow_color", text="Sharp Shadow")
+                col_colors.prop(scene, "gi_soft_shadow_color", text="Soft Shadow")
+                col_colors.prop(scene, "gi_rim_lit_color", text="Rim Lit")
+                col_colors.prop(scene, "gi_rim_shadow_color", text="Rim Shadow")
 
         # 3. Fresnel (Toggle checkbox + Power slider + Scaler slider)
-        col_fresnel = layout.column(align=True)
-        col_fresnel.prop(scene, "gi_use_fresnel", text="Toggle Fresnel")
-        if getattr(scene, "gi_use_fresnel", False):
-            box_fr = col_fresnel.box()
-            box_fr.label(text="Fresnel Options", icon="SHADING_RENDERED")
-            col_fr_props = box_fr.column(align=True)
-            col_fr_props.prop(scene, "gi_fresnel_color", text="Fresnel Color")
-            col_fr_props.prop(scene, "gi_fresnel_power", text="Fresnel Power", slider=True)
-            col_fr_props.prop(scene, "gi_fresnel_scaler", text="Fresnel Scaler", slider=True)
+        # In Lighting Panel mode, Toggle Fresnel must NOT be visible
+        if not is_lp_mode:
+            col_fresnel = layout.column(align=True)
+            col_fresnel.prop(scene, "gi_use_fresnel", text="Toggle Fresnel")
+            if getattr(scene, "gi_use_fresnel", False):
+                box_fr = col_fresnel.box()
+                box_fr.label(text="Fresnel Options", icon="SHADING_RENDERED")
+                col_fr_props = box_fr.column(align=True)
+                col_fr_props.prop(scene, "gi_fresnel_color", text="Fresnel Color")
+                col_fr_props.prop(scene, "gi_fresnel_power", text="Fresnel Power", slider=True)
+                col_fr_props.prop(scene, "gi_fresnel_scaler", text="Fresnel Scaler", slider=True)
 
         # 4. Outlines Settings
         box_outlines = layout.box()
@@ -2034,9 +2118,12 @@ class GI_PT_Rig_Character_Settings(Panel):
         box_shadow = layout.box()
         box_shadow.label(text="Shadow & Scene Settings", icon="SHADING_SOLID")
         col_shadow = box_shadow.column(align=True)
-        col_shadow.prop(scene, "gi_shadow_position", text="Shadow Position", slider=True)
+        # In Lighting Panel mode, Shadow Position and Day / Night must NOT be visible
+        if not is_lp_mode:
+            col_shadow.prop(scene, "gi_shadow_position", text="Shadow Position", slider=True)
         col_shadow.prop(scene, "gi_catch_shadows", text="Catch Shadows")
-        col_shadow.prop(scene, "gi_day_night", text="Day / Night", slider=True)
+        if not is_lp_mode:
+            col_shadow.prop(scene, "gi_day_night", text="Day / Night", slider=True)
         col_shadow.prop(scene, "gi_blush_strength", text="Blush Strength", slider=True)
 
         # 5. Hair & Clothes Physics (Below Shadow & Scene Settings)
@@ -2094,19 +2181,28 @@ def register_gi_properties():
                 except Exception:
                     pass
 
+    bpy.types.Scene.gi_lighting_control_type = bpy.props.EnumProperty(
+        items=[
+            ("PANEL", "Lighting Panel", "Use 3D Lighting Panel rig controls in viewport"),
+            ("THIS_PANEL", "This Panel", "Use Character Settings panel controls"),
+        ],
+        name="Lighting Type",
+        description="Choose whether to control lighting via 3D Lighting Panel or This Panel",
+        default="PANEL",
+        update=update_gi_lighting_control_type,
+    )
+
     bpy.types.Scene.gi_light_mode = bpy.props.EnumProperty(
         items=[
             ("0", "Default", "Default Genshin lighting"),
-
             ("1", "Sunrise", "Sunrise lighting"),
             ("2", "Day", "Bright daytime lighting"),
             ("3", "Sunset", "Sunset lighting"),
             ("4", "Night", "Night lighting"),
             ("5", "Rainy", "Rainy / overcast lighting"),
             ("6", "Custom", "Custom user-defined lighting"),
-            ("7", "Lighting Panel", "Use 3D Lighting Panel rig controls (LightingPanel.blend)"),
         ],
-        name="Lighting Mode",
+        name="Lighting Preset",
         description="Select lighting mode / preset",
         default="0",
         update=update_gi_light_mode,
@@ -2288,7 +2384,7 @@ def unregister_gi_properties():
         bpy.app.handlers.depsgraph_update_post.remove(_on_character_selection_change)
 
     for prop in [
-        "gi_light_mode", "gi_use_fresnel", "gi_fresnel_color", "gi_fresnel_size", "gi_fresnel_power", "gi_fresnel_scaler",
+        "gi_lighting_control_type", "gi_light_mode", "gi_use_fresnel", "gi_fresnel_color", "gi_fresnel_size", "gi_fresnel_power", "gi_fresnel_scaler",
         "gi_amb_color", "gi_sharp_lit_color", "gi_soft_lit_color",
         "gi_sharp_shadow_color", "gi_soft_shadow_color", "gi_shadow_position",
         "gi_catch_shadows", "gi_day_night", "gi_blush_strength",
