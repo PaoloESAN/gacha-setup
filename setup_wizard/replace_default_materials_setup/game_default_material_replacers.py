@@ -571,6 +571,36 @@ def setup_durin_pupil_materials(mesh, new_pupil_mat, material_names=None):
             pass
 
 
+def remove_set_depth_nodes_from_highlight_material(material=None):
+    """
+    Removes any unused 'Set Depth' node from the Genshin Highlight material.
+    Does not touch the .blend source file, only cleans up the material in the scene
+    after it has been imported and assigned to its corresponding object.
+    """
+    mats_to_check = [material] if material else [
+        m for m in bpy.data.materials
+        if m and getattr(m, "use_nodes", False) and m.node_tree and 'highlight' in m.name.lower()
+    ]
+    for mat in mats_to_check:
+        if not mat or not getattr(mat, "use_nodes", False) or not mat.node_tree:
+            continue
+        nodes_to_remove = []
+        for n in mat.node_tree.nodes:
+            is_set_depth = False
+            if 'set depth' in n.name.lower() or 'set depth' in getattr(n, 'label', '').lower():
+                is_set_depth = True
+            elif n.type == 'GROUP' and n.node_tree and 'set depth' in n.node_tree.name.lower():
+                is_set_depth = True
+
+            if is_set_depth:
+                nodes_to_remove.append(n)
+        for n in nodes_to_remove:
+            try:
+                mat.node_tree.nodes.remove(n)
+            except Exception:
+                pass
+
+
 def setup_new_pupil_highlight_layer(mesh, material_names=None):
     """
     Separates the pupil mesh into inner layer (Slot 0: New Pupil) and
@@ -645,6 +675,9 @@ def setup_new_pupil_highlight_layer(mesh, material_names=None):
 
     mesh.material_slots[0].material = new_pupil_mat
     mesh.material_slots[1].material = highlight_material
+
+    # Remove unconnected Set Depth node from highlight material
+    remove_set_depth_nodes_from_highlight_material(highlight_material)
 
     # Remove any extra material slots past index 1
     while len(mesh.material_slots) > 2:
@@ -909,6 +942,11 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 
         try:
             apply_character_shader_overrides()
+        except Exception:
+            pass
+
+        try:
+            remove_set_depth_nodes_from_highlight_material()
         except Exception:
             pass
 

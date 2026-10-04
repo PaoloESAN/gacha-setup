@@ -2046,6 +2046,12 @@ class GenshinTextureImporter:
                 if any(k in n_id for k in ['highlight', 'eyelight', 'eyehighlight']):
                     n.image = img
 
+        try:
+            from setup_wizard.replace_default_materials_setup.game_default_material_replacers import remove_set_depth_nodes_from_highlight_material
+            remove_set_depth_nodes_from_highlight_material(material)
+        except Exception:
+            pass
+
     def set_new_pupil_material_textures(self, material, pupil_images_dict, ramp_img=None, highlight_img=None):
         if not material or not material.use_nodes or not material.node_tree:
             return

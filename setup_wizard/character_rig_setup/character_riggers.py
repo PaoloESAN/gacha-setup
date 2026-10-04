@@ -249,6 +249,15 @@ class GenshinImpactCharacterRigger(CharacterRigger):
             print(f"[GI RIGGER] Post-rig setup notice: {e_post}")
 
 
+        # Sync gi_light_mode tag with armature and scene
+        if target_rig:
+            if character_rigger_props.set_up_lighting_panel:
+                target_rig["gi_light_mode"] = "7"
+                self.context.scene.gi_light_mode = "7"
+            else:
+                target_rig["gi_light_mode"] = "0"
+                self.context.scene.gi_light_mode = "0"
+
         if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):
             from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics, find_target_armature
             target_rig = find_target_armature(self.context, armature)
