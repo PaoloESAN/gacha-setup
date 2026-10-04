@@ -3801,7 +3801,72 @@ def rig_character(
             bpy.ops.object.mode_set(mode='OBJECT')
     except Exception as ex:
         print(f"[DEBUG] breast sub-bones parenting warning: {ex}")
-    
+
+    # Fix chest weights pointing at non-deforming controls (e.g. Belle-default:
+    # VGs 'breast.L'/'breast.R' match control bones with use_deform=False while
+    # 'DEF-breast.L'/'DEF-breast.R' are the real deformers). Verts weighted only
+    # to the non-deforming controls lag behind the torso and stretch. Transfer
+    # those weights to the DEF counterparts. Leave VGs like 'breast.L.001'
+    # (which already target deforming sub-bones) untouched.
+    try:
+        _rig_for_vg = None
+        try:
+            _rig_for_vg = this_obj
+        except Exception:
+            _rig_for_vg = None
+        if _rig_for_vg is None or getattr(_rig_for_vg, "type", None) != 'ARMATURE':
+            _rig_for_vg = bpy.context.object if (bpy.context.object and bpy.context.object.type == 'ARMATURE') else None
+        if _rig_for_vg is not None:
+            _breast_vg_remap = [
+                ("breast.L", "DEF-breast.L"),
+                ("breast.R", "DEF-breast.R"),
+                ("Bdy_L_Chest", "DEF-breast.L"),
+                ("Bdy_R_Chest", "DEF-breast.R"),
+                ("Skn_L_Chest", "DEF-breast.L"),
+                ("Skn_R_Chest", "DEF-breast.R"),
+            ]
+            _valid_remap = []
+            for _src, _dst in _breast_vg_remap:
+                _dst_bone = _rig_for_vg.data.bones.get(_dst)
+                if _dst_bone is not None and _dst_bone.use_deform:
+                    _valid_remap.append((_src, _dst))
+            if _valid_remap:
+                try:
+                    if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+                        bpy.ops.object.mode_set(mode='OBJECT')
+                except Exception:
+                    pass
+                for _obj in bpy.data.objects:
+                    if getattr(_obj, "type", None) != 'MESH':
+                        continue
+                    _bound = False
+                    try:
+                        for _mod in getattr(_obj, "modifiers", []) or []:
+                            if getattr(_mod, "type", "") == 'ARMATURE' and getattr(_mod, "object", None) == _rig_for_vg:
+                                _bound = True
+                                break
+                    except Exception:
+                        continue
+                    if not _bound:
+                        continue
+                    for _src, _dst in _valid_remap:
+                        _src_vg = _obj.vertex_groups.get(_src)
+                        if _src_vg is None:
+                            continue
+                        _src_idx = _src_vg.index
+                        _dst_vg = _obj.vertex_groups.get(_dst)
+                        if _dst_vg is None:
+                            _dst_vg = _obj.vertex_groups.new(name=_dst)
+                        for _v in _obj.data.vertices:
+                            for _g in _v.groups:
+                                if _g.group == _src_idx and _g.weight > 0.0:
+                                    _dst_vg.add([_v.index], _g.weight, 'ADD')
+                                    break
+                        _obj.vertex_groups.remove(_src_vg)
+                        print(f"[ZZZ RIG] Remapped chest VG '{_src}' -> '{_dst}' on '{_obj.name}'")
+    except Exception as ex:
+        print(f"[DEBUG] breast VG remap warning: {ex}")
+
     # DONE MODIFYING ui.py FILE --------------------------------------------
     
     
