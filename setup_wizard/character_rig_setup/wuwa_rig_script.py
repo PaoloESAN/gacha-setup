@@ -29,6 +29,83 @@ _WUWA_HEAD_CANDIDATES = [
 
 _WUWA_ROOTSHAPE_OBJECTS = ["root plate.002", "root plate.001", "root plate", "head-control-shape"]
 
+# Expected vertex counts of the canonical RootShape.blend widgets.
+# Used to detect copies contaminated by face_panel_wuwa.blend, whose own
+# 'root plate' has 256 verts (3 rings) instead of the single-ring 64-vert one.
+_WUWA_ROOTSHAPE_VERTS = {
+    "root plate": 64,
+    "root plate.001": 96,
+    "root plate.002": 96,
+}
+
+_WUWA_ROOTSHAPE_ASSIGN = (
+    ("root", "root plate"),
+    ("root.001", "root plate.001"),
+    ("root.002", "root plate.002"),
+)
+
+
+def _ensure_wuwa_root_widgets():
+    """Appends root widgets from RootShape.blend, quarantining contaminated copies.
+
+    face_panel_wuwa.blend ships its own 'root plate' (256 verts / 3 rings). If it
+    was imported first, a plain 'append only if missing' keeps the wrong object
+    and bone 'root' ends up with 3 rings instead of the single-ring shape.
+    """
+    rs_blend = os.path.join(os.path.dirname(os.path.abspath(__file__)), "RootShape.blend")
+    if not os.path.isfile(rs_blend):
+        return
+    obj_dir = rs_blend + "/Object"
+    for shape_name in _WUWA_ROOTSHAPE_OBJECTS:
+        existing = bpy.data.objects.get(shape_name)
+        expected = _WUWA_ROOTSHAPE_VERTS.get(shape_name)
+        bad = False
+        if existing is not None and expected is not None and existing.type == 'MESH':
+            try:
+                bad = len(existing.data.vertices) != expected
+            except Exception:
+                bad = False
+        if existing is None or bad:
+            if bad:
+                referenced = False
+                try:
+                    for o in bpy.data.objects:
+                        if o.type == 'ARMATURE' and getattr(o, "pose", None):
+                            for pb in o.pose.bones:
+                                if getattr(pb, "custom_shape", None) == existing:
+                                    referenced = True
+                                    break
+                        if referenced:
+                            break
+                except Exception:
+                    referenced = True
+                try:
+                    if referenced:
+                        existing.name = shape_name + ".FP-BAD"
+                    else:
+                        bpy.data.objects.remove(existing, do_unlink=True)
+                except Exception:
+                    pass
+            try:
+                bpy.ops.wm.append(filename=shape_name, directory=obj_dir)
+            except Exception as ex_app:
+                print(f"[WUWA RIG] shape append notice '{shape_name}': {ex_app}")
+
+
+def _assign_wuwa_root_shapes(rig_obj):
+    """Points root / root.001 / root.002 at the canonical single-ring widgets."""
+    if rig_obj is None or getattr(rig_obj, "pose", None) is None:
+        return
+    for rb_name, shape_name in _WUWA_ROOTSHAPE_ASSIGN:
+        pb_r = rig_obj.pose.bones.get(rb_name)
+        sh_obj = bpy.data.objects.get(shape_name)
+        if pb_r is not None and sh_obj is not None:
+            try:
+                pb_r.custom_shape = sh_obj
+                pb_r.use_custom_shape_bone_size = False
+            except Exception as ex_rsh:
+                print(f"[WUWA RIG] root shape notice '{rb_name}': {ex_rsh}")
+
 
 def _wuwa_resolve_head(rig_obj):
     for _b in _WUWA_HEAD_CANDIDATES:
@@ -106,15 +183,9 @@ def _apply_zzz_parity_wuwa(rig_obj, context, orig_arm_name):
     _add_childof = getattr(_rprops, "add_children_of_constraints", True) if _rprops else True
 
     # --- shapes desde RootShape.blend (solo los que ZZZ tiene) ---
-    _rs_blend = os.path.join(os.path.dirname(os.path.abspath(__file__)), "RootShape.blend")
-    if os.path.isfile(_rs_blend):
-        _obj_dir = _rs_blend + "/Object"
-        for _shape_name in _WUWA_ROOTSHAPE_OBJECTS:
-            if bpy.data.objects.get(_shape_name) is None:
-                try:
-                    bpy.ops.wm.append(filename=_shape_name, directory=_obj_dir)
-                except Exception as ex_app:
-                    print(f"[WUWA RIG] shape append notice '{_shape_name}': {ex_app}")
+    # Valida geometria: face_panel_wuwa.blend trae su propio 'root plate' de
+    # 3 anillos que no debe sobrevivir bajo el nombre canonico.
+    _ensure_wuwa_root_widgets()
 
     # --- EDIT: roots + plate + head-controller ---
     ctx.view_layer.objects.active = rig_obj
@@ -223,16 +294,7 @@ def _apply_zzz_parity_wuwa(rig_obj, context, orig_arm_name):
         _wuwa_set_prop(plate, "Use Head Controller", 1.0 if _use_head_tracker else 0.0,
                        0.0, 1.0, "Use Head Tracker Controller")
 
-    for _rb_name, _shape_name in [("root", "root plate"), ("root.001", "root plate.001"),
-                                  ("root.002", "root plate.002")]:
-        _pb_r = rig_obj.pose.bones.get(_rb_name)
-        _sh_obj = bpy.data.objects.get(_shape_name)
-        if _pb_r is not None and _sh_obj is not None:
-            try:
-                _pb_r.custom_shape = _sh_obj
-                _pb_r.use_custom_shape_bone_size = False
-            except Exception as ex_rsh:
-                print(f"[WUWA RIG] root shape notice '{_rb_name}': {ex_rsh}")
+    _assign_wuwa_root_shapes(rig_obj)
 
     # Created roots copy root.002's color (they are born after theming with
     # DEFAULT/blue while root.002 is themed/red).
@@ -1112,6 +1174,13 @@ def rig_wuthering_waves_character(context=None):
                                     pass
                 except Exception as ex_hcol:
                     print(f"[WUWA RIG] root heal color notice: {ex_hcol}")
+                try:
+                    # Repara rigs contaminados por face_panel_wuwa.blend: el hueso
+                    # 'root' pudo quedar apuntando al 'root plate' de 3 anillos.
+                    _ensure_wuwa_root_widgets()
+                    _assign_wuwa_root_shapes(obj)
+                except Exception as ex_hsh:
+                    print(f"[WUWA RIG] root shape heal notice: {ex_hsh}")
             except Exception as ex_heal:
                 print(f"[WUWA RIG] root trio heal notice: {ex_heal}")
                 try:
@@ -1804,7 +1873,7 @@ def rig_wuthering_waves_character(context=None):
             eye_mesh = CharacterMesh
 
         # Secondary Shape Keys (Pupil)
-        source_shape_keys = ["Pupil_R", "Pupil_L", "Pupil_Up", "Pupil_Down"]
+        source_shape_keys = ["Pupil_R", "Pupil_L", "Pupil_Up", "Pupil_Down", "Pupil_Scale"]
         target_material_name = None
         if eye_mesh:
             for slot in eye_mesh.material_slots:
@@ -1877,6 +1946,8 @@ def rig_wuthering_waves_character(context=None):
                 for source_name in source_shape_keys:
                     if source_name not in keys:
                         continue
+                    if f"{source_name}.L" in keys and f"{source_name}.R" in keys:
+                        continue
                     source_key = keys[source_name]
                     index = next(i for i, k in enumerate(keys) if k.name == source_key.name)
                     CharacterMesh.active_shape_key_index = index
@@ -1893,12 +1964,18 @@ def rig_wuthering_waves_character(context=None):
                         base_co = basis.data[i].co
                         source_co = source_key.data[i].co
                         delta = source_co - base_co
-                        offset = offset_connected if i in connected_vertices else offset_unconnected
 
-                        if base_co.x >= 0:
-                            key_L.data[i].co = base_co + delta * 2 + offset
+                        if source_name == "Pupil_Scale":
+                            if base_co.x >= 0:
+                                key_L.data[i].co = base_co + delta
+                            else:
+                                key_R.data[i].co = base_co + delta
                         else:
-                            key_R.data[i].co = base_co + delta * 2 + offset
+                            offset = offset_connected if i in connected_vertices else offset_unconnected
+                            if base_co.x >= 0:
+                                key_L.data[i].co = base_co + delta * 2 + offset
+                            else:
+                                key_R.data[i].co = base_co + delta * 2 + offset
 
                     bpy.ops.object.select_all(action='DESELECT')
 
@@ -1946,6 +2023,14 @@ def rig_wuthering_waves_character(context=None):
                 RigArmatureObj.pose.bones[b_name].custom_shape = bpy.data.objects[s_name]
                 RigArmatureObj.pose.bones[b_name].custom_shape_scale_xyz = (4.0, 4.0, 4.0)
 
+        for b_name in ["EyeTracker", "Eye.L", "Eye.R"]:
+            pb = RigArmatureObj.pose.bones.get(b_name)
+            if pb:
+                pb.lock_location[:] = (False, False, False)
+                pb.lock_rotation[:] = (False, False, False)
+                pb.lock_rotation_w = False
+                pb.lock_scale[:] = (False, False, False)
+
         # Drivers for Pupils
         if CharacterMesh and CharacterMesh.data and CharacterMesh.data.shape_keys:
             shape_key_names = {
@@ -1977,23 +2062,85 @@ def rig_wuthering_waves_character(context=None):
                     var.targets[0].transform_space = 'LOCAL_SPACE'
                     driver.expression = expressions[shape_key_name]
 
-        # Pupil Scale Driver
-        if CharacterMesh and CharacterMesh.data and CharacterMesh.data.shape_keys and "Pupil_Scale" in CharacterMesh.data.shape_keys.key_blocks:
-            shape_key = CharacterMesh.data.shape_keys.key_blocks["Pupil_Scale"]
-            try:
-                shape_key.driver_remove('value')
-            except Exception:
-                pass
-            driver = shape_key.driver_add('value').driver
-            driver.type = 'SCRIPTED'
-            var = driver.variables.new()
-            var.name = 'bone_scale'
-            var.type = 'TRANSFORMS'
-            var.targets[0].id = RigArmatureObj
-            var.targets[0].bone_target = "EyeTracker"
-            var.targets[0].transform_type = 'SCALE_Y'
-            var.targets[0].transform_space = 'LOCAL_SPACE'
-            driver.expression = 'max(min((1.0 - bone_scale), 1.0), -1.0)'
+        # Pupil Scale Drivers (EyeTracker master + Eye.L / Eye.R independent scaling)
+        if CharacterMesh and CharacterMesh.data and CharacterMesh.data.shape_keys:
+            keyblocks = CharacterMesh.data.shape_keys.key_blocks
+            has_split_pupil_scale = ("Pupil_Scale.L" in keyblocks and "Pupil_Scale.R" in keyblocks)
+
+            if has_split_pupil_scale:
+                if "Pupil_Scale" in keyblocks:
+                    sk_global = keyblocks["Pupil_Scale"]
+                    try:
+                        sk_global.driver_remove('value')
+                    except Exception:
+                        pass
+                    sk_global.value = 0.0
+
+                for sk_name, indep_bone in [("Pupil_Scale.L", "Eye.L"), ("Pupil_Scale.R", "Eye.R")]:
+                    shape_key = keyblocks[sk_name]
+                    try:
+                        shape_key.driver_remove('value')
+                    except Exception:
+                        pass
+                    shape_key.slider_min = -1.0
+                    shape_key.slider_max = 1.0
+                    driver = shape_key.driver_add('value').driver
+                    driver.type = 'SCRIPTED'
+
+                    v_master = driver.variables.new()
+                    v_master.name = "s_m"
+                    v_master.type = 'TRANSFORMS'
+                    v_master.targets[0].id = RigArmatureObj
+                    v_master.targets[0].bone_target = "EyeTracker"
+                    v_master.targets[0].transform_type = 'SCALE_Y'
+                    v_master.targets[0].transform_space = 'LOCAL_SPACE'
+
+                    v_indep = driver.variables.new()
+                    v_indep.name = "s_i"
+                    v_indep.type = 'TRANSFORMS'
+                    v_indep.targets[0].id = RigArmatureObj
+                    v_indep.targets[0].bone_target = indep_bone
+                    v_indep.targets[0].transform_type = 'SCALE_Y'
+                    v_indep.targets[0].transform_space = 'LOCAL_SPACE'
+
+                    driver.expression = 'max(min((1.0 - (s_m * s_i)) * 2.0, 1.0), -1.0)'
+
+            elif "Pupil_Scale" in keyblocks:
+                shape_key = keyblocks["Pupil_Scale"]
+                try:
+                    shape_key.driver_remove('value')
+                except Exception:
+                    pass
+                shape_key.slider_min = -1.0
+                shape_key.slider_max = 1.0
+                driver = shape_key.driver_add('value').driver
+                driver.type = 'SCRIPTED'
+
+                v_master = driver.variables.new()
+                v_master.name = "s_m"
+                v_master.type = 'TRANSFORMS'
+                v_master.targets[0].id = RigArmatureObj
+                v_master.targets[0].bone_target = "EyeTracker"
+                v_master.targets[0].transform_type = 'SCALE_Y'
+                v_master.targets[0].transform_space = 'LOCAL_SPACE'
+
+                v_l = driver.variables.new()
+                v_l.name = "s_l"
+                v_l.type = 'TRANSFORMS'
+                v_l.targets[0].id = RigArmatureObj
+                v_l.targets[0].bone_target = "Eye.L"
+                v_l.targets[0].transform_type = 'SCALE_Y'
+                v_l.targets[0].transform_space = 'LOCAL_SPACE'
+
+                v_r = driver.variables.new()
+                v_r.name = "s_r"
+                v_r.type = 'TRANSFORMS'
+                v_r.targets[0].id = RigArmatureObj
+                v_r.targets[0].bone_target = "Eye.R"
+                v_r.targets[0].transform_type = 'SCALE_Y'
+                v_r.targets[0].transform_space = 'LOCAL_SPACE'
+
+                driver.expression = 'max(min((1.0 - (s_m * ((s_l + s_r) * 0.5))) * 2.0, 1.0), -1.0)'
 
         # Left and Right Eye Independent Combined Drivers
         if CharacterMesh and CharacterMesh.data and CharacterMesh.data.shape_keys:
@@ -2038,6 +2185,13 @@ def rig_wuthering_waves_character(context=None):
                     driver.expression = f"max(min(({sign}(v_m + v_i) * 10.0), 1.0), 0.0)"
 
         bpy.ops.object.mode_set(mode='OBJECT')
+
+        # Merge Eye Highlight directly into armature as pose bones if highlight objects exist
+        try:
+            from setup_wizard.character_rig_setup.wuwa_face_panel import merge_eye_highlight_into_armature
+            merge_eye_highlight_into_armature(context, RigArmatureObj, "ORG-head")
+        except Exception as e_mhl:
+            print(f"[WUWA RIG] Eye highlight merge notice: {e_mhl}")
 
         # Move Widgets to per-character WGTS_<Char> nested in char collection (Append-safe)
         try:
@@ -2238,6 +2392,12 @@ def rig_wuthering_waves_character(context=None):
             traceback.print_exc()
             print(f"[WUWA FACE RIG] Notice: {e}")
 
+        try:
+            from setup_wizard.character_rig_setup.wuwa_face_panel import setup_outline_drivers_from_face_panel
+            setup_outline_drivers_from_face_panel(RigArmatureObj, context)
+        except Exception as e_ol:
+            print(f"[WUWA RIG] outline drivers notice: {e_ol}")
+
         # Ensure Face collection is visible
         if hasattr(RigArmatureObj.data, "collections"):
             for fc in ["Face", "Face (Primary)"]:
@@ -2271,6 +2431,15 @@ def rig_wuthering_waves_character(context=None):
                 bpy.data.objects.remove(orig_arm, do_unlink=True)
             except Exception:
                 pass
+
+        # Final pass to isolate all widgets into single WGTS_<Char> collection and clean up duplicate collections
+        try:
+            from setup_wizard.character_rig_setup.wgts_isolation import isolate_wgts_for_character
+            _char_coll = char_collection if 'char_collection' in locals() else None
+            _char_name = char_base_name if 'char_base_name' in locals() else None
+            isolate_wgts_for_character(RigArmatureObj, _char_name, _char_coll)
+        except Exception as e_wgts_final:
+            print(f"[WUWA RIG] final WGTS isolation notice: {e_wgts_final}")
 
         unlock_wuwa_secondary_bones(RigArmatureObj)
 
@@ -2533,6 +2702,7 @@ def organize_rigify_bone_collections(rig_obj, orig_arm_name=None, char_name=None
 
         face_control_names = {
             "EyeTracker", "Eye.L", "Eye.R", "EyeScale", "FacePanelRoot", "FacePanel", "Face-Root",
+            "CTRL-Eye_Highlight", "CTRL-Highlight_Top", "CTRL-Highlight_Bottom",
             "Smile.L", "Smile.R", "Anger.L", "Anger.R", "Sad.L", "Sad.R",
             "Focus.L", "Focus.R", "Insipid.L", "Insipid.R", "Mouth.L", "Mouth.R",
             "B_Anger", "B_Happy", "B_Cheerful", "B_Sad", "B_Flat", "B_Inside_Add",
@@ -2625,6 +2795,7 @@ def organize_rigify_bone_collections(rig_obj, orig_arm_name=None, char_name=None
 
     face_bones = [
         "EyeTracker", "Eye.L", "Eye.R", "EyeScale", "FacePanelRoot", "FacePanel",
+        "CTRL-Eye_Highlight", "CTRL-Highlight_Top", "CTRL-Highlight_Bottom",
         "Smile.L", "Smile.R", "Anger.L", "Anger.R", "Sad.L", "Sad.R",
         "Focus.L", "Focus.R", "Insipid.L", "Insipid.R", "Mouth.L", "Mouth.R",
         "B_Anger", "B_Happy", "B_Cheerful", "B_Sad", "B_Flat", "B_Inside_Add",
@@ -2633,9 +2804,29 @@ def organize_rigify_bone_collections(rig_obj, orig_arm_name=None, char_name=None
     for b in face_bones:
         b2c(b, 0, "Face")
 
+    face_panel_blend_bones = {
+        'panel.root', 'root 2', 'fp.boarder', 'fp.brow.board', 'fp.brow.txt', 'fp.mouth',
+        'eye.board', 'fp.off', 'fp.on', 'eye.fp', 'general.ctrl.002', 'general.ctrl.003',
+        'general.ctrl.005', 'general.ctrl.007', 'general.ctrl.009', 'general.ctrl.011',
+        'general.ctrl.013', 'general.ctrl.015', 'general.ctrl.017', 'general.ctrl.019',
+        'general.ctrl.021', 'general.ctrl.023', 'general.ctrl.025', 'general.ctrl.027',
+        'root 2.001', 'fp.brow.sel', 'mouth.board', 'fp.m.pos.sel', 'eye.pos',
+        'lip.cor.pos.sel.r', 'lip.cor.pos.sel.l', 'doubt.1', 'b.happy', 'b.flat',
+        'm.AA', 'm.E', 'm.O', 'm.U', 'm.I', 'm.A', 'e.ji', 'e.lowlid', 'e.focus',
+        'e.wide', 'e.wink.up.r', 'e.wink.up.l', 'doubt.2', 'x1', 'x2', 'x3', 'x4',
+        'x5', 'x6', 'fp.extra', 'b.close', 'fp.outline', 'general.ctrl.030',
+        'general.ctrl.034', 'general.ctrl.008', 'general.ctrl.010', 'general.ctrl.012',
+        'general.ctrl.014', 'general.ctrl.016', 'general.ctrl.018', 'general.ctrl.006',
+        'general.ctrl.004', 'fp.outline.001', 'fp.off.001', 'fp.on.001', 'fp.off.002',
+        'fp.on.002', 'm.pos',
+        'CTRL-Eye_Highlight', 'CTRL-Highlight_Top', 'CTRL-Highlight_Bottom'
+    }
+
     if hasattr(rig_obj.data, "bones"):
         for b in rig_obj.data.bones:
-            if b.name.startswith("CTRL-") or b.name.startswith("LABEL-"):
+            if b.name in face_panel_blend_bones:
+                b2c(b.name, 0, "Face")
+            elif b.name.startswith("CTRL-") or b.name.startswith("LABEL-"):
                 b2c(b.name, 0, "Face")
             elif b.name == "Face-Root":
                 b2c(b.name, 25, "Other")

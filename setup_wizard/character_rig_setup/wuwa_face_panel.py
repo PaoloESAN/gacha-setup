@@ -4,6 +4,7 @@
 
 import bpy
 import math
+import re
 from mathutils import Vector, Matrix
 from bpy.types import Operator
 
@@ -213,7 +214,8 @@ def plan_wuwa_controls(mesh_obj, armature, head_name, keyblock):
     eye_tracker_keys = [
         "Pupil_Up", "Pupil_Down", "Pupil_L", "Pupil_R", "Pupil_Scale", "E_Blephar",
         "Pupil_Up.L", "Pupil_Up.R", "Pupil_Down.L", "Pupil_Down.R",
-        "Pupil_L.L", "Pupil_L.R", "Pupil_R.L", "Pupil_R.R"
+        "Pupil_L.L", "Pupil_L.R", "Pupil_R.L", "Pupil_R.R",
+        "Pupil_Scale.L", "Pupil_Scale.R"
     ]
     for k in eye_tracker_keys:
         handled_keys.add(k)
@@ -1149,6 +1151,988 @@ def setup_wuwa_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_s
     return True
 
 
+
+SHAPE_KEYS_TO_SPLIT = [
+    "E_Close", "E_Anger", "E_Sad", "E_Focus", "E_Insipid",
+    "P_M_Scale_Add",
+    "Pupil_L", "Pupil_R", "Pupil_Up", "Pupil_Down"
+]
+
+
+def split_shape_keys(mesh_obj, shape_names=None):
+    """Splits bilateral shapekeys into .L and .R versions by the X axis."""
+    if not mesh_obj or not mesh_obj.data or not mesh_obj.data.shape_keys:
+        return
+    if shape_names is None:
+        shape_names = SHAPE_KEYS_TO_SPLIT
+
+    keys = mesh_obj.data.shape_keys.key_blocks
+    basis = mesh_obj.data.shape_keys.reference_key
+    if not basis:
+        return
+
+    original_active = bpy.context.view_layer.objects.active
+    orig_mode = bpy.context.mode
+    if orig_mode != 'OBJECT':
+        try:
+            bpy.ops.object.mode_set(mode='OBJECT')
+        except RuntimeError:
+            pass
+
+    bpy.context.view_layer.objects.active = mesh_obj
+    mesh_obj.select_set(True)
+
+    for source_name in shape_names:
+        if source_name not in keys:
+            continue
+        if f"{source_name}.L" in keys and f"{source_name}.R" in keys:
+            continue
+        source_key = keys[source_name]
+
+        try:
+            mesh_obj.active_shape_key_index = list(keys).index(source_key)
+            bpy.ops.object.shape_key_add(from_mix=False)
+            key_L = mesh_obj.data.shape_keys.key_blocks[-1]
+            key_L.name = f"{source_name}.L"
+            key_L.value = 0.0
+
+            bpy.ops.object.shape_key_add(from_mix=False)
+            key_R = mesh_obj.data.shape_keys.key_blocks[-1]
+            key_R.name = f"{source_name}.R"
+            key_R.value = 0.0
+
+            for i, vert in enumerate(basis.data):
+                base_co = vert.co
+                delta = source_key.data[i].co - base_co
+                if base_co.x >= 0:
+                    key_L.data[i].co = base_co + delta
+                    key_R.data[i].co = base_co
+                else:
+                    key_R.data[i].co = base_co + delta
+                    key_L.data[i].co = base_co
+        except Exception as e:
+            print(f"[WUWA FACE RIG] split_shape_keys notice for {source_name}: {e}")
+
+    mesh_obj.select_set(False)
+    if original_active:
+        bpy.context.view_layer.objects.active = original_active
+        if orig_mode == 'POSE':
+            try:
+                bpy.ops.object.mode_set(mode='POSE')
+            except RuntimeError:
+                pass
+
+
+def add_shape_key_driver(mesh, armature, shape_key_name, bone_name, expression, transform_type):
+    if not mesh.data.shape_keys:
+        return
+    sk_block = mesh.data.shape_keys.key_blocks.get(shape_key_name)
+    if not sk_block:
+        return
+
+    try:
+        mesh.data.shape_keys.driver_remove(f'key_blocks["{shape_key_name}"].value')
+    except Exception:
+        pass
+
+    driver = sk_block.driver_add("value").driver
+    driver.type = "SCRIPTED"
+    var = driver.variables.new()
+    var.name = "bone"
+    var.type = "TRANSFORMS"
+    var.targets[0].id = armature
+    var.targets[0].bone_target = bone_name
+    var.targets[0].transform_space = "LOCAL_SPACE"
+    var.targets[0].transform_type = transform_type
+    driver.expression = expression
+
+
+def add_dual_shape_key_driver(mesh, armature, shape_key_name, bone1, bone2, expression, tr_type1, tr_type2):
+    if not mesh.data.shape_keys:
+        return
+    sk_block = mesh.data.shape_keys.key_blocks.get(shape_key_name)
+    if not sk_block:
+        return
+
+    try:
+        mesh.data.shape_keys.driver_remove(f'key_blocks["{shape_key_name}"].value')
+    except Exception:
+        pass
+
+    driver = sk_block.driver_add("value").driver
+    driver.type = "SCRIPTED"
+
+    var1 = driver.variables.new()
+    var1.name = "bone_001"
+    var1.type = "TRANSFORMS"
+    var1.targets[0].id = armature
+    var1.targets[0].bone_target = bone1
+    var1.targets[0].transform_space = "LOCAL_SPACE"
+    var1.targets[0].transform_type = tr_type1
+
+    var2 = driver.variables.new()
+    var2.name = "bone"
+    var2.type = "TRANSFORMS"
+    var2.targets[0].id = armature
+    var2.targets[0].bone_target = bone2
+    var2.targets[0].transform_space = "LOCAL_SPACE"
+    var2.targets[0].transform_type = tr_type2
+
+    driver.expression = expression
+
+
+def setup_face_panel_blend_drivers(context, mesh, panel_armature):
+    """Sets up all 43+ shape key drivers connecting the face panel armature to character mesh shape keys."""
+    # First, if earlier runs left split keys like E_Close.L / E_Close.R, remove them so they don't keep eyes shut
+    if mesh.data and mesh.data.shape_keys:
+        for split_key_name in ["E_Close.L", "E_Close.R"]:
+            sk = mesh.data.shape_keys.key_blocks.get(split_key_name)
+            if sk:
+                try:
+                    mesh.data.shape_keys.driver_remove(f'key_blocks["{split_key_name}"].value')
+                except Exception:
+                    pass
+                mesh.shape_key_remove(sk)
+
+    driver_configs = [
+        ("Aa", "m.A", "bone * 25", "LOC_X"),
+        ("A", "m.AA", "bone * 25", "LOC_X"),
+        ("E", "m.E", "bone * 25", "LOC_X"),
+        ("I", "m.I", "bone * 25", "LOC_X"),
+        ("O", "m.O", "bone * 25", "LOC_X"),
+        ("U", "m.U", "bone * 25", "LOC_X"),
+        ("P_M_Up_Add", "fp.m.pos.sel", "bone * 25", "LOC_Y"),
+        ("P_M_Down_Add", "fp.m.pos.sel", "bone * -25", "LOC_Y"),
+        ("P_M_RMove_Add", "fp.m.pos.sel", "bone * -25", "LOC_X"),
+        ("P_M_LMove_Add", "fp.m.pos.sel", "bone * 25", "LOC_X"),
+        ("P_M_L_Add", "lip.cor.pos.sel.r", "bone * 25", "LOC_X"),
+        ("P_M_R_Add", "lip.cor.pos.sel.l", "bone * -25", "LOC_X"),
+        ("M_Smile_L", "lip.cor.pos.sel.r", "bone * 25", "LOC_Y"),
+        ("M_Smile_R", "lip.cor.pos.sel.l", "bone * 25", "LOC_Y"),
+        ("M_Ennui_L", "lip.cor.pos.sel.r", "bone * -25", "LOC_Y"),
+        ("M_Ennui_R", "lip.cor.pos.sel.l", "bone * -25", "LOC_Y"),
+        ("M_Laugh", "x1", "bone * 25", "LOC_X"),
+        ("M_Scared", "x2", "bone * 25", "LOC_X"),
+        ("M_ScaredTooth", "x3", "bone * 25", "LOC_X"),
+        ("M_Anger", "x4", "bone * 25", "LOC_X"),
+        ("M_Nutcracker", "x5", "bone * 25", "LOC_X"),
+        ("M_O", "x6", "bone * 25", "LOC_X"),
+        ("B_AH_R", "doubt.1", "bone * 25", "LOC_X"),
+        ("B_AH_L", "doubt.2", "bone * 25", "LOC_X"),
+        ("B_Cheerful", "b.happy", "bone * 25", "LOC_X"),
+        ("B_Flat", "b.flat", "bone * 25", "LOC_X"),
+        ("B_Inside_Add", "b.close", "bone * 25", "LOC_X"),
+        ("B_Anger", "fp.brow.sel", "bone * -25", "LOC_X"),
+        ("B_Sad", "fp.brow.sel", "bone * 25", "LOC_X"),
+        ("B_Up_Add", "fp.brow.sel", "bone * 25", "LOC_Y"),
+        ("B_Down_Add", "fp.brow.sel", "bone * -25", "LOC_Y"),
+        ("E_Insipid", "e.ji", "bone * 25", "LOC_X"),
+        ("E_Blephar", "e.lowlid", "bone * 25", "LOC_X"),
+        ("E_Focus", "e.focus", "bone * 25", "LOC_X"),
+        ("E_Stare", "e.wide", "bone * 25", "LOC_X"),
+        ("E_Smile_R", "e.wink.up.r", "bone * 25", "LOC_X"),
+        ("E_Smile_L", "e.wink.up.l", "bone * 25", "LOC_X"),
+        ("E_Anger", "eye.pos", "bone * -25", "LOC_X"),
+        ("E_Sad", "eye.pos", "bone * 25", "LOC_X"),
+        ("E_Close", "eye.pos", "bone * -25", "LOC_Y"),
+    ]
+
+    dual_driver_configs = [
+        ("E_Smile_L", "eye.pos", "e.wink.up.l", "max(bone_001 * 25, bone * 25)", "LOC_Y", "LOC_X"),
+        ("E_Smile_R", "eye.pos", "e.wink.up.r", "max(bone_001 * 25, bone * 25)", "LOC_Y", "LOC_X"),
+    ]
+
+    for sk_name, bone_name, expr, tr_type in driver_configs:
+        add_shape_key_driver(mesh, panel_armature, sk_name, bone_name, expr, tr_type)
+
+    for sk_name, b1, b2, expr, tr_type1, tr_type2 in dual_driver_configs:
+        add_dual_shape_key_driver(mesh, panel_armature, sk_name, b1, b2, expr, tr_type1, tr_type2)
+
+    # Reset eye and un-driven shape keys to 0 so eyes are open by default
+    for sk in mesh.data.shape_keys.key_blocks:
+        if sk.name != "Basis":
+            if sk.name in ["E_Close", "Blink", "Eye_Close"]:
+                sk.value = 0.0
+
+    try:
+        context.evaluated_depsgraph_get().update()
+    except Exception:
+        pass
+
+
+def setup_outline_drivers_from_face_panel(armature, context=None):
+    """
+    Connects drivers from the Face Panel 'fp.outline' bone to all character outline
+    modifiers (Solidify, Outlines) and outline objects for both viewport and render visibility.
+    When the bone is at 'On' (loc.x < threshold), outlines are 1 (active).
+    When at 'Off' (loc.x >= threshold), outlines are 0 (inactive).
+    """
+    if not armature or armature.type != 'ARMATURE':
+        return
+    pb = armature.pose.bones.get("fp.outline")
+    if not pb:
+        return
+
+    # Determine threshold from limit location constraint (default 0.03 for 0.06 max_x)
+    threshold = 0.03
+    for c in pb.constraints:
+        if c.type == 'LIMIT_LOCATION' and c.use_max_x:
+            threshold = c.max_x * 0.5
+            break
+
+    # Gather character meshes
+    meshes = []
+    for obj in bpy.data.objects:
+        if obj.type == 'MESH':
+            if any(m.type == 'ARMATURE' and m.object == armature for m in obj.modifiers):
+                meshes.append(obj)
+            elif obj.parent == armature:
+                meshes.append(obj)
+
+    try:
+        from setup_wizard.character_rig_setup.wgts_isolation import get_char_collection
+        char_coll = get_char_collection(armature)
+        if char_coll:
+            for obj in getattr(char_coll, "all_objects", char_coll.objects):
+                if obj.type == 'MESH' and obj not in meshes and not obj.name.startswith("WGT-"):
+                    meshes.append(obj)
+    except Exception:
+        pass
+
+    for mesh_obj in meshes:
+        for mod in mesh_obj.modifiers:
+            is_outline_mod = False
+            mod_low = mod.name.lower()
+            if mod.type == 'SOLIDIFY':
+                is_outline_mod = True
+            elif "outline" in mod_low:
+                is_outline_mod = True
+            elif mod.type == 'NODES' and getattr(mod, 'node_group', None):
+                ng_low = mod.node_group.name.lower()
+                if "outline" in ng_low:
+                    is_outline_mod = True
+
+            if is_outline_mod:
+                for prop in ["show_viewport", "show_render"]:
+                    try:
+                        mod.driver_remove(prop)
+                    except Exception:
+                        pass
+                    fcurve = mod.driver_add(prop)
+                    drv = fcurve.driver
+                    drv.type = 'SCRIPTED'
+                    var = drv.variables.new()
+                    var.name = "pos"
+                    var.type = 'TRANSFORMS'
+                    var.targets[0].id = armature
+                    var.targets[0].bone_target = "fp.outline"
+                    var.targets[0].transform_type = 'LOC_X'
+                    var.targets[0].transform_space = 'LOCAL_SPACE'
+                    drv.expression = f"1.0 if pos < {threshold:.4f} else 0.0"
+
+        # Separate outline mesh object if any
+        if "outline" in mesh_obj.name.lower():
+            for prop in ["hide_viewport", "hide_render"]:
+                try:
+                    mesh_obj.driver_remove(prop)
+                except Exception:
+                    pass
+                fcurve = mesh_obj.driver_add(prop)
+                drv = fcurve.driver
+                drv.type = 'SCRIPTED'
+                var = drv.variables.new()
+                var.name = "pos"
+                var.type = 'TRANSFORMS'
+                var.targets[0].id = armature
+                var.targets[0].bone_target = "fp.outline"
+                var.targets[0].transform_type = 'LOC_X'
+                var.targets[0].transform_space = 'LOCAL_SPACE'
+                drv.expression = f"0.0 if pos < {threshold:.4f} else 1.0"
+
+
+def _cache_and_reset_armature(armature):
+    """Caches transforms of armature and pose bones and resets them to rest pose."""
+    cache = {
+        "location": armature.location.copy(),
+        "rotation_euler": armature.rotation_euler.copy(),
+        "scale": armature.scale.copy(),
+        "pose_position": armature.data.pose_position if hasattr(armature.data, 'pose_position') else 'POSE',
+        "pose_bones": {}
+    }
+    if hasattr(armature.data, 'pose_position') and armature.data.pose_position != 'POSE':
+        armature.data.pose_position = 'POSE'
+
+    for b in armature.pose.bones:
+        cache["pose_bones"][b.name] = {
+            "location": b.location.copy(),
+            "rotation_quaternion": b.rotation_quaternion.copy(),
+            "rotation_euler": b.rotation_euler.copy(),
+            "scale": b.scale.copy(),
+        }
+        b.location = (0, 0, 0)
+        b.rotation_quaternion = (1, 0, 0, 0)
+        b.rotation_euler = (0, 0, 0)
+        b.scale = (1, 1, 1)
+
+    armature.location = (0, 0, 0)
+    armature.rotation_euler = (0, 0, 0)
+    armature.scale = (1, 1, 1)
+    bpy.context.view_layer.update()
+    return cache
+
+
+def _restore_armature(armature, cache):
+    """Restores previously cached transforms to armature and pose bones."""
+    if not armature or not cache:
+        return
+    armature.location = cache["location"]
+    armature.rotation_euler = cache["rotation_euler"]
+    armature.scale = cache["scale"]
+    if hasattr(armature.data, 'pose_position'):
+        armature.data.pose_position = cache["pose_position"]
+
+    for bname, pcache in cache["pose_bones"].items():
+        pb = armature.pose.bones.get(bname)
+        if pb:
+            pb.location = pcache["location"]
+            pb.rotation_quaternion = pcache["rotation_quaternion"]
+            pb.rotation_euler = pcache["rotation_euler"]
+            pb.scale = pcache["scale"]
+    bpy.context.view_layer.update()
+
+
+WUWA_FACE_PANEL_BONE_NAMES = {
+    'panel.root', 'root 2', 'fp.boarder', 'fp.brow.board', 'fp.brow.txt', 'fp.mouth',
+    'eye.board', 'fp.off', 'fp.on', 'eye.fp', 'general.ctrl.002', 'general.ctrl.003',
+    'general.ctrl.005', 'general.ctrl.007', 'general.ctrl.009', 'general.ctrl.011',
+    'general.ctrl.013', 'general.ctrl.015', 'general.ctrl.017', 'general.ctrl.019',
+    'general.ctrl.021', 'general.ctrl.023', 'general.ctrl.025', 'general.ctrl.027',
+    'root 2.001', 'fp.brow.sel', 'mouth.board', 'fp.m.pos.sel', 'eye.pos',
+    'lip.cor.pos.sel.r', 'lip.cor.pos.sel.l', 'doubt.1', 'b.happy', 'b.flat',
+    'm.AA', 'm.E', 'm.O', 'm.U', 'm.I', 'm.A', 'e.ji', 'e.lowlid', 'e.focus',
+    'e.wide', 'e.wink.up.r', 'e.wink.up.l', 'doubt.2', 'x1', 'x2', 'x3', 'x4',
+    'x5', 'x6', 'fp.extra', 'b.close', 'fp.outline', 'general.ctrl.030',
+    'general.ctrl.034', 'general.ctrl.008', 'general.ctrl.010', 'general.ctrl.012',
+    'general.ctrl.014', 'general.ctrl.016', 'general.ctrl.018', 'general.ctrl.006',
+    'general.ctrl.004', 'fp.outline.001', 'fp.off.001', 'fp.on.001', 'fp.off.002',
+    'fp.on.002', 'm.pos'
+}
+
+
+def _cleanup_face_panel_bones_from_armature(armature):
+    """Removes previously joined Face Panel and Eye Highlight bones from the character armature."""
+    if not armature or armature.type != 'ARMATURE':
+        return
+    orig_mode = bpy.context.mode
+    if orig_mode != 'OBJECT':
+        try:
+            bpy.ops.object.mode_set(mode='OBJECT')
+        except Exception:
+            pass
+
+    # Unbind constraints from highlight objects first to prevent depsgraph dangling bone warnings
+    for hl_name in ['Eye Highlight', 'Highlight Top', 'Highlight Bottom']:
+        hl_obj = bpy.data.objects.get(hl_name)
+        if hl_obj:
+            for c in list(hl_obj.constraints):
+                if c.type in ('CHILD_OF', 'COPY_TRANSFORMS') and getattr(c, 'target', None) == armature:
+                    hl_obj.constraints.remove(c)
+
+    panel_bone_names = set(WUWA_FACE_PANEL_BONE_NAMES)
+    panel_bone_names.update(['CTRL-Eye_Highlight', 'CTRL-Highlight_Top', 'CTRL-Highlight_Bottom'])
+
+    bones_to_remove = [b.name for b in armature.data.bones if b.name in panel_bone_names]
+    if not bones_to_remove:
+        return
+
+    bpy.context.view_layer.objects.active = armature
+    bpy.ops.object.mode_set(mode='EDIT')
+    ebs = armature.data.edit_bones
+    for bn in bones_to_remove:
+        eb = ebs.get(bn)
+        if eb:
+            ebs.remove(eb)
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+
+def merge_eye_highlight_into_armature(context, armature, head_bone_name=None):
+    """Merges/binds Eye Highlight, Highlight Top, and Highlight Bottom into the character armature as pose bones."""
+    if not armature or armature.type != 'ARMATURE':
+        return False
+
+    eye_hl = bpy.data.objects.get('Eye Highlight')
+    hl_top = bpy.data.objects.get('Highlight Top')
+    hl_bot = bpy.data.objects.get('Highlight Bottom')
+
+    if not (eye_hl or hl_top or hl_bot):
+        return False
+
+    if not head_bone_name:
+        _, head_bone_name = find_armature_and_head(armature)
+
+    orig_mode = context.mode
+    if orig_mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+    inv_mat = armature.matrix_world.inverted()
+
+    def get_mesh_visual_center(obj):
+        if not obj or obj.type != 'MESH' or not len(obj.data.vertices):
+            return obj.matrix_world.translation if obj else Vector((0.35, 0.029, 1.435))
+        pts = [v.co for v in obj.data.vertices]
+        min_co = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
+        max_co = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
+        return obj.matrix_world @ ((min_co + max_co) * 0.5)
+
+    c_root = get_mesh_visual_center(eye_hl)
+    c_top = get_mesh_visual_center(hl_top)
+    c_bot = get_mesh_visual_center(hl_bot)
+
+    # Enter Edit Mode on armature to create bones
+    context.view_layer.objects.active = armature
+    bpy.ops.object.mode_set(mode='EDIT')
+    ebs = armature.data.edit_bones
+    head_eb = ebs.get(head_bone_name)
+    if not head_eb:
+        for eb in ebs:
+            if 'head' in eb.name.lower() or 'spine.006' in eb.name.lower():
+                head_eb = eb
+                break
+
+    # Offset slightly to the left (-X in world space) to separate from the Face Panel
+    PANEL_OFFSET = Vector((-0.07, 0, 0))
+
+    # 1. Root Highlight bone
+    b_root = ebs.get('CTRL-Eye_Highlight') or ebs.new('CTRL-Eye_Highlight')
+    b_root.head = inv_mat @ (c_root + PANEL_OFFSET)
+    b_root.tail = b_root.head + Vector((0, 0, 0.03))
+    if head_eb:
+        b_root.parent = head_eb
+        b_root.use_connect = False
+
+    # 2. Highlight Top bone
+    b_top = ebs.get('CTRL-Highlight_Top') or ebs.new('CTRL-Highlight_Top')
+    b_top.head = inv_mat @ (c_top + PANEL_OFFSET)
+    b_top.tail = b_top.head + Vector((0, 0, 0.015))
+    b_top.parent = b_root
+    b_top.use_connect = False
+
+    # 3. Highlight Bottom bone
+    b_bot = ebs.get('CTRL-Highlight_Bottom') or ebs.new('CTRL-Highlight_Bottom')
+    b_bot.head = inv_mat @ (c_bot + PANEL_OFFSET)
+    b_bot.tail = b_bot.head + Vector((0, 0, 0.015))
+    b_bot.parent = b_root
+    b_bot.use_connect = False
+
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Assign to Face Bone Collection in Blender 5.2 / 4.x
+    if hasattr(armature.data, 'collections'):
+        face_coll = armature.data.collections.get("Face") or armature.data.collections.new("Face")
+        for bn in ['CTRL-Eye_Highlight', 'CTRL-Highlight_Top', 'CTRL-Highlight_Bottom']:
+            b = armature.data.bones.get(bn)
+            if b:
+                for c in list(b.collections):
+                    if c != face_coll:
+                        c.unassign(b)
+                face_coll.assign(b)
+
+        unwanted_hl = armature.data.collections.get("Eye Highlight")
+        if unwanted_hl:
+            try:
+                armature.data.collections.remove(unwanted_hl)
+            except Exception:
+                pass
+
+    # Ensure widgets collection (prefer character-isolated WGTS_<Char>)
+    wgt_coll = None
+    try:
+        from setup_wizard.character_rig_setup.wgts_isolation import get_char_collection, get_or_create_char_wgts
+        char_coll = get_char_collection(armature)
+        clean_char = armature.name.replace("RIG-", "").replace("RIG_", "")
+        if char_coll:
+            for child in char_coll.children:
+                if child.name.startswith("WGTS_") or child.name.startswith("WGTS"):
+                    wgt_coll = child
+                    break
+            if not wgt_coll:
+                wgt_coll = get_or_create_char_wgts(char_coll, clean_char)
+    except Exception:
+        pass
+
+    if not wgt_coll:
+        wgt_coll = bpy.data.collections.get("WGTS") or bpy.data.collections.get("wgt")
+    if not wgt_coll:
+        for c in bpy.data.collections:
+            if "wgt" in c.name.lower():
+                wgt_coll = c
+                break
+    if not wgt_coll:
+        wgt_coll = bpy.data.collections.new("WGTS")
+        context.scene.collection.children.link(wgt_coll)
+
+    def create_centered_wgt(wgt_name, source_obj, scale=1.0):
+        old_wgt = bpy.data.objects.get(wgt_name)
+        if old_wgt:
+            try:
+                bpy.data.objects.remove(old_wgt, do_unlink=True)
+            except Exception:
+                pass
+        if not source_obj or source_obj.type != 'MESH' or not len(source_obj.data.vertices):
+            return make_widget('ring', wgt_coll) if 'make_widget' in globals() else None
+
+        pts = [v.co for v in source_obj.data.vertices]
+        min_co = Vector((min(p.x for p in pts), min(p.y for p in pts), min(p.z for p in pts)))
+        max_co = Vector((max(p.x for p in pts), max(p.y for p in pts), max(p.z for p in pts)))
+        c_local = (min_co + max_co) * 0.5
+
+        new_mesh = bpy.data.meshes.new(f"{wgt_name}_mesh")
+        # In bone space (where bone tail = head + Vector((0, 0, 0.03)), local Y is World +Z vertical,
+        # local X is World +X horizontal, and local Z is World -Y depth).
+        # To make the widget stand upright in the front view:
+        # local_x = (v.x - c.x) * scale
+        # local_y = (v.z - c.z) * scale (World +Z vertical)
+        # local_z = -(v.y - c.y) * scale (World -Y depth)
+        verts = [
+            Vector((
+                (v.co.x - c_local.x) * scale,
+                (v.co.z - c_local.z) * scale,
+                -(v.co.y - c_local.y) * scale
+            ))
+            for v in source_obj.data.vertices
+        ]
+        edges = [(e.vertices[0], e.vertices[1]) for e in source_obj.data.edges]
+        new_mesh.from_pydata(verts, edges, [])
+        new_mesh.update()
+
+        wgt_obj = bpy.data.objects.new(wgt_name, new_mesh)
+        wgt_coll.objects.link(wgt_obj)
+        # Crucial: hide_viewport must remain False so custom shape renders on bone in viewport
+        wgt_obj.hide_viewport = False
+        wgt_obj.hide_render = True
+        wgt_obj.hide_select = True
+        return wgt_obj
+
+    wgt_root = create_centered_wgt("WGT-Eye_Highlight", eye_hl, scale=1.5)
+    wgt_top = create_centered_wgt("WGT-Highlight_Top", hl_top, scale=2.5)
+    wgt_bot = create_centered_wgt("WGT-Highlight_Bottom", hl_bot, scale=2.5)
+
+    bpy.ops.object.mode_set(mode='POSE')
+    bone_wgts = [
+        ('CTRL-Eye_Highlight', wgt_root, 0.06, 'THEME01'),
+        ('CTRL-Highlight_Top', wgt_top, 0.04, 'THEME04'),
+        ('CTRL-Highlight_Bottom', wgt_bot, 0.04, 'THEME04'),
+    ]
+    for bname, wobj, limit_val, theme in bone_wgts:
+        pb = armature.pose.bones.get(bname)
+        if not pb:
+            continue
+        if wobj:
+            pb.custom_shape = wobj
+            pb.use_custom_shape_bone_size = False
+            pb.custom_shape_scale_xyz = Vector((1.0, 1.0, 1.0))
+            if hasattr(pb, 'custom_shape_rotation_euler'):
+                pb.custom_shape_rotation_euler = Vector((0.0, 0.0, 0.0))
+        if hasattr(pb, 'color'):
+            pb.color.palette = theme
+
+        pb.lock_location[2] = True  # Lock depth Z
+        pb.lock_location[0] = False
+        pb.lock_location[1] = False
+        pb.lock_rotation[:] = (True, True, True)
+        pb.lock_scale[:] = (True, True, True)
+
+        for c in list(pb.constraints):
+            if c.type == 'LIMIT_LOCATION':
+                pb.constraints.remove(c)
+        lim = pb.constraints.new('LIMIT_LOCATION')
+        lim.owner_space = 'LOCAL'
+        lim.use_transform_limit = True
+        lim.use_min_x = lim.use_max_x = True
+        lim.use_min_y = lim.use_max_y = True
+        lim.use_min_z = lim.use_max_z = True
+        lim.min_x, lim.max_x = -limit_val, limit_val
+        lim.min_y, lim.max_y = -limit_val, limit_val
+        lim.min_z = lim.max_z = 0.0
+
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Drive the shader helper objects from the pose bones
+    def setup_hl_object_drivers(obj, bone_name):
+        if not obj:
+            return
+        obj.parent = None
+        for c in list(obj.constraints):
+            obj.constraints.remove(c)
+
+        for axis_idx, bone_axis in [(0, 'X'), (2, 'Y')]:
+            try:
+                obj.driver_remove('location', axis_idx)
+            except Exception:
+                pass
+            driver = obj.driver_add('location', axis_idx).driver
+            driver.type = 'SCRIPTED'
+
+            # Master bone component
+            vm = driver.variables.new()
+            vm.name = "vm"
+            vm.type = 'TRANSFORMS'
+            vm.targets[0].id = armature
+            vm.targets[0].bone_target = "CTRL-Eye_Highlight"
+            vm.targets[0].transform_type = f"LOC_{bone_axis}"
+            vm.targets[0].transform_space = 'LOCAL_SPACE'
+
+            # Independent bone component
+            vi = driver.variables.new()
+            vi.name = "vi"
+            vi.type = 'TRANSFORMS'
+            vi.targets[0].id = armature
+            vi.targets[0].bone_target = bone_name
+            vi.targets[0].transform_type = f"LOC_{bone_axis}"
+            vi.targets[0].transform_space = 'LOCAL_SPACE'
+
+            driver.expression = "vm + vi"
+
+        try:
+            obj.driver_remove('location', 1)
+        except Exception:
+            pass
+        obj.location.y = 0.0
+
+        # Move to WGTS and hide from view / selection while keeping active in depsgraph
+        if obj.name not in wgt_coll.objects:
+            wgt_coll.objects.link(obj)
+        for c in list(obj.users_collection):
+            if c != wgt_coll:
+                try:
+                    c.objects.unlink(obj)
+                except Exception:
+                    pass
+        obj.hide_viewport = False
+        try:
+            obj.hide_set(True)
+        except Exception:
+            pass
+        obj.hide_render = True
+        obj.hide_select = True
+
+    if hl_top:
+        setup_hl_object_drivers(hl_top, "CTRL-Highlight_Top")
+    if hl_bot:
+        setup_hl_object_drivers(hl_bot, "CTRL-Highlight_Bottom")
+    if eye_hl:
+        if eye_hl.name not in wgt_coll.objects:
+            wgt_coll.objects.link(eye_hl)
+        for c in list(eye_hl.users_collection):
+            if c != wgt_coll:
+                try:
+                    c.objects.unlink(eye_hl)
+                except Exception:
+                    pass
+        eye_hl.hide_viewport = False
+        try:
+            eye_hl.hide_set(True)
+        except Exception:
+            pass
+        eye_hl.hide_render = True
+        eye_hl.hide_select = True
+
+    return True
+
+
+def _cleanup_existing_face_panel(context):
+    """Safely removes previous Face Panel objects, orphan custom shape widgets, and duplicate collections."""
+    old_panel_objs = [o for o in bpy.data.objects if o.name.startswith("Face Panel") and o.type == 'ARMATURE']
+    widget_objs = set()
+    for panel in old_panel_objs:
+        if hasattr(panel, 'pose') and panel.pose:
+            for pb in panel.pose.bones:
+                if pb.custom_shape:
+                    widget_objs.add(pb.custom_shape)
+
+    for panel in old_panel_objs:
+        try:
+            bpy.data.objects.remove(panel, do_unlink=True)
+        except Exception:
+            pass
+
+    for w in widget_objs:
+        if w.users == 0:
+            try:
+                bpy.data.objects.remove(w, do_unlink=True)
+            except Exception:
+                pass
+
+    for c in list(bpy.data.collections):
+        if c.name.startswith(("Face Panel", "Face panelwgt")):
+            for parent in list(bpy.data.collections):
+                if c.name in parent.children:
+                    try:
+                        parent.children.unlink(c)
+                    except Exception:
+                        pass
+            if c.name in context.scene.collection.children:
+                try:
+                    context.scene.collection.children.unlink(c)
+                except Exception:
+                    pass
+            try:
+                bpy.data.collections.remove(c, do_unlink=True)
+            except Exception:
+                pass
+
+
+# Widgets reservados del rig (RootShape.blend). face_panel_wuwa.blend trae sus
+# propias copias: su 'root plate' tiene 256 verts / 3 anillos frente al de un
+# solo anillo (64 verts) del rig. Si sobreviven a la importacion, el hueso
+# 'root' termina con 3 circulos en vez de 1.
+_WUWA_RESERVED_WIDGET_RE = re.compile(r"^(root plate|head-control-shape)(\.\d{3})?$")
+
+
+def _purge_panel_colliding_rig_widgets():
+    """Elimina copias huerfanas de widgets reservados traidas por el face panel.
+
+    Conserva cualquier objeto referenciado como custom_shape por un hueso, asi
+    que los widgets buenos del rig (root -> 'root plate', etc.) nunca se tocan.
+    """
+    try:
+        used_shapes = set()
+        for o in bpy.data.objects:
+            if o.type == 'ARMATURE' and getattr(o, "pose", None):
+                try:
+                    for pb in o.pose.bones:
+                        cs = getattr(pb, "custom_shape", None)
+                        if cs is not None:
+                            used_shapes.add(cs.name)
+                except Exception:
+                    continue
+        for obj in [o for o in bpy.data.objects if _WUWA_RESERVED_WIDGET_RE.match(o.name)]:
+            if obj.name in used_shapes:
+                continue
+            try:
+                bpy.data.objects.remove(obj, do_unlink=True)
+            except Exception:
+                pass
+    except Exception as ex:
+        print(f"[WUWA FACE PANEL] widget purge notice: {ex}")
+
+
+def import_wuwa_face_panel_blend(context, mesh, armature, head_bone):
+    """Imports face_panel_wuwa.blend and joins all 72 bones directly into the character armature."""
+    import os
+    cur_dir = os.path.dirname(os.path.abspath(__file__))
+    blend_path = os.path.join(cur_dir, "face_panel_wuwa.blend")
+
+    if not os.path.exists(blend_path):
+        raise FileNotFoundError(f"face_panel_wuwa.blend not found in: {blend_path}")
+
+    # 1. Cleanup any previous standalone panel objects, collections, and existing panel bones in the armature
+    _cleanup_existing_face_panel(context)
+    _cleanup_face_panel_bones_from_armature(armature)
+
+    # 2. Load collection from blend (Face Panel collection contains Face panelwgt as child)
+    collection_name = "Face Panel"
+
+    with bpy.data.libraries.load(blend_path, link=False) as (src_data, tgt_data):
+        if collection_name in src_data.collections:
+            tgt_data.collections = [collection_name]
+        else:
+            raise RuntimeError("Collection 'Face Panel' not found in face_panel_wuwa.blend")
+
+    face_panel_coll = tgt_data.collections[0]
+    if not face_panel_coll:
+        raise RuntimeError("Failed to load 'Face Panel' collection.")
+
+    # Purga copias contaminantes ('root plate' de 3 anillos, etc.) traidas por
+    # el blend antes de que el parity del rig las confunda con las buenas.
+    _purge_panel_colliding_rig_widgets()
+
+    # Remove Face panelwgt child collection so its 71 widget shapes remain in bpy.data.objects without cluttering the scene
+    for child in list(face_panel_coll.children):
+        face_panel_coll.children.unlink(child)
+        bpy.data.collections.remove(child, do_unlink=True)
+
+    # Temporarily link face_panel_coll to scene root to execute object operations
+    if face_panel_coll.name not in context.scene.collection.children:
+        context.scene.collection.children.link(face_panel_coll)
+
+    # Find face panel armature object
+    panel_arm = next((obj for obj in face_panel_coll.objects if obj.type == "ARMATURE"), None)
+    if not panel_arm:
+        for obj in bpy.data.objects:
+            if obj.name.startswith("Face Panel") and obj.type == "ARMATURE":
+                panel_arm = obj
+                break
+
+    if not panel_arm:
+        raise RuntimeError("Armature 'Face Panel' not found in imported collection.")
+
+    panel_bone_names = [b.name for b in panel_arm.data.bones]
+
+    # 3. Position and scale panel_arm using rest pose alignment
+    cached_xform = _cache_and_reset_armature(armature)
+
+    try:
+        bone = armature.data.bones.get(head_bone)
+        if bone:
+            head_pos = bone.head_local.copy()
+            panel_arm.location = (head_pos.x + 0.35, head_pos.y, head_pos.z)
+        else:
+            panel_arm.location = (0.35, 0.0, 1.5)
+
+        panel_arm.scale = (0.2, 0.2, 0.2)
+        panel_arm.rotation_euler = (0, 0, 0)
+
+        # Apply transforms so edit bones match their world locations
+        orig_active = context.view_layer.objects.active
+        orig_mode = context.mode
+        if orig_mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        context.view_layer.objects.active = panel_arm
+        panel_arm.select_set(True)
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+
+        # 4. Remove internal collections from panel_arm so they don't pollute the character armature
+        if hasattr(panel_arm.data, 'collections'):
+            while panel_arm.data.collections:
+                panel_arm.data.collections.remove(panel_arm.data.collections[0])
+
+        bpy.ops.object.select_all(action='DESELECT')
+        panel_arm.select_set(True)
+        armature.select_set(True)
+        context.view_layer.objects.active = armature
+        bpy.ops.object.join()
+
+        # 5. In Edit Mode: parent root bones to head_bone
+        bpy.ops.object.mode_set(mode='EDIT')
+        ebs = armature.data.edit_bones
+        head_eb = ebs.get(head_bone)
+
+        if head_eb:
+            if 'panel.root' in ebs:
+                ebs['panel.root'].parent = head_eb
+                ebs['panel.root'].use_connect = False
+            if 'm.pos' in ebs:
+                ebs['m.pos'].parent = ebs.get('panel.root', head_eb)
+                ebs['m.pos'].use_connect = False
+
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+        # 6. Assign Face Panel bones strictly to the "Face" Bone Collection in Blender 5.2 / 4.x
+        # and scale LIMIT_LOCATION constraints by 0.2 to match the panel armature's applied scale
+        if hasattr(armature.data, 'collections'):
+            face_coll = armature.data.collections.get("Face") or armature.data.collections.new("Face")
+            for bn in panel_bone_names:
+                b = armature.data.bones.get(bn)
+                if b:
+                    for c in list(b.collections):
+                        if c != face_coll:
+                            c.unassign(b)
+                    face_coll.assign(b)
+
+            # Clean up unwanted imported collections if any lingered
+            for unwanted_c_name in ["Layer 1", "text", "static", "move", "move 2", "Group", "Face Panel"]:
+                unwanted_c = armature.data.collections.get(unwanted_c_name)
+                if unwanted_c:
+                    try:
+                        armature.data.collections.remove(unwanted_c)
+                    except Exception:
+                        pass
+
+        # Scale down constraint limits because Blender's transform_apply(scale=True) scales edit bones but leaves constraint limits unscaled
+        PANEL_SCALE_FACTOR = 0.2
+        for bn in panel_bone_names:
+            pb = armature.pose.bones.get(bn)
+            if pb:
+                for c in pb.constraints:
+                    if c.type == 'LIMIT_LOCATION':
+                        if c.use_min_x: c.min_x *= PANEL_SCALE_FACTOR
+                        if c.use_max_x: c.max_x *= PANEL_SCALE_FACTOR
+                        if c.use_min_y: c.min_y *= PANEL_SCALE_FACTOR
+                        if c.use_max_y: c.max_y *= PANEL_SCALE_FACTOR
+                        if c.use_min_z: c.min_z *= PANEL_SCALE_FACTOR
+                        if c.use_max_z: c.max_z *= PANEL_SCALE_FACTOR
+
+        # 7. Merge Eye Highlight if objects exist
+        merge_eye_highlight_into_armature(context, armature, head_bone)
+
+        if orig_active and orig_active != panel_arm:
+            context.view_layer.objects.active = orig_active
+        else:
+            context.view_layer.objects.active = armature
+    finally:
+        _restore_armature(armature, cached_xform)
+
+    # 8. Clean up temporary imported collection Face Panel
+    for c in list(bpy.data.collections):
+        if c.name.startswith("Face Panel") or c.name.startswith("Face panelwgt"):
+            try:
+                if c.name in context.scene.collection.children:
+                    context.scene.collection.children.unlink(c)
+                bpy.data.collections.remove(c, do_unlink=True)
+            except Exception:
+                pass
+
+    # Segunda pasada de seguridad: ninguna copia huerfana de widgets
+    # reservados ('root plate', ...) debe sobrevivir a la importacion.
+    _purge_panel_colliding_rig_widgets()
+
+    # 9. Setup shape key drivers targeting the fused character armature
+    setup_face_panel_blend_drivers(context, mesh, armature)
+
+    # 10. Setup Outline drivers from fp.outline bone to character outline modifiers
+    try:
+        setup_outline_drivers_from_face_panel(armature, context)
+    except Exception as ex_ol:
+        print(f"[WUWA FACE PANEL] Outline drivers notice: {ex_ol}")
+
+    mesh["ww_face_panel_armature"] = armature.name
+    mesh["ww_face_panel_assigned"] = True
+    armature["ww_face_panel_armature"] = armature.name
+
+    return armature
+
+
+class WW_OT_ImportFacePanel(Operator):
+    bl_idname = "wuthering_waves.import_face_panel"
+    bl_label = "Import 3D Face Panel (Blend)"
+    bl_description = "Imports the high quality 3D Face Panel widget from face_panel_wuwa.blend and connects drivers"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        obj = context.active_object or context.object
+        if not obj:
+            return False
+        if obj.type == 'MESH':
+            return any(m.type == 'ARMATURE' and m.object for m in obj.modifiers)
+        elif obj.type == 'ARMATURE':
+            return True
+        return False
+
+    def execute(self, context):
+        try:
+            faceobj = find_face_mesh()
+            if not faceobj:
+                self.report({'ERROR'}, "No character mesh with shape keys found.")
+                return {'CANCELLED'}
+
+            armature, head_name = find_armature_and_head(faceobj)
+            if not armature:
+                self.report({'ERROR'}, "No character armature found.")
+                return {'CANCELLED'}
+
+            panel_obj = import_wuwa_face_panel_blend(context, faceobj, armature, head_name)
+            self.report({'INFO'}, f"Successfully imported 3D Face Panel ({panel_obj.name}) with drivers connected!")
+            return {'FINISHED'}
+        except Exception as ex:
+            import traceback
+            traceback.print_exc()
+            self.report({'ERROR'}, f"Failed to import Face Panel: {ex}")
+            return {'CANCELLED'}
+
+
 def wuwa_face_rig_main(armature_obj=None):
     faceobj = find_face_mesh()
     if faceobj is None:
@@ -1171,6 +2155,20 @@ def wuwa_face_rig_main(armature_obj=None):
         print("[WUWA FACE RIG] Notice: No armature found.")
         return False
 
+    # 1. Try importing high-fidelity face_panel_wuwa.blend if available
+    import os
+    cur_dir = os.path.dirname(os.path.abspath(__file__))
+    blend_path = os.path.join(cur_dir, "face_panel_wuwa.blend")
+
+    if os.path.exists(blend_path):
+        try:
+            import_wuwa_face_panel_blend(bpy.context, faceobj, armature, head_name)
+            print("[WUWA FACE RIG] Successfully created face rig using face_panel_wuwa.blend!")
+            return True
+        except Exception as ex:
+            print(f"[WUWA FACE RIG] Notice importing blend face panel: {ex}. Falling back to procedural sliders.")
+
+    # 2. Fallback procedural face rig
     fwd, right, up, face_size, fcx = get_face_metrics(faceobj, armature, head_name)
     keyblock = faceobj.data.shape_keys.key_blocks
 
@@ -1212,5 +2210,19 @@ class WW_OT_CreateFacePanel(Operator):
             return {'CANCELLED'}
 
 
-register, unregister = bpy.utils.register_classes_factory([WW_OT_CreateFacePanel])
+classes = (
+    WW_OT_CreateFacePanel,
+    WW_OT_ImportFacePanel,
+)
+
+
+def register():
+    for cls in classes:
+        bpy.utils.register_class(cls)
+
+
+def unregister():
+    for cls in reversed(classes):
+        bpy.utils.unregister_class(cls)
+
 

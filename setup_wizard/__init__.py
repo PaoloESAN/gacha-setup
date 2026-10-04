@@ -42,6 +42,7 @@ else:
     )
     from setup_wizard.character_rig_setup.wuwa_face_panel import (
         WW_OT_CreateFacePanel,
+        WW_OT_ImportFacePanel,
     )
     from setup_wizard.character_rig_setup.ake_face_rig import (
         AKE_OT_SetUpIsaacFaceRig,
@@ -331,6 +332,7 @@ else:
         WW_OT_FinishSetup,
         WW_OT_SetupCompositorNodes,
         WW_OT_CreateFacePanel,
+        WW_OT_ImportFacePanel,
         WW_OT_ToggleAnimateMode,
         WW_OT_ToggleOutlines,
         WW_OT_ToggleHairTrans,

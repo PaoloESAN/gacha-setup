@@ -215,6 +215,41 @@ def isolate_wgts_for_character(rig_obj, char_name, char_coll=None, extra_keyword
             continue
         if not is_global:
             continue
+        # Check if this collection is a duplicate or variant of THIS character
+        # (e.g. WGTS_<Char>_Skeleton, WGTS_<Char>Rig, or any WGTS under char_coll)
+        is_same_char = False
+        if coll.name.startswith("WGTS_"):
+            clean_c = coll.name[5:].lower()
+            clean_t = char_name.lower()
+            if clean_c.startswith(clean_t) or clean_t.startswith(clean_c):
+                is_same_char = True
+            elif char_coll is not None and coll.name in char_coll.children:
+                is_same_char = True
+
+        if is_same_char:
+            # THIS character's duplicate WGTS (e.g. WGTS_Qianxia_Skeleton).
+            # Migrate ALL its objects into wgts_coll so there is only 1 single WGTS collection!
+            for c_obj in list(coll.objects):
+                try:
+                    _move(c_obj)
+                except Exception:
+                    pass
+            for child_c in list(coll.children):
+                try:
+                    coll.children.unlink(child_c)
+                except Exception:
+                    pass
+            try:
+                for parent_c in list(bpy.data.collections):
+                    if coll.name in parent_c.children:
+                        parent_c.children.unlink(coll)
+                if coll.name in bpy.context.scene.collection.children:
+                    bpy.context.scene.collection.children.unlink(coll)
+                bpy.data.collections.remove(coll, do_unlink=True)
+            except Exception:
+                pass
+            continue
+
         # Don't touch another character's WGTS_<Other>
         if coll.name.startswith("WGTS_") and coll.name != wgts_coll.name:
             # Still migrate objects used by THIS rig, leave the rest
@@ -249,5 +284,20 @@ def isolate_wgts_for_character(rig_obj, char_name, char_coll=None, extra_keyword
                 bpy.data.collections.remove(coll, do_unlink=True)
         except Exception:
             pass
+
+    # Ensure char_coll has ONLY ONE WGTS collection (wgts_coll)
+    if char_coll:
+        for child in list(char_coll.children):
+            if child != wgts_coll and (child.name.startswith("WGTS") or "wgt" in child.name.lower()):
+                for c_obj in list(child.objects):
+                    try:
+                        _move(c_obj)
+                    except Exception:
+                        pass
+                try:
+                    char_coll.children.unlink(child)
+                    bpy.data.collections.remove(child, do_unlink=True)
+                except Exception:
+                    pass
 
     return wgts_coll
