@@ -521,6 +521,7 @@ GI_LIGHT_PRESETS = {
         "day_night": 0.0,
         "rim_lit": (1.0, 1.0, 1.0),
         "rim_shadow": (1.0, 1.0, 1.0),
+        "rim_scale": 0.15,
     },
     "1": {  # Sunrise
         "ambient": (0.95, 0.85, 0.8),
@@ -532,6 +533,7 @@ GI_LIGHT_PRESETS = {
         "day_night": 0.0,
         "rim_lit": (1.0, 0.82, 0.66),
         "rim_shadow": (0.6, 0.5, 0.7),
+        "rim_scale": 0.15,
     },
     "2": {  # Day
         "ambient": (1.0, 1.0, 1.0),
@@ -543,6 +545,7 @@ GI_LIGHT_PRESETS = {
         "day_night": 0.0,
         "rim_lit": (1.0, 1.0, 1.0),
         "rim_shadow": (0.6, 0.6, 0.7),
+        "rim_scale": 0.15,
     },
     "3": {  # Sunset
         "ambient": (0.9, 0.75, 0.7),
@@ -554,6 +557,7 @@ GI_LIGHT_PRESETS = {
         "day_night": 0.0,
         "rim_lit": (1.0, 0.8, 0.5),
         "rim_shadow": (0.5, 0.35, 0.6),
+        "rim_scale": 0.15,
     },
     "4": {  # Night
         "ambient": (0.4, 0.45, 0.6),
@@ -565,6 +569,7 @@ GI_LIGHT_PRESETS = {
         "day_night": 1.0,
         "rim_lit": (0.5, 0.7, 1.0),
         "rim_shadow": (0.2, 0.3, 0.5),
+        "rim_scale": 0.15,
     },
     "5": {  # Rainy
         "ambient": (0.6, 0.65, 0.7),
@@ -576,6 +581,7 @@ GI_LIGHT_PRESETS = {
         "day_night": 0.3,
         "rim_lit": (0.6, 0.7, 0.8),
         "rim_shadow": (0.3, 0.35, 0.45),
+        "rim_scale": 0.15,
     },
 }
 
@@ -793,10 +799,11 @@ def update_gi_lighting_control_type(self, context=None):
             finally:
                 _is_updating_gi_props = False
 
-        if str(current_mode) in GI_LIGHT_PRESETS:
-            preset = GI_LIGHT_PRESETS[str(current_mode)]
-            _is_updating_gi_props = True
-            try:
+        _is_updating_gi_props = True
+        try:
+            self.gi_rim_scale = 0.15
+            if str(current_mode) in GI_LIGHT_PRESETS:
+                preset = GI_LIGHT_PRESETS[str(current_mode)]
                 if "ambient" in preset:
                     self.gi_amb_color = preset["ambient"]
                 if "sharp_lit" in preset:
@@ -815,8 +822,9 @@ def update_gi_lighting_control_type(self, context=None):
                     self.gi_rim_lit_color = preset["rim_lit"]
                 if "rim_shadow" in preset:
                     self.gi_rim_shadow_color = preset["rim_shadow"]
-            finally:
-                _is_updating_gi_props = False
+                self.gi_rim_scale = preset.get("rim_scale", 0.15)
+        finally:
+            _is_updating_gi_props = False
 
     sync_genshin_shader_properties(getattr(context, "scene", getattr(bpy.context, "scene", None)), context=context)
 
@@ -868,6 +876,7 @@ def update_gi_light_mode(self, context=None):
                 self.gi_rim_lit_color = preset["rim_lit"]
             if "rim_shadow" in preset:
                 self.gi_rim_shadow_color = preset["rim_shadow"]
+            self.gi_rim_scale = preset.get("rim_scale", 0.15)
         finally:
             _is_updating_gi_props = False
 
@@ -965,6 +974,8 @@ def sync_genshin_shader_properties(scene=None, context=None):
     if len(rim_shadow_col) == 3:
         rim_shadow_col.append(1.0)
 
+    rim_scale_val = float(getattr(scene, "gi_rim_scale", 0.15))
+
     prop_map = {
         "Toggle Fresnel": use_fresnel,
         "Fresnel Color": fresnel_col,
@@ -984,6 +995,7 @@ def sync_genshin_shader_properties(scene=None, context=None):
         "Warm / Cold Ramps": day_night,
         "Rim Lit": rim_lit_col,
         "Rim Shadow": rim_shadow_col,
+        "Rim Scale": [rim_scale_val * 10.0, rim_scale_val * 10.0, rim_scale_val * 10.0],
     }
 
     # 1. Resolve character materials to keep settings strictly per-character
@@ -1086,6 +1098,7 @@ def sync_genshin_shader_properties(scene=None, context=None):
         "Warm / Cold Ramps": ["Warm / Cold Ramps", "Day/Night"],
         "Rim Lit": ["Rim Lit"],
         "Rim Shadow": ["Rim Shadow"],
+        "Rim Scale": ["Rim Scale", "Rim Scale X", "Rim Scale Y", "Scale"],
     }
 
     for mat in mats_to_update:
@@ -1131,6 +1144,13 @@ def sync_genshin_shader_properties(scene=None, context=None):
     try:
         from setup_wizard.replace_default_materials_setup.game_default_material_replacers import apply_character_shader_overrides
         apply_character_shader_overrides()
+    except Exception:
+        pass
+
+    # 4d. Auto-patch Rimlight for Blender 5.2 / official Blender in memory
+    try:
+        from setup_wizard.optimization.blender_rimlight_patch import patch_all_rimlight_groups_for_blender
+        patch_all_rimlight_groups_for_blender()
     except Exception:
         pass
 
@@ -1355,6 +1375,16 @@ def pull_gi_panel_values(scene, context, force=False):
                             scene.gi_rim_lit_color = tuple(inputs["Rim Lit"].default_value)[:3]
                         if "Rim Shadow" in inputs:
                             scene.gi_rim_shadow_color = tuple(inputs["Rim Shadow"].default_value)[:3]
+                        rim_scale_inp = inputs.get("Rim Scale") or inputs.get("Rim Size")
+                        if rim_scale_inp:
+                            try:
+                                v = rim_scale_inp.default_value
+                                if hasattr(v, "__iter__"):
+                                    scene.gi_rim_scale = float(v[0])
+                                else:
+                                    scene.gi_rim_scale = float(v)
+                            except Exception:
+                                pass
                 # Blush Strength is face-material only: pull from the first
                 # shader node exposing it (face materials).
                 try:
@@ -1408,6 +1438,13 @@ def pull_gi_panel_values(scene, context, force=False):
                             scene.gi_dark_eyes = False
                     else:
                         scene.gi_dark_eyes = False
+            except Exception:
+                pass
+
+            # 7. Patch rimlight groups in memory if running in official Blender
+            try:
+                from setup_wizard.optimization.blender_rimlight_patch import patch_all_rimlight_groups_for_blender
+                patch_all_rimlight_groups_for_blender()
             except Exception:
                 pass
         finally:
@@ -2101,6 +2138,7 @@ class GI_PT_Rig_Character_Settings(Panel):
                     col_colors.prop(scene, "gi_soft_shadow_color", text="Soft Shadow")
                     col_colors.prop(scene, "gi_rim_lit_color", text="Rim Lit")
                     col_colors.prop(scene, "gi_rim_shadow_color", text="Rim Shadow")
+                    col_colors.prop(scene, "gi_rim_scale", text="Rim Scale")
         else:
             # Rig does not have lighting panel (e.g. pre-3.7.3 models):
             # Hide Lighting Type completely, and show Lighting Mode preset selector directly.
@@ -2119,6 +2157,7 @@ class GI_PT_Rig_Character_Settings(Panel):
                 col_colors.prop(scene, "gi_soft_shadow_color", text="Soft Shadow")
                 col_colors.prop(scene, "gi_rim_lit_color", text="Rim Lit")
                 col_colors.prop(scene, "gi_rim_shadow_color", text="Rim Shadow")
+                col_colors.prop(scene, "gi_rim_scale", text="Rim Scale")
 
         # 3. Fresnel (Toggle checkbox + Power slider + Scaler slider)
         # In Lighting Panel mode, Toggle Fresnel must NOT be visible
@@ -2373,6 +2412,15 @@ def register_gi_properties():
         default=(1.0, 1.0, 1.0),
         update=update_gi_lighting,
     )
+    bpy.types.Scene.gi_rim_scale = bpy.props.FloatProperty(
+        name="Rim Scale",
+        description="Rim light thickness / scale",
+        min=0.0,
+        max=1.0,
+        default=0.15,
+        precision=2,
+        update=update_gi_lighting,
+    )
     bpy.types.Scene.gi_hair_physics_influence = bpy.props.FloatProperty(
         name="Hair Physics",
         description="Damped Track constraint influence for hair bone chains",
@@ -2422,7 +2470,7 @@ def unregister_gi_properties():
         "gi_amb_color", "gi_sharp_lit_color", "gi_soft_lit_color",
         "gi_sharp_shadow_color", "gi_soft_shadow_color", "gi_shadow_position",
         "gi_catch_shadows", "gi_day_night", "gi_blush_strength",
-        "gi_rim_lit_color", "gi_rim_shadow_color",
+        "gi_rim_lit_color", "gi_rim_shadow_color", "gi_rim_scale",
         "gi_hair_physics_influence", "gi_clothes_physics_influence",
         "gi_enable_outlines", "gi_enable_night_soul", "gi_dark_eyes"
     ]:

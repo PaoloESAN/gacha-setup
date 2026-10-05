@@ -950,6 +950,12 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         except Exception:
             pass
 
+        try:
+            from setup_wizard.optimization.blender_rimlight_patch import patch_all_rimlight_groups_for_blender
+            patch_all_rimlight_groups_for_blender()
+        except Exception:
+            pass
+
         self.blender_operator.report({'INFO'}, 'Replaced default materials with Genshin shader materials...')
 
     def create_shader_material_if_unique_mesh(self, mesh, mesh_body_part_name, material_name):
