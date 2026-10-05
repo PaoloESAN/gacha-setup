@@ -352,11 +352,12 @@ def resolve_settings_armature(context):
 
     # If no armature found directly from selection, check if selected object is a character mesh
     # and find any character armature in the scene / active collection
-    if target_arm is None and candidates:
+    if target_arm is None:
         import bpy
         for cand in candidates:
             if getattr(cand, "type", None) == 'MESH':
-                for o in getattr(context.scene, "objects", []):
+                scn_objs = getattr(getattr(context, "scene", None) or getattr(bpy.context, "scene", None), "objects", bpy.data.objects)
+                for o in scn_objs:
                     if o.type == 'ARMATURE' and not any(ign in o.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig", "wgt"]):
                         target_arm = o
                         break
@@ -365,6 +366,12 @@ def resolve_settings_armature(context):
                     if cand.get(GACHA_GAME_KEY) or any(slot.material for slot in getattr(cand, "material_slots", [])):
                         target_arm = cand
                 break
+        if target_arm is None:
+            scn_objs = getattr(getattr(context, "scene", None) or getattr(bpy.context, "scene", None), "objects", bpy.data.objects)
+            for o in scn_objs:
+                if o.type == 'ARMATURE' and not any(ign in o.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig", "wgt"]):
+                    target_arm = o
+                    break
 
     if target_arm is not None:
         try:

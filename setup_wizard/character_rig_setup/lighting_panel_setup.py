@@ -362,6 +362,17 @@ def armature_has_lighting_panel(arm) -> bool:
     return bool(arm.data.bones.get(LightingPanelNames.Bones.LIGHTING_PANEL))
 
 
+def character_supports_lighting_panel(arm=None, context=None, target_materials=None) -> bool:
+    """Returns True if the character rig has the 3D lighting panel bone."""
+    if arm is None and context is not None:
+        try:
+            from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+            arm = resolve_settings_armature(context)
+        except Exception:
+            pass
+    return bool(arm and armature_has_lighting_panel(arm))
+
+
 def is_lighting_panel_visible(arm) -> bool:
     """Returns True if the Lighting Panel controls are currently visible."""
     if not arm or arm.type != 'ARMATURE' or not arm.data:
