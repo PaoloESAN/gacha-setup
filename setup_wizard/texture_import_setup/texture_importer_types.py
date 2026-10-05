@@ -2138,8 +2138,8 @@ class GenshinTextureImporter:
 
             mix_001 = gtree.nodes.get('Mix.001')
             mix_main = gtree.nodes.get('Mix')
-            mix_shader_002 = gtree.nodes.get('Mix Shader.002')
-            mix_shader_main = gtree.nodes.get('Mix Shader')
+            mix_color_002 = gtree.nodes.get('Mix Color.002') or gtree.nodes.get('Mix.002') or gtree.nodes.get('Mix Shader.002')
+            mix_color_main = gtree.nodes.get('Mix Color') or gtree.nodes.get('Mix.003') or gtree.nodes.get('Mix Shader')
 
             if not mix_001 or not mix_main:
                 mix_nodes = [n for n in gtree.nodes if n.type == 'MIX']
@@ -2149,13 +2149,13 @@ class GenshinTextureImporter:
                     elif mn.name == 'Mix':
                         mix_main = mn
 
-            if not mix_shader_002 or not mix_shader_main:
-                ms_nodes = [n for n in gtree.nodes if n.type == 'MIX_SHADER']
-                for msn in ms_nodes:
-                    if '002' in msn.name:
-                        mix_shader_002 = msn
-                    elif msn.name == 'Mix Shader':
-                        mix_shader_main = msn
+            if not mix_color_002 or not mix_color_main:
+                mc_nodes = [n for n in gtree.nodes if n.type in ('MIX', 'MIX_SHADER')]
+                for mcn in mc_nodes:
+                    if '002' in mcn.name:
+                        mix_color_002 = mcn
+                    elif '003' in mcn.name or 'color' in mcn.name.lower() or 'shader' in mcn.name.lower():
+                        mix_color_main = mcn
 
             dir_str = getattr(self, 'directory', '') or ''
             is_marionette_new = (
@@ -2166,10 +2166,10 @@ class GenshinTextureImporter:
             )
 
             if has_ramp and is_marionette_new:
-                # With ramp: Pupil_ramp1 & Pupil04 -> Mix.001 -> Mix Shader.002
-                if mix_001 and mix_shader_002:
+                # With ramp: Pupil_ramp1 & Pupil04 -> Mix.001 -> Mix Color.002
+                if mix_001 and mix_color_002:
                     for link in list(gtree.links):
-                        if p4_node and link.from_node == p4_node and link.to_node == mix_shader_002 and link.to_socket.name == 'Shader':
+                        if p4_node and link.from_node == p4_node and link.to_node == mix_color_002:
                             gtree.links.remove(link)
                     ramp1_node = ramp_nodes[0] if ramp_nodes else None
                     if ramp1_node and 'Color' in ramp1_node.outputs:
@@ -2181,14 +2181,14 @@ class GenshinTextureImporter:
                         if b_sock:
                             gtree.links.new(p4_node.outputs['Color'], b_sock)
                     res_sock = mix_001.outputs.get('Result') or mix_001.outputs[0]
-                    shader_in_sock = mix_shader_002.inputs[2] if len(mix_shader_002.inputs) > 2 else mix_shader_002.inputs.get('Shader')
-                    if res_sock and shader_in_sock:
-                        gtree.links.new(res_sock, shader_in_sock)
+                    color_in_sock = mix_color_002.inputs.get('B') or mix_color_002.inputs.get('Shader') or mix_color_002.inputs[2]
+                    if res_sock and color_in_sock:
+                        gtree.links.new(res_sock, color_in_sock)
 
-                # With ramp: Pupil_ramp2 & Pupil02 -> Mix -> Mix Shader
-                if mix_main and mix_shader_main:
+                # With ramp: Pupil_ramp2 & Pupil02 -> Mix -> Mix Color
+                if mix_main and mix_color_main:
                     for link in list(gtree.links):
-                        if p2_node and link.from_node == p2_node and link.to_node == mix_shader_main and link.to_socket.name == 'Shader':
+                        if p2_node and link.from_node == p2_node and link.to_node == mix_color_main:
                             gtree.links.remove(link)
                     ramp2_node = ramp_nodes[1] if len(ramp_nodes) > 1 else (ramp_nodes[0] if ramp_nodes else None)
                     if ramp2_node and 'Color' in ramp2_node.outputs:
@@ -2200,26 +2200,26 @@ class GenshinTextureImporter:
                         if b_sock:
                             gtree.links.new(p2_node.outputs['Color'], b_sock)
                     res_sock = mix_main.outputs.get('Result') or mix_main.outputs[0]
-                    shader_in_sock = mix_shader_main.inputs[2] if len(mix_shader_main.inputs) > 2 else mix_shader_main.inputs.get('Shader')
-                    if res_sock and shader_in_sock:
-                        gtree.links.new(res_sock, shader_in_sock)
+                    color_in_sock = mix_color_main.inputs.get('B') or mix_color_main.inputs.get('Shader') or mix_color_main.inputs[2]
+                    if res_sock and color_in_sock:
+                        gtree.links.new(res_sock, color_in_sock)
             elif not is_marionette_new:
-                # Disconnect Mix/Mix.001: Pupil04 and Pupil02 go directly to Mix Shader nodes if NOT MarionetteNew
-                if p4_node and mix_shader_002:
+                # Disconnect Mix/Mix.001: Pupil04 and Pupil02 go directly to Mix Color nodes if NOT MarionetteNew
+                if p4_node and mix_color_002:
                     for link in list(gtree.links):
-                        if mix_001 and link.from_node == mix_001 and link.to_node == mix_shader_002:
+                        if mix_001 and link.from_node == mix_001 and link.to_node == mix_color_002:
                             gtree.links.remove(link)
-                    shader_in_sock = mix_shader_002.inputs[2] if len(mix_shader_002.inputs) > 2 else mix_shader_002.inputs.get('Shader')
-                    if shader_in_sock:
-                        gtree.links.new(p4_node.outputs['Color'], shader_in_sock)
+                    color_in_sock = mix_color_002.inputs.get('B') or mix_color_002.inputs.get('Shader') or mix_color_002.inputs[2]
+                    if color_in_sock:
+                        gtree.links.new(p4_node.outputs['Color'], color_in_sock)
 
-                if p2_node and mix_shader_main:
+                if p2_node and mix_color_main:
                     for link in list(gtree.links):
-                        if mix_main and link.from_node == mix_main and link.to_node == mix_shader_main:
+                        if mix_main and link.from_node == mix_main and link.to_node == mix_color_main:
                             gtree.links.remove(link)
-                    shader_in_sock = mix_shader_main.inputs[2] if len(mix_shader_main.inputs) > 2 else mix_shader_main.inputs.get('Shader')
-                    if shader_in_sock:
-                        gtree.links.new(p2_node.outputs['Color'], shader_in_sock)
+                    color_in_sock = mix_color_main.inputs.get('B') or mix_color_main.inputs.get('Shader') or mix_color_main.inputs[2]
+                    if color_in_sock:
+                        gtree.links.new(p2_node.outputs['Color'], color_in_sock)
 
     def set_multi_pupil_textures(self, material, pupil_images_dict, ramp_img=None, highlight_img=None):
         self.set_new_pupil_material_textures(material, pupil_images_dict, ramp_img, highlight_img)
