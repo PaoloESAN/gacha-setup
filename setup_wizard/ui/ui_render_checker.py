@@ -34,3 +34,11 @@ class WutheringWavesUIRenderChecker(UIRenderChecker):
 class ArknightsEndfieldUIRenderChecker(UIRenderChecker):
     GAME_TYPE = GameType.ARKNIGHTS_ENDFIELD.name
 
+
+class HonkaiImpact3rdUIRenderChecker(UIRenderChecker):
+    GAME_TYPE = GameType.HONKAI_IMPACT_3RD.name
+
+
+class HonkaiNexusAnimaUIRenderChecker(UIRenderChecker):
+    GAME_TYPE = GameType.HONKAI_NEXUS_ANIMA.name
+

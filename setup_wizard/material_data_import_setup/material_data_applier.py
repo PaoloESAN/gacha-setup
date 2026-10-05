@@ -55,6 +55,15 @@ class MaterialDataAppliersFactory:
             return []
         elif game_type == GameType.WUTHERING_WAVES.name:
             return []
+        elif game_type == GameType.PUNISHING_GRAY_RAVEN.name:
+            return []
+        elif game_type == GameType.HONKAI_IMPACT_3RD.name:
+            return []
+        elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
+            return [
+                V2_HSR_MaterialDataApplier(material_data_parser, outline_material_group),
+                StellarToon_MaterialDataApplier(material_data_parser, outline_material_group),
+            ]
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 

@@ -50,6 +50,9 @@ class HOYOVERSE_OT_rig_character(Operator, ImportHelper, CustomOperatorPropertie
         GameType.NEVERNESS_TO_EVERNESS.name,
         GameType.WUTHERING_WAVES.name,
         GameType.ARKNIGHTS_ENDFIELD.name,
+        GameType.PUNISHING_GRAY_RAVEN.name,
+        GameType.HONKAI_IMPACT_3RD.name,
+        GameType.HONKAI_NEXUS_ANIMA.name,
     ]
 
     def execute(self, context):

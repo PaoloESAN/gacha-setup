@@ -43,6 +43,10 @@ class GameOutlineImporterFactory:
             return WutheringWavesOutlineNodeGroupImporter(blender_operator, context)
         elif game_type == GameType.ARKNIGHTS_ENDFIELD.name:
             return ArknightsEndfieldOutlineNodeGroupImporter(blender_operator, context)
+        elif game_type == GameType.HONKAI_IMPACT_3RD.name:
+            return HonkaiImpact3rdOutlineNodeGroupImporter(blender_operator, context)
+        elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
+            return HonkaiStarRailOutlineNodeGroupImporter(blender_operator, context, OutlineNodeGroupNames.HONKAI_NEXUS_ANIMA_OUTLINES)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -124,6 +128,66 @@ class PunishingGrayRavenOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
             OutlineNodeGroupNames.V2_JAREDNYTS_PGR_OUTLINES + OutlineNodeGroupNames.V3_JAREDNYTS_PGR_OUTLINES
 
     def import_outline_node_group(self):
+        filepath = get_shader_file_path(GameType.PUNISHING_GRAY_RAVEN.name, 'main')
+        if filepath and os.path.isfile(filepath):
+            for outline_node_group_name in self.outlines_node_group_names:
+                if not bpy.data.node_groups.get(outline_node_group_name):
+                    inner_path = 'NodeTree'
+                    try:
+                        bpy.ops.wm.append(
+                            filepath=os.path.join(filepath, inner_path, outline_node_group_name),
+                            directory=os.path.join(filepath, inner_path),
+                            filename=outline_node_group_name
+                        )
+                    except Exception as e:
+                        print(f"Failed to append {outline_node_group_name} from {filepath}: {e}")
+
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx, 
+            self.blender_operator.invoker_type,
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=self.blender_operator.game_type,
+        )
+
+
+class HonkaiImpact3rdOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+        self.outlines_node_group_names = OutlineNodeGroupNames.HONKAI_IMPACT_3RD_OUTLINES
+
+    def import_outline_node_group(self):
+        filepath = get_shader_file_path(GameType.HONKAI_IMPACT_3RD.name, 'main')
+        if filepath and os.path.isfile(filepath):
+            for outline_node_group_name in self.outlines_node_group_names:
+                if not bpy.data.node_groups.get(outline_node_group_name):
+                    inner_path = 'NodeTree'
+                    try:
+                        bpy.ops.wm.append(
+                            filepath=os.path.join(filepath, inner_path, outline_node_group_name),
+                            directory=os.path.join(filepath, inner_path),
+                            filename=outline_node_group_name
+                        )
+                    except Exception as e:
+                        print(f"Failed to append {outline_node_group_name} from {filepath}: {e}")
+
+            # Import direction control objects from shader file
+            try:
+                with bpy.data.libraries.load(filepath, link=False) as (data_from, data_to):
+                    direction_keywords = ["light direction", "head origin", "head forward", "head up"]
+                    target_objs = [
+                        o for o in data_from.objects
+                        if any(kw == o.lower() for kw in direction_keywords)
+                        and o not in bpy.data.objects
+                    ]
+                    data_to.objects = target_objs
+
+                for obj in data_to.objects:
+                    if obj and obj.name not in bpy.context.scene.collection.objects:
+                        bpy.context.scene.collection.objects.link(obj)
+            except Exception as e:
+                print(f"Failed to import HI3 direction objects from {filepath}: {e}")
+
         NextStepInvoker().invoke(
             self.blender_operator.next_step_idx, 
             self.blender_operator.invoker_type,

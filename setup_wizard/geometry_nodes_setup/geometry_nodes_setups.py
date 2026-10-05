@@ -13,7 +13,7 @@ from setup_wizard.domain.shader_material_name_keywords import ShaderMaterialName
 from setup_wizard.domain.shader_material import ShaderMaterial
 from setup_wizard.domain.shader_node_names import ShaderNodeNames, StellarToonShaderNodeNames, V3_GenshinShaderNodeNames, V4_PrimoToonShaderNodeNames
 from setup_wizard.domain.shader_identifier_service import GenshinImpactShaders, HonkaiStarRailShaders, ShaderIdentifierService, ShaderIdentifierServiceFactory
-from setup_wizard.domain.shader_material_names import JaredNytsPunishingGrayRavenShaderMaterialNames, StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, V2_FestivityGenshinImpactMaterialNames, ShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, V4_PrimoToonGenshinImpactMaterialNames, DURIN_DARK_EYE_MATERIAL_NAME, DURIN_NORMAL_EYE_MATERIAL_NAME
+from setup_wizard.domain.shader_material_names import JaredNytsPunishingGrayRavenShaderMaterialNames, StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, V2_FestivityGenshinImpactMaterialNames, ShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, V4_PrimoToonGenshinImpactMaterialNames, DURIN_DARK_EYE_MATERIAL_NAME, DURIN_NORMAL_EYE_MATERIAL_NAME, HonkaiImpact3rdShaderMaterialNames
 
 from setup_wizard.domain.game_types import GameType
 from setup_wizard.material_import_setup.empty_names import LightDirectionEmptyNames
@@ -243,6 +243,15 @@ class GameGeometryNodesSetupFactory:
             return NevernessToEvernessGeometryNodesSetup(blender_operator, context)
         elif game_type == GameType.WUTHERING_WAVES.name:
             return WutheringWavesGeometryNodesSetup(blender_operator, context)
+        elif game_type == GameType.HONKAI_IMPACT_3RD.name:
+            return HonkaiImpact3rdGeometryNodesSetup(blender_operator, context)
+        elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
+            return HonkaiStarRailGeometryNodesSetup(
+                blender_operator, 
+                context, 
+                Nya222HonkaiStarRailShaderMaterialNames, 
+                OutlineNodeGroupNames.HONKAI_NEXUS_ANIMA_OUTLINES
+            )
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -2286,4 +2295,99 @@ class WutheringWavesGeometryNodesSetup(GameGeometryNodesSetup):
                 mod.node_group = star_group
 
         self.blender_operator.report({'INFO'}, 'Configured Geometry Nodes and Outlines for Wuthering Waves.')
+
+
+class HonkaiImpact3rdGeometryNodesSetup(GameGeometryNodesSetup):
+    DEFAULT_OUTLINE_THICKNESS = 0.1
+
+    def __init__(self, blender_operator, context):
+        super().__init__(blender_operator, context)
+        self.material_names = HonkaiImpact3rdShaderMaterialNames
+        self.outlines_node_group_names = OutlineNodeGroupNames.HONKAI_IMPACT_3RD_OUTLINES
+
+    def setup_geometry_nodes(self):
+        outline_ng = bpy.data.node_groups.get("ImpactToon - Honkai Impact 3rd Outlines")
+        lv_ng = bpy.data.node_groups.get("Light Vectors")
+        outlines_mat = bpy.data.materials.get("ImpactToon - Outlines")
+
+        light_dir_obj = bpy.data.objects.get("Light Direction")
+        head_origin_obj = bpy.data.objects.get("Head Origin")
+        head_fwd_obj = bpy.data.objects.get("Head Forward")
+        head_up_obj = bpy.data.objects.get("Head Up")
+
+        meshes = [obj for obj in bpy.context.scene.objects if obj.type == 'MESH']
+        for obj in meshes:
+            if any(ign in obj.name.lower() for ign in ['shadow', 'effect', 'eye']):
+                continue
+            has_hi3_mat = any(slot.material and slot.material.name.startswith("ImpactToon - ") for slot in obj.material_slots)
+            if not has_hi3_mat:
+                continue
+
+            # 1. Light Vectors modifier
+            if lv_ng:
+                mod_lv = obj.modifiers.get("Light Vectors")
+                if not mod_lv:
+                    # Check if an old generic Geometry Nodes mod with this node group exists
+                    old_mod = next((m for m in obj.modifiers if m.type == 'NODES' and m.node_group == lv_ng), None)
+                    if old_mod:
+                        old_mod.name = "Light Vectors"
+                        mod_lv = old_mod
+                    else:
+                        mod_lv = obj.modifiers.new("Light Vectors", 'NODES')
+                mod_lv.node_group = lv_ng
+
+                # Set input control objects
+                for sock_name, target_obj in [
+                    ("Light Direction", light_dir_obj),
+                    ("Input_3", light_dir_obj),
+                    ("Head Origin", head_origin_obj),
+                    ("Input_4", head_origin_obj),
+                    ("Head Forward", head_fwd_obj),
+                    ("Input_5", head_fwd_obj),
+                    ("Head Up", head_up_obj),
+                    ("Input_6", head_up_obj),
+                ]:
+                    if target_obj:
+                        set_modifier_property(mod_lv, sock_name, target_obj)
+
+                # Set output attributes
+                for out_ident, out_name in [
+                    ("Output_2", "lightDir"),
+                    ("Output_7", "headForward"),
+                    ("Output_8", "headUp"),
+                ]:
+                    set_modifier_property(mod_lv, out_ident, out_name)
+                    set_modifier_property(mod_lv, out_name, out_name)
+                    set_modifier_property(mod_lv, f"{out_ident}_attribute_name", out_name)
+                    set_modifier_property(mod_lv, f"{out_name}_attribute_name", out_name)
+                    if hasattr(mod_lv, "properties") and hasattr(mod_lv.properties, "outputs"):
+                        sock = getattr(mod_lv.properties.outputs, out_ident, None) or getattr(mod_lv.properties.outputs, out_name, None)
+                        if sock and hasattr(sock, "attribute_name"):
+                            try:
+                                sock.attribute_name = out_name
+                            except Exception:
+                                pass
+
+            # 2. Outlines modifier
+            if outline_ng:
+                mod_ol = obj.modifiers.get("Outlines")
+                if not mod_ol:
+                    old_mod = next((m for m in obj.modifiers if m.type == 'NODES' and m.node_group == outline_ng), None)
+                    if old_mod:
+                        old_mod.name = "Outlines"
+                        mod_ol = old_mod
+                    else:
+                        mod_ol = obj.modifiers.new("Outlines", 'NODES')
+                mod_ol.node_group = outline_ng
+
+                if outlines_mat:
+                    for slot in ['Hair Outline', 'Body Outline', 'Face Outline', 'Dress Outline', 'Dress 2 Outline', 'Other Outline']:
+                        set_modifier_property(mod_ol, slot, outlines_mat)
+
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx, 
+            self.blender_operator.invoker_type, 
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=self.blender_operator.game_type,
+        )
 

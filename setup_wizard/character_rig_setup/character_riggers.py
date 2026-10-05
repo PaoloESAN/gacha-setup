@@ -10,6 +10,9 @@ from setup_wizard.character_rig_setup.lighting_panel_setup import LightingPanel,
 from setup_wizard.character_rig_setup.rig_script import rig_character
 from setup_wizard.character_rig_setup.npc_rig_script import rig_character as rig_npc
 from setup_wizard.character_rig_setup.hsr_rig_script import rig_character as hsr_rig_character
+from setup_wizard.character_rig_setup.pgr_rig_script import rig_character as pgr_rig_character
+from setup_wizard.character_rig_setup.hi3_rig_script import rig_character as hi3_rig_character
+from setup_wizard.character_rig_setup.hna_rig_script import rig_character as hna_rig_character
 from setup_wizard.character_rig_setup.zzz_rig_script import rig_character as zzz_rig_character
 from setup_wizard.character_rig_setup.nte_rig_script import rig_character as nte_rig_character
 from setup_wizard.character_rig_setup.wuwa_rig_script import rig_wuthering_waves_character
@@ -58,6 +61,10 @@ class CharacterRiggerFactory:
             return WutheringWavesCharacterRigger(blender_operator, context)
         elif game_type == GameType.ARKNIGHTS_ENDFIELD.name:
             return ArknightsEndfieldCharacterRigger(blender_operator, context)
+        elif game_type == GameType.HONKAI_IMPACT_3RD.name:
+            return HonkaiImpact3rdCharacterRigger(blender_operator, context)
+        elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
+            return HonkaiNexusAnimaCharacterRigger(blender_operator, context)
         else:
             raise Exception(f'Unexpected input GameType "{game_type}" for CharacterRiggerFactory')
 
@@ -892,10 +899,150 @@ class PunishingGrayRavenCharacterRigger(CharacterRigger):
     def __init__(self, blender_operator, context):
         self.blender_operator = blender_operator
         self.context = context
-        self.rigify_bone_shapes_file_path = 'PLACEHOLDER'
+        self.rigify_bone_shapes_file_path = GENSHIN_RIGIFY_BONE_SHAPES_FILE_PATH
 
     def rig_character(self):
-        return
+        cache_enabled = self.context.window_manager.cache_enabled
+        cached = get_cache(cache_enabled).get(self.rigify_bone_shapes_file_path)
+        filepath = cached if (cached and os.path.isfile(cached)) else (self.blender_operator.filepath if (self.blender_operator.filepath and os.path.isfile(self.blender_operator.filepath)) else None)
+
+        if not filepath or not os.path.isfile(filepath):
+            filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'RootShape.blend')
+
+        armature = _get_character_armature(self.context)
+        if not armature:
+            self.blender_operator.report({'ERROR'}, 'No armature found. Please import or select a character.')
+            return
+
+        character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
+        if getattr(character_rigger_props, "disable_rigging", False):
+            self.blender_operator.report({'INFO'}, 'Rigging disabled by user settings.')
+            return
+
+        bpy.ops.object.select_all(action='DESELECT')
+        try:
+            armature.hide_set(False)
+        except:
+            pass
+        self.context.view_layer.objects.active = armature
+        armature.select_set(True)
+
+        pgr_rig_character(
+            filepath,
+            not character_rigger_props.allow_arm_ik_stretch,
+            not character_rigger_props.allow_leg_ik_stretch,
+            character_rigger_props.use_arm_ik_poles,
+            character_rigger_props.use_leg_ik_poles,
+            character_rigger_props.add_children_of_constraints,
+            character_rigger_props.use_head_tracker,
+            meshes_joined=True
+        )
+
+        try:
+            from setup_wizard.character_rig_setup.pgr_face_rig import pgr_face_rig_main
+            pgr_face_rig_main()
+        except Exception as e_face:
+            print(f"[PGR FACE RIG] Warning during face rig generation: {e_face}")
+
+
+class HonkaiImpact3rdCharacterRigger(CharacterRigger):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+        self.rigify_bone_shapes_file_path = GENSHIN_RIGIFY_BONE_SHAPES_FILE_PATH
+
+    def rig_character(self):
+        cache_enabled = self.context.window_manager.cache_enabled
+        cached = get_cache(cache_enabled).get(self.rigify_bone_shapes_file_path)
+        filepath = cached if (cached and os.path.isfile(cached)) else (self.blender_operator.filepath if (self.blender_operator.filepath and os.path.isfile(self.blender_operator.filepath)) else None)
+
+        if not filepath or not os.path.isfile(filepath):
+            filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'RootShape.blend')
+
+        armature = _get_character_armature(self.context)
+        if not armature:
+            self.blender_operator.report({'ERROR'}, 'No armature found. Please import or select a character.')
+            return
+
+        character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
+        if getattr(character_rigger_props, "disable_rigging", False):
+            self.blender_operator.report({'INFO'}, 'Rigging disabled by user settings.')
+            return
+
+        bpy.ops.object.select_all(action='DESELECT')
+        try:
+            armature.hide_set(False)
+        except:
+            pass
+        self.context.view_layer.objects.active = armature
+        armature.select_set(True)
+
+        hi3_rig_character(
+            filepath,
+            not character_rigger_props.allow_arm_ik_stretch,
+            not character_rigger_props.allow_leg_ik_stretch,
+            character_rigger_props.use_arm_ik_poles,
+            character_rigger_props.use_leg_ik_poles,
+            character_rigger_props.add_children_of_constraints,
+            character_rigger_props.use_head_tracker,
+            meshes_joined=True
+        )
+
+        try:
+            from setup_wizard.character_rig_setup.hi3_face_rig import hi3_face_rig_main
+            hi3_face_rig_main()
+        except Exception as e_face:
+            print(f"[HI3 FACE RIG] Warning during face rig generation: {e_face}")
+
+
+class HonkaiNexusAnimaCharacterRigger(CharacterRigger):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+        self.rigify_bone_shapes_file_path = GENSHIN_RIGIFY_BONE_SHAPES_FILE_PATH
+
+    def rig_character(self):
+        cache_enabled = self.context.window_manager.cache_enabled
+        cached = get_cache(cache_enabled).get(self.rigify_bone_shapes_file_path)
+        filepath = cached if (cached and os.path.isfile(cached)) else (self.blender_operator.filepath if (self.blender_operator.filepath and os.path.isfile(self.blender_operator.filepath)) else None)
+
+        if not filepath or not os.path.isfile(filepath):
+            filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'RootShape.blend')
+
+        armature = _get_character_armature(self.context)
+        if not armature:
+            self.blender_operator.report({'ERROR'}, 'No armature found. Please import or select a character.')
+            return
+
+        character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
+        if getattr(character_rigger_props, "disable_rigging", False):
+            self.blender_operator.report({'INFO'}, 'Rigging disabled by user settings.')
+            return
+
+        bpy.ops.object.select_all(action='DESELECT')
+        try:
+            armature.hide_set(False)
+        except:
+            pass
+        self.context.view_layer.objects.active = armature
+        armature.select_set(True)
+
+        hna_rig_character(
+            filepath,
+            not character_rigger_props.allow_arm_ik_stretch,
+            not character_rigger_props.allow_leg_ik_stretch,
+            character_rigger_props.use_arm_ik_poles,
+            character_rigger_props.use_leg_ik_poles,
+            character_rigger_props.add_children_of_constraints,
+            character_rigger_props.use_head_tracker,
+            meshes_joined=True
+        )
+
+        try:
+            from setup_wizard.character_rig_setup.hna_face_rig import hna_face_rig_main
+            hna_face_rig_main()
+        except Exception as e_face:
+            print(f"[HNA FACE RIG] Warning during face rig generation: {e_face}")
 
 
 class ZenlessZoneZeroCharacterRigger(CharacterRigger):

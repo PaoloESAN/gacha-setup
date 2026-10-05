@@ -6,7 +6,7 @@ from enum import Enum, auto
 
 from setup_wizard.domain.shader_node_names import JaredNyts_PunishingGrayRavenNodeNames, ShaderNodeNames, StellarToonShaderNodeNames, V2_GenshinShaderNodeNames, V3_GenshinShaderNodeNames, V4_PrimoToonShaderNodeNames, V1_HoYoToonShaderNodeNames
 from setup_wizard.domain.game_types import GameType
-from setup_wizard.domain.shader_material_names import JaredNytsPunishingGrayRavenShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, V2_FestivityGenshinImpactMaterialNames, V4_PrimoToonGenshinImpactMaterialNames, V1_HoYoToonGenshinImpactMaterialNames, ZenlessZoneZeroShaderMaterialNames, NevernessToEvernessShaderMaterialNames, WutheringWavesShaderMaterialNames, ArknightsEndfieldShaderMaterialNames
+from setup_wizard.domain.shader_material_names import JaredNytsPunishingGrayRavenShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, V2_FestivityGenshinImpactMaterialNames, V4_PrimoToonGenshinImpactMaterialNames, V1_HoYoToonGenshinImpactMaterialNames, ZenlessZoneZeroShaderMaterialNames, NevernessToEvernessShaderMaterialNames, WutheringWavesShaderMaterialNames, ArknightsEndfieldShaderMaterialNames, HonkaiImpact3rdShaderMaterialNames
 from setup_wizard.texture_import_setup.texture_node_names import GenshinImpactTextureNodeNames, JaredNytsPunishingGrayRavenTextureNodeNames, Nya222HonkaiStarRailTextureNodeNames, StellarToonTextureNodeNames, V1_GenshinImpactTextureNodeNames, V2_GenshinImpactTextureNodeNames, V3_GenshinImpactTextureNodeNames, V4_GenshinImpactTextureNodeNames, V1_HoYoToonGenshinImpactTextureNodeNames, ZenlessZoneZeroTextureNodeNames
 
 
@@ -43,6 +43,14 @@ class ArknightsEndfieldShaders(Enum):
     V1_ARKNIGHTS_ENDFIELD_SHADER = auto()
 
 
+class HonkaiImpact3rdShaders(Enum):
+    V1_BETTERHI3RD_SHADER = auto()
+
+
+class HonkaiNexusAnimaShaders(Enum):
+    V1_HSR_COMPAT_SHADER = auto()
+
+
 class ShaderIdentifier:
     def __init__(self, material_name, shader_node_name, shader_label_name, material_prefix_after_rename, material_endswith_after_rename):
         self.material_name = material_name
@@ -68,6 +76,10 @@ class ShaderIdentifierServiceFactory:
             return WutheringWavesShaderIdentifierService()
         elif game_type == GameType.ARKNIGHTS_ENDFIELD.name:
             return ArknightsEndfieldShaderIdentifierService()
+        elif game_type == GameType.HONKAI_IMPACT_3RD.name:
+            return HonkaiImpact3rdShaderIdentifierService()
+        elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
+            return HonkaiNexusAnimaShaderIdentifierService()
         else:
             raise Exception(f'Unexpected input GameType "{game_type}" for ShaderIdentifierServiceFactory')
 
@@ -142,6 +154,10 @@ class ShaderIdentifierService:
             return WutheringWavesShaderMaterialNames
         elif game_type == GameType.ARKNIGHTS_ENDFIELD.name:
             return ArknightsEndfieldShaderMaterialNames
+        elif game_type == GameType.HONKAI_IMPACT_3RD.name:
+            return HonkaiImpact3rdShaderMaterialNames
+        elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
+            return Nya222HonkaiStarRailShaderMaterialNames
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -169,6 +185,10 @@ class ShaderIdentifierService:
             return WutheringWavesShaderMaterialNames
         elif shader is ArknightsEndfieldShaders.V1_ARKNIGHTS_ENDFIELD_SHADER:
             return ArknightsEndfieldShaderMaterialNames
+        elif shader is HonkaiImpact3rdShaders.V1_BETTERHI3RD_SHADER:
+            return HonkaiImpact3rdShaderMaterialNames
+        elif shader is HonkaiNexusAnimaShaders.V1_HSR_COMPAT_SHADER:
+            return Nya222HonkaiStarRailShaderMaterialNames
         else:
             raise Exception(f'Unknown Shader: {shader}')
 
@@ -191,7 +211,7 @@ class ShaderIdentifierService:
             return JaredNytsPunishingGrayRavenTextureNodeNames
         elif shader is ZenlessZoneZeroShaders.V1_ZENLESS_ZONE_ZERO_SHADER or shader is None:
             return ZenlessZoneZeroTextureNodeNames
-        elif shader is NevernessToEvernessShaders.V1_NEVERNESS_TO_EVERNESS_SHADER or shader is WutheringWavesShaders.V1_GUSTLING_WATERS_SHADER or shader is ArknightsEndfieldShaders.V1_ARKNIGHTS_ENDFIELD_SHADER:
+        elif shader in (NevernessToEvernessShaders.V1_NEVERNESS_TO_EVERNESS_SHADER, WutheringWavesShaders.V1_GUSTLING_WATERS_SHADER, ArknightsEndfieldShaders.V1_ARKNIGHTS_ENDFIELD_SHADER, HonkaiImpact3rdShaders.V1_BETTERHI3RD_SHADER, HonkaiNexusAnimaShaders.V1_HSR_COMPAT_SHADER):
             return None
         else:
             raise Exception(f'Unknown Shader: {shader}')
@@ -214,7 +234,7 @@ class ShaderIdentifierService:
             return JaredNyts_PunishingGrayRavenNodeNames  # Unused
         elif shader is ZenlessZoneZeroShaders.V1_ZENLESS_ZONE_ZERO_SHADER or shader is None:
             return ShaderNodeNames  # Unused
-        elif shader is NevernessToEvernessShaders.V1_NEVERNESS_TO_EVERNESS_SHADER or shader is WutheringWavesShaders.V1_GUSTLING_WATERS_SHADER or shader is ArknightsEndfieldShaders.V1_ARKNIGHTS_ENDFIELD_SHADER:
+        elif shader in (NevernessToEvernessShaders.V1_NEVERNESS_TO_EVERNESS_SHADER, WutheringWavesShaders.V1_GUSTLING_WATERS_SHADER, ArknightsEndfieldShaders.V1_ARKNIGHTS_ENDFIELD_SHADER, HonkaiImpact3rdShaders.V1_BETTERHI3RD_SHADER, HonkaiNexusAnimaShaders.V1_HSR_COMPAT_SHADER):
             return ShaderNodeNames
         else:
             raise Exception(f'Unknown Shader: {shader}')
@@ -285,6 +305,18 @@ class PunishingGrayRavenShaderIdentifierService(ShaderIdentifierService):
 
     def __init__(self):
         super().__init__()
+
+    def identify_shader(self, materials, node_groups):
+        res = super().identify_shader(materials, node_groups)
+        if res is not None:
+            return res
+        for m in materials.values():
+            if m and (m.name.startswith("PGR - ") or "pgr" in m.name.lower()):
+                return PunishingGrayRavenShaders.V1_JAREDNYTS_PUNISHING_GRAY_RAVEN_SHADER
+        for ng in node_groups.values():
+            if ng and "pgr" in ng.name.lower():
+                return PunishingGrayRavenShaders.V1_JAREDNYTS_PUNISHING_GRAY_RAVEN_SHADER
+        return PunishingGrayRavenShaders.V1_JAREDNYTS_PUNISHING_GRAY_RAVEN_SHADER
 
 
 class ZenlessZoneZeroShaderIdentifierService(ShaderIdentifierService):
@@ -379,4 +411,52 @@ class ArknightsEndfieldShaderIdentifierService(ShaderIdentifierService):
             if ng and any(k in ng.name.lower() for k in ["arknights", "endfield", "facemat", "face_alpha"]):
                 return ArknightsEndfieldShaders.V1_ARKNIGHTS_ENDFIELD_SHADER
         return ArknightsEndfieldShaders.V1_ARKNIGHTS_ENDFIELD_SHADER
+
+
+class HonkaiImpact3rdShaderIdentifierService(ShaderIdentifierService):
+    V1_NAMES_OF_HI3_MATERIALS = [
+        HonkaiImpact3rdShaderMaterialNames.MATERIAL_PREFIX_AFTER_RENAME,
+    ]
+    material_lists_to_search_through = {
+        HonkaiImpact3rdShaders.V1_BETTERHI3RD_SHADER: V1_NAMES_OF_HI3_MATERIALS
+    }
+
+    def __init__(self):
+        super().__init__()
+
+    def identify_shader(self, materials, node_groups):
+        res = super().identify_shader(materials, node_groups)
+        if res is not None:
+            return res
+        for m in materials.values():
+            if m and ("impacttoon" in m.name.lower() or "hi3" in m.name.lower()):
+                return HonkaiImpact3rdShaders.V1_BETTERHI3RD_SHADER
+        for ng in node_groups.values():
+            if ng and ("impacttoon" in ng.name.lower() or "honkai impact" in ng.name.lower()):
+                return HonkaiImpact3rdShaders.V1_BETTERHI3RD_SHADER
+        return HonkaiImpact3rdShaders.V1_BETTERHI3RD_SHADER
+
+
+class HonkaiNexusAnimaShaderIdentifierService(ShaderIdentifierService):
+    V1_NAMES_OF_HNA_MATERIALS = [
+        Nya222HonkaiStarRailShaderMaterialNames.MATERIAL_PREFIX_AFTER_RENAME,
+    ]
+    material_lists_to_search_through = {
+        HonkaiNexusAnimaShaders.V1_HSR_COMPAT_SHADER: V1_NAMES_OF_HNA_MATERIALS
+    }
+
+    def __init__(self):
+        super().__init__()
+
+    def identify_shader(self, materials, node_groups):
+        res = super().identify_shader(materials, node_groups)
+        if res is not None:
+            return res
+        for m in materials.values():
+            if m and (m.name.startswith("HSR - ") or "hsr" in m.name.lower()):
+                return HonkaiNexusAnimaShaders.V1_HSR_COMPAT_SHADER
+        for ng in node_groups.values():
+            if ng and ("star rail" in ng.name.lower() or "hsr" in ng.name.lower()):
+                return HonkaiNexusAnimaShaders.V1_HSR_COMPAT_SHADER
+        return HonkaiNexusAnimaShaders.V1_HSR_COMPAT_SHADER
 

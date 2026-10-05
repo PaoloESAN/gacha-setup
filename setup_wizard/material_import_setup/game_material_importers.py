@@ -8,7 +8,7 @@ from setup_wizard.domain.game_types import GameType
 from setup_wizard.domain.shader_material_names import StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, \
     V2_FestivityGenshinImpactMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, \
     JaredNytsPunishingGrayRavenShaderMaterialNames, V4_PrimoToonGenshinImpactMaterialNames, ZenlessZoneZeroShaderMaterialNames, \
-    NevernessToEvernessShaderMaterialNames
+    NevernessToEvernessShaderMaterialNames, HonkaiImpact3rdShaderMaterialNames
 from setup_wizard.import_order import GENSHIN_IMPACT_OUTLINES_FILE_PATH, NextStepInvoker, cache_using_cache_key, get_cache, \
     GENSHIN_IMPACT_ROOT_FOLDER_FILE_PATH, GENSHIN_IMPACT_SHADER_FILE_PATH, HONKAI_STAR_RAIL_ROOT_FOLDER_FILE_PATH, \
     HONKAI_STAR_RAIL_SHADER_FILE_PATH, PUNISHING_GRAY_RAVEN_ROOT_FOLDER_FILE_PATH, PUNISHING_GRAY_RAVEN_SHADER_FILE_PATH, \
@@ -36,6 +36,10 @@ class GameMaterialImporterFactory:
             return WutheringWavesMaterialImporterFacade(blender_operator, context)
         elif game_type == GameType.ARKNIGHTS_ENDFIELD.name:
             return ArknightsEndfieldMaterialImporterFacade(blender_operator, context)
+        elif game_type == GameType.HONKAI_IMPACT_3RD.name:
+            return HonkaiImpact3rdMaterialImporterFacade(blender_operator, context)
+        elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
+            return HonkaiNexusAnimaMaterialImporterFacade(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -1064,6 +1068,83 @@ class ArknightsEndfieldMaterialImporterFacade(GameMaterialImporter):
                 high_level_step_name=getattr(self.blender_operator, 'high_level_step_name', None),
                 game_type=getattr(self.blender_operator, 'game_type', GameType.ARKNIGHTS_ENDFIELD.name),
             )
+
+
+class HonkaiImpact3rdMaterialImporterFacade(GameMaterialImporter):
+    NAMES_OF_HONKAI_IMPACT_3RD_MATERIALS = [
+        {'name': 'ImpactToon - Base'},
+        {'name': 'ImpactToon - Eye'},
+        {'name': 'ImpactToon - Face'},
+        {'name': 'ImpactToon - Hair'},
+        {'name': 'ImpactToon - Outlines'},
+    ]
+
+    def __init__(self, blender_operator, context):
+        super().__init__(
+            blender_operator,
+            context,
+            None,
+            None,
+            'betterhi3rdshader.blend',
+            self.NAMES_OF_HONKAI_IMPACT_3RD_MATERIALS
+        )
+
+    def import_materials(self):
+        status = super().import_materials()
+        if status == {'FINISHED'}:
+            return status
+
+        cache_enabled = self.context.window_manager.cache_enabled
+        project_root_directory_file_path = getattr(self.blender_operator, 'file_directory', None) \
+            or (os.path.dirname(self.blender_operator.filepath) if getattr(self.blender_operator, 'filepath', None) else None)
+
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx, 
+            self.blender_operator.invoker_type, 
+            file_path_to_cache=project_root_directory_file_path,
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=self.blender_operator.game_type,
+        )
+
+
+class HonkaiNexusAnimaMaterialImporterFacade(GameMaterialImporter):
+    NAMES_OF_HONKAI_NEXUS_ANIMA_MATERIALS = [
+        {'name': 'HSR - Body1'},
+        {'name': 'HSR - Body2'},
+        {'name': 'HSR - Body_Trans'},
+        {'name': 'HSR - EyeShadow'},
+        {'name': 'HSR - Face'},
+        {'name': 'HSR - Hair'},
+        {'name': 'HSR - Outlines'},
+        {'name': 'HSR - Weapon'},
+    ]
+
+    def __init__(self, blender_operator, context):
+        super().__init__(
+            blender_operator,
+            context,
+            None,
+            None,
+            'HSR_Shader_1.07.blend',
+            self.NAMES_OF_HONKAI_NEXUS_ANIMA_MATERIALS
+        )
+
+    def import_materials(self):
+        status = super().import_materials()
+        if status == {'FINISHED'}:
+            return status
+
+        cache_enabled = self.context.window_manager.cache_enabled
+        project_root_directory_file_path = getattr(self.blender_operator, 'file_directory', None) \
+            or (os.path.dirname(self.blender_operator.filepath) if getattr(self.blender_operator, 'filepath', None) else None)
+
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx, 
+            self.blender_operator.invoker_type, 
+            file_path_to_cache=project_root_directory_file_path,
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=self.blender_operator.game_type,
+        )
 
 
 

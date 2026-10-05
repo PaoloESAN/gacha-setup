@@ -264,6 +264,10 @@ class OutlineTextureImporterFactory:
             return NevernessToEvernessOutlineTextureImporter(blender_operator, context, shader_node_names)
         elif game_type == GameType.WUTHERING_WAVES.name:
             return WutheringWavesOutlineTextureImporter(blender_operator, context, shader_node_names)
+        elif game_type == GameType.HONKAI_IMPACT_3RD.name:
+            return HonkaiImpact3rdOutlineTextureImporter(blender_operator, context, shader_node_names)
+        elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
+            return HonkaiStarRailOutlineTextureImporter(blender_operator, context, Nya222HonkaiStarRailShaderMaterialNames, shader_node_names)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -535,4 +539,14 @@ class WutheringWavesOutlineTextureImporter(OutlineTextureImporter):
 
     def import_textures(self):
         return
+
+
+class HonkaiImpact3rdOutlineTextureImporter(OutlineTextureImporter):
+    def __init__(self, blender_operator, context, shader_node_names: ShaderNodeNames):
+        from setup_wizard.domain.shader_material_names import HonkaiImpact3rdShaderMaterialNames
+        super().__init__(blender_operator, context, HonkaiImpact3rdShaderMaterialNames, shader_node_names)
+
+    def import_textures(self):
+        return
+
 

@@ -446,6 +446,27 @@ class ZZZ_OT_SetUpCharacter(Operator, BasicSetupUIOperator):
     bl_label = "Zenless Zone Zero: Set Up Character (UI)"
 
 
+class PGR_OT_SetUpCharacter(Operator, BasicSetupUIOperator):
+    """Sets Up Character"""
+
+    bl_idname = "punishing_gray_raven.set_up_character"
+    bl_label = "Punishing Gray Raven: Set Up Character (UI)"
+
+
+class HI3_OT_SetUpCharacter(Operator, BasicSetupUIOperator):
+    """Sets Up Character"""
+
+    bl_idname = "honkai_impact_3rd.set_up_character"
+    bl_label = "Honkai Impact 3rd: Set Up Character (UI)"
+
+
+class HNA_OT_SetUpCharacter(Operator, BasicSetupUIOperator):
+    """Sets Up Character"""
+
+    bl_idname = "honkai_nexus_anima.set_up_character"
+    bl_label = "Honkai: Nexus Anima: Set Up Character (UI)"
+
+
 def find_largest_uemodel_file(directory_or_file):
     """
     Finds the largest .uemodel file in the given directory or file path.
@@ -1865,6 +1886,26 @@ class GI_OT_DeleteEmpties(Operator, CustomOperatorProperties):
                         should_delete = False
                         break
                 if should_delete:
+                    # If this empty is a root scaling node (e.g. FBX unit scaling 0.01) whose children
+                    # already have coordinate data in meters, resetting the empty's scale to 1.0 prevents
+                    # shrinking the character down to 1 cm.
+                    if any(abs(s - 0.01) < 0.005 for s in object.scale):
+                        already_in_meters = False
+                        for child in object.children:
+                            if child.type == "ARMATURE" and child.data and child.data.bones:
+                                max_b = max((max(abs(c) for c in b.head_local) for b in child.data.bones), default=0.0)
+                                if 0.2 < max_b < 10.0:
+                                    already_in_meters = True
+                                    break
+                            elif child.type == "MESH" and child.data and child.data.vertices:
+                                max_v = max((abs(v.co.z) for v in child.data.vertices[:min(100, len(child.data.vertices))]), default=0.0)
+                                if 0.2 < max_v < 10.0:
+                                    already_in_meters = True
+                                    break
+                        if already_in_meters:
+                            object.scale = (1.0, 1.0, 1.0)
+                            bpy.context.view_layer.update()
+
                     # Unparent any children of this empty, keeping their world transforms
                     for child in object.children:
                         matrix_world = child.matrix_world.copy()
@@ -1958,5 +1999,8 @@ register, unregister = bpy.utils.register_classes_factory(
         NTE_OT_SetUpCharacter,
         WW_OT_SetUpCharacter,
         AKE_OT_SetUpCharacter,
+        PGR_OT_SetUpCharacter,
+        HI3_OT_SetUpCharacter,
+        HNA_OT_SetUpCharacter,
     ]
 )

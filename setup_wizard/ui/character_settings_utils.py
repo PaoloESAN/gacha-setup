@@ -485,6 +485,10 @@ def detect_armature_game(arm):
                         return "WUTHERING_WAVES"
                     if "zzz outlines" in ng_name or "extra fx" in ng_name:
                         return "ZENLESS_ZONE_ZERO"
+                    if "impacttoon" in ng_name or "betterhi3rd" in ng_name:
+                        return "HONKAI_IMPACT_3RD"
+                    if "nexus" in ng_name or "anima" in ng_name:
+                        return "HONKAI_NEXUS_ANIMA"
                     if "stellartoon" in ng_name or "nya222" in ng_name:
                         return "HONKAI_STAR_RAIL"
                     if "bonny festivity" in ng_name or "primotoon" in ng_name:
@@ -501,6 +505,10 @@ def detect_armature_game(arm):
                     mat_names.append(mat.name.lower())
         blob = " ".join(mat_names)
         if blob:
+            if any(k in blob for k in ["impacttoon", "hi3", "honkai 3rd", "honkai3rd", "betterhi3rd"]):
+                return "HONKAI_IMPACT_3RD"
+            if any(k in blob for k in ["nexus_anima", "nexus anima", "hna"]):
+                return "HONKAI_NEXUS_ANIMA"
             if any(k in blob for k in ["stellartoon", "hsr", "star rail", "star_rail", "nya222"]):
                 return "HONKAI_STAR_RAIL"
             if any(k in blob for k in ["kythera", "zzz ", " zzz", "zenless"]) or blob.strip() == "zzz":

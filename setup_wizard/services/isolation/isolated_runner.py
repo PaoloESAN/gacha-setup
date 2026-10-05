@@ -18,6 +18,8 @@ GAME_TO_WIZARD = {
     "WUTHERING_WAVES": "wuthering_waves.setup_wizard_ui",
     "ARKNIGHTS_ENDFIELD": "arknights_endfield.setup_wizard_ui",
     "PUNISHING_GRAY_RAVEN": "punishing_gray_raven.setup_wizard_ui",
+    "HONKAI_IMPACT_3RD": "honkai_impact_3rd.setup_wizard_ui",
+    "HONKAI_NEXUS_ANIMA": "honkai_nexus_anima.setup_wizard_ui",
 }
 
 

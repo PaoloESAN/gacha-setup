@@ -49,7 +49,7 @@ class HSR_OT_HonkaiStarRailSetupWizardUI(Operator, BasicSetupUIOperator):
 class PGR_OT_SetupWizardUI(Operator, BasicSetupUIOperator):
     '''Runs through entire setup process'''
     bl_idname = 'punishing_gray_raven.setup_wizard_ui'
-    bl_label = 'Genshin: Setup Wizard (UI)'
+    bl_label = 'Punishing Gray Raven: Setup Wizard (UI)'
 
     def execute(self, context):
         next_step_index = 0
@@ -62,6 +62,43 @@ class PGR_OT_SetupWizardUI(Operator, BasicSetupUIOperator):
             game_type=self.game_type,
         )
         return {'FINISHED'}
+
+
+class HI3_OT_SetupWizardUI(Operator, BasicSetupUIOperator):
+    '''Runs through entire setup process'''
+    bl_idname = 'honkai_impact_3rd.setup_wizard_ui'
+    bl_label = 'Honkai Impact 3rd: Setup Wizard (UI)'
+
+    def execute(self, context):
+        next_step_index = 0
+
+        NextStepInvoker().invoke(
+            next_step_index,
+            'invoke_next_step_ui', 
+            high_level_step_name=self.bl_idname if bpy.app.version >= (3,3,0) >= (3,3,0) \
+                else self.bl_idname + '_no_outlines',
+            game_type=self.game_type,
+        )
+        return {'FINISHED'}
+
+
+class HNA_OT_SetupWizardUI(Operator, BasicSetupUIOperator):
+    '''Runs through entire setup process'''
+    bl_idname = 'honkai_nexus_anima.setup_wizard_ui'
+    bl_label = 'Honkai Nexus Anima: Setup Wizard (UI)'
+
+    def execute(self, context):
+        next_step_index = 0
+
+        NextStepInvoker().invoke(
+            next_step_index,
+            'invoke_next_step_ui', 
+            high_level_step_name=self.bl_idname if bpy.app.version >= (3,3,0) >= (3,3,0) \
+                else self.bl_idname + '_no_outlines',
+            game_type=self.game_type,
+        )
+        return {'FINISHED'}
+
 
 
 class ZZZ_OT_SetupWizardUI(Operator, BasicSetupUIOperator):

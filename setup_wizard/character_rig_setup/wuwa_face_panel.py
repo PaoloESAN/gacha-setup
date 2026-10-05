@@ -2023,6 +2023,7 @@ def import_wuwa_face_panel_blend(context, mesh, armature, head_bone):
         # and scale LIMIT_LOCATION constraints by 0.2 to match the panel armature's applied scale
         if hasattr(armature.data, 'collections'):
             face_coll = armature.data.collections.get("Face") or armature.data.collections.new("Face")
+            face_coll.is_visible = True
             for bn in panel_bone_names:
                 b = armature.data.bones.get(bn)
                 if b:
@@ -2079,7 +2080,8 @@ def import_wuwa_face_panel_blend(context, mesh, armature, head_bone):
     _purge_panel_colliding_rig_widgets()
 
     # 9. Setup shape key drivers targeting the fused character armature
-    setup_face_panel_blend_drivers(context, mesh, armature)
+    if mesh:
+        setup_face_panel_blend_drivers(context, mesh, armature)
 
     # 10. Setup Outline drivers from fp.outline bone to character outline modifiers
     try:
@@ -2087,8 +2089,9 @@ def import_wuwa_face_panel_blend(context, mesh, armature, head_bone):
     except Exception as ex_ol:
         print(f"[WUWA FACE PANEL] Outline drivers notice: {ex_ol}")
 
-    mesh["ww_face_panel_armature"] = armature.name
-    mesh["ww_face_panel_assigned"] = True
+    if mesh:
+        mesh["ww_face_panel_armature"] = armature.name
+        mesh["ww_face_panel_assigned"] = True
     armature["ww_face_panel_armature"] = armature.name
 
     return armature

@@ -242,11 +242,11 @@ class GI_OT_RenameShaderMaterials(Operator, CustomOperatorProperties):
         # 1. GI, PGR
         # 2. HSR-Nya222
         # 3. HSR-StellarToon
-        texture_node_names: TextureNodeNames = shader_identifier_service.get_shader_texture_node_names(shader)
+        texture_node_names: TextureNodeNames = shader_identifier_service.get_shader_texture_node_names(shader) if shader else None
 
-        body_diffuse_filename = self.__find_body_diffuse_filename(shader_material_names, texture_node_names)
+        body_diffuse_filename = self.__find_body_diffuse_filename(shader_material_names, texture_node_names) if (shader_material_names and texture_node_names) else None
 
-        if body_diffuse_filename:
+        if body_diffuse_filename and shader_material_names and shader_material_names.MATERIAL_PREFIX:
             materials_to_check = [material for material in bpy.data.materials if \
                                     material.name.startswith(shader_material_names.MATERIAL_PREFIX)]
             for material in materials_to_check:

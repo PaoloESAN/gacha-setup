@@ -39,6 +39,10 @@ class MaterialDefaultValueSetterFactory:
             return WutheringWavesMaterialDefaultValueSetter()
         elif game_type == GameType.ARKNIGHTS_ENDFIELD.name:
             return ArknightsEndfieldMaterialDefaultValueSetter()
+        elif game_type == GameType.HONKAI_IMPACT_3RD.name:
+            return HonkaiImpact3rdMaterialDefaultValueSetter()
+        elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
+            return HonkaiStarRailMaterialDefaultValueSetter()
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -528,4 +532,10 @@ class ArknightsEndfieldMaterialDefaultValueSetter(MaterialDefaultValueSetter):
                                     del mat[_k]
                             except Exception:
                                 pass
+
+
+class HonkaiImpact3rdMaterialDefaultValueSetter:
+    def set_default_values(self):
+        pass
+
 

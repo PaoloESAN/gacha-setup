@@ -51,6 +51,24 @@ class AKE_OT_SetUpOutlines(Operator, BasicSetupUIOperator):
     bl_label = 'Arknights Endfield: Set Up Outlines (UI)'
 
 
+class PGR_OT_SetUpOutlines(Operator, BasicSetupUIOperator):
+    '''Sets Up Outlines'''
+    bl_idname = 'punishing_gray_raven.set_up_outlines'
+    bl_label = 'Punishing Gray Raven: Set Up Outlines (UI)'
+
+
+class HI3_OT_SetUpOutlines(Operator, BasicSetupUIOperator):
+    '''Sets Up Outlines'''
+    bl_idname = 'honkai_impact_3rd.set_up_outlines'
+    bl_label = 'Honkai Impact 3rd: Set Up Outlines (UI)'
+
+
+class HNA_OT_SetUpOutlines(Operator, BasicSetupUIOperator):
+    '''Sets Up Outlines'''
+    bl_idname = 'honkai_nexus_anima.set_up_outlines'
+    bl_label = 'Honkai: Nexus Anima: Set Up Outlines (UI)'
+
+
 class GI_OT_GenshinImportOutlines(Operator, ImportHelper, CustomOperatorProperties):
     """Select the .blend file with the outlines node group to import"""
     bl_idname = "genshin.import_outlines"  # important since its how we chain file dialogs
@@ -94,4 +112,7 @@ register, unregister = bpy.utils.register_classes_factory([
     NTE_OT_SetUpOutlines,
     WW_OT_SetUpOutlines,
     AKE_OT_SetUpOutlines,
+    PGR_OT_SetUpOutlines,
+    HI3_OT_SetUpOutlines,
+    HNA_OT_SetUpOutlines,
 ])

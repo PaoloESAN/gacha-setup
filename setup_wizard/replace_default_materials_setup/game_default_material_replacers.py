@@ -735,6 +735,10 @@ class GameDefaultMaterialReplacerFactory:
             return WutheringWavesDefaultMaterialReplacer(blender_operator, context)
         elif game_type == GameType.ARKNIGHTS_ENDFIELD.name:
             return ArknightsEndfieldDefaultMaterialReplacer(blender_operator, context)
+        elif game_type == GameType.HONKAI_IMPACT_3RD.name:
+            return HonkaiImpact3rdDefaultMaterialReplacer(blender_operator, context)
+        elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
+            return HonkaiNexusAnimaDefaultMaterialReplacer(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -1679,26 +1683,29 @@ class PunishingGrayRavenDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 mesh_body_part_name = \
                     material_identifier_service.get_body_part_name_of_shared_material(material_name) or \
                     mesh_body_part_name
-                if 'Face' in mesh_body_part_name:  # 6.Karenina_Ember (material w/ Face in it, but no called just Face)
+                if 'Face' in mesh_body_part_name:  # 6.Karenina_Ember (material w/ Face in it, but not called just Face)
                     mesh_body_part_name = 'Face'
+                elif 'Eye' in mesh_body_part_name:
+                    mesh_body_part_name = 'Eye'
                 if 'OL' in mesh_body_part_name:  # 9S (Generic), Bianca_Veritas (Ink-lit Hermit)
                     mesh_body_part_name = mesh_body_part_name.replace('OL', '')
 
-                if mesh_body_part_name and 'Alpha' not in mesh_body_part_name:
-                    material_type = JaredNytsPunishingGrayRavenShaderMaterialNames.HAIR if 'Hair' in mesh_body_part_name else \
-                        JaredNytsPunishingGrayRavenShaderMaterialNames.MAIN
-                    material_name = f'{JaredNytsPunishingGrayRavenShaderMaterialNames.MATERIAL_PREFIX}{mesh_body_part_name}'
-                    self.create_main_material(mesh, material_type, material_name)
-                elif mesh_body_part_name and 'Alpha' in mesh_body_part_name:
-                    material_name = JaredNytsPunishingGrayRavenShaderMaterialNames.ALPHA
-                    mesh_body_part_name = 'Alpha'
-                else:
-                    self.blender_operator.report({'WARNING'}, f'Ignoring unknown mesh body part in character model: {mesh_body_part_name} / Material: {material_name}')
-                    continue
+                if not mesh_body_part_name:
+                    mesh_body_part_name = material_name
 
-                punishing_gray_raven_material = bpy.data.materials.get(
-                    f'{JaredNytsPunishingGrayRavenShaderMaterialNames.MATERIAL_PREFIX}{mesh_body_part_name}'
-                )
+                if 'Alpha' in mesh_body_part_name or 'alpha' in material_name.lower():
+                    material_type = JaredNytsPunishingGrayRavenShaderMaterialNames.ALPHA
+                elif 'Face' in mesh_body_part_name:
+                    material_type = JaredNytsPunishingGrayRavenShaderMaterialNames.FACE
+                elif 'Eye' in mesh_body_part_name:
+                    material_type = JaredNytsPunishingGrayRavenShaderMaterialNames.EYE
+                elif 'Hair' in mesh_body_part_name:
+                    material_type = JaredNytsPunishingGrayRavenShaderMaterialNames.HAIR
+                else:
+                    material_type = JaredNytsPunishingGrayRavenShaderMaterialNames.MAIN
+
+                target_mat_name = f'{JaredNytsPunishingGrayRavenShaderMaterialNames.MATERIAL_PREFIX}{mesh_body_part_name}'
+                punishing_gray_raven_material = self.create_main_material(mesh, material_type, target_mat_name)
 
                 if punishing_gray_raven_material:
                     material_slot.material = punishing_gray_raven_material
@@ -1712,9 +1719,6 @@ class PunishingGrayRavenDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         naive_search_body_part_name = self.__naive_body_part_name_search(material_name)
         body_part_name = ''
 
-        # If the two are equal, then we're confident that the body part name is correct (pick either)
-        # Elif the naive search found none of the expected body part names, return expected format search body part name
-        # Else expected format and naive searches do not equal, use the naive search (pulls from list of expected body part names)
         if expected_format_body_part_name == naive_search_body_part_name:
             body_part_name = expected_format_body_part_name
         elif expected_format_body_part_name and not naive_search_body_part_name:
@@ -1727,8 +1731,10 @@ class PunishingGrayRavenDefaultMaterialReplacer(GameDefaultMaterialReplacer):
     Expected Format Search: Search for body part name at expected location, at the end of the material name (ex. 'Body')
     '''
     def __expected_format_body_part_name_search(self, material_name):
-        armature =  [object for object in bpy.data.objects if object.type == 'ARMATURE'][0]
-        return material_name.split(armature.name)[-1]
+        arms = [object for object in bpy.data.objects if object.type == 'ARMATURE']
+        if arms and arms[0].name in material_name:
+            return material_name.split(arms[0].name)[-1]
+        return ""
 
     '''
     Naive Search: Search for body part name in material name
@@ -1741,6 +1747,8 @@ class PunishingGrayRavenDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             'Upper',
             'Down',
             'Eye',
+            'Eyes',
+            'Eye01',
             'Face',
             'Cloth01',
             'Cloth02',
@@ -1751,11 +1759,15 @@ class PunishingGrayRavenDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             'Weapon',
             'Cloth',
             'Hair',
+            'Sock',
+            'Shade',
+            'clock',
+            'Clock',
             'Body',  # Default to Body last
         ]
 
         for expected_body_part_name in EXPECTED_BODY_PART_NAMES:
-            if expected_body_part_name in material_name:
+            if expected_body_part_name.lower() in material_name.lower():
                 return expected_body_part_name
 
     def create_main_material(self, mesh, material_type: ShaderMaterialNames, material_name):
@@ -3443,6 +3455,49 @@ class ArknightsEndfieldDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         _set_mod_socket(mod_fa, "browAlphaMat", brow_alpha_mat)
 
         self.blender_operator.report({'INFO'}, 'Replaced default materials with Arknights: Endfield materials and configured modifiers.')
+
+
+class HonkaiImpact3rdDefaultMaterialReplacer(GameDefaultMaterialReplacer):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+
+    def replace_default_materials(self):
+        meshes = [mesh for mesh in bpy.context.scene.objects if mesh.type == 'MESH']
+        for mesh in meshes:
+            for material_slot in mesh.material_slots:
+                mat = material_slot.material
+                if not mat:
+                    continue
+                mat_name = mat.name
+                if mat_name.startswith("ImpactToon - "):
+                    continue
+
+                low = mat_name.lower()
+                if "face" in low:
+                    template_name = "ImpactToon - Face"
+                elif "eye" in low:
+                    template_name = "ImpactToon - Eye"
+                elif "hair" in low:
+                    template_name = "ImpactToon - Hair"
+                else:
+                    template_name = "ImpactToon - Base"
+
+                tmpl = bpy.data.materials.get(template_name)
+                if not tmpl:
+                    continue
+
+                new_mat = tmpl.copy()
+                new_mat.name = f"ImpactToon - {mat_name}"
+                new_mat.use_fake_user = True
+                material_slot.material = new_mat
+
+        self.blender_operator.report({'INFO'}, 'Replaced default materials with HI3 shader materials...')
+
+
+class HonkaiNexusAnimaDefaultMaterialReplacer(HonkaiStarRailDefaultMaterialReplacer):
+    def __init__(self, blender_operator, context):
+        super().__init__(blender_operator, context, Nya222HonkaiStarRailShaderMaterialNames)
 
 
 

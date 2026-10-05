@@ -3092,9 +3092,18 @@ class HonkaiStarRailTextureImporter(GenshinTextureImporter):
             weapon_ramp_node.image = img
 
     def set_facemap_texture(self, img):
-        img.colorspace_settings.name='Non-Color'
-        bpy.data.node_groups[self.texture_node_names.FACE_LIGHTMAP_NODE_GROUP].nodes[
-            self.texture_node_names.FACE_LIGHTMAP].image = img
+        img.colorspace_settings.name = 'Non-Color'
+        group_name = getattr(self.texture_node_names, "FACE_LIGHTMAP_NODE_GROUP", "")
+        node_name = getattr(self.texture_node_names, "FACE_LIGHTMAP", "Face_Lightmap")
+        ng = bpy.data.node_groups.get(group_name)
+        if ng and node_name in ng.nodes:
+            ng.nodes[node_name].image = img
+        else:
+            for group in bpy.data.node_groups:
+                node = group.nodes.get(node_name) or group.nodes.get("Face_Lightmap") or group.nodes.get("Lightmap")
+                if node and hasattr(node, "image"):
+                    node.image = img
+                    break
 
     def set_face_expression_texture(self, face_material, img):
         img.colorspace_settings.name='Non-Color'
@@ -3728,11 +3737,17 @@ class PunishingGrayRavenAvatarTextureImporter(PunishingGrayRavenTextureImporter)
 
     def import_textures(self, directory):
         for name, folder, files in os.walk(directory):
-            self.files = files
+            image_exts = ('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff', '.webp')
             for file in files:
+                if not file.lower().endswith(image_exts):
+                    continue
                 # load the file with the correct alpha mode
-                img_path = directory + "/" + file
-                img = bpy.data.images.load(filepath = img_path, check_existing=True)
+                img_path = os.path.join(name, file)
+                try:
+                    img = bpy.data.images.load(filepath=img_path, check_existing=True)
+                except Exception as e:
+                    print(f"Notice skipping non-image {file}: {e}")
+                    continue
                 img.alpha_mode = 'CHANNEL_PACKED'
 
                 alpha_material = bpy.data.materials.get(f'{self.material_names.ALPHA}')

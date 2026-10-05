@@ -230,6 +230,10 @@ class GameMaterialDataImporterFactory:
             return NevernessToEvernessMaterialDataImporter(blender_operator, context, outline_material_group, material_names, shader_node_names)
         elif game_type == GameType.WUTHERING_WAVES.name:
             return WutheringWavesMaterialDataImporter(blender_operator, context, outline_material_group, material_names, shader_node_names)
+        elif game_type == GameType.HONKAI_IMPACT_3RD.name:
+            return HonkaiImpact3rdMaterialDataImporter(blender_operator, context, outline_material_group, material_names, shader_node_names)
+        elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
+            return HonkaiStarRailMaterialDataImporter(blender_operator, context, outline_material_group, material_names, shader_node_names)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -781,4 +785,19 @@ class WutheringWavesMaterialDataImporter(GameMaterialDataImporter):
 
     def import_material_data(self):
         return {'FINISHED'}
+
+
+class HonkaiImpact3rdMaterialDataImporter(GameMaterialDataImporter):
+    def __init__(self, blender_operator, context, outline_material_group: OutlineMaterialGroup, material_names, shader_node_names):
+        self.blender_operator: Operator = blender_operator
+        self.context: Context = context
+        self.parsers = []
+        self.material = None
+        self.outline_material_group = outline_material_group
+        self.material_names = material_names
+        self.shader_node_names = shader_node_names
+
+    def import_material_data(self):
+        return {'FINISHED'}
+
 

@@ -164,6 +164,180 @@
       "rig_character",
       "paint_vertex_colors"
     ],
+    "PUNISHING_GRAY_RAVEN_OT_setup_wizard_ui_no_outlines": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
+      "import_character_model",
+      "delete_empties",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures",
+      "fix_transformations",
+      "setup_head_driver",
+      "set_color_management_to_standard",
+      "delete_specific_objects",
+      "rename_shader_materials",
+      "set_up_armtwist_bone_constraints",
+      "join_meshes_on_armature",
+      "rig_character",
+      "paint_vertex_colors"
+    ],
+    "PUNISHING_GRAY_RAVEN_OT_set_up_character": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_character",
+      "import_character_model",
+      "delete_empties"
+    ],
+    "PUNISHING_GRAY_RAVEN_OT_set_up_materials": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_materials",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures"
+    ],
+    "PUNISHING_GRAY_RAVEN_OT_set_up_outlines": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_outlines",
+      "import_outlines",
+      "setup_geometry_nodes",
+      "import_outline_lightmaps",
+      "import_material_data"
+    ],
+    "PUNISHING_GRAY_RAVEN_OT_finish_setup": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_final_steps",
+      "setup_head_driver",
+      "set_color_management_to_standard",
+      "delete_specific_objects",
+      "rename_shader_materials",
+      "set_up_armtwist_bone_constraints",
+      "join_meshes_on_armature",
+      "paint_vertex_colors"
+    ],
+    "HONKAI_IMPACT_3RD_OT_setup_wizard_ui": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
+      "import_character_model",
+      "delete_empties",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures",
+      "import_outlines",
+      "setup_geometry_nodes",
+      "import_outline_lightmaps",
+      "import_material_data",
+      "fix_transformations",
+      "rig_character",
+      "setup_head_driver",
+      "set_color_management_to_standard",
+      "delete_specific_objects",
+      "rename_shader_materials",
+      "join_meshes_on_armature"
+    ],
+    "HONKAI_IMPACT_3RD_OT_setup_wizard_ui_no_outlines": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
+      "import_character_model",
+      "delete_empties",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures",
+      "fix_transformations",
+      "rig_character",
+      "setup_head_driver",
+      "set_color_management_to_standard",
+      "delete_specific_objects",
+      "rename_shader_materials",
+      "join_meshes_on_armature"
+    ],
+    "HONKAI_IMPACT_3RD_OT_set_up_character": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_character",
+      "import_character_model",
+      "delete_empties"
+    ],
+    "HONKAI_IMPACT_3RD_OT_set_up_materials": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_materials",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures"
+    ],
+    "HONKAI_IMPACT_3RD_OT_set_up_outlines": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_outlines",
+      "import_outlines",
+      "setup_geometry_nodes",
+      "import_outline_lightmaps",
+      "import_material_data"
+    ],
+    "HONKAI_IMPACT_3RD_OT_finish_setup": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_final_steps",
+      "setup_head_driver",
+      "set_color_management_to_standard",
+      "delete_specific_objects",
+      "rename_shader_materials",
+      "join_meshes_on_armature"
+    ],
+    "HONKAI_NEXUS_ANIMA_OT_setup_wizard_ui": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
+      "import_character_model",
+      "delete_empties",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures",
+      "import_outlines",
+      "setup_geometry_nodes",
+      "import_outline_lightmaps",
+      "import_material_data",
+      "fix_transformations",
+      "rig_character",
+      "setup_head_driver",
+      "set_color_management_to_standard",
+      "set_up_screen_space_reflections",
+      "vertex_paint_face_see_through_effect",
+      "delete_specific_objects",
+      "rename_shader_materials",
+      "set_up_armtwist_bone_constraints",
+      "join_meshes_on_armature"
+    ],
+    "HONKAI_NEXUS_ANIMA_OT_setup_wizard_ui_no_outlines": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
+      "import_character_model",
+      "delete_empties",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures",
+      "fix_transformations",
+      "rig_character",
+      "setup_head_driver",
+      "set_color_management_to_standard",
+      "set_up_screen_space_reflections",
+      "vertex_paint_face_see_through_effect",
+      "delete_specific_objects",
+      "rename_shader_materials",
+      "set_up_armtwist_bone_constraints",
+      "join_meshes_on_armature"
+    ],
+    "HONKAI_NEXUS_ANIMA_OT_set_up_character": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_character",
+      "import_character_model",
+      "delete_empties"
+    ],
+    "HONKAI_NEXUS_ANIMA_OT_set_up_materials": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_materials",
+      "import_materials",
+      "replace_default_materials",
+      "import_character_textures"
+    ],
+    "HONKAI_NEXUS_ANIMA_OT_set_up_outlines": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_outlines",
+      "import_outlines",
+      "setup_geometry_nodes",
+      "import_outline_lightmaps",
+      "import_material_data"
+    ],
+    "HONKAI_NEXUS_ANIMA_OT_finish_setup": [
+      "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_final_steps",
+      "setup_head_driver",
+      "set_color_management_to_standard",
+      "set_up_screen_space_reflections",
+      "vertex_paint_face_see_through_effect",
+      "delete_specific_objects",
+      "rename_shader_materials",
+      "set_up_armtwist_bone_constraints",
+      "join_meshes_on_armature"
+    ],
     "ZENLESS_ZONE_ZERO_OT_setup_wizard_ui": [
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
       "import_character_model",

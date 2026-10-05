@@ -43,6 +43,10 @@ class GameTextureImporterFactory:
             return WutheringWavesTextureImporterFacade(blender_operator, context)
         elif game_type == GameType.ARKNIGHTS_ENDFIELD.name:
             return ArknightsEndfieldTextureImporterFacade(blender_operator, context)
+        elif game_type == GameType.HONKAI_IMPACT_3RD.name:
+            return HonkaiImpact3rdTextureImporterFacade(blender_operator, context)
+        elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
+            return HonkaiNexusAnimaTextureImporterFacade(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -2551,6 +2555,185 @@ class ArknightsEndfieldTextureImporterFacade(GameTextureImporter):
             high_level_step_name=self.blender_operator.high_level_step_name,
             game_type=self.blender_operator.game_type,
         )
+
+
+'''
+Honkai Impact 3rd Texture Importer Facade
+'''
+class HonkaiImpact3rdTextureImporterFacade(GameTextureImporter):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+
+    def import_textures(self):
+        cache_enabled = self.context.window_manager.cache_enabled if hasattr(self.context, 'window_manager') and hasattr(self.context.window_manager, 'cache_enabled') else True
+        directory = (
+            getattr(self.blender_operator, 'file_directory', None)
+            or get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH)
+            or (os.path.dirname(self.blender_operator.filepath) if hasattr(self.blender_operator, 'filepath') and self.blender_operator.filepath else None)
+            or get_active_character_directory()
+        )
+
+        if not directory or not os.path.isdir(directory):
+            bpy.ops.genshin.import_textures(
+                'INVOKE_DEFAULT',
+                next_step_idx=self.blender_operator.next_step_idx, 
+                file_directory=self.blender_operator.file_directory,
+                invoker_type=self.blender_operator.invoker_type,
+                high_level_step_name=self.blender_operator.high_level_step_name,
+                game_type=GameType.HONKAI_IMPACT_3RD.name,
+            )
+            return {'FINISHED'}
+
+        # Scan all textures recursively
+        image_exts = ('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff', '.webp')
+        texture_file_map = {}
+        for root, _, files in os.walk(directory):
+            for f in files:
+                if f.lower().endswith(image_exts):
+                    clean_name = os.path.splitext(f)[0].lower()
+                    texture_file_map[clean_name] = os.path.normpath(os.path.join(root, f))
+                    texture_file_map[f.lower()] = os.path.normpath(os.path.join(root, f))
+
+        def load_img(fpath, colorspace='sRGB'):
+            if not fpath or not os.path.isfile(fpath):
+                return None
+            fname = os.path.basename(fpath)
+            img = bpy.data.images.get(fname)
+            if not img:
+                try:
+                    img = bpy.data.images.load(filepath=fpath, check_existing=True)
+                except Exception:
+                    img = None
+            if img:
+                img.alpha_mode = 'CHANNEL_PACKED'
+                try:
+                    img.colorspace_settings.name = colorspace
+                except Exception:
+                    pass
+            return img
+
+        # Map and assign to ImpactToon materials
+        for mat in bpy.data.materials:
+            if not mat.use_nodes or not mat.node_tree:
+                continue
+            m_low = mat.name.lower()
+            if 'impacttoon' not in m_low and not m_low.startswith('hoyoverse -') and not m_low.startswith('mihoyo -'):
+                continue
+
+            orig_m = (mat.get("_original_material_name") or "").lower()
+            part_key = 'face' if ('face' in m_low or 'face' in orig_m) else \
+                       'hair' if ('hair' in m_low or 'hair' in orig_m) else \
+                       'eye' if ('eye' in m_low or 'eye' in orig_m) else 'body'
+
+            # 1. Match Color/Diffuse
+            diff_img = None
+            # Check original fbx texture
+            orig_tex = mat.get('_original_fbx_texture')
+            if orig_tex and orig_tex.lower() in texture_file_map:
+                diff_img = load_img(texture_file_map[orig_tex.lower()], 'sRGB')
+
+            if not diff_img:
+                for k, p in texture_file_map.items():
+                    if part_key in k and any(x in k for x in ['color', 'diffuse']) and not any(x in k for x in ['lightmap', 'facemap', 'ramp', 'normal', 'mask']):
+                        diff_img = load_img(p, 'sRGB')
+                        break
+
+            # 2. Match Lightmap
+            lm_img = None
+            if diff_img:
+                d_stem = os.path.splitext(diff_img.name)[0].lower()
+                for pat in ['_color', '_diffuse']:
+                    if pat in d_stem:
+                        lm_stem = d_stem.replace(pat, '_lightmap')
+                        if lm_stem in texture_file_map:
+                            lm_img = load_img(texture_file_map[lm_stem], 'Non-Color')
+                            break
+            if not lm_img:
+                for k, p in texture_file_map.items():
+                    if part_key in k and 'lightmap' in k:
+                        lm_img = load_img(p, 'Non-Color')
+                        break
+
+            # 3. Match Facemap (for Face material)
+            fm_img = None
+            if part_key == 'face':
+                for k, p in texture_file_map.items():
+                    if 'facemap' in k or 'exptex' in k:
+                        fm_img = load_img(p, 'Non-Color')
+                        break
+
+            # Assign to nodes
+            for node in mat.node_tree.nodes:
+                if node.type == 'TEX_IMAGE':
+                    n_label = (node.label or node.name).lower()
+                    if ('maintex' in n_label or 'image texture.001' in n_label or 'diffuse' in n_label or 'color' in n_label) and 'lightmap' not in n_label and 'exp' not in n_label:
+                        if diff_img:
+                            node.image = diff_img
+                    elif ('lightmap' in n_label or node.name == 'Image Texture' or 'lightmap' in (node.name).lower()) and 'exp' not in n_label:
+                        if lm_img:
+                            node.image = lm_img
+                    elif ('exp' in n_label or 'face' in n_label or node.name == 'Image Texture.002') and part_key == 'face':
+                        if fm_img:
+                            node.image = fm_img
+
+        self.blender_operator.report({'INFO'}, 'Successfully imported Honkai Impact 3rd textures!')
+        if cache_enabled and directory:
+            cache_using_cache_key(get_cache(cache_enabled), CHARACTER_MODEL_FOLDER_FILE_PATH, directory)
+
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx,
+            self.blender_operator.invoker_type,
+            file_path_to_cache=directory,
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=GameType.HONKAI_IMPACT_3RD.name,
+        )
+
+
+'''
+Honkai Nexus Anima Texture Importer Facade
+'''
+class HonkaiNexusAnimaTextureImporterFacade(GameTextureImporter):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+
+    def import_textures(self):
+        cache_enabled = self.context.window_manager.cache_enabled if hasattr(self.context, 'window_manager') and hasattr(self.context.window_manager, 'cache_enabled') else True
+        directory = (
+            getattr(self.blender_operator, 'file_directory', None)
+            or get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH)
+            or (os.path.dirname(self.blender_operator.filepath) if hasattr(self.blender_operator, 'filepath') and self.blender_operator.filepath else None)
+            or get_active_character_directory()
+        )
+
+        if not directory or not os.path.isdir(directory):
+            bpy.ops.genshin.import_textures(
+                'INVOKE_DEFAULT',
+                next_step_idx=self.blender_operator.next_step_idx, 
+                file_directory=self.blender_operator.file_directory,
+                invoker_type=self.blender_operator.invoker_type,
+                high_level_step_name=self.blender_operator.high_level_step_name,
+                game_type=GameType.HONKAI_NEXUS_ANIMA.name,
+            )
+            return {'FINISHED'}
+
+        texture_importer_type = TextureImporterType.HSR_AVATAR
+        texture_importer: GenshinTextureImporter = TextureImporterFactory.create(texture_importer_type, GameType.HONKAI_STAR_RAIL)
+        texture_importer.import_textures(directory)
+
+        self.blender_operator.report({'INFO'}, 'Imported Honkai Nexus Anima textures!')
+        if cache_enabled and directory:
+            cache_using_cache_key(get_cache(cache_enabled), CHARACTER_MODEL_FOLDER_FILE_PATH, directory)
+
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx,
+            self.blender_operator.invoker_type,
+            file_path_to_cache=directory,
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=GameType.HONKAI_NEXUS_ANIMA.name
+        )
+
 
 
 

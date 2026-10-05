@@ -14,4 +14,6 @@ class GameType(Enum):
     NEVERNESS_TO_EVERNESS = auto()
     WUTHERING_WAVES = auto()
     ARKNIGHTS_ENDFIELD = auto()
+    HONKAI_IMPACT_3RD = auto()
+    HONKAI_NEXUS_ANIMA = auto()
 

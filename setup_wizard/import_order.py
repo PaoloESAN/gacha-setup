@@ -125,6 +125,10 @@ def invoke_next_step_ui(
             game_type = GameType.ARKNIGHTS_ENDFIELD.name
         elif 'zenless' in hl_low or 'zzz' in hl_low:
             game_type = GameType.ZENLESS_ZONE_ZERO.name
+        elif 'honkai_impact_3rd' in hl_low or 'hi3' in hl_low:
+            game_type = GameType.HONKAI_IMPACT_3RD.name
+        elif 'honkai_nexus_anima' in hl_low or 'nexus' in hl_low or 'hna' in hl_low:
+            game_type = GameType.HONKAI_NEXUS_ANIMA.name
         elif 'honkai' in hl_low or 'hsr' in hl_low:
             game_type = GameType.HONKAI_STAR_RAIL.name
         elif 'punishing' in hl_low or 'pgr' in hl_low:
@@ -274,6 +278,27 @@ def get_shader_file_path(game_type: str, file_type: str = "main") -> str:
         p = os.path.join(shaders_dir, 'ake', 'AKE.blend')
         if os.path.isfile(p):
             return p
+
+    elif game_type == GameType.PUNISHING_GRAY_RAVEN.name:
+        pgr_dir = os.path.join(shaders_dir, 'pgr')
+        if os.path.isdir(pgr_dir):
+            blends = [os.path.join(pgr_dir, f) for f in os.listdir(pgr_dir) if f.lower().endswith('.blend')]
+            if blends:
+                return blends[0]
+
+    elif game_type == GameType.HONKAI_IMPACT_3RD.name:
+        hi3_dir = os.path.join(shaders_dir, 'hi3')
+        if os.path.isdir(hi3_dir):
+            blends = [os.path.join(hi3_dir, f) for f in os.listdir(hi3_dir) if f.lower().endswith('.blend')]
+            if blends:
+                return blends[0]
+
+    elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
+        hna_dir = os.path.join(shaders_dir, 'hna')
+        if os.path.isdir(hna_dir):
+            blends = [os.path.join(hna_dir, f) for f in os.listdir(hna_dir) if f.lower().endswith('.blend')]
+            if blends:
+                return blends[0]
 
     return ""
 

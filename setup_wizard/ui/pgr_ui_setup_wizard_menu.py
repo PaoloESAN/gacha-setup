@@ -32,6 +32,10 @@ class PGR_PT_Setup_Wizard_UI_Layout(Panel, PunishingGrayRavenUIRenderChecker):
     bl_region_type = "UI"
     bl_category = "Gacha Setup"
 
+    @classmethod
+    def poll(cls, context):
+        return False
+
     def draw(self, context):
         layout = self.layout
         window_manager = context.window_manager
@@ -79,14 +83,14 @@ class PGR_PT_Basic_Setup_Wizard_UI_Layout(Panel, PunishingGrayRavenUIRenderCheck
 
         OperatorFactory.create(
             sub_layout,
-            'genshin.set_up_character',
+            'punishing_gray_raven.set_up_character',
             'Set Up Character',
             icon='OUTLINER_OB_ARMATURE',
             game_type=GameType.PUNISHING_GRAY_RAVEN.name,
         )
         OperatorFactory.create(
             sub_layout,
-            'genshin.set_up_materials',
+            'punishing_gray_raven.set_up_materials',
             'Set Up Materials',
             icon='MATERIAL',
             game_type=GameType.PUNISHING_GRAY_RAVEN.name,
@@ -94,7 +98,7 @@ class PGR_PT_Basic_Setup_Wizard_UI_Layout(Panel, PunishingGrayRavenUIRenderCheck
         if bpy.app.version >= (3,3,0):
             OperatorFactory.create(
                 sub_layout,
-                'genshin.set_up_outlines',
+                'punishing_gray_raven.set_up_outlines',
                 'Set Up Outlines',
                 icon='GEOMETRY_NODES',
                 game_type=GameType.PUNISHING_GRAY_RAVEN.name,
@@ -105,13 +109,15 @@ class PGR_PT_Basic_Setup_Wizard_UI_Layout(Panel, PunishingGrayRavenUIRenderCheck
             sub_layout,
             'genshin.fix_transformations',
             'Fix Transformations',
-            'OBJECT_DATA'
+            'OBJECT_DATA',
+            game_type=GameType.PUNISHING_GRAY_RAVEN.name,
         )
+        OperatorFactory.create_rig_character_ui(sub_layout)
         OperatorFactory.create(
             sub_layout,
-            'genshin.finish_setup',
+            'punishing_gray_raven.finish_setup',
             'Finish Setup',
-            icon='CHECKMARK',
+            'CHECKMARK',
             game_type=GameType.PUNISHING_GRAY_RAVEN.name,
         )
 
@@ -283,6 +289,62 @@ class PGR_PT_UI_Outlines_Menu(Panel, PunishingGrayRavenUIRenderChecker):
             layout.label(text='(Outlines Disabled < v3.3.0)')
 
 
+class PGR_PT_UI_Character_Rig_Setup_Menu(Panel, PunishingGrayRavenUIRenderChecker):
+    bl_label = "Character Rig Menu"
+    bl_idname = "PGR_PT_Rigify_Setup_Menu"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_parent_id = "PGR_PT_UI_Advanced_Setup_Layout"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        layout = self.layout
+        sub_layout = layout.column()
+        box = sub_layout.box()
+
+        character_rigger_props = context.scene.character_rigger_props
+
+        OperatorFactory.create_rig_character_ui(box)
+        OperatorFactory.create(
+            box,
+            "punishing_gray_raven.setup_face_rig",
+            "Set Up Face Rig",
+            "FACE_MAPS",
+        )
+        OperatorFactory.create(
+            box,
+            "hoyoverse.apply_hair_clothes_physics",
+            "Apply Hair & Clothes Physics",
+            "PHYSICS",
+        )
+
+        box = sub_layout.box()
+        box.label(text="Settings")
+
+        col = box.column()
+        OperatorFactory.create(
+            col,
+            "hoyoverse.rootshape_filepath_setter",
+            "Override RootShape Filepath",
+            "FILE_FOLDER",
+            game_type=GameType.PUNISHING_GRAY_RAVEN.name,
+            operator_context="INVOKE_DEFAULT",
+        )
+        col = box.column()
+        col.prop(character_rigger_props, "allow_arm_ik_stretch")
+        col.prop(character_rigger_props, "allow_leg_ik_stretch")
+        col.prop(character_rigger_props, "use_arm_ik_poles")
+        col.prop(character_rigger_props, "use_leg_ik_poles")
+        col.prop(character_rigger_props, "add_children_of_constraints")
+        col.prop(character_rigger_props, "use_head_tracker")
+        enable_physics = getattr(character_rigger_props, "enable_hair_clothes_physics", getattr(character_rigger_props, "enable_hair_dress_physics", False))
+        col.prop(character_rigger_props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")
+        if enable_physics:
+            sliders_col = col.column()
+            sliders_col.prop(character_rigger_props, "hair_physics_influence", text="Hair", slider=True)
+            sliders_col.prop(character_rigger_props, "clothes_physics_influence", text="Clothes", slider=True)
+
+
 class PGR_PT_UI_Finish_Setup_Menu(Panel, PunishingGrayRavenUIRenderChecker):
     bl_label = 'Finish Setup Menu'
     bl_idname = 'PGR_PT_UI_Misc_Setup_Menu'
@@ -327,19 +389,8 @@ class PGR_PT_UI_Finish_Setup_Menu(Panel, PunishingGrayRavenUIRenderChecker):
             'Set Up ArmTwist Bone Constraints',
             'CONSTRAINT_BONE'
         )
-        # OperatorFactory.create(
-        #     sub_layout,
-        #     'hoyoverse.join_meshes_on_armature',
-        #     'Join Meshes on Armature',
-        #     'RNA',
-        #     game_type=GameType.PUNISHING_GRAY_RAVEN.name
-        # )
 
 
-'''
-    This factory is intended to help create a UI element's operator (or the action it takes) when pressed.
-    While it currently doesn't do anything too grand, it may provide future flexibility.
-'''
 class OperatorFactory:
     @staticmethod
     def create(
@@ -359,3 +410,46 @@ class OperatorFactory:
 
         for key, value in kwargs.items():
             setattr(ui_object, key, value)
+
+    @staticmethod
+    def create_rig_character_ui(ui_object: UILayout):
+        expy_kit_installed = any('expy' in k.lower() for k in bpy.context.preferences.addons.keys())
+        rigify_installed = any('rigify' in k.lower() for k in bpy.context.preferences.addons.keys())
+
+        column = ui_object.column()
+        column.enabled = True if expy_kit_installed and rigify_installed else False
+        OperatorFactory.create(
+            column,
+            "hoyoverse.set_up_character_rig",
+            "Rig Character",
+            "OUTLINER_OB_ARMATURE",
+            game_type=GameType.PUNISHING_GRAY_RAVEN.name,
+        )
+        if not column.enabled:
+            column = ui_object.column()
+            if not expy_kit_installed:
+                column.label(text="ExpyKit required", icon="ERROR")
+            if not rigify_installed:
+                column.label(text="Rigify required", icon="ERROR")
+
+
+classes = (
+    PGR_PT_Setup_Wizard_UI_Layout,
+    PGR_PT_Basic_Setup_Wizard_UI_Layout,
+    PGR_PT_Advanced_Setup_Wizard_UI_Layout,
+    PGR_PT_UI_Character_Model_Menu,
+    PGR_PT_UI_Materials_Menu,
+    PGR_PT_UI_Outlines_Menu,
+    PGR_PT_UI_Character_Rig_Setup_Menu,
+    PGR_PT_UI_Finish_Setup_Menu,
+)
+
+
+def register():
+    for cls in classes:
+        bpy.utils.register_class(cls)
+
+
+def unregister():
+    for cls in reversed(classes):
+        bpy.utils.unregister_class(cls)
