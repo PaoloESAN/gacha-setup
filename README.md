@@ -102,6 +102,8 @@ Thanks to all those who collaborated on the original project:
 * **WuWa / Wuthering Waves**:
   * **Shader**: [Gustling Waters](https://github.com/nytsjared/Gustling-Waters) by [@nytsjared](https://github.com/nytsjared)
   * **Base Addon & Rigging**: [Blender-WuWa-Character-Setup](https://github.com/fnoji/Blender-WuWa-Character-Setup) by [@fnoji](https://github.com/fnoji)
+  * **Face Rig**: Akatsuki
+  * **emy_purpl**
 * **AKE / Arknights: Endfield**:
   * **Setup**: Xiyang
   * **Shader**: Endfield PBRToon
