@@ -3,7 +3,7 @@ import os
 bl_info = {
     "name": "Gacha Setup",
     "author": "Mken, OctavoPE, Enthralpy, PaoloESAN",
-    "version": (3, 7, 2),
+    "version": (3, 7, 3),
     "blender": (4, 1, 0),
     "location": "3D View > Sidebar > Gacha Setup",
     "description": "An addon to streamline the character model setup process for Gacha games in Blender 4.1+",
@@ -42,6 +42,7 @@ else:
     )
     from setup_wizard.character_rig_setup.wuwa_face_panel import (
         WW_OT_CreateFacePanel,
+        WW_OT_ImportFacePanel,
     )
     from setup_wizard.character_rig_setup.ake_face_rig import (
         AKE_OT_SetUpIsaacFaceRig,
@@ -155,6 +156,9 @@ else:
         GI_PT_UI_Post_Processing_Node_Editor_Setup_Menu,
         GI_PT_UI_Post_Processing_Setup_Menu,
         GI_PT_Rig_Character_Settings,
+        GI_OT_SetupLightingPanel,
+        GI_OT_SelectLightingPanel,
+        GI_OT_ToggleLightingPanelVisibility,
         register_gi_properties,
         unregister_gi_properties,
         gi_frame_change_handler,
@@ -253,6 +257,9 @@ else:
         GI_PT_UI_Finish_Setup_Menu,
         GI_PT_UI_Character_Rig_Setup_Menu,
         GI_PT_Rig_Character_Settings,
+        GI_OT_SetupLightingPanel,
+        GI_OT_SelectLightingPanel,
+        GI_OT_ToggleLightingPanelVisibility,
         GI_PT_UI_Post_Processing_Setup_Menu,
         GI_PT_UI_Post_Processing_Node_Editor_Setup_Menu,
         GI_OT_GenshinSetupWizardUI,
@@ -331,6 +338,7 @@ else:
         WW_OT_FinishSetup,
         WW_OT_SetupCompositorNodes,
         WW_OT_CreateFacePanel,
+        WW_OT_ImportFacePanel,
         WW_OT_ToggleAnimateMode,
         WW_OT_ToggleOutlines,
         WW_OT_ToggleHairTrans,

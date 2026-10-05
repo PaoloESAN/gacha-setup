@@ -352,11 +352,12 @@ def resolve_settings_armature(context):
 
     # If no armature found directly from selection, check if selected object is a character mesh
     # and find any character armature in the scene / active collection
-    if target_arm is None and candidates:
+    if target_arm is None:
         import bpy
         for cand in candidates:
             if getattr(cand, "type", None) == 'MESH':
-                for o in getattr(context.scene, "objects", []):
+                scn_objs = getattr(getattr(context, "scene", None) or getattr(bpy.context, "scene", None), "objects", bpy.data.objects)
+                for o in scn_objs:
                     if o.type == 'ARMATURE' and not any(ign in o.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig", "wgt"]):
                         target_arm = o
                         break
@@ -365,11 +366,18 @@ def resolve_settings_armature(context):
                     if cand.get(GACHA_GAME_KEY) or any(slot.material for slot in getattr(cand, "material_slots", [])):
                         target_arm = cand
                 break
+        if target_arm is None:
+            scn_objs = getattr(getattr(context, "scene", None) or getattr(bpy.context, "scene", None), "objects", bpy.data.objects)
+            for o in scn_objs:
+                if o.type == 'ARMATURE' and not any(ign in o.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig", "wgt"]):
+                    target_arm = o
+                    break
 
     if target_arm is not None:
         try:
             r_id = getattr(getattr(target_arm, "data", None), "get", lambda k: None)("rig_id")
-            if r_id and (r_id not in _registered_rig_ids or f"VIEW3D_PT_rig_layers_{r_id}" not in dir(bpy.types)):
+            if r_id and r_id not in _registered_rig_ids:
+                _registered_rig_ids.add(r_id)
                 ensure_all_rig_uis_registered(target_arm)
         except Exception:
             pass
@@ -424,6 +432,7 @@ def get_character_materials(context=None, arm=None):
         arm = resolve_settings_armature(context)
     if arm is None:
         return None, []
+    import bpy
     mats = []
     seen = set()
     for mesh in _iter_rig_meshes(arm):
@@ -432,6 +441,12 @@ def get_character_materials(context=None, arm=None):
             if mat and mat.name not in seen:
                 seen.add(mat.name)
                 mats.append(mat)
+            if mat and mat.name.endswith("_Low"):
+                orig_name = mat.name[:-4]
+                orig_mat = bpy.data.materials.get(orig_name)
+                if orig_mat and orig_mat.name not in seen:
+                    seen.add(orig_mat.name)
+                    mats.append(orig_mat)
     return arm, mats
 
 
@@ -565,10 +580,11 @@ def reset_last_settings_arm():
     _LAST_SETTINGS_ARM = None
 
 
-def ensure_character_node_trees_isolated(arm, mats):
+def ensure_character_node_trees_isolated(arm, mats, force=False):
     """
-    Ensures that shader node groups in mats are uniquely owned by this character.
-    If another character's armature already owns a node tree, duplicates it to make it private.
+    Ensures that character-setting node groups (such as 'Global Material Properties')
+    in mats are uniquely owned by this character.
+    Fast path: skips immediately if all relevant groups are already owned by this character.
     """
     if not arm or not mats:
         return
@@ -576,16 +592,59 @@ def ensure_character_node_trees_isolated(arm, mats):
     if not arm_name:
         return
 
+    # 1. Collect only relevant property node groups (e.g. "Global Material Properties")
+    relevant_nodes = []
+    needs_isolation = False
+
     for m in mats:
-        if getattr(m, "node_tree", None):
-            for node in m.node_tree.nodes:
-                if node.type == 'GROUP' and node.node_tree:
-                    tree = node.node_tree
-                    owner = tree.get("_owner_armature")
-                    if owner is None:
-                        tree["_owner_armature"] = arm_name
-                    elif owner != arm_name:
-                        new_tree = tree.copy()
-                        new_tree["_owner_armature"] = arm_name
-                        node.node_tree = new_tree
+        if not getattr(m, "node_tree", None):
+            continue
+        for n in m.node_tree.nodes:
+            if n.type == 'GROUP' and n.node_tree:
+                t = n.node_tree
+                t_name = t.name.lower()
+                if "global" in t_name or "properties" in t_name or "_owner_armature" in t:
+                    relevant_nodes.append((n, t))
+                    if t.get("_owner_armature") != arm_name:
+                        needs_isolation = True
+
+    if not needs_isolation and not force:
+        return
+
+    import bpy
+
+    # 2. Find trees currently used by other armatures
+    other_arms = [obj for obj in bpy.data.objects if obj.type == 'ARMATURE' and obj != arm]
+    other_trees = set()
+    if other_arms:
+        for o_arm in other_arms:
+            for mesh in _iter_rig_meshes(o_arm):
+                for slot in getattr(mesh, "material_slots", []) or []:
+                    m = getattr(slot, "material", None)
+                    if m and getattr(m, "node_tree", None):
+                        for n in m.node_tree.nodes:
+                            if n.type == 'GROUP' and n.node_tree:
+                                other_trees.add(n.node_tree)
+
+    # 3. Remap trees ensuring all materials of this armature share the same isolated tree
+    remapped_trees = {}
+
+    for n, t in relevant_nodes:
+        if t in remapped_trees:
+            n.node_tree = remapped_trees[t]
+            continue
+        owner = t.get("_owner_armature")
+        if owner == arm_name:
+            remapped_trees[t] = t
+            continue
+        if owner is not None or t in other_trees:
+            target_tree = t.copy()
+            target_tree["_owner_armature"] = arm_name
+            remapped_trees[t] = target_tree
+            n.node_tree = target_tree
+        else:
+            t["_owner_armature"] = arm_name
+            remapped_trees[t] = t
+
+
 

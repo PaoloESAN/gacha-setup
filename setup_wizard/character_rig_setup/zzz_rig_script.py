@@ -686,10 +686,10 @@ def rig_character(
 
     ## Points toe bones in correct direction
     if toe_bones_exist:
-        armature.edit_bones['toe.L'].tail.z = 0
+        armature.edit_bones['toe.L'].tail.z = armature.edit_bones['toe.L'].head.z
         armature.edit_bones['toe.L'].tail.y -= 0.05
 
-        armature.edit_bones['toe.R'].tail.z = 0
+        armature.edit_bones['toe.R'].tail.z = armature.edit_bones['toe.R'].head.z
         armature.edit_bones['toe.R'].tail.y -= 0.05
             
     bpy.ops.armature.select_all(action='DESELECT')
@@ -859,6 +859,14 @@ def rig_character(
             arm_vec = (forearm_eb.tail - forearm_eb.head).normalized()
             hand_eb.tail = hand_eb.head + arm_vec * 0.05
             hand_eb.roll = forearm_eb.roll
+
+        heel_eb = metarm.edit_bones.get("heel.02" + side)
+        if heel_eb:
+            toe_eb = metarm.edit_bones.get("toe" + side)
+            foot_eb = metarm.edit_bones.get("foot" + side)
+            sole_z = toe_eb.head.z if toe_eb else (foot_eb.tail.z if foot_eb else 0.0)
+            heel_eb.head.z = sole_z
+            heel_eb.tail.z = sole_z
 
     for bone in metarm.edit_bones:
         if "f_" in bone.name or "thumb" in bone.name:
@@ -1535,11 +1543,13 @@ def rig_character(
            
     # Fixing Foot spin bone pos for chars with generated feet bones.
     if not toe_bones_exist:
-        armature.edit_bones['foot_spin_ik.L'].head.z = 0
-        armature.edit_bones['foot_spin_ik.L'].tail.z = 0
+        sole_z_l = armature.edit_bones['foot.L'].tail.z if 'foot.L' in armature.edit_bones else 0.0
+        armature.edit_bones['foot_spin_ik.L'].head.z = sole_z_l
+        armature.edit_bones['foot_spin_ik.L'].tail.z = sole_z_l
         
-        armature.edit_bones['foot_spin_ik.R'].head.z = 0
-        armature.edit_bones['foot_spin_ik.R'].tail.z = 0
+        sole_z_r = armature.edit_bones['foot.R'].tail.z if 'foot.R' in armature.edit_bones else 0.0
+        armature.edit_bones['foot_spin_ik.R'].head.z = sole_z_r
+        armature.edit_bones['foot_spin_ik.R'].tail.z = sole_z_r
     
     # SET RELATIONSHIPS as needed after bringing in new bones  
     if 'root' in armature.edit_bones and 'root-inner' in armature.edit_bones:
@@ -1641,6 +1651,8 @@ def rig_character(
     for b in armature.edit_bones:
         b_low = b.name.lower()
         if "box" in b_low or "weaponbox" in b_low:
+            continue
+        if "footprop" in b_low or "foot_prop" in b_low:
             continue
         if b.name in ["prop.L", "prop.R"]:
             continue
@@ -3789,7 +3801,72 @@ def rig_character(
             bpy.ops.object.mode_set(mode='OBJECT')
     except Exception as ex:
         print(f"[DEBUG] breast sub-bones parenting warning: {ex}")
-    
+
+    # Fix chest weights pointing at non-deforming controls (e.g. Belle-default:
+    # VGs 'breast.L'/'breast.R' match control bones with use_deform=False while
+    # 'DEF-breast.L'/'DEF-breast.R' are the real deformers). Verts weighted only
+    # to the non-deforming controls lag behind the torso and stretch. Transfer
+    # those weights to the DEF counterparts. Leave VGs like 'breast.L.001'
+    # (which already target deforming sub-bones) untouched.
+    try:
+        _rig_for_vg = None
+        try:
+            _rig_for_vg = this_obj
+        except Exception:
+            _rig_for_vg = None
+        if _rig_for_vg is None or getattr(_rig_for_vg, "type", None) != 'ARMATURE':
+            _rig_for_vg = bpy.context.object if (bpy.context.object and bpy.context.object.type == 'ARMATURE') else None
+        if _rig_for_vg is not None:
+            _breast_vg_remap = [
+                ("breast.L", "DEF-breast.L"),
+                ("breast.R", "DEF-breast.R"),
+                ("Bdy_L_Chest", "DEF-breast.L"),
+                ("Bdy_R_Chest", "DEF-breast.R"),
+                ("Skn_L_Chest", "DEF-breast.L"),
+                ("Skn_R_Chest", "DEF-breast.R"),
+            ]
+            _valid_remap = []
+            for _src, _dst in _breast_vg_remap:
+                _dst_bone = _rig_for_vg.data.bones.get(_dst)
+                if _dst_bone is not None and _dst_bone.use_deform:
+                    _valid_remap.append((_src, _dst))
+            if _valid_remap:
+                try:
+                    if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+                        bpy.ops.object.mode_set(mode='OBJECT')
+                except Exception:
+                    pass
+                for _obj in bpy.data.objects:
+                    if getattr(_obj, "type", None) != 'MESH':
+                        continue
+                    _bound = False
+                    try:
+                        for _mod in getattr(_obj, "modifiers", []) or []:
+                            if getattr(_mod, "type", "") == 'ARMATURE' and getattr(_mod, "object", None) == _rig_for_vg:
+                                _bound = True
+                                break
+                    except Exception:
+                        continue
+                    if not _bound:
+                        continue
+                    for _src, _dst in _valid_remap:
+                        _src_vg = _obj.vertex_groups.get(_src)
+                        if _src_vg is None:
+                            continue
+                        _src_idx = _src_vg.index
+                        _dst_vg = _obj.vertex_groups.get(_dst)
+                        if _dst_vg is None:
+                            _dst_vg = _obj.vertex_groups.new(name=_dst)
+                        for _v in _obj.data.vertices:
+                            for _g in _v.groups:
+                                if _g.group == _src_idx and _g.weight > 0.0:
+                                    _dst_vg.add([_v.index], _g.weight, 'ADD')
+                                    break
+                        _obj.vertex_groups.remove(_src_vg)
+                        print(f"[ZZZ RIG] Remapped chest VG '{_src}' -> '{_dst}' on '{_obj.name}'")
+    except Exception as ex:
+        print(f"[DEBUG] breast VG remap warning: {ex}")
+
     # DONE MODIFYING ui.py FILE --------------------------------------------
     
     

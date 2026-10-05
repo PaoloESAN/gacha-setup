@@ -297,6 +297,22 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
                 skillobj_identifier = file.name.split('_')[2]  # WARNING: This is a brittle way to get the identifier
                 body_part = f'{ShaderMaterialNameKeywords.SKILLOBJ} {skillobj_identifier}'
                 character_type = CharacterType.UNKNOWN
+            elif file.name.startswith('AvatarObj') and PurePosixPath(file.name).stem.endswith('_Mat'):
+                # Quest object materials (ex. AvatarObj_Ani_Quest_IkhorShackles_01_Mat.json):
+                # keep the full object name so each maps to its own dedicated
+                # material. Using only the last token ('Mat') would fail to
+                # resolve any material and skip the file entirely.
+                body_part = PurePosixPath(file.name).stem[:-len('_Mat')]
+                character_type = CharacterType.UNKNOWN
+            elif file.name.startswith('Eff_'):
+                # Effect object materials (ex. Eff_Fresnel_048_NO_00.json):
+                # keep the full name so each effect maps to its own dedicated
+                # material instead of collapsing to '00'. These transparent
+                # effects intentionally get no outline materials (see the 'Eff'
+                # outline ignore keyword), so only the main material data is
+                # applied for them.
+                body_part = PurePosixPath(file.name).stem
+                character_type = CharacterType.UNKNOWN
             else:
                 stem = PurePosixPath(file.name).stem
                 if stem.endswith('_D') or stem.endswith('_S'):
@@ -313,16 +329,34 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
 
             # Skirk's Dress2 material data JSON is for her StarCloak
             if body_part == 'Dress2' and 'Skirk' in file.name:
-                body_part_based_on_version = body_part_based_on_version_map.get(self.material_names, 'StarCloak')
-                self.__customized_skirk_starcloak_material_data_setup(material_data_parser, character_type, file, body_part_based_on_version)
+                body_part_based_on_version = body_part_based_on_version_map.get(
+                    type(self.material_names),
+                    body_part_based_on_version_map.get(self.material_names, 'StarCloak')
+                )
+                if body_part_based_on_version != body_part:
+                    self.__customized_skirk_starcloak_material_data_setup(material_data_parser, character_type, file, body_part_based_on_version)
 
-            if not material or not outlines_material:
+            if not material:
                 self.blender_operator.report({'WARNING'}, \
                     f'Continuing to apply other material data, but: \n'
                     f'* Type: {character_type}\n'
                     f'* Material Data JSON "{file.name}" was selected, but unable to determine material to apply this to.\n'
                     f'* Expected Materials "{self.material_names.MATERIAL_PREFIX}{body_part}" and "{self.material_names.MATERIAL_PREFIX}{body_part} Outlines"')
                 continue
+
+            if not outlines_material:
+                if file.name.startswith('Eff_'):
+                    # Transparent effects intentionally get no outline
+                    # materials (see the 'Eff' outline ignore keyword), so
+                    # only the main material data is applied for them.
+                    print(f'[MATERIAL DATA] No outlines for effect "{file.name}"; applying main material data only.')
+                else:
+                    self.blender_operator.report({'WARNING'}, \
+                        f'Continuing to apply other material data, but: \n'
+                        f'* Type: {character_type}\n'
+                        f'* Material Data JSON "{file.name}" was selected, but unable to determine outlines material to apply this to.\n'
+                        f'* Expected Material "{self.material_names.MATERIAL_PREFIX}{body_part} Outlines"')
+                    continue
 
             shadow_ramp_type_setter = ShadowRampTypeSetter(file, material_data_directory, self.shader_node_names)
             shadow_ramp_type_setter.set_shadow_ramp_type(material)
@@ -338,6 +372,8 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
 
     def __customized_skirk_starcloak_material_data_setup(self, material_data_parser, character_type, file, body_part):
         material, outlines_material, night_soul_outlines_material = self.find_material_and_outline_material_for_body_part(body_part)
+        if not material or not outlines_material:
+            return
         outline_material_group: OutlineMaterialGroup = OutlineMaterialGroup(material, outlines_material, night_soul_outlines_material)
 
         material_data_appliers = MaterialDataAppliersFactory.create(

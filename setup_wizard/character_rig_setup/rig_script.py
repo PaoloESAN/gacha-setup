@@ -4729,6 +4729,17 @@ def rig_character(
         except:
             pass
 
+    # Ensure no other bones retain constraints referencing deleted palm.L / palm.R or non-existent bones
+    for pb in this_obj.pose.bones:
+        for c in list(pb.constraints):
+            subtarget = getattr(c, "subtarget", None)
+            target_obj = getattr(c, "target", None)
+            if subtarget in ("palm.L", "palm.R"):
+                pb.constraints.remove(c)
+            elif subtarget and (target_obj == this_obj or target_obj is None):
+                if subtarget not in this_obj.data.bones:
+                    pb.constraints.remove(c)
+
     # Penultimate: Rename bones as needed
     for oldname, newname in rename_bones_list:
         bone = this_obj.pose.bones.get(oldname)

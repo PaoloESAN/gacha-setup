@@ -10,7 +10,7 @@ from setup_wizard.domain.game_types import GameType
 from setup_wizard.domain.shader_identifier_service import GenshinImpactShaders, HonkaiStarRailShaders, ShaderIdentifierService, \
     ShaderIdentifierServiceFactory
 from setup_wizard.domain.shader_material_names import JaredNytsPunishingGrayRavenShaderMaterialNames, StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, V2_FestivityGenshinImpactMaterialNames, \
-    ShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, V4_PrimoToonGenshinImpactMaterialNames
+    ShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, V4_PrimoToonGenshinImpactMaterialNames, DURIN_DARK_EYE_MATERIAL_NAME, DURIN_EYE_MATERIAL_NAMES
 from setup_wizard.domain.shader_node_names import JaredNyts_PunishingGrayRavenNodeNames, ShaderNodeNames, StellarToonShaderNodeNames
 from setup_wizard.domain.shader_material_name_keywords import ShaderMaterialNameKeywords
 
@@ -56,7 +56,7 @@ def is_mat_part_match(mat_name, part):
     """
     m_low = mat_name.lower()
     part_clean = part.lower().replace('_', '')
-    if bool(re.search(rf'(?:^|[\s\-_]){re.escape(part)}$', m_low)):
+    if bool(re.search(rf'(?:^|[\s\-_]){re.escape(part.lower())}$', m_low)):
         return True
     m_tokens = re.split(r'[\s\-_]+', m_low)
     if m_tokens and m_tokens[-1].replace('_', '') == part_clean:
@@ -1272,6 +1272,16 @@ class GenshinTextureImporter:
                 mat_part = 'EffectHair'
             elif 'helmetemo' in c_low:
                 mat_part = 'HelmetEmo'
+            elif c_low.startswith('avatarobj'):
+                # Quest object materials (ex. AvatarObj_Ani_Quest_IkhorLight_01_Mat):
+                # keep the full object name so each maps to its own dedicated
+                # shader material instead of collapsing to a bare index ('01').
+                mat_part = clean_name
+            elif c_low.startswith('eff_'):
+                # Effect object materials (ex. Eff_Fresnel_048_NO_00): keep the
+                # full name so each effect maps to its own dedicated shader
+                # material instead of collapsing to a bare index ('00').
+                mat_part = clean_name
             else:
                 mat_part = clean_name.split('_')[-1]
             json_data_list.append((jf, raw_name, mat_part, data))
@@ -1664,7 +1674,7 @@ class GenshinTextureImporter:
                     for obj in bpy.data.objects:
                         if obj.type == 'MESH':
                             mats = [s.material for s in obj.material_slots if s.material]
-                            if any('new pupil' in m.name.lower() for m in mats) and not any('highlight' in m.name.lower() for m in mats):
+                            if any('new pupil' in m.name.lower() or m.name in DURIN_EYE_MATERIAL_NAMES for m in mats) and not any('highlight' in m.name.lower() for m in mats):
                                 setup_new_pupil_highlight_layer(obj, self.material_names)
                 except Exception as e_hl_split:
                     print(f"[HIGHLIGHT LAYER] Notice ensuring pupil highlight layer: {e_hl_split}")
@@ -2036,6 +2046,12 @@ class GenshinTextureImporter:
                 if any(k in n_id for k in ['highlight', 'eyelight', 'eyehighlight']):
                     n.image = img
 
+        try:
+            from setup_wizard.replace_default_materials_setup.game_default_material_replacers import remove_set_depth_nodes_from_highlight_material
+            remove_set_depth_nodes_from_highlight_material(material)
+        except Exception:
+            pass
+
     def set_new_pupil_material_textures(self, material, pupil_images_dict, ramp_img=None, highlight_img=None):
         if not material or not material.use_nodes or not material.node_tree:
             return
@@ -2122,8 +2138,8 @@ class GenshinTextureImporter:
 
             mix_001 = gtree.nodes.get('Mix.001')
             mix_main = gtree.nodes.get('Mix')
-            mix_shader_002 = gtree.nodes.get('Mix Shader.002')
-            mix_shader_main = gtree.nodes.get('Mix Shader')
+            mix_color_002 = gtree.nodes.get('Mix Color.002') or gtree.nodes.get('Mix.002') or gtree.nodes.get('Mix Shader.002')
+            mix_color_main = gtree.nodes.get('Mix Color') or gtree.nodes.get('Mix.003') or gtree.nodes.get('Mix Shader')
 
             if not mix_001 or not mix_main:
                 mix_nodes = [n for n in gtree.nodes if n.type == 'MIX']
@@ -2133,13 +2149,13 @@ class GenshinTextureImporter:
                     elif mn.name == 'Mix':
                         mix_main = mn
 
-            if not mix_shader_002 or not mix_shader_main:
-                ms_nodes = [n for n in gtree.nodes if n.type == 'MIX_SHADER']
-                for msn in ms_nodes:
-                    if '002' in msn.name:
-                        mix_shader_002 = msn
-                    elif msn.name == 'Mix Shader':
-                        mix_shader_main = msn
+            if not mix_color_002 or not mix_color_main:
+                mc_nodes = [n for n in gtree.nodes if n.type in ('MIX', 'MIX_SHADER')]
+                for mcn in mc_nodes:
+                    if '002' in mcn.name:
+                        mix_color_002 = mcn
+                    elif '003' in mcn.name or 'color' in mcn.name.lower() or 'shader' in mcn.name.lower():
+                        mix_color_main = mcn
 
             dir_str = getattr(self, 'directory', '') or ''
             is_marionette_new = (
@@ -2150,10 +2166,10 @@ class GenshinTextureImporter:
             )
 
             if has_ramp and is_marionette_new:
-                # With ramp: Pupil_ramp1 & Pupil04 -> Mix.001 -> Mix Shader.002
-                if mix_001 and mix_shader_002:
+                # With ramp: Pupil_ramp1 & Pupil04 -> Mix.001 -> Mix Color.002
+                if mix_001 and mix_color_002:
                     for link in list(gtree.links):
-                        if p4_node and link.from_node == p4_node and link.to_node == mix_shader_002 and link.to_socket.name == 'Shader':
+                        if p4_node and link.from_node == p4_node and link.to_node == mix_color_002:
                             gtree.links.remove(link)
                     ramp1_node = ramp_nodes[0] if ramp_nodes else None
                     if ramp1_node and 'Color' in ramp1_node.outputs:
@@ -2165,14 +2181,14 @@ class GenshinTextureImporter:
                         if b_sock:
                             gtree.links.new(p4_node.outputs['Color'], b_sock)
                     res_sock = mix_001.outputs.get('Result') or mix_001.outputs[0]
-                    shader_in_sock = mix_shader_002.inputs[2] if len(mix_shader_002.inputs) > 2 else mix_shader_002.inputs.get('Shader')
-                    if res_sock and shader_in_sock:
-                        gtree.links.new(res_sock, shader_in_sock)
+                    color_in_sock = mix_color_002.inputs.get('B') or mix_color_002.inputs.get('Shader') or mix_color_002.inputs[2]
+                    if res_sock and color_in_sock:
+                        gtree.links.new(res_sock, color_in_sock)
 
-                # With ramp: Pupil_ramp2 & Pupil02 -> Mix -> Mix Shader
-                if mix_main and mix_shader_main:
+                # With ramp: Pupil_ramp2 & Pupil02 -> Mix -> Mix Color
+                if mix_main and mix_color_main:
                     for link in list(gtree.links):
-                        if p2_node and link.from_node == p2_node and link.to_node == mix_shader_main and link.to_socket.name == 'Shader':
+                        if p2_node and link.from_node == p2_node and link.to_node == mix_color_main:
                             gtree.links.remove(link)
                     ramp2_node = ramp_nodes[1] if len(ramp_nodes) > 1 else (ramp_nodes[0] if ramp_nodes else None)
                     if ramp2_node and 'Color' in ramp2_node.outputs:
@@ -2184,26 +2200,26 @@ class GenshinTextureImporter:
                         if b_sock:
                             gtree.links.new(p2_node.outputs['Color'], b_sock)
                     res_sock = mix_main.outputs.get('Result') or mix_main.outputs[0]
-                    shader_in_sock = mix_shader_main.inputs[2] if len(mix_shader_main.inputs) > 2 else mix_shader_main.inputs.get('Shader')
-                    if res_sock and shader_in_sock:
-                        gtree.links.new(res_sock, shader_in_sock)
+                    color_in_sock = mix_color_main.inputs.get('B') or mix_color_main.inputs.get('Shader') or mix_color_main.inputs[2]
+                    if res_sock and color_in_sock:
+                        gtree.links.new(res_sock, color_in_sock)
             elif not is_marionette_new:
-                # Disconnect Mix/Mix.001: Pupil04 and Pupil02 go directly to Mix Shader nodes if NOT MarionetteNew
-                if p4_node and mix_shader_002:
+                # Disconnect Mix/Mix.001: Pupil04 and Pupil02 go directly to Mix Color nodes if NOT MarionetteNew
+                if p4_node and mix_color_002:
                     for link in list(gtree.links):
-                        if mix_001 and link.from_node == mix_001 and link.to_node == mix_shader_002:
+                        if mix_001 and link.from_node == mix_001 and link.to_node == mix_color_002:
                             gtree.links.remove(link)
-                    shader_in_sock = mix_shader_002.inputs[2] if len(mix_shader_002.inputs) > 2 else mix_shader_002.inputs.get('Shader')
-                    if shader_in_sock:
-                        gtree.links.new(p4_node.outputs['Color'], shader_in_sock)
+                    color_in_sock = mix_color_002.inputs.get('B') or mix_color_002.inputs.get('Shader') or mix_color_002.inputs[2]
+                    if color_in_sock:
+                        gtree.links.new(p4_node.outputs['Color'], color_in_sock)
 
-                if p2_node and mix_shader_main:
+                if p2_node and mix_color_main:
                     for link in list(gtree.links):
-                        if mix_main and link.from_node == mix_main and link.to_node == mix_shader_main:
+                        if mix_main and link.from_node == mix_main and link.to_node == mix_color_main:
                             gtree.links.remove(link)
-                    shader_in_sock = mix_shader_main.inputs[2] if len(mix_shader_main.inputs) > 2 else mix_shader_main.inputs.get('Shader')
-                    if shader_in_sock:
-                        gtree.links.new(p2_node.outputs['Color'], shader_in_sock)
+                    color_in_sock = mix_color_main.inputs.get('B') or mix_color_main.inputs.get('Shader') or mix_color_main.inputs[2]
+                    if color_in_sock:
+                        gtree.links.new(p2_node.outputs['Color'], color_in_sock)
 
     def set_multi_pupil_textures(self, material, pupil_images_dict, ramp_img=None, highlight_img=None):
         self.set_new_pupil_material_textures(material, pupil_images_dict, ramp_img, highlight_img)
@@ -2291,12 +2307,22 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                             break
 
             has_multiple_pupil_diffuse = len(pupil_diffuse_images) > 1
-            has_new_pupil_setup = has_multiple_pupil_diffuse or is_sandrone or any('new pupil' in m.name.lower() for m in bpy.data.materials)
+            has_new_pupil_setup = has_multiple_pupil_diffuse or is_sandrone or any('new pupil' in m.name.lower() or m.name in DURIN_EYE_MATERIAL_NAMES for m in bpy.data.materials)
 
             if has_new_pupil_setup:
+                # Durin's slot 0 ("Durin Dark Eye") receives pupil textures like
+                # New Pupil; slot 1 ("Durin Normal Eye") keeps its Hair diffuse
+                # wired by setup and is intentionally excluded from targets.
+                def _is_pupil_texture_target(m):
+                    n_low = m.name.lower()
+                    if 'outlines' in n_low:
+                        return False
+                    if m.name == DURIN_DARK_EYE_MATERIAL_NAME:
+                        return True
+                    return 'new pupil' in n_low and not m.name.endswith('.001') and 'two' not in n_low
                 target_pupil_mats = [
                     m for m in bpy.data.materials
-                    if m.use_nodes and 'new pupil' in m.name.lower() and 'outlines' not in m.name.lower()
+                    if m.use_nodes and _is_pupil_texture_target(m)
                 ]
                 if not target_pupil_mats:
                     new_pupil_mat = bpy.data.materials.get(getattr(self.material_names, 'NEW_PUPIL', f'{self.material_names.MATERIAL_PREFIX}New Pupil')) or \
@@ -2314,6 +2340,8 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                             for slot in obj.material_slots:
                                 if slot.material and slot.material not in target_pupil_mats:
                                     m_low = slot.material.name.lower()
+                                    if m_low.endswith('.001') or 'two' in m_low:
+                                        continue
                                     if ('pupil' in m_low or 'pupila' in m_low) and not any(x in m_low for x in ['face', 'eyestar', 'eyeshadow', 'brow', 'outlines', 'highlight']):
                                         slot.material = primary_pupil_mat
 
@@ -2338,7 +2366,7 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                     for obj in bpy.data.objects:
                         if obj.type == 'MESH':
                             mats = [s.material for s in obj.material_slots if s.material]
-                            if any('new pupil' in m.name.lower() for m in mats) and not any('highlight' in m.name.lower() for m in mats):
+                            if any('new pupil' in m.name.lower() or m.name in DURIN_EYE_MATERIAL_NAMES for m in mats) and not any('highlight' in m.name.lower() for m in mats):
                                 setup_new_pupil_highlight_layer(obj, self.material_names)
                 except Exception as e_hl_split:
                     print(f"[HIGHLIGHT LAYER] Notice ensuring pupil highlight layer: {e_hl_split}")
@@ -2829,7 +2857,7 @@ class GenshinNPCTextureImporter(GenshinTextureImporter):
                         self.set_lightmap_texture(TextureType.BODY, others_material, img)
 
                 elif any(k in file.lower() for k in ['eyehighlight', 'eyelight', 'eye_highlight', 'eye_light']) or ('highlight' in file.lower() and ('diffuse' in file.lower() or 'mask' in file.lower())):
-                    has_new_pupil = any('new pupil' in m.name.lower() for m in bpy.data.materials)
+                    has_new_pupil = any('new pupil' in m.name.lower() or m.name in DURIN_EYE_MATERIAL_NAMES for m in bpy.data.materials)
                     if has_new_pupil:
                         hl_mat = bpy.data.materials.get(getattr(self.material_names, 'HIGHLIGHT', f'{self.material_names.MATERIAL_PREFIX}Highlight')) or \
                                  bpy.data.materials.get('HoYoverse - Genshin Highlight') or \

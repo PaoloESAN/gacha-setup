@@ -843,6 +843,10 @@ def set_animate_mode(enable: bool):
             if enable:
                 if mat.name.endswith(ANIMATE_MODE_SUFFIX):
                     continue
+                try:
+                    mat.use_fake_user = True
+                except Exception:
+                    pass
                 low_name = mat.name + ANIMATE_MODE_SUFFIX
                 low_mat = bpy.data.materials.get(low_name)
                 if not low_mat:
@@ -874,8 +878,17 @@ def set_animate_mode(enable: bool):
                 slot.material = low_mat
             else:
                 if mat.name.endswith(ANIMATE_MODE_SUFFIX):
+                    try:
+                        mat.use_fake_user = False
+                    except Exception:
+                        pass
                     orig_name = mat.name[:-len(ANIMATE_MODE_SUFFIX)]
                     orig_mat = bpy.data.materials.get(orig_name)
+                    if not orig_mat:
+                        for m in bpy.data.materials:
+                            if m.name == orig_name or m.name.startswith(orig_name + "."):
+                                orig_mat = m
+                                break
                     if orig_mat:
                         slot.material = orig_mat
 

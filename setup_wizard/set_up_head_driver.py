@@ -683,6 +683,13 @@ class WW_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
                 head_origin.location = saved_loc
                 head_origin.matrix_world = saved_matrix
 
+                # Merge Eye Highlight directly into armature bones if present
+                try:
+                    from setup_wizard.character_rig_setup.wuwa_face_panel import merge_eye_highlight_into_armature
+                    merge_eye_highlight_into_armature(self.context, armature, matched_bone)
+                except Exception as ex_hl:
+                    print(f"[WUWA HEAD] Notice merging eye highlight: {ex_hl}")
+
         # 3. Ensure Light Direction has no constraints (pure world sun direction)
         light_dir = bpy.data.objects.get("Light Direction")
         if light_dir:

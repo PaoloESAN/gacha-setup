@@ -222,7 +222,9 @@ class WW_PT_UI_Rig_Character_Menu(Panel, WutheringWavesUIRenderChecker):
             'PHYSICS',
         )
         box.separator()
-        box.operator("wuthering_waves.create_face_panel", text="Create Face Rig Panel", icon="FACE_MAPS")
+        row_face = box.row(align=True)
+        row_face.operator("wuthering_waves.create_face_panel", text="Create Face Rig Panel", icon="FACE_MAPS")
+        row_face.operator("wuthering_waves.import_face_panel", text="Import 3D Panel", icon="FILE_BLEND")
 
         box = sub_layout.box()
         box.label(text='Settings')

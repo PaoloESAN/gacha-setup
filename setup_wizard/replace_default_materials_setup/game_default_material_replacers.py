@@ -19,7 +19,7 @@ from setup_wizard.domain.shader_identifier_service import GenshinImpactShaders, 
     ShaderIdentifierServiceFactory
 from setup_wizard.domain.shader_material_names import StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, V2_FestivityGenshinImpactMaterialNames, \
     ShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, JaredNytsPunishingGrayRavenShaderMaterialNames, V4_PrimoToonGenshinImpactMaterialNames, \
-    ZenlessZoneZeroShaderMaterialNames
+    ZenlessZoneZeroShaderMaterialNames, DURIN_DARK_EYE_MATERIAL_NAME, DURIN_NORMAL_EYE_MATERIAL_NAME, DURIN_EYE_MATERIAL_NAMES
 from setup_wizard.texture_import_setup.texture_importer_types import TextureImporterType, find_all_image_nodes_by_category, is_vodyanitsa_character
 from setup_wizard.domain.shader_material_name_keywords import ShaderMaterialNameKeywords
 from setup_wizard.utils.genshin_body_part_deducer import get_monster_body_part_name, \
@@ -219,6 +219,388 @@ def join_pupil_and_highlight_meshes(material_names=None):
     return primary
 
 
+def is_specific_character(character_name: str, mesh=None, material=None) -> bool:
+    """Detects if the character model, material, or context matches character_name."""
+    if not character_name:
+        return False
+    target = character_name.strip().lower()
+
+    if material:
+        m_name = getattr(material, 'name', '') or ''
+        if target in m_name.lower():
+            return True
+
+    if mesh:
+        if target in mesh.name.lower():
+            return True
+        if mesh.parent and target in mesh.parent.name.lower():
+            return True
+        for slot in getattr(mesh, "material_slots", []):
+            if slot.material and target in slot.material.name.lower():
+                return True
+
+    try:
+        from setup_wizard.import_order import get_active_character_directory
+        char_dir = get_active_character_directory() or bpy.context.scene.get("setup_wizard_imported_fbx_path", "")
+        if char_dir and target in str(char_dir).lower():
+            return True
+    except Exception:
+        pass
+
+    if material is None and mesh is None:
+        for m in bpy.data.materials:
+            if target in m.name.lower():
+                return True
+        for o in bpy.data.objects:
+            if target in o.name.lower():
+                return True
+        for img in bpy.data.images:
+            if target in img.name.lower():
+                return True
+    return False
+
+
+def is_durin_character(mesh=None):
+    """Detects if the character model or context corresponds to Durin."""
+    return is_specific_character('durin', mesh=mesh)
+
+
+def is_danica_character(mesh=None, material=None):
+    """Detects if the character model, material, or context corresponds strictly to Danica."""
+    return is_specific_character('danica', mesh=mesh, material=material)
+
+
+# Centralized registry for character-specific shader socket overrides:
+# { character_name: { target_body_part: { socket_name: default_value } } }
+CHARACTER_SHADER_OVERRIDES = {
+    'danica': {
+        'face': {
+            'Cold Shadow Color 2': (1.0, 1.0, 1.0, 1.0),
+            'Cold Shadow Color 3': (1.0, 1.0, 1.0, 1.0),
+            'Warm Shadow Color 2': (1.0, 1.0, 1.0, 1.0),
+            'Warm Shadow Color 3': (1.0, 1.0, 1.0, 1.0),
+        }
+    }
+}
+
+
+def apply_character_shader_overrides(material=None, mesh=None, char_name=None):
+    """Scalable applier for character-specific shader overrides from CHARACTER_SHADER_OVERRIDES registry."""
+    for character, parts_config in CHARACTER_SHADER_OVERRIDES.items():
+        if char_name:
+            if char_name.lower() != character:
+                continue
+        elif not is_specific_character(character, mesh=mesh, material=material):
+            continue
+
+        for part, socket_overrides in parts_config.items():
+            mats = [material] if material else [
+                m for m in bpy.data.materials
+                if getattr(m, 'use_nodes', False) and m.node_tree and part in m.name.lower()
+            ]
+            for mat in mats:
+                if not mat or not getattr(mat, 'node_tree', None) or part not in mat.name.lower():
+                    continue
+                for node in mat.node_tree.nodes:
+                    if node.type == 'GROUP' and node.node_tree:
+                        for sock_name, val in socket_overrides.items():
+                            sock = node.inputs.get(sock_name)
+                            if sock is not None:
+                                sock.default_value = val
+
+
+def apply_danica_face_shadow_colors(material=None):
+    """Sets Cold/Warm Shadow Color 2 and 3 to (1.0, 1.0, 1.0, 1.0) on Danica's face material(s)."""
+    apply_character_shader_overrides(material=material, char_name='danica')
+
+
+
+
+def _is_shader_eye_material(mat):
+    """True when the material carries a shader node setup.
+
+    Plain FBX materials only have a Principled BSDF tree, while shader
+    materials expose one of the shader group nodes (PrimoToon / HoYoToon /
+    Body Shader). Used to tell a properly set up eye material apart from a
+    raw FBX material that was never replaced.
+    """
+    if mat is None or not getattr(mat, 'use_nodes', False):
+        return False
+    nt = getattr(mat, 'node_tree', None)
+    if nt is None:
+        return False
+    try:
+        nodes = nt.nodes
+    except Exception:
+        return False
+    for key in ('PrimoToon', 'HoYoToon', 'Body Shader'):
+        try:
+            if nodes.get(key) is not None:
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _ensure_durin_eye_material(current_mat, target_name, template_mat, legacy_names=()):
+    """Returns the dedicated Durin eye material named ``target_name``.
+
+    Reuses the already-correct material when present, migrates legacy
+    Durin shader materials (ex. "HoYoverse - Durin New Pupil" / ".001")
+    in place, repairs slots holding non-shader (raw FBX) materials, and
+    otherwise copies the template. Shared templates are never renamed in
+    place so other characters reusing them keep working.
+    """
+    # 1. Slot already holds the proper shader material.
+    if (current_mat is not None and current_mat.name == target_name
+            and _is_shader_eye_material(current_mat)):
+        return current_mat
+    # 2. Another proper material already has the right name: reuse it.
+    existing = bpy.data.materials.get(target_name)
+    if (existing is not None and existing is not current_mat
+            and _is_shader_eye_material(existing)):
+        return existing
+    # 3. The name is held by a non-shader (broken) material: drop it when
+    #    unused, else move it aside so the dedicated copy can take the name.
+    if existing is not None and not _is_shader_eye_material(existing):
+        try:
+            if getattr(existing, 'users', 1) == 0:
+                bpy.data.materials.remove(existing)
+            else:
+                base = target_name + ' (Old)'
+                candidate, index = base, 1
+                while bpy.data.materials.get(candidate) is not None:
+                    index += 1
+                    candidate = f'{base}.{index:03d}'
+                existing.name = candidate
+        except Exception:
+            pass
+        existing = bpy.data.materials.get(target_name)
+        if (existing is not None and existing is not current_mat
+                and _is_shader_eye_material(existing)):
+            return existing
+    # 4. Migrate a legacy Durin shader material in place.
+    if (current_mat is not None and current_mat.name in legacy_names
+            and _is_shader_eye_material(current_mat)):
+        try:
+            current_mat.name = target_name
+        except Exception:
+            pass
+        if current_mat.name == target_name:
+            return current_mat
+    # 5. Fresh dedicated copy of the template.
+    new_mat = template_mat.copy()
+    try:
+        new_mat.name = target_name
+    except Exception:
+        pass
+    try:
+        new_mat.use_fake_user = True
+    except Exception:
+        pass
+    return new_mat
+
+
+def setup_durin_pupil_materials(mesh, new_pupil_mat, material_names=None):
+    """
+    Sets up Durin's pupil materials (Durin only):
+    - Slot 0 (Slot 1 in UI): "HoYoverse - Durin Dark Eye": dedicated New Pupil
+      copy with PupilaTodo (dark base eyes).
+    - Slot 1 (Slot 2 in UI): "HoYoverse - Durin Normal Eye": dedicated New Pupil
+      copy with the Hair diffuse texture connected directly to PrimoToon's
+      Diffuse Color (normal/special eyes).
+    - Outer faces (highlights) -> material_index 1
+    - Inner faces -> material_index 0
+    """
+    if not mesh or not new_pupil_mat:
+        return
+
+    while len(mesh.material_slots) < 2:
+        mesh.data.materials.append(None)
+
+    template_mat = new_pupil_mat
+
+    # Slot 0 -> Dark Eye (dedicated copy, never the shared template).
+    dark_eye = _ensure_durin_eye_material(
+        mesh.material_slots[0].material if len(mesh.material_slots) > 0 else None,
+        DURIN_DARK_EYE_MATERIAL_NAME,
+        template_mat,
+        legacy_names=('HoYoverse - Durin New Pupil',),
+    )
+    mesh.material_slots[0].material = dark_eye
+
+    # Slot 1 -> Normal Eye (dedicated copy).
+    new_pupil_two = _ensure_durin_eye_material(
+        mesh.material_slots[1].material if len(mesh.material_slots) > 1 else None,
+        DURIN_NORMAL_EYE_MATERIAL_NAME,
+        template_mat,
+        legacy_names=(
+            'HoYoverse - Durin New Pupil.001',
+            'HoYoverse - Durin New Pupil Two',
+        ),
+    )
+
+    mesh.material_slots[1].material = new_pupil_two
+
+    while len(mesh.material_slots) > 2:
+        mesh.data.materials.pop(index=len(mesh.material_slots) - 1)
+
+    # In new_pupil_two: set Hair texture on Diffuse image node and connect Color directly to PrimoToon
+    if getattr(new_pupil_two, 'node_tree', None):
+        nt = new_pupil_two.node_tree
+        hair_img = None
+        for img in bpy.data.images:
+            i_low = img.name.lower()
+            if 'hair' in i_low and 'diffuse' in i_low:
+                hair_img = img
+                break
+        if not hair_img:
+            for mat in bpy.data.materials:
+                if 'hair' in mat.name.lower() and getattr(mat, 'node_tree', None):
+                    for n in mat.node_tree.nodes:
+                        if n.type == 'TEX_IMAGE' and n.image and 'diffuse' in n.image.name.lower():
+                            hair_img = n.image
+                            break
+                if hair_img:
+                    break
+        if not hair_img:
+            try:
+                from setup_wizard.import_order import get_active_character_directory
+                import os
+                char_dir = get_active_character_directory() or bpy.context.scene.get("setup_wizard_imported_fbx_path", "")
+                if char_dir:
+                    base_dir = char_dir if os.path.isdir(char_dir) else os.path.dirname(char_dir)
+                    tex_dir = os.path.join(base_dir, "Textures") if os.path.isdir(os.path.join(base_dir, "Textures")) else base_dir
+                    if os.path.isdir(tex_dir):
+                        for f in os.listdir(tex_dir):
+                            if 'hair' in f.lower() and 'diffuse' in f.lower() and f.lower().endswith(('.png', '.tga', '.dds')):
+                                p = os.path.normpath(os.path.join(tex_dir, f))
+                                hair_img = bpy.data.images.get(f) or bpy.data.images.load(filepath=p, check_existing=True)
+                                break
+            except Exception:
+                pass
+
+        diffuse_node = nt.nodes.get('Main_Diffuse')
+        if not diffuse_node:
+            for n in nt.nodes:
+                if n.type == 'TEX_IMAGE' and ('diffuse' in n.name.lower() or 'diffuse' in (n.label or '').lower()):
+                    diffuse_node = n
+                    break
+
+        if diffuse_node and hair_img:
+            diffuse_node.image = hair_img
+            diffuse_node.label = 'Diffuse (sRGB) (Channel Packed)'
+            hair_img.alpha_mode = 'CHANNEL_PACKED'
+            hair_img.colorspace_settings.name = 'sRGB'
+
+        primo_node = nt.nodes.get('PrimoToon') or nt.nodes.get('HoYoToon') or nt.nodes.get('Body Shader')
+        if primo_node and diffuse_node:
+            diffuse_sock = primo_node.inputs.get('Diffuse Color') or primo_node.inputs.get('Color')
+            if diffuse_sock:
+                for l in list(nt.links):
+                    if l.to_socket == diffuse_sock:
+                        nt.links.remove(l)
+                nt.links.new(diffuse_node.outputs['Color'], diffuse_sock)
+
+        # Mix Shader setup for Dark Eyes toggle (Fac=0.0: Special Eyes, Fac=1.0: Transparent BSDF/Dark Eyes)
+        out_node = next((n for n in nt.nodes if n.type == 'OUTPUT_MATERIAL'), None)
+        if primo_node and out_node:
+            mix_node = nt.nodes.get('Mix Shader')
+            if not mix_node:
+                for n in nt.nodes:
+                    if n.type == 'MIX_SHADER':
+                        mix_node = n
+                        break
+            if not mix_node:
+                mix_node = nt.nodes.new(type='ShaderNodeMixShader')
+                mix_node.name = 'Mix Shader'
+                mix_node.label = 'Mix Shader'
+                mix_node.location = (out_node.location.x - 220, out_node.location.y)
+
+            trans_node = nt.nodes.get('Transparent BSDF')
+            if not trans_node:
+                for n in nt.nodes:
+                    if n.type == 'BSDF_TRANSPARENT':
+                        trans_node = n
+                        break
+            if not trans_node:
+                trans_node = nt.nodes.new(type='ShaderNodeBsdfTransparent')
+                trans_node.name = 'Transparent BSDF'
+                trans_node.label = 'Transparent BSDF'
+                trans_node.location = (mix_node.location.x - 200, mix_node.location.y - 120)
+
+            primo_out = primo_node.outputs.get('PrimoToon') or primo_node.outputs.get('Shader') or primo_node.outputs[0]
+            trans_out = trans_node.outputs.get('BSDF') or trans_node.outputs[0]
+
+            if primo_out and not any(l.from_socket == primo_out and l.to_socket == mix_node.inputs[1] for l in nt.links):
+                nt.links.new(primo_out, mix_node.inputs[1])
+
+            if trans_out and not any(l.from_socket == trans_out and l.to_socket == mix_node.inputs[2] for l in nt.links):
+                nt.links.new(trans_out, mix_node.inputs[2])
+
+            surf_sock = out_node.inputs.get('Surface')
+            if surf_sock:
+                for l in list(nt.links):
+                    if l.to_socket == surf_sock and l.from_node != mix_node:
+                        nt.links.remove(l)
+                if not any(l.from_node == mix_node and l.to_socket == surf_sock for l in nt.links):
+                    nt.links.new(mix_node.outputs['Shader'], surf_sock)
+
+            # Default Fac is 0.0 (Dark Eyes disabled by default)
+            mix_node.inputs[0].default_value = 0.0
+
+        # Transparency blend modes
+        new_pupil_two.blend_method = 'HASHED'
+        if hasattr(new_pupil_two, 'surface_render_method'):
+            new_pupil_two.surface_render_method = 'DITHERED'
+
+    # Assign polygon indices
+    outer_faces, inner_faces = classify_pupil_faces(mesh)
+    if outer_faces:
+        for poly in mesh.data.polygons:
+            if poly.index in outer_faces:
+                poly.material_index = 1
+            elif poly.index in inner_faces:
+                poly.material_index = 0
+
+    arm = mesh.find_armature() or getattr(mesh, "parent", None)
+    if arm and arm.type == 'ARMATURE':
+        try:
+            arm["gacha_is_durin"] = True
+        except Exception:
+            pass
+
+
+def remove_set_depth_nodes_from_highlight_material(material=None):
+    """
+    Removes any unused 'Set Depth' node from the Genshin Highlight material.
+    Does not touch the .blend source file, only cleans up the material in the scene
+    after it has been imported and assigned to its corresponding object.
+    """
+    mats_to_check = [material] if material else [
+        m for m in bpy.data.materials
+        if m and getattr(m, "use_nodes", False) and m.node_tree and 'highlight' in m.name.lower()
+    ]
+    for mat in mats_to_check:
+        if not mat or not getattr(mat, "use_nodes", False) or not mat.node_tree:
+            continue
+        nodes_to_remove = []
+        for n in mat.node_tree.nodes:
+            is_set_depth = False
+            if 'set depth' in n.name.lower() or 'set depth' in getattr(n, 'label', '').lower():
+                is_set_depth = True
+            elif n.type == 'GROUP' and n.node_tree and 'set depth' in n.node_tree.name.lower():
+                is_set_depth = True
+
+            if is_set_depth:
+                nodes_to_remove.append(n)
+        for n in nodes_to_remove:
+            try:
+                mat.node_tree.nodes.remove(n)
+            except Exception:
+                pass
+
+
 def setup_new_pupil_highlight_layer(mesh, material_names=None):
     """
     Separates the pupil mesh into inner layer (Slot 0: New Pupil) and
@@ -255,6 +637,23 @@ def setup_new_pupil_highlight_layer(mesh, material_names=None):
 
     prefix = getattr(material_names, 'MATERIAL_PREFIX', 'HoYoverse - Genshin ') if material_names else 'HoYoverse - Genshin '
     prefix_renamed = getattr(material_names, 'MATERIAL_PREFIX_AFTER_RENAME', 'HoYoverse - ') if material_names else 'HoYoverse - '
+
+    # Ensure slot 0 has New Pupil if available
+    new_pupil_name = getattr(material_names, 'NEW_PUPIL', f'{prefix}New Pupil') if material_names else f'{prefix}New Pupil'
+    new_pupil_mat = (
+        bpy.data.materials.get(new_pupil_name) or
+        bpy.data.materials.get(f'{prefix_renamed}New Pupil') or
+        bpy.data.materials.get('HoYoverse - Durin New Pupil') or
+        bpy.data.materials.get(f'{prefix_renamed}Durin New Pupil') or
+        bpy.data.materials.get('HoYoverse - Genshin New Pupil') or
+        bpy.data.materials.get(f'{prefix}Pupil') or
+        bpy.data.materials.get('HoYoverse - Genshin Pupil')
+    )
+
+    if is_durin_character(mesh):
+        setup_durin_pupil_materials(mesh, new_pupil_mat, material_names)
+        return
+
     highlight_mat_name = getattr(material_names, 'HIGHLIGHT', f'{prefix}Highlight') if material_names else f'{prefix}Highlight'
 
     highlight_material = (
@@ -270,22 +669,15 @@ def setup_new_pupil_highlight_layer(mesh, material_names=None):
         else:
             return
 
-    # Ensure slot 0 has New Pupil if available
-    new_pupil_name = getattr(material_names, 'NEW_PUPIL', f'{prefix}New Pupil') if material_names else f'{prefix}New Pupil'
-    new_pupil_mat = (
-        bpy.data.materials.get(new_pupil_name) or
-        bpy.data.materials.get(f'{prefix_renamed}New Pupil') or
-        bpy.data.materials.get('HoYoverse - Genshin New Pupil') or
-        bpy.data.materials.get(f'{prefix}Pupil') or
-        bpy.data.materials.get('HoYoverse - Genshin Pupil')
-    )
-
     # Ensure mesh has exactly 2 material slots: Slot 0 = New Pupil, Slot 1 = Highlight
     while len(mesh.material_slots) < 2:
         mesh.data.materials.append(None)
 
     mesh.material_slots[0].material = new_pupil_mat
     mesh.material_slots[1].material = highlight_material
+
+    # Remove unconnected Set Depth node from highlight material
+    remove_set_depth_nodes_from_highlight_material(highlight_material)
 
     # Remove any extra material slots past index 1
     while len(mesh.material_slots) > 2:
@@ -372,6 +764,10 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 if material_name.startswith(self.material_names.MATERIAL_PREFIX) or 'highlight' in material_name.lower():
                     continue
 
+                # Durin's dedicated eye materials are already set up (Dark/Normal Eye).
+                if material_name in DURIN_EYE_MATERIAL_NAMES:
+                    continue
+
                 mesh_body_part_name = None
                 character_type = None
 
@@ -383,6 +779,23 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     character_type = TextureImporterType.MONSTER
                 elif material_name.startswith(('Equip_', 'EquipSkin_')) or (mesh and mesh.name.startswith(('Equip_', 'EquipSkin_'))):
                     mesh_body_part_name = 'Body'
+                    character_type = TextureImporterType.AVATAR
+                elif material_name.startswith('AvatarObj') and material_name.endswith('_Mat'):
+                    # Quest object materials (ex. AvatarObj_Ani_Quest_IkhorLight_01_Mat):
+                    # keep the full object name as the part so each object gets
+                    # its own dedicated material. Using only the last token
+                    # ('Mat') would make every object share a single material
+                    # whose textures get overwritten by the last processed object.
+                    mesh_body_part_name = material_name[:-len('_Mat')]
+                    character_type = TextureImporterType.AVATAR
+                elif material_name.startswith('Eff_'):
+                    # Effect object materials (ex. Eff_Fresnel_048_NO_00): keep
+                    # the full name as the part so each effect gets its own
+                    # dedicated material instead of sharing one per trailing
+                    # token ('00'). The 'Eff' outline ignore keyword then
+                    # excludes these transparent effects from outline creation
+                    # by design (no outline modifier nor outline materials).
+                    mesh_body_part_name = material_name
                     character_type = TextureImporterType.AVATAR
                 else:
                     mesh_body_part_name = material_name.split('_')[-1]
@@ -526,6 +939,22 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             sync_genshin_shader_properties()
         except Exception as e_sync:
             print(f"[GI MATERIALS] Notice syncing shader properties: {e_sync}")
+
+        try:
+            apply_character_shader_overrides()
+        except Exception:
+            pass
+
+        try:
+            remove_set_depth_nodes_from_highlight_material()
+        except Exception:
+            pass
+
+        try:
+            from setup_wizard.optimization.blender_rimlight_patch import patch_all_rimlight_groups_for_blender
+            patch_all_rimlight_groups_for_blender()
+        except Exception:
+            pass
 
         self.blender_operator.report({'INFO'}, 'Replaced default materials with Genshin shader materials...')
 
