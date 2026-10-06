@@ -355,6 +355,23 @@ def rig_character(
     if obj.name[-4:] == ".001":
          obj.name = obj.name[:-4]
     print("New Run\n\n")
+
+    # Merge dangling Bip001 root vertex group into Bip001 Pelvis so back vertices aren't left unweighted
+    for m_obj in bpy.data.objects:
+        if m_obj.type == 'MESH' and 'Bip001' in m_obj.vertex_groups:
+            vg_bip = m_obj.vertex_groups['Bip001']
+            target_vg_name = 'Bip001 Pelvis'
+            if target_vg_name not in m_obj.vertex_groups:
+                vg_bip.name = target_vg_name
+            else:
+                vg_target = m_obj.vertex_groups[target_vg_name]
+                for v in m_obj.data.vertices:
+                    for g in v.groups:
+                        if g.group == vg_bip.index and g.weight > 0.0:
+                            vg_target.add([v.index], g.weight, 'ADD')
+                            break
+                m_obj.vertex_groups.remove(vg_bip)
+
     ## Rename all bones in selected armature to ORG
     original_name = obj.name
     abadidea = {
@@ -382,18 +399,23 @@ def rig_character(
         'DMZ R 03': 'thumb.03.R',    
         'Bip001 L Finger01': 'thumb.02.L',
         'Bip001 L Finger02': 'thumb.03.L',
+        'Bip001 L Finger0Nub': 'thumb.03.L',
         'Bip001 L Finger1': 'f_index.01.L',
         'Bip001 L Finger11': 'f_index.02.L',
         'Bip001 L Finger12': 'f_index.03.L',
+        'Bip001 L Finger1Nub': 'f_index.03.L',
         'Bip001 L Finger2': 'f_middle.01.L',
         'Bip001 L Finger21': 'f_middle.02.L',
         'Bip001 L Finger22': 'f_middle.03.L',
+        'Bip001 L Finger2Nub': 'f_middle.03.L',
         'Bip001 L Finger3': 'f_ring.01.L',
         'Bip001 L Finger31': 'f_ring.02.L',
         'Bip001 L Finger32': 'f_ring.03.L',
+        'Bip001 L Finger3Nub': 'f_ring.03.L',
         'Bip001 L Finger4': 'f_pinky.01.L',
         'Bip001 L Finger41': 'f_pinky.02.L',
         'Bip001 L Finger42': 'f_pinky.03.L',
+        'Bip001 L Finger4Nub': 'f_pinky.03.L',
         'Bip001 Neck': 'spine.004', #YO
         'Bip001 Head': 'spine.006', #RUHROH
         'Bip001 R Clavicle': 'shoulder.R',
@@ -403,18 +425,23 @@ def rig_character(
         'Bip001 R Finger0': 'thumb.01.R',
         'Bip001 R Finger01': 'thumb.02.R',
         'Bip001 R Finger02': 'thumb.03.R',
+        'Bip001 R Finger0Nub': 'thumb.03.R',
         'Bip001 R Finger1': 'f_index.01.R',
         'Bip001 R Finger11': 'f_index.02.R',
         'Bip001 R Finger12': 'f_index.03.R',
+        'Bip001 R Finger1Nub': 'f_index.03.R',
         'Bip001 R Finger2': 'f_middle.01.R',
         'Bip001 R Finger21': 'f_middle.02.R',
         'Bip001 R Finger22': 'f_middle.03.R',
+        'Bip001 R Finger2Nub': 'f_middle.03.R',
         'Bip001 R Finger3': 'f_ring.01.R',
         'Bip001 R Finger31': 'f_ring.02.R',
         'Bip001 R Finger32': 'f_ring.03.R',
+        'Bip001 R Finger3Nub': 'f_ring.03.R',
         'Bip001 R Finger4': 'f_pinky.01.R',
         'Bip001 R Finger41': 'f_pinky.02.R',
         'Bip001 R Finger42': 'f_pinky.03.R',
+        'Bip001 R Finger4Nub': 'f_pinky.03.R',
         '+EyeBone R A01': 'eye.R',
         '+EyeBone L A01': 'eye.L', 
         '+Breast L A01': 'breast.L',
