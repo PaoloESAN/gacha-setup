@@ -856,12 +856,48 @@ def set_animate_mode(enable: bool):
 
                     # Find diffuse image from original material
                     diff_img = None
+                    bad_keywords = ['lightmap', 'light', 'normal', 'norm', 'ramp', 'shadow', 'mask', 'metal', 'spec', 'height', 'ao', 'ilm', 'roughness', '_ld.', '_ld_', '_id.', '_id_']
                     if mat.use_nodes and mat.node_tree:
+                        # 1. Tracing from Base Color / Diffuse inputs
                         for node in mat.node_tree.nodes:
-                            if node.type == 'TEX_IMAGE' and node.image:
-                                if any(k in node.image.name.lower() for k in ['_d.', '_d_', 'diff', 'basecolor']):
-                                    diff_img = node.image
-                                    break
+                            if node.type in ('GROUP', 'BSDF_PRINCIPLED', 'EMISSION'):
+                                for inp_name in ('Diffuse', 'Diffuse (sRGB)', 'Main Diffuse', 'Base Color', 'Color'):
+                                    inp = node.inputs.get(inp_name)
+                                    if inp and inp.is_linked:
+                                        for link in inp.links:
+                                            from_node = link.from_node
+                                            while from_node and from_node.type == 'REROUTE':
+                                                from_socket = from_node.inputs[0] if from_node.inputs else None
+                                                from_node = from_socket.links[0].from_node if (from_socket and from_socket.is_linked) else None
+                                            if from_node and from_node.type == 'TEX_IMAGE' and getattr(from_node, "image", None):
+                                                diff_img = from_node.image
+                                                break
+                                    if diff_img:
+                                        break
+                            if diff_img:
+                                break
+
+                        # 2. Check diffuse keywords excluding bad keywords
+                        if not diff_img:
+                            for node in mat.node_tree.nodes:
+                                if node.type == 'TEX_IMAGE' and node.image:
+                                    img_low = node.image.name.lower()
+                                    if any(k in img_low for k in ['_d.', '_d_', '_diff', 'diff', 'basecolor', 'base_color', 'albedo']):
+                                        if not any(bad in img_low for bad in bad_keywords):
+                                            diff_img = node.image
+                                            break
+
+                        # 3. Any TEX_IMAGE without bad keywords
+                        if not diff_img:
+                            for node in mat.node_tree.nodes:
+                                if node.type == 'TEX_IMAGE' and node.image:
+                                    img_low = node.image.name.lower()
+                                    node_low = node.name.lower()
+                                    if not any(bad in img_low or bad in node_low for bad in bad_keywords):
+                                        diff_img = node.image
+                                        break
+
+                        # 4. Fallback to any TEX_IMAGE
                         if not diff_img:
                             for node in mat.node_tree.nodes:
                                 if node.type == 'TEX_IMAGE' and node.image:

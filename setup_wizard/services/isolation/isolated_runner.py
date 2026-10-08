@@ -44,6 +44,8 @@ def write_status(state, message="", **extra):
     temp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     os.replace(temp, STATUS_PATH)
     print(f"[GACHA SETUP WORKER] {state}: {message}", flush=True)
+    if "traceback" in extra and extra["traceback"]:
+        print(f"[GACHA SETUP WORKER] Traceback:\n{extra['traceback']}", flush=True)
 
 
 def clear_all_objects():
@@ -184,6 +186,22 @@ def apply_settings():
             except Exception:
                 pass
 
+    # Safely restore scene lighting properties if present
+    if hasattr(scene, "gi_light_mode"):
+        try:
+            val = str(JOB.get("gi_light_mode", "0"))
+            if val in ('0', '1', '2', '3', '4', '5', '6'):
+                scene.gi_light_mode = val
+        except Exception:
+            pass
+    if hasattr(scene, "gi_lighting_control_type"):
+        try:
+            val = str(JOB.get("gi_lighting_control_type", "PANEL"))
+            if val in ('PANEL', 'THIS_PANEL'):
+                scene.gi_lighting_control_type = val
+        except Exception:
+            pass
+
 
 def save_and_quit():
     try:
@@ -270,20 +288,22 @@ def run_setup():
 
         from setup_wizard.utils.archive_extractor import is_archive_file, extract_character_archive
 
-        character_dir = JOB["character_directory"]
-        selected_file = JOB.get("selected_model_file", "")
+        character_dir = os.path.abspath(JOB["character_directory"]) if JOB.get("character_directory") else ""
+        selected_file = os.path.abspath(JOB["selected_model_file"]) if JOB.get("selected_model_file") else ""
 
         if (selected_file and is_archive_file(selected_file)) or (character_dir and is_archive_file(character_dir)):
             archive_to_extract = selected_file if (selected_file and is_archive_file(selected_file)) else character_dir
             extracted_folder = os.path.join(os.path.dirname(str(RESULT_PATH)), "extracted_runner")
             char_dir, m_file = extract_character_archive(archive_to_extract, extracted_folder)
-            character_dir = char_dir
-            selected_file = m_file
+            character_dir = os.path.abspath(char_dir)
+            selected_file = os.path.abspath(m_file) if m_file else ""
 
         if not os.path.isdir(character_dir):
             raise RuntimeError(f"Character directory does not exist: {character_dir}")
 
         import_order = importlib.import_module(JOB["gacha_module"] + ".import_order")
+        import_order.set_active_character_directory(character_dir)
+
         if selected_file and not os.path.isfile(selected_file):
             raise RuntimeError(f"Selected model file does not exist: {selected_file}")
 
@@ -327,7 +347,6 @@ def run_setup():
         with override_ctx:
             with checked_workflow(import_order, steps):
                 if selected_file and os.path.isfile(selected_file):
-                    import_order.set_active_character_directory(character_dir)
                     import_op = import_order.ComponentFunctionFactory.create_component_function(
                         "import_character_model"
                     )

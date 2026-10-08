@@ -15,21 +15,74 @@ ANIMATE_MODE_SCENE_KEY = "gi_animate_mode"
 
 
 def _find_diffuse_image(mat):
-    """Finds the diffuse/base-color image of a shader material (WuWa logic)."""
+    """Finds the true diffuse/base-color image of a shader material.
+    Guarantees that lightmaps (which look green), normalmaps, shadow ramps,
+    and masks are NEVER mistaken for the diffuse texture."""
     if not getattr(mat, "use_nodes", False) or not mat.node_tree:
         return None
-    diff_img = None
-    for node in mat.node_tree.nodes:
-        if node.type == 'TEX_IMAGE' and node.image:
-            if any(k in node.image.name.lower() for k in ['_d.', '_d_', 'diff', 'basecolor']):
-                diff_img = node.image
-                break
-    if not diff_img:
-        for node in mat.node_tree.nodes:
-            if node.type == 'TEX_IMAGE' and node.image:
-                diff_img = node.image
-                break
-    return diff_img
+
+    tree = mat.node_tree
+    bad_keywords = [
+        'lightmap', 'light', 'normal', 'norm', 'ramp', 'shadow', 'mask',
+        'metal', 'spec', 'height', 'ao', 'ilm', 'roughness', 'curvature', 'nyx'
+    ]
+
+    # 1. Trace backwards from the main shader's Diffuse / Base Color socket
+    for node in tree.nodes:
+        if node.type in ('GROUP', 'BSDF_PRINCIPLED', 'EMISSION'):
+            target_inputs = []
+            for inp_name in ('Diffuse', 'Diffuse (sRGB)', 'Main Diffuse', 'Base Color', 'Color'):
+                inp = node.inputs.get(inp_name)
+                if inp and inp.is_linked:
+                    target_inputs.append(inp)
+
+            for inp in target_inputs:
+                for link in inp.links:
+                    from_node = link.from_node
+                    while from_node and from_node.type == 'REROUTE':
+                        from_socket = from_node.inputs[0] if from_node.inputs else None
+                        if from_socket and from_socket.is_linked:
+                            from_node = from_socket.links[0].from_node
+                        else:
+                            break
+                    if from_node and from_node.type == 'TEX_IMAGE' and getattr(from_node, "image", None):
+                        return from_node.image
+
+    # 2. Node name explicitly indicates diffuse (e.g. Main_Diffuse, Face_Diffuse)
+    diff_name_keywords = [
+        'diffuse', 'main_diff', 'body_diff', 'face_diff', 'hair_diff',
+        'dress_diff', 'basecolor', 'base_color'
+    ]
+    for node in tree.nodes:
+        if node.type == 'TEX_IMAGE' and getattr(node, "image", None):
+            n_low = node.name.lower()
+            label_low = getattr(node, "label", "").lower()
+            if any(k in n_low or k in label_low for k in diff_name_keywords):
+                if not any(bad in n_low or bad in label_low for bad in ['light', 'normal', 'ramp', 'shadow', 'mask']):
+                    return node.image
+
+    # 3. Image filename has diffuse keywords and does NOT contain bad keywords
+    for node in tree.nodes:
+        if node.type == 'TEX_IMAGE' and getattr(node, "image", None):
+            img_low = node.image.name.lower()
+            if any(k in img_low for k in ['_d.', '_d_', 'diff', 'basecolor', 'base_color', 'albedo', 'diffuse']):
+                if not any(bad in img_low for bad in bad_keywords):
+                    return node.image
+
+    # 4. Any TEX_IMAGE node that does NOT have bad keywords in node name or image name
+    for node in tree.nodes:
+        if node.type == 'TEX_IMAGE' and getattr(node, "image", None):
+            img_low = node.image.name.lower()
+            node_low = node.name.lower()
+            if not any(bad in img_low or bad in node_low for bad in bad_keywords):
+                return node.image
+
+    # 5. Last fallback: Only if nothing else matched, take whatever TEX_IMAGE exists
+    for node in tree.nodes:
+        if node.type == 'TEX_IMAGE' and getattr(node, "image", None):
+            return node.image
+
+    return None
 
 
 def _find_pupilatodo_node(mat):
@@ -61,10 +114,9 @@ def _is_color_wheel(obj_or_mat) -> bool:
 
 
 def _ensure_low_material_setup(low_mat, src_mat):
-    """Wires the diffuse straight into Material Output Surface (unlit
-    passthrough, no BSDF).
-    For New Pupil materials, wires PupilaTodo straight into Material Output
-    Surface instead of a texture.
+    """Wires the diffuse into an Emission shader straight into Material Output Surface
+    (flat unlit passthrough, fully compatible with classic EEVEE and Goo Engine).
+    For New Pupil materials, wires PupilaTodo through Emission into Material Output Surface.
     Idempotent, and upgrades _Low materials created previously."""
     tree = getattr(low_mat, "node_tree", None)
     if not tree:
@@ -76,11 +128,27 @@ def _ensure_low_material_setup(low_mat, src_mat):
         return
     surface = output.inputs["Surface"]
 
-    # Special handling for New Pupil: wire PupilaTodo directly to Material Output Surface
+    # Use a ShaderNodeEmission so that the socket plugged into Surface is always a valid SHADER socket
+    # (avoiding classic EEVEE / Goo Engine GLSL errors or green shader fallbacks from RGBA->Shader socket mismatch).
+    emission = tree.nodes.get("Low_Emission") or tree.nodes.get("Emission")
+    if not emission:
+        emission = tree.nodes.new("ShaderNodeEmission")
+        emission.name = "Low_Emission"
+        emission.label = "Unlit Emission"
+
+    if not any(link.from_node == emission for link in surface.links):
+        for link in list(surface.links):
+            tree.links.remove(link)
+        try:
+            tree.links.new(emission.outputs["Emission"], surface)
+        except Exception:
+            pass
+
+    # Special handling for New Pupil: wire PupilaTodo directly to Emission Color
     src_pt = _find_pupilatodo_node(src_mat)
     if src_pt or _is_new_pupil(src_mat):
         for n in list(tree.nodes):
-            if n.type in ('TEX_IMAGE', 'BSDF_PRINCIPLED'):
+            if n.type in ('TEX_IMAGE', 'BSDF_PRINCIPLED') and n != emission:
                 tree.nodes.remove(n)
 
         low_pt = _find_pupilatodo_node(low_mat)
@@ -105,11 +173,13 @@ def _ensure_low_material_setup(low_mat, src_mat):
             or (low_pt.outputs[0] if low_pt.outputs else None)
         )
         if out_socket:
-            for l in list(surface.links):
-                if l.from_socket != out_socket:
-                    tree.links.remove(l)
-            if not any(l.from_socket == out_socket for l in surface.links):
-                tree.links.new(out_socket, surface)
+            color_in = emission.inputs.get("Color")
+            if color_in:
+                for l in list(color_in.links):
+                    if l.from_socket != out_socket:
+                        tree.links.remove(l)
+                if not any(l.from_socket == out_socket for l in color_in.links):
+                    tree.links.new(out_socket, color_in)
 
         if "Vector" in low_pt.inputs and not low_pt.inputs["Vector"].links:
             uv_lerp_src = src_mat.node_tree.nodes.get("UV Lerp") if (src_mat and src_mat.node_tree) else None
@@ -137,30 +207,30 @@ def _ensure_low_material_setup(low_mat, src_mat):
                 tree.links.new(uv_node.outputs["UV"], low_pt.inputs["Vector"])
         return
 
+    diff_img = _find_diffuse_image(src_mat)
     tex_node = None
-    try:
-        for link in surface.links:
-            if getattr(link.from_node, "type", "") == 'TEX_IMAGE':
-                tex_node = link.from_node
-                break
-    except Exception:
-        pass
+    for node in tree.nodes:
+        if node.type == 'TEX_IMAGE':
+            tex_node = node
+            break
+
     if tex_node is None:
-        for node in tree.nodes:
-            if node.type == 'TEX_IMAGE' and getattr(node, "image", None):
-                tex_node = node
-                break
-    if tex_node is None:
-        diff_img = _find_diffuse_image(src_mat)
         if not diff_img:
             return  # No diffuse: leave Principled fallback untouched.
         tex_node = tree.nodes.new("ShaderNodeTexImage")
+
+    if diff_img:
         tex_node.image = diff_img
-    if not any(link.from_node == tex_node for link in surface.links):
+
+    color_in = emission.inputs.get("Color")
+    if color_in and not any(link.from_node == tex_node for link in color_in.links):
+        for l in list(color_in.links):
+            tree.links.remove(l)
         try:
-            tree.links.new(tex_node.outputs["Color"], surface)
+            tree.links.new(tex_node.outputs["Color"], color_in)
         except Exception:
             pass
+
     for node in [n for n in tree.nodes if n.type == 'BSDF_PRINCIPLED']:
         try:
             tree.nodes.remove(node)
@@ -303,6 +373,10 @@ def _restore_mesh_materials(mesh) -> bool:
                     set_modifier_property(mod, "Toggle Outlines", True)
         except Exception:
             pass
+        try:
+            mesh.update_tag()
+        except Exception:
+            pass
     return restored_any
 
 
@@ -328,7 +402,9 @@ def _redraw_view3d(context=None):
 
 
 def _set_gn_modifiers_visible(visible, meshes=None):
-    """Shows/hides Genshin Geometry Nodes modifiers (Outlines + Light Vectors)."""
+    """Shows/hides Genshin Geometry Nodes outline modifiers.
+    Note: Light Vectors modifiers are intentionally kept visible so lighting
+    direction attributes on meshes are preserved when toggling animated mode."""
     if meshes is None:
         target_objs = [obj for obj in bpy.data.objects if obj.type == 'MESH' and not _is_helper_object(obj)]
     else:
@@ -338,7 +414,8 @@ def _set_gn_modifiers_visible(visible, meshes=None):
             if mod.type != 'NODES' or not mod.node_group:
                 continue
             ng_low = mod.node_group.name.lower()
-            if "outline" in ng_low or "light vector" in ng_low:
+            mod_low = getattr(mod, "name", "").lower()
+            if "outline" in ng_low or "outline" in mod_low:
                 try:
                     mod.show_viewport = visible
                 except Exception:
@@ -522,6 +599,20 @@ def set_genshin_animate_mode(enable: bool, arm=None, context=None):
         scene = getattr(context, "scene", None) if context else getattr(bpy.context, "scene", None)
         if scene:
             scene[ANIMATE_MODE_SCENE_KEY] = bool(enable)
+    except Exception:
+        pass
+
+    try:
+        for obj in target_meshes:
+            try:
+                obj.update_tag()
+            except Exception:
+                pass
+            if getattr(obj, "data", None):
+                try:
+                    obj.data.update()
+                except Exception:
+                    pass
     except Exception:
         pass
 
