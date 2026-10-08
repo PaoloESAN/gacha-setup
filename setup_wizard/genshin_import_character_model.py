@@ -57,9 +57,23 @@ def is_rigging_disabled(context=None):
 
 def _execute_fbx_import(filepath):
     """
-    Executes FBX import using the experimental C++ wm.fbx_import.
-    Falls back to import_scene.fbx if wm.fbx_import is not available.
+    Executes FBX import.
+    In Blender < 4.5, prioritizes BetterFBX if installed.
+    Falls back to experimental C++ wm.fbx_import or standard import_scene.fbx.
     """
+    from setup_wizard.utils.better_fbx_utils import (
+        is_blender_version_lower_than_4_5,
+        is_better_fbx_installed,
+    )
+
+    if is_blender_version_lower_than_4_5() and is_better_fbx_installed():
+        try:
+            print(f"[SETUP WIZARD] Importing FBX using BetterFBX: {filepath}")
+            bpy.ops.better_import.fbx(filepath=filepath)
+            return
+        except Exception as e:
+            print(f"[SETUP WIZARD] bpy.ops.better_import.fbx failed ({e}), falling back to standard importer")
+
     if hasattr(bpy.ops.wm, "fbx_import"):
         try:
             bpy.ops.wm.fbx_import(

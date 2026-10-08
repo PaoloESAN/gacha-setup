@@ -95,6 +95,11 @@ class GI_PT_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
             'PLAY',
             game_type=GameType.GENSHIN_IMPACT.name
         )
+        from setup_wizard.utils.better_fbx_utils import should_show_better_fbx_warning
+        if should_show_better_fbx_warning(GameType.GENSHIN_IMPACT.name):
+            warn_col = run_entire_setup_column.column()
+            warn_col.alert = True
+            warn_col.label(text="BetterFBX is recommended", icon="ERROR")
         from setup_wizard.services.isolation import isolation_service
         isolation_service.draw_setup_status_box(sub_layout, context, run_entire_setup_column)
 
