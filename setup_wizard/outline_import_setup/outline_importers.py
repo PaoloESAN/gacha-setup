@@ -204,11 +204,13 @@ class ZenlessZoneZeroOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
         self.outlines_node_group_names = OutlineNodeGroupNames.ZENLESS_ZONE_ZERO_OUTLINES
 
     def import_outline_node_group(self):
-        # Outlines and Lighting Panel come specifically from the previous setup file (ZZZ Setup File V2.0.blend)
+        # Outlines and Lighting Panel come specifically from the setup file (ZZZ Setup v7.blend)
         filepath = get_shader_file_path(GameType.ZENLESS_ZONE_ZERO.name, 'outlines')
         if not filepath or not os.path.isfile(filepath):
             addon_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            filepath = os.path.join(addon_dir, 'shaders', 'zzz', 'ZZZ Setup File V2.0.blend')
+            filepath = os.path.join(addon_dir, 'shaders', 'zzz', 'ZZZ Setup v7.blend')
+            if not os.path.isfile(filepath):
+                filepath = os.path.join(addon_dir, 'shaders', 'zzz', 'ZZZ Setup File V2.0.blend')
 
         if filepath and os.path.isfile(filepath):
             for outline_node_group_name in self.outlines_node_group_names:
@@ -223,8 +225,18 @@ class ZenlessZoneZeroOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
                     except Exception as e:
                         print(f"Failed to append {outline_node_group_name} from {filepath}: {e}")
 
-            # Import direction objects and optionally Lighting Panel UI from ZZZ Setup File V2.0.blend
-            selected_shader = getattr(bpy.context.scene, 'zzz_shader_type', 'KYTHERA') if hasattr(bpy, 'context') and hasattr(bpy.context, 'scene') else 'KYTHERA'
+            # Also append ZZZLightPanelAttr node group from ZZZ Setup File V2.0.blend if not present
+            if not bpy.data.node_groups.get("ZZZLightPanelAttr"):
+                try:
+                    bpy.ops.wm.append(
+                        filepath=os.path.join(filepath, inner_path, "ZZZLightPanelAttr"),
+                        directory=os.path.join(filepath, inner_path),
+                        filename="ZZZLightPanelAttr"
+                    )
+                except Exception as e:
+                    print(f"Failed to append ZZZLightPanelAttr from {filepath}: {e}")
+
+            # Import direction objects and Lighting Panel UI from ZZZ Setup File V2.0.blend
             try:
                 with bpy.data.libraries.load(filepath, link=False) as (data_from, data_to):
                     direction_keywords = ["light direction", "head direction", "head forward", "head up"]
@@ -232,35 +244,23 @@ class ZenlessZoneZeroOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
                         "colorwheel", "colorpicker", "slider-rim", "origin-rim",
                         "lightpanelwgtplane", "lightpanelselectorwgt", "lighting panel", "light panel"
                     ]
-                    excluded_kw = ["face", "phoneme", "mouth", "eyebrow", "expression", "facrig", "plane", "selector"]
+                    excluded_kw = ["face", "phoneme", "mouth", "eyebrow", "expression", "facrig"]
                     
-                    if selected_shader == 'KYTHERA':
-                        # Strictly import direction control objects, NO lighting panel
-                        target_objs = [
-                            o for o in data_from.objects
-                            if any(kw == o.lower() or kw in o.lower() for kw in direction_keywords)
-                            and not any(lp in o.lower() for lp in lighting_panel_keywords)
-                            and o not in bpy.data.objects
-                        ]
-                        data_to.objects = target_objs
-                        data_to.collections = []
-                    else:
-                        # LEGACY: Import both direction objects and lighting panel collections/objects
-                        target_colls = [
-                            c for c in data_from.collections 
-                            if not any(kw in c.lower() for kw in excluded_kw) and
-                            ("lighting" in c.lower() or "panel" in c.lower() or "light" in c.lower()) and
-                            c not in bpy.data.collections
-                        ]
-                        data_to.collections = target_colls
+                    target_colls = [
+                        c for c in data_from.collections 
+                        if not any(kw in c.lower() for kw in excluded_kw) and
+                        ("lighting" in c.lower() or "panel" in c.lower() or "light" in c.lower() or "widget" in c.lower()) and
+                        c not in bpy.data.collections
+                    ]
+                    data_to.collections = target_colls
 
-                        target_objs = [
-                            o for o in data_from.objects 
-                            if not any(kw in o.lower() for kw in excluded_kw) and
-                            (any(kw in o.lower() for kw in direction_keywords + lighting_panel_keywords) or "panel" in o.lower() or "lighting" in o.lower()) and
-                            o not in bpy.data.objects
-                        ]
-                        data_to.objects = target_objs
+                    target_objs = [
+                        o for o in data_from.objects 
+                        if not any(kw in o.lower() for kw in excluded_kw) and
+                        (any(kw in o.lower() for kw in direction_keywords + lighting_panel_keywords) or "panel" in o.lower() or "lighting" in o.lower()) and
+                        o not in bpy.data.objects
+                    ]
+                    data_to.objects = target_objs
 
                 for coll in data_to.collections:
                     if coll and coll.name not in [c.name for c in bpy.context.scene.collection.children]:
@@ -269,6 +269,47 @@ class ZenlessZoneZeroOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
                 for obj in data_to.objects:
                     if obj and not any(obj.name in c.objects for c in bpy.data.collections.values()):
                         bpy.context.scene.collection.objects.link(obj)
+
+                # Ensure WGT objects have proper viewport and render visibility
+                wgt_plane = bpy.data.objects.get("LightPanelWGTPlane")
+                wgt_selector = bpy.data.objects.get("LightPanelSelectorWGT")
+                if wgt_plane:
+                    wgt_plane.hide_viewport = False
+                    wgt_plane.hide_render = True
+                if wgt_selector:
+                    wgt_selector.hide_viewport = False
+                    wgt_selector.hide_render = True
+
+                # Reconnect custom shapes to Lighting Panel armature pose bones if missing
+                lp_arm = bpy.data.objects.get("Lighting Panel")
+                if lp_arm and lp_arm.type == 'ARMATURE':
+                    wgt_p = bpy.data.objects.get("LightPanelWGTPlane")
+                    wgt_s = bpy.data.objects.get("LightPanelSelectorWGT")
+                    for pb in lp_arm.pose.bones:
+                        if pb.name == "Lighting Panel" and wgt_p:
+                            pb.custom_shape = wgt_p
+                            pb.custom_shape_scale_xyz = (1.0, 1.0, 1.0)
+                            pb.use_custom_shape_bone_size = True
+                            pb.bone.hide = False
+                        elif pb.name in ["Rim Lit", "Shadow", "Lit", "Ambient", "RimShadow", "Rim.R", "Rim.L", "RimX", "RimY"] and wgt_s:
+                            pb.custom_shape = wgt_s
+                            pb.custom_shape_scale_xyz = (0.15, 0.15, 0.15)
+                            pb.use_custom_shape_bone_size = True
+                            pb.bone.hide = False
+
+                    scene = bpy.context.scene
+                    shader_type = getattr(scene, "zzz_shader_type", "KYTHERA")
+                    if shader_type == "KYTHERA":
+                        for pb_name in ["Rim.L", "Rim.R"]:
+                            pb_rim = lp_arm.pose.bones.get(pb_name)
+                            if pb_rim:
+                                con = next((c for c in pb_rim.constraints if c.type == 'LIMIT_LOCATION'), None)
+                                if con and con.use_min_x and con.use_max_x:
+                                    pb_rim.location.x = (con.min_x + con.max_x) / 2.0
+                                elif pb_name == "Rim.L":
+                                    pb_rim.location.x = 0.0425
+                                elif pb_name == "Rim.R":
+                                    pb_rim.location.x = 0.050
             except Exception as e:
                 print(f"Failed to append objects/collections from {filepath}: {e}")
 

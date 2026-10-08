@@ -243,6 +243,8 @@ else:
         ZZZ_PT_UI_Materials_Menu,
         ZZZ_PT_UI_Outlines_Menu,
         ZZZ_PT_Rig_Character_Settings,
+        ZZZ_OT_SelectLightingPanel,
+        ZZZ_OT_ToggleLightingPanelVisibility,
         register_zzz_properties,
         unregister_zzz_properties,
     )
@@ -404,6 +406,8 @@ else:
         ZZZ_OT_SetUpHeadDriver,
         ZZZ_OT_RenameCollectionAndRig,
         ZZZ_OT_MoveLightingPanelToCharacterCollection,
+        ZZZ_OT_SelectLightingPanel,
+        ZZZ_OT_ToggleLightingPanelVisibility,
         NTE_PT_Basic_Setup_Wizard_UI_Layout,
         NTE_PT_Advanced_Setup_Wizard_UI_Layout,
         NTE_PT_UI_Character_Model_Menu,

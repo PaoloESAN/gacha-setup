@@ -226,14 +226,18 @@ def get_shader_file_path(game_type: str, file_type: str = "main") -> str:
 
     elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
         if file_type == 'outlines':
-            p_outlines = os.path.join(shaders_dir, 'zzz', 'ZZZ Setup File V2.0.blend')
+            p_outlines = os.path.join(shaders_dir, 'zzz', 'ZZZ Setup v7.blend')
+            if not os.path.isfile(p_outlines):
+                p_outlines = os.path.join(shaders_dir, 'zzz', 'ZZZ Setup File V2.0.blend')
             if os.path.isfile(p_outlines):
                 return p_outlines
         
         selected_shader = getattr(bpy.context.scene, 'zzz_shader_type', 'KYTHERA') if hasattr(bpy, 'context') and hasattr(bpy.context, 'scene') else 'KYTHERA'
 
         if selected_shader == 'LEGACY':
-            p_legacy = os.path.join(shaders_dir, 'zzz', 'ZZZ Setup File V2.0.blend')
+            p_legacy = os.path.join(shaders_dir, 'zzz', 'ZZZ Setup v7.blend')
+            if not os.path.isfile(p_legacy):
+                p_legacy = os.path.join(shaders_dir, 'zzz', 'ZZZ Setup File V2.0.blend')
             if os.path.isfile(p_legacy):
                 return p_legacy
         else:
@@ -260,7 +264,9 @@ def get_shader_file_path(game_type: str, file_type: str = "main") -> str:
                     if os.path.isfile(p_best):
                         return p_best
 
-            p_legacy = os.path.join(zzz_dir, 'ZZZ Setup File V2.0.blend')
+            p_legacy = os.path.join(zzz_dir, 'ZZZ Setup v7.blend')
+            if not os.path.isfile(p_legacy):
+                p_legacy = os.path.join(zzz_dir, 'ZZZ Setup File V2.0.blend')
             if os.path.isfile(p_legacy):
                 return p_legacy
 

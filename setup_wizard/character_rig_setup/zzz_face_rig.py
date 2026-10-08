@@ -1884,6 +1884,9 @@ def get_huge_facerig_widgets(wgt_coll):
     current_dir = os.path.dirname(os.path.abspath(__file__))
     blend_candidates = [
         os.path.join(current_dir, 'ZZZ_Facerig.blend'),
+        os.path.join(current_dir, '..', 'shaders', 'zzz', 'ZZZ Setup v7.blend'),
+        os.path.join(current_dir, '..', 'shaders', 'zzz', 'ZZZ Setup File V2.0.blend'),
+        r'D:\BLENDERRR\ZZZ\shaders\ZZZ Setup v7.blend',
         r'D:\BLENDERRR\ZZZ\shaders\ZZZ Setup File V2.0.blend',
     ]
     blend_path = next((p for p in blend_candidates if os.path.isfile(p)), None)

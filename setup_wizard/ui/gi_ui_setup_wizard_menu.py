@@ -37,7 +37,7 @@ class UI_Properties:
         bpy.types.Scene.zzz_shader_type = bpy.props.EnumProperty(
             items=[
                 ("KYTHERA", "Kythera's Shader", "Use Kythera's ZZZ Shader (Face Shader + General Shader)"),
-                ("LEGACY", "Legacy Shader", "Use Legacy ZZZ Setup File V2.0 Shader"),
+                ("LEGACY", "Legacy Shader", "Use Legacy ZZZ Setup v7 Shader"),
             ],
             name="Shader",
             description="Select shader setup for Zenless Zone Zero",
@@ -2238,6 +2238,12 @@ def _on_character_selection_change(scene, depsgraph=None):
         if has_active_character_changed(context):
             if is_game_armature(context, "GENSHIN_IMPACT"):
                 pull_gi_panel_values(scene, context, force=True)
+            elif is_game_armature(context, "ZENLESS_ZONE_ZERO"):
+                try:
+                    from setup_wizard.ui.zzz_ui_setup_wizard_menu import pull_zzz_panel_values
+                    pull_zzz_panel_values(scene, context, force=True)
+                except Exception:
+                    pass
     except Exception:
         pass
 

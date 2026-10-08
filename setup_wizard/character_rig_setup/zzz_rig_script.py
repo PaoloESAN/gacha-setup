@@ -4106,6 +4106,8 @@ def rig_character(
         bone_to_layer("Shadow", 1, "Lighting")  # Sharp Shadow
         bone_to_layer("RimShadow", 1, "Lighting")
         bone_to_layer("Rim Lit", 1, "Lighting")
+        bone_to_layer("Rim.L", 1, "Lighting")
+        bone_to_layer("Rim.R", 1, "Lighting")
         bone_to_layer("RimX", 1, "Lighting")
         bone_to_layer("RimY", 1, "Lighting")
         bone_to_layer("RimLitPin", 1, "Lighting")

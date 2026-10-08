@@ -105,36 +105,43 @@ def set_modifier_property(modifier, key, value):
     # 1. Support for Blender 5+ mod.properties.inputs and mod.properties.outputs
     if inputs is not None or outputs is not None:
         clean_out_key = key[:-15] if key.endswith('_attribute_name') else key
-        clean_out_key = clean_out_key[7:] if clean_out_key.startswith('Output_') else clean_out_key
-        
-        if outputs is not None:
-            for k in [key, clean_out_key, f"Output_{clean_out_key}"]:
-                if hasattr(outputs, k) or (hasattr(outputs, "keys") and k in outputs.keys()):
-                    try:
-                        out_item = getattr(outputs, k) if hasattr(outputs, k) else outputs[k]
-                        set_property_field(out_item, 'attribute_name', value)
-                        return
-                    except Exception:
-                        pass
+        is_explicit_output = key.endswith('_attribute_name') or key.startswith('Output_')
 
-            # Fallback: match output socket by its display NAME via the node group interface
-            # (e.g. name 'FM' -> identifier 'Socket_0' -> modifier.properties.outputs['Socket_0'])
-            if getattr(modifier, "type", None) == 'NODES' and hasattr(modifier, "node_group") and modifier.node_group:
-                ng = modifier.node_group
-                target_identifier = None
-                if hasattr(ng, "interface"):
-                    for item in ng.interface.items_tree:
-                        if getattr(item, "item_type", None) == 'SOCKET' and getattr(item, "in_out", None) == 'OUTPUT':
-                            if item.name == clean_out_key or item.identifier == clean_out_key:
-                                target_identifier = item.identifier
-                                break
-                if target_identifier and hasattr(outputs, "keys") and target_identifier in outputs.keys():
-                    try:
-                        out_item = outputs[target_identifier]
-                        set_property_field(out_item, 'attribute_name', value)
-                        return
-                    except Exception:
-                        pass
+        # Outputs only store string attribute names (never numeric/vector values)
+        if outputs is not None and isinstance(value, str):
+            out_candidates = [key, clean_out_key]
+            if clean_out_key.startswith('Output_'):
+                out_candidates.append(clean_out_key[7:])
+            else:
+                out_candidates.append(f"Output_{clean_out_key}")
+
+            if is_explicit_output or (hasattr(outputs, "keys") and (key in outputs.keys() or clean_out_key in outputs.keys()) and (not hasattr(inputs, "keys") or (key not in inputs.keys() and clean_out_key not in inputs.keys()))):
+                for k in out_candidates:
+                    if hasattr(outputs, k) or (hasattr(outputs, "keys") and k in outputs.keys()):
+                        try:
+                            out_item = getattr(outputs, k) if hasattr(outputs, k) else outputs[k]
+                            set_property_field(out_item, 'attribute_name', value)
+                            return
+                        except Exception:
+                            pass
+
+                # Fallback: match output socket by its display NAME via the node group interface
+                if is_explicit_output and getattr(modifier, "type", None) == 'NODES' and hasattr(modifier, "node_group") and modifier.node_group:
+                    ng = modifier.node_group
+                    target_identifier = None
+                    if hasattr(ng, "interface"):
+                        for item in ng.interface.items_tree:
+                            if getattr(item, "item_type", None) == 'SOCKET' and getattr(item, "in_out", None) == 'OUTPUT':
+                                if item.name in [key, clean_out_key] or item.identifier in [key, clean_out_key]:
+                                    target_identifier = item.identifier
+                                    break
+                    if target_identifier and (hasattr(outputs, target_identifier) or (hasattr(outputs, "keys") and target_identifier in outputs.keys())):
+                        try:
+                            out_item = getattr(outputs, target_identifier) if hasattr(outputs, target_identifier) else outputs[target_identifier]
+                            set_property_field(out_item, 'attribute_name', value)
+                            return
+                        except Exception:
+                            pass
 
         if inputs is not None:
             clean_inp_key = key[:-14] if key.endswith('_use_attribute') else key

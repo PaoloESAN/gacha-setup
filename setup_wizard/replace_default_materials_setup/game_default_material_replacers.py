@@ -1832,6 +1832,8 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         pass
             return False
 
+        # Eye shadow mesh detection disabled
+
         if selected_shader == 'LEGACY':
             # --- LEGACY ZZZ SHADER REPLACEMENT ---
             for mesh in meshes:
@@ -1845,7 +1847,7 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     if mat and is_untextured_material_json(mat.name):
                         continue
 
-                    if mat and mat.name.startswith("ZZZ Shader"):
+                    if mat and (mat.name.startswith("ZZZ Shader") or mat.name == "Eye Transparent"):
                         continue
 
                     target_mat_name = None
@@ -1856,7 +1858,7 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     elif "eyehighlight" in matname or "highlight" in matname:
                         target_mat_name = "ZZZ Shader EyeHighlights" if bpy.data.materials.get("ZZZ Shader EyeHighlights") else "ZZZ Shader Face"
                     elif "eye" in matname and matname != "eye transparent":
-                        target_mat_name = "ZZZ Shader Eye" if bpy.data.materials.get("ZZZ Shader Eye") else "ZZZ Shader Face"
+                        target_mat_name = "ZZZ Shader Face"
                     elif "face" in matname:
                         target_mat_name = "ZZZ Shader Face"
                     elif any(k in matname for k in ["body 2", "body2", "body_2", "wing", "ala", "feather", "dress", "cape", "coat", "jacket"]):
@@ -1979,7 +1981,7 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         continue
 
                     # If already replaced with a cloned Kythera ZZZ material, skip
-                    if mat and (mat.name.startswith("ZZZ ") or mat.name.startswith("Kythera")):
+                    if mat and (mat.name.startswith("ZZZ ") or mat.name.startswith("Kythera") or mat.name == "Eye Transparent" or mat.name == "Transp OL"):
                         continue
 
                     is_face = any(k in matname for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight"])
@@ -2057,6 +2059,12 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         slot.material = new_mat
 
             self.blender_operator.report({'INFO'}, "Replaced default materials with Kythera's ZZZ Shader materials...")
+
+        try:
+            from setup_wizard.optimization.blender_rimlight_patch import patch_all_rimlight_groups_for_blender
+            patch_all_rimlight_groups_for_blender()
+        except Exception:
+            pass
 
 
 def find_nte_texture_for_material(mat_name, tex_type, image_files):
@@ -3006,11 +3014,34 @@ def _is_face_slot(name_lower):
 
 
 def _fuse_mesh_slots_to_first(obj):
-    """Point every polygon to slot 0 and drop the remaining slots."""
+    """Point every polygon to the main material slot and drop the remaining slots.
+    For face meshes, chooses the slot matching 'face' or the slot with the most polygons."""
     mesh = obj.data
+    target_idx = 0
+    # If this mesh is a face mesh with multiple materials, find the best face material slot
+    if any(s.material and any(kw in s.material.name.lower() for kw in ('face', '面', 'cara', 'head', 'skin')) for s in obj.material_slots):
+        for idx, slot in enumerate(obj.material_slots):
+            if slot.material:
+                s_name = slot.material.name.lower()
+                if any(kw in s_name for kw in ('face', '面', 'cara', 'head', 'skin')) and not any(ign in s_name for ign in ('outline', 'shadow', 'hair')):
+                    target_idx = idx
+                    break
+    elif len(obj.material_slots) > 1 and mesh.polygons:
+        # Fallback: slot with the most polygons
+        counts = {}
+        for p in mesh.polygons:
+            counts[p.material_index] = counts.get(p.material_index, 0) + 1
+        if counts:
+            target_idx = max(counts.items(), key=lambda x: x[1])[0]
+
+    # Swap target material into slot 0 if not already at 0
+    if 0 < target_idx < len(mesh.materials):
+        chosen_mat = mesh.materials[target_idx]
+        mesh.materials[target_idx] = mesh.materials[0]
+        mesh.materials[0] = chosen_mat
+
     for p in mesh.polygons:
-        if p.material_index >= 1:
-            p.material_index = 0
+        p.material_index = 0
     while len(mesh.materials) > 1:
         mesh.materials.pop(index=1)
     try:
@@ -3032,15 +3063,10 @@ def clean_hair_mesh_slots():
 
 
 def clean_face_mesh_slots():
-    for obj in bpy.context.scene.objects:
-        if obj.type == 'MESH' and obj.data and hasattr(obj.data, "polygons"):
-            obj_name_lower = obj.name.lower()
-            slot_names = [slot.material.name.lower() for slot in obj.material_slots if slot.material]
-            is_face_mesh = 'face' in obj_name_lower or any(_is_face_slot(s) for s in slot_names)
-            # Only fuse meshes whose slots are ALL face-related (Face/Eye/Eyebrow).
-            # Mixed meshes are left untouched.
-            if is_face_mesh and len(obj.material_slots) >= 2 and slot_names and all(_is_face_slot(s) for s in slot_names):
-                _fuse_mesh_slots_to_first(obj)
+    # In Hoyoverse / ZZZ models, face meshes legitimately have separate material
+    # slots for Face skin, Eyeballs, Eyebrows, and Eye Transparent (eyeshadow).
+    # Fusing them deletes eyelids/eyeballs/eyebrows and corrupts the character's face.
+    pass
 
 
 class WutheringWavesDefaultMaterialReplacer(GameDefaultMaterialReplacer):

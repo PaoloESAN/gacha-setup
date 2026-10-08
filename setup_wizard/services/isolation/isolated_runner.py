@@ -201,6 +201,20 @@ def apply_settings():
                 scene.gi_lighting_control_type = val
         except Exception:
             pass
+    if hasattr(scene, "zzz_light_mode"):
+        try:
+            val = str(JOB.get("zzz_light_mode", "0"))
+            if val in ('0', '1', '2', '3', '4', '5', '6'):
+                scene.zzz_light_mode = val
+        except Exception:
+            pass
+    if hasattr(scene, "zzz_lighting_control_type"):
+        try:
+            val = str(JOB.get("zzz_lighting_control_type", "PANEL"))
+            if val in ('PANEL', 'THIS_PANEL'):
+                scene.zzz_lighting_control_type = val
+        except Exception:
+            pass
 
 
 def save_and_quit():

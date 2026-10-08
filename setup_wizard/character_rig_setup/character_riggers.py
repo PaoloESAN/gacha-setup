@@ -280,6 +280,14 @@ class GenshinImpactCharacterRigger(CharacterRigger):
                 self.context.scene.gi_lighting_control_type = "THIS_PANEL"
                 self.context.scene.gi_light_mode = "0"
 
+            if self.blender_operator.game_type == GameType.ZENLESS_ZONE_ZERO.name:
+                target_rig["zzz_lighting_control_type"] = "PANEL"
+                target_rig["zzz_light_mode"] = "0"
+                if hasattr(self.context.scene, "zzz_lighting_control_type"):
+                    self.context.scene.zzz_lighting_control_type = "PANEL"
+                if hasattr(self.context.scene, "zzz_light_mode"):
+                    self.context.scene.zzz_light_mode = "0"
+
         if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):
             from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics, find_target_armature
             target_rig = find_target_armature(self.context, armature)
@@ -1067,17 +1075,7 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
         character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
         meshes_joined = not (bpy.data.objects.get('Body') and bpy.data.objects.get('Face'))
 
-        light_vectors_modifiers = [modifier for obj in bpy.data.objects.values() if 
-                                   obj.type == 'MESH' for modifier in obj.modifiers if 
-                                   'Light Vectors' in modifier.name]
-
-        selected_shader = getattr(self.context.scene, 'zzz_shader_type', 'KYTHERA')
-        use_lighting_panel = character_rigger_props.set_up_lighting_panel and (selected_shader != 'KYTHERA')
-
-        if use_lighting_panel:
-            for modifier in light_vectors_modifiers:
-                lp_filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'LightingPanel.blend')
-                LightingPanel(lp_filepath).set_up_lighting_panel(modifier)
+        use_lighting_panel = character_rigger_props.set_up_lighting_panel
 
         try:
             bpy.ops.object.mode_set(mode='OBJECT')
@@ -1251,6 +1249,94 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
         except Exception as e_parent:
             print(f"[ZZZ Rig Warning] Ensure Facerig Root Child Of: {e_parent}")
 
+        # Ensure Lighting Panel bone has Child Of constraint targeting DEF-spine.006 or root.002 (matching Phoenix.blend)
+        try:
+            if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+                bpy.ops.object.mode_set(mode='OBJECT')
+            self.context.view_layer.objects.active = armature
+            bpy.ops.object.mode_set(mode='EDIT')
+            eb_lp = armature.data.edit_bones.get("Lighting Panel")
+            if eb_lp:
+                eb_lp.parent = None
+            bpy.ops.object.mode_set(mode='POSE')
+            lp_pb = armature.pose.bones.get("Lighting Panel")
+            if lp_pb:
+                target_lp = None
+                for cand in ["DEF-spine.006", "head", "Head", "root.002", "root_2", "root002", "root.001", "root"]:
+                    if cand in armature.pose.bones:
+                        target_lp = cand
+                        break
+                if target_lp:
+                    con_lp = lp_pb.constraints.get("Child Of") or lp_pb.constraints.new('CHILD_OF')
+                    con_lp.name = "Child Of"
+                    con_lp.target = armature
+                    con_lp.subtarget = target_lp
+                    armature.data.bones.active = armature.data.bones["Lighting Panel"]
+                    try:
+                        bpy.ops.constraint.childof_set_inverse(constraint=con_lp.name, owner='BONE')
+                    except Exception:
+                        r_bone = armature.data.bones.get(target_lp)
+                        p_bone = armature.data.bones.get("Lighting Panel")
+                        if r_bone and p_bone:
+                            con_lp.inverse_matrix = r_bone.matrix_local.inverted() @ p_bone.matrix_local
+            bpy.ops.object.mode_set(mode='OBJECT')
+        except Exception as e_lp_con:
+            print(f"[ZZZ Rig Warning] Ensure Lighting Panel Child Of: {e_lp_con}")
+
+        # Ensure Lighting Panel bones, including Rim.L and Rim.R, are in the Lighting collection and visible
+        try:
+            wgt_selector = bpy.data.objects.get("LightPanelSelectorWGT")
+            wgt_plane = bpy.data.objects.get("LightPanelWGTPlane")
+            
+            lighting_coll = None
+            if hasattr(armature.data, "collections"):
+                lighting_coll = armature.data.collections.get("Lighting") or armature.data.collections.get("Light Panel")
+                if not lighting_coll:
+                    lighting_coll = armature.data.collections.new("Lighting")
+                lighting_coll.is_visible = True
+            
+            other_coll = armature.data.collections.get("Other") if hasattr(armature.data, "collections") else None
+            
+            panel_bones = ["Lighting Panel", "Rim Lit", "Shadow", "Lit", "Ambient", "RimShadow", "Rim.L", "Rim.R", "RimX", "RimY"]
+            for pb_name in panel_bones:
+                b = armature.data.bones.get(pb_name)
+                pb = armature.pose.bones.get(pb_name)
+                if b and pb:
+                    b.hide = False
+                    b.hide_select = False
+                    if lighting_coll:
+                        lighting_coll.assign(b)
+                        if other_coll:
+                            try:
+                                other_coll.unassign(b)
+                            except Exception:
+                                pass
+                    if pb_name == "Lighting Panel" and wgt_plane:
+                        pb.custom_shape = wgt_plane
+                        pb.custom_shape_scale_xyz = (1.0, 1.0, 1.0)
+                        pb.use_custom_shape_bone_size = True
+                    elif pb_name in ["Rim Lit", "Shadow", "Lit", "Ambient", "RimShadow", "Rim.L", "Rim.R", "RimX", "RimY"] and wgt_selector:
+                        pb.custom_shape = wgt_selector
+                        pb.custom_shape_scale_xyz = (0.15, 0.15, 0.15)
+                        pb.use_custom_shape_bone_size = True
+
+            # If Kythera shader is used, place Rim.L (RimX) and Rim.R (RimY) sliders in the middle
+            scene = bpy.context.scene
+            shader_type = getattr(scene, "zzz_shader_type", "KYTHERA")
+            if shader_type == "KYTHERA":
+                for pb_name in ["Rim.L", "Rim.R"]:
+                    pb = armature.pose.bones.get(pb_name)
+                    if pb:
+                        con = next((c for c in pb.constraints if c.type == 'LIMIT_LOCATION'), None)
+                        if con and con.use_min_x and con.use_max_x:
+                            pb.location.x = (con.min_x + con.max_x) / 2.0
+                        elif pb_name == "Rim.L":
+                            pb.location.x = 0.0425
+                        elif pb_name == "Rim.R":
+                            pb.location.x = 0.050
+        except Exception as e_lp_bones:
+            print(f"[ZZZ Rig Warning] Configure Lighting Panel bones: {e_lp_bones}")
+
         # Ensure all tail bones have the tweak custom shape (exclude IK bones)
         tweak_shape = (
             next((o for o in bpy.data.objects if o.type == 'MESH' and "tweak_spine" in o.name), None)
@@ -1271,7 +1357,11 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
             for obj in bpy.data.objects:
                 if obj.type == 'MESH':
                     o_lower = obj.name.lower()
-                    if "lightpanelwgt" in o_lower or "lightpanelselector" in o_lower or "wgtplane" in o_lower or "selectorwgt" in o_lower:
+                    if any(k in o_lower for k in [
+                        "colorwheel", "colorpicker", "slider-rim", "origin-rim",
+                        "lightpanelwgt", "lightpanelselector", "wgtplane", "selectorwgt",
+                        "face widget"
+                    ]) or obj.name.startswith("WGT-"):
                         continue
                     for modifier in obj.modifiers:
                         if modifier.type == 'NODES' and modifier.node_group and 'Light Vectors' in modifier.node_group.name:

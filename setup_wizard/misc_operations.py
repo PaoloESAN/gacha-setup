@@ -835,6 +835,24 @@ class ZZZ_OT_MoveLightingPanelToCharacterCollection(Operator, CustomOperatorProp
         except Exception:
             pass
 
+        try:
+            ctrl_type = getattr(context.scene, "zzz_lighting_control_type", "PANEL")
+            from setup_wizard.character_rig_setup.lighting_panel_setup import (
+                connect_zzz_lighting_panel,
+                disconnect_zzz_lighting_panel,
+                set_lighting_panel_visibility,
+            )
+            if ctrl_type == "PANEL":
+                connect_zzz_lighting_panel()
+                if main_rig:
+                    set_lighting_panel_visibility(main_rig, True)
+            else:
+                disconnect_zzz_lighting_panel()
+                if main_rig:
+                    set_lighting_panel_visibility(main_rig, False)
+        except Exception as e:
+            print(f"[ZZZ] Lighting panel connection notice: {e}")
+
         self.report({"INFO"}, "Zenless Zone Zero: Finish Setup Completed Successfully!")
 
         if self.next_step_idx:
