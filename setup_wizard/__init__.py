@@ -483,11 +483,29 @@ else:
     UI_Properties.create_custom_ui_properties()
 
 
+    def _gacha_prewarm():
+        """One-time heavy work moved out of the selection path."""
+        try:
+            from setup_wizard.ui.character_settings_utils import invalidate_caches
+            invalidate_caches()
+        except Exception:
+            pass
+        try:
+            from setup_wizard.optimization.blender_rimlight_patch import patch_all_rimlight_groups_for_blender
+            patch_all_rimlight_groups_for_blender()
+        except Exception:
+            pass
+        return None
+
     @bpy.app.handlers.persistent
     def gacha_rig_ui_load_post_handler(dummy=None):
         try:
             from setup_wizard.ui.character_settings_utils import ensure_all_rig_uis_registered
             ensure_all_rig_uis_registered()
+        except Exception:
+            pass
+        try:
+            bpy.app.timers.register(_gacha_prewarm, first_interval=0.5)
         except Exception:
             pass
 
@@ -528,6 +546,10 @@ else:
             bpy.app.handlers.render_init.append(ake_frame_change_handler)
         if gacha_rig_ui_load_post_handler not in bpy.app.handlers.load_post:
             bpy.app.handlers.load_post.append(gacha_rig_ui_load_post_handler)
+        try:
+            bpy.app.timers.register(_gacha_prewarm, first_interval=1.0)
+        except Exception:
+            pass
         try:
             from setup_wizard.ui.character_settings_utils import ensure_all_rig_uis_registered
             ensure_all_rig_uis_registered()

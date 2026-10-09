@@ -1,5 +1,8 @@
 import bpy
 
+_PATCHED_FLAG = "_gacha_rim_patched"
+_PATCH_VERSION = 1
+
 def is_blender_official():
     """
     Returns True if running in official Blender (e.g. 5.2 / 4.x)
@@ -384,15 +387,23 @@ def patch_all_rimlight_groups_for_blender():
     patched_any = False
     for ng in list(bpy.data.node_groups):
         ng_low = ng.name.lower()
+        # Idempotent: the patch rebuilds nodes/links (very slow, ~200ms per group),
+        # so each group is patched only once and then flagged.
+        if ng.get(_PATCHED_FLAG) == _PATCH_VERSION:
+            continue
+        done = False
         if 'depth-based rim' in ng_low or ng.name == 'Depth-based Rim':
-            if patch_depth_based_rim_group(ng):
-                patched_any = True
+            done = patch_depth_based_rim_group(ng)
         elif 'genshin impact - rimlight' in ng_low or (('rimlight' in ng_low or 'rim light' in ng_low) and 'depth' not in ng_low and 'lit rimlight' not in ng_low):
-            if patch_genshin_rimlight_group(ng):
-                patched_any = True
+            done = patch_genshin_rimlight_group(ng)
         elif 'lit rimlight' in ng_low:
-            if patch_lit_rimlight_custom_group(ng):
-                patched_any = True
+            done = patch_lit_rimlight_custom_group(ng)
+        if done:
+            patched_any = True
+            try:
+                ng[_PATCHED_FLAG] = _PATCH_VERSION
+            except Exception:
+                pass
 
     return patched_any
 

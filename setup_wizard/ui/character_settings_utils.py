@@ -10,6 +10,7 @@ def stamp_rig_game(rig_obj, game_name, char_name=None):
     """Tags a rig armature or character object so its Character Settings panel can be resolved after Append / Setup."""
     if rig_obj is None:
         return
+    invalidate_caches()
     try:
         rig_obj[GACHA_GAME_KEY] = str(game_name)
     except Exception:
@@ -308,6 +309,35 @@ def ensure_all_rig_uis_registered(target_armature=None):
 
 
 def resolve_settings_armature(context):
+    """Cached resolve: O(1) while active object / selection / object count are unchanged."""
+    if context is None:
+        return None
+    try:
+        act = getattr(context, "active_object", None) or getattr(context, "object", None)
+        sel = getattr(context, "selected_objects", None) or ()
+        key = (
+            act.as_pointer() if act is not None else 0,
+            tuple(o.as_pointer() for o in sel),
+            _object_count(),
+        )
+    except Exception:
+        return _resolve_settings_armature_uncached(context)
+    if _ARM_CACHE["key"] == key:
+        arm = _ARM_CACHE["arm"]
+        if arm is None:
+            return None
+        try:
+            arm.name  # raises ReferenceError if freed
+            return arm
+        except Exception:
+            pass
+    arm = _resolve_settings_armature_uncached(context)
+    _ARM_CACHE["key"] = key
+    _ARM_CACHE["arm"] = arm
+    return arm
+
+
+def _resolve_settings_armature_uncached(context):
     """Returns the armature targeted by selection (None if none). Falls back to active mesh or scene armature."""
     if context is None:
         return None
@@ -385,7 +415,48 @@ def resolve_settings_armature(context):
     return target_arm
 
 
+_MISSING = object()
+_MESH_CACHE = {}
+_GAME_CACHE = {}
+_ARM_CACHE = {"key": None, "arm": None}
+
+
+def _object_count():
+    import bpy
+    return len(bpy.data.objects)
+
+
+def invalidate_caches():
+    """Drops all cached lookups (call after structural changes: parenting, modifiers, tags)."""
+    _MESH_CACHE.clear()
+    _GAME_CACHE.clear()
+    _ARM_CACHE["key"] = None
+    _ARM_CACHE["arm"] = None
+
+
 def _iter_rig_meshes(arm):
+    """Cached list of meshes belonging to arm. Full scan only on cache miss."""
+    if arm is None:
+        return iter(())
+    try:
+        key = arm.as_pointer()
+        count = _object_count()
+    except Exception:
+        return _iter_rig_meshes_uncached(arm)
+    entry = _MESH_CACHE.get(key)
+    if entry is not None and entry[0] == count:
+        try:
+            for m in entry[1]:
+                m.name  # raises ReferenceError if freed
+            return iter(entry[1])
+        except Exception:
+            pass
+    meshes = list(_iter_rig_meshes_uncached(arm))
+    _MESH_CACHE[key] = (count, meshes)
+    return iter(meshes)
+
+
+def _iter_rig_meshes_uncached(arm):
     seen = set()
     if arm is None:
         return
@@ -451,6 +522,22 @@ def get_character_materials(context=None, arm=None):
 
 
 def detect_armature_game(arm):
+    """Cached wrapper around the heuristic detection (invalidated by invalidate_caches())."""
+    if arm is None:
+        return None
+    try:
+        key = (arm.as_pointer(), _object_count())
+    except Exception:
+        return _detect_armature_game_uncached(arm)
+    hit = _GAME_CACHE.get(key, _MISSING)
+    if hit is not _MISSING:
+        return hit
+    result = _detect_armature_game_uncached(arm)
+    _GAME_CACHE[key] = result
+    return result
+
+
+def _detect_armature_game_uncached(arm):
     """Detects GameType.name for an armature: stamped tag first, then per-rig heuristics."""
     if arm is None:
         return None
@@ -578,6 +665,8 @@ def has_active_character_changed(context):
         return False
     if current_arm != _LAST_SETTINGS_ARM:
         _LAST_SETTINGS_ARM = current_arm
+        _MESH_CACHE.clear()
+        _GAME_CACHE.clear()
         return True
     return False
 
@@ -586,6 +675,7 @@ def reset_last_settings_arm():
     """Forces the next check to report a change."""
     global _LAST_SETTINGS_ARM
     _LAST_SETTINGS_ARM = None
+    invalidate_caches()
 
 
 def ensure_character_node_trees_isolated(arm, mats, force=False):
@@ -621,11 +711,16 @@ def ensure_character_node_trees_isolated(arm, mats, force=False):
 
     import bpy
 
-    # 2. Find trees currently used by other armatures
-    other_arms = [obj for obj in bpy.data.objects if obj.type == 'ARMATURE' and obj != arm]
-    other_trees = set()
-    if other_arms:
-        for o_arm in other_arms:
+    # 2. Trees used by other armatures: computed lazily (only needed for un-owned trees)
+    other_trees_cache = []
+
+    def _get_other_trees():
+        if other_trees_cache:
+            return other_trees_cache[0]
+        other_trees = set()
+        for o_arm in bpy.data.objects:
+            if o_arm.type != 'ARMATURE' or o_arm == arm:
+                continue
             for mesh in _iter_rig_meshes(o_arm):
                 for slot in getattr(mesh, "material_slots", []) or []:
                     m = getattr(slot, "material", None)
@@ -633,6 +728,8 @@ def ensure_character_node_trees_isolated(arm, mats, force=False):
                         for n in m.node_tree.nodes:
                             if n.type == 'GROUP' and n.node_tree:
                                 other_trees.add(n.node_tree)
+        other_trees_cache.append(other_trees)
+        return other_trees
 
     # 3. Remap trees ensuring all materials of this armature share the same isolated tree
     remapped_trees = {}
@@ -645,7 +742,7 @@ def ensure_character_node_trees_isolated(arm, mats, force=False):
         if owner == arm_name:
             remapped_trees[t] = t
             continue
-        if owner is not None or t in other_trees:
+        if owner is not None or t in _get_other_trees():
             target_tree = t.copy()
             target_tree["_owner_armature"] = arm_name
             remapped_trees[t] = target_tree
