@@ -331,6 +331,7 @@ def setup_dependencies():
         setup_wizard.join_meshes_on_armature.join_meshes_operator.GI_OT_JoinMeshesOnArmature,
         setup_wizard.character_rig_setup.character_rigger_operator.HOYOVERSE_OT_rig_character,
         setup_wizard.character_rig_setup.character_rigger_operator.HOYOVERSE_OT_apply_hair_clothes_physics,
+        setup_wizard.character_rig_setup.character_rigger_operator.HOYOVERSE_OT_remove_hair_clothes_physics,
         setup_wizard.character_rig_setup.character_rigger_operator.HOYOVERSE_OT_apply_hair_dress_physics,
         setup_wizard.character_rig_setup.character_rigger_operator.HOYOVERSE_OT_toggle_weapon_hand,
         setup_wizard.character_rig_setup.rootshape_filepath_setter_operator.GI_OT_RootShape_FilePath_Setter_Operator,
