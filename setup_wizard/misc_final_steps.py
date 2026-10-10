@@ -85,6 +85,16 @@ class GI_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties
         except Exception:
             pass
 
+        try:
+            from setup_wizard.genshin_import_character_model import is_rigging_disabled
+            if is_rigging_disabled(context):
+                from setup_wizard.character_rig_setup.lighting_panel_setup import (
+                    disconnect_lighting_panel_nodes_from_global_material_properties,
+                )
+                disconnect_lighting_panel_nodes_from_global_material_properties()
+        except Exception:
+            pass
+
         cleanup_temp_extracted_archive(context)
 
         return result

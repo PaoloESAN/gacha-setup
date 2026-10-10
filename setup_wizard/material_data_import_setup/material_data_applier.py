@@ -21,15 +21,27 @@ from setup_wizard.utils.modifier_utils import set_modifier_property
 class MaterialDataAppliersFactory:
     def create(game_type, material_data_parser, outline_material_group: OutlineMaterialGroup, character_type: CharacterType):
         if game_type == GameType.GENSHIN_IMPACT.name:
+            shader_identifier_service = ShaderIdentifierServiceFactory.create(game_type)
+            shader = shader_identifier_service.identify_shader(bpy.data.materials, bpy.data.node_groups)
             if character_type is CharacterType.GI_EQUIPMENT:
-                # V2_WeaponMaterialDataApplier is technically unnecessary for now, does same logic as V2_MaterialDataApplier
-                return [
-                    V2_WeaponMaterialDataApplier(material_data_parser, outline_material_group),  
-                    V1_MaterialDataApplier(material_data_parser, outline_material_group),
-                ]
+                if shader is GenshinImpactShaders.V1_GENSHIN_IMPACT_SHADER or \
+                    shader is GenshinImpactShaders.V2_GENSHIN_IMPACT_SHADER or \
+                    shader is GenshinImpactShaders.V3_GENSHIN_IMPACT_SHADER:
+                    return [
+                        V2_WeaponMaterialDataApplier(material_data_parser, outline_material_group),  
+                        V1_MaterialDataApplier(material_data_parser, outline_material_group),
+                    ]
+                elif shader is GenshinImpactShaders.V1_HOYOTOON_GENSHIN_IMPACT_SHADER:
+                    return [
+                        V1_HoYoToonMaterialDataApplier(material_data_parser, outline_material_group),
+                    ]
+                else:
+                    return [
+                        V4_MaterialDataApplier(material_data_parser, outline_material_group),
+                        V2_WeaponMaterialDataApplier(material_data_parser, outline_material_group),
+                        V1_MaterialDataApplier(material_data_parser, outline_material_group),
+                    ]
             else:
-                shader_identifier_service = ShaderIdentifierServiceFactory.create(game_type)
-                shader = shader_identifier_service.identify_shader(bpy.data.materials, bpy.data.node_groups)
                 if shader is GenshinImpactShaders.V1_GENSHIN_IMPACT_SHADER or \
                     shader is GenshinImpactShaders.V2_GENSHIN_IMPACT_SHADER or \
                     shader is GenshinImpactShaders.V3_GENSHIN_IMPACT_SHADER:
@@ -92,7 +104,14 @@ class MaterialDataApplier(ABC):
     # these inputs still holds exactly its template default (AND AND AND), the
     # JSONs provided no outline colors and the diffuse fallback may link them.
     OUTLINE_SENTINEL_SRGB_HEX = ('FF0000FF', 'E7FF00FF', '00FFAAFF', '00AAFFFF', 'E700FFFF')
-    OUTLINE_SENTINEL_EPS = 1e-4
+    OUTLINE_SENTINEL_RAW_LINEAR = (
+        (1.0, 0.0, 0.0, 1.0),
+        (0.8, 1.0, 0.0, 1.0),
+        (0.0, 1.0, 0.4, 1.0),
+        (0.0, 0.4, 1.0, 1.0),
+        (0.8, 0.0, 1.0, 1.0),
+    )
+    OUTLINE_SENTINEL_EPS = 0.01
 
     @staticmethod
     def _srgb_channel_to_linear(c):
@@ -205,11 +224,6 @@ class MaterialDataApplier(ABC):
             return
         outlines_shader_node_inputs = outline_node.inputs
 
-        self.apply_material_data(
-            self.outline_mapping, 
-            outlines_shader_node_inputs,
-        )
-
         # Diffuse fallback if and only if every Outline Color input still holds
         # exactly its template sentinel color (AND AND AND). Otherwise any
         # fallback links left by a previous run are maintained or removed.
@@ -221,6 +235,10 @@ class MaterialDataApplier(ABC):
             else:
                 self._maintain_diffuse_outline_color_fallback(outline_node, targets)
         else:
+            self.apply_material_data(
+                self.outline_mapping, 
+                outlines_shader_node_inputs,
+            )
             self._clear_diffuse_outline_color_fallback(outline_node)
 
     @staticmethod
@@ -246,14 +264,17 @@ class MaterialDataApplier(ABC):
                 indexed[idx] = inp
         return indexed
 
-    def _defaults_match_sentinels(self, indexed):
+    @classmethod
+    def _defaults_match_sentinels(cls, indexed):
         """True only when inputs 1..5 all hold exactly the template sentinel colors."""
         for key in (1, 2, 3, 4, 5):
             if key not in indexed:
                 return False
+        if all(cls._color_close(getattr(indexed[i], 'default_value', None), cls.OUTLINE_SENTINEL_RAW_LINEAR[i - 1], eps=cls.OUTLINE_SENTINEL_EPS) for i in (1, 2, 3, 4, 5)):
+            return True
         for encoding in ('linear', 'srgb'):
-            sentinels = self._sentinel_rgba(encoding)
-            if all(self._color_close(getattr(indexed[i], 'default_value', None), sentinels[i - 1]) for i in (1, 2, 3, 4, 5)):
+            sentinels = cls._sentinel_rgba(encoding)
+            if all(cls._color_close(getattr(indexed[i], 'default_value', None), sentinels[i - 1], eps=cls.OUTLINE_SENTINEL_EPS) for i in (1, 2, 3, 4, 5)):
                 return True
         return False
 
@@ -912,6 +933,7 @@ class V4_MaterialDataApplier(V3_MaterialDataApplier):
         if shader_node:
             self.set_up_mesh_material_data_with_tooltips(shader_node, shader_node)
         if outline_shader_node:
+            self.set_up_outline_colors()
             self.set_up_mesh_material_data_with_tooltips(outline_shader_node, outline_shader_node, is_outlines=True)
         if night_soul_outlines_shader_node:
             self.set_up_mesh_material_data_with_tooltips(night_soul_outlines_shader_node, night_soul_outlines_shader_node, is_outlines=True)
@@ -981,7 +1003,10 @@ class V4_MaterialDataApplier(V3_MaterialDataApplier):
                             _MainTexAlphaUse_mapping=self._MainTexAlphaUse_mapping
                         )
                     else:
-                        socket_input.default_value = material_json_value
+                        if is_outlines and node_interface_input.name.startswith('Outline Color') and len(list(socket_input.links)) > 0:
+                            pass
+                        else:
+                            socket_input.default_value = material_json_value
 
                         if material_data_key == '_Color' and description_to_names.get('_ColorAlpha'):
                             for input_name in description_to_names.get('_ColorAlpha'):

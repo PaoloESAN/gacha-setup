@@ -24,6 +24,13 @@ class RigifyCharacterService:
                 hide_eyestar_if_unrigged(self.context)
             except Exception:
                 pass
+            try:
+                from setup_wizard.character_rig_setup.lighting_panel_setup import (
+                    disconnect_lighting_panel_nodes_from_global_material_properties,
+                )
+                disconnect_lighting_panel_nodes_from_global_material_properties()
+            except Exception as e:
+                print(f"[SETUP WIZARD] Notice disconnecting Global Properties: {e}")
             print("[SETUP WIZARD] Rigging skipped: Disable Rigging is enabled in Setup Settings.")
             if self.blender_operator and hasattr(self.blender_operator, "report"):
                 self.blender_operator.report({'INFO'}, 'Rigging skipped. Disable Rigging is enabled.')

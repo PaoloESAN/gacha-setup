@@ -79,10 +79,21 @@ class CharacterRiggerPropertyGroup(PropertyGroup):
         step=5,
         precision=2,
     )
+    def _on_disable_rigging_update(self, context):
+        if self.disable_rigging:
+            try:
+                from setup_wizard.character_rig_setup.lighting_panel_setup import (
+                    disconnect_lighting_panel_nodes_from_global_material_properties,
+                )
+                disconnect_lighting_panel_nodes_from_global_material_properties()
+            except Exception as e:
+                print(f"[SETUP WIZARD] Notice disconnecting Global Properties: {e}")
+
     disable_rigging: BoolProperty(
         name=' Disable Rigging',
         description='Skip the entire character rigging step during setup',
-        default=False
+        default=False,
+        update=_on_disable_rigging_update,
     )
 
     @staticmethod

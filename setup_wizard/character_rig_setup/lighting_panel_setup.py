@@ -309,34 +309,30 @@ class LightingPanel:
 def disconnect_lighting_panel_nodes_from_global_material_properties(target_materials=None):
     """Disconnects incoming links from internal lighting panel nodes to Global Properties inputs."""
     target_trees = set()
+    for ng in bpy.data.node_groups:
+        ng_low = ng.name.lower()
+        if "global material properties" in ng_low or "global properties" in ng_low:
+            target_trees.add(ng)
+
     mats = target_materials if target_materials else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
     for mat in mats:
         if getattr(mat, "use_nodes", False) and mat.node_tree:
             for node in mat.node_tree.nodes:
                 if node.type == 'GROUP' and node.node_tree:
-                    if "global material properties" in node.node_tree.name.lower() or node.name == 'Global Properties':
+                    if "global material properties" in node.node_tree.name.lower() or "global properties" in node.node_tree.name.lower() or node.name == 'Global Properties':
                         target_trees.add(node.node_tree)
-
-    if not target_trees:
-        for ng in bpy.data.node_groups:
-            if "global material properties" in ng.name.lower():
-                target_trees.add(ng)
-
-    lp_socket_keywords = [
-        "ambient", "sharp lit", "soft lit", "sharp shadow", "soft shadow",
-        "rim lit", "rim shadow", "rim scale", "toggle fresnel", "fresnel color",
-        "fresnel power", "fresnel scaler", "shadow pos"
-    ]
+                if node.name == 'Global Properties' or getattr(node, 'label', '') == 'Global Properties':
+                    for inp in node.inputs:
+                        for l in list(inp.links):
+                            mat.node_tree.links.remove(l)
 
     for tree in target_trees:
-        out_node = tree.nodes.get('Global Properties') or tree.nodes.get('Group Output')
-        if not out_node:
-            continue
-        for inp in out_node.inputs:
-            name_low = inp.name.lower()
-            if "face" in name_low:
-                continue
-            if any(k in name_low for k in lp_socket_keywords):
+        nodes_to_disconnect = [
+            n for n in tree.nodes
+            if n.name == 'Global Properties' or getattr(n, 'label', '') == 'Global Properties' or n.type == 'GROUP_OUTPUT'
+        ]
+        for out_node in nodes_to_disconnect:
+            for inp in out_node.inputs:
                 for l in list(inp.links):
                     tree.links.remove(l)
 

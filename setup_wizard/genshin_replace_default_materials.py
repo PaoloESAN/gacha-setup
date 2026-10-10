@@ -38,6 +38,16 @@ class GI_OT_GenshinReplaceDefaultMaterials(Operator, CustomOperatorProperties):
         default_material_replacer_service = DefaultMaterialReplacerService(game_default_material_replacer)
         default_material_replacer_service.replace_default_materials()
 
+        try:
+            from setup_wizard.genshin_import_character_model import is_rigging_disabled
+            if is_rigging_disabled(context):
+                from setup_wizard.character_rig_setup.lighting_panel_setup import (
+                    disconnect_lighting_panel_nodes_from_global_material_properties,
+                )
+                disconnect_lighting_panel_nodes_from_global_material_properties()
+        except Exception as e:
+            print(f"[SETUP WIZARD] Notice checking disable_rigging after replace materials: {e}")
+
         NextStepInvoker().invoke(
             self.next_step_idx, 
             self.invoker_type, 

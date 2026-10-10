@@ -118,7 +118,26 @@ class GenshinImpactCharacterRigger(CharacterRigger):
         fbx_path = self.context.scene.get("setup_wizard_imported_fbx_path", "")
         fbx_name = os.path.basename(fbx_path) if fbx_path else ""
         if fbx_name and not fbx_name.startswith("Avatar_") and (fbx_name.startswith(("Equip_", "EquipSkin_")) or "equip" in fbx_name.lower()):
+            try:
+                from setup_wizard.character_rig_setup.lighting_panel_setup import (
+                    disconnect_lighting_panel_nodes_from_global_material_properties,
+                )
+                disconnect_lighting_panel_nodes_from_global_material_properties()
+            except Exception as e:
+                print(f"[SETUP WIZARD] Notice disconnecting Global Properties: {e}")
             self.blender_operator.report({'INFO'}, 'Rigging skipped for weapon / equipment (Equip_ / EquipSkin_ detected).')
+            return
+
+        character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
+        if getattr(character_rigger_props, "disable_rigging", False):
+            try:
+                from setup_wizard.character_rig_setup.lighting_panel_setup import (
+                    disconnect_lighting_panel_nodes_from_global_material_properties,
+                )
+                disconnect_lighting_panel_nodes_from_global_material_properties()
+            except Exception as e:
+                print(f"[SETUP WIZARD] Notice disconnecting Global Properties: {e}")
+            self.blender_operator.report({'INFO'}, 'Rigging skipped. Disable Rigging is enabled.')
             return
 
         cache_enabled = self.context.window_manager.cache_enabled
@@ -141,8 +160,6 @@ class GenshinImpactCharacterRigger(CharacterRigger):
         is_player_hand = number_of_hand_bone_children >= 5
         avatar_in_texture_name = self.__get_body_diffuse_texture_name().startswith('Avatar')
         is_playable_character = avatar_in_texture_name or is_player_hand
-
-        character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
 
         # Lighting Panel is an Armature, so it's important this goes after the armature variable initialization above
         # Genshin Shader >= v3.4

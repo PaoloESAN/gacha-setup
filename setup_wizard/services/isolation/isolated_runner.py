@@ -231,6 +231,15 @@ def save_and_quit():
         ):
             raise RuntimeError("Setup produced no generated rig with rig_id.")
 
+        if JOB.get("disable_rigging", False):
+            try:
+                from setup_wizard.character_rig_setup.lighting_panel_setup import (
+                    disconnect_lighting_panel_nodes_from_global_material_properties,
+                )
+                disconnect_lighting_panel_nodes_from_global_material_properties()
+            except Exception as e_lp:
+                print(f"[GACHA SETUP WORKER] Notice disconnecting Global Properties: {e_lp}")
+
         # Capture collections and loose objects in clean original hierarchy
         top_level_collections = [c.name for c in scene.collection.children]
         loose_objects = [o.name for o in scene.collection.objects]
