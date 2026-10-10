@@ -1681,12 +1681,28 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
                     target_vg = vg
                     break
             if target_vg:
-                eval_obj = obj.evaluated_get(depsgraph)
-                eval_mesh = eval_obj.to_mesh()
-                coords = [eval_obj.matrix_world @ eval_mesh.vertices[v.index].co
-                          for v in obj.data.vertices
-                          if any(g.group == target_vg.index and g.weight > 0.3 for g in v.groups)]
-                eval_obj.to_mesh_clear()
+                eval_obj = None
+                eval_mesh = None
+                try:
+                    eval_obj = obj.evaluated_get(depsgraph)
+                    eval_mesh = eval_obj.to_mesh()
+                except Exception:
+                    eval_mesh = None
+
+                coords = []
+                for v in obj.data.vertices:
+                    if any(g.group == target_vg.index and g.weight > 0.3 for g in v.groups):
+                        if eval_mesh and hasattr(eval_mesh, "vertices") and v.index < len(eval_mesh.vertices):
+                            coords.append(eval_obj.matrix_world @ eval_mesh.vertices[v.index].co)
+                        else:
+                            coords.append(obj.matrix_world @ v.co)
+
+                if eval_mesh and eval_obj:
+                    try:
+                        eval_obj.to_mesh_clear()
+                    except Exception:
+                        pass
+
                 if coords:
                     c_world = sum(coords, Vector((0, 0, 0))) / len(coords)
                     break
@@ -1923,6 +1939,7 @@ def get_huge_facerig_widgets(wgt_coll):
 
     for w_obj in (panel_obj, controls_obj):
         if w_obj:
+            w_obj.modifiers.clear()
             if wgt_coll and w_obj.name not in wgt_coll.objects:
                 wgt_coll.objects.link(w_obj)
             if w_obj.name in bpy.context.scene.collection.objects:
@@ -2170,6 +2187,10 @@ def setup_facerig_detail_panel(faceobj, armature, head_name, keyblock):
     b_ctrls = armature.data.bones.get("Facerig Controls")
     if b_ctrls:
         b_ctrls.hide_select = True
+        try:
+            b_ctrls.show_wire = False
+        except Exception:
+            pass
 
     slider_wgt = make_widget('ring', wgt_coll)
 
@@ -2463,7 +2484,10 @@ def zzz_face_rig_main():
         remove_eyetrack_bones(armature)
         if controls:
             setup_face_rig(faceobj, controls, armature, head_name, fwd, up, face_size)
-        setup_lookat_eyes(armature, head_name, fwd, up, face_size)
+        try:
+            setup_lookat_eyes(armature, head_name, fwd, up, face_size)
+        except Exception as e_eye:
+            print(f"[ZZZ Face Rig Warning] setup_lookat_eyes skipped: {e_eye}")
         hide_mechanism_bones(armature)
 
         wgt_coll = get_widget_collection()

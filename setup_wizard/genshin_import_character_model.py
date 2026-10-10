@@ -1108,141 +1108,149 @@ class AKE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
         return {"FINISHED"}
 
 
-def fix_zzz_eye_shadow(faceobj=None):
-    """Disabled: eye shadow mesh detection causes visual glitches."""
-    return False
-
-    # 1. Identify eye-related vs head-related vs face/mouth vertex groups
-    eye_vg_indices = set()
-    head_vg_indices = set()
-    mouth_brow_vg_indices = set()
-    
-    for vg in faceobj.vertex_groups:
-        n = vg.name.lower()
-        if any(k in n for k in ['eye', 'pupil', 'iris']) and not any(k in n for k in ['brow', 'shadow']):
-            eye_vg_indices.add(vg.index)
-        elif any(k in n for k in ['head', 'spine', 'neck']):
-            head_vg_indices.add(vg.index)
-        elif any(k in n for k in ['mouth', 'lip', 'teeth', 'tongue', 'jaw', 'brow', 'cheek']):
-            mouth_brow_vg_indices.add(vg.index)
-
-    eyeshadow_poly_indices = set()
-
-    # Step A: Check for material with 'shadow' or vertex group with 'shadow'
-    for vg in faceobj.vertex_groups:
-        if 'eyeshadow' in vg.name.lower() or 'eye_shadow' in vg.name.lower() or 'eyeshade' in vg.name.lower():
-            for p in mesh.polygons:
-                if any(any(g.group == vg.index and g.weight > 0.05 for g in mesh.vertices[vi].groups) for vi in p.vertices):
-                    eyeshadow_poly_indices.add(p.index)
-            if eyeshadow_poly_indices:
+def setup_zzz_eyeshadow_uv(faceobj=None):
+    """
+    Detects the eye shadow mesh island(s) located furthest to the right (top-right)
+    in UV space (standard Hoyoverse / ZZZ Face UV layout) and assigns them to 'Eye Transparent'.
+    Guarantees that 'Eye Transparent' is always a secondary/separate slot, never slot 0 alone.
+    """
+    if faceobj is None:
+        for obj in bpy.data.objects:
+            if obj.type == "MESH" and "_face" in obj.name.lower() and "weapon" not in obj.name.lower() and "gun" not in obj.name.lower():
+                faceobj = obj
                 break
-
-    # Step B: Check Eye material slot (standard ZZZ character setup)
-    if not eyeshadow_poly_indices:
-        eye_slot_indices = []
-        for idx, slot in enumerate(faceobj.material_slots):
-            if slot.material:
-                mn = slot.material.name.lower()
-                if 'eye' in mn and not any(k in mn for k in ['brow', 'transparent']):
-                    eye_slot_indices.append(idx)
-                    
-        if eye_slot_indices and eye_vg_indices:
-            for p in mesh.polygons:
-                if p.material_index in eye_slot_indices:
-                    # Check if vertices have NO eye bone weight
-                    has_eye_weight = False
-                    for vi in p.vertices:
-                        for g in mesh.vertices[vi].groups:
-                            if g.group in eye_vg_indices and g.weight > 0.01:
-                                has_eye_weight = True
-                                break
-                        if has_eye_weight:
-                            break
-                    if not has_eye_weight:
-                        eyeshadow_poly_indices.add(p.index)
-
-    # Step C: Fallback geometric island analysis (if no eye material or 0 polys found)
-    if not eyeshadow_poly_indices and eye_vg_indices:
-        import bmesh
-        eyeball_verts = [v for v in mesh.vertices if any(g.group in eye_vg_indices and g.weight > 0.05 for g in v.groups)]
-        if eyeball_verts:
-            eye_x_min = min(v.co.x for v in eyeball_verts); eye_x_max = max(v.co.x for v in eyeball_verts)
-            eye_y_min = min(v.co.y for v in eyeball_verts); eye_y_max = max(v.co.y for v in eyeball_verts)
-            eye_z_min = min(v.co.z for v in eyeball_verts); eye_z_max = max(v.co.z for v in eyeball_verts)
-            
-            bm = bmesh.new()
-            bm.from_mesh(mesh)
-            visited = set()
-            for f in bm.faces:
-                if f in visited:
-                    continue
-                island = []
-                queue = [f]
-                visited.add(f)
-                while queue:
-                    curr = queue.pop()
-                    island.append(curr)
-                    for edge in curr.edges:
-                        for lf in edge.link_faces:
-                            if lf not in visited:
-                                visited.add(lf)
-                                queue.append(lf)
-                                
-                if 4 <= len(island) <= 200:
-                    island_verts = set(v.index for item in island for v in item.verts)
-                    has_eye = any(g.group in eye_vg_indices and g.weight > 0.01 for vi in island_verts for g in mesh.vertices[vi].groups)
-                    has_mouth_brow = any(g.group in mouth_brow_vg_indices and g.weight > 0.01 for vi in island_verts for g in mesh.vertices[vi].groups)
-                    has_head = any(g.group in head_vg_indices and g.weight > 0.01 for vi in island_verts for g in mesh.vertices[vi].groups)
-                    
-                    if not has_eye and not has_mouth_brow and has_head:
-                        coords = [mesh.vertices[vi].co for vi in island_verts]
-                        x_min, x_max = min(c.x for c in coords), max(c.x for c in coords)
-                        y_min, y_max = min(c.y for c in coords), max(c.y for c in coords)
-                        z_min, z_max = min(c.z for c in coords), max(c.z for c in coords)
-                        
-                        if (x_min >= eye_x_min - 0.05 and x_max <= eye_x_max + 0.05 and
-                            z_min >= eye_z_min - 0.02 and z_max <= eye_z_max + 0.05 and
-                            y_min >= eye_y_min - 0.05 and y_max <= eye_y_max + 0.05):
-                            for item in island:
-                                eyeshadow_poly_indices.add(item.index)
-            bm.free()
-
-    if not eyeshadow_poly_indices:
+        if not faceobj:
+            for obj in bpy.data.objects:
+                if obj.type == "MESH" and "face" in obj.name.lower():
+                    faceobj = obj
+                    break
+    if not faceobj or faceobj.type != 'MESH' or not faceobj.data:
         return False
 
-    # Find or add 'Eye Transparent' slot
+    for obj in bpy.data.objects:
+        if "NPC" in obj.name:
+            return False
+
+    mesh = faceobj.data
+    if not mesh.uv_layers or not mesh.uv_layers.active:
+        return False
+
+    # Ensure faceobj has a primary material slot for the face skin/head
+    # (Eye Transparent must ALWAYS be a secondary / separate material slot, never slot 0 alone!)
+    had_no_slots = (len(faceobj.material_slots) == 0)
+    if had_no_slots:
+        faceobj.data.materials.append(None)
+        for p in mesh.polygons:
+            p.material_index = 0
+    elif len(faceobj.material_slots) == 1 and faceobj.material_slots[0].material and faceobj.material_slots[0].material.name == "Eye Transparent":
+        # Slot 0 was previously erroneously set to Eye Transparent alone; clear it so it receives the face shader
+        faceobj.material_slots[0].material = None
+        for p in mesh.polygons:
+            p.material_index = 0
+        had_no_slots = True
+
+    # Check if faceobj already has a separate Eye Transparent slot with assigned polygons
+    for idx, slot in enumerate(faceobj.material_slots):
+        if idx > 0 and slot.material and slot.material.name == "Eye Transparent":
+            if any(p.material_index == idx for p in mesh.polygons):
+                return True
+
+    import bmesh
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    uv_bm = bm.loops.layers.uv.active
+
+    # Find candidate faces whose UV center is in the top-right quadrant (U > 0.80, V > 0.80)
+    candidates = [
+        f for f in bm.faces 
+        if sum(l[uv_bm].uv.x for l in f.loops) / len(f.loops) > 0.80 and 
+           sum(l[uv_bm].uv.y for l in f.loops) / len(f.loops) > 0.80
+    ]
+
+    visited = set()
+    eyeshadow_face_indices = []
+    for f in candidates:
+        if f in visited:
+            continue
+        q = [f]
+        visited.add(f)
+        isl = []
+        while q:
+            curr = q.pop()
+            isl.append(curr)
+            for e in curr.edges:
+                for lf in e.link_faces:
+                    if lf not in visited:
+                        u_lf = sum(l[uv_bm].uv.x for l in lf.loops) / len(lf.loops)
+                        v_lf = sum(l[uv_bm].uv.y for l in lf.loops) / len(lf.loops)
+                        if u_lf > 0.75 and v_lf > 0.75:
+                            visited.add(lf)
+                            q.append(lf)
+
+        # Eyeshadow is a floating mesh island located furthest to the right in UV space (avg U > 0.85, avg V > 0.85)
+        num_loops = sum(len(item.loops) for item in isl)
+        if num_loops > 0:
+            avg_u = sum(l[uv_bm].uv.x for item in isl for l in item.loops) / num_loops
+            avg_v = sum(l[uv_bm].uv.y for item in isl for l in item.loops) / num_loops
+            if 4 <= len(isl) <= 150 and avg_u > 0.85 and avg_v > 0.85:
+                eyeshadow_face_indices.extend([item.index for item in isl])
+
+    bm.free()
+
+    if not eyeshadow_face_indices:
+        return False
+
+    # Find or add 'Eye Transparent' material slot as a separate slot (idx > 0)
     eye_transp_slot_idx = None
     for idx, slot in enumerate(faceobj.material_slots):
-        if slot.material and slot.material.name == "Eye Transparent":
+        if idx > 0 and slot.material and slot.material.name == "Eye Transparent":
             eye_transp_slot_idx = idx
             break
-            
+
     if eye_transp_slot_idx is None:
         eye_transp_mat = bpy.data.materials.get("Eye Transparent")
         if not eye_transp_mat:
-            try:
-                from setup_wizard.import_order import get_shader_file_path
-                from setup_wizard.domain.game_types import GameType
-                blend_path = get_shader_file_path(GameType.ZENLESS_ZONE_ZERO.name, 'outlines')
-                if blend_path and os.path.isfile(blend_path):
+            import os
+            from setup_wizard.import_order import get_shader_file_path
+            from setup_wizard.domain.game_types import GameType
+            blend_path = get_shader_file_path(GameType.ZENLESS_ZONE_ZERO.name, 'outlines')
+            if blend_path and os.path.isfile(blend_path):
+                try:
                     with bpy.data.libraries.load(blend_path, link=False) as (df, dt):
                         if "Eye Transparent" in df.materials:
                             dt.materials = ["Eye Transparent"]
                     eye_transp_mat = bpy.data.materials.get("Eye Transparent")
-            except Exception as ex:
-                print(f"Error loading Eye Transparent material: {ex}")
+                except Exception as ex:
+                    print(f"Notice loading Eye Transparent: {ex}")
         if not eye_transp_mat:
             eye_transp_mat = bpy.data.materials.new(name="Eye Transparent")
             eye_transp_mat.use_nodes = True
-            
+
         faceobj.data.materials.append(eye_transp_mat)
         eye_transp_slot_idx = len(faceobj.material_slots) - 1
 
-    # Assign polygons directly to material slot
-    for p_idx in eyeshadow_poly_indices:
+    # If the mesh originally had only 1 material slot for the entire face, make sure
+    # all non-eyeshadow faces are assigned to slot 0 (the face material)
+    if had_no_slots or len(faceobj.material_slots) <= 2:
+        for p in mesh.polygons:
+            if p.index not in eyeshadow_face_indices:
+                p.material_index = 0
+
+    # Assign eyeshadow polygons to Eye Transparent slot
+    for p_idx in eyeshadow_face_indices:
         mesh.polygons[p_idx].material_index = eye_transp_slot_idx
-        
+
+    try:
+        from setup_wizard.services.zzz_outline_mask_service import create_face_outline_mask
+        create_face_outline_mask(faceobj)
+    except Exception as ex_mask:
+        print(f"Notice setting up face outline mask: {ex_mask}")
+
     return True
+
+fix_zzz_eye_shadow = setup_zzz_eyeshadow_uv
+
+
 
 
 class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties):

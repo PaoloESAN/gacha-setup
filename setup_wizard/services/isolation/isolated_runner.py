@@ -156,7 +156,7 @@ def apply_settings():
 
     if JOB["game_type"] == "ZENLESS_ZONE_ZERO" and hasattr(scene, "zzz_shader_type"):
         try:
-            scene.zzz_shader_type = JOB.get("zzz_shader_type", "KYTHERA")
+            scene.zzz_shader_type = JOB.get("zzz_shader_type", "LEGACY")
         except Exception:
             pass
 
@@ -318,8 +318,19 @@ def run_setup():
         import_order = importlib.import_module(JOB["gacha_module"] + ".import_order")
         import_order.set_active_character_directory(character_dir)
 
+        if selected_file and not os.path.isabs(selected_file):
+            candidate = os.path.join(character_dir, selected_file)
+            if os.path.isfile(candidate):
+                selected_file = candidate
+            else:
+                selected_file = os.path.abspath(selected_file)
+
         if selected_file and not os.path.isfile(selected_file):
-            raise RuntimeError(f"Selected model file does not exist: {selected_file}")
+            candidate = os.path.join(character_dir, os.path.basename(selected_file))
+            if os.path.isfile(candidate):
+                selected_file = candidate
+            else:
+                raise RuntimeError(f"Selected model file does not exist: {selected_file}")
 
         config = json.loads(
             Path(import_order.__file__).with_name("config_ui.json").read_text(encoding="utf-8")

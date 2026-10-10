@@ -274,6 +274,10 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
         settings_col = settings_box.column()
         if selected_game == GameType.ZENLESS_ZONE_ZERO.name and hasattr(context.scene, "zzz_shader_type"):
             settings_col.prop(context.scene, "zzz_shader_type", text="Shader")
+            if getattr(context.scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
+                row_by = settings_col.row(align=True)
+                row_by.alignment = 'RIGHT'
+                row_by.label(text="Made by Kythera")
 
         props = getattr(context.scene, "character_rigger_props", None)
         if props:

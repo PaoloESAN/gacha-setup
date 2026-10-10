@@ -262,13 +262,37 @@ class ZenlessZoneZeroOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
                     ]
                     data_to.objects = target_objs
 
+                target_wgt_coll = next((c for c in bpy.data.collections if c.name.startswith("WGTS_")), None)
+                if not target_wgt_coll:
+                    target_wgt_coll = bpy.data.collections.get("wgt") or bpy.data.collections.get("WGTS")
+
                 for coll in data_to.collections:
-                    if coll and coll.name not in [c.name for c in bpy.context.scene.collection.children]:
-                        bpy.context.scene.collection.children.link(coll)
+                    if coll:
+                        if coll.name.lower() in ("widgets", "widget"):
+                            if not target_wgt_coll:
+                                target_wgt_coll = bpy.data.collections.get("wgt") or bpy.data.collections.new("wgt")
+                                if target_wgt_coll.name not in [c.name for c in bpy.context.scene.collection.children]:
+                                    bpy.context.scene.collection.children.link(target_wgt_coll)
+                            for obj in list(coll.objects):
+                                if obj.name not in target_wgt_coll.objects:
+                                    target_wgt_coll.objects.link(obj)
+                                obj.hide_viewport = True
+                                obj.hide_render = True
+                                try:
+                                    coll.objects.unlink(obj)
+                                except Exception:
+                                    pass
+                            try:
+                                bpy.data.collections.remove(coll, do_unlink=True)
+                            except Exception:
+                                pass
+                        elif coll.name not in [c.name for c in bpy.context.scene.collection.children]:
+                            bpy.context.scene.collection.children.link(coll)
 
                 for obj in data_to.objects:
                     if obj and not any(obj.name in c.objects for c in bpy.data.collections.values()):
-                        bpy.context.scene.collection.objects.link(obj)
+                        dest = target_wgt_coll if target_wgt_coll else bpy.context.scene.collection
+                        dest.objects.link(obj)
 
                 # Ensure WGT objects have proper viewport and render visibility
                 wgt_plane = bpy.data.objects.get("LightPanelWGTPlane")
@@ -298,7 +322,7 @@ class ZenlessZoneZeroOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
                             pb.bone.hide = False
 
                     scene = bpy.context.scene
-                    shader_type = getattr(scene, "zzz_shader_type", "KYTHERA")
+                    shader_type = getattr(scene, "zzz_shader_type", "LEGACY")
                     if shader_type == "KYTHERA":
                         for pb_name in ["Rim.L", "Rim.R"]:
                             pb_rim = lp_arm.pose.bones.get(pb_name)
@@ -318,6 +342,15 @@ class ZenlessZoneZeroOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
                 light_dir_empty = bpy.data.objects.new("Light Direction", None)
                 light_dir_empty.empty_display_type = 'SINGLE_ARROW'
                 bpy.context.scene.collection.objects.link(light_dir_empty)
+
+            scene = bpy.context.scene
+            shader_type = getattr(scene, "zzz_shader_type", "LEGACY")
+            if shader_type == "KYTHERA":
+                import math
+                for obj in bpy.data.objects:
+                    if obj.name.startswith("Light Direction") or obj.name.startswith("Main Light Direction"):
+                        obj.rotation_mode = 'XYZ'
+                        obj.rotation_euler = (math.radians(90.0), 0.0, 0.0)
 
         NextStepInvoker().invoke(
             self.blender_operator.next_step_idx, 

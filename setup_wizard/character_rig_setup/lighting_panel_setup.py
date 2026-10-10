@@ -636,29 +636,39 @@ def connect_zzz_lighting_panel(target_materials=None):
                                 sep_node.name = "ZZZ_Rim_SepXYZ"
                                 sep_node.location = (lp_node.location.x + 150, lp_node.location.y - 150)
                             mat.node_tree.links.new(lp_node.outputs["RimScale"], sep_node.inputs["Vector"])
+
+                            map_x = next((n for n in mat.node_tree.nodes if n.type == 'MAP_RANGE' and n.name == "ZZZ_Rim_MapX"), None)
+                            if not map_x:
+                                map_x = mat.node_tree.nodes.new('ShaderNodeMapRange')
+                                map_x.name = "ZZZ_Rim_MapX"
+                                map_x.location = (sep_node.location.x + 180, sep_node.location.y + 60)
+                            map_x.clamp = True
+                            map_x.inputs['From Min'].default_value = 0.0
+                            map_x.inputs['From Max'].default_value = 10.0
+                            map_x.inputs['To Min'].default_value = 0.0
+                            map_x.inputs['To Max'].default_value = 1.0
+                            mat.node_tree.links.new(sep_node.outputs["X"], map_x.inputs["Value"])
+
+                            map_y = next((n for n in mat.node_tree.nodes if n.type == 'MAP_RANGE' and n.name == "ZZZ_Rim_MapY"), None)
+                            if not map_y:
+                                map_y = mat.node_tree.nodes.new('ShaderNodeMapRange')
+                                map_y.name = "ZZZ_Rim_MapY"
+                                map_y.location = (sep_node.location.x + 180, sep_node.location.y - 60)
+                            map_y.clamp = True
+                            map_y.inputs['From Min'].default_value = 0.0
+                            map_y.inputs['From Max'].default_value = 10.0
+                            map_y.inputs['To Min'].default_value = 0.0
+                            map_y.inputs['To Max'].default_value = 1.0
+                            mat.node_tree.links.new(sep_node.outputs["Y"], map_y.inputs["Value"])
+
                             if "Left/Right" in node.inputs:
                                 for l in list(node.inputs["Left/Right"].links):
                                     mat.node_tree.links.remove(l)
-                                mat.node_tree.links.new(sep_node.outputs["X"], node.inputs["Left/Right"])
+                                mat.node_tree.links.new(map_x.outputs["Result"], node.inputs["Left/Right"])
                             if "Up/Down" in node.inputs:
                                 for l in list(node.inputs["Up/Down"].links):
                                     mat.node_tree.links.remove(l)
-                                mat.node_tree.links.new(sep_node.outputs["Y"], node.inputs["Up/Down"])
-
-    scene = bpy.context.scene
-    shader_type = getattr(scene, "zzz_shader_type", "KYTHERA")
-    if shader_type == "KYTHERA":
-        for arm_obj in [o for o in bpy.data.objects if o.type == 'ARMATURE']:
-            for pb_name in ["Rim.L", "Rim.R"]:
-                pb = arm_obj.pose.bones.get(pb_name)
-                if pb:
-                    con = next((c for c in pb.constraints if c.type == 'LIMIT_LOCATION'), None)
-                    if con and con.use_min_x and con.use_max_x:
-                        pb.location.x = (con.min_x + con.max_x) / 2.0
-                    elif pb_name == "Rim.L":
-                        pb.location.x = 0.0425
-                    elif pb_name == "Rim.R":
-                        pb.location.x = 0.050
+                                mat.node_tree.links.new(map_y.outputs["Result"], node.inputs["Up/Down"])
 
     # 2. Check for Legacy shader node groups (Global Material Properties & Global Material Properties FACE)
     for ng in bpy.data.node_groups:
@@ -742,12 +752,13 @@ def disconnect_zzz_lighting_panel(target_materials=None):
                             for l in list(node.inputs[inp_name].links):
                                 if l.from_node and (
                                     (getattr(l.from_node, "node_tree", None) and "zzzlightpanelattr" in l.from_node.node_tree.name.lower())
-                                    or l.from_node.name == "ZZZ_Rim_SepXYZ"
+                                    or l.from_node.name in ("ZZZ_Rim_SepXYZ", "ZZZ_Rim_MapX", "ZZZ_Rim_MapY")
                                 ):
                                     mat.node_tree.links.remove(l)
-                    sep_node = mat.node_tree.nodes.get("ZZZ_Rim_SepXYZ")
-                    if sep_node:
-                        mat.node_tree.nodes.remove(sep_node)
+                    for node_name in ("ZZZ_Rim_SepXYZ", "ZZZ_Rim_MapX", "ZZZ_Rim_MapY"):
+                        extra_node = mat.node_tree.nodes.get(node_name)
+                        if extra_node:
+                            mat.node_tree.nodes.remove(extra_node)
 
     # 2. Legacy shader node groups
     for ng in bpy.data.node_groups:

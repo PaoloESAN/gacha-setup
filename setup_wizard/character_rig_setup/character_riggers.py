@@ -1162,7 +1162,7 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
                         for b in list(c.bones):
                             if "hook" in b.name.lower():
                                 other_coll.assign(b)
-                            elif b.name.endswith(" Bone") or b.name == "Facerig Root":
+                            elif b.name.endswith(" Bone") or b.name in ("Facerig Root", "Facerig Controls"):
                                 face_detail_coll.assign(b)
                             else:
                                 face_coll.assign(b)
@@ -1322,7 +1322,7 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
 
             # If Kythera shader is used, place Rim.L (RimX) and Rim.R (RimY) sliders in the middle
             scene = bpy.context.scene
-            shader_type = getattr(scene, "zzz_shader_type", "KYTHERA")
+            shader_type = getattr(scene, "zzz_shader_type", "LEGACY")
             if shader_type == "KYTHERA":
                 for pb_name in ["Rim.L", "Rim.R"]:
                     pb = armature.pose.bones.get(pb_name)

@@ -734,7 +734,7 @@ def find_zzz_character_armature():
 def _is_wgt_or_lights_collection(name):
     n_low = name.lower()
     return (
-        n_low in ["lights", "wgt", "wgts", "collection", "master collection", "eye", "eyes"]
+        n_low in ["lights", "wgt", "wgts", "collection", "master collection", "eye", "eyes", "widgets", "widget"]
         or n_low.startswith("wgt")
         or n_low.startswith("wgts_")
     )
@@ -742,7 +742,7 @@ def _is_wgt_or_lights_collection(name):
 
 def find_zzz_character_collection():
     for coll in bpy.data.collections:
-        if coll.name.lower() not in ["lights", "wgt", "wgts", "collection", "master collection", "eye", "eyes"] and ("Avatar_" in coll.name or "Size" in coll.name):
+        if coll.name.lower() not in ["lights", "wgt", "wgts", "collection", "master collection", "eye", "eyes", "widgets", "widget"] and ("Avatar_" in coll.name or "Size" in coll.name):
             return coll
     for coll in bpy.data.collections:
         if _is_wgt_or_lights_collection(coll.name):
@@ -752,7 +752,7 @@ def find_zzz_character_collection():
         c_low = coll.name.lower()
         if c_low.startswith("wgt") or (c_low.startswith("wgts_") and c_low != "wgts_facerig"):
             continue
-        if coll.name.lower() not in ["lights", "wgt", "wgts", "eye", "eyes"]:
+        if coll.name.lower() not in ["lights", "wgt", "wgts", "eye", "eyes", "widgets", "widget"]:
             return coll
     return None
 
@@ -853,6 +853,49 @@ class ZZZ_OT_MoveLightingPanelToCharacterCollection(Operator, CustomOperatorProp
         except Exception as e:
             print(f"[ZZZ] Lighting panel connection notice: {e}")
 
+        try:
+            from setup_wizard.services.zzz_bloom_service import setup_zzz_bloom
+            setup_zzz_bloom(context.scene)
+        except Exception as e:
+            print(f"[ZZZ] Bloom setup notice: {e}")
+
+        # Consolidate any leftover 'Widgets' collection into WGTS_<Char>
+        try:
+            for coll in list(bpy.data.collections):
+                if coll.name.lower() in ("widgets", "widget"):
+                    char_wgts = None
+                    if main_rig:
+                        char_name = main_rig.name.replace("Rig", "").replace("rig", "").strip()
+                        char_wgts = bpy.data.collections.get(f"WGTS_{char_name}")
+                    if not char_wgts:
+                        char_wgts = next((c for c in bpy.data.collections if c.name.startswith("WGTS_")), None)
+                    if not char_wgts:
+                        char_wgts = bpy.data.collections.get("wgt") or bpy.data.collections.get("WGTS")
+
+                    if char_wgts:
+                        for obj in list(coll.objects):
+                            if obj.name not in char_wgts.objects:
+                                char_wgts.objects.link(obj)
+                            obj.hide_viewport = True
+                            obj.hide_render = True
+                            for uc in list(obj.users_collection):
+                                if uc != char_wgts:
+                                    try:
+                                        uc.objects.unlink(obj)
+                                    except Exception:
+                                        pass
+                    try:
+                        for parent_c in list(bpy.data.collections):
+                            if coll.name in parent_c.children:
+                                parent_c.children.unlink(coll)
+                        if coll.name in bpy.context.scene.collection.children:
+                            bpy.context.scene.collection.children.unlink(coll)
+                        bpy.data.collections.remove(coll, do_unlink=True)
+                    except Exception:
+                        pass
+        except Exception as e_w:
+            print(f"[ZZZ] Widgets consolidation notice: {e_w}")
+
         self.report({"INFO"}, "Zenless Zone Zero: Finish Setup Completed Successfully!")
 
         if self.next_step_idx:
@@ -871,6 +914,19 @@ class ZZZ_OT_MoveLightingPanelToCharacterCollection(Operator, CustomOperatorProp
         return None
 
 
+class ZZZ_OT_SetupBloom(Operator):
+    """Sets up Compositor Bloom post-processing for Zenless Zone Zero"""
+    bl_idname = 'zenless_zone_zero.setup_bloom'
+    bl_label = 'ZZZ: Setup Bloom'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        from setup_wizard.services.zzz_bloom_service import setup_zzz_bloom
+        setup_zzz_bloom(context.scene)
+        self.report({'INFO'}, "Zenless Zone Zero: Bloom post-processing applied successfully!")
+        return {'FINISHED'}
+
+
 register, unregister = bpy.utils.register_classes_factory([
     GI_OT_SetColorManagementToStandard,
     HYV_OT_SetUpScreenSpaceReflections,
@@ -883,4 +939,5 @@ register, unregister = bpy.utils.register_classes_factory([
     PGR_OT_PaintVertexEraseFaceAlpha,
     ZZZ_OT_RenameCollectionAndRig,
     ZZZ_OT_MoveLightingPanelToCharacterCollection,
+    ZZZ_OT_SetupBloom,
 ])

@@ -232,7 +232,7 @@ def get_shader_file_path(game_type: str, file_type: str = "main") -> str:
             if os.path.isfile(p_outlines):
                 return p_outlines
         
-        selected_shader = getattr(bpy.context.scene, 'zzz_shader_type', 'KYTHERA') if hasattr(bpy, 'context') and hasattr(bpy.context, 'scene') else 'KYTHERA'
+        selected_shader = getattr(bpy.context.scene, 'zzz_shader_type', 'LEGACY') if hasattr(bpy, 'context') and hasattr(bpy.context, 'scene') else 'LEGACY'
 
         if selected_shader == 'LEGACY':
             p_legacy = os.path.join(shaders_dir, 'zzz', 'ZZZ Setup v7.blend')
@@ -521,6 +521,8 @@ class ComponentFunctionFactory:
             return bpy.ops.zenless_zone_zero.rename_collection_and_rig
         elif component_name == 'move_lighting_panel_to_char_collection':
             return bpy.ops.zenless_zone_zero.move_lighting_panel_to_char_collection
+        elif component_name == 'zzz_setup_bloom':
+            return bpy.ops.zenless_zone_zero.setup_bloom
         elif component_name == 'set_up_armtwist_bone_constraints':
             return bpy.ops.genshin.set_up_armtwist_bone_constraints
         elif component_name == 'clear_cache_operator':

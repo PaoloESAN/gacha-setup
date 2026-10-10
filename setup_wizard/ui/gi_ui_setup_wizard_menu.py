@@ -36,12 +36,12 @@ class UI_Properties:
 
         bpy.types.Scene.zzz_shader_type = bpy.props.EnumProperty(
             items=[
-                ("KYTHERA", "Kythera's Shader", "Use Kythera's ZZZ Shader (Face Shader + General Shader)"),
-                ("LEGACY", "Legacy Shader", "Use Legacy ZZZ Setup v7 Shader"),
+                ("LEGACY", "Default Shader", "Use Default ZZZ Setup Shader"),
+                ("KYTHERA", "Toon Shader", "Use Kythera's ZZZ Toon Shader (Face Shader + General Shader)"),
             ],
             name="Shader",
             description="Select shader setup for Zenless Zone Zero",
-            default="KYTHERA",
+            default="LEGACY",
         )
 
         bpy.types.Scene.enable_hair_clothes_physics = bpy.props.BoolProperty(

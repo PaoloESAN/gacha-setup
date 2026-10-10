@@ -30,6 +30,17 @@ def stamp_rig_game(rig_obj, game_name, char_name=None):
     except Exception:
         pass
 
+    if str(game_name).upper() in ("ZENLESS_ZONE_ZERO", "ZZZ"):
+        st = getattr(bpy.context.scene, "zzz_shader_type", "LEGACY")
+        try:
+            if "zzz_shader_type" not in rig_obj:
+                rig_obj["zzz_shader_type"] = st
+            data = getattr(rig_obj, "data", None)
+            if data is not None and "zzz_shader_type" not in data:
+                data["zzz_shader_type"] = st
+        except Exception:
+            pass
+
 
 def hide_eyestar_if_unrigged(context=None):
     """When setup runs without rigging for Genshin, ensure EyeStar has hide_viewport and hide_render set to True."""

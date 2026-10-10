@@ -391,6 +391,11 @@ def patch_all_rimlight_groups_for_blender():
         # so each group is patched only once and then flagged.
         if ng.get(_PATCHED_FLAG) == _PATCH_VERSION:
             continue
+        if 'kythera' in ng_low:
+            continue
+        inputs_tree = getattr(ng, 'interface', None) and getattr(ng.interface, 'items_tree', None)
+        if inputs_tree and any(getattr(item, 'name', '') in ('Left/Right', 'Up/Down') for item in inputs_tree):
+            continue
         done = False
         if 'depth-based rim' in ng_low or ng.name == 'Depth-based Rim':
             done = patch_depth_based_rim_group(ng)

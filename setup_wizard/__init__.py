@@ -118,7 +118,9 @@ else:
     from setup_wizard.misc_operations import (
         ZZZ_OT_RenameCollectionAndRig,
         ZZZ_OT_MoveLightingPanelToCharacterCollection,
+        ZZZ_OT_SetupBloom,
     )
+    from setup_wizard.services.zzz_outline_mask_service import ZZZ_OT_CreateFaceOutlineMask
     from setup_wizard.misc_final_steps import (
         GI_OT_FixTransformations,
         GI_OT_FinishSetup,
@@ -406,6 +408,8 @@ else:
         ZZZ_OT_SetUpHeadDriver,
         ZZZ_OT_RenameCollectionAndRig,
         ZZZ_OT_MoveLightingPanelToCharacterCollection,
+        ZZZ_OT_SetupBloom,
+        ZZZ_OT_CreateFaceOutlineMask,
         ZZZ_OT_SelectLightingPanel,
         ZZZ_OT_ToggleLightingPanelVisibility,
         NTE_PT_Basic_Setup_Wizard_UI_Layout,

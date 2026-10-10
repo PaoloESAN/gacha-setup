@@ -18,14 +18,30 @@ class ZZZ_PT_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
     def poll(cls, context):
         return False
 
+    def _on_zzz_shader_type_update(self, context):
+        global _is_updating_zzz_props
+        if _is_updating_zzz_props:
+            return
+        val = getattr(self, "zzz_shader_type", "LEGACY")
+        try:
+            from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+            arm = resolve_settings_armature(context)
+            if arm:
+                arm["zzz_shader_type"] = val
+                if arm.data:
+                    arm.data["zzz_shader_type"] = val
+        except Exception:
+            pass
+
     bpy.types.Scene.zzz_shader_type = bpy.props.EnumProperty(
         items=[
-            ("KYTHERA", "Kythera's Shader", "Use Kythera's ZZZ Shader (Face Shader + General Shader)"),
-            ("LEGACY", "Legacy Shader", "Use Legacy ZZZ Setup v7 Shader"),
+            ("LEGACY", "Default Shader", "Use Default ZZZ Setup Shader"),
+            ("KYTHERA", "Toon Shader", "Use Kythera's ZZZ Toon Shader (Face Shader + General Shader)"),
         ],
         name="Shader",
         description="Select shader setup for Zenless Zone Zero",
-        default="KYTHERA",
+        default="LEGACY",
+        update=_on_zzz_shader_type_update,
     )
 
     def draw(self, context):
@@ -50,6 +66,10 @@ class ZZZ_PT_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
 
         settings_col = settings_box.column()
         settings_col.prop(context.scene, "zzz_shader_type", text="Shader")
+        if getattr(context.scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
+            row_by = settings_col.row(align=True)
+            row_by.alignment = 'RIGHT'
+            row_by.label(text="Made by Kythera")
         props = context.scene.character_rigger_props
         enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
         settings_col.prop(props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")
@@ -231,6 +251,11 @@ class ZZZ_PT_UI_Outlines_Menu(Panel, ZenlessZoneZeroUIRenderChecker):
                 "GEOMETRY_NODES",
                 game_type=GameType.ZENLESS_ZONE_ZERO.name,
             )
+            sub_layout.operator(
+                "zenless_zone_zero.create_face_outline_mask",
+                text="Create Face Outline Mask",
+                icon="MOD_MASK",
+            )
             OperatorFactory.create(
                 sub_layout,
                 "genshin.import_outline_lightmaps",
@@ -383,7 +408,7 @@ ZZZ_LIGHT_PRESETS = {
         "coverage": 1.0,
         "brightness": 1.0,
         "left_right": 0.5,
-        "up_down": 0.1,
+        "up_down": 0.5,
     },
     "1": { # Sunrise
         "ambient": (0.95, 0.85, 0.8),
@@ -510,7 +535,7 @@ def update_zzz_kythera_props(self, context=None):
         raw_rc = getattr(scene, "zzz_rim_coverage", 1.0)
         raw_rb = getattr(scene, "zzz_rim_brightness", 1.0)
         raw_lr = getattr(scene, "zzz_rim_left_right", 0.5)
-        raw_ud = getattr(scene, "zzz_rim_up_down", 0.1)
+        raw_ud = getattr(scene, "zzz_rim_up_down", 0.5)
 
         lit_brightness = 0.0 if raw_lb < 0.05 else round(raw_lb, 1)
         shadow_intensity = 0.0 if raw_si < 0.05 else round(raw_si, 1)
@@ -616,6 +641,21 @@ def update_zzz_kythera_props(self, context=None):
                                     node.inputs[inp_name].default_value = val
                                 except Exception:
                                     pass
+
+    # Keep Lighting Panel bones in sync
+    if arm and getattr(arm, "pose", None):
+        pb_l = arm.pose.bones.get("Rim.L")
+        if pb_l:
+            con_l = next((c for c in pb_l.constraints if c.type == 'LIMIT_LOCATION'), None)
+            min_l = con_l.min_x if con_l else -0.0075
+            max_l = con_l.max_x if con_l else 0.0925
+            pb_l.location.x = min_l + rim_left_right * (max_l - min_l)
+        pb_r = arm.pose.bones.get("Rim.R")
+        if pb_r:
+            con_r = next((c for c in pb_r.constraints if c.type == 'LIMIT_LOCATION'), None)
+            min_r = con_r.min_x if con_r else 0.0
+            max_r = con_r.max_x if con_r else 0.10
+            pb_r.location.x = min_r + rim_up_down * (max_r - min_r)
 
     def _safe_sock_assign(sock, val):
         if not sock:
@@ -805,6 +845,28 @@ def pull_zzz_panel_values(scene, context, force=False):
         finally:
             _is_updating_zzz_props = False
 
+    # 2b. Pull shader type saved on this armature
+    arm_shader = arm.get("zzz_shader_type") or (arm.data.get("zzz_shader_type") if arm.data else None)
+    if not arm_shader:
+        has_kythera = any(
+            getattr(m, "node_tree", None) and any(
+                n.type == 'GROUP' and n.node_tree and any(k in n.node_tree.name.lower() for k in ["kythera", "face shader"])
+                for n in m.node_tree.nodes
+            )
+            for m in mats
+        )
+        arm_shader = "KYTHERA" if has_kythera else "LEGACY"
+        arm["zzz_shader_type"] = arm_shader
+        if arm.data:
+            arm.data["zzz_shader_type"] = arm_shader
+
+    if getattr(scene, "zzz_shader_type", "") != arm_shader:
+        _is_updating_zzz_props = True
+        try:
+            scene.zzz_shader_type = arm_shader
+        finally:
+            _is_updating_zzz_props = False
+
     # 3. Pull shader node group values
     target_node = None
     for m in mats:
@@ -846,10 +908,28 @@ def pull_zzz_panel_values(scene, context, force=False):
             scene.zzz_rim_coverage = float(inputs["Coverage"].default_value)
         if "Brightness" in inputs:
             scene.zzz_rim_brightness = float(inputs["Brightness"].default_value)
-        if "Left/Right" in inputs:
-            scene.zzz_rim_left_right = float(inputs["Left/Right"].default_value)
-        if "Up/Down" in inputs:
-            scene.zzz_rim_up_down = float(inputs["Up/Down"].default_value)
+        if has_lp and ctrl_type == "PANEL" and arm and getattr(arm, "pose", None):
+            pb_l = arm.pose.bones.get("Rim.L")
+            if pb_l:
+                con_l = next((c for c in pb_l.constraints if c.type == 'LIMIT_LOCATION'), None)
+                min_l = con_l.min_x if con_l else -0.0075
+                max_l = con_l.max_x if con_l else 0.0925
+                span_l = max_l - min_l
+                if span_l > 0:
+                    scene.zzz_rim_left_right = max(0.0, min(1.0, (pb_l.location.x - min_l) / span_l))
+            pb_r = arm.pose.bones.get("Rim.R")
+            if pb_r:
+                con_r = next((c for c in pb_r.constraints if c.type == 'LIMIT_LOCATION'), None)
+                min_r = con_r.min_x if con_r else 0.0
+                max_r = con_r.max_x if con_r else 0.10
+                span_r = max_r - min_r
+                if span_r > 0:
+                    scene.zzz_rim_up_down = max(0.0, min(1.0, (pb_r.location.x - min_r) / span_r))
+        else:
+            if "Left/Right" in inputs:
+                scene.zzz_rim_left_right = float(inputs["Left/Right"].default_value)
+            if "Up/Down" in inputs:
+                scene.zzz_rim_up_down = float(inputs["Up/Down"].default_value)
     except Exception:
         pass
     finally:
@@ -971,7 +1051,10 @@ class ZZZ_PT_Rig_Character_Settings(Panel):
         )
         has_lp = armature_has_lighting_panel(arm)
 
-        is_legacy = (getattr(scene, "zzz_shader_type", "KYTHERA") == "LEGACY")
+        arm_shader_type = (arm.get("zzz_shader_type") or (arm.data.get("zzz_shader_type") if arm.data else None)) if arm else None
+        if not arm_shader_type:
+            arm_shader_type = getattr(scene, "zzz_shader_type", "LEGACY")
+        is_legacy = (arm_shader_type == "LEGACY")
         if not is_legacy:
             has_legacy = any("global material properties" in ng.name.lower() for ng in bpy.data.node_groups)
             has_kythera = any("kythera" in ng.name.lower() for ng in bpy.data.node_groups) or any("face shader" in ng.name.lower() for ng in bpy.data.node_groups)
@@ -1002,11 +1085,10 @@ class ZZZ_PT_Rig_Character_Settings(Panel):
                     col_shading.prop(scene, "zzz_shadow_intensity", text="Shadow Intensity", slider=True)
                     col_shading.prop(scene, "zzz_fake_sss_intensity", text="Fake SSS Intensity", slider=True)
 
-                box_rim = layout.box()
-                box_rim.label(text="Rim Light", icon="LIGHT_SUN")
-                box_rim.prop(scene, "zzz_enable_rim_light", text="Enable Rim Light")
-
                 if not is_legacy:
+                    box_rim = layout.box()
+                    box_rim.label(text="Rim Light", icon="LIGHT_SUN")
+                    box_rim.prop(scene, "zzz_enable_rim_light", text="Enable Rim Light")
                     col_rim = box_rim.column(align=True)
                     col_rim.active = scene.zzz_enable_rim_light
                     col_rim.prop(scene, "zzz_rim_brightness", text="Brightness", slider=True)
@@ -1014,15 +1096,11 @@ class ZZZ_PT_Rig_Character_Settings(Panel):
                     col_rim.prop(scene, "zzz_rim_up_down", text="Up / Down", slider=True)
                     if getattr(scene, "zzz_light_mode", "0") == "6":
                         col_rim.prop(scene, "zzz_rim_light_color", text="Color")
-                else:
-                    if getattr(scene, "zzz_light_mode", "0") == "6":
-                        col_rim = box_rim.column(align=True)
-                        col_rim.active = scene.zzz_enable_rim_light
-                        col_rim.prop(scene, "zzz_rim_light_color", text="Color")
             else:
-                box_rim = layout.box()
-                box_rim.label(text="Rim Light", icon="LIGHT_SUN")
-                box_rim.prop(scene, "zzz_enable_rim_light", text="Enable Rim Light")
+                if not is_legacy:
+                    box_rim = layout.box()
+                    box_rim.label(text="Rim Light", icon="LIGHT_SUN")
+                    box_rim.prop(scene, "zzz_enable_rim_light", text="Enable Rim Light")
         else:
             col_light = layout.column(align=True)
             col_light.label(text="Lighting Mode:")
@@ -1039,22 +1117,16 @@ class ZZZ_PT_Rig_Character_Settings(Panel):
                 col_shading.prop(scene, "zzz_shadow_intensity", text="Shadow Intensity", slider=True)
                 col_shading.prop(scene, "zzz_fake_sss_intensity", text="Fake SSS Intensity", slider=True)
 
-            box_rim = layout.box()
-            box_rim.label(text="Rim Light", icon="LIGHT_SUN")
-            box_rim.prop(scene, "zzz_enable_rim_light", text="Enable Rim Light")
-
             if not is_legacy:
+                box_rim = layout.box()
+                box_rim.label(text="Rim Light", icon="LIGHT_SUN")
+                box_rim.prop(scene, "zzz_enable_rim_light", text="Enable Rim Light")
                 col_rim = box_rim.column(align=True)
                 col_rim.active = scene.zzz_enable_rim_light
                 col_rim.prop(scene, "zzz_rim_brightness", text="Brightness", slider=True)
                 col_rim.prop(scene, "zzz_rim_left_right", text="Left / Right", slider=True)
                 col_rim.prop(scene, "zzz_rim_up_down", text="Up / Down", slider=True)
                 if getattr(scene, "zzz_light_mode", "0") == "6":
-                    col_rim.prop(scene, "zzz_rim_light_color", text="Color")
-            else:
-                if getattr(scene, "zzz_light_mode", "0") == "6":
-                    col_rim = box_rim.column(align=True)
-                    col_rim.active = scene.zzz_enable_rim_light
                     col_rim.prop(scene, "zzz_rim_light_color", text="Color")
 
         # Hair & Clothes Physics
@@ -1238,7 +1310,7 @@ def register_zzz_properties():
         description="Rim light vertical direction offset",
         min=0.0,
         max=1.0,
-        default=0.1,
+        default=0.5,
         step=10,
         precision=1,
         update=update_zzz_kythera_props,

@@ -1785,7 +1785,14 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         self.context = context
 
     def replace_default_materials(self):
-        selected_shader = getattr(bpy.context.scene, 'zzz_shader_type', 'KYTHERA') if hasattr(bpy, 'context') and hasattr(bpy.context, 'scene') else 'KYTHERA'
+        selected_shader = getattr(bpy.context.scene, 'zzz_shader_type', 'LEGACY') if hasattr(bpy, 'context') and hasattr(bpy.context, 'scene') else 'LEGACY'
+        for arm in [o for o in bpy.context.scene.objects if o.type == 'ARMATURE']:
+            try:
+                arm["zzz_shader_type"] = selected_shader
+                if arm.data:
+                    arm.data["zzz_shader_type"] = selected_shader
+            except Exception:
+                pass
         meshes = [mesh for mesh in bpy.context.scene.objects if mesh.type == 'MESH']
 
         # Locate Materials folder to check JSON definitions
@@ -1832,7 +1839,14 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         pass
             return False
 
-        # Eye shadow mesh detection disabled
+                # Detect eyeshadow via top-right UV mapping and assign to Eye Transparent
+        face_mesh = next((o for o in meshes if "_face" in o.name.lower() or "face" in o.name.lower()), None)
+        if face_mesh:
+            try:
+                from setup_wizard.genshin_import_character_model import setup_zzz_eyeshadow_uv
+                setup_zzz_eyeshadow_uv(face_mesh)
+            except Exception as ex:
+                print(f"Notice running setup_zzz_eyeshadow_uv: {ex}")
 
         if selected_shader == 'LEGACY':
             # --- LEGACY ZZZ SHADER REPLACEMENT ---
@@ -2059,6 +2073,13 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         slot.material = new_mat
 
             self.blender_operator.report({'INFO'}, "Replaced default materials with Kythera's ZZZ Shader materials...")
+            scene = bpy.context.scene
+            if getattr(scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
+                import math
+                for obj in bpy.data.objects:
+                    if obj.name.startswith("Light Direction") or obj.name.startswith("Main Light Direction"):
+                        obj.rotation_mode = 'XYZ'
+                        obj.rotation_euler = (math.radians(90.0), 0.0, 0.0)
 
         try:
             from setup_wizard.optimization.blender_rimlight_patch import patch_all_rimlight_groups_for_blender
