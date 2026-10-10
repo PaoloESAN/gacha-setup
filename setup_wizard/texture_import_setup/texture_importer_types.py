@@ -1148,7 +1148,7 @@ class GenshinTextureImporter:
         ]
         materials_dir = None
         for d in candidates:
-            if os.path.isdir(d) and any(f.lower().endswith('.json') and not f.startswith('Avatar_Default_Mat') for f in os.listdir(d)):
+            if os.path.isdir(d) and any(not f.startswith("._") and not f.startswith(".") and f.lower().endswith('.json') and not f.startswith('Avatar_Default_Mat') for f in os.listdir(d)):
                 materials_dir = d
                 break
 
@@ -1157,8 +1157,12 @@ class GenshinTextureImporter:
 
         image_files = []
         for root, _, files in os.walk(directory):
+            if "__MACOSX" in root:
+                continue
             for f in files:
-                if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff')):
+                if f.startswith("._") or f.startswith("."):
+                    continue
+                if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff', '.webp')):
                     image_files.append((f, os.path.join(root, f)))
 
         def is_generic_tex(fname):
@@ -1247,7 +1251,7 @@ class GenshinTextureImporter:
         json_data_list = []
         path_id_to_img = {}
         for jf in os.listdir(materials_dir):
-            if not jf.lower().endswith('.json') or jf.startswith('Avatar_Default_Mat'):
+            if jf.startswith("._") or jf.startswith(".") or not jf.lower().endswith('.json') or jf.startswith('Avatar_Default_Mat'):
                 continue
             jpath = os.path.join(materials_dir, jf)
             try:
@@ -2242,6 +2246,9 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
             return
 
         for name, folder, files in os.walk(directory):
+            if "__MACOSX" in name:
+                continue
+            files = [f for f in files if not f.startswith("._") and not f.startswith(".")]
             self.files = files
             dir_lower = os.path.abspath(directory).lower()
             is_sandrone = any(
@@ -2715,12 +2722,22 @@ class GenshinNPCTextureImporter(GenshinTextureImporter):
                     sync_material_category_textures(mat)
             return
 
+        image_exts = ('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff', '.webp')
         for name, folder, files in os.walk(directory):
+            if "__MACOSX" in name:
+                continue
+            files = [f for f in files if not f.startswith("._") and not f.startswith(".")]
             self.files = files
             for file in files:
+                if not file.lower().endswith(image_exts):
+                    continue
                 # load the file with the correct alpha mode
                 img_path = os.path.normpath(os.path.join(name, file))
-                img = bpy.data.images.load(filepath = img_path, check_existing=True)
+                try:
+                    img = bpy.data.images.load(filepath = img_path, check_existing=True)
+                except Exception as e:
+                    print(f"Notice skipping non-image {file}: {e}")
+                    continue
                 img.alpha_mode = 'CHANNEL_PACKED'
 
                 hair_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}Hair')
@@ -2894,12 +2911,22 @@ class GenshinMonsterTextureImporter(GenshinTextureImporter):
                     sync_material_category_textures(mat)
             return
 
+        image_exts = ('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff', '.webp')
         for name, folder, files in os.walk(directory):
+            if "__MACOSX" in name:
+                continue
+            files = [f for f in files if not f.startswith("._") and not f.startswith(".")]
             self.files = files
             for file in files:
+                if not file.lower().endswith(image_exts):
+                    continue
                 # load the file with the correct alpha mode
                 img_path = os.path.normpath(os.path.join(name, file))
-                img = bpy.data.images.load(filepath = img_path, check_existing=True)
+                try:
+                    img = bpy.data.images.load(filepath = img_path, check_existing=True)
+                except Exception as e:
+                    print(f"Notice skipping non-image {file}: {e}")
+                    continue
                 img.alpha_mode = 'CHANNEL_PACKED'
 
                 hair_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}Hair')
@@ -3737,8 +3764,12 @@ class PunishingGrayRavenAvatarTextureImporter(PunishingGrayRavenTextureImporter)
 
     def import_textures(self, directory):
         for name, folder, files in os.walk(directory):
+            if "__MACOSX" in name:
+                continue
             image_exts = ('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff', '.webp')
             for file in files:
+                if file.startswith("._") or file.startswith("."):
+                    continue
                 if not file.lower().endswith(image_exts):
                     continue
                 # load the file with the correct alpha mode

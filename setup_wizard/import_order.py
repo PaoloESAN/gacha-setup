@@ -246,7 +246,8 @@ def get_shader_file_path(game_type: str, file_type: str = "main") -> str:
             if os.path.isdir(zzz_dir):
                 kythera_blends = [
                     f for f in os.listdir(zzz_dir)
-                    if (f.lower().startswith("kythera") or f.lower().startswith("kyteraz") or "kythera" in f.lower() or "kyteraz" in f.lower())
+                    if not f.startswith("._") and not f.startswith(".")
+                    and (f.lower().startswith("kythera") or f.lower().startswith("kyteraz") or "kythera" in f.lower() or "kyteraz" in f.lower())
                     and f.lower().endswith(".blend")
                 ]
                 if kythera_blends:
@@ -288,21 +289,21 @@ def get_shader_file_path(game_type: str, file_type: str = "main") -> str:
     elif game_type == GameType.PUNISHING_GRAY_RAVEN.name:
         pgr_dir = os.path.join(shaders_dir, 'pgr')
         if os.path.isdir(pgr_dir):
-            blends = [os.path.join(pgr_dir, f) for f in os.listdir(pgr_dir) if f.lower().endswith('.blend')]
+            blends = [os.path.join(pgr_dir, f) for f in os.listdir(pgr_dir) if not f.startswith("._") and not f.startswith(".") and f.lower().endswith('.blend')]
             if blends:
                 return blends[0]
 
     elif game_type == GameType.HONKAI_IMPACT_3RD.name:
         hi3_dir = os.path.join(shaders_dir, 'hi3')
         if os.path.isdir(hi3_dir):
-            blends = [os.path.join(hi3_dir, f) for f in os.listdir(hi3_dir) if f.lower().endswith('.blend')]
+            blends = [os.path.join(hi3_dir, f) for f in os.listdir(hi3_dir) if not f.startswith("._") and not f.startswith(".") and f.lower().endswith('.blend')]
             if blends:
                 return blends[0]
 
     elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
         hna_dir = os.path.join(shaders_dir, 'hna')
         if os.path.isdir(hna_dir):
-            blends = [os.path.join(hna_dir, f) for f in os.listdir(hna_dir) if f.lower().endswith('.blend')]
+            blends = [os.path.join(hna_dir, f) for f in os.listdir(hna_dir) if not f.startswith("._") and not f.startswith(".") and f.lower().endswith('.blend')]
             if blends:
                 return blends[0]
 
@@ -418,7 +419,7 @@ def get_actual_material_name_for_dress(material_name, character_type='AVATAR', i
                                 dress_json = None
                                 hair_json = None
                                 for jf in os.listdir(c_dir):
-                                    if jf.lower().endswith('.json'):
+                                    if not jf.startswith("._") and not jf.startswith(".") and jf.lower().endswith('.json'):
                                         if 'dress' in jf.lower():
                                             dress_json = os.path.join(c_dir, jf)
                                         elif 'hair' in jf.lower():

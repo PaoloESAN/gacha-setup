@@ -108,7 +108,7 @@ class GenshinImpactTextureImporterFacade(GameTextureImporter):
             If an asset does exist, leave it as the default value (1.0).
         '''
         if (texture_importer_type is TextureImporterType.NPC or texture_importer_type is TextureImporterType.MONSTER) and \
-            not [file for file in [file for name, folder, file in os.walk(directory)][0] if 'Shadow_Ramp' in file]:
+            not [file for file in [file for name, folder, file in os.walk(directory) if '__MACOSX' not in name][0] if not file.startswith('._') and not file.startswith('.') and 'Shadow_Ramp' in file]:
             ShaderConfigurator().update_shader_value(
                 materials = [
                     bpy.data.materials.get('miHoYo - Genshin Hair'),
@@ -517,14 +517,14 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         
         materials_dir = None
         for d in candidates_dirs:
-            if os.path.isdir(d) and any(f.lower().endswith(".json") for f in os.listdir(d)):
+            if os.path.isdir(d) and any(f.lower().endswith(".json") and not f.startswith("._") and not f.startswith(".") for f in os.listdir(d)):
                 materials_dir = d
                 break
                 
         # Find texture directory
         tex_dir = folder
         if os.path.isdir(folder):
-            if not any(f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg')) for f in os.listdir(folder)):
+            if not any(f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg')) and not f.startswith("._") and not f.startswith(".") for f in os.listdir(folder)):
                 sub = os.path.join(folder, "Textures")
                 if os.path.isdir(sub):
                     tex_dir = sub
@@ -532,7 +532,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         if not materials_dir or not os.path.isdir(tex_dir):
             return {}, tex_dir
 
-        image_files = [f for f in os.listdir(tex_dir) if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff'))]
+        image_files = [f for f in os.listdir(tex_dir) if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff', '.webp')) and not f.startswith("._") and not f.startswith(".")]
         
         def resolve_file(tex_name):
             if not tex_name:
@@ -553,7 +553,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
 
         mat_map = {}
         for jf in os.listdir(materials_dir):
-            if not jf.lower().endswith(".json"):
+            if not jf.lower().endswith(".json") or jf.startswith("._") or jf.startswith("."):
                 continue
             jpath = os.path.join(materials_dir, jf)
             try:
@@ -800,7 +800,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         if not tex_folder:
             tex_folder = folder
 
-        files = os.listdir(tex_folder)
+        files = [f for f in os.listdir(tex_folder) if not f.startswith("._") and not f.startswith(".")]
         
         # Try to find a character name prefix to filter the files (prevents importing other characters' textures if in same folder)
         main_prefix = ""
@@ -1254,7 +1254,7 @@ def sync_zzz_outline_textures(folder=None, filtered_files=None, main_prefix=None
 
     if folder and not filtered_files:
         try:
-            filtered_files = os.listdir(folder)
+            filtered_files = [f for f in os.listdir(folder) if not f.startswith("._") and not f.startswith(".")]
         except Exception:
             filtered_files = []
 
@@ -1604,7 +1604,7 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
         has_textures = False
         if folder and os.path.isdir(folder):
             try:
-                has_textures = any(f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp')) for f in os.listdir(folder))
+                has_textures = any(not f.startswith("._") and not f.startswith(".") and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp')) for f in os.listdir(folder))
             except Exception:
                 has_textures = False
 
@@ -1625,7 +1625,7 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
         database = load_nte_character_data(folder)
         image_files = database.get("image_files_list", [])
         if not image_files and os.path.isdir(folder):
-            image_files = [f for f in os.listdir(folder) if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
+            image_files = [f for f in os.listdir(folder) if not f.startswith("._") and not f.startswith(".") and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
 
         for mat in bpy.data.materials:
             if not mat.use_nodes or not mat.node_tree or mat.name == '材质球' or 'touming' in mat.name.lower():
@@ -1786,8 +1786,12 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
 
         all_texture_files = []
         for root, _, files in os.walk(folder):
+            if "__MACOSX" in root:
+                continue
             for file_name in files:
-                if any(file_name.lower().endswith(ext) for ext in ['.png', '.tga', '.dds', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp']):
+                if file_name.startswith("._") or file_name.startswith("."):
+                    continue
+                if any(file_name.lower().endswith(ext) for ext in ['.png', '.tga', '.dds', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp', '.webp']):
                     all_texture_files.append(file_name)
 
         if not all_texture_files:
@@ -2077,7 +2081,11 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
         if base_outline_mat:
             ol_json_ld_map = {}
             for root, _, files in os.walk(folder):
+                if "__MACOSX" in root:
+                    continue
                 for file_name in files:
+                    if file_name.startswith("._") or file_name.startswith("."):
+                        continue
                     if file_name.lower().endswith("_ol.json"):
                         import json
                         try:
@@ -2371,8 +2379,12 @@ class ArknightsEndfieldTextureImporterFacade(GameTextureImporter):
         # 1. Scan texture files
         texture_file_map = {}
         for root, _, files in os.walk(folder):
+            if "__MACOSX" in root:
+                continue
             for f in files:
-                if f.lower().endswith(('.png', '.tga', '.jpg', '.jpeg', '.dds', '.tif', '.tiff', '.bmp')):
+                if f.startswith("._") or f.startswith("."):
+                    continue
+                if f.lower().endswith(('.png', '.tga', '.jpg', '.jpeg', '.dds', '.tif', '.tiff', '.bmp', '.webp')):
                     full_p = os.path.join(root, f)
                     texture_file_map[f.lower()] = full_p
                     stem = os.path.splitext(f)[0].lower()
@@ -2381,7 +2393,11 @@ class ArknightsEndfieldTextureImporterFacade(GameTextureImporter):
         # 2. Parse JSON files in Materials/ or character folder if present
         json_tex_mappings = {}
         for root, _, files in os.walk(folder):
+            if "__MACOSX" in root:
+                continue
             for f in files:
+                if f.startswith("._") or f.startswith("."):
+                    continue
                 if f.lower().endswith('.json'):
                     try:
                         with open(os.path.join(root, f), 'r', encoding='utf-8') as jf:
@@ -2589,7 +2605,11 @@ class HonkaiImpact3rdTextureImporterFacade(GameTextureImporter):
         image_exts = ('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff', '.webp')
         texture_file_map = {}
         for root, _, files in os.walk(directory):
+            if "__MACOSX" in root:
+                continue
             for f in files:
+                if f.startswith("._") or f.startswith("."):
+                    continue
                 if f.lower().endswith(image_exts):
                     clean_name = os.path.splitext(f)[0].lower()
                     texture_file_map[clean_name] = os.path.normpath(os.path.join(root, f))

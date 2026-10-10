@@ -300,8 +300,10 @@ class GenshinImpactOutlineTextureImporter(OutlineTextureImporter):
             return {'FINISHED'}
         
         for name, folder, files in os.walk(character_model_folder_file_path):
-            diffuse_files = [file for file in files if 'Diffuse'.lower() in file.lower()]
-            lightmap_files = [file for file in files if 'Lightmap'.lower() in file.lower() or 'Ligntmap'.lower() in file.lower()]  # Important typo check for: Wrioth
+            if "__MACOSX" in name:
+                continue
+            diffuse_files = [file for file in files if not file.startswith("._") and not file.startswith(".") and 'diffuse' in file.lower()]
+            lightmap_files = [file for file in files if not file.startswith("._") and not file.startswith(".") and ('lightmap' in file.lower() or 'ligntmap' in file.lower())]  # Important typo check for: Wrioth
             prefix = getattr(self.material_names, 'MATERIAL_PREFIX', '')
             prefix_renamed = getattr(self.material_names, 'MATERIAL_PREFIX_AFTER_RENAME', '')
             outline_materials = [material for material in bpy.data.materials.values() if 
@@ -396,8 +398,10 @@ class HonkaiStarRailOutlineTextureImporter(OutlineTextureImporter):
             return {'FINISHED'}
 
         for name, folder, files in os.walk(character_model_folder_file_path):
-            color_files = [file for file in files if 'Color'.lower() in file.lower() and 'ramp' not in file.lower() and 'eff' not in file.lower()]
-            lightmap_files = [file for file in files if ('LightMap'.lower() in file.lower() or 'FaceMap' in file.lower() or 'LigthMap'.lower() in file.lower()) and 'eff' not in file.lower()]
+            if "__MACOSX" in name:
+                continue
+            color_files = [file for file in files if not file.startswith("._") and not file.startswith(".") and 'Color'.lower() in file.lower() and 'ramp' not in file.lower() and 'eff' not in file.lower()]
+            lightmap_files = [file for file in files if not file.startswith("._") and not file.startswith(".") and ('LightMap'.lower() in file.lower() or 'FaceMap' in file.lower() or 'LigthMap'.lower() in file.lower()) and 'eff' not in file.lower()]
             outline_materials = [material for material in bpy.data.materials.values() if 'outlines' in material.name.lower() and material.name != self.shader_material_names.OUTLINES]
 
             for outline_material in outline_materials:

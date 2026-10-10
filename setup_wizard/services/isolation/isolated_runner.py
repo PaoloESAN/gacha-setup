@@ -305,6 +305,16 @@ def run_setup():
         character_dir = os.path.abspath(JOB["character_directory"]) if JOB.get("character_directory") else ""
         selected_file = os.path.abspath(JOB["selected_model_file"]) if JOB.get("selected_model_file") else ""
 
+        if selected_file and os.path.basename(selected_file).startswith("._"):
+            real_cand = os.path.join(os.path.dirname(selected_file), os.path.basename(selected_file)[2:])
+            if os.path.isfile(real_cand):
+                selected_file = real_cand
+
+        if character_dir and os.path.basename(character_dir).startswith("._"):
+            real_cand = os.path.join(os.path.dirname(character_dir), os.path.basename(character_dir)[2:])
+            if os.path.isdir(real_cand) or os.path.isfile(real_cand):
+                character_dir = real_cand
+
         if (selected_file and is_archive_file(selected_file)) or (character_dir and is_archive_file(character_dir)):
             archive_to_extract = selected_file if (selected_file and is_archive_file(selected_file)) else character_dir
             extracted_folder = os.path.join(os.path.dirname(str(RESULT_PATH)), "extracted_runner")

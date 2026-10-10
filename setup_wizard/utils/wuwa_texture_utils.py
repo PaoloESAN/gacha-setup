@@ -419,7 +419,7 @@ def load_wuwa_json_material_parameters(folder: str) -> Dict[str, Dict[str, Any]]
     json_files = []
     for root, _, files in os.walk(folder):
         for f in files:
-            if f.lower().endswith(".json") and f.startswith("MI_"):
+            if not f.startswith("._") and not f.startswith(".") and f.lower().endswith(".json") and f.startswith("MI_"):
                 json_files.append((root, f))
 
     for root, f in json_files:
@@ -490,6 +490,8 @@ def load_wuwa_json_mappings(folder: str) -> Dict[str, Dict[str, str]]:
     file_disk_map = {}
     for root, _, files in os.walk(folder):
         for f in files:
+            if f.startswith("._") or f.startswith("."):
+                continue
             ext = os.path.splitext(f)[1].lower()
             if ext in ['.png', '.tga', '.dds', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp']:
                 stem_name = os.path.splitext(f)[0].lower()
@@ -499,7 +501,7 @@ def load_wuwa_json_mappings(folder: str) -> Dict[str, Dict[str, str]]:
     json_files = []
     for root, _, files in os.walk(folder):
         for f in files:
-            if f.lower().endswith(".json") and f.startswith("MI_"):
+            if not f.startswith("._") and not f.startswith(".") and f.lower().endswith(".json") and f.startswith("MI_"):
                 json_files.append((root, f))
 
     # Sort json files so primary materials are processed before sub-materials (_HET, _HETA, _OL, _FS)

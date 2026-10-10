@@ -61,6 +61,13 @@ def _execute_fbx_import(filepath):
     In Blender < 4.5, prioritizes BetterFBX if installed.
     Falls back to experimental C++ wm.fbx_import or standard import_scene.fbx.
     """
+    if os.path.basename(filepath).startswith("._"):
+        real_candidate = os.path.join(os.path.dirname(filepath), os.path.basename(filepath)[2:])
+        if os.path.isfile(real_candidate):
+            filepath = real_candidate
+        else:
+            raise RuntimeError(f"Cannot import invalid macOS metadata file: {filepath}")
+
     from setup_wizard.utils.better_fbx_utils import (
         is_blender_version_lower_than_4_5,
         is_better_fbx_installed,
@@ -491,7 +498,11 @@ def find_largest_uemodel_file(directory_or_file):
         return None
 
     if os.path.isfile(directory_or_file):
-        if directory_or_file.lower().endswith(".uemodel"):
+        if os.path.basename(directory_or_file).startswith("._"):
+            real_cand = os.path.join(os.path.dirname(directory_or_file), os.path.basename(directory_or_file)[2:])
+            if os.path.isfile(real_cand) and real_cand.lower().endswith(".uemodel"):
+                return real_cand
+        elif directory_or_file.lower().endswith(".uemodel"):
             return directory_or_file
         directory_or_file = os.path.dirname(directory_or_file)
 
@@ -500,7 +511,11 @@ def find_largest_uemodel_file(directory_or_file):
 
     uemodel_files = []
     for root, _, files in os.walk(directory_or_file):
+        if "__MACOSX" in root:
+            continue
         for file_name in files:
+            if file_name.startswith("._") or file_name.startswith("."):
+                continue
             if file_name.lower().endswith(".uemodel"):
                 full_path = os.path.join(root, file_name)
                 try:
@@ -761,10 +776,18 @@ class WW_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
         fbx_path = None
         if not uemodel_path:
             if not os.path.isdir(self.filepath) and self.filepath.lower().endswith(".fbx"):
-                fbx_path = self.filepath
+                if os.path.basename(self.filepath).startswith("._"):
+                    real_c = os.path.join(os.path.dirname(self.filepath), os.path.basename(self.filepath)[2:])
+                    fbx_path = real_c if os.path.isfile(real_c) else None
+                else:
+                    fbx_path = self.filepath
             elif os.path.isdir(self.filepath):
                 for root, _, files in os.walk(self.filepath):
+                    if "__MACOSX" in root:
+                        continue
                     for f in files:
+                        if f.startswith("._") or f.startswith("."):
+                            continue
                         if f.lower().endswith(".fbx"):
                             fbx_path = os.path.join(root, f)
                             break
@@ -1064,10 +1087,18 @@ class AKE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
         folder = self.filepath if os.path.isdir(self.filepath) else os.path.dirname(self.filepath)
         fbx_path = None
         if not os.path.isdir(self.filepath) and self.filepath.lower().endswith(".fbx"):
-            fbx_path = self.filepath
+            if os.path.basename(self.filepath).startswith("._"):
+                real_c = os.path.join(os.path.dirname(self.filepath), os.path.basename(self.filepath)[2:])
+                fbx_path = real_c if os.path.isfile(real_c) else None
+            else:
+                fbx_path = self.filepath
         elif os.path.isdir(self.filepath):
             for root, _, files in os.walk(self.filepath):
+                if "__MACOSX" in root:
+                    continue
                 for f in files:
+                    if f.startswith("._") or f.startswith("."):
+                        continue
                     if f.lower().endswith(".fbx"):
                         fbx_path = os.path.join(root, f)
                         break
@@ -1406,6 +1437,15 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
     def import_character_model(
         self, character_model_file_path_or_directory, is_character_model_file
     ):
+        if character_model_file_path_or_directory and os.path.isfile(character_model_file_path_or_directory):
+            if os.path.basename(character_model_file_path_or_directory).startswith("._"):
+                real_f = os.path.join(
+                    os.path.dirname(character_model_file_path_or_directory),
+                    os.path.basename(character_model_file_path_or_directory)[2:]
+                )
+                if os.path.isfile(real_f):
+                    character_model_file_path_or_directory = real_f
+
         if self.game_type == GameType.NEVERNESS_TO_EVERNESS.name:
             uemodel_path = find_largest_uemodel_file(character_model_file_path_or_directory)
             if not uemodel_path or not os.path.isfile(uemodel_path):
@@ -1914,8 +1954,12 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
 
     def __find_fbx_file(self, directory):
         for root, folder, files in os.walk(directory):
+            if "__MACOSX" in root:
+                continue
             for file_name in files:
-                if ".fbx" in pathlib.Path(file_name).suffix:
+                if file_name.startswith("._") or file_name.startswith("."):
+                    continue
+                if pathlib.Path(file_name).suffix.lower() == ".fbx":
                     return os.path.join(root, file_name)
 
 

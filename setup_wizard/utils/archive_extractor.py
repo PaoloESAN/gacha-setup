@@ -12,6 +12,9 @@ def is_archive_file(filepath: Optional[str]) -> bool:
     if not filepath or not isinstance(filepath, str):
         return False
     resolved = os.path.abspath(bpy.path.abspath(filepath))
+    base = os.path.basename(resolved)
+    if base.startswith("._") or base.startswith("."):
+        return False
     return resolved.lower().endswith((".zip", ".7z")) and os.path.isfile(resolved)
 
 
@@ -24,7 +27,11 @@ def find_character_root_and_model(extract_dir: str) -> Tuple[str, str]:
     candidate_models = []
 
     for root, _, files in os.walk(extract_dir):
+        if "__MACOSX" in root:
+            continue
         for f in files:
+            if f.startswith("._") or f.startswith("."):
+                continue
             if f.lower().endswith(model_extensions):
                 full_path = os.path.join(root, f)
                 try:
@@ -37,7 +44,7 @@ def find_character_root_and_model(extract_dir: str) -> Tuple[str, str]:
         subdirs = [
             os.path.join(extract_dir, d)
             for d in os.listdir(extract_dir)
-            if os.path.isdir(os.path.join(extract_dir, d))
+            if os.path.isdir(os.path.join(extract_dir, d)) and d != "__MACOSX" and not d.startswith(".")
         ]
         if len(subdirs) == 1:
             return subdirs[0], ""
@@ -131,5 +138,20 @@ def extract_character_archive(archive_path: str, extract_to: Optional[str] = Non
 
         if not extracted:
             raise RuntimeError(f"Could not extract .7z archive: {err_msg}")
+
+    # Clean up macOS metadata (__MACOSX directories and ._* AppleDouble files)
+    for root, dirs, files in os.walk(extract_to, topdown=False):
+        for f in files:
+            if f.startswith("._") or f == ".DS_Store":
+                try:
+                    os.remove(os.path.join(root, f))
+                except Exception:
+                    pass
+        for d in list(dirs):
+            if d == "__MACOSX" or d.startswith("._"):
+                try:
+                    shutil.rmtree(os.path.join(root, d), ignore_errors=True)
+                except Exception:
+                    pass
 
     return find_character_root_and_model(extract_to)

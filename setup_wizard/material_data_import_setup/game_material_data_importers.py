@@ -169,12 +169,14 @@ class GameMaterialDataImporter(ABC):
             material_data_directory_exists = True
             material_data_directory = character_materials_data_directory
         elif character_directory and os.path.isdir(character_directory):
-            if any(f.endswith('.json') for f in os.listdir(character_directory)):
+            if any(f.endswith('.json') and not f.startswith('._') and not f.startswith('.') for f in os.listdir(character_directory)):
                 material_data_directory_exists = True
                 material_data_directory = character_directory
             else:
                 for root, dirs, files in os.walk(character_directory):
-                    if any(f.endswith('.json') for f in files):
+                    if "__MACOSX" in root:
+                        continue
+                    if any(f.endswith('.json') and not f.startswith('._') and not f.startswith('.') for f in files):
                         material_data_directory_exists = True
                         material_data_directory = root
                         break
@@ -184,7 +186,7 @@ class GameMaterialDataImporter(ABC):
         material_data_files = []
         if material_data_directory:
             for filename in os.listdir(material_data_directory):
-                if filename.endswith('.json'):
+                if filename.endswith('.json') and not filename.startswith('._') and not filename.startswith('.'):
                     material_data_file = MaterialDataFile(filename)
                     material_data_files.append(material_data_file)
 

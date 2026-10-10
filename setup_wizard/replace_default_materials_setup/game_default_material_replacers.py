@@ -473,7 +473,7 @@ def setup_durin_pupil_materials(mesh, new_pupil_mat, material_names=None):
                     tex_dir = os.path.join(base_dir, "Textures") if os.path.isdir(os.path.join(base_dir, "Textures")) else base_dir
                     if os.path.isdir(tex_dir):
                         for f in os.listdir(tex_dir):
-                            if 'hair' in f.lower() and 'diffuse' in f.lower() and f.lower().endswith(('.png', '.tga', '.dds')):
+                            if not f.startswith("._") and not f.startswith(".") and 'hair' in f.lower() and 'diffuse' in f.lower() and f.lower().endswith(('.png', '.tga', '.dds')):
                                 p = os.path.normpath(os.path.join(tex_dir, f))
                                 hair_img = bpy.data.images.get(f) or bpy.data.images.load(filepath=p, check_existing=True)
                                 break
@@ -839,7 +839,7 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         folder = char_dir if os.path.isdir(char_dir) else os.path.dirname(char_dir)
                         if os.path.isdir(folder):
                             try:
-                                files_in_dir = os.listdir(folder)
+                                files_in_dir = [f for f in os.listdir(folder) if not f.startswith("._") and not f.startswith(".")]
                                 if any(('pupil01' in f.lower() or 'pupil_01' in f.lower() or 'pupil 01' in f.lower() or 'pupil02' in f.lower()) for f in files_in_dir):
                                     is_numbered_pupil = True
                             except Exception:
@@ -1809,7 +1809,7 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         ]
         mat_dir = None
         for d in materials_dirs:
-            if d and os.path.isdir(d) and any(f.lower().endswith(".json") for f in os.listdir(d)):
+            if d and os.path.isdir(d) and any(f.lower().endswith(".json") and not f.startswith("._") and not f.startswith(".") for f in os.listdir(d)):
                 mat_dir = d
                 break
 
@@ -1821,7 +1821,7 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             clean_key = lambda k: re.sub(r'\.\d+$', '', k.lower().replace("mat_", "").replace("_ui", "")).strip(" _-")
             target_clean = clean_key(m_raw)
             for jf in os.listdir(mat_dir):
-                if not jf.lower().endswith(".json"):
+                if not jf.lower().endswith(".json") or jf.startswith("._") or jf.startswith("."):
                     continue
                 j_stem = os.path.splitext(jf)[0]
                 if j_stem.lower() == m_raw.lower() or clean_key(j_stem) == target_clean:
@@ -2272,7 +2272,7 @@ def ensure_hair_white_texture(folder=None, image_files=None):
         return
 
     if not image_files and folder and os.path.isdir(folder):
-        image_files = [f for f in os.listdir(folder) if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
+        image_files = [f for f in os.listdir(folder) if not f.startswith("._") and not f.startswith(".") and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
 
     white_file = None
     if image_files:
@@ -2720,7 +2720,7 @@ def setup_common_face_material(mat, folder=None, image_files=None):
         if image_files:
             cands = [f for f in image_files if 'common_face' in f.lower()]
         elif os.path.isdir(folder):
-            cands = [f for f in os.listdir(folder) if 'common_face' in f.lower() and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
+            cands = [f for f in os.listdir(folder) if not f.startswith("._") and not f.startswith(".") and 'common_face' in f.lower() and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
         if cands:
             diff_cands = [f for f in cands if '_d.' in f.lower() or '_d_' in f.lower() or 'face_d' in f.lower()]
             picked = diff_cands[0] if diff_cands else cands[0]
@@ -2778,7 +2778,11 @@ class NevernessToEvernessDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             if not image_files:
                 try:
                     for root, dirs, files in os.walk(folder):
+                        if "__MACOSX" in root:
+                            continue
                         for f in files:
+                            if f.startswith("._") or f.startswith("."):
+                                continue
                             if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp', '.hdr', '.png.001', '.tga.001', '.dds.001')):
                                 image_files.append(f)
                 except Exception:
