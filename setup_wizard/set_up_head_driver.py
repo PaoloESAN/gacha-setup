@@ -605,7 +605,14 @@ def move_lighting_and_head_driver_to_lights(main_obj=None):
                 except Exception:
                     pass
 
-    # Explicitly ensure NO ColorWheel meshes remain linked to lights collection
+    # Explicitly ensure NO ColorWheel meshes remain linked to lights collection, and disable render for them
+    for obj in bpy.data.objects:
+        if "colorwheel" in obj.name.lower():
+            try:
+                obj.hide_render = True
+            except Exception:
+                pass
+
     if lights_coll:
         for obj in list(lights_coll.objects):
             if "colorwheel" in obj.name.lower():

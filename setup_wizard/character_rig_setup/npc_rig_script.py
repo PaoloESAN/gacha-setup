@@ -2523,6 +2523,10 @@ def rig_character(
     if lighting_panel_rig_obj:
         def drive_visibility_with_prop(obj, path):
             driver_obj = bpy.context.scene.objects[obj]
+            try:
+                driver_obj.hide_render = True
+            except Exception:
+                pass
             driver = driver_obj.driver_add("hide_viewport").driver
             
             driver.type = 'SCRIPTED'

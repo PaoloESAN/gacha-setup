@@ -3013,6 +3013,10 @@ def rig_character(
         if not driver_obj:
             return
         try:
+            driver_obj.hide_render = True
+        except Exception:
+            pass
+        try:
             driver = driver_obj.driver_add("hide_viewport").driver
             
             driver.type = 'SCRIPTED'

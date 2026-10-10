@@ -1637,7 +1637,7 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
 
                 if is_lp_or_wgt:
                     obj.modifiers.clear()
-                    if any(k in o_lower for k in ["lightpanelwgt", "lightpanelselector", "wgtplane", "selectorwgt"]):
+                    if any(k in o_lower for k in ["colorwheel", "lightpanelwgt", "lightpanelselector", "wgtplane", "selectorwgt"]):
                         try:
                             obj.hide_viewport = False
                             obj.hide_render = True

@@ -62,6 +62,12 @@ class LightingPanel:
                 {'name': LightingPanelNames.Collections.LIGHTING_PANEL},
             ],
         )
+        for obj in bpy.data.objects:
+            if "colorwheel" in obj.name.lower():
+                try:
+                    obj.hide_render = True
+                except Exception:
+                    pass
 
     def prevent_lighting_issues_when_scaling_character(self, lighting_panel_armature):
         if not lighting_panel_armature:
@@ -251,6 +257,12 @@ class LightingPanel:
                 {'name': LightingPanelNames.Collections.LIGHTING_PANEL},
             ],
         )
+        for obj in bpy.data.objects:
+            if "colorwheel" in obj.name.lower():
+                try:
+                    obj.hide_render = True
+                except Exception:
+                    pass
 
     def prevent_lighting_issues_when_scaling_character(self, lighting_panel_armature):
         if not lighting_panel_armature:
@@ -409,6 +421,7 @@ def set_lighting_panel_visibility(arm, visible: bool = True):
             try:
                 obj.hide_viewport = not visible
                 obj.hide_set(not visible)
+                obj.hide_render = True
             except Exception:
                 pass
 

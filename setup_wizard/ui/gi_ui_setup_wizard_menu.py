@@ -1908,6 +1908,10 @@ class GI_OT_SetupLightingPanel(Operator):
         to_del_coll = bpy.data.collections.get(LightingPanelNames.Collections.WHEEL)
         if to_del_coll:
             for obj in list(to_del_coll.objects):
+                try:
+                    obj.hide_render = True
+                except Exception:
+                    pass
                 move_into_collection(obj.name, target_char_coll)
 
         move_into_collection(LightingPanelNames.Objects.LIGHTING_PANEL, target_char_coll, include_children=False)

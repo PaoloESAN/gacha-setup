@@ -1270,6 +1270,10 @@ def rig_character(
         to_del_coll = bpy.data.collections.get(LightingPanelNames.Collections.WHEEL)
         if to_del_coll:
             for obj in to_del_coll.objects:
+                try:
+                    obj.hide_render = True
+                except Exception:
+                    pass
                 move_into_collection(obj.name, char_name)
         # DO NOT INCLUDE CHILDREN. This will cause ColorPickers to be moved into the rig object.
         move_into_collection(
@@ -3901,6 +3905,10 @@ def rig_character(
         if not driver_obj:
             return
         try:
+            driver_obj.hide_render = True
+        except Exception:
+            pass
+        try:
             driver = driver_obj.driver_add("hide_viewport").driver
             
             driver.type = 'SCRIPTED'
@@ -3926,6 +3934,13 @@ def rig_character(
     drive_visibility_with_prop("ColorWheel-Shadow", "collections[\"Lighting\"].is_visible")
     drive_visibility_with_prop("ColorWheel-SoftLit", "collections[\"Lighting\"].is_visible")
     drive_visibility_with_prop("ColorWheel-SoftShadow", "collections[\"Lighting\"].is_visible")
+
+    for obj in bpy.data.objects:
+        if "colorwheel" in obj.name.lower():
+            try:
+                obj.hide_render = True
+            except Exception:
+                pass
   
     
     # Post modification, Adjustment of bone layers/collections.

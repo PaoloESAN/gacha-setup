@@ -817,6 +817,14 @@ def pull_zzz_panel_values(scene, context, force=False):
 
     ensure_character_node_trees_isolated(arm, mats)
 
+    # Ensure color wheels are never visible in render
+    for o in bpy.data.objects:
+        if "colorwheel" in o.name.lower() and not getattr(o, "hide_render", False):
+            try:
+                o.hide_render = True
+            except Exception:
+                pass
+
     # 1. Pull lighting control type (Light Panel vs This Panel)
     from setup_wizard.character_rig_setup.lighting_panel_setup import (
         is_zzz_lighting_panel_connected,

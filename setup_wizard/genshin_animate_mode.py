@@ -14,6 +14,22 @@ ANIMATE_MODE_SUFFIX = "_Low"
 ANIMATE_MODE_SCENE_KEY = "gi_animate_mode"
 
 
+def _is_bad_texture_name(name: str) -> bool:
+    if not name:
+        return False
+    n_low = name.lower()
+    # Explicitly avoid substring false positives like 'ao' in 'xiao'/'yaoyao' or 'light' in 'highlight'
+    bad_tokens = [
+        'lightmap', 'light_map', '_lm.', '_lm_', '_ld.', '_ld_', '_id.', '_id_',
+        'normal', '_norm.', '_norm_', '_n.', '_n_', 'bump',
+        'ramp', 'shadow', '_mask.', '_mask_', 'mask_',
+        'metal', 'metallic', 'specular', '_spec.', '_spec_',
+        'roughness', 'curvature', 'nyx', 'height', 'depth',
+        'ambient_occlusion', 'ambientocclusion', '_ao.', '_ao_', 'ao_'
+    ]
+    return any(tok in n_low for tok in bad_tokens)
+
+
 def _find_diffuse_image(mat):
     """Finds the true diffuse/base-color image of a shader material.
     Guarantees that lightmaps (which look green), normalmaps, shadow ramps,
@@ -22,43 +38,71 @@ def _find_diffuse_image(mat):
         return None
 
     tree = mat.node_tree
-    bad_keywords = [
-        'lightmap', 'light', 'normal', 'norm', 'ramp', 'shadow', 'mask',
-        'metal', 'spec', 'height', 'ao', 'ilm', 'roughness', 'curvature', 'nyx'
-    ]
 
-    # 1. Trace backwards from the main shader's Diffuse / Base Color socket
+    # 1. Trace backwards from Material Output -> Surface -> Main Shader
+    output = None
+    for n in tree.nodes:
+        if n.type == 'OUTPUT_MATERIAL' and getattr(n, 'is_active_output', True):
+            output = n
+            break
+    if not output:
+        output = tree.nodes.get("Material Output")
+
+    candidate_nodes = []
+    if output and "Surface" in output.inputs and output.inputs["Surface"].is_linked:
+        for link in output.inputs["Surface"].links:
+            fn = link.from_node
+            while fn and fn.type == 'REROUTE':
+                fn = fn.inputs[0].links[0].from_node if (fn.inputs and fn.inputs[0].is_linked) else None
+            if fn:
+                candidate_nodes.append(fn)
+
+    # Fallback candidate nodes if not found directly through output
     for node in tree.nodes:
-        if node.type in ('GROUP', 'BSDF_PRINCIPLED', 'EMISSION'):
-            target_inputs = []
-            for inp_name in ('Diffuse', 'Diffuse (sRGB)', 'Main Diffuse', 'Base Color', 'Color'):
-                inp = node.inputs.get(inp_name)
-                if inp and inp.is_linked:
-                    target_inputs.append(inp)
+        if node.type in ('GROUP', 'BSDF_PRINCIPLED', 'EMISSION') and node not in candidate_nodes:
+            candidate_nodes.append(node)
 
-            for inp in target_inputs:
-                for link in inp.links:
-                    from_node = link.from_node
-                    while from_node and from_node.type == 'REROUTE':
-                        from_socket = from_node.inputs[0] if from_node.inputs else None
-                        if from_socket and from_socket.is_linked:
-                            from_node = from_socket.links[0].from_node
-                        else:
-                            break
-                    if from_node and from_node.type == 'TEX_IMAGE' and getattr(from_node, "image", None):
+    for node in candidate_nodes:
+        target_inputs = []
+        for inp_name in ('Diffuse', 'Diffuse (sRGB)', 'Main Diffuse', 'Base Color', 'BaseColor', 'Color'):
+            inp = node.inputs.get(inp_name)
+            if inp and inp.is_linked:
+                target_inputs.append((inp_name, inp))
+
+        for inp_name, inp in target_inputs:
+            for link in inp.links:
+                from_node = link.from_node
+                while from_node and from_node.type == 'REROUTE':
+                    from_socket = from_node.inputs[0] if from_node.inputs else None
+                    if from_socket and from_socket.is_linked:
+                        from_node = from_socket.links[0].from_node
+                    else:
+                        break
+                # Handle Mix RGB / Mix nodes
+                if from_node and from_node.type in ('MIX_RGB', 'MIX'):
+                    for mix_inp in from_node.inputs:
+                        if mix_inp.is_linked:
+                            fn = mix_inp.links[0].from_node
+                            if fn and fn.type == 'TEX_IMAGE' and getattr(fn, "image", None):
+                                if not _is_bad_texture_name(fn.image.name):
+                                    return fn.image
+                if from_node and from_node.type == 'TEX_IMAGE' and getattr(from_node, "image", None):
+                    if inp_name == 'Color' and _is_bad_texture_name(from_node.image.name):
+                        continue
+                    if not _is_bad_texture_name(from_node.image.name):
                         return from_node.image
 
     # 2. Node name explicitly indicates diffuse (e.g. Main_Diffuse, Face_Diffuse)
     diff_name_keywords = [
         'diffuse', 'main_diff', 'body_diff', 'face_diff', 'hair_diff',
-        'dress_diff', 'basecolor', 'base_color'
+        'dress_diff', 'basecolor', 'base_color', '_diff', 'albedo'
     ]
     for node in tree.nodes:
         if node.type == 'TEX_IMAGE' and getattr(node, "image", None):
             n_low = node.name.lower()
             label_low = getattr(node, "label", "").lower()
             if any(k in n_low or k in label_low for k in diff_name_keywords):
-                if not any(bad in n_low or bad in label_low for bad in ['light', 'normal', 'ramp', 'shadow', 'mask']):
+                if not _is_bad_texture_name(n_low) and not _is_bad_texture_name(label_low) and not _is_bad_texture_name(node.image.name):
                     return node.image
 
     # 3. Image filename has diffuse keywords and does NOT contain bad keywords
@@ -66,7 +110,7 @@ def _find_diffuse_image(mat):
         if node.type == 'TEX_IMAGE' and getattr(node, "image", None):
             img_low = node.image.name.lower()
             if any(k in img_low for k in ['_d.', '_d_', 'diff', 'basecolor', 'base_color', 'albedo', 'diffuse']):
-                if not any(bad in img_low for bad in bad_keywords):
+                if not _is_bad_texture_name(img_low):
                     return node.image
 
     # 4. Any TEX_IMAGE node that does NOT have bad keywords in node name or image name
@@ -74,10 +118,10 @@ def _find_diffuse_image(mat):
         if node.type == 'TEX_IMAGE' and getattr(node, "image", None):
             img_low = node.image.name.lower()
             node_low = node.name.lower()
-            if not any(bad in img_low or bad in node_low for bad in bad_keywords):
+            if not _is_bad_texture_name(img_low) and not _is_bad_texture_name(node_low):
                 return node.image
 
-    # 5. Last fallback: Only if nothing else matched, take whatever TEX_IMAGE exists
+    # 5. Last fallback: Only if nothing else matched, take whatever TEX_IMAGE exists with an image
     for node in tree.nodes:
         if node.type == 'TEX_IMAGE' and getattr(node, "image", None):
             return node.image
@@ -210,26 +254,38 @@ def _ensure_low_material_setup(low_mat, src_mat):
     diff_img = _find_diffuse_image(src_mat)
     tex_node = None
     for node in tree.nodes:
-        if node.type == 'TEX_IMAGE':
+        if node.type == 'TEX_IMAGE' and getattr(node, "image", None):
             tex_node = node
             break
 
-    if tex_node is None:
-        if not diff_img:
-            return  # No diffuse: leave Principled fallback untouched.
+    if tex_node is None and diff_img:
         tex_node = tree.nodes.new("ShaderNodeTexImage")
-
-    if diff_img:
+        tex_node.image = diff_img
+    elif tex_node is not None and diff_img:
         tex_node.image = diff_img
 
     color_in = emission.inputs.get("Color")
-    if color_in and not any(link.from_node == tex_node for link in color_in.links):
-        for l in list(color_in.links):
-            tree.links.remove(l)
-        try:
-            tree.links.new(tex_node.outputs["Color"], color_in)
-        except Exception:
-            pass
+    if color_in:
+        if tex_node and getattr(tex_node, "image", None):
+            if not any(link.from_node == tex_node for link in color_in.links):
+                for l in list(color_in.links):
+                    tree.links.remove(l)
+                try:
+                    tree.links.new(tex_node.outputs["Color"], color_in)
+                except Exception:
+                    pass
+        else:
+            # No texture: remove invalid links so Emission never evaluates pitch black
+            for l in list(color_in.links):
+                tree.links.remove(l)
+            src_bsdf = src_mat.node_tree.nodes.get("Principled BSDF") if (src_mat and src_mat.node_tree) else None
+            if src_bsdf and "Base Color" in src_bsdf.inputs and not src_bsdf.inputs["Base Color"].is_linked:
+                try:
+                    color_in.default_value = src_bsdf.inputs["Base Color"].default_value
+                except Exception:
+                    color_in.default_value = (1.0, 1.0, 1.0, 1.0)
+            else:
+                color_in.default_value = (1.0, 1.0, 1.0, 1.0)
 
     for node in [n for n in tree.nodes if n.type == 'BSDF_PRINCIPLED']:
         try:
@@ -424,6 +480,19 @@ def _set_gn_modifiers_visible(visible, meshes=None):
                     mod.show_render = visible
                 except Exception:
                     pass
+            elif "light vector" in ng_low or "light vector" in mod_low or "灯光矢量" in ng_low or "灯光矢量" in mod_low:
+                # Crucial fix: Light Vectors modifier must ALWAYS be visible so lighting direction
+                # attributes are populated on meshes. In older versions of animated mode,
+                # Light Vectors was set to show_viewport = False, leaving the character solid black
+                # when restored in previous releases. Ensure it is ALWAYS enabled!
+                try:
+                    mod.show_viewport = True
+                except Exception:
+                    pass
+                try:
+                    mod.show_render = True
+                except Exception:
+                    pass
 
 
 def is_genshin_animate_mode(arm=None, context=None) -> bool:
@@ -511,6 +580,15 @@ def set_genshin_animate_mode(enable: bool, arm=None, context=None):
 
             if enable:
                 if mat.name.endswith(ANIMATE_MODE_SUFFIX):
+                    orig_name = mat.name[:-len(ANIMATE_MODE_SUFFIX)]
+                    orig_mat = bpy.data.materials.get(orig_name)
+                    if not orig_mat:
+                        for m in bpy.data.materials:
+                            if m.name == orig_name or m.name.startswith(orig_name + "."):
+                                orig_mat = m
+                                break
+                    if orig_mat:
+                        _ensure_low_material_setup(mat, orig_mat)
                     continue
                 try:
                     mat.use_fake_user = True

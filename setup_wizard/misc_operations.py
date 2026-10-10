@@ -809,7 +809,7 @@ class ZZZ_OT_MoveLightingPanelToCharacterCollection(Operator, CustomOperatorProp
                             except Exception:
                                 pass
                     obj.hide_viewport = False
-                    obj.hide_render = False
+                    obj.hide_render = True
 
             for coll in bpy.data.collections:
                 if coll != target_coll:
@@ -819,6 +819,13 @@ class ZZZ_OT_MoveLightingPanelToCharacterCollection(Operator, CustomOperatorProp
                                 coll.objects.unlink(obj)
                             except Exception:
                                 pass
+
+        for obj in bpy.data.objects:
+            if "colorwheel" in obj.name.lower():
+                try:
+                    obj.hide_render = True
+                except Exception:
+                    pass
 
         # Desvincular / excluir la colección 'lights' de la escena activa (view layer)
         def exclude_layer_collection(layer_coll, name):

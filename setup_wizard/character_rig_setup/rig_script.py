@@ -1661,6 +1661,10 @@ def rig_character(
         to_del_coll = bpy.data.collections.get(LightingPanelNames.Collections.WHEEL)
         if to_del_coll:
             for obj in list(to_del_coll.objects):
+                try:
+                    obj.hide_render = True
+                except Exception:
+                    pass
                 move_into_collection(obj.name, char_name)
         # DO NOT INCLUDE CHILDREN. This will cause ColorPickers to be moved into the rig object.
         move_into_collection(
@@ -4966,6 +4970,10 @@ def rig_character(
 
         def drive_visibility_with_prop(obj, path):
             driver_obj = bpy.context.scene.objects[obj]
+            try:
+                driver_obj.hide_render = True
+            except Exception:
+                pass
             driver = driver_obj.driver_add("hide_viewport").driver
 
             driver.type = "SCRIPTED"
