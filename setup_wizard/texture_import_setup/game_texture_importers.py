@@ -2747,11 +2747,11 @@ class HonkaiImpact3rdTextureImporterFacade(GameTextureImporter):
                 resolve_tex_by_name(tex_envs.get("_MainTex"), 'sRGB')
                 or resolve_tex_by_name(tex_envs.get("_DiffuseTex1"), 'sRGB')
             )
-            if not diff_img:
+            if not diff_img and not jdata:
                 orig_tex = mat.get('_original_fbx_texture')
                 if orig_tex:
                     diff_img = resolve_tex_by_name(orig_tex, 'sRGB')
-            if not diff_img:
+            if not diff_img and not jdata:
                 for k, p in texture_file_map.items():
                     if part_key in k and any(x in k for x in ['color', 'diffuse']) and not any(x in k for x in ['lightmap', 'facemap', 'ramp', 'normal', 'mask']):
                         diff_img = load_img(p, 'sRGB')
@@ -2780,7 +2780,8 @@ class HonkaiImpact3rdTextureImporterFacade(GameTextureImporter):
             if is_face:
                 fm_img = resolve_tex_by_name(tex_envs.get("_FaceMapTex"), 'Non-Color') or global_facemap_img
                 exp_img = (
-                    resolve_tex_by_name(tex_envs.get("_FacExpTex"), 'Non-Color')
+                    resolve_tex_by_name(tex_envs.get("_FaceExpTex"), 'Non-Color')
+                    or resolve_tex_by_name(tex_envs.get("_FacExpTex"), 'Non-Color')
                     or resolve_tex_by_name(tex_envs.get("_ColorMaskTex"), 'Non-Color')
                 )
                 if not exp_img:
@@ -2813,6 +2814,20 @@ class HonkaiImpact3rdTextureImporterFacade(GameTextureImporter):
                     if n_name in ('image texture.001', 'outline_diffuse') or ('maintex' in n_label or 'diffuse' in n_label or 'color' in n_label) and 'lightmap' not in n_label and 'exp' not in n_label:
                         if diff_img:
                             node.image = diff_img
+                        elif jdata:
+                            # A JSON with no diffuse texture uses its solid _Color;
+                            # do not borrow another part's texture (e.g. EyeShadow).
+                            from setup_wizard.material_data_import_setup.game_material_data_importers import HonkaiImpact3rdMaterialDataImporter
+                            colors, _, _ = HonkaiImpact3rdMaterialDataImporter._extract_props(jdata)
+                            color = colors.get('_Color', (1.0, 1.0, 1.0, 1.0))
+                            node.image = None
+                            if sh_node:
+                                for socket_name, value in (('_MainTex', color), ('_MainTex Alpha', color[3])):
+                                    socket = sh_node.inputs.get(socket_name)
+                                    if socket:
+                                        for link in list(socket.links):
+                                            mat.node_tree.links.remove(link)
+                                        socket.default_value = value
                     elif n_name in ('image texture', 'outline_lightmap') or ('lightmap' in n_label or 'lightmap' in n_name) and 'exp' not in n_label:
                         if lm_img:
                             node.image = lm_img

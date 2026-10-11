@@ -3,6 +3,10 @@
 
 import bpy
 from bpy.types import Panel, UILayout
+from setup_wizard.ui.hi3_character_settings import (
+    HI3_OT_CharacterLightingPreset, HI3_PT_CharacterSettings,
+    register_hi3_properties, unregister_hi3_properties,
+)
 
 from setup_wizard.domain.game_types import GameType
 from setup_wizard.ui.ui_render_checker import HonkaiImpact3rdUIRenderChecker
@@ -340,6 +344,8 @@ class OperatorFactory:
 
 
 classes = (
+    HI3_OT_CharacterLightingPreset,
+    HI3_PT_CharacterSettings,
     HI3_PT_Setup_Wizard_UI_Layout,
     HI3_PT_Basic_Setup_Wizard_UI_Layout,
     HI3_PT_Advanced_Setup_Wizard_UI_Layout,
@@ -354,8 +360,10 @@ classes = (
 def register():
     for cls in classes:
         bpy.utils.register_class(cls)
+    register_hi3_properties()
 
 
 def unregister():
+    unregister_hi3_properties()
     for cls in reversed(classes):
         bpy.utils.unregister_class(cls)

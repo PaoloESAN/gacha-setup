@@ -1944,6 +1944,11 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                 object.hide_viewport = True
                 object.hide_render = True
 
+        if self.game_type == GameType.HONKAI_IMPACT_3RD.name:
+            from setup_wizard.utils.hi3_model_utils import hide_hi3_body_shadow_meshes
+            hide_hi3_body_shadow_meshes([obj for obj in bpy.context.scene.objects
+                                        if obj.name not in existing_objects])
+
         if self.game_type == GameType.ARKNIGHTS_ENDFIELD.name:
             handle_ake_post_import(bpy.context)
 

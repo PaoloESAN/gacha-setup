@@ -1094,6 +1094,10 @@ class HonkaiImpact3rdMaterialImporterFacade(GameMaterialImporter):
         if status == {'FINISHED'}:
             return status
 
+        from setup_wizard.ui.hi3_character_settings import configure_hi3_materials
+        configure_hi3_materials([mat for mat in bpy.data.materials
+                                 if mat.name.startswith('ImpactToon - ')])
+
         cache_enabled = self.context.window_manager.cache_enabled
         project_root_directory_file_path = getattr(self.blender_operator, 'file_directory', None) \
             or (os.path.dirname(self.blender_operator.filepath) if getattr(self.blender_operator, 'filepath', None) else None)

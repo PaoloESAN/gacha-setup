@@ -684,6 +684,8 @@ class HI3_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorPropertie
                     stamp_rig_game(obj, GameType.HONKAI_IMPACT_3RD.name)
         except Exception:
             pass
+        from setup_wizard.utils.hi3_model_utils import hide_hi3_body_shadow_meshes
+        hide_hi3_body_shadow_meshes(context.scene.objects)
         return result
 
 
