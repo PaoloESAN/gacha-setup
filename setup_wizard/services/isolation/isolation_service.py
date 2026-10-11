@@ -554,6 +554,15 @@ def append_result(
         except Exception as e_fom:
             print(f"[ZZZ] Notice setting up face outline mask during append: {e_fom}")
 
+    # Appending can link nested widget collections at scene root as well.
+    # Preserve the compact Bangboo hierarchy in the destination scene.
+    bangboo_rigs = {o for o in all_imported_objects
+                   if o.type == 'ARMATURE' and o.data.get('bangboo_widget_unit')}
+    if bangboo_rigs:
+        from setup_wizard.character_rig_setup.bangboo_rig import organize_bangboo_collections
+        for rig in bangboo_rigs:
+            organize_bangboo_collections(rig, scene=target)
+
     # Select primary armature for immediate user interaction and stamp game tag
     try:
         from setup_wizard.ui.character_settings_utils import stamp_rig_game

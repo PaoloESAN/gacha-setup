@@ -712,6 +712,12 @@ class ZZZ_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorPropertie
     bl_label = "Zenless Zone Zero: Finish Setup (UI)"
 
     def execute(self, context):
+        # The generic ZZZ lighting steps can relink wheels and widgets afterward.
+        # Consolidate before invoking the next step/export, only for Bangboo rigs.
+        from setup_wizard.character_rig_setup.bangboo_rig import organize_bangboo_collections
+        for rig in list(context.scene.objects):
+            if rig.type == 'ARMATURE' and rig.data.get('bangboo_widget_unit'):
+                organize_bangboo_collections(rig, context)
         result = BasicSetupUIOperator.execute(self, context)
         try:
             from setup_wizard.ui.character_settings_utils import stamp_rig_game

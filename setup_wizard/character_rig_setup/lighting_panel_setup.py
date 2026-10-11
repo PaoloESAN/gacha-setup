@@ -415,8 +415,11 @@ def set_lighting_panel_visibility(arm, visible: bool = True):
         o_low = obj.name.lower()
         if any(k in o_low for k in ["lighting panel", "lightingpanel", "colorwheel", "colorpicker", "slider-", "origin-"]):
             try:
-                obj.hide_viewport = not visible
-                obj.hide_set(not visible)
+                # Bangboo uses the attached panel's controls; the standalone
+                # color wheel spheres otherwise float above its small body.
+                hide_helper = not visible
+                obj.hide_viewport = hide_helper
+                obj.hide_set(hide_helper)
                 obj.hide_render = True
             except Exception:
                 pass

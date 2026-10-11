@@ -326,6 +326,39 @@ def apply_spine_rest_pose(armature):
             pass
 
 
+def normalize_zzz_spine_bind_pose(armature):
+    """Correct inverted FBX spine bind joints before discarding import offsets."""
+    bones = armature.data.bones
+    spine = [bone for bone in bones if bone.name == 'Bip001 Spine'
+             or (bone.name.startswith('Bip001 Spine')
+                 and bone.name[len('Bip001 Spine'):].isdigit())]
+    pelvis, head = bones.get('Bip001 Pelvis'), bones.get('Bip001 Head')
+    if len(spine) < 2 or not pelvis or not head:
+        return
+    bpy.context.view_layer.update()
+    axis = head.head_local - pelvis.head_local
+    if axis.length < 1e-5:
+        return
+    axis.normalize()
+    matrices = {bone.name: armature.pose.bones[bone.name].matrix.copy() for bone in spine}
+    inverted = [bone for bone in spine if bone.parent in spine
+                and (bone.head_local - bone.parent.head_local).dot(axis) < -0.001]
+    if not inverted or any((matrices[bone.name].translation
+                            - matrices[bone.parent.name].translation).dot(axis) <= 0.001
+                           for bone in inverted):
+        return
+    bpy.context.view_layer.objects.active = armature
+    armature.select_set(True)
+    bpy.ops.object.mode_set(mode='EDIT')
+    for name, matrix in matrices.items():
+        armature.data.edit_bones[name].matrix = matrix
+    bpy.ops.object.mode_set(mode='OBJECT')
+    for name in matrices:
+        armature.pose.bones[name].matrix_basis.identity()
+    bpy.context.view_layer.update()
+    print('[ZZZ IMPORT] Corrected inverted spine bind joints:', ', '.join(matrices))
+
+
 def clear_armature_pose(armature):
     """
     Clears all pose transformations (location, rotation, scale) for all bones in the armature.
@@ -1689,6 +1722,17 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
         if self.game_type == GameType.ZENLESS_ZONE_ZERO.name:
             try:
                 _execute_fbx_import(character_model_file_path)
+                # Capture the FBX facial bind correction before any edit-mode
+                # bone cleanup can discard it, including chain connection.
+                if not is_rigging_disabled(bpy.context):
+                    from setup_wizard.character_rig_setup.character_riggers import _is_bangboo_character
+                    from setup_wizard.character_rig_setup.bangboo_rig import preserve_face_bind_rest
+                    for imported in bpy.context.scene.objects:
+                        if imported.name not in existing_objects and imported.type == 'ARMATURE':
+                            if _is_bangboo_character(bpy.context, imported):
+                                preserve_face_bind_rest(imported)
+                            else:
+                                normalize_zzz_spine_bind_pose(imported)
             except Exception as e:
                 # Clean up newly created objects
                 new_objects = [
@@ -2008,7 +2052,11 @@ class GI_OT_DeleteEmpties(Operator, CustomOperatorProperties):
                 obj = bpy.data.objects.get("Armature")
 
             if obj:
-
+                if not is_rigging_disabled(context):
+                    from setup_wizard.character_rig_setup.character_riggers import _is_bangboo_character
+                    from setup_wizard.character_rig_setup.bangboo_rig import preserve_face_markers
+                    if _is_bangboo_character(context, obj):
+                        preserve_face_markers(obj)
 
                 for object in bpy.data.objects:
                     if object.type == "MESH" and not object.data.uv_layers.get("UV1"):

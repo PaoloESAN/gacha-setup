@@ -105,6 +105,105 @@ def _get_character_armature(context):
     return view_armatures[0] if view_armatures else None
 
 
+def _is_bangboo_character(context, armature):
+    """Detect Bangboo names on the imported file or this character's objects."""
+    names = [armature.name, armature.data.name]
+    character_objects = [armature]
+    for obj in context.scene.objects:
+        if obj.type != 'MESH':
+            continue
+        if obj.parent == armature or any(
+            mod.type == 'ARMATURE' and mod.object == armature
+            for mod in obj.modifiers
+        ):
+            character_objects.append(obj)
+            names.append(obj.name)
+            names.append(obj.data.name)
+    for obj in character_objects:
+        names.extend(coll.name for coll in obj.users_collection)
+    if any('bangboo' in name.lower() for name in names):
+        return True
+    fbx_path = context.scene.get('setup_wizard_imported_fbx_path', '')
+    # Accept both separator styles, including saved scenes opened on another OS.
+    fbx_name = fbx_path.replace('\\', '/').rsplit('/', 1)[-1]
+    return 'bangboo' in fbx_name.lower()
+
+
+def _merge_bangboo_lighting_panel(context, rig):
+    """Attach the existing shader lighting panel to the smaller Bangboo rig."""
+    from mathutils import Matrix, Vector
+
+    panel = bpy.data.objects.get('Lighting Panel')
+    if panel is None or panel.type != 'ARMATURE':
+        return
+    panel_bone = panel.data.bones.get('Lighting Panel')
+    if panel_bone is None:
+        return
+    unit = rig.data['bangboo_widget_unit']
+    head = panel.matrix_world @ panel_bone.head_local
+    points = [panel.matrix_world @ point for bone in panel.data.bones
+              for point in (bone.head_local, bone.tail_local)]
+    height = max(p.z for p in points) - min(p.z for p in points)
+    scale = unit * 0.65 / max(height, 1e-4)
+    target = rig.matrix_world @ Vector((-unit * 0.95, 0.0, unit * 0.35))
+    transform = (Matrix.Translation(target) @ Matrix.Scale(scale, 4)
+                 @ Matrix.Translation(-head))
+    # Joining bakes the armature's scale into its rest bones, but does not
+    # rescale bone-parented helpers or local constraint distances. Preserve
+    # the entire panel, including the wheel/picker coordinates used by GN.
+    helpers = {obj: transform @ obj.matrix_world for obj in bpy.data.objects
+               if obj.parent == panel}
+    locations = {pb.name: pb.location.copy() * scale for pb in panel.pose.bones}
+    limits = []
+    for pb in panel.pose.bones:
+        for con in pb.constraints:
+            if con.type == 'LIMIT_DISTANCE':
+                limits.append((pb.name, con.name, {'distance': con.distance * scale}))
+            elif con.type == 'LIMIT_LOCATION' and con.owner_space == 'LOCAL':
+                limits.append((pb.name, con.name,
+                               {key: getattr(con, key) * scale for key in
+                                ('min_x', 'max_x', 'min_y', 'max_y', 'min_z', 'max_z')}))
+    panel.matrix_world = transform @ panel.matrix_world
+    lighting_names = [bone.name for bone in panel.data.bones]
+    # The shader's panel starts in an excluded widget collection. Link the
+    # armature to the visible rig collection before selecting and joining it.
+    rig_collection = rig.users_collection[0]
+    if panel.name not in rig_collection.objects:
+        rig_collection.objects.link(panel)
+    context.view_layer.update()
+    panel.hide_viewport = False
+    panel.hide_set(False)
+    bpy.ops.object.select_all(action='DESELECT')
+    panel.select_set(True)
+    rig.select_set(True)
+    context.view_layer.objects.active = rig
+    bpy.ops.object.join()
+    bpy.ops.object.mode_set(mode='EDIT')
+    edit_bones = rig.data.edit_bones
+    root = edit_bones['Lighting Panel']
+    root.use_connect = False
+    root.parent = edit_bones['DEF-spine.006']
+    bpy.ops.object.mode_set(mode='OBJECT')
+    for name, location in locations.items():
+        rig.pose.bones[name].location = location
+    for name, constraint, values in limits:
+        con = rig.pose.bones[name].constraints[constraint]
+        for key, value in values.items():
+            setattr(con, key, value)
+    context.view_layer.update()
+    for obj, matrix in helpers.items():
+        obj.matrix_world = matrix
+    context.view_layer.update()
+    lighting = rig.data.collections.get('Lighting') or rig.data.collections.new('Lighting')
+    for name in lighting_names:
+        bone = rig.data.bones[name]
+        lighting.assign(bone)
+        for collection in list(bone.collections):
+            if collection != lighting:
+                collection.unassign(bone)
+    lighting.is_visible = True
+
+
 class GenshinImpactCharacterRigger(CharacterRigger):
     def __init__(self, blender_operator, context, material_names, texture_node_names, shader):
         self.blender_operator: Operator = blender_operator
@@ -1089,6 +1188,20 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
             self.blender_operator.report({'ERROR'}, 'No armature found. Please import or select a character.')
             return
 
+        if _is_bangboo_character(self.context, armature):
+            from setup_wizard.character_rig_setup.bangboo_rig import (
+                run as bangboo_rig, organize_bangboo_collections,
+            )
+
+            # Bangboo builds its own body and facial rig and replaces the source
+            # armature, so the regular ZZZ post-processing must not run afterward.
+            rig, slots = bangboo_rig(src=armature)
+            if self.context.scene.character_rigger_props.set_up_lighting_panel:
+                _merge_bangboo_lighting_panel(self.context, rig)
+            organize_bangboo_collections(rig, self.context)
+            print('Bangboo rig built:', rig.name, '| face slots:', ', '.join(slots))
+            return
+
         character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
         meshes_joined = not (bpy.data.objects.get('Body') and bpy.data.objects.get('Face'))
 
@@ -1146,6 +1259,7 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
                 if obj.type == 'ARMATURE' and obj != body_rig and obj.name != body_rig.name:
                     o_low = obj.name.lower()
                     if any(k in o_low for k in ['lighting', 'panel', 'facerig', 'isaac']):
+                        joined_name = obj.name
                         try:
                             if bpy.context.object and bpy.context.object.mode != 'OBJECT':
                                 bpy.ops.object.mode_set(mode='OBJECT')
@@ -1157,9 +1271,9 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
                             body_rig.select_set(True)
                             bpy.context.view_layer.objects.active = body_rig
                             bpy.ops.object.join()
-                            print(f"[ZZZ RIG] Joined '{obj.name}' into '{body_rig.name}' with bpy.ops.object.join()")
+                            print(f"[ZZZ RIG] Joined '{joined_name}' into '{body_rig.name}' with bpy.ops.object.join()")
                         except Exception as join_err:
-                            print(f"[ZZZ RIG Warning] Failed to join '{obj.name}' into '{body_rig.name}': {join_err}")
+                            print(f"[ZZZ RIG Warning] Failed to join '{joined_name}' into '{body_rig.name}': {join_err}")
 
         join_extra_armatures(armature)
 
