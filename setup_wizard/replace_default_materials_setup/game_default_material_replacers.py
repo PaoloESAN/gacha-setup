@@ -128,16 +128,25 @@ def classify_pupil_faces(mesh_obj):
             continue
 
         has_100 = any(info['face_count'] == 100 for info in side_islands)
-        has_uv_contrast = (
-            any(info['uv_span'] < 0.35 for info in side_islands) and
-            any(info['uv_span'] > 0.70 for info in side_islands)
+        # Compare spans within each eye: legacy pupils such as Prune use a
+        # small texture-atlas region for both the iris and its highlight.
+        # Absolute 0..1 thresholds miss that contrast and fall back to depth,
+        # which can select the entire iris when the highlight is off-center.
+        max_uv_span = max(info['uv_span'] for info in side_islands)
+        full_uv_contrast = (
+            any(0 < info['uv_span'] < 0.35 for info in side_islands) and
+            max_uv_span > 0.70
+        )
+        highlight_uv_limit = 0.35 if full_uv_contrast else max_uv_span * 0.35
+        has_uv_contrast = max_uv_span > 0 and any(
+            0 < info['uv_span'] < highlight_uv_limit for info in side_islands
         )
 
         side_outer = []
         if has_uv_contrast:
-            # Highlight parts (like Durin) mapped to small UV region (< 0.35) while base pupil spans full 0..1
+            # Highlight UVs occupy a smaller region than the base pupil UVs.
             for info in side_islands:
-                if info['uv_span'] < 0.35:
+                if 0 < info['uv_span'] < highlight_uv_limit:
                     side_outer.append(info)
         elif has_100:
             # Standard 100-face highlight discs (Vodyanitsa, Odette, Anastasya)
