@@ -2176,41 +2176,45 @@ class GenshinTextureImporter:
             )
 
             if has_ramp and is_marionette_new:
+                # Mix Color: RGB A/B are sockets 6/7 and Result is output 2.
+                # Name lookup can select the float sockets; leave Fac links intact.
                 # With ramp: Pupil_ramp1 & Pupil04 -> Mix.001 -> Mix Color.002
                 if mix_001 and mix_color_002:
                     for link in list(gtree.links):
-                        if p4_node and link.from_node == p4_node and link.to_node == mix_color_002:
+                        if (p4_node and link.from_node == p4_node
+                                and link.to_node == mix_color_002 and link.from_socket.name == 'Color'):
                             gtree.links.remove(link)
                     ramp1_node = ramp_nodes[0] if ramp_nodes else None
                     if ramp1_node and 'Color' in ramp1_node.outputs:
-                        a_sock = mix_001.inputs.get('A') or (mix_001.inputs[6] if len(mix_001.inputs) > 6 else None)
+                        a_sock = mix_001.inputs[6]
                         if a_sock:
                             gtree.links.new(ramp1_node.outputs['Color'], a_sock)
                     if p4_node and 'Color' in p4_node.outputs:
-                        b_sock = mix_001.inputs.get('B') or (mix_001.inputs[7] if len(mix_001.inputs) > 7 else None)
+                        b_sock = mix_001.inputs[7]
                         if b_sock:
                             gtree.links.new(p4_node.outputs['Color'], b_sock)
-                    res_sock = mix_001.outputs.get('Result') or mix_001.outputs[0]
-                    color_in_sock = mix_color_002.inputs.get('B') or mix_color_002.inputs.get('Shader') or mix_color_002.inputs[2]
+                    res_sock = mix_001.outputs[2]
+                    color_in_sock = mix_color_002.inputs[7] if mix_color_002.type == 'MIX' else mix_color_002.inputs[2]
                     if res_sock and color_in_sock:
                         gtree.links.new(res_sock, color_in_sock)
 
                 # With ramp: Pupil_ramp2 & Pupil02 -> Mix -> Mix Color
                 if mix_main and mix_color_main:
                     for link in list(gtree.links):
-                        if p2_node and link.from_node == p2_node and link.to_node == mix_color_main:
+                        if (p2_node and link.from_node == p2_node
+                                and link.to_node == mix_color_main and link.from_socket.name == 'Color'):
                             gtree.links.remove(link)
                     ramp2_node = ramp_nodes[1] if len(ramp_nodes) > 1 else (ramp_nodes[0] if ramp_nodes else None)
                     if ramp2_node and 'Color' in ramp2_node.outputs:
-                        a_sock = mix_main.inputs.get('A') or (mix_main.inputs[6] if len(mix_main.inputs) > 6 else None)
+                        a_sock = mix_main.inputs[6]
                         if a_sock:
                             gtree.links.new(ramp2_node.outputs['Color'], a_sock)
                     if p2_node and 'Color' in p2_node.outputs:
-                        b_sock = mix_main.inputs.get('B') or (mix_main.inputs[7] if len(mix_main.inputs) > 7 else None)
+                        b_sock = mix_main.inputs[7]
                         if b_sock:
                             gtree.links.new(p2_node.outputs['Color'], b_sock)
-                    res_sock = mix_main.outputs.get('Result') or mix_main.outputs[0]
-                    color_in_sock = mix_color_main.inputs.get('B') or mix_color_main.inputs.get('Shader') or mix_color_main.inputs[2]
+                    res_sock = mix_main.outputs[2]
+                    color_in_sock = mix_color_main.inputs[7] if mix_color_main.type == 'MIX' else mix_color_main.inputs[2]
                     if res_sock and color_in_sock:
                         gtree.links.new(res_sock, color_in_sock)
             elif not is_marionette_new:
@@ -2219,7 +2223,7 @@ class GenshinTextureImporter:
                     for link in list(gtree.links):
                         if mix_001 and link.from_node == mix_001 and link.to_node == mix_color_002:
                             gtree.links.remove(link)
-                    color_in_sock = mix_color_002.inputs.get('B') or mix_color_002.inputs.get('Shader') or mix_color_002.inputs[2]
+                    color_in_sock = mix_color_002.inputs[7] if mix_color_002.type == 'MIX' else mix_color_002.inputs[2]
                     if color_in_sock:
                         gtree.links.new(p4_node.outputs['Color'], color_in_sock)
 
@@ -2227,7 +2231,7 @@ class GenshinTextureImporter:
                     for link in list(gtree.links):
                         if mix_main and link.from_node == mix_main and link.to_node == mix_color_main:
                             gtree.links.remove(link)
-                    color_in_sock = mix_color_main.inputs.get('B') or mix_color_main.inputs.get('Shader') or mix_color_main.inputs[2]
+                    color_in_sock = mix_color_main.inputs[7] if mix_color_main.type == 'MIX' else mix_color_main.inputs[2]
                     if color_in_sock:
                         gtree.links.new(p2_node.outputs['Color'], color_in_sock)
 
