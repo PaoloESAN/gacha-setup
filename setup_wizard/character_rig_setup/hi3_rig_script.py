@@ -7,7 +7,7 @@ import re
 from math import pi
 import addon_utils
 import bpy
-from mathutils import Color, Vector
+from mathutils import Color, Vector, Matrix
 
 from setup_wizard.geometry_nodes_setup.lighting_panel_names import LightingPanelNames
 from setup_wizard.character_rig_setup.rig_ui_utils import (
@@ -259,6 +259,8 @@ def rig_character(
         'PinkyFinger3_R': 'DEF-f_pinky.03.R',
         'eye_R': 'DEF-eye.R',
         'eye_L': 'DEF-eye.L',
+        'Bone_L_Breast': 'DEF-breast.L',
+        'Bone_R_Breast': 'DEF-breast.R',
         'breast_L': 'DEF-breast.L',
         'breast_R': 'DEF-breast.R',
         'breastM_L': 'DEF-breast.L',
@@ -450,6 +452,10 @@ def rig_character(
                 abadidea[f"{pre}41"] = f"DEF-f_pinky.02.{side}"
                 abadidea[f"{pre}42"] = f"DEF-f_pinky.03.{side}"
 
+    # Keep the detected HI3 eye names after the body bone renaming.
+    left_eye_bone_name = abadidea.get(left_eye_bone_name, left_eye_bone_name)
+    right_eye_bone_name = abadidea.get(right_eye_bone_name, right_eye_bone_name)
+
     # Dynamically map spine bones
     pose_bone_names = [b.name for b in obj.pose.bones]
     pelvis_candidates = ['Pelvis_M', 'pelvis_m', 'Pelvis', 'pelvis', 'Bip001 Pelvis', 'Bip001Pelvis', 'Root_M', 'root_m']
@@ -490,6 +496,13 @@ def rig_character(
     for bone in bones_list:
         if bone.name in abadidea:
             bone.name = abadidea[bone.name]
+
+    # Imported connected helper bones must keep their bind positions when the
+    # body tails are extended to the wrist/elbow for the metarig.
+    body_bone_names = set(abadidea.values())
+    for bone in armature.edit_bones:
+        if bone.name not in body_bone_names:
+            bone.use_connect = False
 
     # For making it possible to symmetrically pose bones properly.
     for bone in bones_list:
@@ -721,6 +734,16 @@ def rig_character(
     except Exception as ex:
         print(f"[DEBUG] breast metarig setup warning: {ex}")
 
+    # Joining/removing the FBX armatures clears mesh parenting. Preserve world
+    # transforms so the new Z-up rig deforms the original mesh in the same space.
+    character_mesh_transforms = {
+        item.name: item.matrix_world.copy()
+        for item in bpy.data.objects if item.type == 'MESH'
+        and (item.parent == obj or any(
+            mod.type == 'ARMATURE' and mod.object == obj for mod in item.modifiers
+        ))
+    }
+
     ##########  DETACH PHYSICS BONES
     metanames = ['eye.L', 'eye.R', 'spine', 'thigh.L', 'shin.L', 'foot.L', 'toe.L', 'thigh.R', 'shin.R', 'foot.R', 'toe.R', 'spine.001', 'spine.002', 'spine.003', 'breast.L', 'breast.R', 'shoulder.L', 'upper_arm.L', 'forearm.L', 'hand.L', 'thumb.01.L', 'thumb.02.L', 'thumb.03.L', 'f_index.01.L', 'f_index.02.L', 'f_index.03.L', 'f_middle.01.L', 'f_middle.02.L', 'f_middle.03.L', 'f_ring.01.L', 'f_ring.02.L', 'f_ring.03.L', 'f_pinky.01.L', 'f_pinky.02.L', 'f_pinky.03.L', 'spine.004', 'spine.006', 'shoulder.R', 'upper_arm.R', 'forearm.R', 'hand.R', 'thumb.01.R', 'thumb.02.R', 'thumb.03.R', 'f_index.01.R', 'f_index.02.R', 'f_index.03.R', 'f_middle.01.R', 'f_middle.02.R', 'f_middle.03.R', 'f_ring.01.R', 'f_ring.02.R', 'f_ring.03.R', 'f_pinky.01.R', 'f_pinky.02.R', 'f_pinky.03.R']
     pre_res = ["DEF-" + bonename for bonename in metanames]
@@ -752,12 +775,18 @@ def rig_character(
             bone.select_tail = True
             bone.select_head = True
 
-    before_armatures = {o.name for o in bpy.data.objects if o.type == 'ARMATURE'}
-    bpy.ops.armature.separate()
-    new_armatures = [o for o in bpy.data.objects if o.type == 'ARMATURE' and o.name not in before_armatures]
-    separated_armature = new_armatures[0] if new_armatures else bpy.data.objects.get("__hi3_source_body_armature__.001")
-    if separated_armature:
-        separated_armature.name = "__hi3_physics_bones_armature__"
+    # Preserve the auxiliary bind bones directly. Object separation/join can
+    # pick a stale temporary armature on a repeated full setup, losing every
+    # eye/twist/hair bone while leaving its vertex groups on the meshes.
+    auxiliary_bones = {
+        bone.name: {
+            "head": bone.head.copy(), "tail": bone.tail.copy(), "roll": bone.roll,
+            "parent": bone.parent.name if bone.parent else None,
+            "use_deform": bone.use_deform, "inherit_scale": bone.inherit_scale,
+        }
+        for bone in armature.edit_bones if bone.name not in pre_res
+        and not re.fullmatch(r"eyetrack(?:_[LR])?(?:\.\d+)?", bone.name)
+    }
 
     metarig_obj = bpy.context.view_layer.objects.active if (bpy.context.view_layer.objects.active and "metarig" in bpy.context.view_layer.objects.active.name.lower()) else bpy.data.objects.get("metarig")
     if metarig_obj:
@@ -768,6 +797,8 @@ def rig_character(
         bpy.ops.object.mode_set(mode='POSE')
 
     before_rig_objs = {o.name for o in bpy.data.objects if o.type == 'ARMATURE'}
+    # Always generate a fresh rig for this imported source.
+    metarig_obj.data.rigify_target_rig = None
     bpy.ops.pose.rigify_generate()
     after_rig_objs = [o for o in bpy.data.objects if o.type == 'ARMATURE' and o.name not in before_rig_objs]
 
@@ -788,21 +819,31 @@ def rig_character(
 
     rigifyr.name = target_rig_name
     our_char = rigifyr
+    rig_name = our_char.name
 
-    phys_obj = bpy.data.objects.get("__hi3_physics_bones_armature__") or separated_armature
-    if phys_obj and phys_obj.name in bpy.data.objects and rigifyr.name in bpy.data.objects:
-        obs = [rigifyr, bpy.data.objects[phys_obj.name]]
-        bpy.ops.object.mode_set(mode='OBJECT')
-        bpy.ops.object.select_all(action='DESELECT')
-        rigifyr.select_set(True)
-        bpy.data.objects[phys_obj.name].select_set(True)
-        bpy.context.view_layer.objects.active = rigifyr
-        with bpy.context.temp_override(active_object=rigifyr, selected_editable_objects=obs):
-            bpy.ops.object.join()
+    generated_bone_names = {b.name for b in rigifyr.data.bones}
 
-    old_src = bpy.data.objects.get("__hi3_source_body_armature__")
+    bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.ops.object.select_all(action='DESELECT')
+    rigifyr.select_set(True)
+    bpy.context.view_layer.objects.active = rigifyr
+    bpy.ops.object.mode_set(mode='EDIT')
+    for name, saved in auxiliary_bones.items():
+        bone = rigifyr.data.edit_bones.get(name) or rigifyr.data.edit_bones.new(name)
+        bone.use_connect = False
+        bone.head = saved["head"]
+        bone.tail = saved["tail"]
+        bone.roll = saved["roll"]
+        bone.use_deform = saved["use_deform"]
+        bone.inherit_scale = saved["inherit_scale"]
+    for name, saved in auxiliary_bones.items():
+        rigifyr.data.edit_bones[name].parent = rigifyr.data.edit_bones.get(saved["parent"]) if saved["parent"] else None
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    old_src = obj
     if old_src:
         bpy.data.objects.remove(old_src, do_unlink=True)
+    head_bone_arm_target = our_char
 
     bpy.ops.object.mode_set(mode='OBJECT')
     bpy.ops.object.select_all(action='DESELECT')
@@ -818,6 +859,23 @@ def rig_character(
     for x in [".L", ".R"]:
         if "DEF-forearm" + x + ".002" in rigifyr.data.edit_bones and "DEF-forearm" + x in rigifyr.data.edit_bones:
             rigifyr.data.edit_bones["DEF-forearm" + x + ".002"].parent = rigifyr.data.edit_bones["DEF-forearm" + x]
+
+    # HI3 auxiliary skin bones must follow the matching Rigify segment.
+    # The second twist sits halfway along the limb; the elbow sits at its end.
+    # Parenting all of them to the first segment pulls the sleeve away on bends.
+    for side in ("L", "R"):
+        for source_name, parent_name in (
+            (f"Bone_{side}_UpperArm_Twist_01", f"DEF-upper_arm.{side}"),
+            (f"Bone_{side}_UpperArm_Twist_02", f"DEF-upper_arm.{side}.001"),
+            (f"Bone_{side}_ForeArm_Twist_01", f"DEF-forearm.{side}"),
+            (f"Bone_{side}_ForeArm_Twist_02", f"DEF-forearm.{side}.001"),
+            (f"Bone_Elbow_{side}", f"DEF-upper_arm.{side}.001"),
+        ):
+            child = rigifyr.data.edit_bones.get(source_name)
+            parent = rigifyr.data.edit_bones.get(parent_name)
+            if child and parent:
+                child.use_connect = False
+                child.parent = parent
 
     # Ensure Root_M and pelvic/hip root bones follow DEF-spine
     target_hip_parent = (
@@ -875,7 +933,7 @@ def rig_character(
 
     # Reparent orphan twist / ribbon / accessory / hair / weapon bones to their DEF deform bones
     for eb_item in eb:
-        if eb_item.parent is None and eb_item.name not in ['root', 'root.001', 'root.002', 'MCH-root']:
+        if eb_item.parent is None and eb_item.name not in generated_bone_names:
             eb_low = eb_item.name.lower()
             # 1. Head / Face / Hair bones
             if any(k in eb_low for k in ['head', 'face', 'hair', 'ahoge', 'braid', 'bang', 'ponytail', 'pigtail', 'eye']):
@@ -932,12 +990,16 @@ def rig_character(
 
     # Re-target all mesh Armature modifiers and parents to our_char, and remap vertex groups to DEF-*
     for obj_item in bpy.data.objects:
-        if obj_item.type == 'MESH':
+        if obj_item.type == 'MESH' and obj_item.name in character_mesh_transforms:
             for mod in obj_item.modifiers:
                 if mod.type == 'ARMATURE':
                     mod.object = our_char
             if obj_item.parent and obj_item.parent.type == 'ARMATURE' and obj_item.parent != our_char:
                 obj_item.parent = our_char
+            if obj_item.name in character_mesh_transforms:
+                obj_item.parent = our_char
+                obj_item.matrix_parent_inverse = our_char.matrix_world.inverted()
+                obj_item.matrix_world = character_mesh_transforms[obj_item.name]
             for vg in obj_item.vertex_groups:
                 if vg.name in abadidea:
                     target_def = abadidea[vg.name]
@@ -1002,7 +1064,7 @@ def rig_character(
                 bpy.data.collections.remove(coll)
                 
     # Move the rig into the char name's collection                        
-    move_into_collection(char_name+"Rig",char_name)
+    move_into_collection(rig_name,char_name)
 
     # Let's make a new wgt collection inside the char coll.
     char_coll = bpy.data.collections.get(char_name)
@@ -1112,12 +1174,12 @@ def rig_character(
         bpy.data.armatures[original_name].display_type = 'STICK'
     elif our_char and hasattr(our_char, 'data'):
         our_char.data.display_type = 'STICK'
-    if (char_name + "Rig") in bpy.data.objects:
-        bpy.data.objects[char_name + "Rig"].show_in_front = True
+    if (rig_name) in bpy.data.objects:
+        bpy.data.objects[rig_name].show_in_front = True
 
     # Going into pose mode with our character selected.
     bpy.ops.object.select_all(action='DESELECT')
-    our_char =  bpy.data.objects.get(char_name+"Rig")
+    our_char =  bpy.data.objects.get(rig_name)
     if our_char:
         our_char.select_set(True)
         bpy.context.view_layer.objects.active = our_char
@@ -1156,7 +1218,11 @@ def rig_character(
 
     bpy.ops.wm.append(filename='append_Root', directory=path_to_file)
 
+    before_eye_append = {o.as_pointer() for o in bpy.data.objects}
     bpy.ops.wm.append(filename='append_Eyes', directory=path_to_file)
+    eye_rig_obj = next((o for o in bpy.data.objects
+                        if o.as_pointer() not in before_eye_append and o.type == 'ARMATURE'
+                        and all(name in o.data.bones for name in ('eyetrack', 'eyetrack_L', 'eyetrack_R'))), None)
     
     bpy.ops.wm.append(filename='append_Pelvis', directory=path_to_file)
     
@@ -1175,9 +1241,15 @@ def rig_character(
     if not this_obj and rigifyr and getattr(rigifyr, 'type', '') == 'ARMATURE':
         this_obj = rigifyr
 
-    if this_obj and this_obj.pose and "root" in this_obj.pose.bones and "root plate.002" in bpy.data.objects:
-        this_obj.pose.bones["root"].custom_shape = bpy.data.objects["root plate.002"]
-        this_obj.pose.bones["root"].use_custom_shape_bone_size = False
+    root_plate_inner = (
+        bpy.data.objects.get("root plate.002")
+        or bpy.data.objects.get("root plate.001")
+        or bpy.data.objects.get("root plate")
+    )
+    if this_obj and this_obj.pose and "root" in this_obj.pose.bones and root_plate_inner:
+        this_obj.pose.bones["root"].custom_shape = root_plate_inner
+        this_obj.pose.bones["root"].use_custom_shape_bone_size = True
+        this_obj.pose.bones["root"].custom_shape_scale_xyz = (1.0, 1.0, 1.0)
     
     this_obj.pose.bones["head"].custom_shape_scale_xyz = (1.25, 1.25, 1.25)
     this_obj.pose.bones["head"].custom_shape = bpy.data.objects["neck"]
@@ -1262,10 +1334,14 @@ def rig_character(
     if lighting_panel_rig_obj:
         lighting_panel_rig_obj.select_set(True)
 
-    # Remove eyerig from RootShape.blend (eye tracking is provided by Isaac FaceRig)
-    eye_rig_obj = bpy.data.objects.get("eyerig")
+    # Select eye rig (Genshin eye controller: eyetrack, eyetrack_L, eyetrack_R)
+    eye_control_shapes = {
+        name: eye_rig_obj.pose.bones[name].custom_shape
+        for name in ("eyetrack", "eyetrack_L", "eyetrack_R")
+        if eye_rig_obj and name in eye_rig_obj.pose.bones
+    }
     if eye_rig_obj:
-        bpy.data.objects.remove(eye_rig_obj, do_unlink=True)
+        eye_rig_obj.select_set(True)
     
     # Select root rig    
     root_rig_obj = bpy.data.objects.get("rootrig")
@@ -1305,10 +1381,41 @@ def rig_character(
     # Select char armature
     if our_char:
         our_char.select_set(True)
+        bpy.context.view_layer.objects.active = our_char
 
     # Join them
     bpy.ops.object.join()
      
+    # A helper armature may carry an older copy of the eye controls.
+    # Collapse those aliases immediately after joining, before positioning/tracking.
+    eye_aliases = {b.name: b.name.rsplit('.', 1)[0] for b in our_char.data.bones
+                   if re.fullmatch(r"eyetrack(?:_[LR])?\.\d+", b.name)
+                   and b.name.rsplit('.', 1)[0] in our_char.data.bones}
+    if eye_aliases:
+        for pb in our_char.pose.bones:
+            for constraint in pb.constraints:
+                if getattr(constraint, 'target', None) == our_char:
+                    subtarget = getattr(constraint, 'subtarget', '')
+                    if subtarget in eye_aliases:
+                        constraint.subtarget = eye_aliases[subtarget]
+        driven_ids = [our_char] + [o.data.shape_keys for o in bpy.data.objects
+                                  if o.name in character_mesh_transforms and o.data.shape_keys]
+        for driven in driven_ids:
+            if driven.animation_data:
+                for curve in driven.animation_data.drivers:
+                    for variable in curve.driver.variables:
+                        for target in variable.targets:
+                            if target.id == our_char and target.bone_target in eye_aliases:
+                                target.bone_target = eye_aliases[target.bone_target]
+        bpy.ops.object.mode_set(mode='EDIT')
+        for name, canonical in eye_aliases.items():
+            duplicate = our_char.data.edit_bones[name]
+            for child in list(duplicate.children):
+                child.use_connect = False
+                child.parent = our_char.data.edit_bones[canonical]
+            our_char.data.edit_bones.remove(duplicate)
+        bpy.ops.object.mode_set(mode='OBJECT')
+
     # We want to save all the VG names here, perhaps we can use them to identify weighted def bones.  
     bpy.context.view_layer.objects.active = bpy.data.objects.get("Body")    
     try:
@@ -1337,7 +1444,7 @@ def rig_character(
         return intersection_point
 
     # Select the object then access it's rig (its obj data)
-    ob = bpy.data.objects[char_name+"Rig"]
+    ob = bpy.data.objects[rig_name]
     armature = ob.data
 
     # In edit mode, set parent bones.
@@ -1903,8 +2010,41 @@ def rig_character(
 
 
    
-    # Eye tracking is handled entirely by Isaac FaceRig (Eye-Track-Master)
-    pass
+    # Reuse the eyes detected on the source model, including HI3 Bone_Eye_*_01.
+    # Tracking proxies face forward independently of the imported bone axes;
+    # LOCAL_OWNER_ORIENT below transfers their rotation delta to the real eyes.
+    eye_pairs = (
+        (left_eye_bone_name, "+EyeBone L A01.001", "eyetrack_L"),
+        (right_eye_bone_name, "+EyeBone R A01.001", "eyetrack_R"),
+    )
+    eye_positions = []
+    head_ref = armature.edit_bones.get("head")
+    master = armature.edit_bones.get("eyetrack")
+    if master and head_ref:
+        master.parent = head_ref
+        master.use_connect = False
+    for real_name, proxy_name, target_name in eye_pairs:
+        real = armature.edit_bones.get(real_name) if real_name else None
+        proxy = armature.edit_bones.get(proxy_name)
+        target = armature.edit_bones.get(target_name)
+        if not (real and proxy and target and head_ref):
+            continue
+        proxy.use_connect = False
+        proxy.parent = head_ref
+        proxy.head = real.head.copy()
+        proxy.tail = proxy.head + Vector((0.0, -0.02, 0.0))
+        proxy.roll = 0.0
+        proxy.use_deform = False
+        target.use_connect = False
+        target.parent = master
+        target.roll = 0.0
+        target.head = Vector((real.head.x, -0.3, real.head.z))
+        target.tail = target.head + Vector((0.0, 0.0, 0.01))
+        eye_positions.append(target.head.copy())
+    if master and eye_positions:
+        master.roll = 0.0
+        master.head = sum(eye_positions, Vector()) / len(eye_positions)
+        master.tail = master.head + Vector((0.0, 0.0, 0.01))
 
     # Still in edit mode, select Neck/Head bone and extract the Z loc 
     neck_bone = armature.edit_bones.get('neck')
@@ -1963,43 +2103,25 @@ def rig_character(
 
     # Switch to pose mode for subsequent operations
     bpy.ops.object.mode_set(mode='POSE')
-    faceplate_arm = bpy.context.scene.objects[char_name+"Rig"]
+    faceplate_arm = bpy.context.scene.objects[rig_name]
 
     # Begin moving extra wgt bones to the wgt collection while discarding old collections
     # 1 Root and Eye Bones
     move_into_collection("eye circle","wgt")
     move_into_collection("eye controller","wgt")
     move_into_collection("root plate","wgt")
+    if "root plate.001" in bpy.data.objects:
+        move_into_collection("root plate.001","wgt")
+    if "root plate.002" in bpy.data.objects:
+        move_into_collection("root plate.002","wgt")
     move_into_collection("head-control-shape","wgt")
 
-    # 2 Pelvis Bones
-    to_del_coll = bpy.data.collections.get("wgt.002")
-    if to_del_coll:
-        for obj in to_del_coll.objects:
-            move_into_collection(obj.name,"wgt")
-    
-    # 3 feet Bones
-    to_del_coll = bpy.data.collections.get("wgt.003")
-    if to_del_coll:
-        for obj in to_del_coll.objects:
-            move_into_collection(obj.name,"wgt")
-        
-    # 4 hand Bones
-    to_del_coll = bpy.data.collections.get("wgt.004")
-    if to_del_coll:
-        for obj in to_del_coll.objects:
-            move_into_collection(obj.name,"wgt")
-        
-    # idk bro math is wrong delete whatever this is too
-    to_del_coll = bpy.data.collections.get("wgt.005")
-    if to_del_coll:
-        for obj in to_del_coll.objects:
-            move_into_collection(obj.name,"wgt")
-        
-    to_del_coll = bpy.data.collections.get("wgt.006")
-    if to_del_coll:
-        for obj in to_del_coll.objects:
-            move_into_collection(obj.name,"wgt")
+    # Consolidate wgt.001..wgt.006 duplicates into wgt
+    for _wgt_dup in ["wgt.001", "wgt.002", "wgt.003", "wgt.004", "wgt.005", "wgt.006"]:
+        to_del_coll = bpy.data.collections.get(_wgt_dup)
+        if to_del_coll:
+            for obj in list(to_del_coll.objects):
+                move_into_collection(obj.name,"wgt")
 
     # After moving into collection, delete the old empty ones.
     for append_name in ["append_Root", "append_Eyes", "append_Pelvis", "append_Foot", "append_Hand", "append_Props"]:
@@ -2008,7 +2130,7 @@ def rig_character(
             bpy.data.collections.remove(app_coll, do_unlink=True)
 
     # Adding Shape Key Drivers
-    ourRig = char_name+"Rig"
+    ourRig = rig_name
     
     # Initialize UI properties and gear shape on plate-settings (Genshin convention)
     rig_obj_ref = bpy.data.objects.get(ourRig)
@@ -2095,15 +2217,18 @@ def rig_character(
         
 
     # Since we're still in object mode, here we can add the head pole object in the neck to track head movement
-    head_pole_obj = bpy.data.objects.get("Head_Pole")
-    if not head_pole_obj:
-        bpy.ops.object.empty_add(type='PLAIN_AXES', align='WORLD', location=(0, 0, 0), scale=(1, 1, 1))
-        head_pole_obj = bpy.context.active_object
-        head_pole_obj.name = "Head_Pole"
+    head_pole_obj = bpy.data.objects.new("Head_Pole_" + rig_name, None)
+    bpy.context.scene.collection.objects.link(head_pole_obj)
+    head_pole_obj.empty_display_type = 'PLAIN_AXES'
     head_pole_obj.empty_display_size = 0.01
-    head_pole_obj.parent = bpy.data.objects.get(char_name+"Rig") or bpy.context.object
+    head_pole_obj.parent = our_char
     head_pole_obj.parent_type = "BONE"
     head_pole_obj.parent_bone = "neck"
+    head_pole_obj.matrix_parent_inverse = Matrix.Identity(4)
+    bpy.context.view_layer.update()
+    # Bone parenting uses the neck tail; set the target in world space afterward.
+    head_pole_obj.matrix_world = Matrix.Translation(our_char.matrix_world @ our_char.data.bones['head'].head_local)
+    bpy.context.view_layer.update()
 
 
     # Remove any drivers on viewport outlines so user has direct control
@@ -2150,8 +2275,8 @@ def rig_character(
         # Select the rigs in question
         bpy.ops.object.select_all(action='DESELECT')
         bpy.data.objects["extras"].select_set(True) # select the extras
-        bpy.data.objects[char_name+"Rig"].select_set(True) # select the char rig
-        bpy.context.view_layer.objects.active = bpy.data.objects[char_name+"Rig"] # ensure the rig is the active object
+        bpy.data.objects[rig_name].select_set(True) # select the char rig
+        bpy.context.view_layer.objects.active = bpy.data.objects[rig_name] # ensure the rig is the active object
         bpy.ops.object.join() # join them
         bpy.ops.object.mode_set(mode='EDIT')
         armature.edit_bones['extras-panel'].parent = armature.edit_bones['plate-settings']
@@ -2192,9 +2317,9 @@ def rig_character(
             # Select custom face armature
             bpy.data.objects["slider_rig"].select_set(True)
 
-            bpy.data.objects[char_name+"Rig"].select_set(True)
+            bpy.data.objects[rig_name].select_set(True)
             
-            bpy.context.view_layer.objects.active = bpy.data.objects[char_name+"Rig"]
+            bpy.context.view_layer.objects.active = bpy.data.objects[rig_name]
 
             bpy.ops.object.join()
 
@@ -2243,7 +2368,7 @@ def rig_character(
 
     # Going into pose mode with our character selected.
     bpy.ops.object.select_all(action='DESELECT')
-    our_char =  bpy.data.objects.get(char_name+"Rig")
+    our_char =  bpy.data.objects.get(rig_name)
     if our_char:
         our_char.select_set(True)
         bpy.context.view_layer.objects.active = our_char
@@ -2252,7 +2377,7 @@ def rig_character(
         
         
     def add_driver_to_bone_transform(bone, transform, channel, variables, expr):
-        this_bone = bpy.context.scene.objects[char_name+"Rig"].pose.bones[bone]
+        this_bone = bpy.context.scene.objects[rig_name].pose.bones[bone]
         driver = this_bone.driver_add(transform, channel).driver
         
         # Iterate through the list of variables and create each one
@@ -2291,7 +2416,7 @@ def rig_character(
     
 
     # Default limbs to IK mode (0.0) with zero stretch; controls stay native on limb gears (Genshin convention)
-    rig_obj = bpy.data.objects.get(char_name + "Rig") or bpy.data.objects.get("rigify") or bpy.context.object
+    rig_obj = bpy.data.objects.get(rig_name) or bpy.data.objects.get("rigify") or bpy.context.object
     if rig_obj and hasattr(rig_obj, "pose") and rig_obj.pose:
         for b_name in ["thigh_parent.L", "thigh_parent.R", "upper_arm_parent.L", "upper_arm_parent.R"]:
             pb = rig_obj.pose.bones.get(b_name)
@@ -2302,27 +2427,27 @@ def rig_character(
                     pb["FK_limb_follow"] = 1.0
         
     if use_arm_ik_poles:
-        if "upper_arm_parent.L" in bpy.data.objects[char_name+"Rig"].pose.bones:
-            bpy.data.objects[char_name+"Rig"].pose.bones["upper_arm_parent.L"]["pole_vector"] = True
-        if "upper_arm_parent.R" in bpy.data.objects[char_name+"Rig"].pose.bones:
-            bpy.data.objects[char_name+"Rig"].pose.bones["upper_arm_parent.R"]["pole_vector"] = True
+        if "upper_arm_parent.L" in bpy.data.objects[rig_name].pose.bones:
+            bpy.data.objects[rig_name].pose.bones["upper_arm_parent.L"]["pole_vector"] = True
+        if "upper_arm_parent.R" in bpy.data.objects[rig_name].pose.bones:
+            bpy.data.objects[rig_name].pose.bones["upper_arm_parent.R"]["pole_vector"] = True
         
     if use_leg_ik_poles:
-        if "thigh_parent.L" in bpy.data.objects[char_name+"Rig"].pose.bones:
-            bpy.data.objects[char_name+"Rig"].pose.bones["thigh_parent.L"]["pole_vector"] = True
-        if "thigh_parent.R" in bpy.data.objects[char_name+"Rig"].pose.bones:
-            bpy.data.objects[char_name+"Rig"].pose.bones["thigh_parent.R"]["pole_vector"] = True
+        if "thigh_parent.L" in bpy.data.objects[rig_name].pose.bones:
+            bpy.data.objects[rig_name].pose.bones["thigh_parent.L"]["pole_vector"] = True
+        if "thigh_parent.R" in bpy.data.objects[rig_name].pose.bones:
+            bpy.data.objects[rig_name].pose.bones["thigh_parent.R"]["pole_vector"] = True
 
     for t_name in ["torso", "torso.002"]:
-        if t_name in bpy.data.objects[char_name+"Rig"].pose.bones:
-            pb_t = bpy.data.objects[char_name+"Rig"].pose.bones[t_name]
+        if t_name in bpy.data.objects[rig_name].pose.bones:
+            pb_t = bpy.data.objects[rig_name].pose.bones[t_name]
             if "head_follow" in pb_t:
                 pb_t["head_follow"] = 1.0
             if "neck_follow" in pb_t:
                 pb_t["neck_follow"] = 1.0
     # Configure IK_parent with dropdown items matching Rigify's Pole Parent dropdown
     def setup_ik_parent_dropdown(bone_name, default_val=1):
-        rig_obj = bpy.data.objects.get(char_name + "Rig")
+        rig_obj = bpy.data.objects.get(rig_name)
         if not rig_obj or not hasattr(rig_obj, "pose") or not rig_obj.pose:
             return
         pb = rig_obj.pose.bones.get(bone_name)
@@ -2384,12 +2509,27 @@ def rig_character(
                 if "_RNA_UI" in h_pb and "Poner en mano" in h_pb["_RNA_UI"]:
                     del h_pb["_RNA_UI"]["Poner en mano"]
     
-    # Eye bone constraints handled by Isaac FaceRig
-    pass
+    for real_name, proxy_name, target_name in eye_pairs:
+        eye_bone = our_char.pose.bones.get(real_name) if real_name else None
+        proxy = our_char.pose.bones.get(proxy_name)
+        if not (eye_bone and proxy and target_name in our_char.pose.bones):
+            continue
+        track = next((c for c in proxy.constraints if c.type == 'DAMPED_TRACK'), None)
+        if track is None:
+            track = proxy.constraints.new('DAMPED_TRACK')
+        track.target = our_char
+        track.subtarget = target_name
+        track.track_axis = 'TRACK_Y'
+        co = eye_bone.constraints.new('COPY_ROTATION')
+        co.name = "HI3 Eye Tracking"
+        co.target = our_char
+        co.subtarget = proxy_name
+        co.target_space = 'LOCAL_OWNER_ORIENT'
+        co.owner_space = 'LOCAL'
 
     # Let's add empty 'child of' constraints to limbs, torso and root. Ready to use in case char holds obj/stands on obj
     def add_child_of(bone_name):
-        this_bone = bpy.context.scene.objects[char_name+"Rig"].pose.bones[bone_name]
+        this_bone = bpy.context.scene.objects[rig_name].pose.bones[bone_name]
         co = this_bone.constraints.new('CHILD_OF')
 
     if add_child_of_constraints: 
@@ -2403,9 +2543,9 @@ def rig_character(
         
     # Here we can set up the two damped track constraints to make the head follow the controller bone.
     # This makes the head bone follow the controller
-    head_controller = bpy.context.scene.objects[char_name+"Rig"].pose.bones["head"]
+    head_controller = bpy.context.scene.objects[rig_name].pose.bones["head"]
     co = head_controller.constraints.new('DAMPED_TRACK')
-    head_track_const = bpy.data.objects[char_name+"Rig"].pose.bones["head"].constraints["Damped Track"]
+    head_track_const = bpy.data.objects[rig_name].pose.bones["head"].constraints["Damped Track"]
     head_track_const.target = our_char 
     head_track_const.subtarget = "head-controller"
     head_track_const.track_axis = "TRACK_Z"
@@ -2426,10 +2566,10 @@ def rig_character(
             this_obj.pose.bones["plate-settings"]["Use Head Controller"] = 0.00
  
     # This makes the controller follow the obj in the neck to keep it 'on' the head.
-    head_pole_cont = bpy.context.scene.objects[char_name+"Rig"].pose.bones["head-controller"]
+    head_pole_cont = bpy.context.scene.objects[rig_name].pose.bones["head-controller"]
     co2 = head_pole_cont.constraints.new('DAMPED_TRACK')
-    head_pole_const = bpy.data.objects[char_name+"Rig"].pose.bones["head-controller"].constraints["Damped Track"]
-    head_pole_const.target = bpy.data.objects.get("Head_Pole") 
+    head_pole_const = bpy.data.objects[rig_name].pose.bones["head-controller"].constraints["Damped Track"]
+    head_pole_const.target = head_pole_obj
     head_pole_const.track_axis = "TRACK_NEGATIVE_Z"
     # driver
     head_pole_driver = head_pole_const.driver_add("influence").driver
@@ -2443,14 +2583,21 @@ def rig_character(
     depsgraph = bpy.context.evaluated_depsgraph_get()
     depsgraph.update()
 
-    # Set star custom shape on head-controller / head direction (Genshin primo-joint star style)
-    star_obj = bpy.data.objects.get("primo-joint") or bpy.data.objects.get("head-control-shape")
-    for h_name in ["head-controller", "Head Direction", "head direction", "Head_Direction"]:
-        pb_h = bpy.context.scene.objects[char_name+"Rig"].pose.bones.get(h_name)
-        if pb_h and star_obj:
-            pb_h.custom_shape = star_obj
-            pb_h.use_custom_shape_bone_size = False
-            pb_h.custom_shape_scale_xyz = (0.022, 0.022, 0.022)
+    # Size the head tracking widget from the character, not the head bone tail.
+    head_ctrl_shape = bpy.data.objects.get("head-control-shape")
+    if head_ctrl_shape:
+        pb_hc = bpy.context.scene.objects[rig_name].pose.bones.get("head-controller")
+        if pb_hc:
+            pb_hc.custom_shape = head_ctrl_shape
+            eye_span = max((eye_positions[0] - eye_positions[-1]).length, 0.04) if len(eye_positions) > 1 else 0.06
+            vertices = head_ctrl_shape.data.vertices
+            bounds = [(min(v.co[i] for v in vertices), max(v.co[i] for v in vertices)) for i in range(3)]
+            shape_span = max(hi - lo for lo, hi in bounds)
+            center = Vector([(lo + hi) * 0.5 for lo, hi in bounds])
+            widget_scale = eye_span * 1.25 / max(shape_span, 1e-5)
+            pb_hc.use_custom_shape_bone_size = False
+            pb_hc.custom_shape_scale_xyz = (widget_scale,) * 3
+            pb_hc.custom_shape_translation = center * (eye_span * 3.0 / max(shape_span, 1e-5) - widget_scale)
 
     # We can now make our final bone groups look good! (Both 3.6 and 4.0 functionality.)
     def assign_bone_to_group(bone_name, group_name):
@@ -2584,6 +2731,14 @@ def rig_character(
     # Root settings plate
     assign_bone_to_group("plate-settings", "Root")
 
+    # Face Eye Rig BG & Scales (matching Genshin)
+    try:
+        assign_bone_to_group("eyetrack", "Face")
+        assign_bone_to_group("eyetrack_L", "Face")
+        assign_bone_to_group("eyetrack_R", "Face")
+    except Exception:
+        pass
+
     # Default bone group colors are ugly. We can change them.
     def change_bone_group_colors(bone_group_name, color1, color2, color3):
         active_bg = bpy.context.active_object.pose.bone_groups[bone_group_name]
@@ -2611,19 +2766,19 @@ def rig_character(
             const.name = "SWITCH PARENT"
         while len(const.targets) < 5:
             const.targets.new()
-        const.targets[0].target = bpy.data.objects[char_name+"Rig"]
+        const.targets[0].target = bpy.data.objects[rig_name]
         const.targets[0].subtarget = "root"
 
-        const.targets[1].target = bpy.data.objects[char_name+"Rig"]
+        const.targets[1].target = bpy.data.objects[rig_name]
         const.targets[1].subtarget = "root.001"
 
-        const.targets[2].target = bpy.data.objects[char_name+"Rig"]
+        const.targets[2].target = bpy.data.objects[rig_name]
         const.targets[2].subtarget = "root.002"
 
-        const.targets[3].target = bpy.data.objects[char_name+"Rig"]
+        const.targets[3].target = bpy.data.objects[rig_name]
         const.targets[3].subtarget = "torso.002"
 
-        const.targets[4].target = bpy.data.objects[char_name+"Rig"]
+        const.targets[4].target = bpy.data.objects[rig_name]
         const.targets[4].subtarget = "chest"
         
         location_str = "pose.bones[\"" + location_of_switcher + "\"][\"parent_switch\"]"
@@ -2655,14 +2810,14 @@ def rig_character(
     ]
 
     # 1. Adjustments to positioning (using pre-renamed bone names)
-    if "foot_ik.L" in this_obj.pose.bones and "mch-ik-pivot-L" in bpy.data.objects[char_name+"Rig"].pose.bones:
-        this_obj.pose.bones["foot_ik.L"].custom_shape_transform = bpy.data.objects[char_name+"Rig"].pose.bones["mch-ik-pivot-L"]
-    if "foot_ik.R" in this_obj.pose.bones and "mch-ik-pivot-R" in bpy.data.objects[char_name+"Rig"].pose.bones:
-        this_obj.pose.bones["foot_ik.R"].custom_shape_transform = bpy.data.objects[char_name+"Rig"].pose.bones["mch-ik-pivot-R"]
-    if "hand-ik-L" in this_obj.pose.bones and "mch-hand-ik-pivot-L" in bpy.data.objects[char_name+"Rig"].pose.bones:
-        this_obj.pose.bones["hand-ik-L"].custom_shape_transform = bpy.data.objects[char_name+"Rig"].pose.bones["mch-hand-ik-pivot-L"]
-    if "hand-ik-R" in this_obj.pose.bones and "mch-hand-ik-pivot-R" in bpy.data.objects[char_name+"Rig"].pose.bones:
-        this_obj.pose.bones["hand-ik-R"].custom_shape_transform = bpy.data.objects[char_name+"Rig"].pose.bones["mch-hand-ik-pivot-R"]
+    if "foot_ik.L" in this_obj.pose.bones and "mch-ik-pivot-L" in bpy.data.objects[rig_name].pose.bones:
+        this_obj.pose.bones["foot_ik.L"].custom_shape_transform = bpy.data.objects[rig_name].pose.bones["mch-ik-pivot-L"]
+    if "foot_ik.R" in this_obj.pose.bones and "mch-ik-pivot-R" in bpy.data.objects[rig_name].pose.bones:
+        this_obj.pose.bones["foot_ik.R"].custom_shape_transform = bpy.data.objects[rig_name].pose.bones["mch-ik-pivot-R"]
+    if "hand-ik-L" in this_obj.pose.bones and "mch-hand-ik-pivot-L" in bpy.data.objects[rig_name].pose.bones:
+        this_obj.pose.bones["hand-ik-L"].custom_shape_transform = bpy.data.objects[rig_name].pose.bones["mch-hand-ik-pivot-L"]
+    if "hand-ik-R" in this_obj.pose.bones and "mch-hand-ik-pivot-R" in bpy.data.objects[rig_name].pose.bones:
+        this_obj.pose.bones["hand-ik-R"].custom_shape_transform = bpy.data.objects[rig_name].pose.bones["mch-hand-ik-pivot-R"]
     
     # Align custom shape of hand IK controller bones (wrist) straight to center
     for b_name in ["hand-ik-L", "hand-ik-R", "hand_ik.L", "hand_ik.R", "hand_ik_wrist.L", "hand_ik_wrist.R"]:
@@ -2692,6 +2847,27 @@ def rig_character(
             continue
         bone.name = newname
         print(f"[RIG OK] Renamed bone '{oldname}' -> '{newname}'")
+
+    # Ensure all 3 concentric root circles (root, root.001, root.002) have valid distinct shapes & scales
+    _rp_main = bpy.data.objects.get("root plate")
+    _rp_mid = bpy.data.objects.get("root plate.001") or _rp_main
+    _rp_inner = bpy.data.objects.get("root plate.002") or _rp_mid
+    if _rp_main:
+        _pb_r = this_obj.pose.bones.get("root")
+        if _pb_r and not _pb_r.custom_shape:
+            _pb_r.custom_shape = _rp_main
+    if _rp_mid:
+        _pb_r001 = this_obj.pose.bones.get("root.001")
+        if _pb_r001:
+            _pb_r001.custom_shape = _rp_mid
+            _pb_r001.use_custom_shape_bone_size = False
+            _pb_r001.custom_shape_scale_xyz = (1.0, 1.0, 1.0)
+    if _rp_inner:
+        _pb_r002 = this_obj.pose.bones.get("root.002")
+        if _pb_r002:
+            _pb_r002.custom_shape = _rp_inner
+            _pb_r002.use_custom_shape_bone_size = True
+            _pb_r002.custom_shape_scale_xyz = (1.0, 1.0, 1.0)
 
     # 3. Ensure prop.L, prop.R, and weapon bones are parented to root.002
     try:
@@ -2782,19 +2958,19 @@ def rig_character(
             const.name = "SWITCH PARENT"
         while len(const.targets) < 5:
             const.targets.new()
-        const.targets[0].target = bpy.data.objects[char_name+"Rig"]
+        const.targets[0].target = bpy.data.objects[rig_name]
         const.targets[0].subtarget = "root"
 
-        const.targets[1].target = bpy.data.objects[char_name+"Rig"]
+        const.targets[1].target = bpy.data.objects[rig_name]
         const.targets[1].subtarget = "root.001"
 
-        const.targets[2].target = bpy.data.objects[char_name+"Rig"]
+        const.targets[2].target = bpy.data.objects[rig_name]
         const.targets[2].subtarget = "root.002"
 
-        const.targets[3].target = bpy.data.objects[char_name+"Rig"]
+        const.targets[3].target = bpy.data.objects[rig_name]
         const.targets[3].subtarget = "torso.002"
 
-        const.targets[4].target = bpy.data.objects[char_name+"Rig"]
+        const.targets[4].target = bpy.data.objects[rig_name]
         const.targets[4].subtarget = "chest"
         
         location_str = f'pose.bones["{location_of_switcher}"]["parent_switch"]'
@@ -2857,7 +3033,7 @@ def rig_character(
         new.name = 'SWITCH_PARENT'
         # add target
         new.targets.new()
-        new.targets[0].target = bpy.data.objects[char_name+"Rig"]
+        new.targets[0].target = bpy.data.objects[rig_name]
         new.targets[0].subtarget = "root.002"
         
         location_str = "pose.bones[\"torso\"][\"torso_parent\"]"
@@ -2869,7 +3045,7 @@ def rig_character(
         var = driver.variables.new()
         var.name = "var"
         var.type = 'SINGLE_PROP'
-        var.targets[0].id = bpy.data.objects[char_name+"Rig"]
+        var.targets[0].id = bpy.data.objects[rig_name]
         var.targets[0].data_path = location_str
 
         driver.expression = "var == 1"
@@ -2892,7 +3068,7 @@ def rig_character(
                 const.remove(c)   
         
         new = const.new(constraint_type)
-        new.target = bpy.data.objects[char_name+"Rig"]
+        new.target = bpy.data.objects[rig_name]
         new.subtarget = target_bone       
         new.owner_space = 'LOCAL'
         new.target_space = 'LOCAL'
@@ -2904,7 +3080,7 @@ def rig_character(
         var = driver.variables.new()
         var.name = "var"
         var.type = 'SINGLE_PROP'
-        var.targets[0].id = bpy.data.objects[char_name+"Rig"]
+        var.targets[0].id = bpy.data.objects[rig_name]
         var.targets[0].data_path = new_var
 
         depsgraph = bpy.context.evaluated_depsgraph_get()
@@ -3280,9 +3456,12 @@ def rig_character(
     bone_to_layer("foot_ik_pivot.L", 19, "Pivots & Pins") 
     bone_to_layer("foot_ik_pivot.R", 19, "Pivots & Pins") 
     
-    # MOVING FACE (head-controller, face in Face collection, plate-settings in Root)
+    # MOVING FACE (head-controller, eyetrack, face in Face collection, plate-settings in Root)
     bone_to_layer("plate-settings", 28, "Root")
     bone_to_layer("head-controller", 0, "Face")
+    bone_to_layer("eyetrack", 0, "Face")
+    bone_to_layer("eyetrack_L", 0, "Face")
+    bone_to_layer("eyetrack_R", 0, "Face")
     bone_to_layer("Face-Root", 0, "Face")
     
     # Moving Torso
@@ -3397,7 +3576,7 @@ def rig_character(
             bone_to_layer(bone, layer, collection)
     
     # Refactoring old bone move functionalities
-    list_move_to_other = ["+UpperArmTwistA02.L","+UpperArmTwistA01.L","+UpperArmTwistA01.R","+UpperArmTwistA02.R","eye.R","eye.L","+ToothBone D A01","+ToothBone U A01","+ToothBone A A01"]
+    list_move_to_other = ["+UpperArmTwistA02.L","+UpperArmTwistA01.L","+UpperArmTwistA01.R","+UpperArmTwistA02.R","eye.R","eye.L","+ToothBone D A01","+ToothBone U A01","+ToothBone A A01","+EyeBone R A01.001","+EyeBone L A01.001"]
     fast_bone_move(list_move_to_other, 25, "Other")
     
     if toe_bones_exist:
@@ -3530,7 +3709,7 @@ def rig_character(
         b_low = b.name.lower()
         if "plate-settings" in b_low:
             continue
-        if any(k in b_low for k in ["slider-", "frame-", "brow-", "eye-", "mouth-", "plate-", "face-", "wgt-eye", "wink"]):
+        if any(k in b_low for k in ["slider-", "frame-", "brow-", "eye-", "eyetrack", "mouth-", "plate-", "face-", "wgt-eye", "wink"]):
             bone_to_layer(b.name, 0, "Face")
 
     # Explicitly enforce plate-settings in Root collection and Root group
@@ -3599,7 +3778,7 @@ def rig_character(
         rigify_keywords = [
             "tweak", "_fk", "_ik", "master", "thumb", "f_index", "f_middle", "f_ring", "f_pinky",
             "forearm", "upper_arm", "thigh", "shin", "foot", "toe", "hand", "shoulder",
-            "spine", "torso", "head", "neck", "root", "twist"
+            "spine", "torso", "head", "neck", "root", "twist", "eyetrack"
         ]
 
         arm_bones = this_obj.data.bones if is_version_4 else bpy.context.active_object.pose.bones
@@ -3779,7 +3958,7 @@ def rig_character(
     # into WGTS_<Char> nested in the character collection.
     try:
         from setup_wizard.character_rig_setup.wgts_isolation import isolate_wgts_for_character
-        _rig_final = bpy.data.objects.get(char_name + "Rig")
+        _rig_final = bpy.data.objects.get(rig_name)
         if _rig_final is None:
             try:
                 _rig_final = this_obj
@@ -3793,7 +3972,7 @@ def rig_character(
     # (isolated manifest only links top-level collections; leftovers in the
     # default 'Collection' break multi-character append).
     try:
-        _rig_pkg = bpy.data.objects.get(char_name + "Rig")
+        _rig_pkg = bpy.data.objects.get(rig_name)
         if _rig_pkg is None:
             try:
                 _rig_pkg = this_obj
@@ -3804,6 +3983,54 @@ def rig_character(
     except Exception as e_pkg:
         print(f"[HI3 RIG] Final collection packaging notice: {e_pkg}")
     
+    # Reuse the eye template widgets, without their template transforms.
+    for name, shape in eye_control_shapes.items():
+        if shape is None:
+            continue
+        pb = our_char.pose.bones[name]
+        pb.custom_shape = shape
+        pb.custom_shape_transform = None
+        pb.custom_shape_translation = (0, 0, 0)
+        pb.custom_shape_rotation_euler = (0, 0, 0)
+        # Match Genshin: 1 cm control bones, 2x eye circles and 6.5/5 master.
+        pb.use_custom_shape_bone_size = True
+        pb.custom_shape_scale_xyz = (6.5, 5.0, 1.0) if name == "eyetrack" else (2.0, 2.0, 2.0)
+        pb.bone.hide = False
+        # These are backing meshes for bone widgets, not scene controls.
+        shape.hide_viewport = True
+        shape.hide_render = True
+    our_char.data.show_bone_custom_shapes = True
+
+    # Orient the existing Y/Z hand widget over the palm, anchored at the wrist.
+    for side in ('L', 'R'):
+        pb = our_char.pose.bones.get('hand_ik.' + side)
+        if pb and pb.custom_shape:
+            hand = our_char.data.bones['DEF-hand.' + side]
+            middle = our_char.data.bones['DEF-f_middle.01.' + side]
+            index = our_char.data.bones['DEF-f_index.01.' + side]
+            pinky = our_char.data.bones['DEF-f_pinky.01.' + side]
+            forward = (middle.head_local - hand.head_local).normalized()
+            palm_width = index.head_local - pinky.head_local
+            dorsal = forward.cross(palm_width).normalized()
+            if dorsal.dot(middle.matrix_local.to_3x3().col[2]) < 0:
+                dorsal.negate()
+            width_axis = dorsal.cross(forward).normalized()
+            widget_axes = Matrix((dorsal, forward, width_axis)).transposed()
+            bone_axes_inverse = pb.bone.matrix_local.to_3x3().inverted()
+            rotation = bone_axes_inverse @ widget_axes
+            base = Vector((0, min(v.co.y for v in pb.custom_shape.data.vertices), 0))
+            pb.custom_shape_transform = None
+            pb.use_custom_shape_bone_size = False
+            pb.custom_shape_scale_xyz = (0.65,) * 3
+            pb.custom_shape_rotation_euler = rotation.to_euler()
+            pb.custom_shape_translation = -(rotation @ (base * 0.65)) + bone_axes_inverse @ (dorsal * 0.025)
+
+    for side in ('L', 'R'):
+        breast = our_char.pose.bones.get('breast.' + side)
+        if breast:
+            breast.custom_shape_scale_xyz = (0.45,) * 3
+
+
 def setup_neck_and_head_follow(neck_follow_value=1.0, head_follow_value=1.0):
     if bpy.context.object and hasattr(bpy.context.object, "pose") and bpy.context.object.pose:
         for t_name in ["torso", "torso.002"]:

@@ -1281,20 +1281,104 @@ def add_dual_shape_key_driver(mesh, armature, shape_key_name, bone1, bone2, expr
     driver.expression = expression
 
 
-def setup_face_panel_blend_drivers(context, mesh, panel_armature):
-    """Sets up all 43+ shape key drivers connecting the face panel armature to character mesh shape keys."""
-    # First, if earlier runs left split keys like E_Close.L / E_Close.R, remove them so they don't keep eyes shut
-    if mesh.data and mesh.data.shape_keys:
-        for split_key_name in ["E_Close.L", "E_Close.R"]:
-            sk = mesh.data.shape_keys.key_blocks.get(split_key_name)
-            if sk:
-                try:
-                    mesh.data.shape_keys.driver_remove(f'key_blocks["{split_key_name}"].value')
-                except Exception:
-                    pass
-                mesh.shape_key_remove(sk)
+def _add_aggregated_shape_key_drivers(mesh, armature, entries):
+    """Builds a single aggregated SCRIPTED driver (max of terms) per shape key on mesh."""
+    if not mesh or not mesh.data or not mesh.data.shape_keys:
+        return 0
+    kb = mesh.data.shape_keys.key_blocks
+    by_sk = {}
+    for sk_name, bone_name, mult, tr_type in entries:
+        if sk_name not in kb:
+            continue
+        if not armature.pose or bone_name not in armature.pose.bones:
+            continue
+        by_sk.setdefault(sk_name, []).append((bone_name, mult, tr_type))
 
-    driver_configs = [
+    linked_count = 0
+    for sk_name, rules in by_sk.items():
+        sk_block = kb.get(sk_name)
+        if not sk_block:
+            continue
+        try:
+            mesh.data.shape_keys.driver_remove(f'key_blocks["{sk_name}"].value')
+        except Exception:
+            pass
+        try:
+            sk_block.driver_remove("value")
+        except Exception:
+            pass
+
+        driver = sk_block.driver_add("value").driver
+        driver.type = "SCRIPTED"
+        terms = []
+        # Deduplicate (bone_name, tr_type, mult)
+        seen = set()
+        var_idx = 0
+        for bone_name, mult, tr_type in rules:
+            key_id = (bone_name, tr_type, mult)
+            if key_id in seen:
+                continue
+            seen.add(key_id)
+            vname = "bone" if var_idx == 0 else f"bone_{var_idx:03d}"
+            var_idx += 1
+            var = driver.variables.new()
+            var.name = vname
+            var.type = "TRANSFORMS"
+            var.targets[0].id = armature
+            var.targets[0].bone_target = bone_name
+            var.targets[0].transform_space = "LOCAL_SPACE"
+            var.targets[0].transform_type = tr_type
+            terms.append(f"({vname} * {mult})")
+
+        if len(terms) == 1:
+            driver.expression = terms[0].strip("()")
+        elif terms:
+            driver.expression = "max(0.0, " + ", ".join(terms) + ")"
+        linked_count += 1
+    return linked_count
+
+
+def _collect_character_face_meshes(primary_mesh, panel_armature):
+    """Collects all character meshes with shape keys (Face, Eyebrow, EyeShape, Body, etc.)."""
+    meshes = []
+    if isinstance(primary_mesh, (list, tuple, set)):
+        for m in primary_mesh:
+            if m and getattr(m, "type", None) == "MESH" and m.data and m.data.shape_keys and m not in meshes:
+                meshes.append(m)
+    elif primary_mesh and getattr(primary_mesh, "type", None) == "MESH" and primary_mesh.data and primary_mesh.data.shape_keys:
+        meshes.append(primary_mesh)
+
+    for obj in bpy.data.objects:
+        if obj.type != "MESH" or not obj.data or not obj.data.shape_keys or obj in meshes:
+            continue
+        nl = obj.name.lower()
+        if nl.startswith("wgt") or "lightpanel" in nl or "selectorwgt" in nl or "weapon" in nl:
+            continue
+        has_arm = any(mod.type == "ARMATURE" and mod.object == panel_armature for mod in obj.modifiers)
+        is_face_part = any(k in nl for k in ["face", "eyebrow", "brow", "eyeshape", "eye", "head", "mouth", "body"])
+        if has_arm or obj.parent == panel_armature or is_face_part:
+            meshes.append(obj)
+    return meshes
+
+
+def setup_face_panel_blend_drivers(context, mesh, panel_armature):
+    """Sets up shape key drivers connecting the face panel armature to all character face meshes (WuWa, HI3, Genshin, HSR, ZZZ)."""
+    target_meshes = _collect_character_face_meshes(mesh, panel_armature)
+    if not target_meshes:
+        return
+
+    for m in target_meshes:
+        if m.data and m.data.shape_keys:
+            for split_key_name in ["E_Close.L", "E_Close.R"]:
+                sk = m.data.shape_keys.key_blocks.get(split_key_name)
+                if sk:
+                    try:
+                        m.data.shape_keys.driver_remove(f'key_blocks["{split_key_name}"].value')
+                    except Exception:
+                        pass
+                    m.shape_key_remove(sk)
+
+    wuwa_driver_configs = [
         ("Aa", "m.A", "bone * 25", "LOC_X"),
         ("A", "m.AA", "bone * 25", "LOC_X"),
         ("E", "m.E", "bone * 25", "LOC_X"),
@@ -1337,22 +1421,117 @@ def setup_face_panel_blend_drivers(context, mesh, panel_armature):
         ("E_Close", "eye.pos", "bone * -25", "LOC_Y"),
     ]
 
-    dual_driver_configs = [
+    wuwa_dual_driver_configs = [
         ("E_Smile_L", "eye.pos", "e.wink.up.l", "max(bone_001 * 25, bone * 25)", "LOC_Y", "LOC_X"),
         ("E_Smile_R", "eye.pos", "e.wink.up.r", "max(bone_001 * 25, bone * 25)", "LOC_Y", "LOC_X"),
     ]
 
-    for sk_name, bone_name, expr, tr_type in driver_configs:
-        add_shape_key_driver(mesh, panel_armature, sk_name, bone_name, expr, tr_type)
+    # HI3 / Genshin / HSR / ZZZ shape key mappings to Face Panel bones:
+    # (shape_key_candidates, bone_name, multiplier, transform_type)
+    hoyo_panel_rules = [
+        # Mouth Vowels & 2D Mouth Pos
+        (["Mouth_A01", "Mouth_A", "A01", "Mouth_OpenSmall", "Fac_Mth_Aa1"], "m.A", 25, "LOC_X"),
+        (["Mouth_A01", "Mouth_A", "A01", "Fac_Mth_Aa1", "Fac_Mth_Down", "Mouth_Down"], "fp.m.pos.sel", -25, "LOC_Y"),
+        (["Mouth_Open01", "Mouth_Open", "Mouth_A02", "Mouth_Max", "Fac_Mth_Aa2", "Fac_Mth_AaShout"], "m.AA", 25, "LOC_X"),
+        (["Mouth_Open01", "Mouth_Open", "Mouth_Up", "Fac_Mth_Up"], "fp.m.pos.sel", 25, "LOC_Y"),
+        (["Mouth_E01", "Mouth_E", "Mouth_Smile02", "Fac_Mth_Ee"], "m.E", 25, "LOC_X"),
+        (["Mouth_I01", "Mouth_I", "Mouth_Smile01", "Fac_Mth_Ii"], "m.I", 25, "LOC_X"),
+        (["Mouth_O01", "Mouth_O", "Fac_Mth_Oo"], "m.O", 25, "LOC_X"),
+        (["Mouth_U01", "Mouth_U", "Mouth_Neko01", "Mouth_Pout", "Fac_Mth_Uu"], "m.U", 25, "LOC_X"),
+        (["Mouth_Line01", "Mouth_Twisted01", "Mouth_Delta01", "Fac_Mth_Right"], "fp.m.pos.sel", 25, "LOC_X"),
+        (["Mouth_Line02", "Mouth_Twisted02", "Mouth_Delta02", "Fac_Mth_Left"], "fp.m.pos.sel", -25, "LOC_X"),
+        # Lip corners
+        (["Mouth_Smile01", "Mouth_Smile", "Fac_Mth_R_Up", "Fac_Mth_Laugh1"], "lip.cor.pos.sel.r", 25, "LOC_Y"),
+        (["Mouth_Smile01", "Mouth_Smile", "Fac_Mth_L_Up", "Fac_Mth_Laugh1"], "lip.cor.pos.sel.l", 25, "LOC_Y"),
+        (["Mouth_Angry01", "Mouth_Sad01", "Mouth_Sad", "Fac_Mth_R_Down"], "lip.cor.pos.sel.r", -25, "LOC_Y"),
+        (["Mouth_Angry01", "Mouth_Sad01", "Mouth_Sad", "Fac_Mth_L_Down"], "lip.cor.pos.sel.l", -25, "LOC_Y"),
+        (["Mouth_Smile02", "Fac_Mth_R_Out"], "lip.cor.pos.sel.r", 25, "LOC_X"),
+        (["Mouth_Smile02", "Fac_Mth_L_Out"], "lip.cor.pos.sel.l", -25, "LOC_X"),
+        # Mouth Expression Sliders x1..x6
+        (["Mouth_Smile01", "Mouth_Smile02", "Mouth_Happy", "Fac_Mth_Laugh1", "Fac_Mth_Laugh2"], "x1", 25, "LOC_X"),
+        (["Mouth_Angry02", "Mouth_Shock01", "Mouth_Worry01", "Mouth_Angry03"], "x2", 25, "LOC_X"),
+        (["Mouth_Doya01", "Mouth_Doya02", "Mouth_Proud01", "Mouth_Proud02", "Mouth_Smile03"], "x3", 25, "LOC_X"),
+        (["Mouth_Angry01", "Mouth_Fury01", "Mouth_Pain01", "Fac_Mth_Triangle"], "x4", 25, "LOC_X"),
+        (["Mouth_Pero01", "Mouth_Pero02", "Mouth_BigTongue01"], "x5", 25, "LOC_X"),
+        (["Mouth_Neko01", "Mouth_Line01", "Mouth_Line02", "Mouth_Doya02", "Fac_Mth_UuOo"], "x6", 25, "LOC_X"),
+        # Eyebrows
+        (["Brow_Trouble_R", "Eyebrow_Trouble", "Brow_Trouble", "Eyebrow_Sad", "Fac_Ebr_Sad"], "doubt.1", 25, "LOC_X"),
+        (["Brow_Trouble_L", "Eyebrow_Trouble", "Brow_Trouble", "Eyebrow_Sad", "Fac_Ebr_Sad"], "doubt.2", 25, "LOC_X"),
+        (["Eyebrow_Smily", "Eyebrow_Happy", "Brow_Smily_L", "Brow_Smily_R", "Brow_Smily"], "b.happy", 25, "LOC_X"),
+        (["Eyebrow_Serious", "Eyebrow_Flat", "Brow_Flat", "Brow_Angry_L", "Brow_Angry_R", "Eyebrow_Angry"], "b.flat", 25, "LOC_X"),
+        (["Eyebrow_Shy", "Brow_Shy_L", "Brow_Shy_R", "Brow_Squeeze_L", "Brow_Squeeze_R", "Eyebrow_Squeeze"], "b.close", 25, "LOC_X"),
+        (["Eyebrow_Angry", "Brow_Angry_L", "Brow_Angry_R", "Brow_Angry", "Eyebrow_Serious", "Fac_Ebr_Angry"], "fp.brow.sel", -25, "LOC_X"),
+        (["Eyebrow_Trouble", "Eyebrow_Sad", "Brow_Trouble_L", "Brow_Trouble_R", "Brow_Trouble", "Fac_Ebr_Sad"], "fp.brow.sel", 25, "LOC_X"),
+        (["Brow_Up_L", "Brow_Up_R", "Eyebrow_Up", "Eyebrow_Smily", "Fac_Ebr_Up"], "fp.brow.sel", 25, "LOC_Y"),
+        (["Brow_Down_L", "Brow_Down_R", "Eyebrow_Down", "Fac_Ebr_Down"], "fp.brow.sel", -25, "LOC_Y"),
+        # Eyes
+        (["Eye_Jito", "Eye_Half01", "Eye_Half", "Eye_Tired", "Fac_Eye_HalfClose"], "e.ji", 25, "LOC_X"),
+        (["Eye_Lowereyelid", "Eye_LowerEyelid", "Eye_WDown", "Eye_Tired", "Fac_Eye_LowlidUp"], "e.lowlid", 25, "LOC_X"),
+        (["Eye_Star", "EyeStar", "Eye_Shock", "Eye_Wail", "Eye_Hostility"], "e.focus", 25, "LOC_X"),
+        (["Eye_Ha", "Eye_WUp", "Eye_Wide", "00_Default_Eye", "Fac_Eye_L_Open", "Fac_Eye_R_Open"], "e.wide", 25, "LOC_X"),
+        (["Eye_WinkA_L", "Eye_WinkB_L", "Eye_WinkC_L", "Eye_WinkA", "Eye_WinkB", "Eye_WinkC", "Eye_Wink", "Fac_Eye_L_Wink"], "e.wink.up.l", 25, "LOC_X"),
+        (["Eye_WinkA_R", "Eye_WinkB_R", "Eye_WinkC_R", "Eye_WinkA", "Eye_WinkB", "Eye_WinkC", "Eye_Wink", "Fac_Eye_R_Wink"], "e.wink.up.r", 25, "LOC_X"),
+        (["Eye_Close", "Eye_Close01", "Eye_WinkA", "Eye_WinkA_L", "Eye_WinkA_R", "Eye_Half01", "Eye_Half", "Eye_Wink", "00_Close01_Eye", "Fac_Eye_Close"], "eye.pos", -25, "LOC_Y"),
+        (["Eye_WinkB", "Eye_WinkB_L", "Eye_WinkB_R", "Eye_WinkC", "Eye_WinkC_L", "Eye_WinkC_R", "Eye_Smile", "Eye_Smily", "Eye_Happy"], "eye.pos", 25, "LOC_Y"),
+        (["Eye_Hostility", "Eye_Angry", "Eye_Serious", "Fac_Eye_Angry"], "eye.pos", -25, "LOC_X"),
+        (["Eye_Wail", "Eye_Sad", "Eye_Tired", "Fac_Eye_Sad"], "eye.pos", 25, "LOC_X"),
+    ]
 
-    for sk_name, b1, b2, expr, tr_type1, tr_type2 in dual_driver_configs:
-        add_dual_shape_key_driver(mesh, panel_armature, sk_name, b1, b2, expr, tr_type1, tr_type2)
+    for m in target_meshes:
+        if not m.data or not m.data.shape_keys:
+            continue
+        kb = m.data.shape_keys.key_blocks
 
-    # Reset eye and un-driven shape keys to 0 so eyes are open by default
-    for sk in mesh.data.shape_keys.key_blocks:
-        if sk.name != "Basis":
-            if sk.name in ["E_Close", "Blink", "Eye_Close"]:
-                sk.value = 0.0
+        # 1. Apply WuWa native configs if matching keys exist
+        for sk_name, bone_name, expr, tr_type in wuwa_driver_configs:
+            if sk_name in kb:
+                add_shape_key_driver(m, panel_armature, sk_name, bone_name, expr, tr_type)
+        for sk_name, b1, b2, expr, tr_type1, tr_type2 in wuwa_dual_driver_configs:
+            if sk_name in kb:
+                add_dual_shape_key_driver(m, panel_armature, sk_name, b1, b2, expr, tr_type1, tr_type2)
+
+        # 2. Apply HI3 / Genshin / HSR / ZZZ mappings
+        entries = []
+        mapped_sks = set()
+        for sk_candidates, bone_name, mult, tr_type in hoyo_panel_rules:
+            for cand in sk_candidates:
+                if cand in kb:
+                    entries.append((cand, bone_name, mult, tr_type))
+                    mapped_sks.add(cand)
+
+        # Fallback: link any remaining unmapped shape keys on this mesh to appropriate sliders
+        mouth_fallback_bones = ["x1", "x2", "x3", "x4", "x5", "x6", "m.A", "m.AA", "m.E", "m.I", "m.O", "m.U"]
+        brow_fallback_bones = ["b.happy", "b.flat", "b.close", "doubt.1", "doubt.2"]
+        eye_fallback_bones = ["e.ji", "e.lowlid", "e.focus", "e.wide", "e.wink.up.l", "e.wink.up.r"]
+        m_idx = b_idx = e_idx = 0
+        for sk in kb:
+            sn = sk.name
+            sl = sn.lower()
+            if sn in mapped_sks or sn in [c[0] for c in wuwa_driver_configs]:
+                continue
+            if sl in ("basis", "default") or sl.endswith("_default") or "default_" in sl:
+                continue
+            if "brow" in sl or "eyebrow" in sl or "ebr" in sl:
+                fb_bone = brow_fallback_bones[b_idx % len(brow_fallback_bones)]
+                b_idx += 1
+                entries.append((sn, fb_bone, 25, "LOC_X"))
+            elif "eye" in sl or "wink" in sl or "blink" in sl:
+                fb_bone = eye_fallback_bones[e_idx % len(eye_fallback_bones)]
+                e_idx += 1
+                entries.append((sn, fb_bone, 25, "LOC_X"))
+            elif "mouth" in sl or "mth" in sl or "lip" in sl or "tongue" in sl:
+                fb_bone = mouth_fallback_bones[m_idx % len(mouth_fallback_bones)]
+                m_idx += 1
+                entries.append((sn, fb_bone, 25, "LOC_X"))
+
+        if entries:
+            _add_aggregated_shape_key_drivers(m, panel_armature, entries)
+
+        # Reset eye and un-driven shape keys to 0 so eyes are open by default
+        for sk in kb:
+            if sk.name != "Basis":
+                if sk.name in ["E_Close", "Blink", "Eye_Close", "Eye_Close01", "Eye_Half01", "Eye_WinkA"]:
+                    sk.value = 0.0
 
     try:
         context.evaluated_depsgraph_get().update()
@@ -2079,9 +2258,8 @@ def import_wuwa_face_panel_blend(context, mesh, armature, head_bone):
     # reservados ('root plate', ...) debe sobrevivir a la importacion.
     _purge_panel_colliding_rig_widgets()
 
-    # 9. Setup shape key drivers targeting the fused character armature
-    if mesh:
-        setup_face_panel_blend_drivers(context, mesh, armature)
+    # 9. Setup shape key drivers targeting the fused character armature across all face meshes
+    setup_face_panel_blend_drivers(context, mesh, armature)
 
     # 10. Setup Outline drivers from fp.outline bone to character outline modifiers
     try:
@@ -2089,9 +2267,12 @@ def import_wuwa_face_panel_blend(context, mesh, armature, head_bone):
     except Exception as ex_ol:
         print(f"[WUWA FACE PANEL] Outline drivers notice: {ex_ol}")
 
-    if mesh:
-        mesh["ww_face_panel_armature"] = armature.name
-        mesh["ww_face_panel_assigned"] = True
+    for _m in _collect_character_face_meshes(mesh, armature):
+        try:
+            _m["ww_face_panel_armature"] = armature.name
+            _m["ww_face_panel_assigned"] = True
+        except Exception:
+            pass
     armature["ww_face_panel_armature"] = armature.name
 
     return armature

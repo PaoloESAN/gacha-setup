@@ -1118,6 +1118,27 @@ class HonkaiImpact3rdCharacterRigger(CharacterRigger):
         except Exception as e_face:
             print(f"[HI3 FACE RIG] Warning during face rig generation: {e_face}")
 
+        try:
+            char_name = armature.name.replace("Rig", "")
+            for obj in bpy.data.objects:
+                if obj.type == 'MESH':
+                    o_lower = obj.name.lower()
+                    if any(k in o_lower for k in ["lightpanelwgt", "lightpanelselector", "wgtplane", "selectorwgt"]) or obj.name.startswith("WGT-"):
+                        continue
+                    for modifier in obj.modifiers:
+                        if modifier.type == 'NODES' and modifier.node_group and 'Light Vectors' in modifier.node_group.name:
+                            for sock, emp_name in [
+                                ('Input_3', 'Light Direction'),
+                                ('Input_4', 'Head Origin'),
+                                ('Input_5', 'Head Forward'),
+                                ('Input_6', 'Head Up'),
+                            ]:
+                                empty_obj = bpy.data.objects.get(f"{emp_name}_{char_name}") or bpy.data.objects.get(emp_name)
+                                if empty_obj:
+                                    set_modifier_property(modifier, sock, empty_obj)
+        except Exception as e_lv:
+            print(f"[HI3 RIG] Notice refreshing Light Vectors: {e_lv}")
+
 
 class HonkaiNexusAnimaCharacterRigger(CharacterRigger):
     def __init__(self, blender_operator, context):

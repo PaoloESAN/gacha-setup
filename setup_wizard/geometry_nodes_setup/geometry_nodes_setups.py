@@ -2362,7 +2362,7 @@ class WutheringWavesGeometryNodesSetup(GameGeometryNodesSetup):
 
 
 class HonkaiImpact3rdGeometryNodesSetup(GameGeometryNodesSetup):
-    DEFAULT_OUTLINE_THICKNESS = 0.1
+    DEFAULT_OUTLINE_THICKNESS = 0.15
 
     def __init__(self, blender_operator, context):
         super().__init__(blender_operator, context)
@@ -2379,19 +2379,31 @@ class HonkaiImpact3rdGeometryNodesSetup(GameGeometryNodesSetup):
         head_fwd_obj = bpy.data.objects.get("Head Forward")
         head_up_obj = bpy.data.objects.get("Head Up")
 
+        if head_origin_obj and head_fwd_obj:
+            mw = head_fwd_obj.matrix_world.copy()
+            dist_y = abs(mw.translation.y - head_origin_obj.matrix_world.translation.y) or 0.7827
+            mw.translation.y = head_origin_obj.matrix_world.translation.y + dist_y
+            head_fwd_obj.matrix_world = mw
+
+        if head_origin_obj and head_up_obj:
+            mw = head_up_obj.matrix_world.copy()
+            dist_z = abs(mw.translation.z - head_origin_obj.matrix_world.translation.z) or 0.5384
+            mw.translation.z = head_origin_obj.matrix_world.translation.z - dist_z
+            head_up_obj.matrix_world = mw
+
         meshes = [obj for obj in bpy.context.scene.objects if obj.type == 'MESH']
         for obj in meshes:
-            if any(ign in obj.name.lower() for ign in ['shadow', 'effect', 'eye']):
+            obj_low = obj.name.lower()
+            if any(ign in obj_low for ign in ['shadow', 'effect']):
                 continue
             has_hi3_mat = any(slot.material and slot.material.name.startswith("ImpactToon - ") for slot in obj.material_slots)
             if not has_hi3_mat:
                 continue
 
-            # 1. Light Vectors modifier
+            # 1. Light Vectors modifier (apply to all character meshes including Eyebrow, EyeShape, Eye)
             if lv_ng:
                 mod_lv = obj.modifiers.get("Light Vectors")
                 if not mod_lv:
-                    # Check if an old generic Geometry Nodes mod with this node group exists
                     old_mod = next((m for m in obj.modifiers if m.type == 'NODES' and m.node_group == lv_ng), None)
                     if old_mod:
                         old_mod.name = "Light Vectors"
@@ -2447,7 +2459,10 @@ class HonkaiImpact3rdGeometryNodesSetup(GameGeometryNodesSetup):
                             except Exception:
                                 pass
 
-            # 2. Outlines modifier
+            # 2. Outlines modifier (skip Eye, Eyebrow, EyeShape)
+            if obj_low in ('eye', 'eyebrow', 'eyeshape') or any(ign in obj_low for ign in ['eyebrow', 'eyeshape', 'eyestar']) or obj_low.endswith(('_eye', '.eye')):
+                continue
+
             if outline_ng:
                 mod_ol = obj.modifiers.get("Outlines")
                 if not mod_ol:
@@ -2459,9 +2474,122 @@ class HonkaiImpact3rdGeometryNodesSetup(GameGeometryNodesSetup):
                         mod_ol = obj.modifiers.new("Outlines", 'NODES')
                 mod_ol.node_group = outline_ng
 
+                use_vcol = True
+                col_attr_name = None
+                if obj.data and hasattr(obj.data, "color_attributes") and len(obj.data.color_attributes) > 0:
+                    col_attr = obj.data.color_attributes[0]
+                    col_attr_name = col_attr.name
+                    try:
+                        if len(col_attr.data) > 0:
+                            sample_step = max(1, len(col_attr.data) // 200)
+                            max_alpha = max(col_attr.data[i].color[3] for i in range(0, len(col_attr.data), sample_step))
+                            if max_alpha <= 0.001:
+                                use_vcol = False
+                    except Exception:
+                        pass
+                else:
+                    use_vcol = False
+
+                set_modifier_property(mod_ol, "Base Geometry", True)
+                set_modifier_property(mod_ol, "Input_12", True)
+                set_modifier_property(mod_ol, "Use Vertex Colors?", use_vcol)
+                set_modifier_property(mod_ol, "Input_13", use_vcol)
+                set_modifier_property(mod_ol, "Outline Thickness", self.DEFAULT_OUTLINE_THICKNESS)
+                set_modifier_property(mod_ol, "Input_7", self.DEFAULT_OUTLINE_THICKNESS)
+
+                if getattr(bpy.context.scene, "camera", None):
+                    set_modifier_property(mod_ol, "Camera", bpy.context.scene.camera)
+                    set_modifier_property(mod_ol, "Input_4", bpy.context.scene.camera)
+
+                if col_attr_name:
+                    set_modifier_property(mod_ol, "Input_3_use_attribute", True)
+                    set_modifier_property(mod_ol, "Input_3_attribute_name", col_attr_name)
+                    try:
+                        mod_ol["Input_3_use_attribute"] = True
+                        mod_ol["Input_3_attribute_name"] = col_attr_name
+                    except Exception:
+                        pass
+
                 if outlines_mat:
-                    for slot in ['Hair Outline', 'Body Outline', 'Face Outline', 'Dress Outline', 'Dress 2 Outline', 'Other Outline']:
-                        set_modifier_property(mod_ol, slot, outlines_mat)
+                    base_mats = []
+                    for slot in obj.material_slots:
+                        m = slot.material
+                        if m and m.name.startswith("ImpactToon - ") and not m.name.endswith("Outlines"):
+                            if m not in base_mats:
+                                base_mats.append(m)
+
+                    pair_map = {
+                        ("Hair", "Hair Outline"): ("Input_10", "Input_5"),
+                        ("Body", "Body Outline"): ("Input_11", "Input_9"),
+                        ("Face", "Face Outline"): ("Input_14", "Input_15"),
+                        ("Dress", "Dress Outline"): ("Input_18", "Input_19"),
+                        ("Dress 2", "Dress 2 Outline"): ("Input_24", "Input_25"),
+                        ("Other", "Other Outline"): ("Input_26", "Input_27"),
+                    }
+                    used_pairs = set()
+
+                    for b_mat in base_mats:
+                        ol_mat_name = f"{b_mat.name} Outlines"
+                        ol_mat = bpy.data.materials.get(ol_mat_name)
+                        if not ol_mat:
+                            ol_mat = outlines_mat.copy()
+                            ol_mat.name = ol_mat_name
+                            ol_mat.use_fake_user = True
+                        ol_mat["_original_material_name"] = b_mat.get("_original_material_name") or b_mat.name.replace("ImpactToon - ", "")
+
+                        # Copy diffuse and lightmap textures from base material to outline material
+                        if b_mat.use_nodes and b_mat.node_tree and ol_mat.use_nodes and ol_mat.node_tree:
+                            src_diff = b_mat.node_tree.nodes.get("Image Texture.001")
+                            src_lm = b_mat.node_tree.nodes.get("Image Texture")
+                            dst_diff = ol_mat.node_tree.nodes.get("Outline_Diffuse")
+                            dst_lm = ol_mat.node_tree.nodes.get("Outline_Lightmap")
+                            if src_diff and dst_diff and src_diff.image:
+                                dst_diff.image = src_diff.image
+                            if src_lm and dst_lm:
+                                dst_lm.image = src_lm.image
+
+                        if ol_mat.name not in obj.data.materials:
+                            obj.data.materials.append(ol_mat)
+
+                        b_low = b_mat.name.lower()
+                        chosen_pair = None
+                        if "hair" in b_low and ("Hair", "Hair Outline") not in used_pairs:
+                            chosen_pair = ("Hair", "Hair Outline")
+                        elif "body" in b_low and ("Body", "Body Outline") not in used_pairs:
+                            chosen_pair = ("Body", "Body Outline")
+                        elif "face" in b_low and "dualface" not in b_low and ("Face", "Face Outline") not in used_pairs:
+                            chosen_pair = ("Face", "Face Outline")
+                        else:
+                            for p in [
+                                ("Dress", "Dress Outline"),
+                                ("Dress 2", "Dress 2 Outline"),
+                                ("Other", "Other Outline"),
+                                ("Body", "Body Outline"),
+                                ("Hair", "Hair Outline"),
+                                ("Face", "Face Outline"),
+                            ]:
+                                if p not in used_pairs:
+                                    chosen_pair = p
+                                    break
+
+                        if chosen_pair:
+                            used_pairs.add(chosen_pair)
+                            base_ident, ol_ident = pair_map[chosen_pair]
+                            set_modifier_property(mod_ol, chosen_pair[0], b_mat)
+                            set_modifier_property(mod_ol, base_ident, b_mat)
+                            set_modifier_property(mod_ol, chosen_pair[1], ol_mat)
+                            set_modifier_property(mod_ol, ol_ident, ol_mat)
+                            try:
+                                mod_ol[base_ident] = b_mat
+                                mod_ol[ol_ident] = ol_mat
+                            except Exception:
+                                pass
+
+        try:
+            from setup_wizard.material_data_import_setup.game_material_data_importers import HonkaiImpact3rdMaterialDataImporter
+            HonkaiImpact3rdMaterialDataImporter.apply_all_hi3_material_data(self.context)
+        except Exception as e:
+            print(f"[HI3 GEOMETRY NODES] Notice applying material data: {e}")
 
         NextStepInvoker().invoke(
             self.blender_operator.next_step_idx, 

@@ -694,8 +694,7 @@ def hi3_face_rig_main():
     if os.path.exists(blend_path):
         try:
             from setup_wizard.character_rig_setup.wuwa_face_panel import import_wuwa_face_panel_blend
-            faceobj = face_meshes[0] if face_meshes else None
-            import_wuwa_face_panel_blend(bpy.context, faceobj, armature, head_name)
+            import_wuwa_face_panel_blend(bpy.context, face_meshes, armature, head_name)
             if hasattr(armature.data, 'collections'):
                 fc = armature.data.collections.get("Face")
                 if fc:

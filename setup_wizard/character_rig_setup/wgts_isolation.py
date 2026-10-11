@@ -177,7 +177,7 @@ def isolate_wgts_for_character(rig_obj, char_name, char_coll=None, extra_keyword
                     else:
                         for uc in list(w_obj.users_collection):
                             un = uc.name
-                            if un == "wgt" or un.startswith("wgt.") or un == "WGTS" or un.startswith("WGTS") or un == "WG":
+                            if un == "wgt" or un.startswith("wgt.") or un == "WGTS" or un.startswith("WGTS") or un == "WG" or (un.startswith("WG.") and un[3:].isdigit()):
                                 is_facerig_plane = True
                                 break
                 except Exception:
@@ -215,7 +215,7 @@ def isolate_wgts_for_character(rig_obj, char_name, char_coll=None, extra_keyword
             cname = coll.name
             is_global = (
                 cname == "wgt" or cname.startswith("wgt.")
-                or cname == "WGTS" or cname.startswith("WGTS_") or cname == "WG"
+                or cname == "WGTS" or cname.startswith("WGTS_") or cname == "WG" or (cname.startswith("WG.") and cname[3:].isdigit())
                 or cname.lower() in ("widgets", "widget")
             )
         except Exception:
@@ -320,7 +320,8 @@ def isolate_wgts_for_character(rig_obj, char_name, char_coll=None, extra_keyword
     # Ensure char_coll has ONLY ONE WGTS collection (wgts_coll)
     if char_coll:
         for child in list(char_coll.children):
-            if child != wgts_coll and (child.name.startswith("WGTS") or "wgt" in child.name.lower()):
+            if child != wgts_coll and (child.name.startswith("WGTS") or "wgt" in child.name.lower()
+                                         or child.name == "WG" or (child.name.startswith("WG.") and child.name[3:].isdigit())):
                 for c_obj in list(child.objects):
                     try:
                         _move(c_obj)

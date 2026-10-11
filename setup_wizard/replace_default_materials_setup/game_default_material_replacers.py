@@ -3523,7 +3523,9 @@ class HonkaiImpact3rdDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         self.context = context
 
     def replace_default_materials(self):
+        import os
         meshes = [mesh for mesh in bpy.context.scene.objects if mesh.type == 'MESH']
+        replaced_map = {}
         for mesh in meshes:
             for material_slot in mesh.material_slots:
                 mat = material_slot.material
@@ -3532,6 +3534,20 @@ class HonkaiImpact3rdDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 mat_name = mat.name
                 if mat_name.startswith("ImpactToon - "):
                     continue
+
+                target_mat_name = f"ImpactToon - {mat_name}"
+                existing = replaced_map.get(mat_name) or bpy.data.materials.get(target_mat_name)
+                if existing:
+                    material_slot.material = existing
+                    continue
+
+                orig_fbx_tex = None
+                if mat.use_nodes and mat.node_tree:
+                    for n in mat.node_tree.nodes:
+                        if n.type == 'TEX_IMAGE' and n.image:
+                            raw = n.image.filepath or n.image.name
+                            orig_fbx_tex = os.path.splitext(os.path.basename(raw.replace('\\', '/')))[0]
+                            break
 
                 low = mat_name.lower()
                 if "face" in low:
@@ -3548,8 +3564,12 @@ class HonkaiImpact3rdDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     continue
 
                 new_mat = tmpl.copy()
-                new_mat.name = f"ImpactToon - {mat_name}"
+                new_mat.name = target_mat_name
                 new_mat.use_fake_user = True
+                new_mat["_original_material_name"] = mat_name
+                if orig_fbx_tex:
+                    new_mat["_original_fbx_texture"] = orig_fbx_tex
+                replaced_map[mat_name] = new_mat
                 material_slot.material = new_mat
 
         self.blender_operator.report({'INFO'}, 'Replaced default materials with HI3 shader materials...')

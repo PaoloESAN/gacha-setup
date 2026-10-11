@@ -159,6 +159,24 @@ def set_modifier_property(modifier, key, value):
                     except Exception:
                         pass
                 
+            if not target_inp and getattr(modifier, "type", None) == 'NODES' and hasattr(modifier, "node_group") and modifier.node_group:
+                ng = modifier.node_group
+                target_identifier = None
+                if hasattr(ng, "interface"):
+                    for item in ng.interface.items_tree:
+                        if getattr(item, "item_type", None) == 'SOCKET' and getattr(item, "in_out", None) == 'INPUT':
+                            if item.name in [key, clean_inp_key] or item.identifier in [key, clean_inp_key]:
+                                target_identifier = item.identifier
+                                break
+                if target_identifier:
+                    if hasattr(inputs, target_identifier):
+                        target_inp = getattr(inputs, target_identifier)
+                    elif hasattr(inputs, "keys") and target_identifier in inputs.keys():
+                        try:
+                            target_inp = inputs[target_identifier]
+                        except Exception:
+                            pass
+
             if not target_inp and hasattr(inputs, "keys"):
                 try:
                     for ik in inputs.keys():
@@ -173,6 +191,16 @@ def set_modifier_property(modifier, key, value):
                 if key.endswith('_use_attribute'):
                     try:
                         set_property_field(target_inp, 'type', 'ATTRIBUTE' if value else 'VALUE')
+                        return
+                    except Exception:
+                        pass
+                elif key.endswith('_attribute_name'):
+                    try:
+                        set_property_field(target_inp, 'type', 'ATTRIBUTE')
+                    except Exception:
+                        pass
+                    try:
+                        set_property_field(target_inp, 'attribute_name', value)
                         return
                     except Exception:
                         pass

@@ -2592,7 +2592,34 @@ class HonkaiImpact3rdTextureImporterFacade(GameTextureImporter):
         self.blender_operator = blender_operator
         self.context = context
 
+    @staticmethod
+    def _extract_json_tex_envs(json_data):
+        tex_map = {}
+        if not isinstance(json_data, dict):
+            return tex_map
+        saved = json_data.get("m_SavedProperties") or {}
+        tex_envs = saved.get("m_TexEnvs")
+        if isinstance(tex_envs, dict):
+            for k, v in tex_envs.items():
+                if isinstance(v, dict):
+                    tex_info = v.get("m_Texture") or {}
+                    t_name = tex_info.get("Name") or ""
+                    if t_name:
+                        tex_map[k] = t_name
+        elif isinstance(tex_envs, list):
+            for entry in tex_envs:
+                if isinstance(entry, dict):
+                    k = entry.get("Key") or entry.get("first")
+                    v = entry.get("Value") or entry.get("second") or {}
+                    if k and isinstance(v, dict):
+                        tex_info = v.get("m_Texture") or {}
+                        t_name = tex_info.get("Name") or ""
+                        if t_name:
+                            tex_map[k] = t_name
+        return tex_map
+
     def import_textures(self):
+        import json
         cache_enabled = self.context.window_manager.cache_enabled if hasattr(self.context, 'window_manager') and hasattr(self.context.window_manager, 'cache_enabled') else True
         directory = (
             getattr(self.blender_operator, 'file_directory', None)
@@ -2612,21 +2639,51 @@ class HonkaiImpact3rdTextureImporterFacade(GameTextureImporter):
             )
             return {'FINISHED'}
 
-        fix_missing_textures(directory)
+        search_roots = [os.path.normpath(directory)]
+        parent_dir = os.path.dirname(os.path.normpath(directory))
+        if parent_dir and os.path.isdir(parent_dir) and os.path.basename(os.path.normpath(directory)).lower() in (
+            'textures', 'texture', 'texture2d', 'materials', 'material', 'images'
+        ):
+            if parent_dir not in search_roots:
+                search_roots.insert(0, parent_dir)
+        scene_model_dir = bpy.context.scene.get("setup_wizard_imported_model_dir") if hasattr(bpy.context, "scene") and bpy.context.scene else None
+        if scene_model_dir and os.path.isdir(scene_model_dir):
+            norm_scene_dir = os.path.normpath(scene_model_dir)
+            if norm_scene_dir not in search_roots:
+                search_roots.insert(0, norm_scene_dir)
 
-        # Scan all textures recursively
+        for r_dir in search_roots:
+            fix_missing_textures(r_dir)
+
         image_exts = ('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff', '.webp')
         texture_file_map = {}
-        for root, _, files in os.walk(directory):
-            if "__MACOSX" in root:
-                continue
-            for f in files:
-                if f.startswith("._") or f.startswith("."):
+        material_json_map = {}
+        for base_dir in search_roots:
+            for root, _, files in os.walk(base_dir):
+                if "__MACOSX" in root:
                     continue
-                if f.lower().endswith(image_exts):
-                    clean_name = os.path.splitext(f)[0].lower()
-                    texture_file_map[clean_name] = os.path.normpath(os.path.join(root, f))
-                    texture_file_map[f.lower()] = os.path.normpath(os.path.join(root, f))
+                for f in files:
+                    if f.startswith("._") or f.startswith("."):
+                        continue
+                    f_low = f.lower()
+                    full_p = os.path.normpath(os.path.join(root, f))
+                    if f_low.endswith(image_exts):
+                        clean_name = os.path.splitext(f)[0].lower()
+                        texture_file_map[clean_name] = full_p
+                        texture_file_map[f_low] = full_p
+                    elif f_low.endswith('.json'):
+                        stem = os.path.splitext(f)[0].lower()
+                        if stem not in material_json_map:
+                            try:
+                                with open(full_p, 'r', encoding='utf-8') as jf:
+                                    jdata = json.load(jf)
+                                if isinstance(jdata, dict) and "m_SavedProperties" in jdata:
+                                    material_json_map[stem] = jdata
+                                    m_name = (jdata.get("m_Name") or "").lower()
+                                    if m_name:
+                                        material_json_map[m_name] = jdata
+                            except Exception:
+                                pass
 
         def load_img(fpath, colorspace='sRGB'):
             if not fpath or not os.path.isfile(fpath):
@@ -2641,69 +2698,149 @@ class HonkaiImpact3rdTextureImporterFacade(GameTextureImporter):
                     pass
             return img
 
-        # Map and assign to ImpactToon materials
+        def resolve_tex_by_name(tex_name, colorspace='sRGB'):
+            if not tex_name:
+                return None
+            key = os.path.splitext(tex_name)[0].lower()
+            if key in texture_file_map:
+                return load_img(texture_file_map[key], colorspace)
+            return None
+
+        # Pre-locate global facemap texture if present in character folder
+        global_facemap_img = None
+        for k, p in texture_file_map.items():
+            if 'facemap' in k:
+                global_facemap_img = load_img(p, 'Non-Color')
+                break
+
         for mat in bpy.data.materials:
             if not mat.use_nodes or not mat.node_tree:
                 continue
             m_low = mat.name.lower()
             if 'impacttoon' not in m_low and not m_low.startswith('hoyoverse -') and not m_low.startswith('mihoyo -'):
                 continue
+            if m_low in ('impacttoon - base', 'impacttoon - face', 'impacttoon - hair', 'impacttoon - eye', 'impacttoon - outlines'):
+                continue
 
-            orig_m = (mat.get("_original_material_name") or "").lower()
-            part_key = 'face' if ('face' in m_low or 'face' in orig_m) else \
-                       'hair' if ('hair' in m_low or 'hair' in orig_m) else \
-                       'eye' if ('eye' in m_low or 'eye' in orig_m) else 'body'
+            orig_m = (mat.get("_original_material_name") or mat.name.replace("ImpactToon - ", "").replace(" Outlines", "")).strip()
+            orig_low = orig_m.lower()
 
-            # 1. Match Color/Diffuse
-            diff_img = None
-            # Check original fbx texture
-            orig_tex = mat.get('_original_fbx_texture')
-            if orig_tex and orig_tex.lower() in texture_file_map:
-                diff_img = load_img(texture_file_map[orig_tex.lower()], 'sRGB')
+            is_face = ('face' in orig_low and 'dualface' not in orig_low) or any(
+                n.type == 'GROUP' and n.node_tree and 'ImpactToon - Face' in n.node_tree.name
+                for n in mat.node_tree.nodes
+            )
+            part_key = 'face' if is_face else \
+                       'hair' if 'hair' in orig_low else \
+                       'eye' if 'eye' in orig_low else \
+                       'body' if 'body' in orig_low else orig_low.split('_')[-1]
 
+            jdata = material_json_map.get(orig_low)
+            if not jdata:
+                for jk, jv in material_json_map.items():
+                    if jk == orig_low or jk.endswith(f"_{part_key}"):
+                        jdata = jv
+                        break
+            tex_envs = self._extract_json_tex_envs(jdata) if jdata else {}
+
+            # 1. Match Color/Diffuse (_MainTex / _DiffuseTex1)
+            diff_img = (
+                resolve_tex_by_name(tex_envs.get("_MainTex"), 'sRGB')
+                or resolve_tex_by_name(tex_envs.get("_DiffuseTex1"), 'sRGB')
+            )
+            if not diff_img:
+                orig_tex = mat.get('_original_fbx_texture')
+                if orig_tex:
+                    diff_img = resolve_tex_by_name(orig_tex, 'sRGB')
             if not diff_img:
                 for k, p in texture_file_map.items():
                     if part_key in k and any(x in k for x in ['color', 'diffuse']) and not any(x in k for x in ['lightmap', 'facemap', 'ramp', 'normal', 'mask']):
                         diff_img = load_img(p, 'sRGB')
                         break
 
-            # 2. Match Lightmap
-            lm_img = None
-            if diff_img:
-                d_stem = os.path.splitext(diff_img.name)[0].lower()
-                for pat in ['_color', '_diffuse']:
-                    if pat in d_stem:
-                        lm_stem = d_stem.replace(pat, '_lightmap')
-                        if lm_stem in texture_file_map:
-                            lm_img = load_img(texture_file_map[lm_stem], 'Non-Color')
+            # 2. Match Lightmap (_LightMapTex)
+            lm_img = resolve_tex_by_name(tex_envs.get("_LightMapTex"), 'Non-Color')
+            if not lm_img and ("_LightMapTex" not in tex_envs if jdata else True):
+                if diff_img:
+                    d_stem = os.path.splitext(diff_img.name)[0].lower()
+                    for pat in ['_color', '_diffuse']:
+                        if pat in d_stem:
+                            lm_stem = d_stem.replace(pat, '_lightmap')
+                            if lm_stem in texture_file_map:
+                                lm_img = load_img(texture_file_map[lm_stem], 'Non-Color')
+                                break
+                if not lm_img and part_key in ('body', 'hair', 'face', 'eye'):
+                    for k, p in texture_file_map.items():
+                        if f"_{part_key}_" in f"_{k}_" and 'lightmap' in k:
+                            lm_img = load_img(p, 'Non-Color')
                             break
-            if not lm_img:
-                for k, p in texture_file_map.items():
-                    if part_key in k and 'lightmap' in k:
-                        lm_img = load_img(p, 'Non-Color')
-                        break
 
-            # 3. Match Facemap (for Face material)
+            # 3. Match FaceMap (_FaceMapTex) and Expression Colormask (_FacExpTex) for Face
             fm_img = None
-            if part_key == 'face':
-                for k, p in texture_file_map.items():
-                    if 'facemap' in k or 'exptex' in k:
-                        fm_img = load_img(p, 'Non-Color')
-                        break
+            exp_img = None
+            if is_face:
+                fm_img = resolve_tex_by_name(tex_envs.get("_FaceMapTex"), 'Non-Color') or global_facemap_img
+                exp_img = (
+                    resolve_tex_by_name(tex_envs.get("_FacExpTex"), 'Non-Color')
+                    or resolve_tex_by_name(tex_envs.get("_ColorMaskTex"), 'Non-Color')
+                )
+                if not exp_img:
+                    for k, p in texture_file_map.items():
+                        if 'colormask' in k or 'exptex' in k or 'facexp' in k:
+                            exp_img = load_img(p, 'Non-Color')
+                            break
 
-            # Assign to nodes
+                # Assign FaceMap to _FaceMap node group
+                if fm_img:
+                    fm_ng = bpy.data.node_groups.get('_FaceMap')
+                    if fm_ng:
+                        for fn in fm_ng.nodes:
+                            if fn.type == 'TEX_IMAGE':
+                                fn.image = fm_img
+                    for n in mat.node_tree.nodes:
+                        if n.type == 'GROUP' and n.node_tree:
+                            sub_fm = n.node_tree.nodes.get('Group')
+                            if sub_fm and sub_fm.type == 'GROUP' and sub_fm.node_tree:
+                                for fn in sub_fm.node_tree.nodes:
+                                    if fn.type == 'TEX_IMAGE':
+                                        fn.image = fm_img
+
+            # Assign to material nodes
+            sh_node = mat.node_tree.nodes.get('Group.005') or mat.node_tree.nodes.get('Outlines')
             for node in mat.node_tree.nodes:
                 if node.type == 'TEX_IMAGE':
                     n_label = (node.label or node.name).lower()
-                    if ('maintex' in n_label or 'image texture.001' in n_label or 'diffuse' in n_label or 'color' in n_label) and 'lightmap' not in n_label and 'exp' not in n_label:
+                    n_name = node.name.lower()
+                    if n_name in ('image texture.001', 'outline_diffuse') or ('maintex' in n_label or 'diffuse' in n_label or 'color' in n_label) and 'lightmap' not in n_label and 'exp' not in n_label:
                         if diff_img:
                             node.image = diff_img
-                    elif ('lightmap' in n_label or node.name == 'Image Texture' or 'lightmap' in (node.name).lower()) and 'exp' not in n_label:
+                    elif n_name in ('image texture', 'outline_lightmap') or ('lightmap' in n_label or 'lightmap' in n_name) and 'exp' not in n_label:
                         if lm_img:
                             node.image = lm_img
-                    elif ('exp' in n_label or 'face' in n_label or node.name == 'Image Texture.002') and part_key == 'face':
-                        if fm_img:
-                            node.image = fm_img
+                        else:
+                            node.image = None
+                            if sh_node and '_LightmapColor' in sh_node.inputs:
+                                for l in list(sh_node.inputs['_LightmapColor'].links):
+                                    mat.node_tree.links.remove(l)
+                                sh_node.inputs['_LightmapColor'].default_value = (0.0, 0.5, 0.0, 1.0)
+                            if sh_node and '_LightmapAlpha' in sh_node.inputs:
+                                for l in list(sh_node.inputs['_LightmapAlpha'].links):
+                                    mat.node_tree.links.remove(l)
+                                sh_node.inputs['_LightmapAlpha'].default_value = 0.0
+                    elif is_face and (n_name == 'image texture.002' or 'exp' in n_label):
+                        if exp_img:
+                            node.image = exp_img
+                        else:
+                            node.image = None
+                            if sh_node and '_ExpTex' in sh_node.inputs:
+                                for l in list(sh_node.inputs['_ExpTex'].links):
+                                    mat.node_tree.links.remove(l)
+                                sh_node.inputs['_ExpTex'].default_value = (0.0, 0.0, 0.0, 1.0)
+
+        try:
+            from setup_wizard.material_data_import_setup.game_material_data_importers import HonkaiImpact3rdMaterialDataImporter
+            HonkaiImpact3rdMaterialDataImporter.apply_all_hi3_material_data(self.context, directory=directory)
+        except Exception as e:
+            print(f"[HI3 TEXTURES] Notice applying material data: {e}")
 
         self.blender_operator.report({'INFO'}, 'Successfully imported Honkai Impact 3rd textures!')
         if cache_enabled and directory:
