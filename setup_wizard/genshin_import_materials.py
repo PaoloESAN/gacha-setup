@@ -718,6 +718,11 @@ class GI_OT_GenshinImportMaterials(Operator, ImportHelper, CustomOperatorPropert
 
             material_importer_service = MaterialImporterService(game_material_importer)
             material_importer_service.import_materials()
+            try:
+                from setup_wizard.utils.texture_utils import fix_missing_textures
+                fix_missing_textures()
+            except Exception as e_fix:
+                print(f"[MATERIAL IMPORT] Notice fix_missing_textures: {e_fix}")
         except Exception as ex:
             print(f"[DEBUG ERROR] Exception in GI_OT_GenshinImportMaterials.execute: {ex}")
             raise ex

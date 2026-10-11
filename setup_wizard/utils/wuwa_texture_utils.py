@@ -278,17 +278,16 @@ def load_image_safely(file_path: str, suffix: str) -> Optional[bpy.types.Image]:
             file_path = found
         else:
             return None
+    from setup_wizard.utils.texture_utils import load_or_get_image
     file_name = os.path.basename(file_path)
-    img = bpy.data.images.get(file_name)
-    if not img:
+    img = load_or_get_image(file_path, file_name)
+    if img:
+        img.alpha_mode = "CHANNEL_PACKED"
+        needs_srgb = suffix.upper() in ["_D", "_SKIN"]
         try:
-            img = bpy.data.images.load(file_path)
-            img.alpha_mode = "CHANNEL_PACKED"
-            needs_srgb = suffix.upper() in ["_D", "_SKIN"]
             img.colorspace_settings.name = "sRGB" if needs_srgb else "Non-Color"
-        except Exception as e:
-            print(f"[WuWa Texture] Error loading {file_path}: {e}")
-            return None
+        except Exception:
+            pass
     return img
 
 

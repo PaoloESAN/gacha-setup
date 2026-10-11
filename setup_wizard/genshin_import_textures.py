@@ -52,6 +52,10 @@ class GI_OT_GenshinImportTextures(Operator, ImportHelper, CustomOperatorProperti
             cache_using_cache_key(get_cache(context.window_manager.cache_enabled), CHARACTER_MODEL_FOLDER_FILE_PATH, self.file_directory)
 
 
+        from setup_wizard.utils.texture_utils import fix_missing_textures
+        if self.file_directory:
+            fix_missing_textures(self.file_directory)
+
         game_texture_importer: GameTextureImporter = \
             GameTextureImporterFactory.create(self.game_type, self, context)
         material_default_value_setter = MaterialDefaultValueSetterFactory.create(self.game_type)
@@ -61,6 +65,9 @@ class GI_OT_GenshinImportTextures(Operator, ImportHelper, CustomOperatorProperti
 
         if status == {'FINISHED'}:
             texture_importer_service.set_default_values()
+
+        if self.file_directory:
+            fix_missing_textures(self.file_directory)
 
         super().clear_custom_properties()
         return {'FINISHED'}

@@ -17,6 +17,7 @@ from setup_wizard.domain.shader_material_name_keywords import ShaderMaterialName
 from setup_wizard.import_order import CHARACTER_MODEL_FOLDER_FILE_PATH, cache_using_cache_key, get_actual_material_name_for_dress, get_cache
 import re
 from setup_wizard.utils.genshin_body_part_deducer import get_npc_mesh_body_part_name
+from setup_wizard.utils.texture_utils import fix_missing_textures, load_or_get_image
 
 
 def matches_material_part_name(filename, part_name):
@@ -219,11 +220,10 @@ class OutlineTextureImporter(ABC):
 
     def assign_texture_to_node(self, node, character_model_folder_file_path, texture_file_name):
         texture_img_path = os.path.normpath(os.path.join(character_model_folder_file_path, texture_file_name))
-        texture_img = bpy.data.images.get(texture_file_name)
-        if not texture_img:
-            texture_img = bpy.data.images.load(filepath=texture_img_path, check_existing=True)
-        texture_img.alpha_mode = 'CHANNEL_PACKED'
-        node.image = texture_img
+        texture_img = load_or_get_image(texture_img_path, texture_file_name)
+        if texture_img:
+            texture_img.alpha_mode = 'CHANNEL_PACKED'
+            node.image = texture_img
 
     def get_outline_material_fallback(self, body_part_material_name):
         prefix = getattr(self.material_names, 'MATERIAL_PREFIX', '') if self.material_names else ''
@@ -298,7 +298,9 @@ class GenshinImpactOutlineTextureImporter(OutlineTextureImporter):
                 game_type=self.blender_operator.game_type,
             )
             return {'FINISHED'}
-        
+
+        fix_missing_textures(character_model_folder_file_path)
+
         for name, folder, files in os.walk(character_model_folder_file_path):
             if "__MACOSX" in name:
                 continue
@@ -397,6 +399,8 @@ class HonkaiStarRailOutlineTextureImporter(OutlineTextureImporter):
             )
             return {'FINISHED'}
 
+        fix_missing_textures(character_model_folder_file_path)
+
         for name, folder, files in os.walk(character_model_folder_file_path):
             if "__MACOSX" in name:
                 continue
@@ -465,11 +469,10 @@ class HonkaiStarRailOutlineTextureImporter(OutlineTextureImporter):
         if lightmap_filenames:
             lightmap_filename = lightmap_filenames[0]
             texture_img_path = os.path.normpath(os.path.join(character_model_folder_file_path, lightmap_filename))
-            texture_img = bpy.data.images.get(lightmap_filename)
-            if not texture_img:
-                texture_img = bpy.data.images.load(filepath=texture_img_path, check_existing=True)
-            texture_img.alpha_mode = 'CHANNEL_PACKED'
-            hsr_texture_importer.set_lightmap_texture(texture_type, outline_material, texture_img)
+            texture_img = load_or_get_image(texture_img_path, lightmap_filename)
+            if texture_img:
+                texture_img.alpha_mode = 'CHANNEL_PACKED'
+                hsr_texture_importer.set_lightmap_texture(texture_type, outline_material, texture_img)
 
     def assign_diffuse_texture(self, character_model_folder_file_path, diffuse_files, body_part_material_name, actual_material_part_name):
         outline_material = bpy.data.materials.get(
@@ -502,11 +505,10 @@ class HonkaiStarRailOutlineTextureImporter(OutlineTextureImporter):
         if diffuse_filenames:
             diffuse_filename = diffuse_filenames[0]
             texture_img_path = os.path.normpath(os.path.join(character_model_folder_file_path, diffuse_filename))
-            texture_img = bpy.data.images.get(diffuse_filename)
-            if not texture_img:
-                texture_img = bpy.data.images.load(filepath=texture_img_path, check_existing=True)
-            texture_img.alpha_mode = 'CHANNEL_PACKED'
-            hsr_texture_importer.set_diffuse_texture(texture_type, outline_material, texture_img)
+            texture_img = load_or_get_image(texture_img_path, diffuse_filename)
+            if texture_img:
+                texture_img.alpha_mode = 'CHANNEL_PACKED'
+                hsr_texture_importer.set_diffuse_texture(texture_type, outline_material, texture_img)
 
 
 class PunishingGrayRavenOutlineTextureImporter(OutlineTextureImporter):

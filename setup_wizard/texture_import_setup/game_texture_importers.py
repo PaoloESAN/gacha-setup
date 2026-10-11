@@ -18,6 +18,7 @@ from setup_wizard.import_order import (
     set_active_character_directory,
 )
 from setup_wizard.texture_import_setup.texture_importer_types import GenshinTextureImporter, TextureImporterFactory, TextureImporterType
+from setup_wizard.utils.texture_utils import fix_missing_textures, load_or_get_image
 
 
 class GameTextureImporter(ABC):
@@ -273,6 +274,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
             )
             return {'FINISHED'}
 
+        fix_missing_textures(directory)
         self.import_textures_from_folder(directory)
 
         self.blender_operator.report({'INFO'}, 'Imported textures')
@@ -841,7 +843,9 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
             if not os.path.isfile(img_path):
                 return None
 
-            img = bpy.data.images.load(img_path, check_existing=True)
+            img = load_or_get_image(img_path, file_name)
+            if not img:
+                return None
             img.colorspace_settings.name = 'sRGB' if is_color else 'Non-Color'
             img.alpha_mode = 'CHANNEL_PACKED'
 
@@ -971,16 +975,17 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                 if is_alice_pingmu:
                     belt_path = get_belt_texture_path()
                     if belt_path and os.path.isfile(belt_path):
-                        belt_img = bpy.data.images.load(belt_path, check_existing=True)
-                        belt_img.colorspace_settings.name = 'sRGB'
-                        belt_img.alpha_mode = 'CHANNEL_PACKED'
+                        belt_img = load_or_get_image(belt_path)
+                        if belt_img:
+                            belt_img.colorspace_settings.name = 'sRGB'
+                            belt_img.alpha_mode = 'CHANNEL_PACKED'
                         
                         target_socket = None
                         for inp in kythera_group_node.inputs:
                             if inp.name.lower().strip() in ["_d map", "_d", "diffuse", "diffuse texture"]:
                                 target_socket = inp
                                 break
-                        if target_socket:
+                        if target_socket and belt_img:
                             tex_node = mat.node_tree.nodes.get("Texture_D")
                             if not tex_node:
                                 tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
@@ -1029,10 +1034,11 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                         if lm_node:
                             img_path = os.path.join(tex_folder, face_lm) if os.path.isfile(os.path.join(tex_folder, face_lm)) else os.path.join(folder, face_lm)
                             if os.path.isfile(img_path):
-                                img = bpy.data.images.load(img_path, check_existing=True)
-                                img.colorspace_settings.name = 'Non-Color'
-                                img.alpha_mode = 'CHANNEL_PACKED'
-                                lm_node.image = img
+                                img = load_or_get_image(img_path, face_lm)
+                                if img:
+                                    img.colorspace_settings.name = 'Non-Color'
+                                    img.alpha_mode = 'CHANNEL_PACKED'
+                                    lm_node.image = img
                         else:
                             connect_tex_to_socket(mat, kythera_group_node, "Face_Lightmap", ["Light Map", "LightMap", "_Lightmap"], face_lm, is_color=False, y_offset=-280)
 
@@ -1072,9 +1078,10 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                 if is_alice_pingmu:
                     belt_path = get_belt_texture_path()
                     if belt_path and os.path.isfile(belt_path):
-                        belt_img = bpy.data.images.load(belt_path, check_existing=True)
-                        belt_img.colorspace_settings.name = 'sRGB'
-                        belt_img.alpha_mode = 'CHANNEL_PACKED'
+                        belt_img = load_or_get_image(belt_path)
+                        if belt_img:
+                            belt_img.colorspace_settings.name = 'sRGB'
+                            belt_img.alpha_mode = 'CHANNEL_PACKED'
 
                         gmp_node = None
                         for node in mat.node_tree.nodes:
@@ -1082,7 +1089,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                                 gmp_node = node
                                 break
 
-                        if gmp_node:
+                        if gmp_node and belt_img:
                             target_socket = None
                             for inp in gmp_node.inputs:
                                 if "plug shader output" in inp.name.lower():
@@ -1116,16 +1123,17 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                     if face_d:
                         img_path = os.path.join(tex_folder, face_d) if os.path.isfile(os.path.join(tex_folder, face_d)) else os.path.join(folder, face_d)
                         if os.path.isfile(img_path):
-                            img = bpy.data.images.load(img_path, check_existing=True)
-                            img.colorspace_settings.name = 'sRGB'
-                            img.alpha_mode = 'CHANNEL_PACKED'
-                            for node in mat.node_tree.nodes:
-                                if node.type == 'TEX_IMAGE':
-                                    n_low = node.name.lower()
-                                    if any(k in n_low for k in ["face_d", "texture_d", "_d", "diffuse"]):
-                                        node.image = img
-                                    elif not node.image and "lightmap" not in n_low and "shadow" not in n_low:
-                                        node.image = img
+                            img = load_or_get_image(img_path, face_d)
+                            if img:
+                                img.colorspace_settings.name = 'sRGB'
+                                img.alpha_mode = 'CHANNEL_PACKED'
+                                for node in mat.node_tree.nodes:
+                                    if node.type == 'TEX_IMAGE':
+                                        n_low = node.name.lower()
+                                        if any(k in n_low for k in ["face_d", "texture_d", "_d", "diffuse"]):
+                                            node.image = img
+                                        elif not node.image and "lightmap" not in n_low and "shadow" not in n_low:
+                                            node.image = img
 
                     face_lm = res_textures.get('lightmap') or res_textures.get('n')
                     if not face_lm:
@@ -1134,16 +1142,17 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                     if face_lm:
                         img_path = os.path.join(tex_folder, face_lm) if os.path.isfile(os.path.join(tex_folder, face_lm)) else os.path.join(folder, face_lm)
                         if os.path.isfile(img_path):
-                            img_lm = bpy.data.images.load(img_path, check_existing=True)
-                            img_lm.colorspace_settings.name = 'Non-Color'
-                            img_lm.alpha_mode = 'CHANNEL_PACKED'
-                            for node in mat.node_tree.nodes:
-                                if node.type == 'TEX_IMAGE' and "lightmap" in node.name.lower():
-                                    node.image = img_lm
-                                elif node.type == 'GROUP' and node.node_tree and 'face lightmap' in node.node_tree.name.lower():
-                                    for sub_node in node.node_tree.nodes:
-                                        if sub_node.type == 'TEX_IMAGE':
-                                            sub_node.image = img_lm
+                            img_lm = load_or_get_image(img_path, face_lm)
+                            if img_lm:
+                                img_lm.colorspace_settings.name = 'Non-Color'
+                                img_lm.alpha_mode = 'CHANNEL_PACKED'
+                                for node in mat.node_tree.nodes:
+                                    if node.type == 'TEX_IMAGE' and "lightmap" in node.name.lower():
+                                        node.image = img_lm
+                                    elif node.type == 'GROUP' and node.node_tree and 'face lightmap' in node.node_tree.name.lower():
+                                        for sub_node in node.node_tree.nodes:
+                                            if sub_node.type == 'TEX_IMAGE':
+                                                sub_node.image = img_lm
 
                 for node in mat.node_tree.nodes:
                     if node.type == 'TEX_IMAGE':
@@ -1178,22 +1187,24 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                         if best_tex:
                             img_path = os.path.join(tex_folder, best_tex) if os.path.isfile(os.path.join(tex_folder, best_tex)) else os.path.join(folder, best_tex)
                             if os.path.isfile(img_path):
-                                img = bpy.data.images.load(img_path, check_existing=True)
-                                img.colorspace_settings.name = 'sRGB' if suffix == 'd' else 'Non-Color'
-                                img.alpha_mode = 'CHANNEL_PACKED'
-                                node.image = img
+                                img = load_or_get_image(img_path, best_tex)
+                                if img:
+                                    img.colorspace_settings.name = 'sRGB' if suffix == 'd' else 'Non-Color'
+                                    img.alpha_mode = 'CHANNEL_PACKED'
+                                    node.image = img
 
                     elif node.type == 'GROUP' and node.node_tree and 'face lightmap' in node.node_tree.name.lower():
                         face_lm = res_textures.get('lightmap') or res_textures.get('n')
                         if face_lm:
                             img_path = os.path.join(tex_folder, face_lm) if os.path.isfile(os.path.join(tex_folder, face_lm)) else os.path.join(folder, face_lm)
                             if os.path.isfile(img_path):
-                                img = bpy.data.images.load(img_path, check_existing=True)
-                                img.colorspace_settings.name = 'Non-Color'
-                                img.alpha_mode = 'CHANNEL_PACKED'
-                                for sub_node in node.node_tree.nodes:
-                                    if sub_node.type == 'TEX_IMAGE':
-                                        sub_node.image = img
+                                img = load_or_get_image(img_path, face_lm)
+                                if img:
+                                    img.colorspace_settings.name = 'Non-Color'
+                                    img.alpha_mode = 'CHANNEL_PACKED'
+                                    for sub_node in node.node_tree.nodes:
+                                        if sub_node.type == 'TEX_IMAGE':
+                                            sub_node.image = img
 
             # If this is a Hair material and no hair texture was found,
             # remove its material slot (Slot 2+) from mesh objects so the hair inherits Slot 1 (only for ZZZ)
@@ -1344,10 +1355,11 @@ def sync_zzz_outline_textures(folder=None, filtered_files=None, main_prefix=None
                             cand_lm = [f for f in filtered_files if "lightmap" in f.lower()]
                             if cand_lm: target_lm = cand_lm[0]
                         if target_lm:
-                            img = bpy.data.images.load(os.path.join(folder, target_lm), check_existing=True)
-                            img.colorspace_settings.name = 'Non-Color'
-                            img.alpha_mode = 'CHANNEL_PACKED'
-                            node.image = img
+                            img = load_or_get_image(os.path.join(folder, target_lm), target_lm)
+                            if img:
+                                img.colorspace_settings.name = 'Non-Color'
+                                img.alpha_mode = 'CHANNEL_PACKED'
+                                node.image = img
                     else:
                         # Diffuse / D image
                         cat_tag = "face" if "face" in outline_lower else ("hair" if "hair" in outline_lower else ("body_2" if "2" in outline_lower else "body"))
@@ -1355,10 +1367,11 @@ def sync_zzz_outline_textures(folder=None, filtered_files=None, main_prefix=None
                         if not cand_d and cat_tag == "body":
                             cand_d = [f for f in filtered_files if f.lower().rsplit(".", 1)[0].endswith("_d") and "body" in f.lower() and "2" not in f.lower() and "3" not in f.lower()]
                         if cand_d:
-                            img = bpy.data.images.load(os.path.join(folder, cand_d[0]), check_existing=True)
-                            img.colorspace_settings.name = 'sRGB'
-                            img.alpha_mode = 'CHANNEL_PACKED'
-                            node.image = img
+                            img = load_or_get_image(os.path.join(folder, cand_d[0]), cand_d[0])
+                            if img:
+                                img.colorspace_settings.name = 'sRGB'
+                                img.alpha_mode = 'CHANNEL_PACKED'
+                                node.image = img
 
 
 def create_outline_image_copy(src_image, colorspace_name='Non-Color', suffix='_outline_lightmap'):
@@ -1622,6 +1635,7 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
 
         from setup_wizard.utils.nte_json_parser import load_nte_character_data, get_nte_material_data
 
+        fix_missing_textures(folder)
         database = load_nte_character_data(folder)
         image_files = database.get("image_files_list", [])
         if not image_files and os.path.isdir(folder):
@@ -1649,10 +1663,11 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
                 if best_diff:
                     img_path = os.path.join(folder, best_diff)
                     if os.path.isfile(img_path):
-                        img = bpy.data.images.load(img_path, check_existing=True)
-                        for node in mat.node_tree.nodes:
-                            if node.type == 'TEX_IMAGE':
-                                node.image = img
+                        img = load_or_get_image(img_path, best_diff)
+                        if img:
+                            for node in mat.node_tree.nodes:
+                                if node.type == 'TEX_IMAGE':
+                                    node.image = img
                 continue
 
             mat_info = get_nte_material_data(mat.name, database)
@@ -1683,37 +1698,40 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
                         if best_diff and target_socket and not target_socket.is_linked:
                             img_path = os.path.join(folder, best_diff)
                             if os.path.isfile(img_path):
-                                img = bpy.data.images.load(img_path, check_existing=True)
-                                tex_node = next((n for n in mat.node_tree.nodes if n.type == 'TEX_IMAGE' and n.image == img), None)
-                                if not tex_node:
-                                    tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
-                                    tex_node.image = img
-                                    tex_node.location = (node.location.x - 320, node.location.y)
-                                mat.node_tree.links.new(tex_node.outputs['Color'], target_socket)
+                                img = load_or_get_image(img_path, best_diff)
+                                if img:
+                                    tex_node = next((n for n in mat.node_tree.nodes if n.type == 'TEX_IMAGE' and n.image == img), None)
+                                    if not tex_node:
+                                        tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
+                                        tex_node.image = img
+                                        tex_node.location = (node.location.x - 320, node.location.y)
+                                    mat.node_tree.links.new(tex_node.outputs['Color'], target_socket)
 
                         mask_socket = node.inputs.get('M') or node.inputs.get('MASK') or node.inputs.get('Mask')
                         if mask_socket and not mask_socket.is_linked:
                             if best_mask:
                                 img_path = os.path.join(folder, best_mask)
                                 if os.path.isfile(img_path):
-                                    img = bpy.data.images.load(img_path, check_existing=True)
-                                    img.colorspace_settings.name = 'Non-Color'
-                                    tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
-                                    tex_node.image = img
-                                    tex_node.location = (node.location.x - 320, node.location.y - 220)
-                                    mat.node_tree.links.new(tex_node.outputs['Color'], mask_socket)
+                                    img = load_or_get_image(img_path, best_mask)
+                                    if img:
+                                        img.colorspace_settings.name = 'Non-Color'
+                                        tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
+                                        tex_node.image = img
+                                        tex_node.location = (node.location.x - 320, node.location.y - 220)
+                                        mat.node_tree.links.new(tex_node.outputs['Color'], mask_socket)
 
                         id_socket = node.inputs.get('ID') or node.inputs.get('Id') or node.inputs.get('id')
                         if id_socket and not id_socket.is_linked:
                             if best_id:
                                 img_path = os.path.join(folder, best_id)
                                 if os.path.isfile(img_path):
-                                    img = bpy.data.images.load(img_path, check_existing=True)
-                                    img.colorspace_settings.name = 'Non-Color'
-                                    tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
-                                    tex_node.image = img
-                                    tex_node.location = (node.location.x - 320, node.location.y - 440)
-                                    mat.node_tree.links.new(tex_node.outputs['Color'], id_socket)
+                                    img = load_or_get_image(img_path, best_id)
+                                    if img:
+                                        img.colorspace_settings.name = 'Non-Color'
+                                        tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
+                                        tex_node.image = img
+                                        tex_node.location = (node.location.x - 320, node.location.y - 440)
+                                        mat.node_tree.links.new(tex_node.outputs['Color'], id_socket)
 
                         # Apply JSON parameters to group inputs if available
                         if mat_info:
@@ -1772,6 +1790,7 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
             return
 
         set_active_character_directory(folder)
+        fix_missing_textures(folder)
 
         from setup_wizard.utils.wuwa_texture_utils import (
             split_material_name,
@@ -2376,6 +2395,8 @@ class ArknightsEndfieldTextureImporterFacade(GameTextureImporter):
             self.blender_operator.report({'WARNING'}, f"Folder '{folder}' does not exist.")
             return
 
+        fix_missing_textures(folder)
+
         # 1. Scan texture files
         texture_file_map = {}
         for root, _, files in os.walk(folder):
@@ -2511,12 +2532,7 @@ class ArknightsEndfieldTextureImporterFacade(GameTextureImporter):
                 # Load and assign image
                 if matched_path and os.path.isfile(matched_path):
                     img_name = os.path.basename(matched_path)
-                    img = bpy.data.images.get(img_name)
-                    if not img:
-                        try:
-                            img = bpy.data.images.load(matched_path)
-                        except Exception:
-                            img = None
+                    img = load_or_get_image(matched_path, img_name)
                     if img:
                         node.image = img
                         img.alpha_mode = 'CHANNEL_PACKED'
@@ -2540,12 +2556,7 @@ class ArknightsEndfieldTextureImporterFacade(GameTextureImporter):
                         for tf_name, tf_path in texture_file_map.items():
                             core_name = os.path.splitext(os.path.basename(tf_path))[0].lower()
                             if core_name in img_lower or img_lower.startswith(core_name):
-                                cur_img = bpy.data.images.get(os.path.basename(tf_path))
-                                if not cur_img:
-                                    try:
-                                        cur_img = bpy.data.images.load(tf_path)
-                                    except Exception:
-                                        cur_img = None
+                                cur_img = load_or_get_image(tf_path)
                                 if cur_img:
                                     node.image = cur_img
                                     cur_img.alpha_mode = 'CHANNEL_PACKED'
@@ -2601,6 +2612,8 @@ class HonkaiImpact3rdTextureImporterFacade(GameTextureImporter):
             )
             return {'FINISHED'}
 
+        fix_missing_textures(directory)
+
         # Scan all textures recursively
         image_exts = ('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff', '.webp')
         texture_file_map = {}
@@ -2619,12 +2632,7 @@ class HonkaiImpact3rdTextureImporterFacade(GameTextureImporter):
             if not fpath or not os.path.isfile(fpath):
                 return None
             fname = os.path.basename(fpath)
-            img = bpy.data.images.get(fname)
-            if not img:
-                try:
-                    img = bpy.data.images.load(filepath=fpath, check_existing=True)
-                except Exception:
-                    img = None
+            img = load_or_get_image(fpath, fname)
             if img:
                 img.alpha_mode = 'CHANNEL_PACKED'
                 try:

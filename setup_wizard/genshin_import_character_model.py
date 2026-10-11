@@ -1409,6 +1409,8 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
 
             if character_model_directory:
                 set_active_character_directory(character_model_directory)
+                from setup_wizard.utils.texture_utils import fix_missing_textures
+                fix_missing_textures(character_model_directory)
 
             global IMPORTED_VIA_WIZARD
             IMPORTED_VIA_WIZARD = True
