@@ -42,7 +42,7 @@ class MaterialDefaultValueSetterFactory:
         elif game_type == GameType.HONKAI_IMPACT_3RD.name:
             return HonkaiImpact3rdMaterialDefaultValueSetter()
         elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
-            return HonkaiStarRailMaterialDefaultValueSetter()
+            return HonkaiNexusAnimaMaterialDefaultValueSetter()
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -234,6 +234,13 @@ class HonkaiStarRailMaterialDefaultValueSetter(MaterialDefaultValueSetter):
                         sub_inp = sub_node.inputs.get('Enable Transparency')
                         if sub_inp:
                             sub_inp.default_value = val
+
+
+class HonkaiNexusAnimaMaterialDefaultValueSetter(HonkaiStarRailMaterialDefaultValueSetter):
+    def set_default_values(self):
+        super().set_default_values()
+        from setup_wizard.utils.hna_material_utils import configure_runtime_settings
+        configure_runtime_settings()
 
 
 class PunishingGrayRavenMaterialDefaultValueSetter(MaterialDefaultValueSetter):

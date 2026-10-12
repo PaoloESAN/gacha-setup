@@ -287,7 +287,10 @@
       "set_up_screen_space_reflections",
       "vertex_paint_face_see_through_effect",
       "delete_specific_objects",
-      "set_up_armtwist_bone_constraints"
+      "set_up_armtwist_bone_constraints",
+      "hna_apply_material_settings",
+      "compositing_node_setup",
+      "post_processing_default_settings"
     ],
     "HONKAI_NEXUS_ANIMA_OT_setup_wizard_ui_no_outlines": [
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",
@@ -303,7 +306,10 @@
       "set_up_screen_space_reflections",
       "vertex_paint_face_see_through_effect",
       "delete_specific_objects",
-      "set_up_armtwist_bone_constraints"
+      "set_up_armtwist_bone_constraints",
+      "hna_apply_material_settings",
+      "compositing_node_setup",
+      "post_processing_default_settings"
     ],
     "HONKAI_NEXUS_ANIMA_OT_set_up_character": [
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_character",
@@ -314,14 +320,16 @@
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_materials",
       "import_materials",
       "replace_default_materials",
-      "import_character_textures"
+      "import_character_textures",
+      "hna_apply_material_settings"
     ],
     "HONKAI_NEXUS_ANIMA_OT_set_up_outlines": [
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_set_up_outlines",
       "import_outlines",
       "setup_geometry_nodes",
       "import_outline_lightmaps",
-      "import_material_data"
+      "import_material_data",
+      "hna_apply_material_settings"
     ],
     "HONKAI_NEXUS_ANIMA_OT_finish_setup": [
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_final_steps",
@@ -330,7 +338,10 @@
       "set_up_screen_space_reflections",
       "vertex_paint_face_see_through_effect",
       "delete_specific_objects",
-      "set_up_armtwist_bone_constraints"
+      "set_up_armtwist_bone_constraints",
+      "hna_apply_material_settings",
+      "compositing_node_setup",
+      "post_processing_default_settings"
     ],
     "ZENLESS_ZONE_ZERO_OT_setup_wizard_ui": [
       "IMPORTANT_PLACEHOLDER_VALUE_KEEP_INDEX_ABOVE_0_setup_wizard_ui",

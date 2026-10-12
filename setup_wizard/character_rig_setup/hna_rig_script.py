@@ -3665,6 +3665,11 @@ def rig_character(
             except Exception:
                 _rig_pkg = None
         if _rig_pkg is not None:
+            # Rotate only the final IK control widgets, after the hand renames.
+            for side in ('L', 'R'):
+                hand_ik = _rig_pkg.pose.bones.get(f'hand_ik.{side}')
+                if hand_ik:
+                    hand_ik.custom_shape_rotation_euler[0] = pi / 2 if side == 'L' else -pi / 2
             ensure_character_collection(bpy.context, _rig_pkg, char_name)
     except Exception as e_pkg:
         print(f"[HNA RIG] Final collection packaging notice: {e_pkg}")

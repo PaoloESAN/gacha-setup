@@ -938,7 +938,26 @@ class ZZZ_OT_SetupBloom(Operator):
         return {'FINISHED'}
 
 
+class HNA_OT_ApplyMaterialSettings(Operator, CustomOperatorProperties):
+    """Keep HNA eye transparency and outline color attributes after setup."""
+    bl_idname = 'honkai_nexus_anima.apply_material_settings'
+    bl_label = 'HNA: Apply Material Settings'
+
+    def execute(self, context):
+        from setup_wizard.utils.hna_material_utils import configure_runtime_settings
+        configure_runtime_settings()
+        context.scene.render.use_compositing = True
+        if self.next_step_idx:
+            NextStepInvoker().invoke(
+                self.next_step_idx, self.invoker_type,
+                high_level_step_name=self.high_level_step_name,
+                game_type=self.game_type,
+            )
+        return {'FINISHED'}
+
+
 register, unregister = bpy.utils.register_classes_factory([
+    HNA_OT_ApplyMaterialSettings,
     GI_OT_SetColorManagementToStandard,
     HYV_OT_SetUpScreenSpaceReflections,
     HYV_OT_VertexPaintFaceSeeThroughEffect,

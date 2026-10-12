@@ -542,6 +542,8 @@ class ComponentFunctionFactory:
             return bpy.ops.punishing_gray_raven.import_chibi_face_texture
         elif component_name == 'paint_vertex_colors':
             return bpy.ops.punishing_gray_raven.paint_vertex_colors
+        elif component_name == 'hna_apply_material_settings':
+            return bpy.ops.honkai_nexus_anima.apply_material_settings
         elif component_name == 'compositing_node_setup':
             return bpy.ops.hoyoverse.custom_composite_node_setup
         elif component_name == 'post_processing_default_settings':

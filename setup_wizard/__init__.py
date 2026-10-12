@@ -116,6 +116,7 @@ else:
         AKE_OT_SetUpHeadDriver,
     )
     from setup_wizard.misc_operations import (
+        HNA_OT_ApplyMaterialSettings,
         ZZZ_OT_RenameCollectionAndRig,
         ZZZ_OT_MoveLightingPanelToCharacterCollection,
         ZZZ_OT_SetupBloom,
@@ -138,7 +139,6 @@ else:
     )
     from setup_wizard.character_rig_setup.pgr_face_rig import PGR_OT_SetupFaceRig
     from setup_wizard.character_rig_setup.hi3_face_rig import HI3_OT_SetupFaceRig
-    from setup_wizard.character_rig_setup.hna_face_rig import HNA_OT_SetupFaceRig
     from setup_wizard.ui.ake_ui_setup_wizard_menu import (
         AKE_PT_Setup_Wizard_UI_Layout,
         AKE_PT_Basic_Setup_Wizard_UI_Layout,
@@ -275,6 +275,7 @@ else:
         unregister_hi3_properties,
     )
     from setup_wizard.ui.hna_ui_setup_wizard_menu import (
+        HNA_PT_CharacterSettings, register_hna_properties, unregister_hna_properties,
         HNA_PT_Setup_Wizard_UI_Layout,
         HNA_PT_Basic_Setup_Wizard_UI_Layout,
         HNA_PT_Advanced_Setup_Wizard_UI_Layout,
@@ -302,6 +303,8 @@ else:
     ]
 
     classes = [
+        HNA_PT_CharacterSettings,
+        HNA_OT_ApplyMaterialSettings,
         CharacterRiggerPropertyGroup,
         CharacterRiggerPropertyManager,
         CharacterSetupWizardAddonPreferences,
@@ -480,7 +483,6 @@ else:
         HNA_OT_FinishSetup,
         PGR_OT_SetupFaceRig,
         HI3_OT_SetupFaceRig,
-        HNA_OT_SetupFaceRig,
     ]
 
     for module in modules:
@@ -548,6 +550,7 @@ else:
         register_gi_properties()
         register_ake_properties()
         register_hi3_properties()
+        register_hna_properties()
         setup_wizard.services.isolation.register()
         if wuwa_frame_change_handler not in bpy.app.handlers.render_init:
             bpy.app.handlers.render_init.append(wuwa_frame_change_handler)
@@ -571,6 +574,7 @@ else:
 
 
     def unregister():
+        unregister_hna_properties()
         unregister_hi3_properties()
         addon_icon_manager.unregister_icons()
         if gacha_rig_ui_load_post_handler in bpy.app.handlers.load_post:

@@ -563,6 +563,10 @@ def append_result(
         for rig in bangboo_rigs:
             organize_bangboo_collections(rig, scene=target)
 
+    if (game_type or '').upper() == 'HONKAI_NEXUS_ANIMA':
+        from setup_wizard.utils.hna_material_utils import configure_runtime_settings
+        configure_runtime_settings(all_imported_objects)
+
     # Select primary armature for immediate user interaction and stamp game tag
     try:
         from setup_wizard.ui.character_settings_utils import stamp_rig_game
@@ -764,6 +768,15 @@ def _setup_scene_compositor(scene, game_type):
                 print("[GACHA SETUP] Configured Neverness to Everness Compositor nodes in main scene.")
         except Exception as exc:
             print(f"[GACHA SETUP] NTE Compositor setup notice: {exc}")
+
+    elif gt == "HONKAI_NEXUS_ANIMA":
+        # Scene compositor trees are not imported by collection append. Reuse
+        # the same compositor and defaults as Genshin in the destination scene.
+        scene.render.use_compositing = True
+        with bpy.context.temp_override(scene=scene):
+            bpy.ops.hoyoverse.custom_composite_node_setup('EXEC_DEFAULT', game_type=gt)
+            bpy.ops.hoyoverse.post_processing_default_settings('EXEC_DEFAULT', game_type=gt)
+        print("[GACHA SETUP] Configured HNA compositor with Genshin post-processing.")
 
     elif gt == "GENSHIN_IMPACT":
         try:

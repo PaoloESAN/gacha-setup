@@ -5,6 +5,9 @@ import bpy
 from bpy.types import Panel, UILayout
 
 from setup_wizard.domain.game_types import GameType
+from setup_wizard.ui.hna_character_settings import (
+    HNA_PT_CharacterSettings, register_hna_properties, unregister_hna_properties,
+)
 from setup_wizard.ui.ui_render_checker import HonkaiNexusAnimaUIRenderChecker
 
 
@@ -209,12 +212,6 @@ class HNA_PT_UI_Character_Rig_Setup_Menu(Panel, HonkaiNexusAnimaUIRenderChecker)
         OperatorFactory.create_rig_character_ui(box)
         OperatorFactory.create(
             box,
-            "honkai_nexus_anima.setup_face_rig",
-            "Set Up Face Rig",
-            "FACE_MAPS",
-        )
-        OperatorFactory.create(
-            box,
             "hoyoverse.apply_hair_clothes_physics",
             "Apply Hair & Clothes Physics",
             "PHYSICS",
@@ -340,6 +337,7 @@ class OperatorFactory:
 
 
 classes = (
+    HNA_PT_CharacterSettings,
     HNA_PT_Setup_Wizard_UI_Layout,
     HNA_PT_Basic_Setup_Wizard_UI_Layout,
     HNA_PT_Advanced_Setup_Wizard_UI_Layout,

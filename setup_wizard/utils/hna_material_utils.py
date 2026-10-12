@@ -89,6 +89,52 @@ def replace_materials():
         mat = bpy.data.materials['HSR - Trans'].copy()
         mat.name = 'HSR - Avatar Trans'
         mat.use_fake_user = True
+    configure_eye_materials()
+
+
+def configure_eye_materials(materials=None):
+    """Apply HNA's transparent eye surface method after material defaults."""
+    for mat in materials if materials is not None else bpy.data.materials:
+        if not mat or not mat.name.startswith('HSR - '):
+            continue
+        name = mat.name.lower().replace('_', '').replace(' ', '')
+        if 'outlines' in name or not any(kind in name for kind in ('eyeshadow', 'iris', 'opaque', 'oqaque')):
+            continue
+        if hasattr(mat, 'surface_render_method'):
+            mat.surface_render_method = 'BLENDED'
+        elif hasattr(mat, 'blend_method'):
+            mat.blend_method = 'BLEND'
+
+
+def configure_outline_vertex_colors(objects=None):
+    """Set the actual outline color socket to attribute Col on Blender 4/5."""
+    for obj in objects if objects is not None else bpy.context.scene.objects:
+        if obj.type != 'MESH':
+            continue
+        for mod in obj.modifiers:
+            if mod.type != 'NODES' or not mod.node_group:
+                continue
+            group = mod.node_group
+            if not group.name.startswith('HoYoverse - Outlines'):
+                continue
+            socket = next((item for item in group.interface.items_tree
+                           if item.item_type == 'SOCKET' and item.in_out == 'INPUT'
+                           and (item.identifier == 'Input_3'
+                                or item.name in {'Vertex Colors', 'Vertex Color'})), None)
+            if not socket:
+                raise RuntimeError('HNA outline vertex color socket is missing')
+            set_modifier_property(mod, socket.identifier + '_attribute_name', 'Col')
+            set_modifier_property(mod, socket.identifier + '_use_attribute', True)
+
+
+def configure_runtime_settings(objects=None):
+    """Reapply HNA settings after rig/setup operations and isolated append."""
+    materials = None
+    if objects is not None:
+        materials = {slot.material for obj in objects if obj.type == 'MESH'
+                     for slot in obj.material_slots if slot.material}
+    configure_eye_materials(materials)
+    configure_outline_vertex_colors(objects)
 
 def nodes_with_images(tree, seen=None):
     seen = seen or set()
@@ -218,6 +264,7 @@ class GeometrySetup:
                 else:
                     current = get_modifier_property(mod, key)
                     set_modifier_property(mod, key, bool(val) if isinstance(current, bool) else val)
+        configure_runtime_settings()
         return {'FINISHED'}
 
 class OutlineTextures:

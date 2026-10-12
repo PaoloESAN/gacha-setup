@@ -34,16 +34,14 @@ def get_property_field(group, field):
         return None
 
 def set_property_field(group, field, value):
-    try:
-        group[field] = value
-        return
-    except (TypeError, KeyError):
-        pass
-        
-    try:
+    # Blender 5.x exposes socket fields through RNA. Writing group[field]
+    # directly can store an enum string as an IDProperty without changing the
+    # real enum used by the UI (e.g. type remains VALUE instead of ATTRIBUTE).
+    if hasattr(group, field):
         setattr(group, field, value)
-    except AttributeError as e:
-        raise e
+        return
+    group[field] = value
+
 
 def has_modifier_property(modifier, key):
     inputs = get_modifier_inputs(modifier)
@@ -77,20 +75,20 @@ def get_modifier_property(modifier, key):
         if key.startswith('Output_') and key.endswith('_attribute_name'):
             base_key = key[:-15]
             if outputs and base_key in outputs:
-                return get_property_field(outputs[base_key], 'attribute_name')
+                return get_property_field(getattr(outputs, base_key) if hasattr(outputs, base_key) else outputs[base_key], 'attribute_name')
         
         if key.endswith('_use_attribute'):
             base_key = key[:-14]
             if base_key in inputs:
-                t = get_property_field(inputs[base_key], 'type')
+                t = get_property_field(getattr(inputs, base_key) if hasattr(inputs, base_key) else inputs[base_key], 'type')
                 return 1 if t == 'ATTRIBUTE' else 0
         elif key.endswith('_attribute_name'):
             base_key = key[:-15]
             if base_key in inputs:
-                return get_property_field(inputs[base_key], 'attribute_name')
+                return get_property_field(getattr(inputs, base_key) if hasattr(inputs, base_key) else inputs[base_key], 'attribute_name')
         
         if key in inputs:
-            return get_property_field(inputs[key], 'value')
+            return get_property_field(getattr(inputs, key) if hasattr(inputs, key) else inputs[key], 'value')
             
     # Safe fallback
     try:

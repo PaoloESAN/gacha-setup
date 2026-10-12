@@ -1183,11 +1183,7 @@ class HonkaiNexusAnimaCharacterRigger(CharacterRigger):
             meshes_joined=True
         )
 
-        try:
-            from setup_wizard.character_rig_setup.hna_face_rig import hna_face_rig_main
-            hna_face_rig_main()
-        except Exception as e_face:
-            print(f"[HNA FACE RIG] Warning during face rig generation: {e_face}")
+        # HNA face rig is temporarily disabled.
 
 
 class ZenlessZoneZeroCharacterRigger(CharacterRigger):
