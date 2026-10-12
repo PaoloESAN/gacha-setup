@@ -92,6 +92,40 @@ def replace_materials():
     configure_eye_materials()
 
 
+def configure_iris_nodes(mat):
+    """Match HNA EyeHighlight's color/alpha wiring and additive body shader."""
+    if not mat.use_nodes or not mat.node_tree:
+        return
+    tree = mat.node_tree
+    shader = next((n for n in tree.nodes if n.type == 'GROUP'
+                   and n.inputs.get('Diffuse Color') is not None
+                   and n.outputs.get('Body Shader') is not None), None)
+    if shader is None:
+        return
+    color = next((n for n in tree.nodes if n.type == 'TEX_IMAGE'
+                  and (n.label == '_Color' or n.name == '_Color')), None)
+    if color is None:
+        color = tree.nodes.new('ShaderNodeTexImage')
+        color.label = '_Color'
+    color.interpolation = 'Cubic'
+    color.projection = 'FLAT'
+    color.extension = 'REPEAT'
+    if color.image:
+        color.image.alpha_mode = 'CHANNEL_PACKED'
+        color.image.colorspace_settings.name = 'sRGB'
+    tree.links.new(color.outputs['Color'], shader.inputs['Diffuse Color'])
+    tree.links.new(color.outputs['Alpha'], shader.inputs['Diffuse Alpha'])
+    for name, value in [('LightMap Color', (0, 0, 0, 1)), ('LightMap Alpha', .1),
+                        ('Alpha / 0 = Normal, 1 = Add', 1), ('Use Alpha', 1), ('Use Emission', 0)]:
+        socket = shader.inputs.get(name)
+        if socket is not None:
+            for link in list(socket.links):
+                tree.links.remove(link)
+            socket.default_value = value
+    for output in (n for n in tree.nodes if n.type == 'OUTPUT_MATERIAL'):
+        tree.links.new(shader.outputs['Body Shader'], output.inputs['Surface'])
+
+
 def configure_eye_materials(materials=None):
     """Apply HNA's transparent eye surface method after material defaults."""
     for mat in materials if materials is not None else bpy.data.materials:
@@ -100,6 +134,9 @@ def configure_eye_materials(materials=None):
         name = mat.name.lower().replace('_', '').replace(' ', '')
         if 'outlines' in name or not any(kind in name for kind in ('eyeshadow', 'iris', 'opaque', 'oqaque')):
             continue
+        if (material_kind(mat.get('_original_material_name', '')) == 'Iris'
+                or mat.name.startswith('HSR - Avatar Iris')):
+            configure_iris_nodes(mat)
         if hasattr(mat, 'surface_render_method'):
             mat.surface_render_method = 'BLENDED'
         elif hasattr(mat, 'blend_method'):
@@ -162,7 +199,7 @@ def import_textures(op):
         if not source:
             continue
         kind = material_kind(source)
-        if kind not in {'Body', 'Hair', 'Face'}:
+        if kind not in {'Body', 'Hair', 'Face', 'Iris'}:
             continue
         data = json.loads((folder / 'Materials' / (source + '.json')).read_text(encoding='utf8'))['m_SavedProperties']
         env = data.get('m_TexEnvs', {})
@@ -171,9 +208,15 @@ def import_textures(op):
             texture = env.get(prop, {}).get('m_Texture', {}).get('Name')
             if not texture:
                 continue
-            index = 0 if prop == '_MainTex' else 1
-            if index < len(top):
-                top[index].image = load_image(folder, texture, cs)
+            if kind == 'Iris':
+                configure_iris_nodes(mat)
+                color = next(n for n in mat.node_tree.nodes if n.type == 'TEX_IMAGE' and n.label == '_Color')
+                if prop == '_MainTex':
+                    color.image = load_image(folder, texture, cs)
+            else:
+                index = 0 if prop == '_MainTex' else 1
+                if index < len(top):
+                    top[index].image = load_image(folder, texture, cs)
         groups = {'_DSRampTex': ('Hair_Ramp' if kind == 'Hair' else 'Body_Ramp', 'sRGB'), '_FaceMap': ('_FaceMap', 'Non-Color'), '_FaceExpression': ('_Expression', 'sRGB')}
         for prop, (groupname, cs) in groups.items():
             texture = env.get(prop, {}).get('m_Texture', {}).get('Name')
@@ -183,6 +226,7 @@ def import_textures(op):
             if group:
                 for n in nodes_with_images(group):
                     n.image = load_image(folder, texture, cs)
+    configure_eye_materials()
     return {'FINISHED'}
 
 def linear(c):
