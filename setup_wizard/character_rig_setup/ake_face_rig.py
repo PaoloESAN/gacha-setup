@@ -2,6 +2,7 @@
 # Arknights: Endfield - Isaac Face Rig Integration
 
 import os
+import math
 import bpy
 from bpy.types import Operator
 from mathutils import Vector, Matrix
@@ -108,6 +109,27 @@ def _resolve_isaac_eyes(rig, eye_names=None):
     return eyes
 
 
+def _isaac_iris_center(rig, side, name, context):
+    """Find the iris surface in rig rest space, including rigid NPC irises."""
+    candidates = list(dict.fromkeys([f'face{"Lf" if side == "L" else "Rt"}IrisJoint',
+                                    f'DEF-eye.{side}', name]))
+    inverse = rig.matrix_world.inverted()
+    for candidate in candidates:
+        points = []
+        for mesh in context.scene.objects:
+            if mesh.type != 'MESH' or not any(m.type == 'ARMATURE' and m.object == rig for m in mesh.modifiers):
+                continue
+            group = mesh.vertex_groups.get(candidate)
+            if group is None:
+                continue
+            transform = inverse @ mesh.matrix_world
+            points.extend(transform @ v.co for v in mesh.data.vertices
+                          if any(g.group == group.index and g.weight > .9 for g in v.groups))
+        if points:
+            return sum(points, Vector()) / len(points)
+    return rig.data.bones[name].head_local.copy()
+
+
 def bind_isaac_eye_tracking(rig, eyes, pivots=None, context=None):
     """Rotate the iris around its socket without translating it with the gaze target."""
     context = context or bpy.context
@@ -120,11 +142,21 @@ def bind_isaac_eye_tracking(rig, eyes, pivots=None, context=None):
     for side, name in eyes.items():
         if not name:
             continue
-        pivot = rig.data.bones.get(pivots.get(side, "")) or rig.data.bones[name]
-        positions[side] = pivot.head_local.copy()
+        pivot = rig.data.bones.get(pivots.get(side, ""))
+        saved_socket = rig.get(f'ake_eye_socket_{side}')
+        positions[side] = (pivot.head_local.copy() if pivot else
+                           Vector(saved_socket) if saved_socket is not None else
+                           rig.data.bones[name].head_local.copy())
         follow = rig.pose.bones.get(f"Eye-Track-Follow.{side}")
         if follow:
-            follow_positions[side] = follow.head.copy()
+            target = follow.bone.head_local.copy()
+            ray = _isaac_iris_center(rig, side, name, context) - positions[side]
+            if ray.length > 1e-6 and (target - positions[side]).dot(ray) <= 0:
+                # The template panel can end up behind a scaled FBX socket.
+                # Keep the gaze target in front of the iris in the neutral pose.
+                world_scale = max(rig.matrix_world.to_scale().length / math.sqrt(3), 1e-6)
+                target = positions[side] + ray.normalized() * max(ray.length * 2, .1 / world_scale)
+            follow_positions[side] = target
         for c in list(rig.pose.bones[name].constraints):
             if c.name.startswith("Isaac_Eye"):
                 rig.pose.bones[name].constraints.remove(c)
@@ -134,6 +166,11 @@ def bind_isaac_eye_tracking(rig, eyes, pivots=None, context=None):
         track = rig.data.edit_bones.get(f"Eye-Track.{side}")
         if not track:
             continue
+        follow = rig.data.edit_bones.get(f"Eye-Track-Follow.{side}")
+        if follow and side in follow_positions:
+            offset = follow_positions[side] - follow.head
+            follow.head += offset
+            follow.tail += offset
         length = track.length or 0.05
         track.head = position
         direction = follow_positions.get(side, position + Vector((0, -1, 0))) - position
@@ -143,12 +180,16 @@ def bind_isaac_eye_tracking(rig, eyes, pivots=None, context=None):
         if mechanism is None:
             mechanism = rig.data.edit_bones.new(f"MCH-Isaac-EyeOrbit.{side}")
             mechanism.parent = eye.parent
-            mechanism.matrix = eye.matrix.copy()
-            mechanism.head = position
-            mechanism.tail = position + eye.y_axis * max(eye.length, 0.02)
             mechanism.use_deform = False
             eye.use_connect = False
             eye.parent = mechanism
+        # Use the tracker frame, not the imported iris joint's arbitrary axes.
+        # Reparenting in edit mode keeps the iris's global rest transform intact.
+        track.parent = mechanism.parent
+        track.use_connect = False
+        mechanism.head = track.head.copy()
+        mechanism.tail = track.tail.copy()
+        mechanism.roll = track.roll
     bpy.ops.object.mode_set(mode='OBJECT')
     context.view_layer.update()
     for side, name in eyes.items():
@@ -163,8 +204,7 @@ def bind_isaac_eye_tracking(rig, eyes, pivots=None, context=None):
         orbit.name = f"Isaac_EyeOrbit_{side}"
         orbit.target = rig
         orbit.subtarget = track.name
-        orbit.owner_space = 'LOCAL'
-        orbit.target_space = 'LOCAL_OWNER_ORIENT'
+        orbit.owner_space = orbit.target_space = 'POSE'
         bone = rig.data.bones[mechanism.name]
         if hasattr(rig.data, 'collections'):
             other = rig.data.collections.get('Other') or rig.data.collections.new('Other')
@@ -208,6 +248,23 @@ def bind_endfield_iris_scale(rig, eyes, context):
             center = sum(points, Vector()) / len(points)
             plans.append((side, name, center))
             break
+    # The iris follows the head through its parent hierarchy. Duplicate
+    # deform weights would leave an unscaled contribution when shrinking it.
+    for side, name, center in plans:
+        for mesh in meshes:
+            group = mesh.vertex_groups.get(name)
+            if group is None:
+                continue
+            indices = [v.index for v in mesh.data.vertices
+                       if any(g.group == group.index and g.weight > .9 for g in v.groups)]
+            if not indices:
+                continue
+            for other in mesh.vertex_groups:
+                bone = rig.data.bones.get(other.name)
+                if other != group and bone and bone.use_deform:
+                    other.remove(indices)
+            group.add(indices, 1.0, 'REPLACE')
+
     # Remove the old binding on the tracking control and refresh existing rigs.
     for side, name, center in plans:
         for bone_name in dict.fromkeys([eyes.get(side), name]):
@@ -220,6 +277,13 @@ def bind_endfield_iris_scale(rig, eyes, context):
     bpy.ops.object.mode_set(mode='EDIT')
     bones = rig.data.edit_bones
     for side, name, center in plans:
+        # Rigid NPC irises can be offset from their socket joint. Place the
+        # scale widget over the actual iris while retaining the panel depth.
+        control = bones.get(f'Eye-Scale-Control.{side}')
+        if control:
+            offset = Vector((center.x - control.head.x, 0.0, center.z - control.head.z))
+            control.head += offset
+            control.tail += offset
         iris = bones[name]
         mechanism = bones.get(f'MCH-Isaac-IrisScale.{side}')
         if mechanism is None:
