@@ -225,7 +225,17 @@ def set_modifier_property(modifier, key, value):
                     if in_out == 'INPUT':
                         if item.name == key or item.identifier == key:
                             try:
-                                modifier[item.identifier] = value
+                                # Legacy IDProperties must match the socket's
+                                # type: False on a float socket breaks GN in 4.1.
+                                socket_type = getattr(item, 'socket_type', '')
+                                typed_value = value
+                                if socket_type.startswith('NodeSocketFloat'):
+                                    typed_value = float(value)
+                                elif socket_type.startswith('NodeSocketInt'):
+                                    typed_value = int(value)
+                                elif socket_type == 'NodeSocketBool':
+                                    typed_value = bool(value)
+                                modifier[item.identifier] = typed_value
                                 return
                             except Exception:
                                 pass

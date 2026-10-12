@@ -82,12 +82,10 @@ class HYV_OT_VertexPaintFaceSeeThroughEffect(Operator, CustomOperatorProperties)
             StellarToonShaderMaterialNames
 
         face_object = bpy.data.objects.get('Face')
-        face_mesh: bpy.types.Mesh = bpy.data.meshes.get('Face')
+        face_mesh: bpy.types.Mesh = face_object.data if face_object else None
 
         if shader is HonkaiStarRailShaders.STELLARTOON_HONKAI_STAR_RAIL_SHADER and face_mesh and face_object:
             color_color_attribute = face_mesh.color_attributes.get('Color')
-            orig_active_obj = bpy.context.active_object
-            orig_mode = orig_active_obj.mode if orig_active_obj else 'OBJECT'
 
             if not color_color_attribute:
                 color_color_attribute = face_mesh.color_attributes.new(
@@ -103,42 +101,20 @@ class HYV_OT_VertexPaintFaceSeeThroughEffect(Operator, CustomOperatorProperties)
             if col_color_attribute:
                 col_color_attribute.active_render = True
 
-            try:
-                bpy.context.view_layer.objects.active = face_object
-                bpy.ops.object.mode_set(mode='EDIT')
-                bpy.ops.mesh.select_mode(type='FACE')
-
-                # Try first slot as a best guess (Screwllum has Body1 material in Face mesh)
-                face_material_slot = face_object.material_slots.get(self.shader_material_names.FACE) or (
-                    face_object.material_slots[0] if face_object.material_slots else None
-                )
-                if face_material_slot:
-                    face_object.active_material_index = face_material_slot.slot_index
-
-                bpy.ops.mesh.select_all(action='DESELECT')
-                if face_material_slot:
-                    bpy.ops.object.material_slot_select()
-
-                bpy.ops.paint.vertex_paint_toggle()
-                face_mesh.use_paint_mask = True
-                if "Draw" in bpy.data.brushes:
-                    bpy.data.brushes["Draw"].color = (1, 1, 1)
-                bpy.ops.paint.vertex_color_set()
-            except Exception as e:
-                print(f"[HSR] Vertex paint face see through error: {e}")
-            finally:
-                try:
-                    bpy.ops.object.mode_set(mode='OBJECT')
-                except Exception:
-                    pass
-
-            if orig_active_obj and orig_active_obj.name in bpy.data.objects:
-                try:
-                    bpy.context.view_layer.objects.active = orig_active_obj
-                    if orig_mode in ('POSE', 'EDIT', 'OBJECT'):
-                        bpy.ops.object.mode_set(mode=orig_mode)
-                except Exception:
-                    pass
+            # Write the same material mask directly. Vertex-paint operators enter
+            # the sculpt undo system and can crash Goo 4.1 in isolated setup.
+            # Try the first slot as a fallback (Screwllum uses Body1 on Face).
+            face_material_slot = face_object.material_slots.get(self.shader_material_names.FACE) or (
+                face_object.material_slots[0] if face_object.material_slots else None
+            )
+            if face_material_slot:
+                for polygon in face_mesh.polygons:
+                    if polygon.material_index != face_material_slot.slot_index:
+                        continue
+                    indices = polygon.vertices if color_color_attribute.domain == 'POINT' else polygon.loop_indices
+                    for index in indices:
+                        color_color_attribute.data[index].color = (1, 1, 1, 1)
+            face_mesh.update()
 
             self.__replace_eyeshadow_material()
 

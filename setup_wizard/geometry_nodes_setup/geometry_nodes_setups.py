@@ -344,7 +344,7 @@ class GameGeometryNodesSetup(ABC):
         set_modifier_property(modifier, 'Toggle Screen Space Scaling', False)
         set_modifier_property(modifier, 'Input_6', False)
         try:
-            modifier['Input_6'] = False
+            set_modifier_property(modifier, 'Input_6', False)
         except Exception:
             pass
 
@@ -576,7 +576,7 @@ class V3_GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
         set_modifier_property(modifier, 'Toggle Screen Space Scaling', False)
         set_modifier_property(modifier, 'Input_6', False)
         try:
-            modifier['Input_6'] = False
+            set_modifier_property(modifier, 'Input_6', False)
         except Exception:
             pass
 
@@ -1119,6 +1119,7 @@ def configure_hsr_hair_transparency():
     Step for HSR outlines:
     - Hair outline materials: render method BLENDED, use_transparency_overlap = True.
     - Hair mesh materials: render method BLENDED, use_transparency_overlap = False.
+      On versions without surface_render_method, use legacy Alpha Hashed.
     Only applies to HSR.
     """
     processed = set()
@@ -1135,9 +1136,9 @@ def configure_hsr_hair_transparency():
                 mat.surface_render_method = 'BLENDED'
             except Exception:
                 pass
-        if hasattr(mat, "blend_method"):
+        elif hasattr(mat, "blend_method"):
             try:
-                mat.blend_method = 'BLEND'
+                mat.blend_method = 'BLEND' if is_outline else 'HASHED'
             except Exception:
                 pass
         if hasattr(mat, "use_transparency_overlap"):

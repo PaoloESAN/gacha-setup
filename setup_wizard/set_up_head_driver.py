@@ -253,6 +253,7 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
 
         try:
             enable_layer_colls(bpy.context.view_layer.layer_collection, obj.name)
+            bpy.context.view_layer.update()
         except Exception:
             pass
 
@@ -266,6 +267,10 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
         previous_selected = list(bpy.context.selected_objects)
 
         try:
+            if obj.name not in bpy.context.view_layer.objects:
+                # Hidden lighting collections can exclude the helper in 4.1.
+                # Use the matrix fallback without invoking a selection operator.
+                raise RuntimeError('Head driver is outside the active view layer')
             for s in list(bpy.context.selected_objects):
                 s.select_set(False)
             obj.select_set(True)
