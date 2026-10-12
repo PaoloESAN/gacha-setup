@@ -94,6 +94,11 @@ for slot in main.material_slots:
     assert not alpha.default_value
     assert mat.node_tree.nodes['Main_Lightmap'].image.name == 'Equip_Sword_WeaponQuestSnezhnaya_Tex_Lightmap.png'
     assert mat.node_tree.nodes['Main_Diffuse'].image.name == 'Equip_Sword_WeaponQuestSnezhnaya02_Tex_Diffuse.png'
+    outline = bpy.data.materials.get(mat.name + ' Outlines')
+    assert outline is not None
+    outline_shader = next(n for n in outline.node_tree.nodes if n.inputs.get('Outline Color 1') is not None)
+    assert all(not socket.is_linked for socket in outline_shader.inputs if socket.name.startswith('Outline Color '))
+    assert tuple(outline_shader.inputs['Outline Color 1'].default_value) == (0, 0, 0, 1)
 template = bpy.data.materials['HoYoverse - Genshin Body']
 template_output = next(n for n in template.node_tree.nodes if n.type=='OUTPUT_MATERIAL')
 original_link = template_output.inputs['Surface'].links[0]

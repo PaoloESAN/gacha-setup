@@ -101,8 +101,8 @@ class MaterialDataApplier(ABC):
     OUTLINE_DIFFUSE_FALLBACK_TAG = 'gacha_outline_diffuse_fallback'
 
     # Template sentinel outline colors (Outline Color 1..5). When every one of
-    # these inputs still holds exactly its template default (AND AND AND), the
-    # JSONs provided no outline colors and the diffuse fallback may link them.
+    # these inputs still holds its template default after importing a JSON
+    # without outline colors, the diffuse fallback may link them.
     OUTLINE_SENTINEL_SRGB_HEX = ('FF0000FF', 'E7FF00FF', '00FFAAFF', '00AAFFFF', 'E700FFFF')
     OUTLINE_SENTINEL_RAW_LINEAR = (
         (1.0, 0.0, 0.0, 1.0),
@@ -218,15 +218,28 @@ class MaterialDataApplier(ABC):
                     return n
         return None
 
+    def _has_json_outline_colors(self):
+        """Authored JSON colors take precedence even when they match the template."""
+        parser = getattr(self, 'material_data_parser', None)
+        if parser is None:
+            return False
+        keys = {'_OutlineColor'} | {f'_OutlineColor{i}' for i in range(9)}
+        keys.update(key for key in self.outline_mapping if key.startswith('_OutlineColor'))
+        return any(self.get_value_in_json_parser(parser, key) is not None for key in keys)
+
     def set_up_outline_colors(self):
         outline_node = self._get_outline_shader_node()
-        if not outline_node:
+        if not outline_node or self.material_data_parser is None:
             return
-        outlines_shader_node_inputs = outline_node.inputs
 
-        # Diffuse fallback if and only if every Outline Color input still holds
-        # exactly its template sentinel color (AND AND AND). Otherwise any
-        # fallback links left by a previous run are maintained or removed.
+        # This runs after the material JSON has been applied. Presence of an
+        # authored color is decisive; comparing template defaults alone cannot
+        # distinguish missing JSON colors from colors not imported yet.
+        if self._has_json_outline_colors():
+            self._clear_diffuse_outline_color_fallback(outline_node)
+            self.apply_material_data(self.outline_mapping, outline_node.inputs)
+            return
+
         indexed = self._get_indexed_outline_color_inputs(outline_node)
         if self._defaults_match_sentinels(indexed):
             targets = [indexed[i] for i in (1, 2, 3, 4, 5)]
@@ -235,10 +248,6 @@ class MaterialDataApplier(ABC):
             else:
                 self._maintain_diffuse_outline_color_fallback(outline_node, targets)
         else:
-            self.apply_material_data(
-                self.outline_mapping, 
-                outlines_shader_node_inputs,
-            )
             self._clear_diffuse_outline_color_fallback(outline_node)
 
     @staticmethod
@@ -451,6 +460,7 @@ class MaterialDataApplier(ABC):
         outline_tree = getattr(self.outline_material, 'node_tree', None)
         if outline_tree is None:
             return
+        diffuse = self._find_outline_diffuse_node(outline_tree)
         for inp in self._outline_color_inputs(outline_node):
             try:
                 for link in list(inp.links):
@@ -458,12 +468,13 @@ class MaterialDataApplier(ABC):
                         from_node = link.from_node
                     except Exception:
                         from_node = None
-                    if from_node is not None and getattr(from_node, 'type', '') == 'TEX_IMAGE':
+                    if from_node == diffuse and getattr(link.from_socket, 'name', '') == 'Color':
                         outline_tree.links.remove(link)
             except Exception:
                 pass
         try:
-            still_linked = any(len(list(inp.links)) > 0 for inp in self._outline_color_inputs(outline_node))
+            still_linked = any(link.from_node == diffuse and link.from_socket.name == 'Color'
+                               for inp in self._outline_color_inputs(outline_node) for link in inp.links)
             if not still_linked and self.OUTLINE_DIFFUSE_FALLBACK_TAG in self.outline_material:
                 del self.outline_material[self.OUTLINE_DIFFUSE_FALLBACK_TAG]
         except Exception:
@@ -930,7 +941,10 @@ class V4_MaterialDataApplier(V3_MaterialDataApplier):
         if shader_node:
             self.set_up_mesh_material_data_with_tooltips(shader_node, shader_node)
         if outline_shader_node:
-            self.set_up_outline_colors()
+            # Clear only old automatic fallback links before importing JSON;
+            # otherwise linked color inputs would skip their authored values.
+            if self._has_json_outline_colors():
+                self._clear_diffuse_outline_color_fallback(outline_shader_node)
             self.set_up_mesh_material_data_with_tooltips(outline_shader_node, outline_shader_node, is_outlines=True)
         if night_soul_outlines_shader_node:
             self.set_up_mesh_material_data_with_tooltips(night_soul_outlines_shader_node, night_soul_outlines_shader_node, is_outlines=True)
