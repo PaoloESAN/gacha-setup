@@ -330,10 +330,12 @@ class CSW_PT_Utilities_UI_Layout(Panel):
         doc_cam = row_cam.operator("wm.url_open", text="", icon="TEXT")
         doc_cam.url = "https://gacha-setup.pages.dev/utilities/#jideehs-camera"
 
-        row_eye = col.row(align=True)
-        row_eye.operator("setup_wizard.eye_through_hair", text="Eye Through Hair", icon="HIDE_OFF")
-        doc_eye = row_eye.operator("wm.url_open", text="", icon="TEXT")
-        doc_eye.url = "https://gacha-setup.pages.dev/utilities/#eye-through-hair"
+        from setup_wizard.utils.eye_through_hair import supports_eye_through_hair
+        if supports_eye_through_hair():
+            row_eye = col.row(align=True)
+            row_eye.operator("setup_wizard.eye_through_hair", text="Eye Through Hair", icon="HIDE_OFF")
+            doc_eye = row_eye.operator("wm.url_open", text="", icon="TEXT")
+            doc_eye.url = "https://gacha-setup.pages.dev/utilities/#eye-through-hair"
 
 
 class CSW_PT_Old_Setup_UI_Layout(Panel):

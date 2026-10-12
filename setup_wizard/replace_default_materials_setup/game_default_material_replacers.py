@@ -1866,7 +1866,7 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         pass
             return False
 
-                # Detect eyeshadow via top-right UV mapping and assign to Eye Transparent
+        # Detect the floating upper-eye overlay by geometry and eye weights.
         face_mesh = next((o for o in meshes if "_face" in o.name.lower() or "face" in o.name.lower()), None)
         if face_mesh:
             try:

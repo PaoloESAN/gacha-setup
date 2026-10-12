@@ -1246,8 +1246,8 @@ class AKE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
 
 def setup_zzz_eyeshadow_uv(faceobj=None):
     """
-    Detects the eye shadow mesh island(s) located furthest to the right (top-right)
-    in UV space (standard Hoyoverse / ZZZ Face UV layout) and assigns them to 'Eye Transparent'.
+    Detects floating upper-eye overlays geometrically and assigns 'Eye Transparent'.
+    The historical function name is retained for callers; UV coordinates are not used.
     Guarantees that 'Eye Transparent' is always a secondary/separate slot, never slot 0 alone.
     """
     if faceobj is None:
@@ -1268,7 +1268,9 @@ def setup_zzz_eyeshadow_uv(faceobj=None):
             return False
 
     mesh = faceobj.data
-    if not mesh.uv_layers or not mesh.uv_layers.active:
+    from setup_wizard.utils.zzz_eyeshadow_geometry import classify_zzz_eyeshadow_faces
+    eyeshadow_face_indices = classify_zzz_eyeshadow_faces(faceobj)
+    if not eyeshadow_face_indices:
         return False
 
     # Ensure faceobj has a primary material slot for the face skin/head
@@ -1285,56 +1287,12 @@ def setup_zzz_eyeshadow_uv(faceobj=None):
             p.material_index = 0
         had_no_slots = True
 
-    # Check if faceobj already has a separate Eye Transparent slot with assigned polygons
+    # Recompute on every run so prior UV false positives on the iris are repaired.
     for idx, slot in enumerate(faceobj.material_slots):
         if idx > 0 and slot.material and slot.material.name == "Eye Transparent":
-            if any(p.material_index == idx for p in mesh.polygons):
-                return True
-
-    import bmesh
-    bm = bmesh.new()
-    bm.from_mesh(mesh)
-    uv_bm = bm.loops.layers.uv.active
-
-    # Find candidate faces whose UV center is in the top-right quadrant (U > 0.80, V > 0.80)
-    candidates = [
-        f for f in bm.faces 
-        if sum(l[uv_bm].uv.x for l in f.loops) / len(f.loops) > 0.80 and 
-           sum(l[uv_bm].uv.y for l in f.loops) / len(f.loops) > 0.80
-    ]
-
-    visited = set()
-    eyeshadow_face_indices = []
-    for f in candidates:
-        if f in visited:
-            continue
-        q = [f]
-        visited.add(f)
-        isl = []
-        while q:
-            curr = q.pop()
-            isl.append(curr)
-            for e in curr.edges:
-                for lf in e.link_faces:
-                    if lf not in visited:
-                        u_lf = sum(l[uv_bm].uv.x for l in lf.loops) / len(lf.loops)
-                        v_lf = sum(l[uv_bm].uv.y for l in lf.loops) / len(lf.loops)
-                        if u_lf > 0.75 and v_lf > 0.75:
-                            visited.add(lf)
-                            q.append(lf)
-
-        # Eyeshadow is a floating mesh island located furthest to the right in UV space (avg U > 0.85, avg V > 0.85)
-        num_loops = sum(len(item.loops) for item in isl)
-        if num_loops > 0:
-            avg_u = sum(l[uv_bm].uv.x for item in isl for l in item.loops) / num_loops
-            avg_v = sum(l[uv_bm].uv.y for item in isl for l in item.loops) / num_loops
-            if 4 <= len(isl) <= 150 and avg_u > 0.85 and avg_v > 0.85:
-                eyeshadow_face_indices.extend([item.index for item in isl])
-
-    bm.free()
-
-    if not eyeshadow_face_indices:
-        return False
+            for polygon in mesh.polygons:
+                if polygon.material_index == idx and polygon.index not in eyeshadow_face_indices:
+                    polygon.material_index = 0
 
     # Find or add 'Eye Transparent' material slot as a separate slot (idx > 0)
     eye_transp_slot_idx = None
