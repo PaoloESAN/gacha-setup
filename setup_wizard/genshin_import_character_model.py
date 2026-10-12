@@ -2002,6 +2002,13 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
             self.report({"ERROR"}, error_message)
             raise RuntimeError(error_message)
 
+        if self.game_type == GameType.GENSHIN_IMPACT.name:
+            import uuid
+            model_id = uuid.uuid4().hex
+            for imported in bpy.data.objects:
+                if imported.name not in existing_objects:
+                    imported['_setup_wizard_model_id'] = model_id
+
         for object in bpy.data.objects:
             if object.type == "MESH" and not object.data.uv_layers.get("UV1"):
                 object.data.uv_layers.new(name="UV1")

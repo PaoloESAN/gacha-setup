@@ -217,25 +217,11 @@ class GenshinImpactCharacterRigger(CharacterRigger):
         fbx_path = self.context.scene.get("setup_wizard_imported_fbx_path", "")
         fbx_name = os.path.basename(fbx_path) if fbx_path else ""
         if fbx_name and not fbx_name.startswith("Avatar_") and (fbx_name.startswith(("Equip_", "EquipSkin_")) or "equip" in fbx_name.lower()):
-            try:
-                from setup_wizard.character_rig_setup.lighting_panel_setup import (
-                    disconnect_lighting_panel_nodes_from_global_material_properties,
-                )
-                disconnect_lighting_panel_nodes_from_global_material_properties()
-            except Exception as e:
-                print(f"[SETUP WIZARD] Notice disconnecting Global Properties: {e}")
             self.blender_operator.report({'INFO'}, 'Rigging skipped for weapon / equipment (Equip_ / EquipSkin_ detected).')
             return
 
         character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
         if getattr(character_rigger_props, "disable_rigging", False):
-            try:
-                from setup_wizard.character_rig_setup.lighting_panel_setup import (
-                    disconnect_lighting_panel_nodes_from_global_material_properties,
-                )
-                disconnect_lighting_panel_nodes_from_global_material_properties()
-            except Exception as e:
-                print(f"[SETUP WIZARD] Notice disconnecting Global Properties: {e}")
             self.blender_operator.report({'INFO'}, 'Rigging skipped. Disable Rigging is enabled.')
             return
 

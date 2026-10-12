@@ -59,21 +59,6 @@ class HOYOVERSE_OT_rig_character(Operator, ImportHelper, CustomOperatorPropertie
         props = getattr(context.scene, "character_rigger_props", None)
         disable_rigging = getattr(props, "disable_rigging", getattr(context.scene, "disable_rigging", False))
         if disable_rigging:
-            try:
-                from setup_wizard.ui.character_settings_utils import stamp_rig_game, hide_eyestar_if_unrigged
-                for obj in context.scene.objects:
-                    if obj.type == 'ARMATURE':
-                        stamp_rig_game(obj, self.game_type)
-                hide_eyestar_if_unrigged(context)
-            except Exception:
-                pass
-            try:
-                from setup_wizard.character_rig_setup.lighting_panel_setup import (
-                    disconnect_lighting_panel_nodes_from_global_material_properties,
-                )
-                disconnect_lighting_panel_nodes_from_global_material_properties()
-            except Exception as e:
-                print(f"[SETUP WIZARD] Notice disconnecting Global Properties: {e}")
             self.report(
                 {'INFO'},
                 'Rigging skipped. Disable Rigging is enabled in Setup Settings.'
@@ -101,13 +86,6 @@ class HOYOVERSE_OT_rig_character(Operator, ImportHelper, CustomOperatorPropertie
                 )
 
         if is_equip:
-            try:
-                from setup_wizard.character_rig_setup.lighting_panel_setup import (
-                    disconnect_lighting_panel_nodes_from_global_material_properties,
-                )
-                disconnect_lighting_panel_nodes_from_global_material_properties()
-            except Exception as e:
-                print(f"[SETUP WIZARD] Notice disconnecting Global Properties: {e}")
             self.report(
                 {'INFO'},
                 'Rigging skipped for weapon / equipment (Equip_ / EquipSkin_ detected).'

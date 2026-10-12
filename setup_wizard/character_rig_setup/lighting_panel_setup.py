@@ -278,7 +278,7 @@ class LightingPanel:
 
     def connect_lighting_panel_nodes_to_global_material_properties(self, target_materials=None):
         target_trees = set()
-        mats = target_materials if target_materials else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
+        mats = target_materials if target_materials is not None else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
         for mat in mats:
             if getattr(mat, "use_nodes", False) and mat.node_tree:
                 for node in mat.node_tree.nodes:
@@ -286,7 +286,7 @@ class LightingPanel:
                         if "global material properties" in node.node_tree.name.lower() or node.name == 'Global Properties':
                             target_trees.add(node.node_tree)
 
-        if not target_trees:
+        if not target_trees and target_materials is None:
             for ng in bpy.data.node_groups:
                 if "global material properties" in ng.name.lower():
                     target_trees.add(ng)
@@ -307,40 +307,84 @@ class LightingPanel:
 
 
 def disconnect_lighting_panel_nodes_from_global_material_properties(target_materials=None):
-    """Disconnects incoming links from internal lighting panel nodes to Global Properties inputs."""
-    target_trees = set()
-    for ng in bpy.data.node_groups:
-        ng_low = ng.name.lower()
-        if "global material properties" in ng_low or "global properties" in ng_low:
-            target_trees.add(ng)
+    """Disconnect only lighting-panel links in explicitly supplied materials.
 
-    mats = target_materials if target_materials else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
-    for mat in mats:
+    Missing or empty targets are a no-op. Shared property groups are copied so
+    switching one character's lighting mode cannot disconnect another's panel.
+    """
+    if target_materials is None:
+        return
+    grouped_nodes = {}
+    for mat in set(target_materials):
         if getattr(mat, "use_nodes", False) and mat.node_tree:
             for node in mat.node_tree.nodes:
                 if node.type == 'GROUP' and node.node_tree:
                     if "global material properties" in node.node_tree.name.lower() or "global properties" in node.node_tree.name.lower() or node.name == 'Global Properties':
-                        target_trees.add(node.node_tree)
-                if node.name == 'Global Properties' or getattr(node, 'label', '') == 'Global Properties':
-                    for inp in node.inputs:
-                        for l in list(inp.links):
-                            mat.node_tree.links.remove(l)
+                        grouped_nodes.setdefault(node.node_tree, []).append(node)
 
-    for tree in target_trees:
+    for tree, group_nodes in grouped_nodes.items():
+        if tree.users > len(group_nodes):
+            tree = tree.copy()
+            for node in group_nodes:
+                node.node_tree = tree
         nodes_to_disconnect = [
             n for n in tree.nodes
             if n.name == 'Global Properties' or getattr(n, 'label', '') == 'Global Properties' or n.type == 'GROUP_OUTPUT'
         ]
         for out_node in nodes_to_disconnect:
             for inp in out_node.inputs:
+                if "face" in inp.name.lower():
+                    continue
+                source_socket = get_lighting_panel_source_socket(tree, inp.name)
+                if source_socket is None:
+                    continue
                 for l in list(inp.links):
-                    tree.links.remove(l)
+                    if l.from_socket == source_socket:
+                        tree.links.remove(l)
+
+
+def setup_unrigged_genshin_lighting(context):
+    """Use static lighting for every part of the selected setup model."""
+    from setup_wizard.ui.character_settings_utils import get_character_materials
+
+    selected = [obj for obj in context.selected_objects if obj.type in {'ARMATURE', 'MESH'}]
+    active = context.view_layer.objects.active
+    target = active if active in selected else next(iter(selected), None)
+    if target is None:
+        return
+    model_id = target.get('_setup_wizard_model_id')
+    if target.type == 'MESH':
+        target = target.find_armature() or target
+    model_id = model_id or target.get('_setup_wizard_model_id')
+    _, materials = get_character_materials(context, arm=target)
+    materials = set(materials)
+    if model_id:
+        # Effects and detached mesh parts need not be skinned to the armature.
+        for obj in context.scene.objects:
+            if obj.type == 'MESH' and obj.get('_setup_wizard_model_id') == model_id:
+                materials.update(slot.material for slot in obj.material_slots if slot.material)
+    else:
+        # Older imports have no model ID. Equipment materials retain the Unity
+        # source name, including the model prefix before _Mat and effect suffixes.
+        def equipment_source(mat):
+            source = mat.get('_original_material_name', '')
+            if mat.get('_genshin_equipment') and source.startswith(('Equip_', 'EquipSkin_')):
+                return source.partition('_Mat')[0]
+            return None
+
+        sources = {equipment_source(mat) for mat in materials} - {None}
+        if sources:
+            for obj in context.scene.objects:
+                if obj.type == 'MESH':
+                    materials.update(slot.material for slot in obj.material_slots
+                                     if slot.material and equipment_source(slot.material) in sources)
+    disconnect_lighting_panel_nodes_from_global_material_properties(target_materials=materials)
 
 
 def is_lighting_panel_connected(target_materials=None) -> bool:
     """Checks whether the character's Global Properties node group has incoming links from the Lighting Panel."""
     target_trees = set()
-    mats = target_materials if target_materials else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
+    mats = target_materials if target_materials is not None else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
     for mat in mats:
         if getattr(mat, "use_nodes", False) and mat.node_tree:
             for node in mat.node_tree.nodes:
@@ -348,7 +392,7 @@ def is_lighting_panel_connected(target_materials=None) -> bool:
                     if "global material properties" in node.node_tree.name.lower() or node.name == 'Global Properties':
                         target_trees.add(node.node_tree)
 
-    if not target_trees:
+    if not target_trees and target_materials is None:
         for ng in bpy.data.node_groups:
             if "global material properties" in ng.name.lower():
                 target_trees.add(ng)

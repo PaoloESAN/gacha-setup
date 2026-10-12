@@ -19,6 +19,15 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
     bl_label = "Genshin: Setup Head Driver"
 
     def execute(self, context):
+        # Configure shader lighting here, after material setup, rather than when
+        # toggling the rigging preference or skipping rig generation. Equipment
+        # needs this even though it has no head-driver constraint to set up.
+        if self.game_type == 'GENSHIN_IMPACT':
+            from setup_wizard.genshin_import_character_model import is_rigging_disabled
+            if is_rigging_disabled(context):
+                from setup_wizard.character_rig_setup.lighting_panel_setup import setup_unrigged_genshin_lighting
+                setup_unrigged_genshin_lighting(context)
+
         # Check if weapon / equipment
         fbx_path = context.scene.get("setup_wizard_imported_fbx_path", "")
         fbx_name = os.path.basename(fbx_path) if fbx_path else ""
