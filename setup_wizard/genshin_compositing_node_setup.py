@@ -75,6 +75,40 @@ class GI_OT_PostProcessingCompositingSetup(Operator, BasicSetupUIOperator):
     bl_label = 'HoYoverse: Set Up Post Processing Compositing (UI)'
 
 
+class PGR_OT_SetUpCompositor(Operator, CustomOperatorProperties):
+    """Ensure a render output without adding foreign post-processing to PGR."""
+    bl_idname = 'punishing_gray_raven.setup_compositor'
+    bl_label = 'PGR: Set Up Compositor'
+
+    def execute(self, context):
+        context.scene.render.use_compositing = True
+        tree = get_node_tree(context.scene)
+        output_type = get_output_node_type()
+        output = next((n for n in tree.nodes if n.bl_idname == output_type
+                       and (output_type != 'NodeGroupOutput' or n.is_active_output)), None)
+        if output is None:
+            if output_type == 'NodeGroupOutput':
+                if not any(s.item_type == 'SOCKET' and s.in_out == 'OUTPUT' and s.socket_type == 'NodeSocketColor'
+                           for s in tree.interface.items_tree):
+                    tree.interface.new_socket(name='Image', in_out='OUTPUT', socket_type='NodeSocketColor')
+            output = tree.nodes.new(output_type)
+        image_input = output.inputs.get('Image') or next((s for s in output.inputs if s.type == 'RGBA'), None)
+        if image_input is None:
+            self.report({'ERROR'}, 'PGR compositor output has no image socket')
+            return {'CANCELLED'}
+        # Preserve an existing custom processing chain.
+        if not image_input.is_linked:
+            render = next((n for n in tree.nodes if n.bl_idname == 'CompositorNodeRLayers'), None)
+            if render is None:
+                render = tree.nodes.new('CompositorNodeRLayers')
+            tree.links.new(render.outputs['Image'], image_input)
+        if self.next_step_idx:
+            NextStepInvoker().invoke(self.next_step_idx, self.invoker_type,
+                                     high_level_step_name=self.high_level_step_name,
+                                     game_type=self.game_type)
+        return {'FINISHED'}
+
+
 class PostProcessingFeatureFlag:
     # self is CustomOperatorProperties only for IDE syntax highlighting purposes
     def feature_disabled(self: CustomOperatorProperties, context):

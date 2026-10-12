@@ -4,6 +4,7 @@
 
 import bpy
 import math
+import re
 from mathutils import Vector, Matrix
 
 HEAD_BONE_NAME = None
@@ -681,6 +682,159 @@ def setup_pgr_wuwa_face_rig(face_meshes, controls, armature, head_name, fwd, up,
     print(f"[PGR WUWA FACE RIG] Successfully created {len(controls)} face controls and drivers!")
 
 
+def setup_pgr_panel_movements(face_meshes, armature):
+    """Connect PGR's numbered morphs to the panel's two-dimensional pads.
+
+    Preserve the existing expression sliders and combine them with pad motion.
+    The common numbered PGR morphs contain paired brows, directional mouth
+    translations and eye expressions; WuWa's name-based rules cannot find them.
+    """
+    from setup_wizard.character_rig_setup.wuwa_face_panel import _add_aggregated_shape_key_drivers
+    rules = {
+        'eyebrow01': ('fp.brow.sel', -25, 'LOC_X'),
+        'eyebrow02': ('fp.brow.sel', -25, 'LOC_X'),
+        'eyebrow03': ('fp.brow.sel', 25, 'LOC_X'),
+        'eyebrow04': ('fp.brow.sel', 25, 'LOC_X'),
+        'eyebrow07': ('fp.brow.sel', 25, 'LOC_Y'),
+        'eyebrow08': ('fp.brow.sel', 25, 'LOC_Y'),
+        'eyebrow09': ('fp.brow.sel', -25, 'LOC_Y'),
+        'eyebrow10': ('fp.brow.sel', -25, 'LOC_Y'),
+        'mouth24': ('fp.m.pos.sel', 25, 'LOC_Y'),
+        'mouth25': ('fp.m.pos.sel', -25, 'LOC_Y'),
+        'mouth26': ('fp.m.pos.sel', 25, 'LOC_X'),
+        'mouth27': ('fp.m.pos.sel', -25, 'LOC_X'),
+        'eye01': ('eye.pos', -25, 'LOC_Y'),
+        'eye04': ('eye.pos', 25, 'LOC_Y'),
+        'eye05': ('eye.pos', 25, 'LOC_Y'),
+        'eye06': ('eye.pos', -25, 'LOC_X'),
+        'eye07': ('eye.pos', 25, 'LOC_X'),
+    }
+    movement_bones = {rule[0] for rule in rules.values()}
+    for mesh in face_meshes:
+        keys = mesh.data.shape_keys
+        if not keys:
+            continue
+        entries = []
+        for key in keys.key_blocks:
+            name = key.name.lower()
+            # Shade follows the matching eyelid expression, keeping its overlay
+            # aligned even when the user changes its transparency later.
+            rule = rules.get('eye' + name[5:] if name.startswith('shade') else name)
+            if not rule:
+                continue
+            path = key.path_from_id('value')
+            old = next((f for f in keys.animation_data.drivers if f.data_path == path), None) if keys.animation_data else None
+            if old:
+                for variable in old.driver.variables:
+                    target = variable.targets[0]
+                    match = re.search(r'\b' + re.escape(variable.name) + r'\s*\*\s*(-?[\d.]+)', old.driver.expression)
+                    if (variable.type == 'TRANSFORMS' and target.id == armature
+                            and target.bone_target not in movement_bones and match):
+                        entries.append((key.name, target.bone_target, float(match.group(1)), target.transform_type))
+            bone, multiplier, axis = rule
+            entries.append((key.name, bone, multiplier, axis))
+        _add_aggregated_shape_key_drivers(mesh, armature, entries)
+        if keys.animation_data:
+            affected = {entry[0] for entry in entries}
+            for key in keys.key_blocks:
+                if key.name in affected:
+                    driver = next(f.driver for f in keys.animation_data.drivers if f.data_path == key.path_from_id('value'))
+                    driver.expression = 'max(0.0, min(1.0, ' + driver.expression + '))'
+
+
+def setup_pgr_eye_tracking(face_meshes, armature, head_name):
+    """Use the model's native directional pupil morphs for a gaze target."""
+    eye_meshes = [m for m in face_meshes if m.data.shape_keys
+                  and all(m.data.shape_keys.key_blocks.get(f'pupil{i:02d}') for i in range(1, 5))]
+    if not eye_meshes:
+        return False
+    fwd, right, up, face_size, _ = get_face_metrics(face_meshes, armature, head_name)
+    positions = [m.matrix_world @ v.co for m in eye_meshes for v in m.data.shape_keys.key_blocks[0].data]
+    center = sum(positions, Vector()) / len(positions)
+    # Unequal topology between eyes can bias their average into one pupil.
+    # Split at the head's center plane instead of the vertex-count average.
+    head_center = armature.matrix_world @ armature.data.bones[head_name].head_local
+    center -= right * (center - head_center).dot(right)
+    distance = face_size * 1.5
+    inverse = armature.matrix_world.inverted()
+    if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.context.view_layer.objects.active = armature
+    armature.select_set(True)
+    bpy.ops.object.mode_set(mode='EDIT')
+    bone = armature.data.edit_bones.get('Eye-Track-Master') or armature.data.edit_bones.new('Eye-Track-Master')
+    bone.head = inverse @ (center + fwd * distance)
+    bone.tail = inverse @ (center + fwd * distance + up * face_size * .15)
+    bone.align_roll(inverse.to_3x3() @ fwd)
+    bone.parent = armature.data.edit_bones[head_name]
+    bone.use_connect = False
+    bone.use_deform = False
+    for side, direction in (('L', 1), ('R', -1)):
+        side_positions = [p for p in positions if direction * (p - center).dot(right) > 0]
+        side_center = sum(side_positions, Vector()) / len(side_positions)
+        child = armature.data.edit_bones.get(f'Eye.{side}') or armature.data.edit_bones.new(f'Eye.{side}')
+        child.head = inverse @ (side_center + fwd * distance)
+        child.tail = inverse @ (side_center + fwd * distance + up * face_size * .1)
+        child.align_roll(inverse.to_3x3() @ fwd)
+        child.parent = bone
+        child.use_connect = False
+        child.use_deform = False
+    bpy.ops.object.mode_set(mode='OBJECT')
+    control = armature.pose.bones['Eye-Track-Master']
+    control.lock_rotation = (True, True, True)
+    control.lock_scale = (True, True, True)
+    control.custom_shape = make_widget('ring', get_widget_collection())
+    control.use_custom_shape_bone_size = False
+    control.custom_shape_scale_xyz = (face_size * .15,) * 3
+    # Ring widgets use X/Z; the target's vertical translation is local Y.
+    control.custom_shape_rotation_euler.x = math.pi * .5
+    if hasattr(armature.data, 'collections'):
+        collection = armature.data.collections.get('Face') or armature.data.collections.new('Face')
+        collection.assign(control.bone)
+        collection.is_visible = True
+        for side in ('L', 'R'):
+            child = armature.pose.bones[f'Eye.{side}']
+            child.lock_rotation = child.lock_scale = (True, True, True)
+            child.custom_shape = control.custom_shape
+            child.use_custom_shape_bone_size = False
+            child.custom_shape_scale_xyz = (face_size * .08,) * 3
+            child.custom_shape_rotation_euler.x = math.pi * .5
+            collection.assign(child.bone)
+    for mesh in eye_meshes:
+        for index, axis, sign in ((1, 'LOC_Y', 1), (2, 'LOC_Y', -1), (3, 'LOC_X', 1), (4, 'LOC_X', -1)):
+            source = mesh.data.shape_keys.key_blocks[f'pupil{index:02d}']
+            try:
+                source.driver_remove('value')
+            except Exception:
+                pass
+            source.value = 0
+            basis = mesh.data.shape_keys.key_blocks[0]
+            for side, direction in (('L', 1), ('R', -1)):
+                name = f'PGR-Gaze-{index:02d}.{side}'
+                key = mesh.data.shape_keys.key_blocks.get(name) or mesh.shape_key_add(name=name, from_mix=False)
+                for i, point in enumerate(basis.data):
+                    belongs = direction * (mesh.matrix_world @ point.co - center).dot(right) > 0
+                    key.data[i].co = source.data[i].co if belongs else point.co
+                try:
+                    key.driver_remove('value')
+                except Exception:
+                    pass
+                driver = key.driver_add('value').driver
+                driver.type = 'SCRIPTED'
+                for name, transform, target_bone in (('motion', axis, control.name), ('depth', 'LOC_Z', control.name),
+                                                     ('offset', axis, f'Eye.{side}'), ('offset_depth', 'LOC_Z', f'Eye.{side}')):
+                    variable = driver.variables.new()
+                    variable.name = name
+                    variable.type = 'TRANSFORMS'
+                    target = variable.targets[0]
+                    target.id = armature
+                    target.bone_target = target_bone
+                    target.transform_space = 'LOCAL_SPACE'
+                    target.transform_type = transform
+                driver.expression = f'max(0.0, min(1.0, {sign * 25} * (motion + offset) * {distance!r} / max(0.03, {distance!r} + depth + offset_depth)))'
+    return True
+
+
 def pgr_face_rig_main():
     face_meshes = find_face_meshes()
     try:
@@ -698,6 +852,8 @@ def pgr_face_rig_main():
             from setup_wizard.character_rig_setup.wuwa_face_panel import import_wuwa_face_panel_blend
             faceobj = face_meshes[0] if face_meshes else None
             import_wuwa_face_panel_blend(bpy.context, faceobj, armature, head_name)
+            setup_pgr_panel_movements(face_meshes, armature)
+            setup_pgr_eye_tracking(face_meshes, armature, head_name)
             if hasattr(armature.data, 'collections'):
                 fc = armature.data.collections.get("Face")
                 if fc:
@@ -716,6 +872,7 @@ def pgr_face_rig_main():
 
     controls, fwd, up, face_size = plan_pgr_wuwa_controls(face_meshes, armature, head_name)
     setup_pgr_wuwa_face_rig(face_meshes, controls, armature, head_name, fwd, up, face_size)
+    setup_pgr_eye_tracking(face_meshes, armature, head_name)
     if hasattr(armature.data, 'collections'):
         fc = armature.data.collections.get("Face")
         if fc:

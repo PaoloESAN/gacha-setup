@@ -3818,13 +3818,25 @@ class PunishingGrayRavenAvatarTextureImporter(PunishingGrayRavenTextureImporter)
                         continue
 
                     materials = [material for material in bpy.data.materials if material.name.replace(JaredNytsPunishingGrayRavenShaderMaterialNames.MATERIAL_PREFIX, '') in texture_body_part_name]
+                    matched_by_name = False
 
                     # Check cases where textures are not prefixed with body part names
                     if not materials:
                         texture_body_part_name = material_identifer_service.search_original_material_user_for_body_part_name(file)
-                        if not texture_body_part_name:
-                            continue
-                        materials = [material for material in bpy.data.materials if material.name.replace(JaredNytsPunishingGrayRavenShaderMaterialNames.MATERIAL_PREFIX, '') in texture_body_part_name]
+                        if texture_body_part_name:
+                            materials = [material for material in bpy.data.materials if material.name.replace(JaredNytsPunishingGrayRavenShaderMaterialNames.MATERIAL_PREFIX, '') in texture_body_part_name]
+                    if not materials:
+                        # Some accessories put the part before the model ID
+                        # (R3Kurumi_clockMd010011.png), not after it.
+                        normalized_file = re.sub(r'[^a-z0-9]', '', os.path.splitext(file)[0].lower())
+                        used_materials = {slot.material for obj in bpy.context.scene.objects if obj.type == 'MESH'
+                                          for slot in obj.material_slots if slot.material}
+                        prefix = JaredNytsPunishingGrayRavenShaderMaterialNames.MATERIAL_PREFIX
+                        materials = [material for material in used_materials
+                                     if material.name.startswith(prefix) and material.node_tree
+                                     and material.node_tree.nodes.get(self.texture_node_names.DIFFUSE)
+                                     and re.sub(r'[^a-z0-9]', '', material.name[len(prefix):].lower()) in normalized_file]
+                        matched_by_name = bool(materials)
 
                     if materials:
                         material = bpy.data.materials.get(max([material.name for material in materials], key=len))
@@ -3855,7 +3867,8 @@ class PunishingGrayRavenAvatarTextureImporter(PunishingGrayRavenTextureImporter)
                                 self.set_lut_texture(TextureType.FACE, material, img)
                             else:
                                 self.set_lut_texture(TextureType.BODY, material, img)
-                        elif file.endswith(f'{body_part_name}.png'):
+                        elif file.endswith(f'{body_part_name}.png') or (matched_by_name and
+                                not self.is_one_texture_identifier_in_texture_name(['UV', 'MC', 'HET'], file)):
                             if 'Face' in file:
                                 self.set_diffuse_texture(TextureType.FACE, material, img)
                             else:

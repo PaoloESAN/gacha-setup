@@ -769,6 +769,12 @@ def _setup_scene_compositor(scene, game_type):
         except Exception as exc:
             print(f"[GACHA SETUP] NTE Compositor setup notice: {exc}")
 
+    elif gt == "PUNISHING_GRAY_RAVEN":
+        # Collection append does not transfer scene compositor trees.
+        with bpy.context.temp_override(scene=scene):
+            bpy.ops.punishing_gray_raven.setup_compositor('EXEC_DEFAULT', game_type=gt)
+        print("[GACHA SETUP] Configured PGR compositor output in main scene.")
+
     elif gt == "HONKAI_NEXUS_ANIMA":
         # Scene compositor trees are not imported by collection append. Reuse
         # the same compositor and defaults as Genshin in the destination scene.

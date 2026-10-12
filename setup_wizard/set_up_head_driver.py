@@ -126,7 +126,15 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
             self.set_contraint_target_and_bone(
                 child_of_constraint, armature, head_bone_name
             )
-            self.set_inverse(head_driver_object, child_of_constraint.name)
+            if self.game_type == 'PUNISHING_GRAY_RAVEN':
+                # The bundled helper belongs to a different character. Align
+                # its origin to this head, after the final PGR rig is generated.
+                context.view_layer.update()
+                pose_bone = armature.pose.bones[head_bone_name]
+                saved_matrix.translation = armature.matrix_world @ pose_bone.head
+                child_of_constraint.inverse_matrix = (armature.matrix_world @ pose_bone.matrix).inverted()
+            else:
+                self.set_inverse(head_driver_object, child_of_constraint.name)
             head_driver_object.location = saved_loc
             head_driver_object.matrix_world = saved_matrix
         else:

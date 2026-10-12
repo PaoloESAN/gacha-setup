@@ -1700,9 +1700,6 @@ class PunishingGrayRavenDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         for mesh in meshes:
             for material_slot in mesh.material_slots:
                 material_name = material_slot.name
-                
-                if material_name.startswith(JaredNytsPunishingGrayRavenShaderMaterialNames.MATERIAL_PREFIX):
-                    continue
 
                 material_identifier_service = PunishingGrayRavenMaterialIdentifierService()
                 mesh_body_part_name = material_identifier_service.get_body_part_name(material_name) or \
@@ -1710,6 +1707,14 @@ class PunishingGrayRavenDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 mesh_body_part_name = \
                     material_identifier_service.get_body_part_name_of_shared_material(material_name) or \
                     mesh_body_part_name
+                if (mesh_body_part_name and mesh_body_part_name.lower() in ('shade', 'eyeshadow', 'eye_shadow')) or \
+                        re.search(r'eye[ _-]*shadow', material_name, re.IGNORECASE):
+                    prefix = JaredNytsPunishingGrayRavenShaderMaterialNames.MATERIAL_PREFIX
+                    name = material_name if material_name.startswith(prefix) else f'{prefix}{material_name}'
+                    material_slot.material = self.create_eye_shadow_material(name)
+                    continue
+                if material_name.startswith(JaredNytsPunishingGrayRavenShaderMaterialNames.MATERIAL_PREFIX):
+                    continue
                 if 'Face' in mesh_body_part_name:  # 6.Karenina_Ember (material w/ Face in it, but not called just Face)
                     mesh_body_part_name = 'Face'
                 elif 'Eye' in mesh_body_part_name:
@@ -1740,6 +1745,20 @@ class PunishingGrayRavenDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     self.blender_operator.report({'WARNING'}, f'Ignoring unknown mesh body part in character model: {mesh_body_part_name} / Material: {material_name}')
                     continue
         self.blender_operator.report({'INFO'}, 'Replaced default materials with Genshin shader materials...')
+
+    def create_eye_shadow_material(self, name):
+        material = bpy.data.materials.get(name) or bpy.data.materials.new(name)
+        material.use_nodes = True
+        material.node_tree.nodes.clear()
+        transparent = material.node_tree.nodes.new('ShaderNodeBsdfTransparent')
+        transparent.inputs['Color'].default_value = (1, 1, 1, 1)
+        output = material.node_tree.nodes.new('ShaderNodeOutputMaterial')
+        material.node_tree.links.new(transparent.outputs['BSDF'], output.inputs['Surface'])
+        if hasattr(material, 'surface_render_method'):
+            material.surface_render_method = 'DITHERED'
+        elif hasattr(material, 'blend_method'):
+            material.blend_method = 'HASHED'
+        return material
 
     def find_body_part_name(self, material_name):
         expected_format_body_part_name = self.__expected_format_body_part_name_search(material_name)

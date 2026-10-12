@@ -278,6 +278,8 @@ def rig_character(
         'breast_R': 'DEF-breast.R',
         'breastM_L': 'DEF-breast.L',
         'breastM_R': 'DEF-breast.R',
+        'OppeinBoneL01': 'DEF-breast.L',
+        'OppeinBoneR01': 'DEF-breast.R',
 
         'HipPart1_R': 'DEF-thigh.R.001',
         'HipPart1_L': 'DEF-thigh.L.001',
@@ -779,6 +781,7 @@ def rig_character(
     our_char = rigifyr
 
     phys_obj = bpy.data.objects.get("__pgr_physics_bones_armature__") or separated_armature
+    imported_physics_bones = {bone.name for bone in phys_obj.data.bones} if phys_obj else set()
     if phys_obj and phys_obj.name in bpy.data.objects and rigifyr.name in bpy.data.objects:
         obs = [rigifyr, bpy.data.objects[phys_obj.name]]
         bpy.ops.object.mode_set(mode='OBJECT')
@@ -852,6 +855,11 @@ def rig_character(
 
     # Reparent orphan twist / ribbon / accessory / hair / weapon bones to their DEF deform bones
     for eb_item in eb:
+        # Only imported physics bones are orphans to repair. Rigify's unparented
+        # MCH-torso.parent is intentional: parenting it to DEF-spine makes the
+        # torso depend on the deform spine that the torso itself drives.
+        if eb_item.name not in imported_physics_bones:
+            continue
         if eb_item.parent is None and eb_item.name not in ['root', 'root.001', 'root.002', 'MCH-root']:
             eb_low = eb_item.name.lower()
             # 1. Head / Face / Hair bones
@@ -1231,7 +1239,7 @@ def rig_character(
     if lighting_panel_rig_obj:
         lighting_panel_rig_obj.select_set(True)
 
-    # Remove eyerig from RootShape.blend (eye tracking is provided by Isaac FaceRig)
+    # Remove the legacy eyerig; pgr_face_rig connects native pupil morph tracking.
     eye_rig_obj = bpy.data.objects.get("eyerig")
     if eye_rig_obj:
         bpy.data.objects.remove(eye_rig_obj, do_unlink=True)
@@ -1872,7 +1880,7 @@ def rig_character(
 
 
    
-    # Eye tracking is handled entirely by Isaac FaceRig (Eye-Track-Master)
+    # Eye tracking is connected to the native PGR pupil morphs by pgr_face_rig.
     pass
 
     # Still in edit mode, select Neck/Head bone and extract the Z loc 
@@ -3097,10 +3105,10 @@ def rig_character(
                 b_low = b.name.lower()
                 if b.name in ["breast.L", "breast.R", "DEF-breast.L", "DEF-breast.R", "ORG-breast.L", "ORG-breast.R", "MCH-breast.L", "MCH-breast.R"]:
                     continue
-                if ("breast.l" in b_low or "breast_l" in b_low or "skn_l_chest" in b_low or "chest_l" in b_low or "+breast l" in b_low) and def_l:
+                if ("breast.l" in b_low or "breast_l" in b_low or "skn_l_chest" in b_low or "chest_l" in b_low or "+breast l" in b_low or "oppeinbonel" in b_low) and def_l:
                     b.parent = def_l
                     b.use_connect = False
-                elif ("breast.r" in b_low or "breast_r" in b_low or "skn_r_chest" in b_low or "chest_r" in b_low or "+breast r" in b_low) and def_r:
+                elif ("breast.r" in b_low or "breast_r" in b_low or "skn_r_chest" in b_low or "chest_r" in b_low or "+breast r" in b_low or "oppeinboner" in b_low) and def_r:
                     b.parent = def_r
                     b.use_connect = False
 

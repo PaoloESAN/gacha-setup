@@ -546,6 +546,8 @@ class ComponentFunctionFactory:
             return bpy.ops.honkai_nexus_anima.apply_material_settings
         elif component_name == 'compositing_node_setup':
             return bpy.ops.hoyoverse.custom_composite_node_setup
+        elif component_name == 'pgr_setup_compositor':
+            return bpy.ops.punishing_gray_raven.setup_compositor
         elif component_name == 'post_processing_default_settings':
             return bpy.ops.hoyoverse.post_processing_default_settings
         elif component_name == 'nte_setup_outlines':

@@ -381,6 +381,7 @@ def setup_dependencies():
         setup_wizard.character_rig_setup.rootshape_filepath_setter_operator.GI_OT_RootShape_FilePath_Setter_Operator,
         setup_wizard.optimization.emissive_optimizer.GI_OT_Emissive_Optimizer,
         setup_wizard.genshin_compositing_node_setup.GI_OT_CompositingNodeSetup,
+        setup_wizard.genshin_compositing_node_setup.PGR_OT_SetUpCompositor,
         setup_wizard.genshin_compositing_node_setup.HYV_OT_HoyoversePostProcessingDefaultSettings,
         setup_wizard.change_bpy_context.GI_OT_Change_BPY_Context,
         setup_wizard.mesh_import_setup.chibi_face_setup.PGR_OT_SetUpChibiFace,
@@ -423,7 +424,7 @@ def unregister():
     from setup_wizard.character_rig_setup.rootshape_filepath_setter_operator import GI_OT_RootShape_FilePath_Setter_Operator
     from setup_wizard.optimization.emissive_optimizer import GI_OT_Emissive_Optimizer
     from setup_wizard.genshin_compositing_node_setup import GI_OT_CompositingNodeSetup, \
-        HYV_OT_HoyoversePostProcessingDefaultSettings
+        HYV_OT_HoyoversePostProcessingDefaultSettings, PGR_OT_SetUpCompositor
     from setup_wizard.change_bpy_context import GI_OT_Change_BPY_Context
     from setup_wizard.mesh_import_setup.chibi_face_setup import PGR_OT_SetUpChibiFace, PGR_OT_ImportChibiFaceTexture
 
@@ -460,6 +461,7 @@ def unregister():
         GI_OT_RootShape_FilePath_Setter_Operator,
         GI_OT_Emissive_Optimizer,
         GI_OT_CompositingNodeSetup,
+        PGR_OT_SetUpCompositor,
         HYV_OT_HoyoversePostProcessingDefaultSettings,
         GI_OT_Change_BPY_Context,
         PGR_OT_SetUpChibiFace,
