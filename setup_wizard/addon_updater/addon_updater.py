@@ -666,6 +666,14 @@ class SingletonUpdater:
         else:
             self._tags = all_tags
 
+        # GitHub's API order is not a version order. Compare numeric versions
+        # so beta.10 wins over beta.9, and stable wins over its own betas.
+        # Sort before prepending branches to preserve their manual-install order.
+        self._tags.sort(
+            key=lambda tag: self.normalize_version(
+                self.version_tuple_from_text(tag["name"])),
+            reverse=True)
+
         # get additional branches too, if needed, and place in front
         # Does NO checking here whether branch is valid
         if self._include_branches:
@@ -1410,7 +1418,7 @@ class SingletonUpdater:
                 tg = tag
                 break
         if tg:
-            new_version = self.version_tuple_from_text(self.tag_latest)
+            new_version = self.version_tuple_from_text(tg["name"])
             self._update_version = new_version
             self._update_link = self.select_link(self, tg)
         elif self._include_branches and name in self._include_branch_list:
@@ -1754,6 +1762,10 @@ class GithubEngine:
     def parse_tags(self, response, updater):
         if response is None:
             return list()
+        if updater.use_releases:
+            # Release titles are editable; the tag is the version identifier.
+            return [{**release, "name": release["tag_name"]}
+                    for release in response]
         return response
 
 
