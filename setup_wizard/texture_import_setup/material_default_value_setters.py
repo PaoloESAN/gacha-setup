@@ -166,6 +166,22 @@ class GenshinImpactMaterialDefaultValueSetter(MaterialDefaultValueSetter):
 
             self.set_up_normal_map_default_value(material)
             self.set_up_veil_material_default_value(material)
+            # UI sliders use inverse Power (10 -> 0) and Scaler (1 -> 0).
+            # Set sockets too, since the panel syncs its initial values from them.
+            nodes = list(material.node_tree.nodes) if material.node_tree else []
+            for group in list(nodes):
+                if group.type == 'GROUP' and group.node_tree and 'Global Material Properties' in group.node_tree.name:
+                    nodes.extend(group.node_tree.nodes)
+            for node in nodes:
+                for name, value in [('Rim Scale', 0.0), ('Rim Size', 0.0),
+                                    ('Fresnel Power', 10.0), ('Fresnel Scaler', 1.0)]:
+                    socket = node.inputs.get(name)
+                    if socket is None:
+                        continue
+                    if socket.type == 'VALUE':
+                        socket.default_value = value
+                    elif socket.type == 'VECTOR' and name in ('Rim Scale', 'Rim Size'):
+                        socket.default_value = (0.0, 0.0, 0.0)
         
         body2_material = bpy.data.materials.get(self.material_names.BODY2)
         if body2_material:

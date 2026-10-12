@@ -526,7 +526,7 @@ GI_LIGHT_PRESETS = {
         "day_night": 0.0,
         "rim_lit": (1.0, 1.0, 1.0),
         "rim_shadow": (1.0, 1.0, 1.0),
-        "rim_scale": 0.15,
+        "rim_scale": 0.0,
     },
     "1": {  # Sunrise
         "ambient": (0.95, 0.85, 0.8),
@@ -538,7 +538,7 @@ GI_LIGHT_PRESETS = {
         "day_night": 0.0,
         "rim_lit": (1.0, 0.82, 0.66),
         "rim_shadow": (0.6, 0.5, 0.7),
-        "rim_scale": 0.15,
+        "rim_scale": 0.0,
     },
     "2": {  # Day
         "ambient": (1.0, 1.0, 1.0),
@@ -550,7 +550,7 @@ GI_LIGHT_PRESETS = {
         "day_night": 0.0,
         "rim_lit": (1.0, 1.0, 1.0),
         "rim_shadow": (0.6, 0.6, 0.7),
-        "rim_scale": 0.15,
+        "rim_scale": 0.0,
     },
     "3": {  # Sunset
         "ambient": (0.9, 0.75, 0.7),
@@ -562,7 +562,7 @@ GI_LIGHT_PRESETS = {
         "day_night": 0.0,
         "rim_lit": (1.0, 0.8, 0.5),
         "rim_shadow": (0.5, 0.35, 0.6),
-        "rim_scale": 0.15,
+        "rim_scale": 0.0,
     },
     "4": {  # Night
         "ambient": (0.4, 0.45, 0.6),
@@ -574,7 +574,7 @@ GI_LIGHT_PRESETS = {
         "day_night": 1.0,
         "rim_lit": (0.5, 0.7, 1.0),
         "rim_shadow": (0.2, 0.3, 0.5),
-        "rim_scale": 0.15,
+        "rim_scale": 0.0,
     },
     "5": {  # Rainy
         "ambient": (0.6, 0.65, 0.7),
@@ -586,7 +586,7 @@ GI_LIGHT_PRESETS = {
         "day_night": 0.3,
         "rim_lit": (0.6, 0.7, 0.8),
         "rim_shadow": (0.3, 0.35, 0.45),
-        "rim_scale": 0.15,
+        "rim_scale": 0.0,
     },
 }
 
@@ -806,7 +806,7 @@ def update_gi_lighting_control_type(self, context=None):
 
         _is_updating_gi_props = True
         try:
-            self.gi_rim_scale = 0.15
+            self.gi_rim_scale = 0.0
             if str(current_mode) in GI_LIGHT_PRESETS:
                 preset = GI_LIGHT_PRESETS[str(current_mode)]
                 if "ambient" in preset:
@@ -827,7 +827,7 @@ def update_gi_lighting_control_type(self, context=None):
                     self.gi_rim_lit_color = preset["rim_lit"]
                 if "rim_shadow" in preset:
                     self.gi_rim_shadow_color = preset["rim_shadow"]
-                self.gi_rim_scale = preset.get("rim_scale", 0.15)
+                self.gi_rim_scale = preset.get("rim_scale", 0.0)
         finally:
             _is_updating_gi_props = False
 
@@ -881,7 +881,7 @@ def update_gi_light_mode(self, context=None):
                 self.gi_rim_lit_color = preset["rim_lit"]
             if "rim_shadow" in preset:
                 self.gi_rim_shadow_color = preset["rim_shadow"]
-            self.gi_rim_scale = preset.get("rim_scale", 0.15)
+            self.gi_rim_scale = preset.get("rim_scale", 0.0)
         finally:
             _is_updating_gi_props = False
 
@@ -979,7 +979,7 @@ def sync_genshin_shader_properties(scene=None, context=None):
     if len(rim_shadow_col) == 3:
         rim_shadow_col.append(1.0)
 
-    rim_scale_val = float(getattr(scene, "gi_rim_scale", 0.15))
+    rim_scale_val = float(getattr(scene, "gi_rim_scale", 0.0))
 
     prop_map = {
         "Toggle Fresnel": use_fresnel,
@@ -2433,7 +2433,7 @@ def register_gi_properties():
         description="Rim light thickness / scale",
         min=0.0,
         max=1.0,
-        default=0.15,
+        default=0.0,
         precision=2,
         update=update_gi_lighting,
     )
