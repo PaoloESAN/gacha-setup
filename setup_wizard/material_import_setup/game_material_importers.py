@@ -1121,6 +1121,7 @@ class HonkaiNexusAnimaMaterialImporterFacade(GameMaterialImporter):
         {'name': 'HSR - Hair'},
         {'name': 'HSR - Outlines'},
         {'name': 'HSR - Weapon'},
+        *[{'name': 'HSR - '+n} for n in ('Iris','Oqaque','Trans','Body Outlines','Hair Outlines','Face Outlines','Oqaque Outlines','Trans Outlines')],
     ]
 
     def __init__(self, blender_operator, context):

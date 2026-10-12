@@ -12,4 +12,4 @@ class OutlineNodeGroupNames:
     V3_JAREDNYTS_PGR_OUTLINES = ['HoYoverse - Genshin Impact Outlines']  # Uses Genshin V3 Outlines
     ZENLESS_ZONE_ZERO_OUTLINES = ['ZZZ Outlines', 'face_outlines', 'Extra FX Geonode', 'Light Vectors']
     HONKAI_IMPACT_3RD_OUTLINES = ['ImpactToon - Honkai Impact 3rd Outlines', 'Light Vectors']
-    HONKAI_NEXUS_ANIMA_OUTLINES = ['Star Rail Outlines', 'HoYoverse - Outlines']
+    HONKAI_NEXUS_ANIMA_OUTLINES = ['HoYoverse - Outlines']

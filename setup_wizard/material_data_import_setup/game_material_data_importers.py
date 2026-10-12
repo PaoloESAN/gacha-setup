@@ -246,7 +246,8 @@ class GameMaterialDataImporterFactory:
         elif game_type == GameType.HONKAI_IMPACT_3RD.name:
             return HonkaiImpact3rdMaterialDataImporter(blender_operator, context, outline_material_group, material_names, shader_node_names)
         elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
-            return HonkaiStarRailMaterialDataImporter(blender_operator, context, outline_material_group, material_names, shader_node_names)
+            from setup_wizard.utils.hna_material_utils import MaterialDataImporter
+            return MaterialDataImporter(blender_operator)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 

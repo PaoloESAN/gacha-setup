@@ -96,7 +96,7 @@ class HonkaiStarRailOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
         self.outlines_node_group_names = outlines_node_group_names
 
     def import_outline_node_group(self):
-        filepath = get_shader_file_path(GameType.HONKAI_STAR_RAIL.name, 'main')
+        filepath = get_shader_file_path(self.blender_operator.game_type or GameType.HONKAI_STAR_RAIL.name, 'main')
 
         if filepath and os.path.isfile(filepath):
             for outline_node_group_name in self.outlines_node_group_names:

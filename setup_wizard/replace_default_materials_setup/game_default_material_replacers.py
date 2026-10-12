@@ -3576,6 +3576,10 @@ class HonkaiImpact3rdDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 
 
 class HonkaiNexusAnimaDefaultMaterialReplacer(HonkaiStarRailDefaultMaterialReplacer):
+    def replace_default_materials(self):
+        from setup_wizard.utils.hna_material_utils import replace_materials
+        replace_materials()
+
     def __init__(self, blender_operator, context):
         super().__init__(blender_operator, context, Nya222HonkaiStarRailShaderMaterialNames)
 

@@ -246,12 +246,8 @@ class GameGeometryNodesSetupFactory:
         elif game_type == GameType.HONKAI_IMPACT_3RD.name:
             return HonkaiImpact3rdGeometryNodesSetup(blender_operator, context)
         elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
-            return HonkaiStarRailGeometryNodesSetup(
-                blender_operator, 
-                context, 
-                Nya222HonkaiStarRailShaderMaterialNames, 
-                OutlineNodeGroupNames.HONKAI_NEXUS_ANIMA_OUTLINES
-            )
+            from setup_wizard.utils.hna_material_utils import GeometrySetup
+            return GeometrySetup(blender_operator)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -1365,7 +1361,7 @@ class HonkaiStarRailGeometryNodesSetup(GameGeometryNodesSetup):
             outlines_node_group = bpy.data.node_groups.get(outlines_node_group_name)
             geometry_nodes_modifier = mesh.modifiers.get(f'{NAME_OF_GEOMETRY_NODES_MODIFIER} {mesh_name}')
 
-            if not outlines_node_group:
+            if not outlines_node_group or outlines_node_group.bl_idname != 'GeometryNodeTree':
                 continue
 
             if not geometry_nodes_modifier:

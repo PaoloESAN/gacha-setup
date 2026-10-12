@@ -392,6 +392,10 @@ class GI_OT_SetUpArmTwistBoneConstraints(Operator, CustomOperatorProperties):
     RIGHT_FOREARM = 'Bip001RForearm'
 
     def execute(self, context):
+        from setup_wizard.genshin_import_character_model import is_rigging_disabled
+        if self.game_type == GameType.HONKAI_NEXUS_ANIMA.name and is_rigging_disabled(context):
+            NextStepInvoker().invoke(self.next_step_idx, self.invoker_type, high_level_step_name=self.high_level_step_name, game_type=self.game_type)
+            return {'FINISHED'}
         armature =  [object for object in bpy.data.objects if object.type == 'ARMATURE'][0]
         left_armtwist_bone_names, right_armtwist_bone_names = self.get_armtwist_bones()
 

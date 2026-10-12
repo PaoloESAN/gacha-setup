@@ -267,7 +267,8 @@ class OutlineTextureImporterFactory:
         elif game_type == GameType.HONKAI_IMPACT_3RD.name:
             return HonkaiImpact3rdOutlineTextureImporter(blender_operator, context, shader_node_names)
         elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
-            return HonkaiStarRailOutlineTextureImporter(blender_operator, context, Nya222HonkaiStarRailShaderMaterialNames, shader_node_names)
+            from setup_wizard.utils.hna_material_utils import OutlineTextures
+            return OutlineTextures()
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 

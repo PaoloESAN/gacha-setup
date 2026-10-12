@@ -2900,7 +2900,8 @@ class HonkaiNexusAnimaTextureImporterFacade(GameTextureImporter):
 
         texture_importer_type = TextureImporterType.HSR_AVATAR
         texture_importer: GenshinTextureImporter = TextureImporterFactory.create(texture_importer_type, GameType.HONKAI_STAR_RAIL)
-        texture_importer.import_textures(directory)
+        from setup_wizard.utils.hna_material_utils import import_textures
+        import_textures(self.blender_operator)
 
         self.blender_operator.report({'INFO'}, 'Imported Honkai Nexus Anima textures!')
         if cache_enabled and directory:
