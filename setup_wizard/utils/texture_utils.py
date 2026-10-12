@@ -1,5 +1,6 @@
 import os
 import re
+import unicodedata
 import bpy
 
 VALID_TEXTURE_EXTENSIONS = (
@@ -10,10 +11,36 @@ VALID_TEXTURE_EXTENSIONS = (
 def normalize_path(path):
     if not path:
         return ""
-    # On non-Windows platforms (*nix: macOS and Linux), convert backslashes to forward slashes
+    path = os.fspath(path)
     if os.name != 'nt':
         path = path.replace('\\', '/')
+    # Keep Blender's relative marker until bpy.path.abspath resolves it.
+    if path.startswith('//'):
+        return '//' + os.path.normpath(path[2:])
     return os.path.normpath(path)
+
+
+def absolute_texture_path(path, library=None):
+    path = normalize_path(path)
+    if not path:
+        return ""
+    return os.path.abspath(bpy.path.abspath(path, library=library))
+
+
+def _filename_key(name):
+    return unicodedata.normalize('NFC', name).casefold()
+
+
+def _active_texture_directory():
+    try:
+        from setup_wizard.import_order import get_active_character_directory
+        directory = get_active_character_directory()
+    except Exception:
+        directory = None
+    if not directory:
+        scene = getattr(bpy.context, 'scene', None)
+        directory = scene.get('setup_wizard_imported_model_dir') if scene is not None else None
+    return absolute_texture_path(directory) if directory else ""
 
 
 def find_image_datablock(name_or_filename):
@@ -69,7 +96,7 @@ def is_image_missing_or_invalid(img):
         return True
 
     clean_fp = raw_fp.replace('\\', '/') if os.name != 'nt' else raw_fp
-    abs_fp = bpy.path.abspath(clean_fp)
+    abs_fp = absolute_texture_path(clean_fp, getattr(img, 'library', None))
     if not abs_fp or not os.path.exists(abs_fp):
         return True
 
@@ -92,6 +119,7 @@ def scan_directory_for_textures(directory):
     stem_map = {}
     if not directory:
         return filename_map, stem_map
+    directory = absolute_texture_path(directory)
     if os.path.isfile(directory):
         directory = os.path.dirname(directory)
     if not os.path.isdir(directory):
@@ -106,8 +134,8 @@ def scan_directory_for_textures(directory):
             ext = os.path.splitext(f)[1].lower()
             if ext in VALID_TEXTURE_EXTENSIONS:
                 full_p = normalize_path(os.path.join(root, f))
-                f_low = f.lower()
-                stem_low = os.path.splitext(f)[0].lower()
+                f_low = _filename_key(f)
+                stem_low = _filename_key(os.path.splitext(f)[0])
                 filename_map[f_low] = full_p
                 if stem_low not in stem_map:
                     stem_map[stem_low] = full_p
@@ -134,6 +162,7 @@ def fix_missing_textures(directory=None):
 
     if not directory:
         return
+    directory = absolute_texture_path(directory)
 
     if os.path.isfile(directory):
         directory = os.path.dirname(directory)
@@ -169,7 +198,7 @@ def fix_missing_textures(directory=None):
 
         # 3a. Direct slash normalization (e.g. relative path //textures\foo.png on macOS/Linux)
         if clean_fp:
-            abs_candidate = bpy.path.abspath(clean_fp)
+            abs_candidate = absolute_texture_path(clean_fp, getattr(image, "library", None))
             if abs_candidate and os.path.exists(abs_candidate):
                 image.filepath = clean_fp if clean_fp.startswith('//') else abs_candidate
                 try:
@@ -180,9 +209,9 @@ def fix_missing_textures(directory=None):
                 continue
 
         # 3b. Name and stem matching against scanned textures
-        clean_name = re.sub(r'\.\d{3}$', '', image.name).lower()
+        clean_name = _filename_key(re.sub(r'\.\d{3}$', '', image.name))
         fp_basename = clean_fp.split('/')[-1] if clean_fp else ''
-        clean_fp_basename = re.sub(r'\.\d{3}$', '', fp_basename).lower()
+        clean_fp_basename = _filename_key(re.sub(r'\.\d{3}$', '', fp_basename))
 
         candidates = [clean_name, clean_fp_basename]
         matched_path = None
@@ -222,62 +251,47 @@ def fix_missing_textures(directory=None):
 
 
 def load_or_get_image(filepath, fname=None):
-    """
-    Safely loads or gets an image. If an existing Image datablock is found
-    but its filepath is invalid or missing on disk, updates filepath to the valid path and reloads.
-    Also searches common subfolders (e.g. Textures/) if the file isn't directly at filepath.
-    """
+    """Return a usable image, resolving Blender paths and relocated textures first."""
     if not filepath:
         return None
-    norm_fp = normalize_path(filepath)
-    if not fname:
-        fname = os.path.basename(norm_fp)
-
-    # If filepath does not exist directly, search common subfolders
-    if not os.path.exists(norm_fp):
-        dir_p = os.path.dirname(norm_fp)
-        candidates = [
-            os.path.join(dir_p, "Textures", fname),
-            os.path.join(dir_p, "textures", fname),
-            os.path.join(dir_p, "Materials", fname),
-            os.path.join(dir_p, "materials", fname),
-            os.path.join(dir_p, "Texture", fname),
-        ]
-        parent_p = os.path.dirname(dir_p)
-        if parent_p and parent_p != dir_p:
-            candidates.extend([
-                os.path.join(parent_p, fname),
-                os.path.join(parent_p, "Textures", fname),
-                os.path.join(parent_p, "textures", fname),
-            ])
-        for c in candidates:
-            if os.path.isfile(c):
-                norm_fp = normalize_path(c)
+    norm_fp = absolute_texture_path(filepath)
+    # FBX names can contain Windows separators even on a POSIX host.
+    fname = str(fname or filepath).replace('\\', '/').rsplit('/', 1)[-1]
+    if not os.path.isfile(norm_fp):
+        directory = os.path.dirname(norm_fp)
+        roots = [directory, os.path.dirname(directory), _active_texture_directory()]
+        for root in dict.fromkeys(r for r in roots if r):
+            files, stems = scan_directory_for_textures(root)
+            key = _filename_key(fname)
+            candidate = files.get(key) or stems.get(os.path.splitext(key)[0])
+            if candidate:
+                norm_fp = candidate
                 break
+    if not os.path.isfile(norm_fp):
+        print(f"[TEXTURE UTILS] Texture file not found: {filepath}")
+        return None
 
     img = find_image_datablock(fname)
-    if img:
+    if img and is_image_missing_or_invalid(img):
+        img.filepath = norm_fp
+        try:
+            img.reload()
+        except Exception as ex:
+            print(f"[TEXTURE UTILS] Failed to reload '{norm_fp}': {ex}")
         if is_image_missing_or_invalid(img):
-            if os.path.exists(norm_fp):
-                img.filepath = norm_fp
-                try:
-                    img.reload()
-                except Exception:
-                    pass
-        img.alpha_mode = 'CHANNEL_PACKED'
-        return img
-
-    if os.path.exists(norm_fp):
+            return None
+    elif img:
+        # A different character may have an image with the same filename.
+        existing_path = absolute_texture_path(img.filepath, getattr(img, 'library', None))
+        if os.path.normcase(existing_path) != os.path.normcase(norm_fp):
+            img = None
+    if img is None:
         try:
             img = bpy.data.images.load(filepath=norm_fp, check_existing=True)
-            if is_image_missing_or_invalid(img):
-                img.filepath = norm_fp
-                try:
-                    img.reload()
-                except Exception:
-                    pass
-            img.alpha_mode = 'CHANNEL_PACKED'
-            return img
-        except Exception as e:
-            print(f"[TEXTURE UTILS] Failed to load image '{norm_fp}': {e}")
-    return None
+        except Exception as ex:
+            print(f"[TEXTURE UTILS] Failed to load '{norm_fp}': {ex}")
+            return None
+        if is_image_missing_or_invalid(img):
+            return None
+    img.alpha_mode = 'CHANNEL_PACKED'
+    return img
