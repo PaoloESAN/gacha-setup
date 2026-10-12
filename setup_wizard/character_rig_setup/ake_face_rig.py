@@ -75,16 +75,16 @@ ENDFIELD_FACE_MAPPING = {
     # Cheeks Left & Right
     "faceLfCheekOtJoint": {"mouth_master": True, "deform": "chhek_L"},
     "faceLfCheekOtUpJoint": {"mouth_master": True, "deform": "chhek_L"},
-    "faceLfCheekOtDnJoint": {"mouth_master": True, "deform": "mouthUpper_03_L"},
-    "faceLfCheekOtInJoint": {"mouth_master": True, "deform": "mouthUpper_01_L"},
+    "faceLfCheekOtDnJoint": {"mouth_master": True, "deform": "mouthUpper_03_L.001"},
+    "faceLfCheekOtInJoint": {"mouth_master": True, "deform": "mouthUpper_01_L.001"},
     "faceRtCheekOtJoint": {"mouth_master": True, "deform": "chhek_R"},
     "faceRtCheekOtUpJoint": {"mouth_master": True, "deform": "chhek_R"},
-    "faceRtCheekOtDnJoint": {"mouth_master": True, "deform": "mouthUpper_03_R"},
-    "faceRtCheekOtInJoint": {"mouth_master": True, "deform": "mouthUpper_01_R"},
+    "faceRtCheekOtDnJoint": {"mouth_master": True, "deform": "mouthUpper_03_R.001"},
+    "faceRtCheekOtInJoint": {"mouth_master": True, "deform": "mouthUpper_01_R.001"},
 
     # Jaw & Teeth
-    "jawJoint": {"deform": "JawdnEnd_M"},
-    "faceMdJawDnJoint": {"deform": "JawdnEnd_M"},
+    "jawJoint": {"deform": "mouthLower_M.001"},
+    "faceMdJawDnJoint": {"deform": "mouthLower_M.001"},
     "faceMdToothUpJoint": {"mouth_chain": True, "deform": "UpTeeth"},
     "faceMdToothDnJoint": {"mouth_chain": True, "deform": "DownTeeth"},
     "line_toothJoint": {"mouth_chain": True, "deform": "DownTeeth"},
@@ -315,6 +315,137 @@ def bind_endfield_iris_scale(rig, eyes, context):
     context.view_layer.update()
 
 
+def align_endfield_mouth_panel(rig, context):
+    """Center the mouth widgets vertically on the imported lips in rest space."""
+    upper = rig.data.bones.get('lipMupJoint')
+    lower = rig.data.bones.get('lipMdnJoint')
+    master = rig.data.bones.get('Mouth-Master')
+    if not upper or not lower or not master:
+        return
+    height = (upper.head_local.z + lower.head_local.z) * .5
+    offset = Vector((0.0, 0.0, height - master.head_local.z))
+    if abs(offset.z) < 1e-6:
+        return
+    context.view_layer.objects.active = rig
+    bpy.ops.object.mode_set(mode='EDIT')
+    master = rig.data.edit_bones['Mouth-Master']
+    # Move the complete panel together so local control/deform transforms stay
+    # unchanged. Imported facial joints and the eye panel retain their rest pose.
+    for bone in [master, *master.children_recursive]:
+        bone.head += offset
+        bone.tail += offset
+    bpy.ops.object.mode_set(mode='OBJECT')
+    context.view_layer.update()
+
+
+def bind_isaac_face_deformations(body_rig, face_mapping):
+    """Refresh imported facial bindings without appending another control rig."""
+    assigned_count = 0
+    for bone_name, mapping in face_mapping.items():
+        pb = body_rig.pose.bones.get(bone_name)
+        if not pb:
+            continue
+
+        # Remove existing Isaac constraints to allow clean idempotent re-runs
+        for c in list(pb.constraints):
+            if c.name.startswith("Isaac_"):
+                pb.constraints.remove(c)
+
+        btype = mapping.get("type", "TRANSFORMS")
+
+        if btype == "ROTATION":
+            c = pb.constraints.new('COPY_ROTATION')
+            c.name = "Isaac_CopyRotation"
+            c.target = body_rig
+            c.subtarget = mapping["deform"]
+            c.owner_space = 'LOCAL'
+            c.target_space = 'LOCAL_OWNER_ORIENT'
+            assigned_count += 1
+
+        elif btype == "SCALE":
+            c = pb.constraints.new('COPY_SCALE')
+            c.name = "Isaac_CopyScale"
+            c.target = body_rig
+            c.subtarget = mapping["deform"]
+            c.owner_space = 'LOCAL'
+            c.target_space = 'LOCAL'
+            assigned_count += 1
+
+        elif mapping.get("mouth_chain"):
+            # Mouth chain: Mouth-Master -> Lip-Master -> Specific Deform Bone
+            c1 = pb.constraints.new('COPY_TRANSFORMS')
+            c1.name = "Isaac_MouthMaster"
+            c1.target = body_rig
+            c1.subtarget = "Mouth-Master"
+            c1.owner_space = 'LOCAL'
+            c1.target_space = 'LOCAL_OWNER_ORIENT'
+
+            c2 = pb.constraints.new('COPY_TRANSFORMS')
+            c2.name = "Isaac_LipMaster"
+            c2.target = body_rig
+            c2.subtarget = "Lip-Master"
+            c2.owner_space = 'LOCAL'
+            c2.target_space = 'LOCAL_OWNER_ORIENT'
+            c2.mix_mode = 'AFTER'
+
+            c3 = pb.constraints.new('COPY_TRANSFORMS')
+            c3.name = f"Isaac_Deform_{mapping['deform']}"
+            c3.target = body_rig
+            c3.subtarget = mapping["deform"]
+            c3.owner_space = 'LOCAL'
+            c3.target_space = 'LOCAL_OWNER_ORIENT'
+            c3.mix_mode = 'AFTER'
+            assigned_count += 1
+
+        elif mapping.get("mouth_master"):
+            # Cheeks: Mouth-Master -> Specific Deform Bone
+            c1 = pb.constraints.new('COPY_TRANSFORMS')
+            c1.name = "Isaac_MouthMaster"
+            c1.target = body_rig
+            c1.subtarget = "Mouth-Master"
+            c1.owner_space = 'LOCAL'
+            c1.target_space = 'LOCAL_OWNER_ORIENT'
+
+            c2 = pb.constraints.new('COPY_TRANSFORMS')
+            c2.name = f"Isaac_Deform_{mapping['deform']}"
+            c2.target = body_rig
+            c2.subtarget = mapping["deform"]
+            c2.owner_space = 'LOCAL'
+            c2.target_space = 'LOCAL_OWNER_ORIENT'
+            c2.mix_mode = 'AFTER'
+            assigned_count += 1
+
+        elif "master" in mapping:
+            # Eyebrows / Eyelids: Master Bone -> Specific Deform Bone
+            c1 = pb.constraints.new('COPY_TRANSFORMS')
+            c1.name = f"Isaac_Master_{mapping['master']}"
+            c1.target = body_rig
+            c1.subtarget = mapping["master"]
+            c1.owner_space = 'LOCAL'
+            c1.target_space = 'LOCAL_OWNER_ORIENT'
+
+            c2 = pb.constraints.new('COPY_TRANSFORMS')
+            c2.name = f"Isaac_Deform_{mapping['deform']}"
+            c2.target = body_rig
+            c2.subtarget = mapping["deform"]
+            c2.owner_space = 'LOCAL'
+            c2.target_space = 'LOCAL_OWNER_ORIENT'
+            c2.mix_mode = 'AFTER'
+            assigned_count += 1
+
+        else:
+            # Jaw, Nose, etc.
+            c = pb.constraints.new('COPY_TRANSFORMS')
+            c.name = f"Isaac_Deform_{mapping['deform']}"
+            c.target = body_rig
+            c.subtarget = mapping["deform"]
+            c.owner_space = 'LOCAL'
+            c.target_space = 'LOCAL_OWNER_ORIENT'
+            assigned_count += 1
+
+    return assigned_count
+
+
 def setup_endfield_isaac_face_rig(body_rig, context=None, face_mapping=None, eye_names=None, eye_pivots=None):
     """Sets up the Isaac Face Rig controls for Arknights: Endfield characters.
     
@@ -336,10 +467,13 @@ def setup_endfield_isaac_face_rig(body_rig, context=None, face_mapping=None, eye
     # bones itself; fusing again would only spawn .001 dupes.
     try:
         if "Eye-Track-Master" in body_rig.data.bones:
+            if is_endfield:
+                align_endfield_mouth_panel(body_rig, context)
+            bind_isaac_face_deformations(body_rig, face_mapping)
             bind_isaac_eye_tracking(body_rig, eyes, eye_pivots, context)
             if is_endfield:
                 bind_endfield_iris_scale(body_rig, eyes, context)
-            print("[AKE FACE RIG] FaceRig already fused; eye tracking refreshed.")
+            print("[AKE FACE RIG] FaceRig already fused; facial bindings and eye tracking refreshed.")
             return body_rig
     except Exception:
         pass
@@ -655,109 +789,9 @@ def setup_endfield_isaac_face_rig(body_rig, context=None, face_mapping=None, eye
     except Exception:
         pass
 
-    # Bind Endfield facial bones to Isaac FaceRig
-    assigned_count = 0
-    for bone_name, mapping in face_mapping.items():
-        pb = body_rig.pose.bones.get(bone_name)
-        if not pb:
-            continue
-
-        # Remove existing Isaac constraints to allow clean idempotent re-runs
-        for c in list(pb.constraints):
-            if c.name.startswith("Isaac_"):
-                pb.constraints.remove(c)
-
-        btype = mapping.get("type", "TRANSFORMS")
-
-        if btype == "ROTATION":
-            c = pb.constraints.new('COPY_ROTATION')
-            c.name = "Isaac_CopyRotation"
-            c.target = facerig_obj
-            c.subtarget = mapping["deform"]
-            c.owner_space = 'LOCAL'
-            c.target_space = 'LOCAL_OWNER_ORIENT'
-            assigned_count += 1
-
-        elif btype == "SCALE":
-            c = pb.constraints.new('COPY_SCALE')
-            c.name = "Isaac_CopyScale"
-            c.target = facerig_obj
-            c.subtarget = mapping["deform"]
-            c.owner_space = 'LOCAL'
-            c.target_space = 'LOCAL'
-            assigned_count += 1
-
-        elif mapping.get("mouth_chain"):
-            # Mouth chain: Mouth-Master -> Lip-Master -> Specific Deform Bone
-            c1 = pb.constraints.new('COPY_TRANSFORMS')
-            c1.name = "Isaac_MouthMaster"
-            c1.target = facerig_obj
-            c1.subtarget = "Mouth-Master"
-            c1.owner_space = 'LOCAL'
-            c1.target_space = 'LOCAL_OWNER_ORIENT'
-
-            c2 = pb.constraints.new('COPY_TRANSFORMS')
-            c2.name = "Isaac_LipMaster"
-            c2.target = facerig_obj
-            c2.subtarget = "Lip-Master"
-            c2.owner_space = 'LOCAL'
-            c2.target_space = 'LOCAL_OWNER_ORIENT'
-            c2.mix_mode = 'AFTER'
-
-            c3 = pb.constraints.new('COPY_TRANSFORMS')
-            c3.name = f"Isaac_Deform_{mapping['deform']}"
-            c3.target = facerig_obj
-            c3.subtarget = mapping["deform"]
-            c3.owner_space = 'LOCAL'
-            c3.target_space = 'LOCAL_OWNER_ORIENT'
-            c3.mix_mode = 'AFTER'
-            assigned_count += 1
-
-        elif mapping.get("mouth_master"):
-            # Cheeks: Mouth-Master -> Specific Deform Bone
-            c1 = pb.constraints.new('COPY_TRANSFORMS')
-            c1.name = "Isaac_MouthMaster"
-            c1.target = facerig_obj
-            c1.subtarget = "Mouth-Master"
-            c1.owner_space = 'LOCAL'
-            c1.target_space = 'LOCAL_OWNER_ORIENT'
-
-            c2 = pb.constraints.new('COPY_TRANSFORMS')
-            c2.name = f"Isaac_Deform_{mapping['deform']}"
-            c2.target = facerig_obj
-            c2.subtarget = mapping["deform"]
-            c2.owner_space = 'LOCAL'
-            c2.target_space = 'LOCAL_OWNER_ORIENT'
-            c2.mix_mode = 'AFTER'
-            assigned_count += 1
-
-        elif "master" in mapping:
-            # Eyebrows / Eyelids: Master Bone -> Specific Deform Bone
-            c1 = pb.constraints.new('COPY_TRANSFORMS')
-            c1.name = f"Isaac_Master_{mapping['master']}"
-            c1.target = facerig_obj
-            c1.subtarget = mapping["master"]
-            c1.owner_space = 'LOCAL'
-            c1.target_space = 'LOCAL_OWNER_ORIENT'
-
-            c2 = pb.constraints.new('COPY_TRANSFORMS')
-            c2.name = f"Isaac_Deform_{mapping['deform']}"
-            c2.target = facerig_obj
-            c2.subtarget = mapping["deform"]
-            c2.owner_space = 'LOCAL'
-            c2.target_space = 'LOCAL_OWNER_ORIENT'
-            c2.mix_mode = 'AFTER'
-            assigned_count += 1
-
-        else:
-            # Jaw, Nose, etc.
-            c = pb.constraints.new('COPY_TRANSFORMS')
-            c.name = f"Isaac_Deform_{mapping['deform']}"
-            c.target = facerig_obj
-            c.subtarget = mapping["deform"]
-            c.owner_space = 'LOCAL'
-            c.target_space = 'LOCAL_OWNER_ORIENT'
-            assigned_count += 1
+    if is_endfield:
+        align_endfield_mouth_panel(body_rig, context)
+    assigned_count = bind_isaac_face_deformations(body_rig, face_mapping)
 
     # Post-fuse Child Of inverse fix (HSR parity): recompute in body-rig space
     # so Eye-Track-Follow rests perfectly horizontal.
