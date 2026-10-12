@@ -3766,7 +3766,7 @@ def rig_character(
         }
 
         hair_keywords = [
-            "hair", "eardrop", "headline", "ahoge", "bangs", "ponytail", "twintail", "bone00"
+            "hair", "headband", "eardrop", "headline", "ahoge", "bangs", "ponytail", "twintail", "bone00"
         ]
         clothes_keywords = [
             "ribbon", "sleeve", "strap", "skirt", "button", "belt", "cloth", "dress",
@@ -3804,7 +3804,7 @@ def rig_character(
 
             # Skip standard Rigify controls unless explicitly hair or clothes
             if any(rk in b_low for rk in rigify_keywords) and not (
-                b_name.startswith("+") or any(k in b_low for k in ["hair", "skirt", "dress", "cloth", "ribbon", "tail", "amice"])
+                b_name.startswith("+") or any(k in b_low for k in hair_keywords + ["skirt", "dress", "cloth", "ribbon", "tail", "amice"])
             ):
                 continue
 
@@ -3818,6 +3818,8 @@ def rig_character(
                 bone_to_layer(b_name, 22, "Clothes")
 
     loop_place_physics()
+    from setup_wizard.character_rig_setup.rig_ui_utils import configure_hi3_hair_physics_collections
+    configure_hi3_hair_physics_collections(this_obj)
     
     def loop_place_def():
         # Handpicked bones to serve as the def layer.

@@ -211,6 +211,19 @@ class HI3_OT_CharacterLightingPreset(Operator):
         return {'FINISHED'}
 
 
+def _draw_physics(layout, context):
+    box_physics = layout.box()
+    box_physics.label(text='Hair & Clothes Physics', icon='PHYSICS')
+    col_physics = box_physics.column(align=True)
+    from setup_wizard.character_rig_setup.rig_ui_utils import has_hair_clothes_physics
+    if has_hair_clothes_physics(context):
+        col_physics.prop(context.scene, 'gi_hair_physics_influence', text='Hair Physics', slider=True)
+        col_physics.prop(context.scene, 'gi_clothes_physics_influence', text='Clothes Physics', slider=True)
+        box_physics.column(align=True).operator('hoyoverse.remove_hair_clothes_physics', text='Remove Physics', icon='PANEL_CLOSE')
+    else:
+        col_physics.operator('hoyoverse.apply_hair_clothes_physics', text='Apply Physics', icon='FILE_REFRESH')
+
+
 class HI3_PT_CharacterSettings(Panel):
     bl_label = 'Character Settings'
     bl_idname = 'HI3_PT_CharacterSettings'
@@ -233,6 +246,7 @@ class HI3_PT_CharacterSettings(Panel):
                 layout.label(text='Loading character settings…')
             else:
                 layout.label(text='Set up HI3 materials first', icon='INFO')
+            _draw_physics(layout, context)
             return
         mode = output.id_data.hi3_light_mode
         lighting = layout.column(align=True)
@@ -265,6 +279,7 @@ class HI3_PT_CharacterSettings(Panel):
             face = layout.box()
             face.label(text='Face', icon='USER')
             face.column(align=True).prop(blush, 'default_value', text='Exp Blush Intensity', slider=True)
+        _draw_physics(layout, context)
 
 
 def unregister_pending():
