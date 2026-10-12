@@ -210,6 +210,7 @@ class HNA_PT_UI_Character_Rig_Setup_Menu(Panel, HonkaiNexusAnimaUIRenderChecker)
         character_rigger_props = context.scene.character_rigger_props
 
         OperatorFactory.create_rig_character_ui(box)
+        OperatorFactory.create(box, "honkai_nexus_anima.setup_face_rig", "Set Up Isaac Face Rig", "FACE_MAPS")
         OperatorFactory.create(
             box,
             "hoyoverse.apply_hair_clothes_physics",

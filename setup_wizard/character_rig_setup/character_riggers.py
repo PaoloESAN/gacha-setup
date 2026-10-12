@@ -1183,7 +1183,8 @@ class HonkaiNexusAnimaCharacterRigger(CharacterRigger):
             meshes_joined=True
         )
 
-        # HNA face rig is temporarily disabled.
+        from setup_wizard.character_rig_setup.hna_face_rig import hna_face_rig_main
+        hna_face_rig_main(self.context)
 
 
 class ZenlessZoneZeroCharacterRigger(CharacterRigger):

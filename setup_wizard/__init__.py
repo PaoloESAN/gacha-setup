@@ -139,6 +139,7 @@ else:
     )
     from setup_wizard.character_rig_setup.pgr_face_rig import PGR_OT_SetupFaceRig
     from setup_wizard.character_rig_setup.hi3_face_rig import HI3_OT_SetupFaceRig
+    from setup_wizard.character_rig_setup.hna_face_rig import HNA_OT_SetupFaceRig
     from setup_wizard.ui.ake_ui_setup_wizard_menu import (
         AKE_PT_Setup_Wizard_UI_Layout,
         AKE_PT_Basic_Setup_Wizard_UI_Layout,
@@ -483,6 +484,7 @@ else:
         HNA_OT_FinishSetup,
         PGR_OT_SetupFaceRig,
         HI3_OT_SetupFaceRig,
+        HNA_OT_SetupFaceRig,
     ]
 
     for module in modules:
