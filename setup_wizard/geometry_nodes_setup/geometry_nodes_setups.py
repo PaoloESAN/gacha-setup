@@ -868,7 +868,9 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
         # separating them by material would dissolve them into the generic
         # Hair/Dress meshes and the wings could no longer be toggled.
         mesh_name_low = (getattr(mesh, "name", "") or "").lower()
-        if any(kw in mesh_name_low for kw in meshes_to_keep_intact_keywords):
+        if (any(kw in mesh_name_low for kw in meshes_to_keep_intact_keywords)
+                or any(slot.material and slot.material.get('_genshin_equipment')
+                       for slot in mesh.material_slots)):
             print(f'Keeping part mesh intact (skipping material separation): {mesh.name}')
             return
         if len(mesh.material_slots) > 1:

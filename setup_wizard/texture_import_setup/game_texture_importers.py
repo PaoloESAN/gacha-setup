@@ -103,6 +103,31 @@ class GenshinImpactTextureImporterFacade(GameTextureImporter):
 
         texture_importer: GenshinTextureImporter = TextureImporterFactory.create(texture_importer_type, GameType.GENSHIN_IMPACT)
         texture_importer.import_textures(directory)
+        # Equipment exports keep their own material JSON and existing texture nodes.
+        for material in bpy.data.materials:
+            if not material.get('_genshin_equipment') or material.name.endswith('Outlines'):
+                continue
+            source = material.get('_original_material_name')
+            path = os.path.join(directory, 'Materials', source + '.json')
+            if not os.path.isfile(path):
+                continue
+            with open(path, encoding='utf-8') as handle:
+                env = json.load(handle).get('m_SavedProperties', {}).get('m_TexEnvs') or {}
+            for prop, node_name, colorspace in [('_MainTex', 'Main_Diffuse', 'sRGB'),
+                                                ('_LightMapTex', 'Main_Lightmap', 'Non-Color'),
+                                                ('_BumpMap', 'Main_Normalmap', 'Non-Color')]:
+                texture = env.get(prop, {}).get('m_Texture', {}).get('Name')
+                node = material.node_tree.nodes.get(node_name)
+                if not texture or node is None:
+                    continue
+                filename = next((f for f in os.listdir(directory) if os.path.splitext(f)[0].lower() == texture.lower()
+                                 and os.path.splitext(f)[1].lower() in {'.png', '.dds', '.tga', '.jpg'}), None)
+                if filename is None:
+                    raise RuntimeError('Missing Genshin equipment texture: ' + texture)
+                image = bpy.data.images.load(os.path.join(directory, filename), check_existing=True)
+                image.colorspace_settings.name = colorspace
+                image.alpha_mode = 'CHANNEL_PACKED'
+                node.image = image
 
         '''
             NPCs and Monsters don't typically have shadow ramps. Turn off using shadow ramp if there are no assets for it.

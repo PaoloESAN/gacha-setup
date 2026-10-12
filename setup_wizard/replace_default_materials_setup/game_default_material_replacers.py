@@ -3,6 +3,7 @@
 import bpy
 import os
 import re
+import json
 
 
 from abc import ABC, abstractmethod
@@ -777,6 +778,32 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 if material_name.startswith(self.material_names.MATERIAL_PREFIX) or 'highlight' in material_name.lower():
                     continue
 
+                if (material_name.startswith(('Equip_', 'EquipSkin_'))
+                        or mesh.name.startswith(('Equip_', 'EquipSkin_'))):
+                    # Keep Unity materials distinct without adding shader nodes.
+                    source = material_name or mesh.name
+                    folder = get_active_character_directory()
+                    path = os.path.join(folder, 'Materials', source + '.json') if folder else ''
+                    values = {}
+                    if path and os.path.isfile(path):
+                        with open(path, encoding='utf-8') as handle:
+                            values = json.load(handle).get('m_SavedProperties', {}).get('m_Floats') or {}
+                    effect = '_SrcBlendMode' in values and '_UseTexColor' in values
+                    name = self.material_names.MATERIAL_PREFIX + ('Eff_' if effect else '') + source
+                    material = bpy.data.materials.get(name)
+                    if material is None:
+                        template = bpy.data.materials.get(self.material_names.BODY)
+                        if template is None:
+                            raise RuntimeError('Missing Genshin body shader for: ' + source)
+                        material = template.copy()
+                        material.name = name
+                        material.use_fake_user = True
+                    material['_original_material_name'] = source
+                    material['_genshin_equipment'] = True
+                    self.__transfer_diffuse_texture(material_slot.material, material)
+                    material_slot.material = material
+                    continue
+
                 # Durin's dedicated eye materials are already set up (Dark/Normal Eye).
                 if material_name in DURIN_EYE_MATERIAL_NAMES:
                     continue
@@ -882,15 +909,6 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 if genshin_material:
                     self.__transfer_diffuse_texture(material_slot.material, genshin_material)
                     material_slot.material = genshin_material
-                    is_equip_mat = material_name.startswith(('Equip_', 'EquipSkin_')) or (mesh and mesh.name.startswith(('Equip_', 'EquipSkin_'))) or ('equip' in material_name.lower())
-                    if is_equip_mat and genshin_material.use_nodes:
-                        for n in genshin_material.node_tree.nodes:
-                            if 'Use Alpha' in n.inputs:
-                                n.inputs['Use Alpha'].default_value = 1.0
-                            if n.type == 'GROUP' and n.node_tree:
-                                for sub_node in n.node_tree.nodes:
-                                    if 'Use Alpha' in sub_node.inputs:
-                                        sub_node.inputs['Use Alpha'].default_value = 1.0
                     if mesh_body_part_name == 'New Pupil':
                         setup_new_pupil_highlight_layer(mesh, self.material_names)
                 elif mesh_body_part_name and ('Dress' in mesh_body_part_name or 'Arm' in mesh_body_part_name or 'Cloak' in mesh_body_part_name):

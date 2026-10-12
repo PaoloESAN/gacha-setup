@@ -303,7 +303,10 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
                 body_part = get_npc_mesh_body_part_name(PurePosixPath(file.name).stem)
                 character_type = CharacterType.NPC
             elif 'Equip' in file.name:
-                body_part = 'Body'
+                stem = PurePosixPath(file.name).stem
+                equipment = next((m for m in bpy.data.materials if m.get('_genshin_equipment')
+                                  and m.get('_original_material_name') == stem), None)
+                body_part = equipment.name.removeprefix(self.material_names.MATERIAL_PREFIX) if equipment else 'Body'
                 character_type = CharacterType.GI_EQUIPMENT
             elif file.name.endswith('Glass_Mat.json'):
                 body_part = 'Glass'

@@ -725,9 +725,16 @@ class V2_MaterialDataApplier(MaterialDataApplier):
             return
 
         _MainTexAlphaUse_value = int(_MainTexAlphaUse_value_raw)
+        equipment_opaque = False
+        if self.material and self.material.get('_genshin_equipment'):
+            mode = self.get_value_in_json_parser(self.material_data_parser, '_Mode')
+            alpha_test = self.get_value_in_json_parser(self.material_data_parser, '_UseAlphaTest')
+            equipment_opaque = mode == 0 and not alpha_test and _MainTexAlphaUse_value == 1
+            if equipment_opaque:
+                _MainTexAlphaUse_value = 0
         _MainTexAlphaUse_material_node_dict = _MainTexAlphaUse_mapping.get(_MainTexAlphaUse_value)
 
-        if outlines_alpha_only and _MainTexAlphaUse_value != 1:
+        if outlines_alpha_only and _MainTexAlphaUse_value != 1 and not equipment_opaque:
             # For outlines ignore 0, 2
             # Only apply material data if it's 1
             return
@@ -745,16 +752,6 @@ class V2_MaterialDataApplier(MaterialDataApplier):
                 print(f'Did not set {material_node_name} in {getattr(self, "material", None)}: {ex}')
                 continue
 
-        # If equipment / weapon, always force Use Alpha = 1
-        is_equip = getattr(self, 'material', None) and (
-            self.material.name.lower().startswith(('equip_', 'equipskin_')) or
-            'equip' in self.material.name.lower() or
-            any(obj.name.startswith(('Equip_', 'EquipSkin_')) for obj in bpy.data.objects)
-        )
-        if is_equip:
-            node_input = node_inputs.get("Use Alpha") or node_inputs.get("Toggle Alpha")
-            if node_input:
-                node_input.default_value = True if type(node_input) is bpy.types.NodeSocketBool else 1.0
 
 
 class V3_MaterialDataApplier(V2_MaterialDataApplier):
