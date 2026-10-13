@@ -20,7 +20,7 @@ from setup_wizard.character_rig_setup.rig_ui_utils import (
 
 
 def attach_overcoat_to_arms(rig, context=None):
-    """Attach shoulder drapes and their segments to the arm/forearm without changing rest."""
+    """Attach only shoulder drape roots to the upper arms without changing rest."""
     context = context or bpy.context
     context.view_layer.objects.active = rig
     previous_mode = rig.mode
@@ -56,31 +56,12 @@ def attach_overcoat_to_arms(rig, context=None):
             # Shoulder drape near the arm; front/back torso panels stay on chest.
             if not 0.0 <= projection <= 1.0 or distance > length * .35:
                 continue
-            chain = [bone] + list(bone.children_recursive)
-            chain += [candidate for candidate in bones
-                      if candidate.get('gi_overcoat_arm_chain') == bone.name and candidate not in chain]
-            segments = [bones.get(name) for name in (
-                f'DEF-upper_arm.{side}', f'DEF-upper_arm.{side}.001',
-                f'DEF-forearm.{side}', f'DEF-forearm.{side}.001')]
-            segments = [candidate for candidate in segments if candidate]
-            for cloth in chain:
-                if not re.fullmatch(r'Bone_Overcoat\d+_' + side, cloth.name):
-                    continue
-                cloth['gi_overcoat_arm_chain'] = bone.name
-                def distance_to_segment(candidate):
-                    direction = candidate.tail - candidate.head
-                    if direction.length_squared < 1e-10:
-                        return (cloth.head - candidate.head).length
-                    t = (cloth.head - candidate.head).dot(direction) / direction.length_squared
-                    point = candidate.head + direction * max(0.0, min(1.0, t))
-                    return (cloth.head - point).length
-                target = arm if cloth == bone else min(segments, key=distance_to_segment)
-                if distance_to_segment(target) > length * .5:
-                    continue
-                if cloth.parent != target:
-                    cloth.use_connect = False
-                    cloth.parent = target
-                    changed.append(cloth.name)
+            # Keep the original cloth chain: lower segments must not follow
+            # the split upper-arm deform bones or the bending forearm.
+            if bone.parent != arm:
+                bone.use_connect = False
+                bone.parent = arm
+                changed.append(bone.name)
     if previous_mode != 'EDIT':
         bpy.ops.object.mode_set(mode=previous_mode)
     return changed
