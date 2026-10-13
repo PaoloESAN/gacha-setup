@@ -1153,6 +1153,34 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
 
         return None
 
+    def _normalize_pgr_scale(self, armature, context):
+        """Remove a redundant FBX centimeter scale from meter-sized PGR assets.
+
+        Use the bound meshes rather than character height: standalone weapons
+        can have very small skeletons. This also recognizes previously applied
+        armature scale, which Blender transfers to its mesh children.
+        """
+        meshes = [obj for obj in context.scene.objects
+                  if obj.type == 'MESH' and obj.find_armature() == armature]
+        if not meshes:
+            return False
+
+        def local_extent(mesh):
+            return max(max(v[i] for v in mesh.bound_box)
+                       - min(v[i] for v in mesh.bound_box) for i in range(3))
+
+        # Use the largest mesh so small details on a centimeter-sized model
+        # cannot be mistaken for an entire model whose vertices are in meters.
+        mesh = max(meshes, key=local_extent)
+        world_scale = mesh.matrix_world.to_scale()
+        if (0.1 < local_extent(mesh) < 10.0
+                and all(abs(abs(value) - 0.01) < 0.0001 for value in world_scale)):
+            armature.scale *= 100.0
+            context.view_layer.update()
+            self.report({'INFO'}, 'Corrected redundant PGR FBX scale (100x).')
+            return True
+        return False
+
     def execute(self, context):
         from setup_wizard.genshin_import_character_model import is_rigging_disabled
         if self.game_type == GameType.HONKAI_NEXUS_ANIMA.name and is_rigging_disabled(context):
@@ -1165,6 +1193,10 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
                 pass
 
         armature = self._find_target_armature(context)
+
+        if armature and self.game_type == GameType.PUNISHING_GRAY_RAVEN.name:
+            context.view_layer.update()
+            self._normalize_pgr_scale(armature, context)
 
         # Check if weapon / equipment
         fbx_path = context.scene.get("setup_wizard_imported_fbx_path", "")

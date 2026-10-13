@@ -1715,15 +1715,16 @@ class PunishingGrayRavenDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     continue
                 if material_name.startswith(JaredNytsPunishingGrayRavenShaderMaterialNames.MATERIAL_PREFIX):
                     continue
+                # Standalone equipment can use the full asset name without a
+                # body-part suffix (for example E3Kurumi_longgunMd010011).
+                # Preserve that name for texture/material-data matching.
+                mesh_body_part_name = mesh_body_part_name or material_name
                 if 'Face' in mesh_body_part_name:  # 6.Karenina_Ember (material w/ Face in it, but not called just Face)
                     mesh_body_part_name = 'Face'
                 elif 'Eye' in mesh_body_part_name:
                     mesh_body_part_name = 'Eye'
                 if 'OL' in mesh_body_part_name:  # 9S (Generic), Bianca_Veritas (Ink-lit Hermit)
                     mesh_body_part_name = mesh_body_part_name.replace('OL', '')
-
-                if not mesh_body_part_name:
-                    mesh_body_part_name = material_name
 
                 if 'Alpha' in mesh_body_part_name or 'alpha' in material_name.lower():
                     material_type = JaredNytsPunishingGrayRavenShaderMaterialNames.ALPHA
