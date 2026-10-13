@@ -3,7 +3,7 @@ import os
 bl_info = {
     "name": "Gacha Setup",
     "author": "Mken, OctavoPE, Enthralpy, PaoloESAN",
-    "version": (3, 7, 3),
+    "version": (3, 8, 0),
     "blender": (4, 1, 0),
     "location": "3D View > Sidebar > Gacha Setup",
     "description": "An addon to streamline the character model setup process for Gacha games in Blender 4.1+",
@@ -33,6 +33,9 @@ else:
     import setup_wizard.services.isolation
     import setup_wizard.ui.addon_icon_manager as addon_icon_manager
     import setup_wizard.ui.gi_ui_setup_wizard_menu
+    import setup_wizard.ui.pgr_ui_setup_wizard_menu
+    import setup_wizard.ui.hi3_ui_setup_wizard_menu
+    import setup_wizard.ui.hna_ui_setup_wizard_menu
     from setup_wizard.character_rig_setup.character_rigger_operator import (
         GI_OT_RigCharacter,
         GI_OT_CharacterRiggerOperator,
@@ -61,6 +64,9 @@ else:
         NTE_OT_SetUpCharacter,
         WW_OT_SetUpCharacter,
         AKE_OT_SetUpCharacter,
+        PGR_OT_SetUpCharacter,
+        HI3_OT_SetUpCharacter,
+        HNA_OT_SetUpCharacter,
         GI_OT_ClearPose,
         GI_OT_ReorientBones,
     )
@@ -74,6 +80,9 @@ else:
         WW_OT_SetUpMaterials,
         AKE_OT_SetUpMaterials,
         AKE_OT_SetUpOutlines,
+        PGR_OT_SetUpMaterials,
+        HI3_OT_SetUpMaterials,
+        HNA_OT_SetUpMaterials,
     )
 
     from setup_wizard.genshin_import_outlines import (
@@ -81,11 +90,17 @@ else:
         HSR_OT_SetUpOutlines,
         ZZZ_OT_SetUpOutlines,
         WW_OT_SetUpOutlines,
+        PGR_OT_SetUpOutlines,
+        HI3_OT_SetUpOutlines,
+        HNA_OT_SetUpOutlines,
     )
     from setup_wizard.genshin_animate_mode import GI_OT_ToggleAnimateMode
     from setup_wizard.genshin_setup_wizard import (
         GI_OT_GenshinSetupWizardUI,
         HSR_OT_HonkaiStarRailSetupWizardUI,
+        PGR_OT_SetupWizardUI,
+        HI3_OT_SetupWizardUI,
+        HNA_OT_SetupWizardUI,
         ZZZ_OT_SetupWizardUI,
         NTE_OT_SetupWizardUI,
         WW_OT_WutheringWavesSetupWizardUI,
@@ -101,9 +116,12 @@ else:
         AKE_OT_SetUpHeadDriver,
     )
     from setup_wizard.misc_operations import (
+        HNA_OT_ApplyMaterialSettings,
         ZZZ_OT_RenameCollectionAndRig,
         ZZZ_OT_MoveLightingPanelToCharacterCollection,
+        ZZZ_OT_SetupBloom,
     )
+    from setup_wizard.services.zzz_outline_mask_service import ZZZ_OT_CreateFaceOutlineMask
     from setup_wizard.misc_final_steps import (
         GI_OT_FixTransformations,
         GI_OT_FinishSetup,
@@ -115,7 +133,13 @@ else:
         WW_OT_SetupCompositorNodes,
         AKE_OT_FinishSetup,
         AKE_OT_SetupCompositorNodes,
+        PGR_OT_FinishSetup,
+        HI3_OT_FinishSetup,
+        HNA_OT_FinishSetup,
     )
+    from setup_wizard.character_rig_setup.pgr_face_rig import PGR_OT_SetupFaceRig
+    from setup_wizard.character_rig_setup.hi3_face_rig import HI3_OT_SetupFaceRig
+    from setup_wizard.character_rig_setup.hna_face_rig import HNA_OT_SetupFaceRig
     from setup_wizard.ui.ake_ui_setup_wizard_menu import (
         AKE_PT_Setup_Wizard_UI_Layout,
         AKE_PT_Basic_Setup_Wizard_UI_Layout,
@@ -206,6 +230,8 @@ else:
         CSW_OT_JideehCamera,
         CSW_OT_CreateCameraPro,
         CSW_OT_CreateJideehCamrig,
+        CSW_OT_SelectGame,
+        CSW_MT_GameSelectorMenu,
     )
     from setup_wizard.utils.eye_through_hair import CSW_OT_EyeThroughHair
 
@@ -220,8 +246,47 @@ else:
         ZZZ_PT_UI_Materials_Menu,
         ZZZ_PT_UI_Outlines_Menu,
         ZZZ_PT_Rig_Character_Settings,
+        ZZZ_OT_SelectLightingPanel,
+        ZZZ_OT_ToggleLightingPanelVisibility,
         register_zzz_properties,
         unregister_zzz_properties,
+    )
+    from setup_wizard.ui.pgr_ui_setup_wizard_menu import (
+        PGR_PT_CharacterSettings,
+        PGR_OT_CharacterLightingPreset,
+        PGR_PT_Setup_Wizard_UI_Layout,
+        PGR_PT_Basic_Setup_Wizard_UI_Layout,
+        PGR_PT_Advanced_Setup_Wizard_UI_Layout,
+        PGR_PT_UI_Character_Model_Menu,
+        PGR_PT_UI_Materials_Menu,
+        PGR_PT_UI_Outlines_Menu,
+        PGR_PT_UI_Character_Rig_Setup_Menu,
+        PGR_PT_UI_Finish_Setup_Menu,
+    )
+    from setup_wizard.ui.hi3_ui_setup_wizard_menu import (
+        HI3_PT_Setup_Wizard_UI_Layout,
+        HI3_PT_Basic_Setup_Wizard_UI_Layout,
+        HI3_PT_Advanced_Setup_Wizard_UI_Layout,
+        HI3_PT_UI_Character_Model_Menu,
+        HI3_PT_UI_Materials_Menu,
+        HI3_PT_UI_Outlines_Menu,
+        HI3_PT_UI_Character_Rig_Setup_Menu,
+        HI3_PT_UI_Finish_Setup_Menu,
+        HI3_PT_CharacterSettings,
+        HI3_OT_CharacterLightingPreset,
+        register_hi3_properties,
+        unregister_hi3_properties,
+    )
+    from setup_wizard.ui.hna_ui_setup_wizard_menu import (
+        HNA_PT_CharacterSettings, register_hna_properties, unregister_hna_properties,
+        HNA_PT_Setup_Wizard_UI_Layout,
+        HNA_PT_Basic_Setup_Wizard_UI_Layout,
+        HNA_PT_Advanced_Setup_Wizard_UI_Layout,
+        HNA_PT_UI_Character_Model_Menu,
+        HNA_PT_UI_Materials_Menu,
+        HNA_PT_UI_Outlines_Menu,
+        HNA_PT_UI_Character_Rig_Setup_Menu,
+        HNA_PT_UI_Finish_Setup_Menu,
     )
 
     setup_dependencies()
@@ -229,6 +294,9 @@ else:
     modules = [
         setup_wizard.ui.gi_ui_setup_wizard_menu,
         setup_wizard.ui.hsr_ui_setup_wizard_menu,
+        setup_wizard.ui.pgr_ui_setup_wizard_menu,
+        setup_wizard.ui.hi3_ui_setup_wizard_menu,
+        setup_wizard.ui.hna_ui_setup_wizard_menu,
         setup_wizard.ui.zzz_ui_setup_wizard_menu,
         setup_wizard.ui.nte_ui_setup_wizard_menu,
         setup_wizard.ui.wuwa_ui_setup_wizard_menu,
@@ -238,10 +306,14 @@ else:
     ]
 
     classes = [
+        HNA_PT_CharacterSettings,
+        HNA_OT_ApplyMaterialSettings,
         CharacterRiggerPropertyGroup,
         CharacterRiggerPropertyManager,
         CharacterSetupWizardAddonPreferences,
         CSW_PT_Updater_UI_Layout,
+        CSW_OT_SelectGame,
+        CSW_MT_GameSelectorMenu,
         CSW_PT_Unified_Character_Setup_Wizard_UI_Layout,
         CSW_PT_Utilities_UI_Layout,
         CSW_OT_JideehCamera,
@@ -290,6 +362,49 @@ else:
         HSR_OT_SetUpMaterials,
         HSR_OT_SetUpOutlines,
         HSR_OT_FinishSetup,
+        # Punishing: Gray Raven
+        PGR_PT_CharacterSettings,
+        PGR_OT_CharacterLightingPreset,
+        PGR_PT_Setup_Wizard_UI_Layout,
+        PGR_PT_Basic_Setup_Wizard_UI_Layout,
+        PGR_PT_Advanced_Setup_Wizard_UI_Layout,
+        PGR_PT_UI_Character_Model_Menu,
+        PGR_PT_UI_Materials_Menu,
+        PGR_PT_UI_Outlines_Menu,
+        PGR_PT_UI_Character_Rig_Setup_Menu,
+        PGR_PT_UI_Finish_Setup_Menu,
+        PGR_OT_SetupWizardUI,
+        PGR_OT_SetUpCharacter,
+        PGR_OT_SetUpMaterials,
+        PGR_OT_SetUpOutlines,
+        # Honkai Impact 3rd
+        HI3_PT_Setup_Wizard_UI_Layout,
+        HI3_PT_Basic_Setup_Wizard_UI_Layout,
+        HI3_PT_Advanced_Setup_Wizard_UI_Layout,
+        HI3_PT_UI_Character_Model_Menu,
+        HI3_PT_UI_Materials_Menu,
+        HI3_PT_UI_Outlines_Menu,
+        HI3_PT_UI_Character_Rig_Setup_Menu,
+        HI3_PT_UI_Finish_Setup_Menu,
+        HI3_PT_CharacterSettings,
+        HI3_OT_CharacterLightingPreset,
+        HI3_OT_SetupWizardUI,
+        HI3_OT_SetUpCharacter,
+        HI3_OT_SetUpMaterials,
+        HI3_OT_SetUpOutlines,
+        # Honkai: Nexus Anima
+        HNA_PT_Setup_Wizard_UI_Layout,
+        HNA_PT_Basic_Setup_Wizard_UI_Layout,
+        HNA_PT_Advanced_Setup_Wizard_UI_Layout,
+        HNA_PT_UI_Character_Model_Menu,
+        HNA_PT_UI_Materials_Menu,
+        HNA_PT_UI_Outlines_Menu,
+        HNA_PT_UI_Character_Rig_Setup_Menu,
+        HNA_PT_UI_Finish_Setup_Menu,
+        HNA_OT_SetupWizardUI,
+        HNA_OT_SetUpCharacter,
+        HNA_OT_SetUpMaterials,
+        HNA_OT_SetUpOutlines,
         ZZZ_PT_Basic_Setup_Wizard_UI_Layout,
         ZZZ_PT_Advanced_Setup_Wizard_UI_Layout,
         ZZZ_PT_UI_Character_Model_Menu,
@@ -307,6 +422,10 @@ else:
         ZZZ_OT_SetUpHeadDriver,
         ZZZ_OT_RenameCollectionAndRig,
         ZZZ_OT_MoveLightingPanelToCharacterCollection,
+        ZZZ_OT_SetupBloom,
+        ZZZ_OT_CreateFaceOutlineMask,
+        ZZZ_OT_SelectLightingPanel,
+        ZZZ_OT_ToggleLightingPanelVisibility,
         NTE_PT_Basic_Setup_Wizard_UI_Layout,
         NTE_PT_Advanced_Setup_Wizard_UI_Layout,
         NTE_PT_UI_Character_Model_Menu,
@@ -364,6 +483,12 @@ else:
         AKE_OT_FinishSetup,
         AKE_OT_SetupCompositorNodes,
         AKE_OT_SetUpIsaacFaceRig,
+        PGR_OT_FinishSetup,
+        HI3_OT_FinishSetup,
+        HNA_OT_FinishSetup,
+        PGR_OT_SetupFaceRig,
+        HI3_OT_SetupFaceRig,
+        HNA_OT_SetupFaceRig,
     ]
 
     for module in modules:
@@ -376,11 +501,29 @@ else:
     UI_Properties.create_custom_ui_properties()
 
 
+    def _gacha_prewarm():
+        """One-time heavy work moved out of the selection path."""
+        try:
+            from setup_wizard.ui.character_settings_utils import invalidate_caches
+            invalidate_caches()
+        except Exception:
+            pass
+        try:
+            from setup_wizard.optimization.blender_rimlight_patch import patch_all_rimlight_groups_for_blender
+            patch_all_rimlight_groups_for_blender()
+        except Exception:
+            pass
+        return None
+
     @bpy.app.handlers.persistent
     def gacha_rig_ui_load_post_handler(dummy=None):
         try:
             from setup_wizard.ui.character_settings_utils import ensure_all_rig_uis_registered
             ensure_all_rig_uis_registered()
+        except Exception:
+            pass
+        try:
+            bpy.app.timers.register(_gacha_prewarm, first_interval=0.5)
         except Exception:
             pass
 
@@ -412,6 +555,10 @@ else:
         register_hsr_properties()
         register_gi_properties()
         register_ake_properties()
+        register_hi3_properties()
+        from setup_wizard.ui.pgr_character_settings import register_pgr_properties
+        register_pgr_properties()
+        register_hna_properties()
         setup_wizard.services.isolation.register()
         if wuwa_frame_change_handler not in bpy.app.handlers.render_init:
             bpy.app.handlers.render_init.append(wuwa_frame_change_handler)
@@ -422,6 +569,10 @@ else:
         if gacha_rig_ui_load_post_handler not in bpy.app.handlers.load_post:
             bpy.app.handlers.load_post.append(gacha_rig_ui_load_post_handler)
         try:
+            bpy.app.timers.register(_gacha_prewarm, first_interval=1.0)
+        except Exception:
+            pass
+        try:
             from setup_wizard.ui.character_settings_utils import ensure_all_rig_uis_registered
             ensure_all_rig_uis_registered()
         except Exception:
@@ -431,6 +582,10 @@ else:
 
 
     def unregister():
+        from setup_wizard.ui.pgr_character_settings import unregister_pgr_properties
+        unregister_pgr_properties()
+        unregister_hna_properties()
+        unregister_hi3_properties()
         addon_icon_manager.unregister_icons()
         if gacha_rig_ui_load_post_handler in bpy.app.handlers.load_post:
             bpy.app.handlers.load_post.remove(gacha_rig_ui_load_post_handler)

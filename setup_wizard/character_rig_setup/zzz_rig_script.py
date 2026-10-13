@@ -1233,6 +1233,14 @@ def rig_character(
     new_name = get_and_rename_empty("Light Direction")
     if new_name: move_into_collection(new_name,char_name)
 
+    scene = bpy.context.scene
+    if getattr(scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
+        import math
+        for obj in bpy.data.objects:
+            if obj.name.startswith("Light Direction") or obj.name.startswith("Main Light Direction"):
+                obj.rotation_mode = 'XYZ'
+                obj.rotation_euler = (math.radians(90.0), 0.0, 0.0)
+
     bpy.data.collections["wgt"].hide_select = True
     bpy.data.collections["wgt"].hide_viewport = True
     bpy.data.collections["wgt"].hide_render = True
@@ -1262,6 +1270,10 @@ def rig_character(
         to_del_coll = bpy.data.collections.get(LightingPanelNames.Collections.WHEEL)
         if to_del_coll:
             for obj in to_del_coll.objects:
+                try:
+                    obj.hide_render = True
+                except Exception:
+                    pass
                 move_into_collection(obj.name, char_name)
         # DO NOT INCLUDE CHILDREN. This will cause ColorPickers to be moved into the rig object.
         move_into_collection(
@@ -2730,11 +2742,28 @@ def rig_character(
 
     # Since we're still in object mode, here we can add the head pole object in the neck to track head movement
     bpy.ops.object.empty_add(type='PLAIN_AXES', align='WORLD', location=(0, 0, 0), scale=(1, 1, 1))
-    bpy.data.objects["Empty"].name = "Head_Pole"
-    bpy.data.objects["Head_Pole"].empty_display_size = 0.01
-    bpy.data.objects["Head_Pole"].parent = bpy.data.objects[char_name+"Rig"]
-    bpy.data.objects["Head_Pole"].parent_type = "BONE"
-    bpy.data.objects["Head_Pole"].parent_bone = "neck"
+    hp_obj = bpy.context.active_object or bpy.data.objects.get("Empty")
+    if hp_obj:
+        hp_obj.name = "Head_Pole"
+        hp_obj.empty_display_size = 0.01
+        rig_target = bpy.data.objects.get(char_name + "Rig")
+        if rig_target:
+            hp_obj.parent = rig_target
+            hp_obj.parent_type = "BONE"
+            hp_obj.parent_bone = "neck"
+        # Move into wgt or WGTS collection so it never sits loose in scene root
+        wgt_target = bpy.data.collections.get(f"WGTS_{char_name}") or bpy.data.collections.get("wgt") or bpy.data.collections.get("WGTS")
+        if wgt_target:
+            if hp_obj.name not in wgt_target.objects:
+                wgt_target.objects.link(hp_obj)
+            for uc in list(hp_obj.users_collection):
+                if uc != wgt_target:
+                    try:
+                        uc.objects.unlink(hp_obj)
+                    except Exception:
+                        pass
+        hp_obj.hide_viewport = True
+        hp_obj.hide_render = True
 
 
     # Remove any drivers on viewport outlines so user has direct control
@@ -3876,6 +3905,10 @@ def rig_character(
         if not driver_obj:
             return
         try:
+            driver_obj.hide_render = True
+        except Exception:
+            pass
+        try:
             driver = driver_obj.driver_add("hide_viewport").driver
             
             driver.type = 'SCRIPTED'
@@ -3901,6 +3934,13 @@ def rig_character(
     drive_visibility_with_prop("ColorWheel-Shadow", "collections[\"Lighting\"].is_visible")
     drive_visibility_with_prop("ColorWheel-SoftLit", "collections[\"Lighting\"].is_visible")
     drive_visibility_with_prop("ColorWheel-SoftShadow", "collections[\"Lighting\"].is_visible")
+
+    for obj in bpy.data.objects:
+        if "colorwheel" in obj.name.lower():
+            try:
+                obj.hide_render = True
+            except Exception:
+                pass
   
     
     # Post modification, Adjustment of bone layers/collections.
@@ -4106,6 +4146,8 @@ def rig_character(
         bone_to_layer("Shadow", 1, "Lighting")  # Sharp Shadow
         bone_to_layer("RimShadow", 1, "Lighting")
         bone_to_layer("Rim Lit", 1, "Lighting")
+        bone_to_layer("Rim.L", 1, "Lighting")
+        bone_to_layer("Rim.R", 1, "Lighting")
         bone_to_layer("RimX", 1, "Lighting")
         bone_to_layer("RimY", 1, "Lighting")
         bone_to_layer("RimLitPin", 1, "Lighting")

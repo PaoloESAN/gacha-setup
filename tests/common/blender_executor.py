@@ -27,7 +27,7 @@ def enable_addons():
     addon_utils.enable("rigify", default_set=True)
     for mod in addon_utils.modules():
         name = getattr(mod, "__name__", "")
-        if "expy" in name.lower() or "ueformat" in name.lower():
+        if "expy" in name.lower() or "ueformat" in name.lower() or "better_fbx" in name.lower():
             try:
                 addon_utils.enable(name, default_set=True)
             except Exception:

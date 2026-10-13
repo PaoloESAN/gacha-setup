@@ -19,6 +19,15 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
     bl_label = "Genshin: Setup Head Driver"
 
     def execute(self, context):
+        # Configure shader lighting here, after material setup, rather than when
+        # toggling the rigging preference or skipping rig generation. Equipment
+        # needs this even though it has no head-driver constraint to set up.
+        if self.game_type == 'GENSHIN_IMPACT':
+            from setup_wizard.genshin_import_character_model import is_rigging_disabled
+            if is_rigging_disabled(context):
+                from setup_wizard.character_rig_setup.lighting_panel_setup import setup_unrigged_genshin_lighting
+                setup_unrigged_genshin_lighting(context)
+
         # Check if weapon / equipment
         fbx_path = context.scene.get("setup_wizard_imported_fbx_path", "")
         fbx_name = os.path.basename(fbx_path) if fbx_path else ""
@@ -117,7 +126,15 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
             self.set_contraint_target_and_bone(
                 child_of_constraint, armature, head_bone_name
             )
-            self.set_inverse(head_driver_object, child_of_constraint.name)
+            if self.game_type == 'PUNISHING_GRAY_RAVEN':
+                # The bundled helper belongs to a different character. Align
+                # its origin to this head, after the final PGR rig is generated.
+                context.view_layer.update()
+                pose_bone = armature.pose.bones[head_bone_name]
+                saved_matrix.translation = armature.matrix_world @ pose_bone.head
+                child_of_constraint.inverse_matrix = (armature.matrix_world @ pose_bone.matrix).inverted()
+            else:
+                self.set_inverse(head_driver_object, child_of_constraint.name)
             head_driver_object.location = saved_loc
             head_driver_object.matrix_world = saved_matrix
         else:
@@ -244,6 +261,7 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
 
         try:
             enable_layer_colls(bpy.context.view_layer.layer_collection, obj.name)
+            bpy.context.view_layer.update()
         except Exception:
             pass
 
@@ -257,6 +275,10 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
         previous_selected = list(bpy.context.selected_objects)
 
         try:
+            if obj.name not in bpy.context.view_layer.objects:
+                # Hidden lighting collections can exclude the helper in 4.1.
+                # Use the matrix fallback without invoking a selection operator.
+                raise RuntimeError('Head driver is outside the active view layer')
             for s in list(bpy.context.selected_objects):
                 s.select_set(False)
             obj.select_set(True)
@@ -605,7 +627,14 @@ def move_lighting_and_head_driver_to_lights(main_obj=None):
                 except Exception:
                     pass
 
-    # Explicitly ensure NO ColorWheel meshes remain linked to lights collection
+    # Explicitly ensure NO ColorWheel meshes remain linked to lights collection, and disable render for them
+    for obj in bpy.data.objects:
+        if "colorwheel" in obj.name.lower():
+            try:
+                obj.hide_render = True
+            except Exception:
+                pass
+
     if lights_coll:
         for obj in list(lights_coll.objects):
             if "colorwheel" in obj.name.lower():

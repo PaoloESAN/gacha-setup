@@ -24,7 +24,8 @@ ng = bpy.data.node_groups.get("Global Material Properties+")
 out_node = ng.nodes.get("Global Properties") or ng.nodes.get("Group Output")
 
 # 1. Disconnect test
-disconnect_lighting_panel_nodes_from_global_material_properties()
+disconnect_lighting_panel_nodes_from_global_material_properties(
+    target_materials=[m for m in bpy.data.materials if m.use_nodes])
 connected_count_after_disconnect = sum(
     1 for inp in out_node.inputs
     if inp.links and not inp.name.startswith("---") and "face" not in inp.name.lower()

@@ -1054,6 +1054,7 @@ class AKE_PT_Rig_Character_Settings(Panel):
         if physics_present:
             col_physics.prop(scene, "gi_hair_physics_influence", text="Hair Physics", slider=True)
             col_physics.prop(scene, "gi_clothes_physics_influence", text="Clothes Physics", slider=True)
+            box_physics.column(align=True).operator("hoyoverse.remove_hair_clothes_physics", text="Remove Physics", icon="PANEL_CLOSE")
         else:
             col_physics.operator("hoyoverse.apply_hair_clothes_physics", text="Apply Physics", icon="FILE_REFRESH")
 

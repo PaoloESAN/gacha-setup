@@ -82,12 +82,10 @@ class HYV_OT_VertexPaintFaceSeeThroughEffect(Operator, CustomOperatorProperties)
             StellarToonShaderMaterialNames
 
         face_object = bpy.data.objects.get('Face')
-        face_mesh: bpy.types.Mesh = bpy.data.meshes.get('Face')
+        face_mesh: bpy.types.Mesh = face_object.data if face_object else None
 
         if shader is HonkaiStarRailShaders.STELLARTOON_HONKAI_STAR_RAIL_SHADER and face_mesh and face_object:
             color_color_attribute = face_mesh.color_attributes.get('Color')
-            orig_active_obj = bpy.context.active_object
-            orig_mode = orig_active_obj.mode if orig_active_obj else 'OBJECT'
 
             if not color_color_attribute:
                 color_color_attribute = face_mesh.color_attributes.new(
@@ -103,42 +101,20 @@ class HYV_OT_VertexPaintFaceSeeThroughEffect(Operator, CustomOperatorProperties)
             if col_color_attribute:
                 col_color_attribute.active_render = True
 
-            try:
-                bpy.context.view_layer.objects.active = face_object
-                bpy.ops.object.mode_set(mode='EDIT')
-                bpy.ops.mesh.select_mode(type='FACE')
-
-                # Try first slot as a best guess (Screwllum has Body1 material in Face mesh)
-                face_material_slot = face_object.material_slots.get(self.shader_material_names.FACE) or (
-                    face_object.material_slots[0] if face_object.material_slots else None
-                )
-                if face_material_slot:
-                    face_object.active_material_index = face_material_slot.slot_index
-
-                bpy.ops.mesh.select_all(action='DESELECT')
-                if face_material_slot:
-                    bpy.ops.object.material_slot_select()
-
-                bpy.ops.paint.vertex_paint_toggle()
-                face_mesh.use_paint_mask = True
-                if "Draw" in bpy.data.brushes:
-                    bpy.data.brushes["Draw"].color = (1, 1, 1)
-                bpy.ops.paint.vertex_color_set()
-            except Exception as e:
-                print(f"[HSR] Vertex paint face see through error: {e}")
-            finally:
-                try:
-                    bpy.ops.object.mode_set(mode='OBJECT')
-                except Exception:
-                    pass
-
-            if orig_active_obj and orig_active_obj.name in bpy.data.objects:
-                try:
-                    bpy.context.view_layer.objects.active = orig_active_obj
-                    if orig_mode in ('POSE', 'EDIT', 'OBJECT'):
-                        bpy.ops.object.mode_set(mode=orig_mode)
-                except Exception:
-                    pass
+            # Write the same material mask directly. Vertex-paint operators enter
+            # the sculpt undo system and can crash Goo 4.1 in isolated setup.
+            # Try the first slot as a fallback (Screwllum uses Body1 on Face).
+            face_material_slot = face_object.material_slots.get(self.shader_material_names.FACE) or (
+                face_object.material_slots[0] if face_object.material_slots else None
+            )
+            if face_material_slot:
+                for polygon in face_mesh.polygons:
+                    if polygon.material_index != face_material_slot.slot_index:
+                        continue
+                    indices = polygon.vertices if color_color_attribute.domain == 'POINT' else polygon.loop_indices
+                    for index in indices:
+                        color_color_attribute.data[index].color = (1, 1, 1, 1)
+            face_mesh.update()
 
             self.__replace_eyeshadow_material()
 
@@ -242,11 +218,11 @@ class GI_OT_RenameShaderMaterials(Operator, CustomOperatorProperties):
         # 1. GI, PGR
         # 2. HSR-Nya222
         # 3. HSR-StellarToon
-        texture_node_names: TextureNodeNames = shader_identifier_service.get_shader_texture_node_names(shader)
+        texture_node_names: TextureNodeNames = shader_identifier_service.get_shader_texture_node_names(shader) if shader else None
 
-        body_diffuse_filename = self.__find_body_diffuse_filename(shader_material_names, texture_node_names)
+        body_diffuse_filename = self.__find_body_diffuse_filename(shader_material_names, texture_node_names) if (shader_material_names and texture_node_names) else None
 
-        if body_diffuse_filename:
+        if body_diffuse_filename and shader_material_names and shader_material_names.MATERIAL_PREFIX:
             materials_to_check = [material for material in bpy.data.materials if \
                                     material.name.startswith(shader_material_names.MATERIAL_PREFIX)]
             for material in materials_to_check:
@@ -392,6 +368,10 @@ class GI_OT_SetUpArmTwistBoneConstraints(Operator, CustomOperatorProperties):
     RIGHT_FOREARM = 'Bip001RForearm'
 
     def execute(self, context):
+        from setup_wizard.genshin_import_character_model import is_rigging_disabled
+        if self.game_type == GameType.HONKAI_NEXUS_ANIMA.name and is_rigging_disabled(context):
+            NextStepInvoker().invoke(self.next_step_idx, self.invoker_type, high_level_step_name=self.high_level_step_name, game_type=self.game_type)
+            return {'FINISHED'}
         armature =  [object for object in bpy.data.objects if object.type == 'ARMATURE'][0]
         left_armtwist_bone_names, right_armtwist_bone_names = self.get_armtwist_bones()
 
@@ -734,7 +714,7 @@ def find_zzz_character_armature():
 def _is_wgt_or_lights_collection(name):
     n_low = name.lower()
     return (
-        n_low in ["lights", "wgt", "wgts", "collection", "master collection", "eye", "eyes"]
+        n_low in ["lights", "wgt", "wgts", "collection", "master collection", "eye", "eyes", "widgets", "widget"]
         or n_low.startswith("wgt")
         or n_low.startswith("wgts_")
     )
@@ -742,7 +722,7 @@ def _is_wgt_or_lights_collection(name):
 
 def find_zzz_character_collection():
     for coll in bpy.data.collections:
-        if coll.name.lower() not in ["lights", "wgt", "wgts", "collection", "master collection", "eye", "eyes"] and ("Avatar_" in coll.name or "Size" in coll.name):
+        if coll.name.lower() not in ["lights", "wgt", "wgts", "collection", "master collection", "eye", "eyes", "widgets", "widget"] and ("Avatar_" in coll.name or "Size" in coll.name):
             return coll
     for coll in bpy.data.collections:
         if _is_wgt_or_lights_collection(coll.name):
@@ -752,7 +732,7 @@ def find_zzz_character_collection():
         c_low = coll.name.lower()
         if c_low.startswith("wgt") or (c_low.startswith("wgts_") and c_low != "wgts_facerig"):
             continue
-        if coll.name.lower() not in ["lights", "wgt", "wgts", "eye", "eyes"]:
+        if coll.name.lower() not in ["lights", "wgt", "wgts", "eye", "eyes", "widgets", "widget"]:
             return coll
     return None
 
@@ -809,7 +789,7 @@ class ZZZ_OT_MoveLightingPanelToCharacterCollection(Operator, CustomOperatorProp
                             except Exception:
                                 pass
                     obj.hide_viewport = False
-                    obj.hide_render = False
+                    obj.hide_render = True
 
             for coll in bpy.data.collections:
                 if coll != target_coll:
@@ -819,6 +799,13 @@ class ZZZ_OT_MoveLightingPanelToCharacterCollection(Operator, CustomOperatorProp
                                 coll.objects.unlink(obj)
                             except Exception:
                                 pass
+
+        for obj in bpy.data.objects:
+            if "colorwheel" in obj.name.lower():
+                try:
+                    obj.hide_render = True
+                except Exception:
+                    pass
 
         # Desvincular / excluir la colección 'lights' de la escena activa (view layer)
         def exclude_layer_collection(layer_coll, name):
@@ -834,6 +821,67 @@ class ZZZ_OT_MoveLightingPanelToCharacterCollection(Operator, CustomOperatorProp
             exclude_layer_collection(context.view_layer.layer_collection, "lights")
         except Exception:
             pass
+
+        try:
+            ctrl_type = getattr(context.scene, "zzz_lighting_control_type", "PANEL")
+            from setup_wizard.character_rig_setup.lighting_panel_setup import (
+                connect_zzz_lighting_panel,
+                disconnect_zzz_lighting_panel,
+                set_lighting_panel_visibility,
+            )
+            if ctrl_type == "PANEL":
+                connect_zzz_lighting_panel()
+                if main_rig:
+                    set_lighting_panel_visibility(main_rig, True)
+            else:
+                disconnect_zzz_lighting_panel()
+                if main_rig:
+                    set_lighting_panel_visibility(main_rig, False)
+        except Exception as e:
+            print(f"[ZZZ] Lighting panel connection notice: {e}")
+
+        try:
+            from setup_wizard.services.zzz_bloom_service import setup_zzz_bloom
+            setup_zzz_bloom(context.scene)
+        except Exception as e:
+            print(f"[ZZZ] Bloom setup notice: {e}")
+
+        # Consolidate any leftover 'Widgets' collection into WGTS_<Char>
+        try:
+            for coll in list(bpy.data.collections):
+                if coll.name.lower() in ("widgets", "widget"):
+                    char_wgts = None
+                    if main_rig:
+                        char_name = main_rig.name.replace("Rig", "").replace("rig", "").strip()
+                        char_wgts = bpy.data.collections.get(f"WGTS_{char_name}")
+                    if not char_wgts:
+                        char_wgts = next((c for c in bpy.data.collections if c.name.startswith("WGTS_")), None)
+                    if not char_wgts:
+                        char_wgts = bpy.data.collections.get("wgt") or bpy.data.collections.get("WGTS")
+
+                    if char_wgts:
+                        for obj in list(coll.objects):
+                            if obj.name not in char_wgts.objects:
+                                char_wgts.objects.link(obj)
+                            obj.hide_viewport = True
+                            obj.hide_render = True
+                            for uc in list(obj.users_collection):
+                                if uc != char_wgts:
+                                    try:
+                                        uc.objects.unlink(obj)
+                                    except Exception:
+                                        pass
+                    try:
+                        for parent_c in list(bpy.data.collections):
+                            if coll.name in parent_c.children:
+                                parent_c.children.unlink(coll)
+                        if coll.name in bpy.context.scene.collection.children:
+                            bpy.context.scene.collection.children.unlink(coll)
+                        bpy.data.collections.remove(coll, do_unlink=True)
+                    except Exception:
+                        pass
+        except Exception as e_w:
+            print(f"[ZZZ] Widgets consolidation notice: {e_w}")
 
         self.report({"INFO"}, "Zenless Zone Zero: Finish Setup Completed Successfully!")
 
@@ -853,7 +901,39 @@ class ZZZ_OT_MoveLightingPanelToCharacterCollection(Operator, CustomOperatorProp
         return None
 
 
+class ZZZ_OT_SetupBloom(Operator):
+    """Sets up Compositor Bloom post-processing for Zenless Zone Zero"""
+    bl_idname = 'zenless_zone_zero.setup_bloom'
+    bl_label = 'ZZZ: Setup Bloom'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        from setup_wizard.services.zzz_bloom_service import setup_zzz_bloom
+        setup_zzz_bloom(context.scene)
+        self.report({'INFO'}, "Zenless Zone Zero: Bloom post-processing applied successfully!")
+        return {'FINISHED'}
+
+
+class HNA_OT_ApplyMaterialSettings(Operator, CustomOperatorProperties):
+    """Keep HNA eye transparency and outline color attributes after setup."""
+    bl_idname = 'honkai_nexus_anima.apply_material_settings'
+    bl_label = 'HNA: Apply Material Settings'
+
+    def execute(self, context):
+        from setup_wizard.utils.hna_material_utils import configure_runtime_settings
+        configure_runtime_settings()
+        context.scene.render.use_compositing = True
+        if self.next_step_idx:
+            NextStepInvoker().invoke(
+                self.next_step_idx, self.invoker_type,
+                high_level_step_name=self.high_level_step_name,
+                game_type=self.game_type,
+            )
+        return {'FINISHED'}
+
+
 register, unregister = bpy.utils.register_classes_factory([
+    HNA_OT_ApplyMaterialSettings,
     GI_OT_SetColorManagementToStandard,
     HYV_OT_SetUpScreenSpaceReflections,
     HYV_OT_VertexPaintFaceSeeThroughEffect,
@@ -865,4 +945,5 @@ register, unregister = bpy.utils.register_classes_factory([
     PGR_OT_PaintVertexEraseFaceAlpha,
     ZZZ_OT_RenameCollectionAndRig,
     ZZZ_OT_MoveLightingPanelToCharacterCollection,
+    ZZZ_OT_SetupBloom,
 ])

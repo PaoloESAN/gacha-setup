@@ -305,3 +305,14 @@ class ArknightsEndfieldShaderMaterialNames(ShaderMaterialNames):
     WING = 'wing'
     OUTLINES = 'Dots Stroke'
 
+
+class HonkaiImpact3rdShaderMaterialNames(ShaderMaterialNames):
+    MATERIAL_PREFIX = 'ImpactToon - '
+    MATERIAL_PREFIX_AFTER_RENAME = 'ImpactToon - '
+    BASE = 'ImpactToon - Base'
+    BODY = 'ImpactToon - Base'
+    EYE = 'ImpactToon - Eye'
+    FACE = 'ImpactToon - Face'
+    HAIR = 'ImpactToon - Hair'
+    OUTLINES = 'ImpactToon - Outlines'
+

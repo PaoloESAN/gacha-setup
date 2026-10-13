@@ -41,6 +41,15 @@ EYE_THROUGH_HAIR_S2RGB_LABEL = "Eye Through Hair Shader to RGB"
 EYE_THROUGH_HAIR_AOV_COLOR_LABEL = "Eye Through Hair Color"
 EYE_THROUGH_HAIR_AOV_MASK_LABEL = "Eye Through Hair Mask"
 EYE_THROUGH_HAIR_SUFFIX = "_EyeThroughHair"
+EYE_THROUGH_HAIR_MIN_VERSION = (5, 2, 0)
+
+
+def supports_eye_through_hair():
+    """Supported utility baseline; this is not the introduction version of AOVs."""
+    return (bpy.app.version >= EYE_THROUGH_HAIR_MIN_VERSION
+            and 'aovs' in bpy.types.ViewLayer.bl_rna.properties
+            and hasattr(bpy.types, 'ShaderNodeOutputAOV')
+            and hasattr(bpy.types, 'ShaderNodeShaderToRGB'))
 
 
 def ensure_aov_passes(view_layer: bpy.types.ViewLayer) -> Tuple[bool, bool]:
@@ -635,6 +644,8 @@ def execute_eye_through_hair(context: bpy.types.Context) -> Tuple[bool, str]:
     4. Sets up Compositor nodes.
     5. Sets viewport compositor to ALWAYS.
     """
+    if not supports_eye_through_hair():
+        return False, 'Eye Through Hair requires Blender 5.2 or newer with shader AOV support.'
     target_objs = get_target_mesh_objects(context)
     if not target_objs:
         return False, "No mesh objects found in selection or active context."
@@ -703,6 +714,9 @@ class CSW_OT_EyeThroughHair(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
+        if not supports_eye_through_hair():
+            cls.poll_message_set('Eye Through Hair requires Blender 5.2 or newer with shader AOV support.')
+            return False
         if context.active_object and context.active_object.type == 'MESH':
             return True
         if any(o.type == 'MESH' for o in getattr(context, 'selected_objects', [])):

@@ -34,16 +34,14 @@ def get_property_field(group, field):
         return None
 
 def set_property_field(group, field, value):
-    try:
-        group[field] = value
-        return
-    except (TypeError, KeyError):
-        pass
-        
-    try:
+    # Blender 5.x exposes socket fields through RNA. Writing group[field]
+    # directly can store an enum string as an IDProperty without changing the
+    # real enum used by the UI (e.g. type remains VALUE instead of ATTRIBUTE).
+    if hasattr(group, field):
         setattr(group, field, value)
-    except AttributeError as e:
-        raise e
+        return
+    group[field] = value
+
 
 def has_modifier_property(modifier, key):
     inputs = get_modifier_inputs(modifier)
@@ -77,20 +75,20 @@ def get_modifier_property(modifier, key):
         if key.startswith('Output_') and key.endswith('_attribute_name'):
             base_key = key[:-15]
             if outputs and base_key in outputs:
-                return get_property_field(outputs[base_key], 'attribute_name')
+                return get_property_field(getattr(outputs, base_key) if hasattr(outputs, base_key) else outputs[base_key], 'attribute_name')
         
         if key.endswith('_use_attribute'):
             base_key = key[:-14]
             if base_key in inputs:
-                t = get_property_field(inputs[base_key], 'type')
+                t = get_property_field(getattr(inputs, base_key) if hasattr(inputs, base_key) else inputs[base_key], 'type')
                 return 1 if t == 'ATTRIBUTE' else 0
         elif key.endswith('_attribute_name'):
             base_key = key[:-15]
             if base_key in inputs:
-                return get_property_field(inputs[base_key], 'attribute_name')
+                return get_property_field(getattr(inputs, base_key) if hasattr(inputs, base_key) else inputs[base_key], 'attribute_name')
         
         if key in inputs:
-            return get_property_field(inputs[key], 'value')
+            return get_property_field(getattr(inputs, key) if hasattr(inputs, key) else inputs[key], 'value')
             
     # Safe fallback
     try:
@@ -105,36 +103,43 @@ def set_modifier_property(modifier, key, value):
     # 1. Support for Blender 5+ mod.properties.inputs and mod.properties.outputs
     if inputs is not None or outputs is not None:
         clean_out_key = key[:-15] if key.endswith('_attribute_name') else key
-        clean_out_key = clean_out_key[7:] if clean_out_key.startswith('Output_') else clean_out_key
-        
-        if outputs is not None:
-            for k in [key, clean_out_key, f"Output_{clean_out_key}"]:
-                if hasattr(outputs, k) or (hasattr(outputs, "keys") and k in outputs.keys()):
-                    try:
-                        out_item = getattr(outputs, k) if hasattr(outputs, k) else outputs[k]
-                        set_property_field(out_item, 'attribute_name', value)
-                        return
-                    except Exception:
-                        pass
+        is_explicit_output = key.endswith('_attribute_name') or key.startswith('Output_')
 
-            # Fallback: match output socket by its display NAME via the node group interface
-            # (e.g. name 'FM' -> identifier 'Socket_0' -> modifier.properties.outputs['Socket_0'])
-            if getattr(modifier, "type", None) == 'NODES' and hasattr(modifier, "node_group") and modifier.node_group:
-                ng = modifier.node_group
-                target_identifier = None
-                if hasattr(ng, "interface"):
-                    for item in ng.interface.items_tree:
-                        if getattr(item, "item_type", None) == 'SOCKET' and getattr(item, "in_out", None) == 'OUTPUT':
-                            if item.name == clean_out_key or item.identifier == clean_out_key:
-                                target_identifier = item.identifier
-                                break
-                if target_identifier and hasattr(outputs, "keys") and target_identifier in outputs.keys():
-                    try:
-                        out_item = outputs[target_identifier]
-                        set_property_field(out_item, 'attribute_name', value)
-                        return
-                    except Exception:
-                        pass
+        # Outputs only store string attribute names (never numeric/vector values)
+        if outputs is not None and isinstance(value, str):
+            out_candidates = [key, clean_out_key]
+            if clean_out_key.startswith('Output_'):
+                out_candidates.append(clean_out_key[7:])
+            else:
+                out_candidates.append(f"Output_{clean_out_key}")
+
+            if is_explicit_output or (hasattr(outputs, "keys") and (key in outputs.keys() or clean_out_key in outputs.keys()) and (not hasattr(inputs, "keys") or (key not in inputs.keys() and clean_out_key not in inputs.keys()))):
+                for k in out_candidates:
+                    if hasattr(outputs, k) or (hasattr(outputs, "keys") and k in outputs.keys()):
+                        try:
+                            out_item = getattr(outputs, k) if hasattr(outputs, k) else outputs[k]
+                            set_property_field(out_item, 'attribute_name', value)
+                            return
+                        except Exception:
+                            pass
+
+                # Fallback: match output socket by its display NAME via the node group interface
+                if is_explicit_output and getattr(modifier, "type", None) == 'NODES' and hasattr(modifier, "node_group") and modifier.node_group:
+                    ng = modifier.node_group
+                    target_identifier = None
+                    if hasattr(ng, "interface"):
+                        for item in ng.interface.items_tree:
+                            if getattr(item, "item_type", None) == 'SOCKET' and getattr(item, "in_out", None) == 'OUTPUT':
+                                if item.name in [key, clean_out_key] or item.identifier in [key, clean_out_key]:
+                                    target_identifier = item.identifier
+                                    break
+                    if target_identifier and (hasattr(outputs, target_identifier) or (hasattr(outputs, "keys") and target_identifier in outputs.keys())):
+                        try:
+                            out_item = getattr(outputs, target_identifier) if hasattr(outputs, target_identifier) else outputs[target_identifier]
+                            set_property_field(out_item, 'attribute_name', value)
+                            return
+                        except Exception:
+                            pass
 
         if inputs is not None:
             clean_inp_key = key[:-14] if key.endswith('_use_attribute') else key
@@ -152,6 +157,24 @@ def set_modifier_property(modifier, key, value):
                     except Exception:
                         pass
                 
+            if not target_inp and getattr(modifier, "type", None) == 'NODES' and hasattr(modifier, "node_group") and modifier.node_group:
+                ng = modifier.node_group
+                target_identifier = None
+                if hasattr(ng, "interface"):
+                    for item in ng.interface.items_tree:
+                        if getattr(item, "item_type", None) == 'SOCKET' and getattr(item, "in_out", None) == 'INPUT':
+                            if item.name in [key, clean_inp_key] or item.identifier in [key, clean_inp_key]:
+                                target_identifier = item.identifier
+                                break
+                if target_identifier:
+                    if hasattr(inputs, target_identifier):
+                        target_inp = getattr(inputs, target_identifier)
+                    elif hasattr(inputs, "keys") and target_identifier in inputs.keys():
+                        try:
+                            target_inp = inputs[target_identifier]
+                        except Exception:
+                            pass
+
             if not target_inp and hasattr(inputs, "keys"):
                 try:
                     for ik in inputs.keys():
@@ -166,6 +189,16 @@ def set_modifier_property(modifier, key, value):
                 if key.endswith('_use_attribute'):
                     try:
                         set_property_field(target_inp, 'type', 'ATTRIBUTE' if value else 'VALUE')
+                        return
+                    except Exception:
+                        pass
+                elif key.endswith('_attribute_name'):
+                    try:
+                        set_property_field(target_inp, 'type', 'ATTRIBUTE')
+                    except Exception:
+                        pass
+                    try:
+                        set_property_field(target_inp, 'attribute_name', value)
                         return
                     except Exception:
                         pass
@@ -192,7 +225,17 @@ def set_modifier_property(modifier, key, value):
                     if in_out == 'INPUT':
                         if item.name == key or item.identifier == key:
                             try:
-                                modifier[item.identifier] = value
+                                # Legacy IDProperties must match the socket's
+                                # type: False on a float socket breaks GN in 4.1.
+                                socket_type = getattr(item, 'socket_type', '')
+                                typed_value = value
+                                if socket_type.startswith('NodeSocketFloat'):
+                                    typed_value = float(value)
+                                elif socket_type.startswith('NodeSocketInt'):
+                                    typed_value = int(value)
+                                elif socket_type == 'NodeSocketBool':
+                                    typed_value = bool(value)
+                                modifier[item.identifier] = typed_value
                                 return
                             except Exception:
                                 pass

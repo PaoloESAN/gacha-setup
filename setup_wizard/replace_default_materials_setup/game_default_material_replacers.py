@@ -3,6 +3,7 @@
 import bpy
 import os
 import re
+import json
 
 
 from abc import ABC, abstractmethod
@@ -128,16 +129,25 @@ def classify_pupil_faces(mesh_obj):
             continue
 
         has_100 = any(info['face_count'] == 100 for info in side_islands)
-        has_uv_contrast = (
-            any(info['uv_span'] < 0.35 for info in side_islands) and
-            any(info['uv_span'] > 0.70 for info in side_islands)
+        # Compare spans within each eye: legacy pupils such as Prune use a
+        # small texture-atlas region for both the iris and its highlight.
+        # Absolute 0..1 thresholds miss that contrast and fall back to depth,
+        # which can select the entire iris when the highlight is off-center.
+        max_uv_span = max(info['uv_span'] for info in side_islands)
+        full_uv_contrast = (
+            any(0 < info['uv_span'] < 0.35 for info in side_islands) and
+            max_uv_span > 0.70
+        )
+        highlight_uv_limit = 0.35 if full_uv_contrast else max_uv_span * 0.35
+        has_uv_contrast = max_uv_span > 0 and any(
+            0 < info['uv_span'] < highlight_uv_limit for info in side_islands
         )
 
         side_outer = []
         if has_uv_contrast:
-            # Highlight parts (like Durin) mapped to small UV region (< 0.35) while base pupil spans full 0..1
+            # Highlight UVs occupy a smaller region than the base pupil UVs.
             for info in side_islands:
-                if info['uv_span'] < 0.35:
+                if 0 < info['uv_span'] < highlight_uv_limit:
                     side_outer.append(info)
         elif has_100:
             # Standard 100-face highlight discs (Vodyanitsa, Odette, Anastasya)
@@ -473,7 +483,7 @@ def setup_durin_pupil_materials(mesh, new_pupil_mat, material_names=None):
                     tex_dir = os.path.join(base_dir, "Textures") if os.path.isdir(os.path.join(base_dir, "Textures")) else base_dir
                     if os.path.isdir(tex_dir):
                         for f in os.listdir(tex_dir):
-                            if 'hair' in f.lower() and 'diffuse' in f.lower() and f.lower().endswith(('.png', '.tga', '.dds')):
+                            if not f.startswith("._") and not f.startswith(".") and 'hair' in f.lower() and 'diffuse' in f.lower() and f.lower().endswith(('.png', '.tga', '.dds')):
                                 p = os.path.normpath(os.path.join(tex_dir, f))
                                 hair_img = bpy.data.images.get(f) or bpy.data.images.load(filepath=p, check_existing=True)
                                 break
@@ -735,6 +745,10 @@ class GameDefaultMaterialReplacerFactory:
             return WutheringWavesDefaultMaterialReplacer(blender_operator, context)
         elif game_type == GameType.ARKNIGHTS_ENDFIELD.name:
             return ArknightsEndfieldDefaultMaterialReplacer(blender_operator, context)
+        elif game_type == GameType.HONKAI_IMPACT_3RD.name:
+            return HonkaiImpact3rdDefaultMaterialReplacer(blender_operator, context)
+        elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
+            return HonkaiNexusAnimaDefaultMaterialReplacer(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -762,6 +776,32 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 
                 # If it already has our shader prefix, it was processed previously (e.g. earlier character).
                 if material_name.startswith(self.material_names.MATERIAL_PREFIX) or 'highlight' in material_name.lower():
+                    continue
+
+                if (material_name.startswith(('Equip_', 'EquipSkin_'))
+                        or mesh.name.startswith(('Equip_', 'EquipSkin_'))):
+                    # Keep Unity materials distinct without adding shader nodes.
+                    source = material_name or mesh.name
+                    folder = get_active_character_directory()
+                    path = os.path.join(folder, 'Materials', source + '.json') if folder else ''
+                    values = {}
+                    if path and os.path.isfile(path):
+                        with open(path, encoding='utf-8') as handle:
+                            values = json.load(handle).get('m_SavedProperties', {}).get('m_Floats') or {}
+                    effect = '_SrcBlendMode' in values and '_UseTexColor' in values
+                    name = self.material_names.MATERIAL_PREFIX + ('Eff_' if effect else '') + source
+                    material = bpy.data.materials.get(name)
+                    if material is None:
+                        template = bpy.data.materials.get(self.material_names.BODY)
+                        if template is None:
+                            raise RuntimeError('Missing Genshin body shader for: ' + source)
+                        material = template.copy()
+                        material.name = name
+                        material.use_fake_user = True
+                    material['_original_material_name'] = source
+                    material['_genshin_equipment'] = True
+                    self.__transfer_diffuse_texture(material_slot.material, material)
+                    material_slot.material = material
                     continue
 
                 # Durin's dedicated eye materials are already set up (Dark/Normal Eye).
@@ -835,7 +875,7 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         folder = char_dir if os.path.isdir(char_dir) else os.path.dirname(char_dir)
                         if os.path.isdir(folder):
                             try:
-                                files_in_dir = os.listdir(folder)
+                                files_in_dir = [f for f in os.listdir(folder) if not f.startswith("._") and not f.startswith(".")]
                                 if any(('pupil01' in f.lower() or 'pupil_01' in f.lower() or 'pupil 01' in f.lower() or 'pupil02' in f.lower()) for f in files_in_dir):
                                     is_numbered_pupil = True
                             except Exception:
@@ -869,15 +909,6 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 if genshin_material:
                     self.__transfer_diffuse_texture(material_slot.material, genshin_material)
                     material_slot.material = genshin_material
-                    is_equip_mat = material_name.startswith(('Equip_', 'EquipSkin_')) or (mesh and mesh.name.startswith(('Equip_', 'EquipSkin_'))) or ('equip' in material_name.lower())
-                    if is_equip_mat and genshin_material.use_nodes:
-                        for n in genshin_material.node_tree.nodes:
-                            if 'Use Alpha' in n.inputs:
-                                n.inputs['Use Alpha'].default_value = 1.0
-                            if n.type == 'GROUP' and n.node_tree:
-                                for sub_node in n.node_tree.nodes:
-                                    if 'Use Alpha' in sub_node.inputs:
-                                        sub_node.inputs['Use Alpha'].default_value = 1.0
                     if mesh_body_part_name == 'New Pupil':
                         setup_new_pupil_highlight_layer(mesh, self.material_names)
                 elif mesh_body_part_name and ('Dress' in mesh_body_part_name or 'Arm' in mesh_body_part_name or 'Cloak' in mesh_body_part_name):
@@ -1669,9 +1700,6 @@ class PunishingGrayRavenDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         for mesh in meshes:
             for material_slot in mesh.material_slots:
                 material_name = material_slot.name
-                
-                if material_name.startswith(JaredNytsPunishingGrayRavenShaderMaterialNames.MATERIAL_PREFIX):
-                    continue
 
                 material_identifier_service = PunishingGrayRavenMaterialIdentifierService()
                 mesh_body_part_name = material_identifier_service.get_body_part_name(material_name) or \
@@ -1679,26 +1707,37 @@ class PunishingGrayRavenDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 mesh_body_part_name = \
                     material_identifier_service.get_body_part_name_of_shared_material(material_name) or \
                     mesh_body_part_name
-                if 'Face' in mesh_body_part_name:  # 6.Karenina_Ember (material w/ Face in it, but no called just Face)
+                if (mesh_body_part_name and mesh_body_part_name.lower() in ('shade', 'eyeshadow', 'eye_shadow')) or \
+                        re.search(r'eye[ _-]*shadow', material_name, re.IGNORECASE):
+                    prefix = JaredNytsPunishingGrayRavenShaderMaterialNames.MATERIAL_PREFIX
+                    name = material_name if material_name.startswith(prefix) else f'{prefix}{material_name}'
+                    material_slot.material = self.create_eye_shadow_material(name)
+                    continue
+                if material_name.startswith(JaredNytsPunishingGrayRavenShaderMaterialNames.MATERIAL_PREFIX):
+                    continue
+                if 'Face' in mesh_body_part_name:  # 6.Karenina_Ember (material w/ Face in it, but not called just Face)
                     mesh_body_part_name = 'Face'
+                elif 'Eye' in mesh_body_part_name:
+                    mesh_body_part_name = 'Eye'
                 if 'OL' in mesh_body_part_name:  # 9S (Generic), Bianca_Veritas (Ink-lit Hermit)
                     mesh_body_part_name = mesh_body_part_name.replace('OL', '')
 
-                if mesh_body_part_name and 'Alpha' not in mesh_body_part_name:
-                    material_type = JaredNytsPunishingGrayRavenShaderMaterialNames.HAIR if 'Hair' in mesh_body_part_name else \
-                        JaredNytsPunishingGrayRavenShaderMaterialNames.MAIN
-                    material_name = f'{JaredNytsPunishingGrayRavenShaderMaterialNames.MATERIAL_PREFIX}{mesh_body_part_name}'
-                    self.create_main_material(mesh, material_type, material_name)
-                elif mesh_body_part_name and 'Alpha' in mesh_body_part_name:
-                    material_name = JaredNytsPunishingGrayRavenShaderMaterialNames.ALPHA
-                    mesh_body_part_name = 'Alpha'
-                else:
-                    self.blender_operator.report({'WARNING'}, f'Ignoring unknown mesh body part in character model: {mesh_body_part_name} / Material: {material_name}')
-                    continue
+                if not mesh_body_part_name:
+                    mesh_body_part_name = material_name
 
-                punishing_gray_raven_material = bpy.data.materials.get(
-                    f'{JaredNytsPunishingGrayRavenShaderMaterialNames.MATERIAL_PREFIX}{mesh_body_part_name}'
-                )
+                if 'Alpha' in mesh_body_part_name or 'alpha' in material_name.lower():
+                    material_type = JaredNytsPunishingGrayRavenShaderMaterialNames.ALPHA
+                elif 'Face' in mesh_body_part_name:
+                    material_type = JaredNytsPunishingGrayRavenShaderMaterialNames.FACE
+                elif 'Eye' in mesh_body_part_name:
+                    material_type = JaredNytsPunishingGrayRavenShaderMaterialNames.EYE
+                elif 'Hair' in mesh_body_part_name:
+                    material_type = JaredNytsPunishingGrayRavenShaderMaterialNames.HAIR
+                else:
+                    material_type = JaredNytsPunishingGrayRavenShaderMaterialNames.MAIN
+
+                target_mat_name = f'{JaredNytsPunishingGrayRavenShaderMaterialNames.MATERIAL_PREFIX}{mesh_body_part_name}'
+                punishing_gray_raven_material = self.create_main_material(mesh, material_type, target_mat_name)
 
                 if punishing_gray_raven_material:
                     material_slot.material = punishing_gray_raven_material
@@ -1707,14 +1746,25 @@ class PunishingGrayRavenDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     continue
         self.blender_operator.report({'INFO'}, 'Replaced default materials with Genshin shader materials...')
 
+    def create_eye_shadow_material(self, name):
+        material = bpy.data.materials.get(name) or bpy.data.materials.new(name)
+        material.use_nodes = True
+        material.node_tree.nodes.clear()
+        transparent = material.node_tree.nodes.new('ShaderNodeBsdfTransparent')
+        transparent.inputs['Color'].default_value = (1, 1, 1, 1)
+        output = material.node_tree.nodes.new('ShaderNodeOutputMaterial')
+        material.node_tree.links.new(transparent.outputs['BSDF'], output.inputs['Surface'])
+        if hasattr(material, 'surface_render_method'):
+            material.surface_render_method = 'DITHERED'
+        elif hasattr(material, 'blend_method'):
+            material.blend_method = 'HASHED'
+        return material
+
     def find_body_part_name(self, material_name):
         expected_format_body_part_name = self.__expected_format_body_part_name_search(material_name)
         naive_search_body_part_name = self.__naive_body_part_name_search(material_name)
         body_part_name = ''
 
-        # If the two are equal, then we're confident that the body part name is correct (pick either)
-        # Elif the naive search found none of the expected body part names, return expected format search body part name
-        # Else expected format and naive searches do not equal, use the naive search (pulls from list of expected body part names)
         if expected_format_body_part_name == naive_search_body_part_name:
             body_part_name = expected_format_body_part_name
         elif expected_format_body_part_name and not naive_search_body_part_name:
@@ -1727,8 +1777,10 @@ class PunishingGrayRavenDefaultMaterialReplacer(GameDefaultMaterialReplacer):
     Expected Format Search: Search for body part name at expected location, at the end of the material name (ex. 'Body')
     '''
     def __expected_format_body_part_name_search(self, material_name):
-        armature =  [object for object in bpy.data.objects if object.type == 'ARMATURE'][0]
-        return material_name.split(armature.name)[-1]
+        arms = [object for object in bpy.data.objects if object.type == 'ARMATURE']
+        if arms and arms[0].name in material_name:
+            return material_name.split(arms[0].name)[-1]
+        return ""
 
     '''
     Naive Search: Search for body part name in material name
@@ -1741,6 +1793,8 @@ class PunishingGrayRavenDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             'Upper',
             'Down',
             'Eye',
+            'Eyes',
+            'Eye01',
             'Face',
             'Cloth01',
             'Cloth02',
@@ -1751,11 +1805,15 @@ class PunishingGrayRavenDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             'Weapon',
             'Cloth',
             'Hair',
+            'Sock',
+            'Shade',
+            'clock',
+            'Clock',
             'Body',  # Default to Body last
         ]
 
         for expected_body_part_name in EXPECTED_BODY_PART_NAMES:
-            if expected_body_part_name in material_name:
+            if expected_body_part_name.lower() in material_name.lower():
                 return expected_body_part_name
 
     def create_main_material(self, mesh, material_type: ShaderMaterialNames, material_name):
@@ -1773,7 +1831,14 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         self.context = context
 
     def replace_default_materials(self):
-        selected_shader = getattr(bpy.context.scene, 'zzz_shader_type', 'KYTHERA') if hasattr(bpy, 'context') and hasattr(bpy.context, 'scene') else 'KYTHERA'
+        selected_shader = getattr(bpy.context.scene, 'zzz_shader_type', 'LEGACY') if hasattr(bpy, 'context') and hasattr(bpy.context, 'scene') else 'LEGACY'
+        for arm in [o for o in bpy.context.scene.objects if o.type == 'ARMATURE']:
+            try:
+                arm["zzz_shader_type"] = selected_shader
+                if arm.data:
+                    arm.data["zzz_shader_type"] = selected_shader
+            except Exception:
+                pass
         meshes = [mesh for mesh in bpy.context.scene.objects if mesh.type == 'MESH']
 
         # Locate Materials folder to check JSON definitions
@@ -1790,7 +1855,7 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         ]
         mat_dir = None
         for d in materials_dirs:
-            if d and os.path.isdir(d) and any(f.lower().endswith(".json") for f in os.listdir(d)):
+            if d and os.path.isdir(d) and any(f.lower().endswith(".json") and not f.startswith("._") and not f.startswith(".") for f in os.listdir(d)):
                 mat_dir = d
                 break
 
@@ -1802,7 +1867,7 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             clean_key = lambda k: re.sub(r'\.\d+$', '', k.lower().replace("mat_", "").replace("_ui", "")).strip(" _-")
             target_clean = clean_key(m_raw)
             for jf in os.listdir(mat_dir):
-                if not jf.lower().endswith(".json"):
+                if not jf.lower().endswith(".json") or jf.startswith("._") or jf.startswith("."):
                     continue
                 j_stem = os.path.splitext(jf)[0]
                 if j_stem.lower() == m_raw.lower() or clean_key(j_stem) == target_clean:
@@ -1820,6 +1885,15 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         pass
             return False
 
+        # Detect the floating upper-eye overlay by geometry and eye weights.
+        face_mesh = next((o for o in meshes if "_face" in o.name.lower() or "face" in o.name.lower()), None)
+        if face_mesh:
+            try:
+                from setup_wizard.genshin_import_character_model import setup_zzz_eyeshadow_uv
+                setup_zzz_eyeshadow_uv(face_mesh)
+            except Exception as ex:
+                print(f"Notice running setup_zzz_eyeshadow_uv: {ex}")
+
         if selected_shader == 'LEGACY':
             # --- LEGACY ZZZ SHADER REPLACEMENT ---
             for mesh in meshes:
@@ -1833,7 +1907,7 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     if mat and is_untextured_material_json(mat.name):
                         continue
 
-                    if mat and mat.name.startswith("ZZZ Shader"):
+                    if mat and (mat.name.startswith("ZZZ Shader") or mat.name == "Eye Transparent"):
                         continue
 
                     target_mat_name = None
@@ -1844,7 +1918,7 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     elif "eyehighlight" in matname or "highlight" in matname:
                         target_mat_name = "ZZZ Shader EyeHighlights" if bpy.data.materials.get("ZZZ Shader EyeHighlights") else "ZZZ Shader Face"
                     elif "eye" in matname and matname != "eye transparent":
-                        target_mat_name = "ZZZ Shader Eye" if bpy.data.materials.get("ZZZ Shader Eye") else "ZZZ Shader Face"
+                        target_mat_name = "ZZZ Shader Face"
                     elif "face" in matname:
                         target_mat_name = "ZZZ Shader Face"
                     elif any(k in matname for k in ["body 2", "body2", "body_2", "wing", "ala", "feather", "dress", "cape", "coat", "jacket"]):
@@ -1967,7 +2041,7 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         continue
 
                     # If already replaced with a cloned Kythera ZZZ material, skip
-                    if mat and (mat.name.startswith("ZZZ ") or mat.name.startswith("Kythera")):
+                    if mat and (mat.name.startswith("ZZZ ") or mat.name.startswith("Kythera") or mat.name == "Eye Transparent" or mat.name == "Transp OL"):
                         continue
 
                     is_face = any(k in matname for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight"])
@@ -2045,6 +2119,19 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         slot.material = new_mat
 
             self.blender_operator.report({'INFO'}, "Replaced default materials with Kythera's ZZZ Shader materials...")
+            scene = bpy.context.scene
+            if getattr(scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
+                import math
+                for obj in bpy.data.objects:
+                    if obj.name.startswith("Light Direction") or obj.name.startswith("Main Light Direction"):
+                        obj.rotation_mode = 'XYZ'
+                        obj.rotation_euler = (math.radians(90.0), 0.0, 0.0)
+
+        try:
+            from setup_wizard.optimization.blender_rimlight_patch import patch_all_rimlight_groups_for_blender
+            patch_all_rimlight_groups_for_blender()
+        except Exception:
+            pass
 
 
 def find_nte_texture_for_material(mat_name, tex_type, image_files):
@@ -2231,7 +2318,7 @@ def ensure_hair_white_texture(folder=None, image_files=None):
         return
 
     if not image_files and folder and os.path.isdir(folder):
-        image_files = [f for f in os.listdir(folder) if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
+        image_files = [f for f in os.listdir(folder) if not f.startswith("._") and not f.startswith(".") and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
 
     white_file = None
     if image_files:
@@ -2679,7 +2766,7 @@ def setup_common_face_material(mat, folder=None, image_files=None):
         if image_files:
             cands = [f for f in image_files if 'common_face' in f.lower()]
         elif os.path.isdir(folder):
-            cands = [f for f in os.listdir(folder) if 'common_face' in f.lower() and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
+            cands = [f for f in os.listdir(folder) if not f.startswith("._") and not f.startswith(".") and 'common_face' in f.lower() and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
         if cands:
             diff_cands = [f for f in cands if '_d.' in f.lower() or '_d_' in f.lower() or 'face_d' in f.lower()]
             picked = diff_cands[0] if diff_cands else cands[0]
@@ -2737,7 +2824,11 @@ class NevernessToEvernessDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             if not image_files:
                 try:
                     for root, dirs, files in os.walk(folder):
+                        if "__MACOSX" in root:
+                            continue
                         for f in files:
+                            if f.startswith("._") or f.startswith("."):
+                                continue
                             if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp', '.hdr', '.png.001', '.tga.001', '.dds.001')):
                                 image_files.append(f)
                 except Exception:
@@ -2994,11 +3085,34 @@ def _is_face_slot(name_lower):
 
 
 def _fuse_mesh_slots_to_first(obj):
-    """Point every polygon to slot 0 and drop the remaining slots."""
+    """Point every polygon to the main material slot and drop the remaining slots.
+    For face meshes, chooses the slot matching 'face' or the slot with the most polygons."""
     mesh = obj.data
+    target_idx = 0
+    # If this mesh is a face mesh with multiple materials, find the best face material slot
+    if any(s.material and any(kw in s.material.name.lower() for kw in ('face', '面', 'cara', 'head', 'skin')) for s in obj.material_slots):
+        for idx, slot in enumerate(obj.material_slots):
+            if slot.material:
+                s_name = slot.material.name.lower()
+                if any(kw in s_name for kw in ('face', '面', 'cara', 'head', 'skin')) and not any(ign in s_name for ign in ('outline', 'shadow', 'hair')):
+                    target_idx = idx
+                    break
+    elif len(obj.material_slots) > 1 and mesh.polygons:
+        # Fallback: slot with the most polygons
+        counts = {}
+        for p in mesh.polygons:
+            counts[p.material_index] = counts.get(p.material_index, 0) + 1
+        if counts:
+            target_idx = max(counts.items(), key=lambda x: x[1])[0]
+
+    # Swap target material into slot 0 if not already at 0
+    if 0 < target_idx < len(mesh.materials):
+        chosen_mat = mesh.materials[target_idx]
+        mesh.materials[target_idx] = mesh.materials[0]
+        mesh.materials[0] = chosen_mat
+
     for p in mesh.polygons:
-        if p.material_index >= 1:
-            p.material_index = 0
+        p.material_index = 0
     while len(mesh.materials) > 1:
         mesh.materials.pop(index=1)
     try:
@@ -3020,15 +3134,10 @@ def clean_hair_mesh_slots():
 
 
 def clean_face_mesh_slots():
-    for obj in bpy.context.scene.objects:
-        if obj.type == 'MESH' and obj.data and hasattr(obj.data, "polygons"):
-            obj_name_lower = obj.name.lower()
-            slot_names = [slot.material.name.lower() for slot in obj.material_slots if slot.material]
-            is_face_mesh = 'face' in obj_name_lower or any(_is_face_slot(s) for s in slot_names)
-            # Only fuse meshes whose slots are ALL face-related (Face/Eye/Eyebrow).
-            # Mixed meshes are left untouched.
-            if is_face_mesh and len(obj.material_slots) >= 2 and slot_names and all(_is_face_slot(s) for s in slot_names):
-                _fuse_mesh_slots_to_first(obj)
+    # In Hoyoverse / ZZZ models, face meshes legitimately have separate material
+    # slots for Face skin, Eyeballs, Eyebrows, and Eye Transparent (eyeshadow).
+    # Fusing them deletes eyelids/eyeballs/eyebrows and corrupts the character's face.
+    pass
 
 
 class WutheringWavesDefaultMaterialReplacer(GameDefaultMaterialReplacer):
@@ -3443,6 +3552,73 @@ class ArknightsEndfieldDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         _set_mod_socket(mod_fa, "browAlphaMat", brow_alpha_mat)
 
         self.blender_operator.report({'INFO'}, 'Replaced default materials with Arknights: Endfield materials and configured modifiers.')
+
+
+class HonkaiImpact3rdDefaultMaterialReplacer(GameDefaultMaterialReplacer):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+
+    def replace_default_materials(self):
+        import os
+        meshes = [mesh for mesh in bpy.context.scene.objects if mesh.type == 'MESH']
+        replaced_map = {}
+        for mesh in meshes:
+            for material_slot in mesh.material_slots:
+                mat = material_slot.material
+                if not mat:
+                    continue
+                mat_name = mat.name
+                if mat_name.startswith("ImpactToon - "):
+                    continue
+
+                target_mat_name = f"ImpactToon - {mat_name}"
+                existing = replaced_map.get(mat_name) or bpy.data.materials.get(target_mat_name)
+                if existing:
+                    material_slot.material = existing
+                    continue
+
+                orig_fbx_tex = None
+                if mat.use_nodes and mat.node_tree:
+                    for n in mat.node_tree.nodes:
+                        if n.type == 'TEX_IMAGE' and n.image:
+                            raw = n.image.filepath or n.image.name
+                            orig_fbx_tex = os.path.splitext(os.path.basename(raw.replace('\\', '/')))[0]
+                            break
+
+                low = mat_name.lower()
+                if "face" in low and "dualface" not in low:
+                    template_name = "ImpactToon - Face"
+                elif "eye" in low:
+                    template_name = "ImpactToon - Eye"
+                elif "hair" in low:
+                    template_name = "ImpactToon - Hair"
+                else:
+                    template_name = "ImpactToon - Base"
+
+                tmpl = bpy.data.materials.get(template_name)
+                if not tmpl:
+                    continue
+
+                new_mat = tmpl.copy()
+                new_mat.name = target_mat_name
+                new_mat.use_fake_user = True
+                new_mat["_original_material_name"] = mat_name
+                if orig_fbx_tex:
+                    new_mat["_original_fbx_texture"] = orig_fbx_tex
+                replaced_map[mat_name] = new_mat
+                material_slot.material = new_mat
+
+        self.blender_operator.report({'INFO'}, 'Replaced default materials with HI3 shader materials...')
+
+
+class HonkaiNexusAnimaDefaultMaterialReplacer(HonkaiStarRailDefaultMaterialReplacer):
+    def replace_default_materials(self):
+        from setup_wizard.utils.hna_material_utils import replace_materials
+        replace_materials()
+
+    def __init__(self, blender_operator, context):
+        super().__init__(blender_operator, context, Nya222HonkaiStarRailShaderMaterialNames)
 
 
 

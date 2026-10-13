@@ -1,5 +1,8 @@
 import bpy
 
+_PATCHED_FLAG = "_gacha_rim_patched"
+_PATCH_VERSION = 1
+
 def is_blender_official():
     """
     Returns True if running in official Blender (e.g. 5.2 / 4.x)
@@ -61,9 +64,81 @@ def patch_depth_based_rim_group(ng):
             if not sep_xyz:
                 sep_xyz = ng.nodes.new('ShaderNodeSeparateXYZ')
                 sep_xyz.name = 'Blender_Rim_SepScale'
-                sep_xyz.location = (math_node.location.x - 600, math_node.location.y - 150)
+                sep_xyz.location = (math_node.location.x - 700, math_node.location.y - 150)
             ng.links.new(scale_out, sep_xyz.inputs['Vector'])
-            scale_sock = sep_xyz.outputs['X']
+
+            # Anisotropic Rim: Normal in camera space to separate horizontal (X) and vertical (Y)
+            geom = ng.nodes.get('Blender_Rim_Geom')
+            if not geom:
+                geom = ng.nodes.new('ShaderNodeNewGeometry')
+                geom.name = 'Blender_Rim_Geom'
+                geom.location = (math_node.location.x - 900, math_node.location.y - 300)
+
+            vtrans = ng.nodes.get('Blender_Rim_VTrans')
+            if not vtrans:
+                vtrans = ng.nodes.new('ShaderNodeVectorTransform')
+                vtrans.name = 'Blender_Rim_VTrans'
+                vtrans.vector_type = 'NORMAL'
+                vtrans.convert_from = 'WORLD'
+                vtrans.convert_to = 'CAMERA'
+                vtrans.location = (math_node.location.x - 700, math_node.location.y - 300)
+            ng.links.new(geom.outputs['Normal'], vtrans.inputs['Vector'])
+
+            sep_norm = ng.nodes.get('Blender_Rim_SepNorm')
+            if not sep_norm:
+                sep_norm = ng.nodes.new('ShaderNodeSeparateXYZ')
+                sep_norm.name = 'Blender_Rim_SepNorm'
+                sep_norm.location = (math_node.location.x - 550, math_node.location.y - 300)
+            ng.links.new(vtrans.outputs['Vector'], sep_norm.inputs['Vector'])
+
+            # nx^2 and ny^2
+            nx_sq = ng.nodes.get('Blender_Rim_NxSq')
+            if not nx_sq:
+                nx_sq = ng.nodes.new('ShaderNodeMath')
+                nx_sq.name = 'Blender_Rim_NxSq'
+                nx_sq.operation = 'MULTIPLY'
+                nx_sq.location = (math_node.location.x - 400, math_node.location.y - 250)
+            ng.links.new(sep_norm.outputs['X'], nx_sq.inputs[0])
+            ng.links.new(sep_norm.outputs['X'], nx_sq.inputs[1])
+
+            ny_sq = ng.nodes.get('Blender_Rim_NySq')
+            if not ny_sq:
+                ny_sq = ng.nodes.new('ShaderNodeMath')
+                ny_sq.name = 'Blender_Rim_NySq'
+                ny_sq.operation = 'MULTIPLY'
+                ny_sq.location = (math_node.location.x - 400, math_node.location.y - 350)
+            ng.links.new(sep_norm.outputs['Y'], ny_sq.inputs[0])
+            ng.links.new(sep_norm.outputs['Y'], ny_sq.inputs[1])
+
+            # scale_x * nx^2 and scale_y * ny^2
+            x_eff = ng.nodes.get('Blender_Rim_XEff')
+            if not x_eff:
+                x_eff = ng.nodes.new('ShaderNodeMath')
+                x_eff.name = 'Blender_Rim_XEff'
+                x_eff.operation = 'MULTIPLY'
+                x_eff.location = (math_node.location.x - 250, math_node.location.y - 200)
+            ng.links.new(sep_xyz.outputs['X'], x_eff.inputs[0])
+            ng.links.new(nx_sq.outputs['Value'], x_eff.inputs[1])
+
+            y_eff = ng.nodes.get('Blender_Rim_YEff')
+            if not y_eff:
+                y_eff = ng.nodes.new('ShaderNodeMath')
+                y_eff.name = 'Blender_Rim_YEff'
+                y_eff.operation = 'MULTIPLY'
+                y_eff.location = (math_node.location.x - 250, math_node.location.y - 300)
+            ng.links.new(sep_xyz.outputs['Y'], y_eff.inputs[0])
+            ng.links.new(ny_sq.outputs['Value'], y_eff.inputs[1])
+
+            eff_scale = ng.nodes.get('Blender_Rim_EffScale')
+            if not eff_scale:
+                eff_scale = ng.nodes.new('ShaderNodeMath')
+                eff_scale.name = 'Blender_Rim_EffScale'
+                eff_scale.operation = 'ADD'
+                eff_scale.location = (math_node.location.x - 100, math_node.location.y - 250)
+            ng.links.new(x_eff.outputs['Value'], eff_scale.inputs[0])
+            ng.links.new(y_eff.outputs['Value'], eff_scale.inputs[1])
+
+            scale_sock = eff_scale.outputs['Value']
         else:
             scale_sock = scale_out
 
@@ -312,15 +387,28 @@ def patch_all_rimlight_groups_for_blender():
     patched_any = False
     for ng in list(bpy.data.node_groups):
         ng_low = ng.name.lower()
+        # Idempotent: the patch rebuilds nodes/links (very slow, ~200ms per group),
+        # so each group is patched only once and then flagged.
+        if ng.get(_PATCHED_FLAG) == _PATCH_VERSION:
+            continue
+        if 'kythera' in ng_low:
+            continue
+        inputs_tree = getattr(ng, 'interface', None) and getattr(ng.interface, 'items_tree', None)
+        if inputs_tree and any(getattr(item, 'name', '') in ('Left/Right', 'Up/Down') for item in inputs_tree):
+            continue
+        done = False
         if 'depth-based rim' in ng_low or ng.name == 'Depth-based Rim':
-            if patch_depth_based_rim_group(ng):
-                patched_any = True
+            done = patch_depth_based_rim_group(ng)
         elif 'genshin impact - rimlight' in ng_low or (('rimlight' in ng_low or 'rim light' in ng_low) and 'depth' not in ng_low and 'lit rimlight' not in ng_low):
-            if patch_genshin_rimlight_group(ng):
-                patched_any = True
+            done = patch_genshin_rimlight_group(ng)
         elif 'lit rimlight' in ng_low:
-            if patch_lit_rimlight_custom_group(ng):
-                patched_any = True
+            done = patch_lit_rimlight_custom_group(ng)
+        if done:
+            patched_any = True
+            try:
+                ng[_PATCHED_FLAG] = _PATCH_VERSION
+            except Exception:
+                pass
 
     return patched_any
 

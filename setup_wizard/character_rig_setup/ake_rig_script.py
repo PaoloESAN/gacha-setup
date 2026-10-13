@@ -22,6 +22,19 @@ from setup_wizard.character_rig_setup.rig_ui_utils import (
 )
 
 
+def ground_ake_foot_widgets(rig):
+    """Lower each foot widget to the rig ground without moving it forward."""
+    for side in ('L', 'R'):
+        foot = rig.pose.bones.get(f'foot_ik.{side}')
+        if foot is None:
+            continue
+        reference = foot.custom_shape_transform or foot
+        rest = reference.bone.matrix_local
+        # Widget translations use the display bone's local axes, not rig axes.
+        down = Vector((0.0, 0.0, -rest.translation.z))
+        foot.custom_shape_translation = rest.to_3x3().inverted() @ down
+
+
 def rig_character(
     file_path,
     disallow_arm_ik_stretch,
@@ -73,6 +86,11 @@ def rig_character(
     original_name = obj.name
     armature = obj.data
 
+    # Keep anatomical socket centers across bone renaming/separation.
+    socket_centers = {side: obj.matrix_world @ armature.bones[name].head_local
+                      for side, name in [('L', 'eyeLfJoint'), ('R', 'eyeRtJoint')]
+                      if name in armature.bones}
+
     # 1. Edit mode checks and head/eye correction
     bpy.ops.object.mode_set(mode="EDIT")
 
@@ -81,7 +99,9 @@ def rig_character(
     eye_r1 = armature.edit_bones.get("+EyeBone R A01") or armature.edit_bones.get("+EyeBoneA01.R") or armature.edit_bones.get("eyeRtJoint")
     eye_l2 = armature.edit_bones.get("+EyeBone L A02") or armature.edit_bones.get("+EyeBoneA02.L") or armature.edit_bones.get("faceLfIrisJoint")
     eye_r2 = armature.edit_bones.get("+EyeBone R A02") or armature.edit_bones.get("+EyeBoneA02.R") or armature.edit_bones.get("faceRtIrisJoint")
-    if eye_l1 and eye_r1 and eye_l2 and eye_r2:
+    # Endfield socket joints are anatomical pivots, not offset pupil controls.
+    if (eye_l1 and eye_r1 and eye_l2 and eye_r2
+            and eye_l1.name != 'eyeLfJoint' and eye_r1.name != 'eyeRtJoint'):
         center_x_1 = (eye_l1.head.x + eye_r1.head.x) / 2.0
         center_x_2 = (eye_l2.head.x + eye_r2.head.x) / 2.0
         offset_x = center_x_1 - center_x_2
@@ -782,10 +802,9 @@ def rig_character(
 
     safe_set_custom_shape("head", "neck", scale=(1.65, 1.65, 1.65), translation=(0.0, 0.255, 0.0), rotation_euler=(1.5708, 0, 0))
     safe_set_custom_shape("neck", "neck", scale=(1, 1, 1), translation=(0.0, 0.035, 0.007), rotation_euler=(1.5708, 0, 0))
-    foot_l_pb = rigifyr.pose.bones.get("foot_ik.L")
-    foot_z_offset = foot_l_pb.head.z if foot_l_pb else 0.15
-    safe_set_custom_shape("foot_ik.L", "foot1", translation=(0.0, 0.0, -foot_z_offset))
-    safe_set_custom_shape("foot_ik.R", "foot1", scale=(-1.0, 1.0, 1.0), translation=(0.0, 0.0, -foot_z_offset))
+    safe_set_custom_shape("foot_ik.L", "foot1")
+    safe_set_custom_shape("foot_ik.R", "foot1", scale=(-1.0, 1.0, 1.0))
+    ground_ake_foot_widgets(rigifyr)
     safe_set_custom_shape("torso", "pelvis2")
     safe_set_custom_shape("hips", "hips", scale=(1, 1, 1), translation=(0.0, -0.04, 0.044), rotation_euler=(1.309, 0, 0))
     safe_set_custom_shape("chest", "chest", scale=(0.45, 0.45, 0.45), translation=(0.0, -0.04, 0.0), rotation_euler=(1.5708, 0, 0))
@@ -1475,4 +1494,6 @@ def rig_character(
         print(f"[AKE RIG] Final collection packaging notice: {e_pkg}")
 
     print(f"[AKE RIG] Character '{char_name}' rigged successfully!")
+    for side, world_center in socket_centers.items():
+        rigifyr[f'ake_eye_socket_{side}'] = tuple(rigifyr.matrix_world.inverted() @ world_center)
     return rigifyr

@@ -34,6 +34,8 @@ def build_image_files_map(folder):
     try:
         for root, _, files in os.walk(folder):
             for f in files:
+                if f.startswith("._") or f.startswith("."):
+                    continue
                 f_lower = f.lower()
                 if any(f_lower.endswith(ext) for ext in valid_exts):
                     image_files_list.append(f)
@@ -216,7 +218,7 @@ def load_nte_character_data(folder):
     try:
         for root, _, files in os.walk(folder):
             for f in files:
-                if f.lower().endswith('.json'):
+                if not f.startswith("._") and not f.startswith(".") and f.lower().endswith('.json'):
                     json_files.append(os.path.join(root, f))
     except Exception as ex:
         print(f"[NTE JSON Parser] Notice walking JSON files: {ex}")

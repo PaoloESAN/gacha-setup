@@ -34,6 +34,12 @@ class GI_OT_GenshinImportOutlineLightmaps(Operator, ImportHelper, CustomOperator
     )
 
     def execute(self, context):
+        import os
+        folder = self.file_directory or (os.path.dirname(self.filepath) if self.filepath else '')
+        if folder:
+            from setup_wizard.utils.texture_utils import fix_missing_textures
+            fix_missing_textures(folder)
+
         outline_texture_importer: OutlineTextureImporter = OutlineTextureImporterFactory.create(self.game_type, self, context)
         outline_texture_importer.import_textures()
 

@@ -10,6 +10,9 @@ from setup_wizard.character_rig_setup.lighting_panel_setup import LightingPanel,
 from setup_wizard.character_rig_setup.rig_script import rig_character
 from setup_wizard.character_rig_setup.npc_rig_script import rig_character as rig_npc
 from setup_wizard.character_rig_setup.hsr_rig_script import rig_character as hsr_rig_character
+from setup_wizard.character_rig_setup.pgr_rig_script import rig_character as pgr_rig_character
+from setup_wizard.character_rig_setup.hi3_rig_script import rig_character as hi3_rig_character
+from setup_wizard.character_rig_setup.hna_rig_script import rig_character as hna_rig_character
 from setup_wizard.character_rig_setup.zzz_rig_script import rig_character as zzz_rig_character
 from setup_wizard.character_rig_setup.nte_rig_script import rig_character as nte_rig_character
 from setup_wizard.character_rig_setup.wuwa_rig_script import rig_wuthering_waves_character
@@ -58,6 +61,10 @@ class CharacterRiggerFactory:
             return WutheringWavesCharacterRigger(blender_operator, context)
         elif game_type == GameType.ARKNIGHTS_ENDFIELD.name:
             return ArknightsEndfieldCharacterRigger(blender_operator, context)
+        elif game_type == GameType.HONKAI_IMPACT_3RD.name:
+            return HonkaiImpact3rdCharacterRigger(blender_operator, context)
+        elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
+            return HonkaiNexusAnimaCharacterRigger(blender_operator, context)
         else:
             raise Exception(f'Unexpected input GameType "{game_type}" for CharacterRiggerFactory')
 
@@ -98,6 +105,105 @@ def _get_character_armature(context):
     return view_armatures[0] if view_armatures else None
 
 
+def _is_bangboo_character(context, armature):
+    """Detect Bangboo names on the imported file or this character's objects."""
+    names = [armature.name, armature.data.name]
+    character_objects = [armature]
+    for obj in context.scene.objects:
+        if obj.type != 'MESH':
+            continue
+        if obj.parent == armature or any(
+            mod.type == 'ARMATURE' and mod.object == armature
+            for mod in obj.modifiers
+        ):
+            character_objects.append(obj)
+            names.append(obj.name)
+            names.append(obj.data.name)
+    for obj in character_objects:
+        names.extend(coll.name for coll in obj.users_collection)
+    if any('bangboo' in name.lower() for name in names):
+        return True
+    fbx_path = context.scene.get('setup_wizard_imported_fbx_path', '')
+    # Accept both separator styles, including saved scenes opened on another OS.
+    fbx_name = fbx_path.replace('\\', '/').rsplit('/', 1)[-1]
+    return 'bangboo' in fbx_name.lower()
+
+
+def _merge_bangboo_lighting_panel(context, rig):
+    """Attach the existing shader lighting panel to the smaller Bangboo rig."""
+    from mathutils import Matrix, Vector
+
+    panel = bpy.data.objects.get('Lighting Panel')
+    if panel is None or panel.type != 'ARMATURE':
+        return
+    panel_bone = panel.data.bones.get('Lighting Panel')
+    if panel_bone is None:
+        return
+    unit = rig.data['bangboo_widget_unit']
+    head = panel.matrix_world @ panel_bone.head_local
+    points = [panel.matrix_world @ point for bone in panel.data.bones
+              for point in (bone.head_local, bone.tail_local)]
+    height = max(p.z for p in points) - min(p.z for p in points)
+    scale = unit * 0.65 / max(height, 1e-4)
+    target = rig.matrix_world @ Vector((-unit * 0.95, 0.0, unit * 0.35))
+    transform = (Matrix.Translation(target) @ Matrix.Scale(scale, 4)
+                 @ Matrix.Translation(-head))
+    # Joining bakes the armature's scale into its rest bones, but does not
+    # rescale bone-parented helpers or local constraint distances. Preserve
+    # the entire panel, including the wheel/picker coordinates used by GN.
+    helpers = {obj: transform @ obj.matrix_world for obj in bpy.data.objects
+               if obj.parent == panel}
+    locations = {pb.name: pb.location.copy() * scale for pb in panel.pose.bones}
+    limits = []
+    for pb in panel.pose.bones:
+        for con in pb.constraints:
+            if con.type == 'LIMIT_DISTANCE':
+                limits.append((pb.name, con.name, {'distance': con.distance * scale}))
+            elif con.type == 'LIMIT_LOCATION' and con.owner_space == 'LOCAL':
+                limits.append((pb.name, con.name,
+                               {key: getattr(con, key) * scale for key in
+                                ('min_x', 'max_x', 'min_y', 'max_y', 'min_z', 'max_z')}))
+    panel.matrix_world = transform @ panel.matrix_world
+    lighting_names = [bone.name for bone in panel.data.bones]
+    # The shader's panel starts in an excluded widget collection. Link the
+    # armature to the visible rig collection before selecting and joining it.
+    rig_collection = rig.users_collection[0]
+    if panel.name not in rig_collection.objects:
+        rig_collection.objects.link(panel)
+    context.view_layer.update()
+    panel.hide_viewport = False
+    panel.hide_set(False)
+    bpy.ops.object.select_all(action='DESELECT')
+    panel.select_set(True)
+    rig.select_set(True)
+    context.view_layer.objects.active = rig
+    bpy.ops.object.join()
+    bpy.ops.object.mode_set(mode='EDIT')
+    edit_bones = rig.data.edit_bones
+    root = edit_bones['Lighting Panel']
+    root.use_connect = False
+    root.parent = edit_bones['DEF-spine.006']
+    bpy.ops.object.mode_set(mode='OBJECT')
+    for name, location in locations.items():
+        rig.pose.bones[name].location = location
+    for name, constraint, values in limits:
+        con = rig.pose.bones[name].constraints[constraint]
+        for key, value in values.items():
+            setattr(con, key, value)
+    context.view_layer.update()
+    for obj, matrix in helpers.items():
+        obj.matrix_world = matrix
+    context.view_layer.update()
+    lighting = rig.data.collections.get('Lighting') or rig.data.collections.new('Lighting')
+    for name in lighting_names:
+        bone = rig.data.bones[name]
+        lighting.assign(bone)
+        for collection in list(bone.collections):
+            if collection != lighting:
+                collection.unassign(bone)
+    lighting.is_visible = True
+
+
 class GenshinImpactCharacterRigger(CharacterRigger):
     def __init__(self, blender_operator, context, material_names, texture_node_names, shader):
         self.blender_operator: Operator = blender_operator
@@ -112,6 +218,11 @@ class GenshinImpactCharacterRigger(CharacterRigger):
         fbx_name = os.path.basename(fbx_path) if fbx_path else ""
         if fbx_name and not fbx_name.startswith("Avatar_") and (fbx_name.startswith(("Equip_", "EquipSkin_")) or "equip" in fbx_name.lower()):
             self.blender_operator.report({'INFO'}, 'Rigging skipped for weapon / equipment (Equip_ / EquipSkin_ detected).')
+            return
+
+        character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
+        if getattr(character_rigger_props, "disable_rigging", False):
+            self.blender_operator.report({'INFO'}, 'Rigging skipped. Disable Rigging is enabled.')
             return
 
         cache_enabled = self.context.window_manager.cache_enabled
@@ -134,8 +245,6 @@ class GenshinImpactCharacterRigger(CharacterRigger):
         is_player_hand = number_of_hand_bone_children >= 5
         avatar_in_texture_name = self.__get_body_diffuse_texture_name().startswith('Avatar')
         is_playable_character = avatar_in_texture_name or is_player_hand
-
-        character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
 
         # Lighting Panel is an Armature, so it's important this goes after the armature variable initialization above
         # Genshin Shader >= v3.4
@@ -272,6 +381,14 @@ class GenshinImpactCharacterRigger(CharacterRigger):
                 target_rig["gi_light_mode"] = "0"
                 self.context.scene.gi_lighting_control_type = "THIS_PANEL"
                 self.context.scene.gi_light_mode = "0"
+
+            if self.blender_operator.game_type == GameType.ZENLESS_ZONE_ZERO.name:
+                target_rig["zzz_lighting_control_type"] = "PANEL"
+                target_rig["zzz_light_mode"] = "0"
+                if hasattr(self.context.scene, "zzz_lighting_control_type"):
+                    self.context.scene.zzz_lighting_control_type = "PANEL"
+                if hasattr(self.context.scene, "zzz_light_mode"):
+                    self.context.scene.zzz_light_mode = "0"
 
         if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):
             from setup_wizard.character_rig_setup.rig_ui_utils import apply_hair_and_clothes_physics, find_target_armature
@@ -892,10 +1009,168 @@ class PunishingGrayRavenCharacterRigger(CharacterRigger):
     def __init__(self, blender_operator, context):
         self.blender_operator = blender_operator
         self.context = context
-        self.rigify_bone_shapes_file_path = 'PLACEHOLDER'
+        self.rigify_bone_shapes_file_path = GENSHIN_RIGIFY_BONE_SHAPES_FILE_PATH
 
     def rig_character(self):
-        return
+        cache_enabled = self.context.window_manager.cache_enabled
+        cached = get_cache(cache_enabled).get(self.rigify_bone_shapes_file_path)
+        filepath = cached if (cached and os.path.isfile(cached)) else (self.blender_operator.filepath if (self.blender_operator.filepath and os.path.isfile(self.blender_operator.filepath)) else None)
+
+        if not filepath or not os.path.isfile(filepath):
+            filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'RootShape.blend')
+
+        armature = _get_character_armature(self.context)
+        if not armature:
+            self.blender_operator.report({'ERROR'}, 'No armature found. Please import or select a character.')
+            return
+
+        character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
+        if getattr(character_rigger_props, "disable_rigging", False):
+            self.blender_operator.report({'INFO'}, 'Rigging disabled by user settings.')
+            return
+
+        bpy.ops.object.select_all(action='DESELECT')
+        try:
+            armature.hide_set(False)
+        except:
+            pass
+        self.context.view_layer.objects.active = armature
+        armature.select_set(True)
+
+        pgr_rig_character(
+            filepath,
+            not character_rigger_props.allow_arm_ik_stretch,
+            not character_rigger_props.allow_leg_ik_stretch,
+            character_rigger_props.use_arm_ik_poles,
+            character_rigger_props.use_leg_ik_poles,
+            character_rigger_props.add_children_of_constraints,
+            character_rigger_props.use_head_tracker,
+            meshes_joined=True
+        )
+
+        try:
+            from setup_wizard.character_rig_setup.pgr_face_rig import pgr_face_rig_main
+            pgr_face_rig_main()
+        except Exception as e_face:
+            print(f"[PGR FACE RIG] Warning during face rig generation: {e_face}")
+
+
+class HonkaiImpact3rdCharacterRigger(CharacterRigger):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+        self.rigify_bone_shapes_file_path = GENSHIN_RIGIFY_BONE_SHAPES_FILE_PATH
+
+    def rig_character(self):
+        cache_enabled = self.context.window_manager.cache_enabled
+        cached = get_cache(cache_enabled).get(self.rigify_bone_shapes_file_path)
+        filepath = cached if (cached and os.path.isfile(cached)) else (self.blender_operator.filepath if (self.blender_operator.filepath and os.path.isfile(self.blender_operator.filepath)) else None)
+
+        if not filepath or not os.path.isfile(filepath):
+            filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'RootShape.blend')
+
+        armature = _get_character_armature(self.context)
+        if not armature:
+            self.blender_operator.report({'ERROR'}, 'No armature found. Please import or select a character.')
+            return
+
+        character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
+        if getattr(character_rigger_props, "disable_rigging", False):
+            self.blender_operator.report({'INFO'}, 'Rigging disabled by user settings.')
+            return
+
+        bpy.ops.object.select_all(action='DESELECT')
+        try:
+            armature.hide_set(False)
+        except:
+            pass
+        self.context.view_layer.objects.active = armature
+        armature.select_set(True)
+
+        hi3_rig_character(
+            filepath,
+            not character_rigger_props.allow_arm_ik_stretch,
+            not character_rigger_props.allow_leg_ik_stretch,
+            character_rigger_props.use_arm_ik_poles,
+            character_rigger_props.use_leg_ik_poles,
+            character_rigger_props.add_children_of_constraints,
+            character_rigger_props.use_head_tracker,
+            meshes_joined=True
+        )
+
+        try:
+            from setup_wizard.character_rig_setup.hi3_face_rig import hi3_face_rig_main
+            hi3_face_rig_main()
+        except Exception as e_face:
+            print(f"[HI3 FACE RIG] Warning during face rig generation: {e_face}")
+
+        try:
+            char_name = armature.name.replace("Rig", "")
+            for obj in bpy.data.objects:
+                if obj.type == 'MESH':
+                    o_lower = obj.name.lower()
+                    if any(k in o_lower for k in ["lightpanelwgt", "lightpanelselector", "wgtplane", "selectorwgt"]) or obj.name.startswith("WGT-"):
+                        continue
+                    for modifier in obj.modifiers:
+                        if modifier.type == 'NODES' and modifier.node_group and 'Light Vectors' in modifier.node_group.name:
+                            for sock, emp_name in [
+                                ('Input_3', 'Light Direction'),
+                                ('Input_4', 'Head Origin'),
+                                ('Input_5', 'Head Forward'),
+                                ('Input_6', 'Head Up'),
+                            ]:
+                                empty_obj = bpy.data.objects.get(f"{emp_name}_{char_name}") or bpy.data.objects.get(emp_name)
+                                if empty_obj:
+                                    set_modifier_property(modifier, sock, empty_obj)
+        except Exception as e_lv:
+            print(f"[HI3 RIG] Notice refreshing Light Vectors: {e_lv}")
+
+
+class HonkaiNexusAnimaCharacterRigger(CharacterRigger):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+        self.rigify_bone_shapes_file_path = GENSHIN_RIGIFY_BONE_SHAPES_FILE_PATH
+
+    def rig_character(self):
+        cache_enabled = self.context.window_manager.cache_enabled
+        cached = get_cache(cache_enabled).get(self.rigify_bone_shapes_file_path)
+        filepath = cached if (cached and os.path.isfile(cached)) else (self.blender_operator.filepath if (self.blender_operator.filepath and os.path.isfile(self.blender_operator.filepath)) else None)
+
+        if not filepath or not os.path.isfile(filepath):
+            filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'RootShape.blend')
+
+        armature = _get_character_armature(self.context)
+        if not armature:
+            self.blender_operator.report({'ERROR'}, 'No armature found. Please import or select a character.')
+            return
+
+        character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
+        if getattr(character_rigger_props, "disable_rigging", False):
+            self.blender_operator.report({'INFO'}, 'Rigging disabled by user settings.')
+            return
+
+        bpy.ops.object.select_all(action='DESELECT')
+        try:
+            armature.hide_set(False)
+        except:
+            pass
+        self.context.view_layer.objects.active = armature
+        armature.select_set(True)
+
+        hna_rig_character(
+            filepath,
+            not character_rigger_props.allow_arm_ik_stretch,
+            not character_rigger_props.allow_leg_ik_stretch,
+            character_rigger_props.use_arm_ik_poles,
+            character_rigger_props.use_leg_ik_poles,
+            character_rigger_props.add_children_of_constraints,
+            character_rigger_props.use_head_tracker,
+            meshes_joined=True
+        )
+
+        from setup_wizard.character_rig_setup.hna_face_rig import hna_face_rig_main
+        hna_face_rig_main(self.context)
 
 
 class ZenlessZoneZeroCharacterRigger(CharacterRigger):
@@ -917,20 +1192,24 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
             self.blender_operator.report({'ERROR'}, 'No armature found. Please import or select a character.')
             return
 
+        if _is_bangboo_character(self.context, armature):
+            from setup_wizard.character_rig_setup.bangboo_rig import (
+                run as bangboo_rig, organize_bangboo_collections,
+            )
+
+            # Bangboo builds its own body and facial rig and replaces the source
+            # armature, so the regular ZZZ post-processing must not run afterward.
+            rig, slots = bangboo_rig(src=armature)
+            if self.context.scene.character_rigger_props.set_up_lighting_panel:
+                _merge_bangboo_lighting_panel(self.context, rig)
+            organize_bangboo_collections(rig, self.context)
+            print('Bangboo rig built:', rig.name, '| face slots:', ', '.join(slots))
+            return
+
         character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
         meshes_joined = not (bpy.data.objects.get('Body') and bpy.data.objects.get('Face'))
 
-        light_vectors_modifiers = [modifier for obj in bpy.data.objects.values() if 
-                                   obj.type == 'MESH' for modifier in obj.modifiers if 
-                                   'Light Vectors' in modifier.name]
-
-        selected_shader = getattr(self.context.scene, 'zzz_shader_type', 'KYTHERA')
-        use_lighting_panel = character_rigger_props.set_up_lighting_panel and (selected_shader != 'KYTHERA')
-
-        if use_lighting_panel:
-            for modifier in light_vectors_modifiers:
-                lp_filepath = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'LightingPanel.blend')
-                LightingPanel(lp_filepath).set_up_lighting_panel(modifier)
+        use_lighting_panel = character_rigger_props.set_up_lighting_panel
 
         try:
             bpy.ops.object.mode_set(mode='OBJECT')
@@ -984,6 +1263,7 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
                 if obj.type == 'ARMATURE' and obj != body_rig and obj.name != body_rig.name:
                     o_low = obj.name.lower()
                     if any(k in o_low for k in ['lighting', 'panel', 'facerig', 'isaac']):
+                        joined_name = obj.name
                         try:
                             if bpy.context.object and bpy.context.object.mode != 'OBJECT':
                                 bpy.ops.object.mode_set(mode='OBJECT')
@@ -995,9 +1275,9 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
                             body_rig.select_set(True)
                             bpy.context.view_layer.objects.active = body_rig
                             bpy.ops.object.join()
-                            print(f"[ZZZ RIG] Joined '{obj.name}' into '{body_rig.name}' with bpy.ops.object.join()")
+                            print(f"[ZZZ RIG] Joined '{joined_name}' into '{body_rig.name}' with bpy.ops.object.join()")
                         except Exception as join_err:
-                            print(f"[ZZZ RIG Warning] Failed to join '{obj.name}' into '{body_rig.name}': {join_err}")
+                            print(f"[ZZZ RIG Warning] Failed to join '{joined_name}' into '{body_rig.name}': {join_err}")
 
         join_extra_armatures(armature)
 
@@ -1017,7 +1297,7 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
                         for b in list(c.bones):
                             if "hook" in b.name.lower():
                                 other_coll.assign(b)
-                            elif b.name.endswith(" Bone") or b.name == "Facerig Root":
+                            elif b.name.endswith(" Bone") or b.name in ("Facerig Root", "Facerig Controls"):
                                 face_detail_coll.assign(b)
                             else:
                                 face_coll.assign(b)
@@ -1104,6 +1384,94 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
         except Exception as e_parent:
             print(f"[ZZZ Rig Warning] Ensure Facerig Root Child Of: {e_parent}")
 
+        # Ensure Lighting Panel bone has Child Of constraint targeting DEF-spine.006 or root.002 (matching Phoenix.blend)
+        try:
+            if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+                bpy.ops.object.mode_set(mode='OBJECT')
+            self.context.view_layer.objects.active = armature
+            bpy.ops.object.mode_set(mode='EDIT')
+            eb_lp = armature.data.edit_bones.get("Lighting Panel")
+            if eb_lp:
+                eb_lp.parent = None
+            bpy.ops.object.mode_set(mode='POSE')
+            lp_pb = armature.pose.bones.get("Lighting Panel")
+            if lp_pb:
+                target_lp = None
+                for cand in ["DEF-spine.006", "head", "Head", "root.002", "root_2", "root002", "root.001", "root"]:
+                    if cand in armature.pose.bones:
+                        target_lp = cand
+                        break
+                if target_lp:
+                    con_lp = lp_pb.constraints.get("Child Of") or lp_pb.constraints.new('CHILD_OF')
+                    con_lp.name = "Child Of"
+                    con_lp.target = armature
+                    con_lp.subtarget = target_lp
+                    armature.data.bones.active = armature.data.bones["Lighting Panel"]
+                    try:
+                        bpy.ops.constraint.childof_set_inverse(constraint=con_lp.name, owner='BONE')
+                    except Exception:
+                        r_bone = armature.data.bones.get(target_lp)
+                        p_bone = armature.data.bones.get("Lighting Panel")
+                        if r_bone and p_bone:
+                            con_lp.inverse_matrix = r_bone.matrix_local.inverted() @ p_bone.matrix_local
+            bpy.ops.object.mode_set(mode='OBJECT')
+        except Exception as e_lp_con:
+            print(f"[ZZZ Rig Warning] Ensure Lighting Panel Child Of: {e_lp_con}")
+
+        # Ensure Lighting Panel bones, including Rim.L and Rim.R, are in the Lighting collection and visible
+        try:
+            wgt_selector = bpy.data.objects.get("LightPanelSelectorWGT")
+            wgt_plane = bpy.data.objects.get("LightPanelWGTPlane")
+            
+            lighting_coll = None
+            if hasattr(armature.data, "collections"):
+                lighting_coll = armature.data.collections.get("Lighting") or armature.data.collections.get("Light Panel")
+                if not lighting_coll:
+                    lighting_coll = armature.data.collections.new("Lighting")
+                lighting_coll.is_visible = True
+            
+            other_coll = armature.data.collections.get("Other") if hasattr(armature.data, "collections") else None
+            
+            panel_bones = ["Lighting Panel", "Rim Lit", "Shadow", "Lit", "Ambient", "RimShadow", "Rim.L", "Rim.R", "RimX", "RimY"]
+            for pb_name in panel_bones:
+                b = armature.data.bones.get(pb_name)
+                pb = armature.pose.bones.get(pb_name)
+                if b and pb:
+                    b.hide = False
+                    b.hide_select = False
+                    if lighting_coll:
+                        lighting_coll.assign(b)
+                        if other_coll:
+                            try:
+                                other_coll.unassign(b)
+                            except Exception:
+                                pass
+                    if pb_name == "Lighting Panel" and wgt_plane:
+                        pb.custom_shape = wgt_plane
+                        pb.custom_shape_scale_xyz = (1.0, 1.0, 1.0)
+                        pb.use_custom_shape_bone_size = True
+                    elif pb_name in ["Rim Lit", "Shadow", "Lit", "Ambient", "RimShadow", "Rim.L", "Rim.R", "RimX", "RimY"] and wgt_selector:
+                        pb.custom_shape = wgt_selector
+                        pb.custom_shape_scale_xyz = (0.15, 0.15, 0.15)
+                        pb.use_custom_shape_bone_size = True
+
+            # If Kythera shader is used, place Rim.L (RimX) and Rim.R (RimY) sliders in the middle
+            scene = bpy.context.scene
+            shader_type = getattr(scene, "zzz_shader_type", "LEGACY")
+            if shader_type == "KYTHERA":
+                for pb_name in ["Rim.L", "Rim.R"]:
+                    pb = armature.pose.bones.get(pb_name)
+                    if pb:
+                        con = next((c for c in pb.constraints if c.type == 'LIMIT_LOCATION'), None)
+                        if con and con.use_min_x and con.use_max_x:
+                            pb.location.x = (con.min_x + con.max_x) / 2.0
+                        elif pb_name == "Rim.L":
+                            pb.location.x = 0.0425
+                        elif pb_name == "Rim.R":
+                            pb.location.x = 0.050
+        except Exception as e_lp_bones:
+            print(f"[ZZZ Rig Warning] Configure Lighting Panel bones: {e_lp_bones}")
+
         # Ensure all tail bones have the tweak custom shape (exclude IK bones)
         tweak_shape = (
             next((o for o in bpy.data.objects if o.type == 'MESH' and "tweak_spine" in o.name), None)
@@ -1124,7 +1492,11 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
             for obj in bpy.data.objects:
                 if obj.type == 'MESH':
                     o_lower = obj.name.lower()
-                    if "lightpanelwgt" in o_lower or "lightpanelselector" in o_lower or "wgtplane" in o_lower or "selectorwgt" in o_lower:
+                    if any(k in o_lower for k in [
+                        "colorwheel", "colorpicker", "slider-rim", "origin-rim",
+                        "lightpanelwgt", "lightpanelselector", "wgtplane", "selectorwgt",
+                        "face widget"
+                    ]) or obj.name.startswith("WGT-"):
                         continue
                     for modifier in obj.modifiers:
                         if modifier.type == 'NODES' and modifier.node_group and 'Light Vectors' in modifier.node_group.name:

@@ -1743,6 +1743,26 @@ def find_target_armature(context=None, armature_obj=None):
     return None
 
 
+def configure_hi3_hair_physics_collections(armature_obj):
+    """Include the Headband strands in Hair."""
+    data = armature_obj.data
+    for bone in data.bones:
+        is_headband = "headband" in bone.name.lower()
+        if not is_headband:
+            continue
+        if hasattr(data, "collections"):
+            destination = "Hair"
+            collection = data.collections.get(destination) or data.collections.new(destination)
+            for old in list(bone.collections):
+                if old.name in ("Hair", "Clothes", "Dress", "Tails", "Other"):
+                    old.unassign(bone)
+            collection.assign(bone)
+        else:
+            bone.layers[20] = is_headband
+            bone.layers[22] = False
+            bone.layers[25] = False
+
+
 def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influence=None, clothes_influence=None, dress_influence=None):
     """
     Applies Damped Track constraints along bone chains for Hair and Clothes bones:
@@ -1811,6 +1831,10 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
     is_v4 = bpy.app.version >= (4, 0, 0)
     arm_data = armature_obj.data
 
+    from setup_wizard.ui.character_settings_utils import detect_armature_game
+    is_hi3 = detect_armature_game(armature_obj) == "HONKAI_IMPACT_3RD"
+    if is_hi3:
+        configure_hi3_hair_physics_collections(armature_obj)
     # Make Hair and Clothes collections / layers visible
     if is_v4 and hasattr(arm_data, "collections"):
         for coll_name in ["Hair", "Clothes", "Dress", "Physics", "Extra", "Secondary"]:
@@ -1910,6 +1934,8 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
         "hair", "eardrop", "headline", "ahoge", "bangs", "ponytail", "twintail", "bone00",
         "plait", "braid", "toufa"
     ]
+    if is_hi3:
+        hair_keywords.append("headband")
     clothes_keywords = [
         "ribbon", "sleeve", "strap", "skirt", "button", "belt", "cloth", "dress",
         "cape", "coat", "hem", "scarf", "tassel", "string", "chain", "acc",
@@ -1937,21 +1963,18 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
     hair_bone_names = {b for b in hair_bone_names if not is_physics_ignored(b)}
     clothes_bone_names = {b for b in clothes_bone_names if not is_physics_ignored(b)}
 
-    # Remove previous Damped Track physics constraints to prevent duplicates
-    for b_name in (hair_bone_names | clothes_bone_names):
-        pb = armature_obj.pose.bones.get(b_name)
-        if pb:
-            try:
-                arm_data.bones[b_name].hide = False
-                pb.bone.hide = False
-            except Exception:
-                pass
-            for c in list(pb.constraints):
-                if c.type == "DAMPED_TRACK" and (
-                    "physics" in c.name.lower()
-                    or c.name in ["Damped Track", "Hair_Physics_DampedTrack", "Clothes_Physics_DampedTrack"]
-                ):
-                    pb.constraints.remove(c)
+    # Clear owned constraints before rebuilding, including old constraints on
+    # branch anchors which no longer have a valid continuation.
+    selected_names = hair_bone_names | clothes_bone_names
+    for pb in armature_obj.pose.bones:
+        if pb.name in selected_names:
+            pb.bone.hide = False
+        for c in list(pb.constraints):
+            if c.type == "DAMPED_TRACK" and (
+                c.name in ("Hair_Physics_DampedTrack", "Clothes_Physics_DampedTrack")
+                or (pb.name in selected_names and ("physics" in c.name.lower() or c.name == "Damped Track"))
+            ):
+                pb.constraints.remove(c)
 
     def is_contiguous_chain_child(parent_bone_name, child_bone_name):
         p_bone = arm_data.bones.get(parent_bone_name)
@@ -1984,21 +2007,27 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
         allowed_gap = max(0.10, 1.5 * p_bone.length)
         return gap <= allowed_gap
 
-    def common_prefix_len(s1, s2):
-        count = 0
-        for a, b in zip(s1, s2):
-            if a == b:
-                count += 1
-            else:
-                break
-        return count
-
     def pick_best_child(parent_name, children_list):
-        if not children_list:
-            return None
         if len(children_list) == 1:
             return children_list[0]
-        return max(children_list, key=lambda c: common_prefix_len(parent_name, c.name))
+        # A shared anchor is not a strand. Only accept an unambiguous numbered
+        # continuation of the same branch, never a tie resolved by name order.
+        stem = re.sub(r"\d+$", "", parent_name)
+        if stem == parent_name:
+            return None
+        matching = [c for c in children_list if re.sub(r"\d+$", "", c.name) == stem]
+        return matching[0] if len(matching) == 1 else None
+
+    # Choose once using the original geometry and the same category as the
+    # eventual constraint. Both rest-tail alignment and tracking use this plan.
+    chain_targets = {}
+    for b_name in sorted(hair_bone_names | clothes_bone_names):
+        pb = armature_obj.pose.bones.get(b_name)
+        allowed = hair_bone_names if b_name in hair_bone_names else hair_bone_names | clothes_bone_names
+        children = [c for c in pb.children if c.name in allowed and is_contiguous_chain_child(b_name, c.name)]
+        child = pick_best_child(b_name, children)
+        if child:
+            chain_targets[b_name] = child.name
 
     def would_create_cycle(source_bone_name, target_bone_name):
         """Checks if adding a Damped Track from source -> target creates an end-to-start cycle."""
@@ -2042,8 +2071,8 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
                 continue
             chain_children = [c for c in eb.children if c.name in (hair_bone_names | clothes_bone_names)]
             if chain_children:
-                best_c = pick_best_child(eb.name, chain_children)
-                if not would_create_cycle(eb.name, best_c.name):
+                best_c = edit_bones.get(chain_targets.get(eb.name, ""))
+                if best_c and not would_create_cycle(eb.name, best_c.name):
                     vec = best_c.head - eb.head
                     if vec.length > 0.001:
                         eb.tail = best_c.head
@@ -2068,12 +2097,8 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
         if not pb:
             continue
 
-        hair_children = [
-            c for c in pb.children 
-            if c.name in hair_bone_names and is_contiguous_chain_child(b_name, c.name)
-        ]
-        if hair_children:
-            child_pb = pick_best_child(b_name, hair_children)
+        if b_name in chain_targets:
+            child_pb = armature_obj.pose.bones.get(chain_targets[b_name])
             if child_pb:
                 if would_create_cycle(b_name, child_pb.name):
                     print(f"[PHYSICS SKIP] Skipped Damped Track {b_name} -> {child_pb.name} (dependency cycle detected).")
@@ -2091,12 +2116,8 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
         if not pb:
             continue
 
-        clothes_children = [
-            c for c in pb.children 
-            if (c.name in clothes_bone_names or c.name in hair_bone_names) and is_contiguous_chain_child(b_name, c.name)
-        ]
-        if clothes_children:
-            child_pb = pick_best_child(b_name, clothes_children)
+        if b_name in chain_targets:
+            child_pb = armature_obj.pose.bones.get(chain_targets[b_name])
             if child_pb:
                 if would_create_cycle(b_name, child_pb.name):
                     print(f"[PHYSICS SKIP] Skipped Damped Track {b_name} -> {child_pb.name} (dependency cycle detected).")

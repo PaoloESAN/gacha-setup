@@ -82,7 +82,7 @@ class CharacterRiggerPropertyGroup(PropertyGroup):
     disable_rigging: BoolProperty(
         name=' Disable Rigging',
         description='Skip the entire character rigging step during setup',
-        default=False
+        default=False,
     )
 
     @staticmethod

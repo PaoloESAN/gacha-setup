@@ -11,6 +11,9 @@ GAME_FOLDERS = {
     "wuwa": "wuwa",
     "nte": "nte",
     "ake": "ake",
+    "pgr": "pgr",
+    "hi3": "hi3",
+    "hna": "hna",
 }
 
 GAME_TYPE_NAMES = {
@@ -20,6 +23,9 @@ GAME_TYPE_NAMES = {
     "wuwa": "WUTHERING_WAVES",
     "nte": "NEVERNESS_TO_EVERNESS",
     "ake": "ARKNIGHTS_ENDFIELD",
+    "pgr": "PUNISHING_GRAY_RAVEN",
+    "hi3": "HONKAI_IMPACT_3RD",
+    "hna": "HONKAI_NEXUS_ANIMA",
 }
 
 

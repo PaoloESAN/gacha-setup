@@ -120,6 +120,61 @@ class CSW_PT_Updater_UI_Layout(Panel):
             box.prop(settings, "include_beta_updates", text="Include Beta Versions")
 
 
+class CSW_OT_SelectGame(bpy.types.Operator):
+    bl_idname = "csw.select_game"
+    bl_label = "Select Game"
+    bl_description = "Select the game for the Character Setup Wizard"
+    bl_options = {'INTERNAL'}
+
+    game_type: bpy.props.StringProperty()
+
+    def execute(self, context):
+        context.scene.game_type_dropdown = self.game_type
+        return {'FINISHED'}
+
+
+class CSW_MT_GameSelectorMenu(bpy.types.Menu):
+    bl_label = "Select Game"
+    bl_idname = "CSW_MT_game_selector_menu"
+
+    def draw(self, context):
+        layout = self.layout
+        current_game = getattr(context.scene, 'game_type_dropdown', GameType.GENSHIN_IMPACT.name)
+
+        row = layout.row()
+
+        # Column 1: Hoyoverse
+        col_hoyo = row.column()
+        col_hoyo.label(text="Hoyoverse")
+        col_hoyo.separator()
+        hoyo_games = [
+            (GameType.GENSHIN_IMPACT.name, "Genshin Impact"),
+            (GameType.HONKAI_STAR_RAIL.name, "Honkai: Star Rail"),
+            (GameType.ZENLESS_ZONE_ZERO.name, "Zenless Zone Zero"),
+            (GameType.HONKAI_IMPACT_3RD.name, "Honkai Impact 3rd"),
+            (GameType.HONKAI_NEXUS_ANIMA.name, "Honkai: Nexus Anima"),
+        ]
+        for g_type, g_label in hoyo_games:
+            icon = "CHECKMARK" if current_game == g_type else "BLANK1"
+            props = col_hoyo.operator("csw.select_game", text=g_label, icon=icon)
+            props.game_type = g_type
+
+        # Column 2: Others
+        col_others = row.column()
+        col_others.label(text="Others")
+        col_others.separator()
+        other_games = [
+            (GameType.WUTHERING_WAVES.name, "Wuthering Waves"),
+            (GameType.PUNISHING_GRAY_RAVEN.name, "Punishing Gray Raven"),
+            (GameType.NEVERNESS_TO_EVERNESS.name, "Neverness to Everness"),
+            (GameType.ARKNIGHTS_ENDFIELD.name, "Arknights: Endfield"),
+        ]
+        for g_type, g_label in other_games:
+            icon = "CHECKMARK" if current_game == g_type else "BLANK1"
+            props = col_others.operator("csw.select_game", text=g_label, icon=icon)
+            props.game_type = g_type
+
+
 class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
     bl_label = "Character Setup Wizard"
     bl_idname = 'CSW_PT_Unified_Character_Setup_Wizard_UI_Layout'
@@ -132,8 +187,11 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
     bpy.types.Scene.game_type_dropdown = EnumProperty(
         items=[
             (GameType.GENSHIN_IMPACT.name, 'Genshin Impact', 'Genshin Impact Setup'),
-            (GameType.HONKAI_STAR_RAIL.name, 'Honkai Star Rail', 'Honkai Star Rail Setup'),
+            (GameType.HONKAI_STAR_RAIL.name, 'Honkai: Star Rail', 'Honkai: Star Rail Setup'),
             (GameType.ZENLESS_ZONE_ZERO.name, 'Zenless Zone Zero', 'Zenless Zone Zero Setup'),
+            (GameType.PUNISHING_GRAY_RAVEN.name, 'Punishing Gray Raven', 'Punishing Gray Raven Setup'),
+            (GameType.HONKAI_IMPACT_3RD.name, 'Honkai Impact 3rd', 'Honkai Impact 3rd Setup'),
+            (GameType.HONKAI_NEXUS_ANIMA.name, 'Honkai: Nexus Anima', 'Honkai: Nexus Anima Setup'),
             (GameType.NEVERNESS_TO_EVERNESS.name, 'Neverness to Everness', 'Neverness to Everness Setup'),
             (GameType.WUTHERING_WAVES.name, 'Wuthering Waves', 'Wuthering Waves Setup'),
             (GameType.ARKNIGHTS_ENDFIELD.name, 'Arknights: Endfield', 'Arknights: Endfield Setup'),
@@ -152,13 +210,30 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
     def draw(self, context):
         layout = self.layout
         main_box = layout.box()
-        main_box.prop(context.scene, 'game_type_dropdown')
 
+        game_display_names = {
+            GameType.GENSHIN_IMPACT.name: "Genshin Impact",
+            GameType.HONKAI_STAR_RAIL.name: "Honkai: Star Rail",
+            GameType.ZENLESS_ZONE_ZERO.name: "Zenless Zone Zero",
+            GameType.PUNISHING_GRAY_RAVEN.name: "Punishing Gray Raven",
+            GameType.HONKAI_IMPACT_3RD.name: "Honkai Impact 3rd",
+            GameType.HONKAI_NEXUS_ANIMA.name: "Honkai: Nexus Anima",
+            GameType.NEVERNESS_TO_EVERNESS.name: "Neverness to Everness",
+            GameType.WUTHERING_WAVES.name: "Wuthering Waves",
+            GameType.ARKNIGHTS_ENDFIELD.name: "Arknights: Endfield",
+        }
         selected_game = getattr(context.scene, 'game_type_dropdown', GameType.GENSHIN_IMPACT.name)
+        curr_label = game_display_names.get(selected_game, "Genshin Impact")
+
+        selector_row = main_box.row(align=True)
+        selector_row.menu("CSW_MT_game_selector_menu", text=f"Game:  {curr_label}")
 
         game_op_map = {
             GameType.GENSHIN_IMPACT.name: ('genshin.setup_wizard_ui', GameType.GENSHIN_IMPACT.name, 'EXEC_DEFAULT'),
             GameType.HONKAI_STAR_RAIL.name: ('honkai_star_rail.setup_wizard_ui', GameType.HONKAI_STAR_RAIL.name, 'EXEC_DEFAULT'),
+            GameType.PUNISHING_GRAY_RAVEN.name: ('punishing_gray_raven.setup_wizard_ui', GameType.PUNISHING_GRAY_RAVEN.name, 'EXEC_DEFAULT'),
+            GameType.HONKAI_IMPACT_3RD.name: ('honkai_impact_3rd.setup_wizard_ui', GameType.HONKAI_IMPACT_3RD.name, 'EXEC_DEFAULT'),
+            GameType.HONKAI_NEXUS_ANIMA.name: ('honkai_nexus_anima.setup_wizard_ui', GameType.HONKAI_NEXUS_ANIMA.name, 'EXEC_DEFAULT'),
             GameType.ZENLESS_ZONE_ZERO.name: ('zenless_zone_zero.setup_wizard_ui', GameType.ZENLESS_ZONE_ZERO.name, 'EXEC_DEFAULT'),
             GameType.NEVERNESS_TO_EVERNESS.name: ('neverness_to_everness.setup_wizard_ui', GameType.NEVERNESS_TO_EVERNESS.name, 'INVOKE_DEFAULT'),
             GameType.WUTHERING_WAVES.name: ('wuthering_waves.setup_wizard_ui', GameType.WUTHERING_WAVES.name, 'INVOKE_DEFAULT'),
@@ -183,6 +258,12 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
             game_type=gt_name,
         )
 
+        from setup_wizard.utils.better_fbx_utils import should_show_better_fbx_warning
+        if should_show_better_fbx_warning(selected_game):
+            warn_col = run_entire_setup_column.column()
+            warn_col.alert = True
+            warn_col.label(text="BetterFBX is recommended", icon="ERROR")
+
         from setup_wizard.services.isolation import isolation_service
         isolation_service.draw_setup_status_box(main_box, context, run_entire_setup_column)
 
@@ -193,6 +274,10 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
         settings_col = settings_box.column()
         if selected_game == GameType.ZENLESS_ZONE_ZERO.name and hasattr(context.scene, "zzz_shader_type"):
             settings_col.prop(context.scene, "zzz_shader_type", text="Shader")
+            if getattr(context.scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
+                row_by = settings_col.row(align=True)
+                row_by.alignment = 'RIGHT'
+                row_by.label(text="Made by Kythera")
 
         props = getattr(context.scene, "character_rigger_props", None)
         if props:
@@ -245,10 +330,12 @@ class CSW_PT_Utilities_UI_Layout(Panel):
         doc_cam = row_cam.operator("wm.url_open", text="", icon="TEXT")
         doc_cam.url = "https://gacha-setup.pages.dev/utilities/#jideehs-camera"
 
-        row_eye = col.row(align=True)
-        row_eye.operator("setup_wizard.eye_through_hair", text="Eye Through Hair", icon="HIDE_OFF")
-        doc_eye = row_eye.operator("wm.url_open", text="", icon="TEXT")
-        doc_eye.url = "https://gacha-setup.pages.dev/utilities/#eye-through-hair"
+        from setup_wizard.utils.eye_through_hair import supports_eye_through_hair
+        if supports_eye_through_hair():
+            row_eye = col.row(align=True)
+            row_eye.operator("setup_wizard.eye_through_hair", text="Eye Through Hair", icon="HIDE_OFF")
+            doc_eye = row_eye.operator("wm.url_open", text="", icon="TEXT")
+            doc_eye.url = "https://gacha-setup.pages.dev/utilities/#eye-through-hair"
 
 
 class CSW_PT_Old_Setup_UI_Layout(Panel):

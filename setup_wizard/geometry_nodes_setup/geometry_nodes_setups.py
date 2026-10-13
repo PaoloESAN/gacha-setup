@@ -13,13 +13,13 @@ from setup_wizard.domain.shader_material_name_keywords import ShaderMaterialName
 from setup_wizard.domain.shader_material import ShaderMaterial
 from setup_wizard.domain.shader_node_names import ShaderNodeNames, StellarToonShaderNodeNames, V3_GenshinShaderNodeNames, V4_PrimoToonShaderNodeNames
 from setup_wizard.domain.shader_identifier_service import GenshinImpactShaders, HonkaiStarRailShaders, ShaderIdentifierService, ShaderIdentifierServiceFactory
-from setup_wizard.domain.shader_material_names import JaredNytsPunishingGrayRavenShaderMaterialNames, StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, V2_FestivityGenshinImpactMaterialNames, ShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, V4_PrimoToonGenshinImpactMaterialNames, DURIN_DARK_EYE_MATERIAL_NAME, DURIN_NORMAL_EYE_MATERIAL_NAME
+from setup_wizard.domain.shader_material_names import JaredNytsPunishingGrayRavenShaderMaterialNames, StellarToonShaderMaterialNames, V3_BonnyFestivityGenshinImpactMaterialNames, V2_FestivityGenshinImpactMaterialNames, ShaderMaterialNames, Nya222HonkaiStarRailShaderMaterialNames, V4_PrimoToonGenshinImpactMaterialNames, DURIN_DARK_EYE_MATERIAL_NAME, DURIN_NORMAL_EYE_MATERIAL_NAME, HonkaiImpact3rdShaderMaterialNames
 
 from setup_wizard.domain.game_types import GameType
 from setup_wizard.material_import_setup.empty_names import LightDirectionEmptyNames
 from setup_wizard.outline_import_setup.outline_node_groups import OutlineNodeGroupNames
 from setup_wizard.texture_import_setup.texture_node_names import V4_GenshinImpactTextureNodeNames
-from setup_wizard.utils.modifier_utils import get_modifier_property, set_modifier_property
+from setup_wizard.utils.modifier_utils import get_modifier_property, set_modifier_property, get_modifier_inputs, get_modifier_outputs, set_property_field
 from setup_wizard.import_order import NextStepInvoker
 
 
@@ -243,6 +243,11 @@ class GameGeometryNodesSetupFactory:
             return NevernessToEvernessGeometryNodesSetup(blender_operator, context)
         elif game_type == GameType.WUTHERING_WAVES.name:
             return WutheringWavesGeometryNodesSetup(blender_operator, context)
+        elif game_type == GameType.HONKAI_IMPACT_3RD.name:
+            return HonkaiImpact3rdGeometryNodesSetup(blender_operator, context)
+        elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
+            from setup_wizard.utils.hna_material_utils import GeometrySetup
+            return GeometrySetup(blender_operator)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -339,7 +344,7 @@ class GameGeometryNodesSetup(ABC):
         set_modifier_property(modifier, 'Toggle Screen Space Scaling', False)
         set_modifier_property(modifier, 'Input_6', False)
         try:
-            modifier['Input_6'] = False
+            set_modifier_property(modifier, 'Input_6', False)
         except Exception:
             pass
 
@@ -571,7 +576,7 @@ class V3_GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
         set_modifier_property(modifier, 'Toggle Screen Space Scaling', False)
         set_modifier_property(modifier, 'Input_6', False)
         try:
-            modifier['Input_6'] = False
+            set_modifier_property(modifier, 'Input_6', False)
         except Exception:
             pass
 
@@ -863,7 +868,9 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
         # separating them by material would dissolve them into the generic
         # Hair/Dress meshes and the wings could no longer be toggled.
         mesh_name_low = (getattr(mesh, "name", "") or "").lower()
-        if any(kw in mesh_name_low for kw in meshes_to_keep_intact_keywords):
+        if (any(kw in mesh_name_low for kw in meshes_to_keep_intact_keywords)
+                or any(slot.material and slot.material.get('_genshin_equipment')
+                       for slot in mesh.material_slots)):
             print(f'Keeping part mesh intact (skipping material separation): {mesh.name}')
             return
         if len(mesh.material_slots) > 1:
@@ -1112,6 +1119,7 @@ def configure_hsr_hair_transparency():
     Step for HSR outlines:
     - Hair outline materials: render method BLENDED, use_transparency_overlap = True.
     - Hair mesh materials: render method BLENDED, use_transparency_overlap = False.
+      On versions without surface_render_method, use legacy Alpha Hashed.
     Only applies to HSR.
     """
     processed = set()
@@ -1128,9 +1136,9 @@ def configure_hsr_hair_transparency():
                 mat.surface_render_method = 'BLENDED'
             except Exception:
                 pass
-        if hasattr(mat, "blend_method"):
+        elif hasattr(mat, "blend_method"):
             try:
-                mat.blend_method = 'BLEND'
+                mat.blend_method = 'BLEND' if is_outline else 'HASHED'
             except Exception:
                 pass
         if hasattr(mat, "use_transparency_overlap"):
@@ -1356,7 +1364,7 @@ class HonkaiStarRailGeometryNodesSetup(GameGeometryNodesSetup):
             outlines_node_group = bpy.data.node_groups.get(outlines_node_group_name)
             geometry_nodes_modifier = mesh.modifiers.get(f'{NAME_OF_GEOMETRY_NODES_MODIFIER} {mesh_name}')
 
-            if not outlines_node_group:
+            if not outlines_node_group or outlines_node_group.bl_idname != 'GeometryNodeTree':
                 continue
 
             if not geometry_nodes_modifier:
@@ -1573,6 +1581,25 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
         light_vectors_gn = bpy.data.node_groups.get("Light Vectors")
         extra_fx_gn = bpy.data.node_groups.get("Extra FX Geonode")
         zzz_outlines_gn = bpy.data.node_groups.get("ZZZ Outlines")
+        zzz_face_outlines_gn = bpy.data.node_groups.get("face_outlines")
+
+        if self.blender_operator.game_type == GameType.ZENLESS_ZONE_ZERO.name:
+            if not extra_fx_gn or not light_vectors_gn or not zzz_outlines_gn or not zzz_face_outlines_gn:
+                try:
+                    import os
+                    from setup_wizard.import_order import get_shader_file_path
+                    blend_path = get_shader_file_path(GameType.ZENLESS_ZONE_ZERO.name, 'outlines')
+                    if blend_path and os.path.isfile(blend_path):
+                        with bpy.data.libraries.load(blend_path, link=False) as (df, dt):
+                            to_load = [ng for ng in ['Extra FX Geonode', 'Light Vectors', 'ZZZ Outlines', 'face_outlines'] if ng in df.node_groups and not bpy.data.node_groups.get(ng)]
+                            if to_load:
+                                dt.node_groups = to_load
+                        extra_fx_gn = bpy.data.node_groups.get("Extra FX Geonode")
+                        light_vectors_gn = bpy.data.node_groups.get("Light Vectors")
+                        zzz_outlines_gn = bpy.data.node_groups.get("ZZZ Outlines")
+                        zzz_face_outlines_gn = bpy.data.node_groups.get("face_outlines")
+                except Exception as ex:
+                    print(f"Notice loading ZZZ node groups in setup_geometry_nodes: {ex}")
 
         char_name = ""
         for ob in bpy.data.objects:
@@ -1599,15 +1626,22 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
 
         for obj in bpy.data.objects:
             if obj.type == 'MESH':
-                # Skip LightPanelWGTPlane, LightPanelSelectorWGT, or any WGT panel widgets
                 o_lower = obj.name.lower()
-                if "lightpanelwgt" in o_lower or "lightpanelselector" in o_lower or "wgtplane" in o_lower or "selectorwgt" in o_lower:
+                # Skip lighting panel widgets, facerig widgets, colorwheels, and UI meshes from receiving geometry nodes modifiers
+                is_lp_or_wgt = any(k in o_lower for k in [
+                    "colorwheel", "colorpicker", "slider", "origin-rim",
+                    "lightpanel", "selector", "wgtplane",
+                    "face widget", "limitdistance", "facerig", "wgt", "controls", "panel"
+                ]) or obj.name.startswith("WGT-") or any(c.name.startswith("WGTS") or "wgt" in c.name.lower() or "facerig" in c.name.lower() for c in obj.users_collection)
+
+                if is_lp_or_wgt:
                     obj.modifiers.clear()
-                    try:
-                        obj.hide_viewport = True
-                        obj.hide_render = True
-                    except Exception:
-                        pass
+                    if any(k in o_lower for k in ["colorwheel", "lightpanelwgt", "lightpanelselector", "wgtplane", "selectorwgt"]):
+                        try:
+                            obj.hide_viewport = False
+                            obj.hide_render = True
+                        except Exception:
+                            pass
                     continue
 
                 # Light Vectors
@@ -1669,6 +1703,30 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                         if target_obj:
                             set_modifier_property(mod, socket_name, target_obj)
 
+                    lv_output_mapping = {
+                        "Output_2": "lightDir",
+                        "Output_7": "headForward",
+                        "Output_8": "headUp",
+                        "lightDir": "lightDir",
+                        "headForward": "headForward",
+                        "headUp": "headUp",
+                        "Socket_10": "Ambient",
+                        "Socket_11": "Lit",
+                        "Socket_12": "Shadow",
+                        "Socket_13": "RimLit",
+                        "Socket_14": "RimShadow",
+                        "Socket_30": "Rim",
+                        "Ambient": "Ambient",
+                        "Lit": "Lit",
+                        "Shadow": "Shadow",
+                        "Rim Lit": "RimLit",
+                        "Rim Shadow": "RimShadow",
+                        "Rim": "Rim",
+                    }
+                    for sock_ident, attr_name in lv_output_mapping.items():
+                        set_modifier_property(mod, sock_ident, attr_name)
+                        set_modifier_property(mod, f"{sock_ident}_attribute_name", attr_name)
+
                 # Extra FX
                 if extra_fx_gn:
                     mod = obj.modifiers.get("Extra FX")
@@ -1677,30 +1735,55 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                         mod.node_group = extra_fx_gn
                     obj.modifiers.move(len(obj.modifiers) - 1, 1)
 
-                    # Dynamic & explicit assignment of Output Attributes to match output socket names
-                    extra_fx_mapping = {
-                        "Output_2": "blend",
-                        "Output_3": "depth",
-                        "Socket_5": "face shadow",
-                        "Socket_9": "faceshadadjust",
-                        "Socket_0": "cast shadow",
-                        "Socket_11": "shadowsharpness"
-                    }
-                    for sock_ident, attr_name in extra_fx_mapping.items():
-                        set_modifier_property(mod, sock_ident, attr_name)
-                        set_modifier_property(mod, attr_name, attr_name)
-                        set_modifier_property(mod, f"{attr_name}_attribute_name", attr_name)
+                    is_face_obj = "face" in obj.name.lower()
 
-                    # Input properties for Extra FX:
-                    # - blend: 0.0 for face, 0.3 for body and other parts
-                    # - shadowsharpness: 1.090 for all objects
-                    blend_val = 0.0 if "face" in obj.name.lower() else 0.3
-                    shadowsharpness_val = 1.090
+                    # 1. Direct Blender 5+ modifier properties setting matching Phoenix.blend
+                    outputs = get_modifier_outputs(mod)
+                    if outputs is not None:
+                        out_attrs = {
+                            "Socket_0": "cast shadow",
+                            "Socket_11": "shadowsharpness",
+                            "Output_2": "blend" if is_face_obj else "",
+                            "Output_3": "depth" if is_face_obj else "",
+                            "Socket_5": "face shadow" if is_face_obj else "",
+                            "Socket_9": "faceshadadjust" if is_face_obj else "",
+                        }
+                        for sock_id, attr_val in out_attrs.items():
+                            if hasattr(outputs, "keys") and sock_id in outputs.keys():
+                                set_property_field(outputs[sock_id], 'attribute_name', attr_val)
+                            elif hasattr(outputs, sock_id):
+                                set_property_field(getattr(outputs, sock_id), 'attribute_name', attr_val)
 
-                    for k in ["Input_4", "blend(Off/On)", "blend"]:
-                        set_modifier_property(mod, k, blend_val)
-                    for k in ["Socket_10", "shadowsharpness"]:
-                        set_modifier_property(mod, k, shadowsharpness_val)
+                    inputs = get_modifier_inputs(mod)
+                    if inputs is not None:
+                        in_vals = {
+                            "Input_4": 0.0 if is_face_obj else 0.3,
+                            "Input_5": 0.08,
+                            "Socket_2": 1.0 if is_face_obj else 0.0,
+                            "Socket_8": 0.0,
+                            "Socket_1": 0.0,
+                            "Socket_10": 1.090,
+                        }
+                        for sock_id, val in in_vals.items():
+                            if hasattr(inputs, "keys") and sock_id in inputs.keys():
+                                set_property_field(inputs[sock_id], 'value', val)
+                            elif hasattr(inputs, sock_id):
+                                set_property_field(getattr(inputs, sock_id), 'value', val)
+
+                    # 2. General fallback setting via set_modifier_property for pre-Blender 5
+                    set_modifier_property(mod, "Socket_0_attribute_name", "cast shadow")
+                    set_modifier_property(mod, "Socket_11_attribute_name", "shadowsharpness")
+                    set_modifier_property(mod, "Output_2_attribute_name", "blend" if is_face_obj else "")
+                    set_modifier_property(mod, "Output_3_attribute_name", "depth" if is_face_obj else "")
+                    set_modifier_property(mod, "Socket_5_attribute_name", "face shadow" if is_face_obj else "")
+                    set_modifier_property(mod, "Socket_9_attribute_name", "faceshadadjust" if is_face_obj else "")
+
+                    set_modifier_property(mod, "Input_4", 0.0 if is_face_obj else 0.3)
+                    set_modifier_property(mod, "Input_5", 0.08)
+                    set_modifier_property(mod, "Socket_2", 1.0 if is_face_obj else 0.0)
+                    set_modifier_property(mod, "Socket_8", 0.0)
+                    set_modifier_property(mod, "Socket_1", 0.0)
+                    set_modifier_property(mod, "Socket_10", 1.090)
 
                 # Outlines vs Solidify
                 is_zzz_game = self.blender_operator.game_type == GameType.ZENLESS_ZONE_ZERO.name
@@ -1721,100 +1804,43 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                                 pass
                     continue
 
-                if is_zzz_game and is_face:
-                    # Consolidate all face polygons to material slot 0 (main face material) before creating outline slot
-                    if obj.data and hasattr(obj.data, "polygons"):
-                        for p in obj.data.polygons:
-                            if p.material_index >= 1:
-                                p.material_index = 0
-                        while len(obj.data.materials) > 1:
-                            obj.data.materials.pop(index=1)
-                        try:
-                            obj.data.update()
-                        except Exception:
-                            pass
+                # fix_zzz_eye_shadow disabled
 
-                    # Remove ZZZ Outlines Geonode modifier on Face objects
-                    mod_ol = obj.modifiers.get("Outlines")
-                    if mod_ol:
-                        try:
-                            obj.modifiers.remove(mod_ol)
-                        except Exception:
-                            pass
-
-                    # Add and configure Solidify modifier on Face objects
+                    # Remove any Solidify modifier on Face objects (user requested Geometry Nodes Outlines instead)
                     mod_sol = obj.modifiers.get("Solidify")
-                    if not mod_sol:
-                        mod_sol = obj.modifiers.new(name="Solidify", type='SOLIDIFY')
-                    
-                    try:
-                        mod_sol.mode = 'EXTRUDE'
-                    except Exception:
-                        pass
-                    try:
-                        mod_sol.thickness = 0.001
-                    except Exception:
-                        pass
-                    try:
-                        mod_sol.offset = 1.0
-                    except Exception:
-                        pass
-                    try:
-                        mod_sol.use_rim = False
-                    except Exception:
-                        pass
-                    try:
-                        mod_sol.use_flip_normals = True
-                    except Exception:
-                        pass
-                    try:
-                        mod_sol.material_offset = 1
-                    except Exception:
-                        pass
+                    if mod_sol:
+                        try:
+                            obj.modifiers.remove(mod_sol)
+                        except Exception:
+                            pass
 
-                    # Ensure Material Slot 2 (index 1) has ZZZ Face Outlines
-                    face_ol_mat = bpy.data.materials.get("ZZZ Face Outlines") or bpy.data.materials.get("ZZZ Face Outline")
-                    if face_ol_mat:
-                        while len(obj.material_slots) < 2:
-                            obj.data.materials.append(face_ol_mat)
-                        obj.material_slots[1].material = face_ol_mat
+                if is_zzz_game and zzz_outlines_gn:
+                    # Remove any Solidify modifier on character objects in ZZZ
+                    mod_sol = obj.modifiers.get("Solidify")
+                    if mod_sol:
+                        try:
+                            obj.modifiers.remove(mod_sol)
+                        except Exception:
+                            pass
 
-                elif is_zzz_game and zzz_outlines_gn:
+                    is_face_obj = ("face" in obj.name.lower() and "shadow" not in obj.name.lower()) or any(
+                        slot.material and "face" in slot.material.name.lower() and "shadow" not in slot.material.name.lower()
+                        for slot in obj.material_slots
+                    )
+
+                    target_gn = (zzz_face_outlines_gn or zzz_outlines_gn) if is_face_obj else zzz_outlines_gn
+
                     mod = obj.modifiers.get("Outlines")
                     if not mod:
                         mod = obj.modifiers.new(name="Outlines", type='NODES')
-                        mod.node_group = zzz_outlines_gn
+                    mod.node_group = target_gn
 
-                    # Configure Vertex Colors socket mode to VALUE (single color, not attribute mode) & set black color (0,0,0,1)
-                    props = getattr(mod, "properties", None)
-                    if props and hasattr(props, "inputs"):
-                        for vc_key in ["Input_3", "Vertex Colors"]:
-                            if hasattr(props.inputs, vc_key):
-                                inp_item = getattr(props.inputs, vc_key)
-                                try:
-                                    inp_item.type = 'VALUE'
-                                except Exception:
-                                    pass
-                                try:
-                                    inp_item.value = (0.0, 0.0, 0.0, 1.0)
-                                except Exception:
-                                    try:
-                                        inp_item.value[0] = 0.0
-                                        inp_item.value[1] = 0.0
-                                        inp_item.value[2] = 0.0
-                                        inp_item.value[3] = 1.0
-                                    except Exception:
-                                        pass
-                    
-                    try:
-                        mod['Input_3_use_attribute'] = 0
-                    except:
-                        pass
-                    try:
-                        mod["Input_12"] = True
-                        mod["Input_13"] = True
-                    except:
-                        pass
+                    if is_face_obj:
+                        try:
+                            from setup_wizard.services.zzz_outline_mask_service import create_face_outline_mask
+                            create_face_outline_mask(obj, configure_modifier=True)
+                        except Exception as e_mask:
+                            print(f"[ZZZ] Notice setting up face outline mask: {e_mask}")
 
                     # Dynamic material resolution for actual character materials & outlines based on mesh slots
                     obj_mats = [slot.material for slot in obj.material_slots if slot.material]
@@ -1873,12 +1899,21 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                     mat_weapon_ol = get_outline_mat(mat_weapon) or bpy.data.materials.get("ZZZ Weapon Outlines")
 
                     cam_obj = bpy.data.objects.get("Camera") or getattr(self.context.scene, "camera", None)
-                    is_hair = (
-                        ("hair" in obj.name.lower() and "hairshadow" not in obj.name.lower())
-                        or (obj.data and "hair" in obj.data.name.lower() and "hairshadow" not in obj.data.name.lower())
+                    is_body = (
+                        ("body" in obj.name.lower())
+                        or (obj.data and "body" in obj.data.name.lower())
+                    )
+                    is_hair = not is_body and (
+                        ("hair" in obj.name.lower() and "shadow" not in obj.name.lower())
+                        or (obj.data and "hair" in obj.data.name.lower() and "shadow" not in obj.data.name.lower())
                         or any(slot.material and "hair" in slot.material.name.lower() and "shadow" not in slot.material.name.lower() for slot in obj.material_slots)
                     )
-                    outline_thickness = 0.025 if is_hair else 0.075
+                    is_face = not is_body and (
+                        ("face" in obj.name.lower() and "shadow" not in obj.name.lower())
+                        or (obj.data and "face" in obj.data.name.lower() and "shadow" not in obj.data.name.lower())
+                        or any(slot.material and "face" in slot.material.name.lower() and "shadow" not in slot.material.name.lower() for slot in obj.material_slots)
+                    )
+                    outline_thickness = 0.075
 
                     target_settings = [
                         # Base Geometry = True
@@ -1887,7 +1922,7 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                         (["Use Vertex Colors?", "Use Vertex Colors", "Input_13"], True),
                         # Vertex Colors = #000000FF black
                         (["Vertex Colors", "Vertex Color", "Input_3"], (0.0, 0.0, 0.0, 1.0)),
-                        # Outline Thickness = 0.025 for hair, 0.075 for others
+                        # Outline Thickness = 0.075 for all without exception
                         (["Outline Thickness", "Input_7", "Input_2"], outline_thickness),
                         # Camera
                         (["Camera", "Input_1", "Input_4"], cam_obj),
@@ -1918,35 +1953,44 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                             for key in keys:
                                 set_modifier_property(mod, key, val)
 
-                    if is_hair:
-                        try:
-                            mod["Input_7"] = 0.025
-                        except Exception:
-                            pass
-                        try:
-                            set_modifier_property(mod, "Outline Thickness", 0.025)
-                            set_modifier_property(mod, "Input_7", 0.025)
-                        except Exception:
-                            pass
-                        for d_path in ['["Input_7"]', '["Outline Thickness"]', '["Input_2"]']:
-                            try:
-                                mod.driver_remove(d_path)
-                            except Exception:
-                                pass
-                        if hasattr(mod, "properties") and hasattr(mod.properties, "inputs") and hasattr(mod.properties.inputs, "Input_7"):
-                            try:
-                                mod.properties.inputs.Input_7.driver_remove("value")
-                            except Exception:
-                                pass
-                        if obj.animation_data:
-                            for fcurve in list(obj.animation_data.drivers):
-                                dp = fcurve.data_path
-                                if mod.name in dp and any(k in dp for k in ["Input_7", "Outline Thickness", "Input_2"]):
+                    # For non-face meshes: ensure Vertex Colors socket is VALUE mode with black color (0,0,0,1)
+                    if not is_face_obj:
+                        props = getattr(mod, "properties", None)
+                        if props and hasattr(props, "inputs"):
+                            for vc_key in ["Input_3", "Vertex Colors"]:
+                                if hasattr(props.inputs, vc_key):
+                                    inp_item = getattr(props.inputs, vc_key)
                                     try:
-                                        obj.animation_data.drivers.remove(fcurve)
+                                        inp_item.type = 'VALUE'
                                     except Exception:
                                         pass
-                    elif bod and obj != bod:
+                                    try:
+                                        inp_item.value = (0.0, 0.0, 0.0, 1.0)
+                                    except Exception:
+                                        try:
+                                            inp_item.value[0] = 0.0
+                                            inp_item.value[1] = 0.0
+                                            inp_item.value[2] = 0.0
+                                            inp_item.value[3] = 1.0
+                                        except Exception:
+                                            pass
+                        try:
+                            mod['Input_3_use_attribute'] = 0
+                            mod['Input_3'] = (0.0, 0.0, 0.0, 1.0)
+                        except Exception:
+                            pass
+
+                    # Ensure outline thickness is 0.075 on all objects without exception
+                    try:
+                        mod["Input_7"] = 0.075
+                    except Exception:
+                        pass
+                    try:
+                        set_modifier_property(mod, "Outline Thickness", 0.075)
+                        set_modifier_property(mod, "Input_7", 0.075)
+                    except Exception:
+                        pass
+                    if bod and obj != bod:
                         try:
                             mod.driver_remove('["Input_7"]')
                         except Exception:
@@ -1975,29 +2019,57 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
         # Cast shadow drivers
         faceobj = None
         for obj in bpy.data.objects:
-            if obj.type == 'MESH' and "face" in obj.name.lower():
+            if obj.type == 'MESH' and "face" in obj.name.lower() and not any(k in obj.name.lower() for k in ["wgt", "facerig", "panel", "control", "shadow", "plane"]):
                 faceobj = obj
                 break
 
         if faceobj:
-            for ob in bpy.data.objects:
-                if ob.type == 'MESH' and ob != faceobj:
-                    extra_fx_mod = ob.modifiers.get("Extra FX")
-                    if extra_fx_mod:
-                        for sock_name in ["Socket_1", "Socket_10"]:
-                            try:
-                                extra_fx_mod.driver_remove(sock_name)
-                            except:
-                                pass
-                            try:
-                                d = extra_fx_mod.driver_add(sock_name).driver
-                                d.type = "AVERAGE"
-                                v = d.variables.new()
-                                v.name = sock_name
-                                v.targets[0].id = faceobj
-                                v.targets[0].data_path = f'modifiers["Extra FX"]["{sock_name}"]'
-                            except Exception as e:
-                                print(f"Error adding extra fx driver for {sock_name}:", e)
+            face_mod = faceobj.modifiers.get("Extra FX") or next((m for m in faceobj.modifiers if m.type == 'NODES' and "Extra FX" in m.name), None)
+            if face_mod:
+                for ob in bpy.data.objects:
+                    if ob.type == 'MESH' and ob != faceobj:
+                        extra_fx_mod = ob.modifiers.get("Extra FX")
+                        if extra_fx_mod:
+                            for sock_name in ["Socket_1", "Socket_10"]:
+                                driver_added = False
+                                # 1. Modern Blender 5+ driver on modifier property input
+                                data_path_5 = f'modifiers["{extra_fx_mod.name}"].properties.inputs.{sock_name}.value'
+                                target_path_5 = f'modifiers["{face_mod.name}"].properties.inputs.{sock_name}.value'
+                                try:
+                                    ob.driver_remove(data_path_5)
+                                except Exception:
+                                    pass
+                                try:
+                                    fcurve = ob.driver_add(data_path_5)
+                                    d = fcurve.driver
+                                    d.type = "AVERAGE"
+                                    for v in list(d.variables):
+                                        d.variables.remove(v)
+                                    v = d.variables.new()
+                                    v.name = sock_name
+                                    v.targets[0].id = faceobj
+                                    v.targets[0].data_path = target_path_5
+                                    driver_added = True
+                                except Exception:
+                                    pass
+
+                                # 2. Fallback for older Blender versions
+                                if not driver_added:
+                                    try:
+                                        extra_fx_mod.driver_remove(sock_name)
+                                    except Exception:
+                                        pass
+                                    try:
+                                        d = extra_fx_mod.driver_add(sock_name).driver
+                                        d.type = "AVERAGE"
+                                        for v in list(d.variables):
+                                            d.variables.remove(v)
+                                        v = d.variables.new()
+                                        v.name = sock_name
+                                        v.targets[0].id = faceobj
+                                        v.targets[0].data_path = f'modifiers["{face_mod.name}"]["{sock_name}"]'
+                                    except Exception as e:
+                                        print(f"Error adding extra fx driver for {sock_name} on {ob.name}:", e)
 
         self.outlineshader_sync()
 
@@ -2286,4 +2358,242 @@ class WutheringWavesGeometryNodesSetup(GameGeometryNodesSetup):
                 mod.node_group = star_group
 
         self.blender_operator.report({'INFO'}, 'Configured Geometry Nodes and Outlines for Wuthering Waves.')
+
+
+class HonkaiImpact3rdGeometryNodesSetup(GameGeometryNodesSetup):
+    DEFAULT_OUTLINE_THICKNESS = 0.15
+
+    def __init__(self, blender_operator, context):
+        super().__init__(blender_operator, context)
+        self.material_names = HonkaiImpact3rdShaderMaterialNames
+        self.outlines_node_group_names = OutlineNodeGroupNames.HONKAI_IMPACT_3RD_OUTLINES
+
+    def setup_geometry_nodes(self):
+        outline_ng = bpy.data.node_groups.get("ImpactToon - Honkai Impact 3rd Outlines")
+        lv_ng = bpy.data.node_groups.get("Light Vectors")
+        outlines_mat = bpy.data.materials.get("ImpactToon - Outlines")
+
+        light_dir_obj = bpy.data.objects.get("Light Direction")
+        head_origin_obj = bpy.data.objects.get("Head Origin")
+        head_fwd_obj = bpy.data.objects.get("Head Forward")
+        head_up_obj = bpy.data.objects.get("Head Up")
+
+        if head_origin_obj and head_fwd_obj:
+            mw = head_fwd_obj.matrix_world.copy()
+            dist_y = abs(mw.translation.y - head_origin_obj.matrix_world.translation.y) or 0.7827
+            mw.translation.y = head_origin_obj.matrix_world.translation.y + dist_y
+            head_fwd_obj.matrix_world = mw
+
+        if head_origin_obj and head_up_obj:
+            mw = head_up_obj.matrix_world.copy()
+            dist_z = abs(mw.translation.z - head_origin_obj.matrix_world.translation.z) or 0.5384
+            mw.translation.z = head_origin_obj.matrix_world.translation.z - dist_z
+            head_up_obj.matrix_world = mw
+
+        meshes = [obj for obj in bpy.context.scene.objects if obj.type == 'MESH']
+        for obj in meshes:
+            obj_low = obj.name.lower()
+            if any(ign in obj_low for ign in ['shadow', 'effect']):
+                continue
+            has_hi3_mat = any(slot.material and slot.material.name.startswith("ImpactToon - ") for slot in obj.material_slots)
+            if not has_hi3_mat:
+                continue
+
+            # 1. Light Vectors modifier (apply to all character meshes including Eyebrow, EyeShape, Eye)
+            if lv_ng:
+                mod_lv = obj.modifiers.get("Light Vectors")
+                if not mod_lv:
+                    old_mod = next((m for m in obj.modifiers if m.type == 'NODES' and m.node_group == lv_ng), None)
+                    if old_mod:
+                        old_mod.name = "Light Vectors"
+                        mod_lv = old_mod
+                    else:
+                        mod_lv = obj.modifiers.new("Light Vectors", 'NODES')
+                mod_lv.node_group = lv_ng
+
+                # Set input control objects
+                for sock_name, target_obj in [
+                    ("Light Direction", light_dir_obj),
+                    ("Input_3", light_dir_obj),
+                    ("Head Origin", head_origin_obj),
+                    ("Input_4", head_origin_obj),
+                    ("Head Forward", head_fwd_obj),
+                    ("Input_5", head_fwd_obj),
+                    ("Head Up", head_up_obj),
+                    ("Input_6", head_up_obj),
+                ]:
+                    if target_obj:
+                        set_modifier_property(mod_lv, sock_name, target_obj)
+
+                # Set output attributes
+                for out_ident, out_name in [
+                    ("Output_2", "lightDir"),
+                    ("Output_7", "headForward"),
+                    ("Output_8", "headUp"),
+                    ("Socket_10", "Ambient"),
+                    ("Socket_11", "Lit"),
+                    ("Socket_12", "Shadow"),
+                    ("Socket_13", "RimLit"),
+                    ("Socket_14", "RimShadow"),
+                    ("Socket_30", "Rim"),
+                    ("lightDir", "lightDir"),
+                    ("headForward", "headForward"),
+                    ("headUp", "headUp"),
+                    ("Ambient", "Ambient"),
+                    ("Lit", "Lit"),
+                    ("Shadow", "Shadow"),
+                    ("Rim Lit", "RimLit"),
+                    ("Rim Shadow", "RimShadow"),
+                    ("Rim", "Rim"),
+                ]:
+                    set_modifier_property(mod_lv, out_ident, out_name)
+                    set_modifier_property(mod_lv, out_name, out_name)
+                    set_modifier_property(mod_lv, f"{out_ident}_attribute_name", out_name)
+                    set_modifier_property(mod_lv, f"{out_name}_attribute_name", out_name)
+                    if hasattr(mod_lv, "properties") and hasattr(mod_lv.properties, "outputs"):
+                        sock = getattr(mod_lv.properties.outputs, out_ident, None) or getattr(mod_lv.properties.outputs, out_name, None)
+                        if sock and hasattr(sock, "attribute_name"):
+                            try:
+                                sock.attribute_name = out_name
+                            except Exception:
+                                pass
+
+            # 2. Outlines modifier (skip Eye, Eyebrow, EyeShape)
+            if obj_low in ('eye', 'eyebrow', 'eyeshape') or any(ign in obj_low for ign in ['eyebrow', 'eyeshape', 'eyestar']) or obj_low.endswith(('_eye', '.eye')):
+                continue
+
+            if outline_ng:
+                mod_ol = obj.modifiers.get("Outlines")
+                if not mod_ol:
+                    old_mod = next((m for m in obj.modifiers if m.type == 'NODES' and m.node_group == outline_ng), None)
+                    if old_mod:
+                        old_mod.name = "Outlines"
+                        mod_ol = old_mod
+                    else:
+                        mod_ol = obj.modifiers.new("Outlines", 'NODES')
+                mod_ol.node_group = outline_ng
+
+                use_vcol = True
+                col_attr_name = None
+                if obj.data and hasattr(obj.data, "color_attributes") and len(obj.data.color_attributes) > 0:
+                    col_attr = obj.data.color_attributes[0]
+                    col_attr_name = col_attr.name
+                    try:
+                        if len(col_attr.data) > 0:
+                            sample_step = max(1, len(col_attr.data) // 200)
+                            max_alpha = max(col_attr.data[i].color[3] for i in range(0, len(col_attr.data), sample_step))
+                            if max_alpha <= 0.001:
+                                use_vcol = False
+                    except Exception:
+                        pass
+                else:
+                    use_vcol = False
+
+                set_modifier_property(mod_ol, "Base Geometry", True)
+                set_modifier_property(mod_ol, "Input_12", True)
+                set_modifier_property(mod_ol, "Use Vertex Colors?", use_vcol)
+                set_modifier_property(mod_ol, "Input_13", use_vcol)
+                set_modifier_property(mod_ol, "Outline Thickness", self.DEFAULT_OUTLINE_THICKNESS)
+                set_modifier_property(mod_ol, "Input_7", self.DEFAULT_OUTLINE_THICKNESS)
+
+                if getattr(bpy.context.scene, "camera", None):
+                    set_modifier_property(mod_ol, "Camera", bpy.context.scene.camera)
+                    set_modifier_property(mod_ol, "Input_4", bpy.context.scene.camera)
+
+                if col_attr_name:
+                    set_modifier_property(mod_ol, "Input_3_use_attribute", True)
+                    set_modifier_property(mod_ol, "Input_3_attribute_name", col_attr_name)
+                    try:
+                        mod_ol["Input_3_use_attribute"] = True
+                        mod_ol["Input_3_attribute_name"] = col_attr_name
+                    except Exception:
+                        pass
+
+                if outlines_mat:
+                    base_mats = []
+                    for slot in obj.material_slots:
+                        m = slot.material
+                        if m and m.name.startswith("ImpactToon - ") and not m.name.endswith("Outlines"):
+                            if m not in base_mats:
+                                base_mats.append(m)
+
+                    pair_map = {
+                        ("Hair", "Hair Outline"): ("Input_10", "Input_5"),
+                        ("Body", "Body Outline"): ("Input_11", "Input_9"),
+                        ("Face", "Face Outline"): ("Input_14", "Input_15"),
+                        ("Dress", "Dress Outline"): ("Input_18", "Input_19"),
+                        ("Dress 2", "Dress 2 Outline"): ("Input_24", "Input_25"),
+                        ("Other", "Other Outline"): ("Input_26", "Input_27"),
+                    }
+                    used_pairs = set()
+
+                    for b_mat in base_mats:
+                        ol_mat_name = f"{b_mat.name} Outlines"
+                        ol_mat = bpy.data.materials.get(ol_mat_name)
+                        if not ol_mat:
+                            ol_mat = outlines_mat.copy()
+                            ol_mat.name = ol_mat_name
+                            ol_mat.use_fake_user = True
+                        ol_mat["_original_material_name"] = b_mat.get("_original_material_name") or b_mat.name.replace("ImpactToon - ", "")
+
+                        # Copy diffuse and lightmap textures from base material to outline material
+                        if b_mat.use_nodes and b_mat.node_tree and ol_mat.use_nodes and ol_mat.node_tree:
+                            src_diff = b_mat.node_tree.nodes.get("Image Texture.001")
+                            src_lm = b_mat.node_tree.nodes.get("Image Texture")
+                            dst_diff = ol_mat.node_tree.nodes.get("Outline_Diffuse")
+                            dst_lm = ol_mat.node_tree.nodes.get("Outline_Lightmap")
+                            if src_diff and dst_diff and src_diff.image:
+                                dst_diff.image = src_diff.image
+                            if src_lm and dst_lm:
+                                dst_lm.image = src_lm.image
+
+                        if ol_mat.name not in obj.data.materials:
+                            obj.data.materials.append(ol_mat)
+
+                        b_low = b_mat.name.lower()
+                        chosen_pair = None
+                        if "hair" in b_low and ("Hair", "Hair Outline") not in used_pairs:
+                            chosen_pair = ("Hair", "Hair Outline")
+                        elif "body" in b_low and ("Body", "Body Outline") not in used_pairs:
+                            chosen_pair = ("Body", "Body Outline")
+                        elif "face" in b_low and "dualface" not in b_low and ("Face", "Face Outline") not in used_pairs:
+                            chosen_pair = ("Face", "Face Outline")
+                        else:
+                            for p in [
+                                ("Dress", "Dress Outline"),
+                                ("Dress 2", "Dress 2 Outline"),
+                                ("Other", "Other Outline"),
+                                ("Body", "Body Outline"),
+                                ("Hair", "Hair Outline"),
+                                ("Face", "Face Outline"),
+                            ]:
+                                if p not in used_pairs:
+                                    chosen_pair = p
+                                    break
+
+                        if chosen_pair:
+                            used_pairs.add(chosen_pair)
+                            base_ident, ol_ident = pair_map[chosen_pair]
+                            set_modifier_property(mod_ol, chosen_pair[0], b_mat)
+                            set_modifier_property(mod_ol, base_ident, b_mat)
+                            set_modifier_property(mod_ol, chosen_pair[1], ol_mat)
+                            set_modifier_property(mod_ol, ol_ident, ol_mat)
+                            try:
+                                mod_ol[base_ident] = b_mat
+                                mod_ol[ol_ident] = ol_mat
+                            except Exception:
+                                pass
+
+        try:
+            from setup_wizard.material_data_import_setup.game_material_data_importers import HonkaiImpact3rdMaterialDataImporter
+            HonkaiImpact3rdMaterialDataImporter.apply_all_hi3_material_data(self.context)
+        except Exception as e:
+            print(f"[HI3 GEOMETRY NODES] Notice applying material data: {e}")
+
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx, 
+            self.blender_operator.invoker_type, 
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=self.blender_operator.game_type,
+        )
 

@@ -19,6 +19,80 @@ from setup_wizard.character_rig_setup.rig_ui_utils import (
 )
 
 
+def attach_overcoat_to_arms(rig, context=None):
+    """Attach shoulder drapes and their segments to the arm/forearm without changing rest."""
+    context = context or bpy.context
+    context.view_layer.objects.active = rig
+    previous_mode = rig.mode
+    if previous_mode != 'EDIT':
+        bpy.ops.object.mode_set(mode='EDIT')
+    bones = rig.data.edit_bones
+    changed = []
+    # Overcoat21 is the torso drape, including rigs made by the previous rule.
+    chest = bones.get('DEF-spine.003') or bones.get('chest')
+    for side in ('L', 'R'):
+        torso_coat = bones.get(f'Bone_Overcoat21_{side}')
+        if chest and torso_coat and torso_coat.parent and torso_coat.parent.name.startswith('DEF-upper_arm.'):
+            torso_coat.use_connect = False
+            torso_coat.parent = chest
+            changed.append(torso_coat.name)
+    for side in ('L', 'R'):
+        arm = bones.get(f'DEF-upper_arm.{side}')
+        end = bones.get(f'DEF-upper_arm.{side}.001') or arm
+        if not arm:
+            continue
+        segment = end.tail - arm.head
+        length = segment.length
+        if length < 1e-5:
+            continue
+        for bone in bones:
+            if bone.name == f'Bone_Overcoat21_{side}' or not re.fullmatch(r'Bone_Overcoat\d+_' + side, bone.name):
+                continue
+            if not bone.parent or bone.parent.name not in ('DEF-spine.003', 'chest', arm.name):
+                continue
+            offset = bone.head - arm.head
+            projection = offset.dot(segment) / (length * length)
+            distance = (offset - segment * max(0.0, min(1.0, projection))).length
+            # Shoulder drape near the arm; front/back torso panels stay on chest.
+            if not 0.0 <= projection <= 1.0 or distance > length * .35:
+                continue
+            chain = [bone] + list(bone.children_recursive)
+            chain += [candidate for candidate in bones
+                      if candidate.get('gi_overcoat_arm_chain') == bone.name and candidate not in chain]
+            segments = [bones.get(name) for name in (
+                f'DEF-upper_arm.{side}', f'DEF-upper_arm.{side}.001',
+                f'DEF-forearm.{side}', f'DEF-forearm.{side}.001')]
+            segments = [candidate for candidate in segments if candidate]
+            for cloth in chain:
+                if not re.fullmatch(r'Bone_Overcoat\d+_' + side, cloth.name):
+                    continue
+                cloth['gi_overcoat_arm_chain'] = bone.name
+                def distance_to_segment(candidate):
+                    direction = candidate.tail - candidate.head
+                    if direction.length_squared < 1e-10:
+                        return (cloth.head - candidate.head).length
+                    t = (cloth.head - candidate.head).dot(direction) / direction.length_squared
+                    point = candidate.head + direction * max(0.0, min(1.0, t))
+                    return (cloth.head - point).length
+                target = arm if cloth == bone else min(segments, key=distance_to_segment)
+                if distance_to_segment(target) > length * .5:
+                    continue
+                if cloth.parent != target:
+                    cloth.use_connect = False
+                    cloth.parent = target
+                    changed.append(cloth.name)
+    if previous_mode != 'EDIT':
+        bpy.ops.object.mode_set(mode=previous_mode)
+    return changed
+
+
+def initialize_genshin_rim_x(rig):
+    if rig and rig.pose:
+        rim = rig.pose.bones.get('RimX')
+        if rim:
+            rim.location.x = -0.0075
+
+
 def rig_character(
     file_path,
     lighting_panel_version,
@@ -1121,6 +1195,8 @@ def rig_character(
                     mainbone
                 ]
 
+    attach_overcoat_to_arms(rigifyr)
+
     # Ensure Root, Bip001 Pelvis and other pelvic/hip root bones follow DEF-spine
     target_hip_parent = (
         rigifyr.data.edit_bones.get("DEF-spine")
@@ -1661,6 +1737,10 @@ def rig_character(
         to_del_coll = bpy.data.collections.get(LightingPanelNames.Collections.WHEEL)
         if to_del_coll:
             for obj in list(to_del_coll.objects):
+                try:
+                    obj.hide_render = True
+                except Exception:
+                    pass
                 move_into_collection(obj.name, char_name)
         # DO NOT INCLUDE CHILDREN. This will cause ColorPickers to be moved into the rig object.
         move_into_collection(
@@ -4966,6 +5046,10 @@ def rig_character(
 
         def drive_visibility_with_prop(obj, path):
             driver_obj = bpy.context.scene.objects[obj]
+            try:
+                driver_obj.hide_render = True
+            except Exception:
+                pass
             driver = driver_obj.driver_add("hide_viewport").driver
 
             driver.type = "SCRIPTED"
@@ -5255,6 +5339,7 @@ def rig_character(
         bone_to_layer("RimShadow", 1, "Lighting")
         bone_to_layer("Rim Lit", 1, "Lighting")
         bone_to_layer("RimX", 1, "Lighting")
+        initialize_genshin_rim_x(bpy.data.objects.get(char_name + "Rig"))
         bone_to_layer("RimY", 1, "Lighting")
         bone_to_layer("RimLitPin", 1, "Lighting")
         bone_to_layer("ShadowOffset", 1, "Lighting")

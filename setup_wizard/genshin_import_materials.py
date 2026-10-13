@@ -51,6 +51,24 @@ class AKE_OT_SetUpMaterials(Operator, BasicSetupUIOperator, CustomOperatorProper
     bl_label = 'Arknights Endfield: Set Up Materials (UI)'
 
 
+class PGR_OT_SetUpMaterials(Operator, BasicSetupUIOperator):
+    '''Sets Up Materials'''
+    bl_idname = 'punishing_gray_raven.set_up_materials'
+    bl_label = 'Punishing Gray Raven: Set Up Materials (UI)'
+
+
+class HI3_OT_SetUpMaterials(Operator, BasicSetupUIOperator):
+    '''Sets Up Materials'''
+    bl_idname = 'honkai_impact_3rd.set_up_materials'
+    bl_label = 'Honkai Impact 3rd: Set Up Materials (UI)'
+
+
+class HNA_OT_SetUpMaterials(Operator, BasicSetupUIOperator):
+    '''Sets Up Materials'''
+    bl_idname = 'honkai_nexus_anima.set_up_materials'
+    bl_label = 'Honkai: Nexus Anima: Set Up Materials (UI)'
+
+
 class AKE_OT_SetUpOutlines(Operator, BasicSetupUIOperator, CustomOperatorProperties):
     '''Sets Up Outlines for Arknights: Endfield'''
     bl_idname = 'arknights_endfield.set_up_outlines'
@@ -700,6 +718,11 @@ class GI_OT_GenshinImportMaterials(Operator, ImportHelper, CustomOperatorPropert
 
             material_importer_service = MaterialImporterService(game_material_importer)
             material_importer_service.import_materials()
+            try:
+                from setup_wizard.utils.texture_utils import fix_missing_textures
+                fix_missing_textures()
+            except Exception as e_fix:
+                print(f"[MATERIAL IMPORT] Notice fix_missing_textures: {e_fix}")
         except Exception as ex:
             print(f"[DEBUG ERROR] Exception in GI_OT_GenshinImportMaterials.execute: {ex}")
             raise ex
@@ -720,6 +743,9 @@ register, unregister = bpy.utils.register_classes_factory([
     WW_OT_SetUpMaterials,
     AKE_OT_SetUpMaterials,
     AKE_OT_SetUpOutlines,
+    PGR_OT_SetUpMaterials,
+    HI3_OT_SetUpMaterials,
+    HNA_OT_SetUpMaterials,
 ])
 
 

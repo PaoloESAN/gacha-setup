@@ -36,12 +36,12 @@ class UI_Properties:
 
         bpy.types.Scene.zzz_shader_type = bpy.props.EnumProperty(
             items=[
-                ("KYTHERA", "Kythera's Shader", "Use Kythera's ZZZ Shader (Face Shader + General Shader)"),
-                ("LEGACY", "Legacy Shader", "Use Legacy ZZZ Setup File V2.0 Shader"),
+                ("LEGACY", "Default Shader", "Use Default ZZZ Setup Shader"),
+                ("KYTHERA", "Toon Shader", "Use Kythera's ZZZ Toon Shader (Face Shader + General Shader)"),
             ],
             name="Shader",
             description="Select shader setup for Zenless Zone Zero",
-            default="KYTHERA",
+            default="LEGACY",
         )
 
         bpy.types.Scene.enable_hair_clothes_physics = bpy.props.BoolProperty(
@@ -95,6 +95,11 @@ class GI_PT_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
             'PLAY',
             game_type=GameType.GENSHIN_IMPACT.name
         )
+        from setup_wizard.utils.better_fbx_utils import should_show_better_fbx_warning
+        if should_show_better_fbx_warning(GameType.GENSHIN_IMPACT.name):
+            warn_col = run_entire_setup_column.column()
+            warn_col.alert = True
+            warn_col.label(text="BetterFBX is recommended", icon="ERROR")
         from setup_wizard.services.isolation import isolation_service
         isolation_service.draw_setup_status_box(sub_layout, context, run_entire_setup_column)
 
@@ -521,7 +526,7 @@ GI_LIGHT_PRESETS = {
         "day_night": 0.0,
         "rim_lit": (1.0, 1.0, 1.0),
         "rim_shadow": (1.0, 1.0, 1.0),
-        "rim_scale": 0.15,
+        "rim_scale": 0.0,
     },
     "1": {  # Sunrise
         "ambient": (0.95, 0.85, 0.8),
@@ -533,7 +538,7 @@ GI_LIGHT_PRESETS = {
         "day_night": 0.0,
         "rim_lit": (1.0, 0.82, 0.66),
         "rim_shadow": (0.6, 0.5, 0.7),
-        "rim_scale": 0.15,
+        "rim_scale": 0.0,
     },
     "2": {  # Day
         "ambient": (1.0, 1.0, 1.0),
@@ -545,7 +550,7 @@ GI_LIGHT_PRESETS = {
         "day_night": 0.0,
         "rim_lit": (1.0, 1.0, 1.0),
         "rim_shadow": (0.6, 0.6, 0.7),
-        "rim_scale": 0.15,
+        "rim_scale": 0.0,
     },
     "3": {  # Sunset
         "ambient": (0.9, 0.75, 0.7),
@@ -557,7 +562,7 @@ GI_LIGHT_PRESETS = {
         "day_night": 0.0,
         "rim_lit": (1.0, 0.8, 0.5),
         "rim_shadow": (0.5, 0.35, 0.6),
-        "rim_scale": 0.15,
+        "rim_scale": 0.0,
     },
     "4": {  # Night
         "ambient": (0.4, 0.45, 0.6),
@@ -569,7 +574,7 @@ GI_LIGHT_PRESETS = {
         "day_night": 1.0,
         "rim_lit": (0.5, 0.7, 1.0),
         "rim_shadow": (0.2, 0.3, 0.5),
-        "rim_scale": 0.15,
+        "rim_scale": 0.0,
     },
     "5": {  # Rainy
         "ambient": (0.6, 0.65, 0.7),
@@ -581,7 +586,7 @@ GI_LIGHT_PRESETS = {
         "day_night": 0.3,
         "rim_lit": (0.6, 0.7, 0.8),
         "rim_shadow": (0.3, 0.35, 0.45),
-        "rim_scale": 0.15,
+        "rim_scale": 0.0,
     },
 }
 
@@ -801,7 +806,7 @@ def update_gi_lighting_control_type(self, context=None):
 
         _is_updating_gi_props = True
         try:
-            self.gi_rim_scale = 0.15
+            self.gi_rim_scale = 0.0
             if str(current_mode) in GI_LIGHT_PRESETS:
                 preset = GI_LIGHT_PRESETS[str(current_mode)]
                 if "ambient" in preset:
@@ -822,7 +827,7 @@ def update_gi_lighting_control_type(self, context=None):
                     self.gi_rim_lit_color = preset["rim_lit"]
                 if "rim_shadow" in preset:
                     self.gi_rim_shadow_color = preset["rim_shadow"]
-                self.gi_rim_scale = preset.get("rim_scale", 0.15)
+                self.gi_rim_scale = preset.get("rim_scale", 0.0)
         finally:
             _is_updating_gi_props = False
 
@@ -876,7 +881,7 @@ def update_gi_light_mode(self, context=None):
                 self.gi_rim_lit_color = preset["rim_lit"]
             if "rim_shadow" in preset:
                 self.gi_rim_shadow_color = preset["rim_shadow"]
-            self.gi_rim_scale = preset.get("rim_scale", 0.15)
+            self.gi_rim_scale = preset.get("rim_scale", 0.0)
         finally:
             _is_updating_gi_props = False
 
@@ -974,7 +979,7 @@ def sync_genshin_shader_properties(scene=None, context=None):
     if len(rim_shadow_col) == 3:
         rim_shadow_col.append(1.0)
 
-    rim_scale_val = float(getattr(scene, "gi_rim_scale", 0.15))
+    rim_scale_val = float(getattr(scene, "gi_rim_scale", 0.0))
 
     prop_map = {
         "Toggle Fresnel": use_fresnel,
@@ -1903,6 +1908,10 @@ class GI_OT_SetupLightingPanel(Operator):
         to_del_coll = bpy.data.collections.get(LightingPanelNames.Collections.WHEEL)
         if to_del_coll:
             for obj in list(to_del_coll.objects):
+                try:
+                    obj.hide_render = True
+                except Exception:
+                    pass
                 move_into_collection(obj.name, target_char_coll)
 
         move_into_collection(LightingPanelNames.Objects.LIGHTING_PANEL, target_char_coll, include_children=False)
@@ -2212,6 +2221,7 @@ class GI_PT_Rig_Character_Settings(Panel):
         if physics_present:
             col_physics.prop(scene, "gi_hair_physics_influence", text="Hair Physics", slider=True)
             col_physics.prop(scene, "gi_clothes_physics_influence", text="Clothes Physics", slider=True)
+            box_physics.column(align=True).operator("hoyoverse.remove_hair_clothes_physics", text="Remove Physics", icon="PANEL_CLOSE")
         else:
             col_physics.operator("hoyoverse.apply_hair_clothes_physics", text="Apply Physics", icon="FILE_REFRESH")
 
@@ -2233,6 +2243,12 @@ def _on_character_selection_change(scene, depsgraph=None):
         if has_active_character_changed(context):
             if is_game_armature(context, "GENSHIN_IMPACT"):
                 pull_gi_panel_values(scene, context, force=True)
+            elif is_game_armature(context, "ZENLESS_ZONE_ZERO"):
+                try:
+                    from setup_wizard.ui.zzz_ui_setup_wizard_menu import pull_zzz_panel_values
+                    pull_zzz_panel_values(scene, context, force=True)
+                except Exception:
+                    pass
     except Exception:
         pass
 
@@ -2417,7 +2433,7 @@ def register_gi_properties():
         description="Rim light thickness / scale",
         min=0.0,
         max=1.0,
-        default=0.15,
+        default=0.0,
         precision=2,
         update=update_gi_lighting,
     )

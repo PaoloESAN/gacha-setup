@@ -125,6 +125,10 @@ def invoke_next_step_ui(
             game_type = GameType.ARKNIGHTS_ENDFIELD.name
         elif 'zenless' in hl_low or 'zzz' in hl_low:
             game_type = GameType.ZENLESS_ZONE_ZERO.name
+        elif 'honkai_impact_3rd' in hl_low or 'hi3' in hl_low:
+            game_type = GameType.HONKAI_IMPACT_3RD.name
+        elif 'honkai_nexus_anima' in hl_low or 'nexus' in hl_low or 'hna' in hl_low:
+            game_type = GameType.HONKAI_NEXUS_ANIMA.name
         elif 'honkai' in hl_low or 'hsr' in hl_low:
             game_type = GameType.HONKAI_STAR_RAIL.name
         elif 'punishing' in hl_low or 'pgr' in hl_low:
@@ -222,14 +226,18 @@ def get_shader_file_path(game_type: str, file_type: str = "main") -> str:
 
     elif game_type == GameType.ZENLESS_ZONE_ZERO.name:
         if file_type == 'outlines':
-            p_outlines = os.path.join(shaders_dir, 'zzz', 'ZZZ Setup File V2.0.blend')
+            p_outlines = os.path.join(shaders_dir, 'zzz', 'ZZZ Setup v7.blend')
+            if not os.path.isfile(p_outlines):
+                p_outlines = os.path.join(shaders_dir, 'zzz', 'ZZZ Setup File V2.0.blend')
             if os.path.isfile(p_outlines):
                 return p_outlines
         
-        selected_shader = getattr(bpy.context.scene, 'zzz_shader_type', 'KYTHERA') if hasattr(bpy, 'context') and hasattr(bpy.context, 'scene') else 'KYTHERA'
+        selected_shader = getattr(bpy.context.scene, 'zzz_shader_type', 'LEGACY') if hasattr(bpy, 'context') and hasattr(bpy.context, 'scene') else 'LEGACY'
 
         if selected_shader == 'LEGACY':
-            p_legacy = os.path.join(shaders_dir, 'zzz', 'ZZZ Setup File V2.0.blend')
+            p_legacy = os.path.join(shaders_dir, 'zzz', 'ZZZ Setup v7.blend')
+            if not os.path.isfile(p_legacy):
+                p_legacy = os.path.join(shaders_dir, 'zzz', 'ZZZ Setup File V2.0.blend')
             if os.path.isfile(p_legacy):
                 return p_legacy
         else:
@@ -238,7 +246,8 @@ def get_shader_file_path(game_type: str, file_type: str = "main") -> str:
             if os.path.isdir(zzz_dir):
                 kythera_blends = [
                     f for f in os.listdir(zzz_dir)
-                    if (f.lower().startswith("kythera") or f.lower().startswith("kyteraz") or "kythera" in f.lower() or "kyteraz" in f.lower())
+                    if not f.startswith("._") and not f.startswith(".")
+                    and (f.lower().startswith("kythera") or f.lower().startswith("kyteraz") or "kythera" in f.lower() or "kyteraz" in f.lower())
                     and f.lower().endswith(".blend")
                 ]
                 if kythera_blends:
@@ -256,7 +265,9 @@ def get_shader_file_path(game_type: str, file_type: str = "main") -> str:
                     if os.path.isfile(p_best):
                         return p_best
 
-            p_legacy = os.path.join(zzz_dir, 'ZZZ Setup File V2.0.blend')
+            p_legacy = os.path.join(zzz_dir, 'ZZZ Setup v7.blend')
+            if not os.path.isfile(p_legacy):
+                p_legacy = os.path.join(zzz_dir, 'ZZZ Setup File V2.0.blend')
             if os.path.isfile(p_legacy):
                 return p_legacy
 
@@ -274,6 +285,27 @@ def get_shader_file_path(game_type: str, file_type: str = "main") -> str:
         p = os.path.join(shaders_dir, 'ake', 'AKE.blend')
         if os.path.isfile(p):
             return p
+
+    elif game_type == GameType.PUNISHING_GRAY_RAVEN.name:
+        pgr_dir = os.path.join(shaders_dir, 'pgr')
+        if os.path.isdir(pgr_dir):
+            blends = [os.path.join(pgr_dir, f) for f in os.listdir(pgr_dir) if not f.startswith("._") and not f.startswith(".") and f.lower().endswith('.blend')]
+            if blends:
+                return blends[0]
+
+    elif game_type == GameType.HONKAI_IMPACT_3RD.name:
+        hi3_dir = os.path.join(shaders_dir, 'hi3')
+        if os.path.isdir(hi3_dir):
+            blends = [os.path.join(hi3_dir, f) for f in os.listdir(hi3_dir) if not f.startswith("._") and not f.startswith(".") and f.lower().endswith('.blend')]
+            if blends:
+                return blends[0]
+
+    elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
+        hna_dir = os.path.join(shaders_dir, 'hna')
+        if os.path.isdir(hna_dir):
+            blends = [os.path.join(hna_dir, f) for f in os.listdir(hna_dir) if not f.startswith("._") and not f.startswith(".") and f.lower().endswith('.blend')]
+            if blends:
+                return blends[0]
 
     return ""
 
@@ -387,7 +419,7 @@ def get_actual_material_name_for_dress(material_name, character_type='AVATAR', i
                                 dress_json = None
                                 hair_json = None
                                 for jf in os.listdir(c_dir):
-                                    if jf.lower().endswith('.json'):
+                                    if not jf.startswith("._") and not jf.startswith(".") and jf.lower().endswith('.json'):
                                         if 'dress' in jf.lower():
                                             dress_json = os.path.join(c_dir, jf)
                                         elif 'hair' in jf.lower():
@@ -490,6 +522,8 @@ class ComponentFunctionFactory:
             return bpy.ops.zenless_zone_zero.rename_collection_and_rig
         elif component_name == 'move_lighting_panel_to_char_collection':
             return bpy.ops.zenless_zone_zero.move_lighting_panel_to_char_collection
+        elif component_name == 'zzz_setup_bloom':
+            return bpy.ops.zenless_zone_zero.setup_bloom
         elif component_name == 'set_up_armtwist_bone_constraints':
             return bpy.ops.genshin.set_up_armtwist_bone_constraints
         elif component_name == 'clear_cache_operator':
@@ -508,8 +542,12 @@ class ComponentFunctionFactory:
             return bpy.ops.punishing_gray_raven.import_chibi_face_texture
         elif component_name == 'paint_vertex_colors':
             return bpy.ops.punishing_gray_raven.paint_vertex_colors
+        elif component_name == 'hna_apply_material_settings':
+            return bpy.ops.honkai_nexus_anima.apply_material_settings
         elif component_name == 'compositing_node_setup':
             return bpy.ops.hoyoverse.custom_composite_node_setup
+        elif component_name == 'pgr_setup_compositor':
+            return bpy.ops.punishing_gray_raven.setup_compositor
         elif component_name == 'post_processing_default_settings':
             return bpy.ops.hoyoverse.post_processing_default_settings
         elif component_name == 'nte_setup_outlines':

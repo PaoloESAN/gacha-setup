@@ -136,9 +136,20 @@ class GameMaterialDataImporter(ABC):
                 (material for material in searched_outlines_materials if is_night_soul_outlines_material(material)), None
             )
 
-        outlines_material: Material = self.outlines_material or \
-            bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{body_part} Outlines') or \
-            searched_outlines_material
+        outlines_material: Material = (
+            self.outlines_material
+            or bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{body_part} Outlines')
+            or bpy.data.materials.get(getattr(self.material_names, 'OUTLINES', ''))
+            or bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}Outlines')
+            or bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX_AFTER_RENAME}Outlines')
+            or searched_outlines_material
+        )
+        if not outlines_material:
+            for mat in bpy.data.materials.values():
+                m_name = mat.name
+                if 'outline' in m_name.lower() and not (getattr(self.material_names, 'NIGHT_SOUL_OUTLINES_SUFFIX', 'Night Soul Outlines') in m_name):
+                    outlines_material = mat
+                    break
         night_soul_outlines_material: Material = self.outlines_material or \
             bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}{body_part} {self.material_names.NIGHT_SOUL_OUTLINES_SUFFIX}') or \
             searched_night_soul_outlines_material
@@ -169,12 +180,14 @@ class GameMaterialDataImporter(ABC):
             material_data_directory_exists = True
             material_data_directory = character_materials_data_directory
         elif character_directory and os.path.isdir(character_directory):
-            if any(f.endswith('.json') for f in os.listdir(character_directory)):
+            if any(f.endswith('.json') and not f.startswith('._') and not f.startswith('.') for f in os.listdir(character_directory)):
                 material_data_directory_exists = True
                 material_data_directory = character_directory
             else:
                 for root, dirs, files in os.walk(character_directory):
-                    if any(f.endswith('.json') for f in files):
+                    if "__MACOSX" in root:
+                        continue
+                    if any(f.endswith('.json') and not f.startswith('._') and not f.startswith('.') for f in files):
                         material_data_directory_exists = True
                         material_data_directory = root
                         break
@@ -184,7 +197,7 @@ class GameMaterialDataImporter(ABC):
         material_data_files = []
         if material_data_directory:
             for filename in os.listdir(material_data_directory):
-                if filename.endswith('.json'):
+                if filename.endswith('.json') and not filename.startswith('._') and not filename.startswith('.'):
                     material_data_file = MaterialDataFile(filename)
                     material_data_files.append(material_data_file)
 
@@ -230,6 +243,11 @@ class GameMaterialDataImporterFactory:
             return NevernessToEvernessMaterialDataImporter(blender_operator, context, outline_material_group, material_names, shader_node_names)
         elif game_type == GameType.WUTHERING_WAVES.name:
             return WutheringWavesMaterialDataImporter(blender_operator, context, outline_material_group, material_names, shader_node_names)
+        elif game_type == GameType.HONKAI_IMPACT_3RD.name:
+            return HonkaiImpact3rdMaterialDataImporter(blender_operator, context, outline_material_group, material_names, shader_node_names)
+        elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
+            from setup_wizard.utils.hna_material_utils import MaterialDataImporter
+            return MaterialDataImporter(blender_operator)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -285,7 +303,10 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
                 body_part = get_npc_mesh_body_part_name(PurePosixPath(file.name).stem)
                 character_type = CharacterType.NPC
             elif 'Equip' in file.name:
-                body_part = 'Body'
+                stem = PurePosixPath(file.name).stem
+                equipment = next((m for m in bpy.data.materials if m.get('_genshin_equipment')
+                                  and m.get('_original_material_name') == stem), None)
+                body_part = equipment.name.removeprefix(self.material_names.MATERIAL_PREFIX) if equipment else 'Body'
                 character_type = CharacterType.GI_EQUIPMENT
             elif file.name.endswith('Glass_Mat.json'):
                 body_part = 'Glass'
@@ -368,6 +389,53 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
                 character_type
             )
             self.apply_material_data(body_part, material_data_appliers, file)
+
+        # Apply diffuse fallback to any outline materials in the scene that still have sentinel colors
+        for mat in bpy.data.materials:
+            if 'outline' in mat.name.lower() and mat.node_tree:
+                pt = mat.node_tree.nodes.get(self.shader_node_names.OUTLINES_SHADER) or \
+                     mat.node_tree.nodes.get('PrimoToon')
+                if not pt:
+                    for n in mat.node_tree.nodes:
+                        if n.type == 'GROUP' and any(inp.name.startswith('Outline Color') for inp in n.inputs):
+                            pt = n
+                            break
+                if pt:
+                    indexed = {}
+                    for inp in pt.inputs:
+                        if inp.name.startswith('Outline Color'):
+                            try:
+                                idx = int(inp.name.split('Outline Color')[1].strip())
+                                indexed[idx] = inp
+                            except Exception:
+                                pass
+                    if MaterialDataApplier._defaults_match_sentinels(indexed):
+                        targets = [indexed[i] for i in (1, 2, 3, 4, 5) if i in indexed]
+                        if targets and all(len(list(inp.links)) == 0 for inp in targets):
+                            diffuse_node = None
+                            for n in mat.node_tree.nodes:
+                                if n.type == 'TEX_IMAGE' and 'diffuse' in (n.name + ' ' + (n.label or '')).lower():
+                                    diffuse_node = n
+                                    break
+                            if diffuse_node and not diffuse_node.image:
+                                for other_mat in bpy.data.materials:
+                                    if other_mat.node_tree and 'outline' not in other_mat.name.lower():
+                                        for n in other_mat.node_tree.nodes:
+                                            if n.type == 'TEX_IMAGE' and 'diffuse' in (n.name + ' ' + (n.label or '')).lower() and n.image:
+                                                diffuse_node.image = n.image
+                                                break
+                                        if diffuse_node.image:
+                                            break
+                            if diffuse_node and diffuse_node.image:
+                                color_out = diffuse_node.outputs.get('Color') or diffuse_node.outputs[0]
+                                color_out.hide = False
+                                for inp in targets:
+                                    inp.hide = False
+                                    for link in list(inp.links):
+                                        mat.node_tree.links.remove(link)
+                                    mat.node_tree.links.new(color_out, inp)
+                                mat[MaterialDataApplier.OUTLINE_DIFFUSE_FALLBACK_TAG] = True
+
         return {'FINISHED'}
 
     def __customized_skirk_starcloak_material_data_setup(self, material_data_parser, character_type, file, body_part):
@@ -781,4 +849,254 @@ class WutheringWavesMaterialDataImporter(GameMaterialDataImporter):
 
     def import_material_data(self):
         return {'FINISHED'}
+
+
+class HonkaiImpact3rdMaterialDataImporter(GameMaterialDataImporter):
+    def __init__(self, blender_operator, context, outline_material_group: OutlineMaterialGroup, material_names, shader_node_names):
+        self.blender_operator: Operator = blender_operator
+        self.context: Context = context
+        self.parsers = []
+        self.material = None
+        self.outline_material_group = outline_material_group
+        self.material_names = material_names
+        self.shader_node_names = shader_node_names
+
+    @staticmethod
+    def _extract_props(jdata):
+        colors = {}
+        floats = {}
+        keywords = []
+        if not isinstance(jdata, dict):
+            return colors, floats, keywords
+        kw = jdata.get("m_ShaderKeywords")
+        if isinstance(kw, list):
+            keywords = [str(x) for x in kw]
+        elif isinstance(kw, str):
+            keywords = kw.split()
+
+        saved = jdata.get("m_SavedProperties") or {}
+        raw_colors = saved.get("m_Colors")
+        if isinstance(raw_colors, dict):
+            for k, v in raw_colors.items():
+                if isinstance(v, dict) and "r" in v:
+                    colors[k] = (
+                        float(v.get("r", 1.0)),
+                        float(v.get("g", 1.0)),
+                        float(v.get("b", 1.0)),
+                        float(v.get("a", 1.0)),
+                    )
+        elif isinstance(raw_colors, list):
+            for entry in raw_colors:
+                if isinstance(entry, dict):
+                    k = entry.get("Key") or entry.get("first")
+                    v = entry.get("Value") or entry.get("second")
+                    if k and isinstance(v, dict) and "r" in v:
+                        colors[k] = (
+                            float(v.get("r", 1.0)),
+                            float(v.get("g", 1.0)),
+                            float(v.get("b", 1.0)),
+                            float(v.get("a", 1.0)),
+                        )
+
+        raw_floats = saved.get("m_Floats")
+        if isinstance(raw_floats, dict):
+            for k, v in raw_floats.items():
+                if isinstance(v, (int, float)):
+                    floats[k] = float(v)
+        elif isinstance(raw_floats, list):
+            for entry in raw_floats:
+                if isinstance(entry, dict):
+                    k = entry.get("Key") or entry.get("first")
+                    v = entry.get("Value") or entry.get("second")
+                    if k and isinstance(v, (int, float)):
+                        floats[k] = float(v)
+
+        return colors, floats, keywords
+
+    @classmethod
+    def apply_all_hi3_material_data(cls, context=None, directory=None):
+        ctx = context or bpy.context
+        cache_enabled = ctx.window_manager.cache_enabled if hasattr(ctx, 'window_manager') and hasattr(ctx.window_manager, 'cache_enabled') else True
+        base_dir = (
+            directory
+            or (ctx.scene.get("setup_wizard_imported_model_dir") if hasattr(ctx, "scene") and ctx.scene else None)
+            or get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH)
+            or get_active_character_directory()
+        )
+        search_roots = []
+        for cand in [
+            base_dir,
+            os.path.dirname(os.path.normpath(base_dir)) if base_dir else None,
+            ctx.scene.get("setup_wizard_imported_model_dir") if hasattr(ctx, "scene") and ctx.scene else None,
+            get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH),
+            get_active_character_directory(),
+        ]:
+            if cand and os.path.isdir(cand):
+                norm_c = os.path.normpath(cand)
+                if norm_c not in search_roots:
+                    search_roots.append(norm_c)
+                parent_c = os.path.dirname(norm_c)
+                if parent_c and os.path.isdir(parent_c) and os.path.basename(norm_c).lower() in (
+                    'textures', 'texture', 'texture2d', 'materials', 'material', 'images'
+                ):
+                    if parent_c not in search_roots:
+                        search_roots.insert(0, parent_c)
+
+        material_json_map = {}
+        for r_dir in search_roots:
+            for root, _, files in os.walk(r_dir):
+                if "__MACOSX" in root:
+                    continue
+                for f in files:
+                    if f.startswith("._") or f.startswith(".") or not f.lower().endswith(".json"):
+                        continue
+                    full_p = os.path.join(root, f)
+                    stem = os.path.splitext(f)[0].lower()
+                    if stem not in material_json_map:
+                        try:
+                            with open(full_p, "r", encoding="utf-8") as jf:
+                                jdata = json.load(jf)
+                            if isinstance(jdata, dict) and "m_SavedProperties" in jdata:
+                                material_json_map[stem] = jdata
+                                m_name = (jdata.get("m_Name") or "").lower()
+                                if m_name:
+                                    material_json_map[m_name] = jdata
+                        except Exception:
+                            pass
+
+        def _set_sock(node, name, val):
+            if node and name in node.inputs:
+                try:
+                    node.inputs[name].default_value = val
+                except Exception:
+                    pass
+
+        for mat in bpy.data.materials:
+            if not mat.use_nodes or not mat.node_tree:
+                continue
+            m_low = mat.name.lower()
+            if not m_low.startswith("impacttoon - "):
+                continue
+            if m_low in ("impacttoon - base", "impacttoon - face", "impacttoon - hair", "impacttoon - eye", "impacttoon - outlines"):
+                continue
+
+            orig_m = (mat.get("_original_material_name") or mat.name.replace("ImpactToon - ", "").replace(" Outlines", "")).strip()
+            orig_low = orig_m.lower()
+            part_key = 'face' if ('face' in orig_low and 'dualface' not in orig_low) else \
+                       'hair' if 'hair' in orig_low else \
+                       'eye' if 'eye' in orig_low else \
+                       'body' if 'body' in orig_low else orig_low.split('_')[-1]
+
+            jdata = material_json_map.get(orig_low)
+            if not jdata:
+                for jk, jv in material_json_map.items():
+                    if jk == orig_low or jk.endswith(f"_{part_key}"):
+                        jdata = jv
+                        break
+            colors, floats, keywords = cls._extract_props(jdata) if jdata else ({}, {}, [])
+
+            use_alpha = 1.0 if (
+                floats.get("_UseAlphaClip", 0.0) == 1.0
+                or floats.get("_EnableAlphaTest", 0.0) == 1.0
+                or floats.get("_AlphaClip", 0.0) == 1.0
+            ) else 0.0
+            cutoff = floats.get("_AlphaClipThreshold", floats.get("_CutOff", 0.5))
+
+            # 1. Outline material
+            ol_node = mat.node_tree.nodes.get("Outlines")
+            if ol_node:
+                is_face_ol = ('face' in orig_low and 'dualface' not in orig_low)
+                _set_sock(ol_node, "Use Face Shader", 1.0 if is_face_ol else 0.0)
+                _set_sock(ol_node, "Use Alpha", use_alpha)
+                _set_sock(ol_node, "Transparency Cutoff", cutoff)
+                c1 = colors.get("_OutlineColor", (0.2, 0.2, 0.2, 1.0))
+                c1_rgb = (c1[0], c1[1], c1[2], 1.0)
+                _set_sock(ol_node, "Outline Color 1", c1_rgb)
+                for idx in range(2, 6):
+                    ci = colors.get(f"_OutlineColor{idx}", c1)
+                    _set_sock(ol_node, f"Outline Color {idx}", (ci[0], ci[1], ci[2], 1.0))
+                for cname in ("Ambient Colour", "Sharp Lit Colour", "Outline Tint"):
+                    _set_sock(ol_node, cname, (1.0, 1.0, 1.0, 1.0))
+                _set_sock(ol_node, "Outline Saturation", 1.0)
+                _set_sock(ol_node, "Outline Intensity", 1.0)
+                more_ol = (
+                    floats.get("_More_Outline_Color", 0.0) == 1.0
+                    or "MORE_OUTLINE_COLOR" in keywords
+                    or ("_OutlineColor2" in colors and part_key == "body")
+                )
+                _set_sock(ol_node, "Hair/ Base", 1.0 if (more_ol and not is_face_ol and part_key != "hair") else 0.0)
+                continue
+
+            # 2. Main shader node (Group.005)
+            sh_node = mat.node_tree.nodes.get("Group.005")
+            if not sh_node or not sh_node.node_tree:
+                continue
+
+            nt_name = sh_node.node_tree.name
+            for cname in ("Ambient Colour", "Sharp Light Colour", "Soft Light Colour", "Sharp Shadow Color", "Soft Shadow Colour"):
+                _set_sock(sh_node, cname, (1.0, 1.0, 1.0, 1.0))
+
+            if "ImpactToon - Face" in nt_name:
+                _set_sock(sh_node, "_LightArea", floats.get("_LightArea", 0.51))
+                feather = floats.get("_ShadowFeather", 0.001)
+                _set_sock(sh_node, "_ShadowFeather", max(float(feather if feather else 0.001), 0.001))
+                sc = (
+                    colors.get("_ShadowColor")
+                    or colors.get("_ShadowMultColor")
+                    or colors.get("_FirstShadowMultColor")
+                    or (0.96862745, 0.7529412, 0.7529412, 1.0)
+                )
+                _set_sock(sh_node, "_ShadowColor", (sc[0], sc[1], sc[2], 1.0))
+                _set_sock(sh_node, "_ExpBlushIntensity", floats.get("_ExpBlushIntensity", floats.get("_ExpBlushIntensityR", 0.0)))
+                _set_sock(sh_node, "_ExpShadowIntensity", floats.get("_ExpShadowIntensity", floats.get("_ExpShadowIntensityG", 0.0)))
+                _set_sock(sh_node, "_ExpShadowIntensity2", floats.get("_ExpShadowIntensity2", floats.get("_ExpShadowIntensityB", 0.0)))
+                _set_sock(sh_node, "_ExpShadowIntensity3", floats.get("_ExpShadowIntensity3", floats.get("_ExpShadowIntensityA", 0.0)))
+                for s_name, c_keys, fallback in [
+                    ("_ExpBlushColor", ("_ExpBlushColor", "_ExpBlushColorR"), (1.0, 0.0, 0.0, 1.0)),
+                    ("_ExpShadowColor", ("_ExpShadowColor", "_ExpShadowColorG"), (0.6397, 0.3725, 0.3057, 1.0)),
+                    ("_ExpShadowColor2", ("_ExpShadowColor2", "_ExpShadowColorB"), (0.5, 0.5, 0.5, 1.0)),
+                    ("_ExpShadowColor3", ("_ExpShadowColor3", "_ExpShadowColorA"), (0.7569, 0.1686, 0.1686, 1.0)),
+                ]:
+                    c_val = next((colors[k] for k in c_keys if k in colors), fallback)
+                    _set_sock(sh_node, s_name, (c_val[0], c_val[1], c_val[2], 1.0))
+            else:
+                has_multi_id = ("_FirstShadowMultColor2" in colors or "_ShadowMultColor2" in colors)
+                is_single = (part_key in ("hair", "eye") or not has_multi_id)
+                _set_sock(sh_node, "Body / Hair", 1.0 if is_single else 0.0)
+
+                s1 = (
+                    colors.get("_FirstShadowMultColor")
+                    or colors.get("_ShadowMultColor")
+                    or (0.9, 0.7, 0.75, 1.0)
+                )
+                _set_sock(sh_node, "_FirstShadowMultColor", (s1[0], s1[1], s1[2], 1.0))
+                for idx in range(2, 6):
+                    si = (
+                        colors.get(f"_FirstShadowMultColor{idx}")
+                        or colors.get(f"_ShadowMultColor{idx}")
+                        or s1
+                    )
+                    _set_sock(sh_node, f"_FirstShadowMultColor{idx}", (si[0], si[1], si[2], 1.0))
+
+                _set_sock(sh_node, "_LightArea", floats.get("_LightArea", 0.51))
+                _set_sock(sh_node, "_Shininess", max(float(floats.get("_Shininess", 10.0) or 10.0), 0.1))
+                _set_sock(sh_node, "_SpecMulti", floats.get("_SpecMulti", 0.0))
+                lsc = colors.get("_LightSpecColor", (1.0, 1.0, 1.0, 1.0))
+                _set_sock(sh_node, "_LightSpecColor", (lsc[0], lsc[1], lsc[2], 1.0))
+
+                _set_sock(sh_node, "Use Alpha", use_alpha)
+                _set_sock(sh_node, "0 = Emission, 1 = Transparency", 1.0)
+                _set_sock(sh_node, "Transparency Cutoff", cutoff)
+                _set_sock(sh_node, "Emission Tint", (0.0, 0.0, 0.0, 1.0))
+                _set_sock(sh_node, "Emission Strength", 0.0)
+
+    def import_material_data(self):
+        directory = getattr(self.blender_operator, "file_directory", None) or (
+            os.path.dirname(self.blender_operator.filepath)
+            if hasattr(self.blender_operator, "filepath") and self.blender_operator.filepath
+            else None
+        )
+        self.apply_all_hi3_material_data(self.context, directory=directory)
+        return {'FINISHED'}
+
 

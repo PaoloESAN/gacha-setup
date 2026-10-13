@@ -9,7 +9,7 @@ This folder contains the shader and rig setup files for **Zenless Zone Zero (ZZZ
 
 ## Included Files
 
-* `ZZZ Setup File V2.0.blend` — Shader setup file for ZZZ character materials, rig drivers, and node configurations.
+* `ZZZ Setup v7.blend` — Shader setup file for ZZZ character materials, rig drivers, and node configurations.
 
 ---
 

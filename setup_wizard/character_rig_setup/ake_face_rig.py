@@ -2,6 +2,7 @@
 # Arknights: Endfield - Isaac Face Rig Integration
 
 import os
+import math
 import bpy
 from bpy.types import Operator
 from mathutils import Vector, Matrix
@@ -74,16 +75,16 @@ ENDFIELD_FACE_MAPPING = {
     # Cheeks Left & Right
     "faceLfCheekOtJoint": {"mouth_master": True, "deform": "chhek_L"},
     "faceLfCheekOtUpJoint": {"mouth_master": True, "deform": "chhek_L"},
-    "faceLfCheekOtDnJoint": {"mouth_master": True, "deform": "mouthUpper_03_L"},
-    "faceLfCheekOtInJoint": {"mouth_master": True, "deform": "mouthUpper_01_L"},
+    "faceLfCheekOtDnJoint": {"mouth_master": True, "deform": "mouthUpper_03_L.001"},
+    "faceLfCheekOtInJoint": {"mouth_master": True, "deform": "mouthUpper_01_L.001"},
     "faceRtCheekOtJoint": {"mouth_master": True, "deform": "chhek_R"},
     "faceRtCheekOtUpJoint": {"mouth_master": True, "deform": "chhek_R"},
-    "faceRtCheekOtDnJoint": {"mouth_master": True, "deform": "mouthUpper_03_R"},
-    "faceRtCheekOtInJoint": {"mouth_master": True, "deform": "mouthUpper_01_R"},
+    "faceRtCheekOtDnJoint": {"mouth_master": True, "deform": "mouthUpper_03_R.001"},
+    "faceRtCheekOtInJoint": {"mouth_master": True, "deform": "mouthUpper_01_R.001"},
 
     # Jaw & Teeth
-    "jawJoint": {"deform": "JawdnEnd_M"},
-    "faceMdJawDnJoint": {"deform": "JawdnEnd_M"},
+    "jawJoint": {"deform": "mouthLower_M.001"},
+    "faceMdJawDnJoint": {"deform": "mouthLower_M.001"},
     "faceMdToothUpJoint": {"mouth_chain": True, "deform": "UpTeeth"},
     "faceMdToothDnJoint": {"mouth_chain": True, "deform": "DownTeeth"},
     "line_toothJoint": {"mouth_chain": True, "deform": "DownTeeth"},
@@ -99,7 +100,353 @@ ENDFIELD_FACE_MAPPING = {
 }
 
 
-def setup_endfield_isaac_face_rig(body_rig, context=None):
+def _resolve_isaac_eyes(rig, eye_names=None):
+    eyes = {}
+    for side in ("L", "R"):
+        names = [eye_names[side]] if eye_names and side in eye_names else [
+            f"eye.{side}", f"DEF-eye.{side}", f"face{'Lf' if side == 'L' else 'Rt'}IrisJoint"]
+        eyes[side] = next((name for name in names if name in rig.pose.bones), None)
+    return eyes
+
+
+def _isaac_iris_center(rig, side, name, context):
+    """Find the iris surface in rig rest space, including rigid NPC irises."""
+    candidates = list(dict.fromkeys([f'face{"Lf" if side == "L" else "Rt"}IrisJoint',
+                                    f'DEF-eye.{side}', name]))
+    inverse = rig.matrix_world.inverted()
+    for candidate in candidates:
+        points = []
+        for mesh in context.scene.objects:
+            if mesh.type != 'MESH' or not any(m.type == 'ARMATURE' and m.object == rig for m in mesh.modifiers):
+                continue
+            group = mesh.vertex_groups.get(candidate)
+            if group is None:
+                continue
+            transform = inverse @ mesh.matrix_world
+            points.extend(transform @ v.co for v in mesh.data.vertices
+                          if any(g.group == group.index and g.weight > .9 for g in v.groups))
+        if points:
+            return sum(points, Vector()) / len(points)
+    return rig.data.bones[name].head_local.copy()
+
+
+def bind_isaac_eye_tracking(rig, eyes, pivots=None, context=None):
+    """Rotate the iris around its socket without translating it with the gaze target."""
+    context = context or bpy.context
+    pivots = pivots or {"L": "eyeLfJoint", "R": "eyeRtJoint"}
+    context.view_layer.objects.active = rig
+    bpy.ops.object.mode_set(mode='OBJECT')
+    positions = {}
+    follow_positions = {}
+    context.view_layer.update()
+    for side, name in eyes.items():
+        if not name:
+            continue
+        pivot = rig.data.bones.get(pivots.get(side, ""))
+        saved_socket = rig.get(f'ake_eye_socket_{side}')
+        positions[side] = (pivot.head_local.copy() if pivot else
+                           Vector(saved_socket) if saved_socket is not None else
+                           rig.data.bones[name].head_local.copy())
+        follow = rig.pose.bones.get(f"Eye-Track-Follow.{side}")
+        if follow:
+            target = follow.bone.head_local.copy()
+            ray = _isaac_iris_center(rig, side, name, context) - positions[side]
+            if ray.length > 1e-6 and (target - positions[side]).dot(ray) <= 0:
+                # The template panel can end up behind a scaled FBX socket.
+                # Keep the gaze target in front of the iris in the neutral pose.
+                world_scale = max(rig.matrix_world.to_scale().length / math.sqrt(3), 1e-6)
+                target = positions[side] + ray.normalized() * max(ray.length * 2, .1 / world_scale)
+            follow_positions[side] = target
+        for c in list(rig.pose.bones[name].constraints):
+            if c.name.startswith("Isaac_Eye"):
+                rig.pose.bones[name].constraints.remove(c)
+    bpy.ops.object.mode_set(mode='EDIT')
+    for side, position in positions.items():
+        eye = rig.data.edit_bones[eyes[side]]
+        track = rig.data.edit_bones.get(f"Eye-Track.{side}")
+        if not track:
+            continue
+        follow = rig.data.edit_bones.get(f"Eye-Track-Follow.{side}")
+        if follow and side in follow_positions:
+            offset = follow_positions[side] - follow.head
+            follow.head += offset
+            follow.tail += offset
+        length = track.length or 0.05
+        track.head = position
+        direction = follow_positions.get(side, position + Vector((0, -1, 0))) - position
+        track.tail = position + direction.normalized() * length
+        track.roll = 0
+        mechanism = rig.data.edit_bones.get(f"MCH-Isaac-EyeOrbit.{side}")
+        if mechanism is None:
+            mechanism = rig.data.edit_bones.new(f"MCH-Isaac-EyeOrbit.{side}")
+            mechanism.parent = eye.parent
+            mechanism.use_deform = False
+            eye.use_connect = False
+            eye.parent = mechanism
+        # Use the tracker frame, not the imported iris joint's arbitrary axes.
+        # Reparenting in edit mode keeps the iris's global rest transform intact.
+        track.parent = mechanism.parent
+        track.use_connect = False
+        mechanism.head = track.head.copy()
+        mechanism.tail = track.tail.copy()
+        mechanism.roll = track.roll
+    bpy.ops.object.mode_set(mode='OBJECT')
+    context.view_layer.update()
+    for side, name in eyes.items():
+        mechanism = rig.pose.bones.get(f"MCH-Isaac-EyeOrbit.{side}")
+        track = rig.pose.bones.get(f"Eye-Track.{side}")
+        if not name or not mechanism or not track:
+            continue
+        for c in list(mechanism.constraints):
+            if c.name.startswith('Isaac_'):
+                mechanism.constraints.remove(c)
+        orbit = mechanism.constraints.new('COPY_ROTATION')
+        orbit.name = f"Isaac_EyeOrbit_{side}"
+        orbit.target = rig
+        orbit.subtarget = track.name
+        orbit.owner_space = orbit.target_space = 'POSE'
+        bone = rig.data.bones[mechanism.name]
+        if hasattr(rig.data, 'collections'):
+            other = rig.data.collections.get('Other') or rig.data.collections.new('Other')
+            for collection in list(bone.collections):
+                collection.unassign(bone)
+            other.assign(bone)
+        else:
+            bone.layers = tuple(index == 25 for index in range(32))
+        bone.hide = True
+        scale = rig.pose.bones[name].constraints.new('COPY_SCALE')
+        scale.name = f"Isaac_EyeScale_{side}"
+        scale.target = rig
+        scale.subtarget = f"Eye-Scale-Control.{side}"
+        scale.owner_space = scale.target_space = 'LOCAL'
+    context.view_layer.update()
+
+
+def bind_endfield_iris_scale(rig, eyes, context):
+    """Bind scale to the weighted iris, about its mesh center rather than the socket."""
+    meshes = [obj for obj in context.scene.objects if obj.type == 'MESH' and
+              any(mod.type == 'ARMATURE' and mod.object == rig for mod in obj.modifiers)]
+    inverse = rig.matrix_world.inverted()
+    plans = []
+    for side in ('L', 'R'):
+        candidates = [f'face{ "Lf" if side == "L" else "Rt" }IrisJoint',
+                      f'DEF-eye.{side}', eyes.get(side), f'eye{ "Lf" if side == "L" else "Rt" }Joint']
+        for name in dict.fromkeys(n for n in candidates if n):
+            if name not in rig.data.bones:
+                continue
+            points = []
+            for mesh in meshes:
+                group = mesh.vertex_groups.get(name)
+                if group is None:
+                    continue
+                transform = inverse @ mesh.matrix_world
+                for vertex in mesh.data.vertices:
+                    if any(g.group == group.index and g.weight > .9 for g in vertex.groups):
+                        points.append(transform @ vertex.co)
+            if not points:
+                continue
+            center = sum(points, Vector()) / len(points)
+            plans.append((side, name, center))
+            break
+    # The iris follows the head through its parent hierarchy. Duplicate
+    # deform weights would leave an unscaled contribution when shrinking it.
+    for side, name, center in plans:
+        for mesh in meshes:
+            group = mesh.vertex_groups.get(name)
+            if group is None:
+                continue
+            indices = [v.index for v in mesh.data.vertices
+                       if any(g.group == group.index and g.weight > .9 for g in v.groups)]
+            if not indices:
+                continue
+            for other in mesh.vertex_groups:
+                bone = rig.data.bones.get(other.name)
+                if other != group and bone and bone.use_deform:
+                    other.remove(indices)
+            group.add(indices, 1.0, 'REPLACE')
+
+    # Remove the old binding on the tracking control and refresh existing rigs.
+    for side, name, center in plans:
+        for bone_name in dict.fromkeys([eyes.get(side), name]):
+            bone = rig.pose.bones.get(bone_name or '')
+            if bone:
+                for constraint in list(bone.constraints):
+                    if constraint.name == f'Isaac_EyeScale_{side}':
+                        bone.constraints.remove(constraint)
+    context.view_layer.objects.active = rig
+    bpy.ops.object.mode_set(mode='EDIT')
+    bones = rig.data.edit_bones
+    for side, name, center in plans:
+        # Rigid NPC irises can be offset from their socket joint. Place the
+        # scale widget over the actual iris while retaining the panel depth.
+        control = bones.get(f'Eye-Scale-Control.{side}')
+        if control:
+            offset = Vector((center.x - control.head.x, 0.0, center.z - control.head.z))
+            control.head += offset
+            control.tail += offset
+        iris = bones[name]
+        mechanism = bones.get(f'MCH-Isaac-IrisScale.{side}')
+        if mechanism is None:
+            mechanism = bones.new(f'MCH-Isaac-IrisScale.{side}')
+            mechanism.matrix = iris.matrix.copy()
+            mechanism.head = center
+            mechanism.tail = center + iris.y_axis * max(iris.length, .01)
+            mechanism.parent = iris.parent
+            mechanism.use_deform = False
+            iris.use_connect = False
+            iris.parent = mechanism
+    bpy.ops.object.mode_set(mode='OBJECT')
+    for side, name, center in plans:
+        mechanism = rig.pose.bones[f'MCH-Isaac-IrisScale.{side}']
+        for constraint in list(mechanism.constraints):
+            if constraint.name == f'Isaac_IrisScale_{side}':
+                mechanism.constraints.remove(constraint)
+        scale = mechanism.constraints.new('COPY_SCALE')
+        scale.name = f'Isaac_IrisScale_{side}'
+        scale.target = rig
+        scale.subtarget = f'Eye-Scale-Control.{side}'
+        scale.owner_space = scale.target_space = 'LOCAL'
+        mechanism.bone.hide = True
+        if hasattr(rig.data, 'collections'):
+            other = rig.data.collections.get('Other') or rig.data.collections.new('Other')
+            for collection in list(mechanism.bone.collections):
+                collection.unassign(mechanism.bone)
+            other.assign(mechanism.bone)
+    context.view_layer.update()
+
+
+def align_endfield_mouth_panel(rig, context):
+    """Center the mouth widgets vertically on the imported lips in rest space."""
+    upper = rig.data.bones.get('lipMupJoint')
+    lower = rig.data.bones.get('lipMdnJoint')
+    master = rig.data.bones.get('Mouth-Master')
+    if not upper or not lower or not master:
+        return
+    height = (upper.head_local.z + lower.head_local.z) * .5
+    offset = Vector((0.0, 0.0, height - master.head_local.z))
+    if abs(offset.z) < 1e-6:
+        return
+    context.view_layer.objects.active = rig
+    bpy.ops.object.mode_set(mode='EDIT')
+    master = rig.data.edit_bones['Mouth-Master']
+    # Move the complete panel together so local control/deform transforms stay
+    # unchanged. Imported facial joints and the eye panel retain their rest pose.
+    for bone in [master, *master.children_recursive]:
+        bone.head += offset
+        bone.tail += offset
+    bpy.ops.object.mode_set(mode='OBJECT')
+    context.view_layer.update()
+
+
+def bind_isaac_face_deformations(body_rig, face_mapping):
+    """Refresh imported facial bindings without appending another control rig."""
+    assigned_count = 0
+    for bone_name, mapping in face_mapping.items():
+        pb = body_rig.pose.bones.get(bone_name)
+        if not pb:
+            continue
+
+        # Remove existing Isaac constraints to allow clean idempotent re-runs
+        for c in list(pb.constraints):
+            if c.name.startswith("Isaac_"):
+                pb.constraints.remove(c)
+
+        btype = mapping.get("type", "TRANSFORMS")
+
+        if btype == "ROTATION":
+            c = pb.constraints.new('COPY_ROTATION')
+            c.name = "Isaac_CopyRotation"
+            c.target = body_rig
+            c.subtarget = mapping["deform"]
+            c.owner_space = 'LOCAL'
+            c.target_space = 'LOCAL_OWNER_ORIENT'
+            assigned_count += 1
+
+        elif btype == "SCALE":
+            c = pb.constraints.new('COPY_SCALE')
+            c.name = "Isaac_CopyScale"
+            c.target = body_rig
+            c.subtarget = mapping["deform"]
+            c.owner_space = 'LOCAL'
+            c.target_space = 'LOCAL'
+            assigned_count += 1
+
+        elif mapping.get("mouth_chain"):
+            # Mouth chain: Mouth-Master -> Lip-Master -> Specific Deform Bone
+            c1 = pb.constraints.new('COPY_TRANSFORMS')
+            c1.name = "Isaac_MouthMaster"
+            c1.target = body_rig
+            c1.subtarget = "Mouth-Master"
+            c1.owner_space = 'LOCAL'
+            c1.target_space = 'LOCAL_OWNER_ORIENT'
+
+            c2 = pb.constraints.new('COPY_TRANSFORMS')
+            c2.name = "Isaac_LipMaster"
+            c2.target = body_rig
+            c2.subtarget = "Lip-Master"
+            c2.owner_space = 'LOCAL'
+            c2.target_space = 'LOCAL_OWNER_ORIENT'
+            c2.mix_mode = 'AFTER'
+
+            c3 = pb.constraints.new('COPY_TRANSFORMS')
+            c3.name = f"Isaac_Deform_{mapping['deform']}"
+            c3.target = body_rig
+            c3.subtarget = mapping["deform"]
+            c3.owner_space = 'LOCAL'
+            c3.target_space = 'LOCAL_OWNER_ORIENT'
+            c3.mix_mode = 'AFTER'
+            assigned_count += 1
+
+        elif mapping.get("mouth_master"):
+            # Cheeks: Mouth-Master -> Specific Deform Bone
+            c1 = pb.constraints.new('COPY_TRANSFORMS')
+            c1.name = "Isaac_MouthMaster"
+            c1.target = body_rig
+            c1.subtarget = "Mouth-Master"
+            c1.owner_space = 'LOCAL'
+            c1.target_space = 'LOCAL_OWNER_ORIENT'
+
+            c2 = pb.constraints.new('COPY_TRANSFORMS')
+            c2.name = f"Isaac_Deform_{mapping['deform']}"
+            c2.target = body_rig
+            c2.subtarget = mapping["deform"]
+            c2.owner_space = 'LOCAL'
+            c2.target_space = 'LOCAL_OWNER_ORIENT'
+            c2.mix_mode = 'AFTER'
+            assigned_count += 1
+
+        elif "master" in mapping:
+            # Eyebrows / Eyelids: Master Bone -> Specific Deform Bone
+            c1 = pb.constraints.new('COPY_TRANSFORMS')
+            c1.name = f"Isaac_Master_{mapping['master']}"
+            c1.target = body_rig
+            c1.subtarget = mapping["master"]
+            c1.owner_space = 'LOCAL'
+            c1.target_space = 'LOCAL_OWNER_ORIENT'
+
+            c2 = pb.constraints.new('COPY_TRANSFORMS')
+            c2.name = f"Isaac_Deform_{mapping['deform']}"
+            c2.target = body_rig
+            c2.subtarget = mapping["deform"]
+            c2.owner_space = 'LOCAL'
+            c2.target_space = 'LOCAL_OWNER_ORIENT'
+            c2.mix_mode = 'AFTER'
+            assigned_count += 1
+
+        else:
+            # Jaw, Nose, etc.
+            c = pb.constraints.new('COPY_TRANSFORMS')
+            c.name = f"Isaac_Deform_{mapping['deform']}"
+            c.target = body_rig
+            c.subtarget = mapping["deform"]
+            c.owner_space = 'LOCAL'
+            c.target_space = 'LOCAL_OWNER_ORIENT'
+            assigned_count += 1
+
+    return assigned_count
+
+
+def setup_endfield_isaac_face_rig(body_rig, context=None, face_mapping=None, eye_names=None, eye_pivots=None):
     """Sets up the Isaac Face Rig controls for Arknights: Endfield characters.
     
     Preserves original Endfield bone positions and geometry while binding
@@ -112,11 +459,21 @@ def setup_endfield_isaac_face_rig(body_rig, context=None):
     if not context:
         context = bpy.context
 
+    is_endfield = face_mapping is None
+    face_mapping = ENDFIELD_FACE_MAPPING if face_mapping is None else face_mapping
+    eyes = _resolve_isaac_eyes(body_rig, eye_names)
+
     # Idempotency (HSR parity): an already-fused body rig carries the FaceRig
     # bones itself; fusing again would only spawn .001 dupes.
     try:
-        if "Eye-Track-Master" in body_rig.data.bones and not bpy.data.objects.get("isaac FaceRig"):
-            print("[AKE FACE RIG] FaceRig already fused into body rig, skipping.")
+        if "Eye-Track-Master" in body_rig.data.bones:
+            if is_endfield:
+                align_endfield_mouth_panel(body_rig, context)
+            bind_isaac_face_deformations(body_rig, face_mapping)
+            bind_isaac_eye_tracking(body_rig, eyes, eye_pivots, context)
+            if is_endfield:
+                bind_endfield_iris_scale(body_rig, eyes, context)
+            print("[AKE FACE RIG] FaceRig already fused; facial bindings and eye tracking refreshed.")
             return body_rig
     except Exception:
         pass
@@ -203,7 +560,7 @@ def setup_endfield_isaac_face_rig(body_rig, context=None):
                 coll.objects.unlink(facerig_obj)
 
     plane_objs = [
-        obj for obj in bpy.data.objects
+        obj for obj in (set(bpy.data.objects) - objects_before)
         if obj.type == 'MESH' and ('Plane.' in obj.name or 'wgt' in obj.name.lower()) and obj != facerig_obj
     ]
     if appended_coll:
@@ -267,8 +624,8 @@ def setup_endfield_isaac_face_rig(body_rig, context=None):
 
     # Precisely align Eye-Track-Master, Eye-Track, Eye-Track-Follow, and Eye-Scale-Control to character's eye coordinates
     try:
-        pb_eye_l = body_rig.pose.bones.get("eye.L") or body_rig.pose.bones.get("DEF-eye.L")
-        pb_eye_r = body_rig.pose.bones.get("eye.R") or body_rig.pose.bones.get("DEF-eye.R")
+        pb_eye_l = body_rig.pose.bones.get(eyes.get("L") or "")
+        pb_eye_r = body_rig.pose.bones.get(eyes.get("R") or "")
         if pb_eye_l and pb_eye_r:
             eye_l_world = body_rig.matrix_world @ pb_eye_l.head
             eye_r_world = body_rig.matrix_world @ pb_eye_r.head
@@ -421,7 +778,7 @@ def setup_endfield_isaac_face_rig(body_rig, context=None):
     # Sanity: warn about mapping bones missing after the fuse.
     try:
         wanted = {"Mouth-Master", "Lip-Master", "Eye-Track-Master"}
-        for mapping in ENDFIELD_FACE_MAPPING.values():
+        for mapping in face_mapping.values():
             if mapping.get("deform"):
                 wanted.add(mapping["deform"])
             if mapping.get("master"):
@@ -432,156 +789,9 @@ def setup_endfield_isaac_face_rig(body_rig, context=None):
     except Exception:
         pass
 
-    # Bind Endfield facial bones to Isaac FaceRig
-    assigned_count = 0
-    for bone_name, mapping in ENDFIELD_FACE_MAPPING.items():
-        pb = body_rig.pose.bones.get(bone_name)
-        if not pb:
-            continue
-
-        # Remove existing Isaac constraints to allow clean idempotent re-runs
-        for c in list(pb.constraints):
-            if c.name.startswith("Isaac_"):
-                pb.constraints.remove(c)
-
-        btype = mapping.get("type", "TRANSFORMS")
-
-        if btype == "ROTATION":
-            c = pb.constraints.new('COPY_ROTATION')
-            c.name = "Isaac_CopyRotation"
-            c.target = facerig_obj
-            c.subtarget = mapping["deform"]
-            c.owner_space = 'LOCAL'
-            c.target_space = 'LOCAL_OWNER_ORIENT'
-            assigned_count += 1
-
-        elif btype == "SCALE":
-            c = pb.constraints.new('COPY_SCALE')
-            c.name = "Isaac_CopyScale"
-            c.target = facerig_obj
-            c.subtarget = mapping["deform"]
-            c.owner_space = 'LOCAL'
-            c.target_space = 'LOCAL'
-            assigned_count += 1
-
-        elif mapping.get("mouth_chain"):
-            # Mouth chain: Mouth-Master -> Lip-Master -> Specific Deform Bone
-            c1 = pb.constraints.new('COPY_TRANSFORMS')
-            c1.name = "Isaac_MouthMaster"
-            c1.target = facerig_obj
-            c1.subtarget = "Mouth-Master"
-            c1.owner_space = 'LOCAL'
-            c1.target_space = 'LOCAL_OWNER_ORIENT'
-
-            c2 = pb.constraints.new('COPY_TRANSFORMS')
-            c2.name = "Isaac_LipMaster"
-            c2.target = facerig_obj
-            c2.subtarget = "Lip-Master"
-            c2.owner_space = 'LOCAL'
-            c2.target_space = 'LOCAL_OWNER_ORIENT'
-            c2.mix_mode = 'AFTER'
-
-            c3 = pb.constraints.new('COPY_TRANSFORMS')
-            c3.name = f"Isaac_Deform_{mapping['deform']}"
-            c3.target = facerig_obj
-            c3.subtarget = mapping["deform"]
-            c3.owner_space = 'LOCAL'
-            c3.target_space = 'LOCAL_OWNER_ORIENT'
-            c3.mix_mode = 'AFTER'
-            assigned_count += 1
-
-        elif mapping.get("mouth_master"):
-            # Cheeks: Mouth-Master -> Specific Deform Bone
-            c1 = pb.constraints.new('COPY_TRANSFORMS')
-            c1.name = "Isaac_MouthMaster"
-            c1.target = facerig_obj
-            c1.subtarget = "Mouth-Master"
-            c1.owner_space = 'LOCAL'
-            c1.target_space = 'LOCAL_OWNER_ORIENT'
-
-            c2 = pb.constraints.new('COPY_TRANSFORMS')
-            c2.name = f"Isaac_Deform_{mapping['deform']}"
-            c2.target = facerig_obj
-            c2.subtarget = mapping["deform"]
-            c2.owner_space = 'LOCAL'
-            c2.target_space = 'LOCAL_OWNER_ORIENT'
-            c2.mix_mode = 'AFTER'
-            assigned_count += 1
-
-        elif "master" in mapping:
-            # Eyebrows / Eyelids: Master Bone -> Specific Deform Bone
-            c1 = pb.constraints.new('COPY_TRANSFORMS')
-            c1.name = f"Isaac_Master_{mapping['master']}"
-            c1.target = facerig_obj
-            c1.subtarget = mapping["master"]
-            c1.owner_space = 'LOCAL'
-            c1.target_space = 'LOCAL_OWNER_ORIENT'
-
-            c2 = pb.constraints.new('COPY_TRANSFORMS')
-            c2.name = f"Isaac_Deform_{mapping['deform']}"
-            c2.target = facerig_obj
-            c2.subtarget = mapping["deform"]
-            c2.owner_space = 'LOCAL'
-            c2.target_space = 'LOCAL_OWNER_ORIENT'
-            c2.mix_mode = 'AFTER'
-            assigned_count += 1
-
-        else:
-            # Jaw, Nose, etc.
-            c = pb.constraints.new('COPY_TRANSFORMS')
-            c.name = f"Isaac_Deform_{mapping['deform']}"
-            c.target = facerig_obj
-            c.subtarget = mapping["deform"]
-            c.owner_space = 'LOCAL'
-            c.target_space = 'LOCAL_OWNER_ORIENT'
-            assigned_count += 1
-
-    # Direct binding for eye.L and eye.R (Eye Tracking movement and Eye Scale)
-    for side in ("L", "R"):
-        eye_name = f"eye.{side}"
-        pb_eye = body_rig.pose.bones.get(eye_name) or body_rig.pose.bones.get(f"DEF-{eye_name}")
-        if pb_eye:
-            for c in list(pb_eye.constraints):
-                if c.name.startswith("Isaac_"):
-                    pb_eye.constraints.remove(c)
-
-            # 1. Eye Rotation (looking around): Rotates with Isaac's Eye-Track.L / Eye-Track.R
-            c_rot = pb_eye.constraints.new('COPY_ROTATION')
-            c_rot.name = f"Isaac_EyeRot_{side}"
-            c_rot.target = facerig_obj
-            c_rot.subtarget = f"Eye-Track.{side}"
-            c_rot.owner_space = 'LOCAL'
-            c_rot.target_space = 'LOCAL'
-            c_rot.invert_x = False
-            c_rot.invert_y = False
-            c_rot.invert_z = False
-            c_rot.influence = 0.25
-
-            # 2. Eye Movement (translation): Slides the iris across the eye plane with Eye-Track-Master
-            # Locked Y (depth) so eyes stay flat against the eye surface without sinking or popping out
-            c_loc = pb_eye.constraints.new('COPY_LOCATION')
-            c_loc.name = f"Isaac_EyeLoc_{side}"
-            c_loc.target = facerig_obj
-            c_loc.subtarget = "Eye-Track-Master"
-            c_loc.owner_space = 'LOCAL'
-            c_loc.target_space = 'LOCAL'
-            c_loc.use_offset = True
-            c_loc.use_x = True
-            c_loc.use_y = False
-            c_loc.use_z = True
-            c_loc.invert_x = True
-            c_loc.invert_z = True
-            c_loc.influence = 0.25
-
-            # 3. Eye Scale: Scale control for iris/eye size
-            c_scale = pb_eye.constraints.new('COPY_SCALE')
-            c_scale.name = f"Isaac_EyeScale_{side}"
-            c_scale.target = facerig_obj
-            c_scale.subtarget = f"Eye-Scale-Control.{side}"
-            c_scale.owner_space = 'LOCAL'
-            c_scale.target_space = 'LOCAL'
-
-            assigned_count += 3
+    if is_endfield:
+        align_endfield_mouth_panel(body_rig, context)
+    assigned_count = bind_isaac_face_deformations(body_rig, face_mapping)
 
     # Post-fuse Child Of inverse fix (HSR parity): recompute in body-rig space
     # so Eye-Track-Follow rests perfectly horizontal.
@@ -597,6 +807,10 @@ def setup_endfield_isaac_face_rig(body_rig, context=None):
         body_rig["ake_facerig_lowered"] = True
     except Exception as ex_inv:
         print(f"[AKE FACE RIG] Post-fuse inverse fix notice: {ex_inv}")
+
+    bind_isaac_eye_tracking(body_rig, eyes, eye_pivots, context)
+    if is_endfield:
+        bind_endfield_iris_scale(body_rig, eyes, context)
 
     # Hide the "Face" bone collection on the body rig as requested
     if hasattr(body_rig.data, "collections"):

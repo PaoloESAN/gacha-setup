@@ -90,7 +90,7 @@ def snapshot_settings(scene, game_type=""):
     current_game = game_type or getattr(scene, "game_type_dropdown", "ZENLESS_ZONE_ZERO")
     values = {
         "game_type": current_game,
-        "zzz_shader_type": getattr(scene, "zzz_shader_type", "KYTHERA"),
+        "zzz_shader_type": getattr(scene, "zzz_shader_type", "LEGACY"),
         "enable_hair_clothes_physics": physics,
         "hair_physics_influence": hair,
         "clothes_physics_influence": clothes,
@@ -498,12 +498,29 @@ def append_result(
             scene_root.children.link(loaded_coll)
         all_imported_objects.extend(list(loaded_coll.all_objects))
 
-    # Link loose objects if any
+    # Link loose objects if any (route widget empties like Head_Pole to WGTS)
+    char_wgts_coll = next((c for c in (data_to.collections or []) if c and c.name.startswith("WGTS_")), None)
+    if not char_wgts_coll:
+        char_wgts_coll = next((c for c in bpy.data.collections if c.name.startswith("WGTS_")), None)
+
     for loaded_obj in (data_to.objects or []):
         if loaded_obj is None:
             continue
-        if loaded_obj.name not in scene_root.objects:
-            scene_root.objects.link(loaded_obj)
+        is_hp = loaded_obj.name.startswith("Head_Pole") or loaded_obj.name.lower() in ("head_pole", "head pole")
+        if is_hp and char_wgts_coll:
+            if loaded_obj.name not in char_wgts_coll.objects:
+                char_wgts_coll.objects.link(loaded_obj)
+            loaded_obj.hide_viewport = True
+            loaded_obj.hide_render = True
+            for uc in list(loaded_obj.users_collection):
+                if uc != char_wgts_coll:
+                    try:
+                        uc.objects.unlink(loaded_obj)
+                    except Exception:
+                        pass
+        else:
+            if loaded_obj.name not in scene_root.objects:
+                scene_root.objects.link(loaded_obj)
         all_imported_objects.append(loaded_obj)
 
     # 1. Deduplicate FaceRig widgets
@@ -519,6 +536,36 @@ def append_result(
 
     # 4. Exclude and hide widget collections (unchecks the viewport checkbox in outliner)
     exclude_widget_collections(target)
+
+    # 5. Ensure ZZZ face outline mask is generated on all imported face meshes (excluding widgets)
+    gt = (game_type or "").upper()
+    if gt in ("ZENLESS_ZONE_ZERO", "ZZZ"):
+        try:
+            from setup_wizard.services.zzz_outline_mask_service import create_face_outline_mask
+            for obj in all_imported_objects:
+                if obj and obj.type == 'MESH':
+                    o_low = obj.name.lower()
+                    is_wgt = obj.name.startswith("WGT-") or any(kw in o_low for kw in ["wgt", "facerig", "panel", "picker", "slider", "control", "shape"]) or any(c.name.startswith("WGTS") or "wgt" in c.name.lower() or "facerig" in c.name.lower() for c in obj.users_collection)
+                    if is_wgt:
+                        obj.modifiers.clear()
+                        continue
+                    if ("face" in o_low and "shadow" not in o_low) or any(slot.material and "face" in slot.material.name.lower() and "shadow" not in slot.material.name.lower() for slot in obj.material_slots):
+                        create_face_outline_mask(obj, configure_modifier=True)
+        except Exception as e_fom:
+            print(f"[ZZZ] Notice setting up face outline mask during append: {e_fom}")
+
+    # Appending can link nested widget collections at scene root as well.
+    # Preserve the compact Bangboo hierarchy in the destination scene.
+    bangboo_rigs = {o for o in all_imported_objects
+                   if o.type == 'ARMATURE' and o.data.get('bangboo_widget_unit')}
+    if bangboo_rigs:
+        from setup_wizard.character_rig_setup.bangboo_rig import organize_bangboo_collections
+        for rig in bangboo_rigs:
+            organize_bangboo_collections(rig, scene=target)
+
+    if (game_type or '').upper() == 'HONKAI_NEXUS_ANIMA':
+        from setup_wizard.utils.hna_material_utils import configure_runtime_settings
+        configure_runtime_settings(all_imported_objects)
 
     # Select primary armature for immediate user interaction and stamp game tag
     try:
@@ -722,6 +769,21 @@ def _setup_scene_compositor(scene, game_type):
         except Exception as exc:
             print(f"[GACHA SETUP] NTE Compositor setup notice: {exc}")
 
+    elif gt == "PUNISHING_GRAY_RAVEN":
+        # Collection append does not transfer scene compositor trees.
+        with bpy.context.temp_override(scene=scene):
+            bpy.ops.punishing_gray_raven.setup_compositor('EXEC_DEFAULT', game_type=gt)
+        print("[GACHA SETUP] Configured PGR compositor output in main scene.")
+
+    elif gt == "HONKAI_NEXUS_ANIMA":
+        # Scene compositor trees are not imported by collection append. Reuse
+        # the same compositor and defaults as Genshin in the destination scene.
+        scene.render.use_compositing = True
+        with bpy.context.temp_override(scene=scene):
+            bpy.ops.hoyoverse.custom_composite_node_setup('EXEC_DEFAULT', game_type=gt)
+            bpy.ops.hoyoverse.post_processing_default_settings('EXEC_DEFAULT', game_type=gt)
+        print("[GACHA SETUP] Configured HNA compositor with Genshin post-processing.")
+
     elif gt == "GENSHIN_IMPACT":
         try:
             wm = getattr(bpy.context, "window_manager", None)
@@ -733,3 +795,11 @@ def _setup_scene_compositor(scene, game_type):
                 print("[GACHA SETUP] Configured Genshin Compositor nodes in main scene.")
         except Exception as exc:
             print(f"[GACHA SETUP] Genshin Compositor setup notice: {exc}")
+
+    elif gt in ("ZENLESS_ZONE_ZERO", "ZZZ"):
+        try:
+            from setup_wizard.services.zzz_bloom_service import setup_zzz_bloom
+            setup_zzz_bloom(scene=scene)
+            print("[GACHA SETUP] Configured Zenless Zone Zero Bloom in main scene.")
+        except Exception as exc:
+            print(f"[GACHA SETUP] ZZZ Bloom setup notice: {exc}")

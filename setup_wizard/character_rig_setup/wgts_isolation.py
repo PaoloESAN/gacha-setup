@@ -101,12 +101,18 @@ def isolate_wgts_for_character(rig_obj, char_name, char_coll=None, extra_keyword
     except Exception:
         pass
 
-    keywords = ["WGT-", "root plate", "head-control-shape", "eye circle", "eye controller"]
+    keywords = [
+        "WGT-", "root plate", "head-control-shape", "eye circle", "eye controller",
+        "face widget", "widget", "wgt"
+    ]
     if extra_keywords:
         keywords.extend(list(extra_keywords))
     # Head-driver empties (NOT Light Direction: that stays with the character).
     # startswith match covers per-character renames like "Head Origin_Char".
-    head_empty_prefixes = ("Head Origin", "Head Driver", "Head Forward", "Head Up", "Face Light Direction")
+    head_empty_prefixes = (
+        "Head Origin", "Head Driver", "Head Forward", "Head Up", "Face Light Direction",
+        "Head_Pole", "Head Pole", "head_pole"
+    )
 
     def _move(c_obj):
         if c_obj is None or wgts_coll is None:
@@ -146,7 +152,7 @@ def isolate_wgts_for_character(rig_obj, char_name, char_coll=None, extra_keyword
             w_type = getattr(w_obj, "type", None)
             is_head_empty = (
                 w_type == 'EMPTY'
-                and any(w_obj.name.startswith(p) for p in head_empty_prefixes)
+                and any(w_obj.name.lower().startswith(p.lower()) for p in head_empty_prefixes)
             )
             if w_type == 'EMPTY' and not is_head_empty:
                 continue
@@ -171,7 +177,7 @@ def isolate_wgts_for_character(rig_obj, char_name, char_coll=None, extra_keyword
                     else:
                         for uc in list(w_obj.users_collection):
                             un = uc.name
-                            if un == "wgt" or un.startswith("wgt.") or un == "WGTS" or un.startswith("WGTS") or un == "WG":
+                            if un == "wgt" or un.startswith("wgt.") or un == "WGTS" or un.startswith("WGTS") or un == "WG" or (un.startswith("WG.") and un[3:].isdigit()):
                                 is_facerig_plane = True
                                 break
                 except Exception:
@@ -180,7 +186,7 @@ def isolate_wgts_for_character(rig_obj, char_name, char_coll=None, extra_keyword
                 w_obj.name in referenced
                 or is_head_empty
                 or is_facerig_plane
-                or (w_type == 'MESH' and any(k in w_obj.name for k in keywords))
+                or (w_type == 'MESH' and any(k.lower() in w_obj.name.lower() for k in keywords))
             )
             if is_wgt:
                 # WGT-* and generic widget meshes (head-control-shape, root plate,
@@ -209,12 +215,38 @@ def isolate_wgts_for_character(rig_obj, char_name, char_coll=None, extra_keyword
             cname = coll.name
             is_global = (
                 cname == "wgt" or cname.startswith("wgt.")
-                or cname == "WGTS" or cname.startswith("WGTS_") or cname == "WG"
+                or cname == "WGTS" or cname.startswith("WGTS_") or cname == "WG" or (cname.startswith("WG.") and cname[3:].isdigit())
+                or cname.lower() in ("widgets", "widget")
             )
         except Exception:
             continue
         if not is_global:
             continue
+
+        if coll.name.lower() in ("widgets", "widget"):
+            for c_obj in list(coll.objects):
+                try:
+                    _move(c_obj)
+                    for flag in ("hide_viewport", "hide_render"):
+                        setattr(c_obj, flag, True)
+                except Exception:
+                    pass
+            for child_c in list(coll.children):
+                try:
+                    coll.children.unlink(child_c)
+                except Exception:
+                    pass
+            try:
+                for parent_c in list(bpy.data.collections):
+                    if coll.name in parent_c.children:
+                        parent_c.children.unlink(coll)
+                if coll.name in bpy.context.scene.collection.children:
+                    bpy.context.scene.collection.children.unlink(coll)
+                bpy.data.collections.remove(coll, do_unlink=True)
+            except Exception:
+                pass
+            continue
+
         # Check if this collection is a duplicate or variant of THIS character
         # (e.g. WGTS_<Char>_Skeleton, WGTS_<Char>Rig, or any WGTS under char_coll)
         is_same_char = False
@@ -288,7 +320,8 @@ def isolate_wgts_for_character(rig_obj, char_name, char_coll=None, extra_keyword
     # Ensure char_coll has ONLY ONE WGTS collection (wgts_coll)
     if char_coll:
         for child in list(char_coll.children):
-            if child != wgts_coll and (child.name.startswith("WGTS") or "wgt" in child.name.lower()):
+            if child != wgts_coll and (child.name.startswith("WGTS") or "wgt" in child.name.lower()
+                                         or child.name == "WG" or (child.name.startswith("WG.") and child.name[3:].isdigit())):
                 for c_obj in list(child.objects):
                     try:
                         _move(c_obj)

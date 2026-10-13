@@ -49,7 +49,7 @@ class HSR_OT_HonkaiStarRailSetupWizardUI(Operator, BasicSetupUIOperator):
 class PGR_OT_SetupWizardUI(Operator, BasicSetupUIOperator):
     '''Runs through entire setup process'''
     bl_idname = 'punishing_gray_raven.setup_wizard_ui'
-    bl_label = 'Genshin: Setup Wizard (UI)'
+    bl_label = 'Punishing Gray Raven: Setup Wizard (UI)'
 
     def execute(self, context):
         next_step_index = 0
@@ -62,6 +62,43 @@ class PGR_OT_SetupWizardUI(Operator, BasicSetupUIOperator):
             game_type=self.game_type,
         )
         return {'FINISHED'}
+
+
+class HI3_OT_SetupWizardUI(Operator, BasicSetupUIOperator):
+    '''Runs through entire setup process'''
+    bl_idname = 'honkai_impact_3rd.setup_wizard_ui'
+    bl_label = 'Honkai Impact 3rd: Setup Wizard (UI)'
+
+    def execute(self, context):
+        next_step_index = 0
+
+        NextStepInvoker().invoke(
+            next_step_index,
+            'invoke_next_step_ui', 
+            high_level_step_name=self.bl_idname if bpy.app.version >= (3,3,0) >= (3,3,0) \
+                else self.bl_idname + '_no_outlines',
+            game_type=self.game_type,
+        )
+        return {'FINISHED'}
+
+
+class HNA_OT_SetupWizardUI(Operator, BasicSetupUIOperator):
+    '''Runs through entire setup process'''
+    bl_idname = 'honkai_nexus_anima.setup_wizard_ui'
+    bl_label = 'Honkai Nexus Anima: Setup Wizard (UI)'
+
+    def execute(self, context):
+        next_step_index = 0
+
+        NextStepInvoker().invoke(
+            next_step_index,
+            'invoke_next_step_ui', 
+            high_level_step_name=self.bl_idname if bpy.app.version >= (3,3,0) >= (3,3,0) \
+                else self.bl_idname + '_no_outlines',
+            game_type=self.game_type,
+        )
+        return {'FINISHED'}
+
 
 
 class ZZZ_OT_SetupWizardUI(Operator, BasicSetupUIOperator):
@@ -199,6 +236,13 @@ def on_register():
         }
 
         for search_key, (default_module, filename) in addons_to_check.items():
+            if search_key == 'ueformat':
+                from bpy_extras import io_utils
+                if not hasattr(io_utils, 'poll_file_object_drop'):
+                    # The bundled UEFormat uses this newer Blender API. FBX
+                    # setups do not need it, so skip an incompatible dependency.
+                    print('[SETUP WIZARD] Skipping bundled UEFormat: file-drop API unavailable.')
+                    continue
             if is_addon_enabled_or_installed(search_key):
                 continue
             if filename:
@@ -331,11 +375,13 @@ def setup_dependencies():
         setup_wizard.join_meshes_on_armature.join_meshes_operator.GI_OT_JoinMeshesOnArmature,
         setup_wizard.character_rig_setup.character_rigger_operator.HOYOVERSE_OT_rig_character,
         setup_wizard.character_rig_setup.character_rigger_operator.HOYOVERSE_OT_apply_hair_clothes_physics,
+        setup_wizard.character_rig_setup.character_rigger_operator.HOYOVERSE_OT_remove_hair_clothes_physics,
         setup_wizard.character_rig_setup.character_rigger_operator.HOYOVERSE_OT_apply_hair_dress_physics,
         setup_wizard.character_rig_setup.character_rigger_operator.HOYOVERSE_OT_toggle_weapon_hand,
         setup_wizard.character_rig_setup.rootshape_filepath_setter_operator.GI_OT_RootShape_FilePath_Setter_Operator,
         setup_wizard.optimization.emissive_optimizer.GI_OT_Emissive_Optimizer,
         setup_wizard.genshin_compositing_node_setup.GI_OT_CompositingNodeSetup,
+        setup_wizard.genshin_compositing_node_setup.PGR_OT_SetUpCompositor,
         setup_wizard.genshin_compositing_node_setup.HYV_OT_HoyoversePostProcessingDefaultSettings,
         setup_wizard.change_bpy_context.GI_OT_Change_BPY_Context,
         setup_wizard.mesh_import_setup.chibi_face_setup.PGR_OT_SetUpChibiFace,
@@ -378,7 +424,7 @@ def unregister():
     from setup_wizard.character_rig_setup.rootshape_filepath_setter_operator import GI_OT_RootShape_FilePath_Setter_Operator
     from setup_wizard.optimization.emissive_optimizer import GI_OT_Emissive_Optimizer
     from setup_wizard.genshin_compositing_node_setup import GI_OT_CompositingNodeSetup, \
-        HYV_OT_HoyoversePostProcessingDefaultSettings
+        HYV_OT_HoyoversePostProcessingDefaultSettings, PGR_OT_SetUpCompositor
     from setup_wizard.change_bpy_context import GI_OT_Change_BPY_Context
     from setup_wizard.mesh_import_setup.chibi_face_setup import PGR_OT_SetUpChibiFace, PGR_OT_ImportChibiFaceTexture
 
@@ -415,6 +461,7 @@ def unregister():
         GI_OT_RootShape_FilePath_Setter_Operator,
         GI_OT_Emissive_Optimizer,
         GI_OT_CompositingNodeSetup,
+        PGR_OT_SetUpCompositor,
         HYV_OT_HoyoversePostProcessingDefaultSettings,
         GI_OT_Change_BPY_Context,
         PGR_OT_SetUpChibiFace,

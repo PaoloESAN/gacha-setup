@@ -278,17 +278,16 @@ def load_image_safely(file_path: str, suffix: str) -> Optional[bpy.types.Image]:
             file_path = found
         else:
             return None
+    from setup_wizard.utils.texture_utils import load_or_get_image
     file_name = os.path.basename(file_path)
-    img = bpy.data.images.get(file_name)
-    if not img:
+    img = load_or_get_image(file_path, file_name)
+    if img:
+        img.alpha_mode = "CHANNEL_PACKED"
+        needs_srgb = suffix.upper() in ["_D", "_SKIN"]
         try:
-            img = bpy.data.images.load(file_path)
-            img.alpha_mode = "CHANNEL_PACKED"
-            needs_srgb = suffix.upper() in ["_D", "_SKIN"]
             img.colorspace_settings.name = "sRGB" if needs_srgb else "Non-Color"
-        except Exception as e:
-            print(f"[WuWa Texture] Error loading {file_path}: {e}")
-            return None
+        except Exception:
+            pass
     return img
 
 
@@ -419,7 +418,7 @@ def load_wuwa_json_material_parameters(folder: str) -> Dict[str, Dict[str, Any]]
     json_files = []
     for root, _, files in os.walk(folder):
         for f in files:
-            if f.lower().endswith(".json") and f.startswith("MI_"):
+            if not f.startswith("._") and not f.startswith(".") and f.lower().endswith(".json") and f.startswith("MI_"):
                 json_files.append((root, f))
 
     for root, f in json_files:
@@ -490,6 +489,8 @@ def load_wuwa_json_mappings(folder: str) -> Dict[str, Dict[str, str]]:
     file_disk_map = {}
     for root, _, files in os.walk(folder):
         for f in files:
+            if f.startswith("._") or f.startswith("."):
+                continue
             ext = os.path.splitext(f)[1].lower()
             if ext in ['.png', '.tga', '.dds', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp']:
                 stem_name = os.path.splitext(f)[0].lower()
@@ -499,7 +500,7 @@ def load_wuwa_json_mappings(folder: str) -> Dict[str, Dict[str, str]]:
     json_files = []
     for root, _, files in os.walk(folder):
         for f in files:
-            if f.lower().endswith(".json") and f.startswith("MI_"):
+            if not f.startswith("._") and not f.startswith(".") and f.lower().endswith(".json") and f.startswith("MI_"):
                 json_files.append((root, f))
 
     # Sort json files so primary materials are processed before sub-materials (_HET, _HETA, _OL, _FS)

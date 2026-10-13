@@ -48,6 +48,10 @@ class BasicSetupUIOperator:
                 game_type = GameType.NEVERNESS_TO_EVERNESS.name
             elif 'zenless' in bl_id or 'zzz' in bl_id:
                 game_type = GameType.ZENLESS_ZONE_ZERO.name
+            elif 'honkai_impact_3rd' in bl_id or 'hi3' in bl_id:
+                game_type = GameType.HONKAI_IMPACT_3RD.name
+            elif 'honkai_nexus_anima' in bl_id or 'nexus' in bl_id or 'hna' in bl_id:
+                game_type = GameType.HONKAI_NEXUS_ANIMA.name
             elif 'honkai' in bl_id or 'hsr' in bl_id:
                 game_type = GameType.HONKAI_STAR_RAIL.name
             elif 'punishing' in bl_id or 'pgr' in bl_id:

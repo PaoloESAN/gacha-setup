@@ -18,14 +18,30 @@ class ZZZ_PT_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
     def poll(cls, context):
         return False
 
+    def _on_zzz_shader_type_update(self, context):
+        global _is_updating_zzz_props
+        if _is_updating_zzz_props:
+            return
+        val = getattr(self, "zzz_shader_type", "LEGACY")
+        try:
+            from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+            arm = resolve_settings_armature(context)
+            if arm:
+                arm["zzz_shader_type"] = val
+                if arm.data:
+                    arm.data["zzz_shader_type"] = val
+        except Exception:
+            pass
+
     bpy.types.Scene.zzz_shader_type = bpy.props.EnumProperty(
         items=[
-            ("KYTHERA", "Kythera's Shader", "Use Kythera's ZZZ Shader (Face Shader + General Shader)"),
-            ("LEGACY", "Legacy Shader", "Use Legacy ZZZ Setup File V2.0 Shader"),
+            ("LEGACY", "Default Shader", "Use Default ZZZ Setup Shader"),
+            ("KYTHERA", "Toon Shader", "Use Kythera's ZZZ Toon Shader (Face Shader + General Shader)"),
         ],
         name="Shader",
         description="Select shader setup for Zenless Zone Zero",
-        default="KYTHERA",
+        default="LEGACY",
+        update=_on_zzz_shader_type_update,
     )
 
     def draw(self, context):
@@ -50,6 +66,10 @@ class ZZZ_PT_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
 
         settings_col = settings_box.column()
         settings_col.prop(context.scene, "zzz_shader_type", text="Shader")
+        if getattr(context.scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
+            row_by = settings_col.row(align=True)
+            row_by.alignment = 'RIGHT'
+            row_by.label(text="Made by Kythera")
         props = context.scene.character_rigger_props
         enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
         settings_col.prop(props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")
@@ -231,6 +251,11 @@ class ZZZ_PT_UI_Outlines_Menu(Panel, ZenlessZoneZeroUIRenderChecker):
                 "GEOMETRY_NODES",
                 game_type=GameType.ZENLESS_ZONE_ZERO.name,
             )
+            sub_layout.operator(
+                "zenless_zone_zero.create_face_outline_mask",
+                text="Create Face Outline Mask",
+                icon="MOD_MASK",
+            )
             OperatorFactory.create(
                 sub_layout,
                 "genshin.import_outline_lightmaps",
@@ -290,14 +315,13 @@ class ZZZ_PT_UI_Finish_Setup_Menu(Panel, ZenlessZoneZeroUIRenderChecker):
             "OUTLINER_COLLECTION",
             game_type=GameType.ZENLESS_ZONE_ZERO.name,
         )
-        if getattr(context.scene, "zzz_shader_type", "KYTHERA") == "LEGACY":
-            OperatorFactory.create(
-                sub_layout,
-                "zenless_zone_zero.move_lighting_panel_to_char_collection",
-                "Move Lighting Panel to Collection",
-                "LIGHT",
-                game_type=GameType.ZENLESS_ZONE_ZERO.name,
-            )
+        OperatorFactory.create(
+            sub_layout,
+            "zenless_zone_zero.move_lighting_panel_to_char_collection",
+            "Move Lighting Panel to Collection",
+            "LIGHT",
+            game_type=GameType.ZENLESS_ZONE_ZERO.name,
+        )
 
 
 class ZZZ_PT_UI_Character_Rig_Setup_Menu(Panel, ZenlessZoneZeroUIRenderChecker):
@@ -384,7 +408,7 @@ ZZZ_LIGHT_PRESETS = {
         "coverage": 1.0,
         "brightness": 1.0,
         "left_right": 0.5,
-        "up_down": 0.1,
+        "up_down": 0.5,
     },
     "1": { # Sunrise
         "ambient": (0.95, 0.85, 0.8),
@@ -511,7 +535,7 @@ def update_zzz_kythera_props(self, context=None):
         raw_rc = getattr(scene, "zzz_rim_coverage", 1.0)
         raw_rb = getattr(scene, "zzz_rim_brightness", 1.0)
         raw_lr = getattr(scene, "zzz_rim_left_right", 0.5)
-        raw_ud = getattr(scene, "zzz_rim_up_down", 0.1)
+        raw_ud = getattr(scene, "zzz_rim_up_down", 0.5)
 
         lit_brightness = 0.0 if raw_lb < 0.05 else round(raw_lb, 1)
         shadow_intensity = 0.0 if raw_si < 0.05 else round(raw_si, 1)
@@ -618,6 +642,159 @@ def update_zzz_kythera_props(self, context=None):
                                 except Exception:
                                     pass
 
+    # Keep Lighting Panel bones in sync
+    if arm and getattr(arm, "pose", None):
+        pb_l = arm.pose.bones.get("Rim.L")
+        if pb_l:
+            con_l = next((c for c in pb_l.constraints if c.type == 'LIMIT_LOCATION'), None)
+            min_l = con_l.min_x if con_l else -0.0075
+            max_l = con_l.max_x if con_l else 0.0925
+            pb_l.location.x = min_l + rim_left_right * (max_l - min_l)
+        pb_r = arm.pose.bones.get("Rim.R")
+        if pb_r:
+            con_r = next((c for c in pb_r.constraints if c.type == 'LIMIT_LOCATION'), None)
+            min_r = con_r.min_x if con_r else 0.0
+            max_r = con_r.max_x if con_r else 0.10
+            pb_r.location.x = min_r + rim_up_down * (max_r - min_r)
+
+    def _safe_sock_assign(sock, val):
+        if not sock:
+            return
+        try:
+            dv = getattr(sock, "default_value", None)
+            if hasattr(dv, "__len__"):
+                if len(dv) == 3:
+                    sock.default_value = (val[0], val[1], val[2])
+                elif len(dv) == 4:
+                    sock.default_value = (val[0], val[1], val[2], val[3] if len(val) > 3 else 1.0)
+            elif isinstance(dv, (int, float)):
+                sock.default_value = float(val) if not isinstance(val, (tuple, list)) else float(val[0])
+            else:
+                sock.default_value = val
+        except Exception:
+            pass
+
+    # 4. Also update Legacy shader node groups if present (when in THIS_PANEL mode)
+    for ng in bpy.data.node_groups:
+        ng_low = ng.name.lower()
+        if "global material properties" in ng_low:
+            if "face" in ng_low:
+                mix_node = ng.nodes.get("Mix")
+                vm_node = ng.nodes.get("Vector Math.001")
+                if mix_node:
+                    sock_b = mix_node.inputs.get("B") or (mix_node.inputs[7] if len(mix_node.inputs) > 7 else None)
+                    sock_a = mix_node.inputs.get("A") or (mix_node.inputs[6] if len(mix_node.inputs) > 6 else None)
+                    _safe_sock_assign(sock_b, lit_tint)
+                    _safe_sock_assign(sock_a, shadow_tint)
+                if vm_node and len(vm_node.inputs) > 1:
+                    _safe_sock_assign(vm_node.inputs[1], ambient_tint)
+            else:
+                amb_node = ng.nodes.get("Ambient")
+                mix_node = ng.nodes.get("Mix")
+                rim_node = ng.nodes.get("Group.001")
+                if amb_node:
+                    sock_b = amb_node.inputs.get("B") or (amb_node.inputs[7] if len(amb_node.inputs) > 7 else None)
+                    _safe_sock_assign(sock_b, ambient_tint)
+                if mix_node:
+                    sock_b = mix_node.inputs.get("B") or (mix_node.inputs[7] if len(mix_node.inputs) > 7 else None)
+                    sock_a = mix_node.inputs.get("A") or (mix_node.inputs[6] if len(mix_node.inputs) > 6 else None)
+                    _safe_sock_assign(sock_b, lit_tint)
+                    _safe_sock_assign(sock_a, shadow_tint)
+                if rim_node:
+                    if "Rim Lit" in rim_node.inputs:
+                        _safe_sock_assign(rim_node.inputs["Rim Lit"], rim_color)
+                    if "Rim Shadow" in rim_node.inputs:
+                        _safe_sock_assign(rim_node.inputs["Rim Shadow"], shadow_tint)
+
+                # Handle Enable Rim Light in Legacy shader (Mix.002 blends between Color and Rims)
+                mix_rim = ng.nodes.get("Mix.002")
+                if mix_rim:
+                    sock_fac = mix_rim.inputs.get("Factor") or (mix_rim.inputs[0] if mix_rim.inputs else None)
+                    if sock_fac:
+                        if enable_rim:
+                            if not sock_fac.links and rim_node:
+                                out_fac = rim_node.outputs.get("Factor")
+                                if out_fac:
+                                    ng.links.new(out_fac, sock_fac)
+                        else:
+                            for l in list(sock_fac.links):
+                                ng.links.remove(l)
+                            sock_fac.default_value = 0.0
+
+    try:
+        from setup_wizard.optimization.blender_rimlight_patch import patch_all_rimlight_groups_for_blender
+        patch_all_rimlight_groups_for_blender()
+    except Exception:
+        pass
+
+
+def update_zzz_lighting_control_type(self, context=None):
+    global _is_updating_zzz_props
+    if _is_updating_zzz_props:
+        return
+    ctrl_type = getattr(self, "zzz_lighting_control_type", "PANEL")
+    arm = None
+    try:
+        from setup_wizard.ui.character_settings_utils import resolve_settings_armature, get_character_materials
+        arm = resolve_settings_armature(context)
+        if arm:
+            arm["zzz_lighting_control_type"] = str(ctrl_type)
+    except Exception:
+        arm = None
+
+    from setup_wizard.character_rig_setup.lighting_panel_setup import (
+        connect_zzz_lighting_panel,
+        disconnect_zzz_lighting_panel,
+        set_lighting_panel_visibility,
+    )
+
+    try:
+        from setup_wizard.ui.character_settings_utils import get_character_materials
+        _, mats = get_character_materials(context, arm)
+    except Exception:
+        mats = []
+
+    if ctrl_type == "PANEL":
+        connect_zzz_lighting_panel(target_materials=mats)
+        if arm:
+            set_lighting_panel_visibility(arm, True)
+    else:
+        if arm:
+            set_lighting_panel_visibility(arm, False)
+        disconnect_zzz_lighting_panel(target_materials=mats)
+
+        current_mode = arm.get("zzz_light_mode", "0") if arm else getattr(self, "zzz_light_mode", "0")
+        if str(current_mode) not in ZZZ_LIGHT_PRESETS and str(current_mode) != "6":
+            current_mode = "0"
+            if arm:
+                arm["zzz_light_mode"] = "0"
+            _is_updating_zzz_props = True
+            try:
+                self.zzz_light_mode = "0"
+            finally:
+                _is_updating_zzz_props = False
+
+        if str(current_mode) in ZZZ_LIGHT_PRESETS:
+            preset = ZZZ_LIGHT_PRESETS[str(current_mode)]
+            _is_updating_zzz_props = True
+            try:
+                self.zzz_ambient_tint = preset["ambient"]
+                self.zzz_lit_tint = preset["lit_tint"]
+                self.zzz_lit_brightness = preset["lit_brightness"]
+                self.zzz_shadow_tint = preset["shadow_tint"]
+                self.zzz_shadow_intensity = preset.get("shadow_intensity", 1.0)
+                self.zzz_fake_sss_intensity = preset.get("fake_sss_intensity", 1.0)
+                self.zzz_enable_rim_light = preset["enable_rim"]
+                self.zzz_rim_light_color = preset["rim_color"]
+                self.zzz_rim_coverage = preset["coverage"]
+                self.zzz_rim_brightness = preset["brightness"]
+                self.zzz_rim_left_right = preset["left_right"]
+                self.zzz_rim_up_down = preset["up_down"]
+            finally:
+                _is_updating_zzz_props = False
+
+        update_zzz_kythera_props(self, context)
+
 
 def pull_zzz_panel_values(scene, context, force=False):
     """Synchronizes UI sliders and lighting mode with the selected character's materials and rig."""
@@ -640,7 +817,34 @@ def pull_zzz_panel_values(scene, context, force=False):
 
     ensure_character_node_trees_isolated(arm, mats)
 
-    # 1. Pull lighting mode saved on this armature
+    # Ensure color wheels are never visible in render
+    for o in bpy.data.objects:
+        if "colorwheel" in o.name.lower() and not getattr(o, "hide_render", False):
+            try:
+                o.hide_render = True
+            except Exception:
+                pass
+
+    # 1. Pull lighting control type (Light Panel vs This Panel)
+    from setup_wizard.character_rig_setup.lighting_panel_setup import (
+        is_zzz_lighting_panel_connected,
+        armature_has_lighting_panel,
+    )
+    has_lp = armature_has_lighting_panel(arm)
+    if has_lp:
+        ctrl_type = arm.get("zzz_lighting_control_type")
+        if ctrl_type not in ("PANEL", "THIS_PANEL"):
+            lp_connected = is_zzz_lighting_panel_connected(target_materials=mats)
+            ctrl_type = "PANEL" if lp_connected else "THIS_PANEL"
+        if getattr(scene, "zzz_lighting_control_type", "") != ctrl_type:
+            _is_updating_zzz_props = True
+            try:
+                scene.zzz_lighting_control_type = ctrl_type
+                arm["zzz_lighting_control_type"] = ctrl_type
+            finally:
+                _is_updating_zzz_props = False
+
+    # 2. Pull lighting mode saved on this armature
     saved_mode = arm.get("zzz_light_mode", "0")
     if getattr(scene, "zzz_light_mode", "") != str(saved_mode):
         _is_updating_zzz_props = True
@@ -649,7 +853,29 @@ def pull_zzz_panel_values(scene, context, force=False):
         finally:
             _is_updating_zzz_props = False
 
-    # 2. Pull shader node group values
+    # 2b. Pull shader type saved on this armature
+    arm_shader = arm.get("zzz_shader_type") or (arm.data.get("zzz_shader_type") if arm.data else None)
+    if not arm_shader:
+        has_kythera = any(
+            getattr(m, "node_tree", None) and any(
+                n.type == 'GROUP' and n.node_tree and any(k in n.node_tree.name.lower() for k in ["kythera", "face shader"])
+                for n in m.node_tree.nodes
+            )
+            for m in mats
+        )
+        arm_shader = "KYTHERA" if has_kythera else "LEGACY"
+        arm["zzz_shader_type"] = arm_shader
+        if arm.data:
+            arm.data["zzz_shader_type"] = arm_shader
+
+    if getattr(scene, "zzz_shader_type", "") != arm_shader:
+        _is_updating_zzz_props = True
+        try:
+            scene.zzz_shader_type = arm_shader
+        finally:
+            _is_updating_zzz_props = False
+
+    # 3. Pull shader node group values
     target_node = None
     for m in mats:
         if getattr(m, "node_tree", None):
@@ -690,14 +916,109 @@ def pull_zzz_panel_values(scene, context, force=False):
             scene.zzz_rim_coverage = float(inputs["Coverage"].default_value)
         if "Brightness" in inputs:
             scene.zzz_rim_brightness = float(inputs["Brightness"].default_value)
-        if "Left/Right" in inputs:
-            scene.zzz_rim_left_right = float(inputs["Left/Right"].default_value)
-        if "Up/Down" in inputs:
-            scene.zzz_rim_up_down = float(inputs["Up/Down"].default_value)
+        if has_lp and ctrl_type == "PANEL" and arm and getattr(arm, "pose", None):
+            pb_l = arm.pose.bones.get("Rim.L")
+            if pb_l:
+                con_l = next((c for c in pb_l.constraints if c.type == 'LIMIT_LOCATION'), None)
+                min_l = con_l.min_x if con_l else -0.0075
+                max_l = con_l.max_x if con_l else 0.0925
+                span_l = max_l - min_l
+                if span_l > 0:
+                    scene.zzz_rim_left_right = max(0.0, min(1.0, (pb_l.location.x - min_l) / span_l))
+            pb_r = arm.pose.bones.get("Rim.R")
+            if pb_r:
+                con_r = next((c for c in pb_r.constraints if c.type == 'LIMIT_LOCATION'), None)
+                min_r = con_r.min_x if con_r else 0.0
+                max_r = con_r.max_x if con_r else 0.10
+                span_r = max_r - min_r
+                if span_r > 0:
+                    scene.zzz_rim_up_down = max(0.0, min(1.0, (pb_r.location.x - min_r) / span_r))
+        else:
+            if "Left/Right" in inputs:
+                scene.zzz_rim_left_right = float(inputs["Left/Right"].default_value)
+            if "Up/Down" in inputs:
+                scene.zzz_rim_up_down = float(inputs["Up/Down"].default_value)
     except Exception:
         pass
     finally:
         _is_updating_zzz_props = False
+
+
+class ZZZ_OT_SelectLightingPanel(bpy.types.Operator):
+    bl_idname = "zenless_zone_zero.select_lighting_panel"
+    bl_label = "Select 3D Lighting Panel"
+    bl_description = "Selects the Lighting Panel controls in Pose Mode in the 3D viewport"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        try:
+            from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+            from setup_wizard.character_rig_setup.lighting_panel_setup import armature_has_lighting_panel
+            arm = resolve_settings_armature(context)
+            return bool(arm and armature_has_lighting_panel(arm))
+        except Exception:
+            return False
+
+    def execute(self, context):
+        from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+        from setup_wizard.geometry_nodes_setup.lighting_panel_names import LightingPanelNames
+        arm = resolve_settings_armature(context)
+        if not arm:
+            return {'CANCELLED'}
+        try:
+            if context.object and context.object.mode != 'OBJECT':
+                bpy.ops.object.mode_set(mode='OBJECT')
+        except Exception:
+            pass
+        bpy.ops.object.select_all(action='DESELECT')
+        arm.select_set(True)
+        context.view_layer.objects.active = arm
+        bpy.ops.object.mode_set(mode='POSE')
+        for b in arm.data.bones:
+            b.select = False
+        lp_b = arm.data.bones.get(LightingPanelNames.Bones.LIGHTING_PANEL)
+        if lp_b:
+            lp_b.select = True
+            arm.data.bones.active = lp_b
+        for pin in ["Ambient", "Lit", "Shadow", "Rim Lit", "RimShadow", "Rim.L", "Rim.R", "RimX", "RimY"]:
+            b = arm.data.bones.get(pin)
+            if b:
+                b.select = True
+        return {'FINISHED'}
+
+
+class ZZZ_OT_ToggleLightingPanelVisibility(bpy.types.Operator):
+    bl_idname = "zenless_zone_zero.toggle_lighting_panel_visibility"
+    bl_label = "Toggle Lighting Panel Visibility"
+    bl_description = "Shows or hides the Lighting Panel controls in the viewport"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        try:
+            from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+            from setup_wizard.character_rig_setup.lighting_panel_setup import armature_has_lighting_panel
+            arm = resolve_settings_armature(context)
+            return bool(arm and armature_has_lighting_panel(arm))
+        except Exception:
+            return False
+
+    def execute(self, context):
+        from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+        from setup_wizard.character_rig_setup.lighting_panel_setup import is_lighting_panel_visible, set_lighting_panel_visibility
+        arm = resolve_settings_armature(context)
+        if not arm:
+            return {'CANCELLED'}
+        vis = is_lighting_panel_visible(arm)
+        set_lighting_panel_visibility(arm, not vis)
+        for win in getattr(context.window_manager, 'windows', []):
+            screen = getattr(win, 'screen', None)
+            if screen:
+                for area in screen.areas:
+                    if area.type == 'VIEW_3D':
+                        area.tag_redraw()
+        return {'FINISHED'}
 
 
 class ZZZ_PT_Rig_Character_Settings(Panel):
@@ -710,9 +1031,6 @@ class ZZZ_PT_Rig_Character_Settings(Panel):
 
     @classmethod
     def poll(cls, context):
-        # Only show when using Kythera's shader
-        if getattr(context.scene, "zzz_shader_type", "KYTHERA") != "KYTHERA":
-            return False
         try:
             from setup_wizard.ui.character_settings_utils import is_game_armature
             return is_game_armature(context, "ZENLESS_ZONE_ZERO")
@@ -723,45 +1041,103 @@ class ZZZ_PT_Rig_Character_Settings(Panel):
     def draw(self, context):
         layout = self.layout
         scene = context.scene
-        obj = context.active_object or context.object
 
         try:
             pull_zzz_panel_values(scene, context)
         except Exception:
             pass
 
-        # 1. Lighting Mode / Presets
-        col_light = layout.column(align=True)
-        col_light.label(text="Lighting Mode:")
-        col_light.prop(scene, "zzz_light_mode", text="")
+        arm = None
+        try:
+            from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+            arm = resolve_settings_armature(context)
+        except Exception:
+            pass
 
-        # Only show Shading & Tints when in Custom mode ("6")
-        if getattr(scene, "zzz_light_mode", "0") == "6":
-            # 2. Shading & Tints
-            box_shading = layout.box()
-            box_shading.label(text="Shading & Tints", icon="COLOR")
-            col_shading = box_shading.column(align=True)
-            col_shading.prop(scene, "zzz_ambient_tint", text="Ambient")
-            col_shading.prop(scene, "zzz_lit_tint", text="Lit Tint")
-            col_shading.prop(scene, "zzz_lit_brightness", text="Lit Brightness", slider=True)
-            col_shading.prop(scene, "zzz_shadow_tint", text="Shadow Tint")
-            col_shading.prop(scene, "zzz_shadow_intensity", text="Shadow Intensity", slider=True)
-            col_shading.prop(scene, "zzz_fake_sss_intensity", text="Fake SSS Intensity", slider=True)
+        from setup_wizard.character_rig_setup.lighting_panel_setup import (
+            armature_has_lighting_panel,
+        )
+        has_lp = armature_has_lighting_panel(arm)
 
-        # 3. Rim Light Settings (Separate option below lighting)
-        box_rim = layout.box()
-        box_rim.label(text="Rim Light", icon="LIGHT_SUN")
-        box_rim.prop(scene, "zzz_enable_rim_light", text="Enable Rim Light")
+        arm_shader_type = (arm.get("zzz_shader_type") or (arm.data.get("zzz_shader_type") if arm.data else None)) if arm else None
+        if not arm_shader_type:
+            arm_shader_type = getattr(scene, "zzz_shader_type", "LEGACY")
+        is_legacy = (arm_shader_type == "LEGACY")
+        if not is_legacy:
+            has_legacy = any("global material properties" in ng.name.lower() for ng in bpy.data.node_groups)
+            has_kythera = any("kythera" in ng.name.lower() for ng in bpy.data.node_groups) or any("face shader" in ng.name.lower() for ng in bpy.data.node_groups)
+            if has_legacy and not has_kythera:
+                is_legacy = True
 
-        col_rim = box_rim.column(align=True)
-        col_rim.active = scene.zzz_enable_rim_light
-        col_rim.prop(scene, "zzz_rim_brightness", text="Brightness", slider=True)
-        col_rim.prop(scene, "zzz_rim_left_right", text="Left / Right", slider=True)
-        col_rim.prop(scene, "zzz_rim_up_down", text="Up / Down", slider=True)
-        if getattr(scene, "zzz_light_mode", "0") == "6":
-            col_rim.prop(scene, "zzz_rim_light_color", text="Color")
+        if has_lp:
+            col_type = layout.column(align=False)
+            col_type.label(text="Lighting Type:")
+            row_btn = col_type.row(align=True)
+            row_btn.prop(scene, "zzz_lighting_control_type", expand=True)
 
-        # 4. Hair & Clothes Physics
+            is_lp_mode = (getattr(scene, "zzz_lighting_control_type", "PANEL") == "PANEL")
+
+            if not is_lp_mode:
+                col_light = layout.column(align=True)
+                col_light.label(text="Lighting Mode:")
+                col_light.prop(scene, "zzz_light_mode", text="")
+
+                if getattr(scene, "zzz_light_mode", "0") == "6":
+                    box_shading = layout.box()
+                    box_shading.label(text="Shading & Tints", icon="COLOR")
+                    col_shading = box_shading.column(align=True)
+                    col_shading.prop(scene, "zzz_ambient_tint", text="Ambient")
+                    col_shading.prop(scene, "zzz_lit_tint", text="Lit Tint")
+                    col_shading.prop(scene, "zzz_lit_brightness", text="Lit Brightness", slider=True)
+                    col_shading.prop(scene, "zzz_shadow_tint", text="Shadow Tint")
+                    col_shading.prop(scene, "zzz_shadow_intensity", text="Shadow Intensity", slider=True)
+                    col_shading.prop(scene, "zzz_fake_sss_intensity", text="Fake SSS Intensity", slider=True)
+
+                if not is_legacy:
+                    box_rim = layout.box()
+                    box_rim.label(text="Rim Light", icon="LIGHT_SUN")
+                    box_rim.prop(scene, "zzz_enable_rim_light", text="Enable Rim Light")
+                    col_rim = box_rim.column(align=True)
+                    col_rim.active = scene.zzz_enable_rim_light
+                    col_rim.prop(scene, "zzz_rim_brightness", text="Brightness", slider=True)
+                    col_rim.prop(scene, "zzz_rim_left_right", text="Left / Right", slider=True)
+                    col_rim.prop(scene, "zzz_rim_up_down", text="Up / Down", slider=True)
+                    if getattr(scene, "zzz_light_mode", "0") == "6":
+                        col_rim.prop(scene, "zzz_rim_light_color", text="Color")
+            else:
+                if not is_legacy:
+                    box_rim = layout.box()
+                    box_rim.label(text="Rim Light", icon="LIGHT_SUN")
+                    box_rim.prop(scene, "zzz_enable_rim_light", text="Enable Rim Light")
+        else:
+            col_light = layout.column(align=True)
+            col_light.label(text="Lighting Mode:")
+            col_light.prop(scene, "zzz_light_mode", text="")
+
+            if getattr(scene, "zzz_light_mode", "0") == "6":
+                box_shading = layout.box()
+                box_shading.label(text="Shading & Tints", icon="COLOR")
+                col_shading = box_shading.column(align=True)
+                col_shading.prop(scene, "zzz_ambient_tint", text="Ambient")
+                col_shading.prop(scene, "zzz_lit_tint", text="Lit Tint")
+                col_shading.prop(scene, "zzz_lit_brightness", text="Lit Brightness", slider=True)
+                col_shading.prop(scene, "zzz_shadow_tint", text="Shadow Tint")
+                col_shading.prop(scene, "zzz_shadow_intensity", text="Shadow Intensity", slider=True)
+                col_shading.prop(scene, "zzz_fake_sss_intensity", text="Fake SSS Intensity", slider=True)
+
+            if not is_legacy:
+                box_rim = layout.box()
+                box_rim.label(text="Rim Light", icon="LIGHT_SUN")
+                box_rim.prop(scene, "zzz_enable_rim_light", text="Enable Rim Light")
+                col_rim = box_rim.column(align=True)
+                col_rim.active = scene.zzz_enable_rim_light
+                col_rim.prop(scene, "zzz_rim_brightness", text="Brightness", slider=True)
+                col_rim.prop(scene, "zzz_rim_left_right", text="Left / Right", slider=True)
+                col_rim.prop(scene, "zzz_rim_up_down", text="Up / Down", slider=True)
+                if getattr(scene, "zzz_light_mode", "0") == "6":
+                    col_rim.prop(scene, "zzz_rim_light_color", text="Color")
+
+        # Hair & Clothes Physics
         box_physics = layout.box()
         box_physics.label(text="Hair & Clothes Physics", icon="PHYSICS")
         col_physics = box_physics.column(align=True)
@@ -774,6 +1150,7 @@ class ZZZ_PT_Rig_Character_Settings(Panel):
         if physics_present:
             col_physics.prop(scene, "gi_hair_physics_influence", text="Hair Physics", slider=True)
             col_physics.prop(scene, "gi_clothes_physics_influence", text="Clothes Physics", slider=True)
+            box_physics.column(align=True).operator("hoyoverse.remove_hair_clothes_physics", text="Remove Physics", icon="PANEL_CLOSE")
         else:
             col_physics.operator("hoyoverse.apply_hair_clothes_physics", text="Apply Physics", icon="FILE_REFRESH")
 
@@ -782,6 +1159,26 @@ class ZZZ_PT_Rig_Character_Settings(Panel):
 
 def register_zzz_properties():
     from bpy.props import EnumProperty, FloatProperty, FloatVectorProperty, BoolProperty
+
+    try:
+        bpy.utils.register_class(ZZZ_OT_SelectLightingPanel)
+    except Exception:
+        pass
+    try:
+        bpy.utils.register_class(ZZZ_OT_ToggleLightingPanelVisibility)
+    except Exception:
+        pass
+
+    bpy.types.Scene.zzz_lighting_control_type = EnumProperty(
+        name="Lighting Control",
+        description="Choose how lighting colors and tints are controlled for ZZZ",
+        items=[
+            ("PANEL", "Light Panel", "Use 3D Lighting Panel in viewport"),
+            ("THIS_PANEL", "This Panel", "Use Character Settings panel controls"),
+        ],
+        default="PANEL",
+        update=update_zzz_lighting_control_type,
+    )
 
     bpy.types.Scene.zzz_light_mode = EnumProperty(
         name="Light Mode",
@@ -921,7 +1318,7 @@ def register_zzz_properties():
         description="Rim light vertical direction offset",
         min=0.0,
         max=1.0,
-        default=0.1,
+        default=0.5,
         step=10,
         precision=1,
         update=update_zzz_kythera_props,
@@ -929,7 +1326,17 @@ def register_zzz_properties():
 
 
 def unregister_zzz_properties():
+    try:
+        bpy.utils.unregister_class(ZZZ_OT_SelectLightingPanel)
+    except Exception:
+        pass
+    try:
+        bpy.utils.unregister_class(ZZZ_OT_ToggleLightingPanelVisibility)
+    except Exception:
+        pass
+
     props = [
+        "zzz_lighting_control_type",
         "zzz_light_mode",
         "zzz_ambient_tint",
         "zzz_lit_tint",

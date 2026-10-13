@@ -17,6 +17,7 @@ from setup_wizard.domain.shader_material_name_keywords import ShaderMaterialName
 from setup_wizard.import_order import get_actual_material_name_for_dress
 from setup_wizard.texture_import_setup.texture_node_names import JaredNytsPunishingGrayRavenTextureNodeNames, Nya222HonkaiStarRailTextureNodeNames, StellarToonTextureNodeNames, TextureNodeNames, V4_GenshinImpactTextureNodeNames
 from setup_wizard.texture_import_setup.original_texture_locator_utils import OriginalTextureLocatorUtils
+from setup_wizard.utils.texture_utils import fix_missing_textures, load_or_get_image
 
 
 def get_or_create_white_texture(name="White_Shadow_Ramp"):
@@ -1148,7 +1149,7 @@ class GenshinTextureImporter:
         ]
         materials_dir = None
         for d in candidates:
-            if os.path.isdir(d) and any(f.lower().endswith('.json') and not f.startswith('Avatar_Default_Mat') for f in os.listdir(d)):
+            if os.path.isdir(d) and any(not f.startswith("._") and not f.startswith(".") and f.lower().endswith('.json') and not f.startswith('Avatar_Default_Mat') for f in os.listdir(d)):
                 materials_dir = d
                 break
 
@@ -1157,8 +1158,12 @@ class GenshinTextureImporter:
 
         image_files = []
         for root, _, files in os.walk(directory):
+            if "__MACOSX" in root:
+                continue
             for f in files:
-                if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff')):
+                if f.startswith("._") or f.startswith("."):
+                    continue
+                if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff', '.webp')):
                     image_files.append((f, os.path.join(root, f)))
 
         def is_generic_tex(fname):
@@ -1183,9 +1188,10 @@ class GenshinTextureImporter:
                     continue
                 stem = os.path.splitext(fname)[0].lower()
                 if stem == t_low:
-                    img = bpy.data.images.get(fname) or bpy.data.images.load(filepath=os.path.normpath(fpath), check_existing=True)
-                    img.alpha_mode = 'CHANNEL_PACKED'
-                    return img
+                    img = load_or_get_image(fpath, fname)
+                    if img:
+                        img.alpha_mode = 'CHANNEL_PACKED'
+                        return img
 
             # 2. Check if a character-specific texture matches the core part suffix (e.g. Crystal_Diffuse)
             if core_part:
@@ -1194,32 +1200,36 @@ class GenshinTextureImporter:
                         continue
                     stem = os.path.splitext(fname)[0].lower()
                     if stem.endswith(core_part) or f'_{core_part}' in stem or core_part in stem:
-                        img = bpy.data.images.get(fname) or bpy.data.images.load(filepath=os.path.normpath(fpath), check_existing=True)
-                        img.alpha_mode = 'CHANNEL_PACKED'
-                        return img
+                        img = load_or_get_image(fpath, fname)
+                        if img:
+                            img.alpha_mode = 'CHANNEL_PACKED'
+                            return img
 
             # 3. Exact stem match across all files
             for fname, fpath in image_files:
                 stem = os.path.splitext(fname)[0].lower()
                 if stem == t_low:
-                    img = bpy.data.images.get(fname) or bpy.data.images.load(filepath=os.path.normpath(fpath), check_existing=True)
-                    img.alpha_mode = 'CHANNEL_PACKED'
-                    return img
+                    img = load_or_get_image(fpath, fname)
+                    if img:
+                        img.alpha_mode = 'CHANNEL_PACKED'
+                        return img
 
             # 4. Prefix / suffix match across all files
             for fname, fpath in image_files:
                 stem = os.path.splitext(fname)[0].lower()
                 if stem.startswith(t_low) or t_low.startswith(stem):
-                    img = bpy.data.images.get(fname) or bpy.data.images.load(filepath=os.path.normpath(fpath), check_existing=True)
-                    img.alpha_mode = 'CHANNEL_PACKED'
-                    return img
+                    img = load_or_get_image(fpath, fname)
+                    if img:
+                        img.alpha_mode = 'CHANNEL_PACKED'
+                        return img
 
             # 5. Substring match across all files
             for fname, fpath in image_files:
                 if t_low in fname.lower():
-                    img = bpy.data.images.get(fname) or bpy.data.images.load(filepath=os.path.normpath(fpath), check_existing=True)
-                    img.alpha_mode = 'CHANNEL_PACKED'
-                    return img
+                    img = load_or_get_image(fpath, fname)
+                    if img:
+                        img.alpha_mode = 'CHANNEL_PACKED'
+                        return img
 
             return None
 
@@ -1247,7 +1257,7 @@ class GenshinTextureImporter:
         json_data_list = []
         path_id_to_img = {}
         for jf in os.listdir(materials_dir):
-            if not jf.lower().endswith('.json') or jf.startswith('Avatar_Default_Mat'):
+            if jf.startswith("._") or jf.startswith(".") or not jf.lower().endswith('.json') or jf.startswith('Avatar_Default_Mat'):
                 continue
             jpath = os.path.join(materials_dir, jf)
             try:
@@ -2166,41 +2176,45 @@ class GenshinTextureImporter:
             )
 
             if has_ramp and is_marionette_new:
+                # Mix Color: RGB A/B are sockets 6/7 and Result is output 2.
+                # Name lookup can select the float sockets; leave Fac links intact.
                 # With ramp: Pupil_ramp1 & Pupil04 -> Mix.001 -> Mix Color.002
                 if mix_001 and mix_color_002:
                     for link in list(gtree.links):
-                        if p4_node and link.from_node == p4_node and link.to_node == mix_color_002:
+                        if (p4_node and link.from_node == p4_node
+                                and link.to_node == mix_color_002 and link.from_socket.name == 'Color'):
                             gtree.links.remove(link)
                     ramp1_node = ramp_nodes[0] if ramp_nodes else None
                     if ramp1_node and 'Color' in ramp1_node.outputs:
-                        a_sock = mix_001.inputs.get('A') or (mix_001.inputs[6] if len(mix_001.inputs) > 6 else None)
+                        a_sock = mix_001.inputs[6]
                         if a_sock:
                             gtree.links.new(ramp1_node.outputs['Color'], a_sock)
                     if p4_node and 'Color' in p4_node.outputs:
-                        b_sock = mix_001.inputs.get('B') or (mix_001.inputs[7] if len(mix_001.inputs) > 7 else None)
+                        b_sock = mix_001.inputs[7]
                         if b_sock:
                             gtree.links.new(p4_node.outputs['Color'], b_sock)
-                    res_sock = mix_001.outputs.get('Result') or mix_001.outputs[0]
-                    color_in_sock = mix_color_002.inputs.get('B') or mix_color_002.inputs.get('Shader') or mix_color_002.inputs[2]
+                    res_sock = mix_001.outputs[2]
+                    color_in_sock = mix_color_002.inputs[7] if mix_color_002.type == 'MIX' else mix_color_002.inputs[2]
                     if res_sock and color_in_sock:
                         gtree.links.new(res_sock, color_in_sock)
 
                 # With ramp: Pupil_ramp2 & Pupil02 -> Mix -> Mix Color
                 if mix_main and mix_color_main:
                     for link in list(gtree.links):
-                        if p2_node and link.from_node == p2_node and link.to_node == mix_color_main:
+                        if (p2_node and link.from_node == p2_node
+                                and link.to_node == mix_color_main and link.from_socket.name == 'Color'):
                             gtree.links.remove(link)
                     ramp2_node = ramp_nodes[1] if len(ramp_nodes) > 1 else (ramp_nodes[0] if ramp_nodes else None)
                     if ramp2_node and 'Color' in ramp2_node.outputs:
-                        a_sock = mix_main.inputs.get('A') or (mix_main.inputs[6] if len(mix_main.inputs) > 6 else None)
+                        a_sock = mix_main.inputs[6]
                         if a_sock:
                             gtree.links.new(ramp2_node.outputs['Color'], a_sock)
                     if p2_node and 'Color' in p2_node.outputs:
-                        b_sock = mix_main.inputs.get('B') or (mix_main.inputs[7] if len(mix_main.inputs) > 7 else None)
+                        b_sock = mix_main.inputs[7]
                         if b_sock:
                             gtree.links.new(p2_node.outputs['Color'], b_sock)
-                    res_sock = mix_main.outputs.get('Result') or mix_main.outputs[0]
-                    color_in_sock = mix_color_main.inputs.get('B') or mix_color_main.inputs.get('Shader') or mix_color_main.inputs[2]
+                    res_sock = mix_main.outputs[2]
+                    color_in_sock = mix_color_main.inputs[7] if mix_color_main.type == 'MIX' else mix_color_main.inputs[2]
                     if res_sock and color_in_sock:
                         gtree.links.new(res_sock, color_in_sock)
             elif not is_marionette_new:
@@ -2209,7 +2223,7 @@ class GenshinTextureImporter:
                     for link in list(gtree.links):
                         if mix_001 and link.from_node == mix_001 and link.to_node == mix_color_002:
                             gtree.links.remove(link)
-                    color_in_sock = mix_color_002.inputs.get('B') or mix_color_002.inputs.get('Shader') or mix_color_002.inputs[2]
+                    color_in_sock = mix_color_002.inputs[7] if mix_color_002.type == 'MIX' else mix_color_002.inputs[2]
                     if color_in_sock:
                         gtree.links.new(p4_node.outputs['Color'], color_in_sock)
 
@@ -2217,7 +2231,7 @@ class GenshinTextureImporter:
                     for link in list(gtree.links):
                         if mix_main and link.from_node == mix_main and link.to_node == mix_color_main:
                             gtree.links.remove(link)
-                    color_in_sock = mix_color_main.inputs.get('B') or mix_color_main.inputs.get('Shader') or mix_color_main.inputs[2]
+                    color_in_sock = mix_color_main.inputs[7] if mix_color_main.type == 'MIX' else mix_color_main.inputs[2]
                     if color_in_sock:
                         gtree.links.new(p2_node.outputs['Color'], color_in_sock)
 
@@ -2235,6 +2249,7 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
 
     def import_textures(self, directory):
         self.directory = directory
+        fix_missing_textures(directory)
         if self.import_textures_from_json(directory):
             for mat in bpy.data.materials:
                 if mat.use_nodes and not any(k in mat.name.lower() for k in ['outlines', 'outline', 'face', 'pupil', 'brow', 'eye']):
@@ -2242,6 +2257,9 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
             return
 
         for name, folder, files in os.walk(directory):
+            if "__MACOSX" in name:
+                continue
+            files = [f for f in files if not f.startswith("._") and not f.startswith(".")]
             self.files = files
             dir_lower = os.path.abspath(directory).lower()
             is_sandrone = any(
@@ -2262,9 +2280,10 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                 if (('eyehighlight' in f_lower or 'eyelight' in f_lower or 'eye_highlight' in f_lower or 'eye_light' in f_lower) and f_lower.endswith(('.png', '.tga', '.dds'))) or \
                    ('highlight' in f_lower and ('diffuse' in f_lower or 'mask' in f_lower) and f_lower.endswith(('.png', '.tga', '.dds'))):
                     img_p = os.path.normpath(os.path.join(name, f_name))
-                    highlight_img = bpy.data.images.get(f_name) or bpy.data.images.load(filepath=img_p, check_existing=True)
-                    highlight_img.alpha_mode = 'CHANNEL_PACKED'
-                    highlight_img.colorspace_settings.name = 'sRGB'
+                    highlight_img = load_or_get_image(img_p, f_name)
+                    if highlight_img:
+                        highlight_img.alpha_mode = 'CHANNEL_PACKED'
+                        highlight_img.colorspace_settings.name = 'sRGB'
 
             # Find pupil blend / packed ramp with priority
             ramp_candidates = []
@@ -2285,9 +2304,10 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                 ramp_candidates.sort(key=lambda x: x[0], reverse=True)
                 best_ramp_file = ramp_candidates[0][1]
                 img_p = os.path.normpath(os.path.join(name, best_ramp_file))
-                pupil_ramp_img = bpy.data.images.get(best_ramp_file) or bpy.data.images.load(filepath=img_p, check_existing=True)
-                pupil_ramp_img.alpha_mode = 'CHANNEL_PACKED'
-                pupil_ramp_img.colorspace_settings.name = 'sRGB'
+                pupil_ramp_img = load_or_get_image(img_p, best_ramp_file)
+                if pupil_ramp_img:
+                    pupil_ramp_img.alpha_mode = 'CHANNEL_PACKED'
+                    pupil_ramp_img.colorspace_settings.name = 'sRGB'
 
             for f_name in files:
                 f_lower = f_name.lower()
@@ -2299,11 +2319,12 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                             f'pupil 0{k_num}' in f_lower or f'pupil 00{k_num}' in f_lower or f'pupil{k_0num}_' in f_lower or f'pupil{k_num}_' in f_lower or
                             f'pupila{k_0num}' in f_lower or f'pupila{k_num}' in f_lower or f'pupila_{k_0num}' in f_lower or f'pupila_{k_num}' in f_lower):
                             img_p = os.path.normpath(os.path.join(name, f_name))
-                            img_obj = bpy.data.images.get(f_name) or bpy.data.images.load(filepath=img_p, check_existing=True)
-                            img_obj.alpha_mode = 'CHANNEL_PACKED'
-                            img_obj.colorspace_settings.name = 'sRGB'
-                            pupil_diffuse_images[k_0num] = img_obj
-                            pupil_diffuse_images[k_num] = img_obj
+                            img_obj = load_or_get_image(img_p, f_name)
+                            if img_obj:
+                                img_obj.alpha_mode = 'CHANNEL_PACKED'
+                                img_obj.colorspace_settings.name = 'sRGB'
+                                pupil_diffuse_images[k_0num] = img_obj
+                                pupil_diffuse_images[k_num] = img_obj
                             break
 
             has_multiple_pupil_diffuse = len(pupil_diffuse_images) > 1
@@ -2383,9 +2404,9 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
             for file in files:
                 # load the file with the correct alpha mode
                 img_path = os.path.normpath(os.path.join(name, file))
-                img = bpy.data.images.get(file)
+                img = load_or_get_image(img_path, file)
                 if not img:
-                    img = bpy.data.images.load(filepath=img_path, check_existing=True)
+                    continue
                 img.alpha_mode = 'CHANNEL_PACKED'
 
                 effect_hair_material = bpy.data.materials.get(f'{self.material_names.EFFECT_HAIR}') or \
@@ -2709,18 +2730,27 @@ class GenshinNPCTextureImporter(GenshinTextureImporter):
         self.shader_material_names = self.shader_identifier_service.get_shader_material_names_using_shader(self.genshin_shader_version)
 
     def import_textures(self, directory):
+        fix_missing_textures(directory)
         if self.import_textures_from_json(directory):
             for mat in bpy.data.materials:
                 if mat.use_nodes and not any(k in mat.name.lower() for k in ['outlines', 'outline', 'face', 'pupil', 'brow', 'eye']):
                     sync_material_category_textures(mat)
             return
 
+        image_exts = ('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff', '.webp')
         for name, folder, files in os.walk(directory):
+            if "__MACOSX" in name:
+                continue
+            files = [f for f in files if not f.startswith("._") and not f.startswith(".")]
             self.files = files
             for file in files:
+                if not file.lower().endswith(image_exts):
+                    continue
                 # load the file with the correct alpha mode
                 img_path = os.path.normpath(os.path.join(name, file))
-                img = bpy.data.images.load(filepath = img_path, check_existing=True)
+                img = load_or_get_image(img_path, file)
+                if not img:
+                    continue
                 img.alpha_mode = 'CHANNEL_PACKED'
 
                 hair_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}Hair')
@@ -2888,18 +2918,27 @@ class GenshinMonsterTextureImporter(GenshinTextureImporter):
         self.genshin_shader_version = self.shader_identifier_service.identify_shader(bpy.data.materials, bpy.data.node_groups)
 
     def import_textures(self, directory):
+        fix_missing_textures(directory)
         if self.import_textures_from_json(directory):
             for mat in bpy.data.materials:
                 if mat.use_nodes and not any(k in mat.name.lower() for k in ['outlines', 'outline', 'face', 'pupil', 'brow', 'eye']):
                     sync_material_category_textures(mat)
             return
 
+        image_exts = ('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff', '.webp')
         for name, folder, files in os.walk(directory):
+            if "__MACOSX" in name:
+                continue
+            files = [f for f in files if not f.startswith("._") and not f.startswith(".")]
             self.files = files
             for file in files:
+                if not file.lower().endswith(image_exts):
+                    continue
                 # load the file with the correct alpha mode
                 img_path = os.path.normpath(os.path.join(name, file))
-                img = bpy.data.images.load(filepath = img_path, check_existing=True)
+                img = load_or_get_image(img_path, file)
+                if not img:
+                    continue
                 img.alpha_mode = 'CHANNEL_PACKED'
 
                 hair_material = bpy.data.materials.get(f'{self.material_names.MATERIAL_PREFIX}Hair')
@@ -3092,9 +3131,18 @@ class HonkaiStarRailTextureImporter(GenshinTextureImporter):
             weapon_ramp_node.image = img
 
     def set_facemap_texture(self, img):
-        img.colorspace_settings.name='Non-Color'
-        bpy.data.node_groups[self.texture_node_names.FACE_LIGHTMAP_NODE_GROUP].nodes[
-            self.texture_node_names.FACE_LIGHTMAP].image = img
+        img.colorspace_settings.name = 'Non-Color'
+        group_name = getattr(self.texture_node_names, "FACE_LIGHTMAP_NODE_GROUP", "")
+        node_name = getattr(self.texture_node_names, "FACE_LIGHTMAP", "Face_Lightmap")
+        ng = bpy.data.node_groups.get(group_name)
+        if ng and node_name in ng.nodes:
+            ng.nodes[node_name].image = img
+        else:
+            for group in bpy.data.node_groups:
+                node = group.nodes.get(node_name) or group.nodes.get("Face_Lightmap") or group.nodes.get("Lightmap")
+                if node and hasattr(node, "image"):
+                    node.image = img
+                    break
 
     def set_face_expression_texture(self, face_material, img):
         img.colorspace_settings.name='Non-Color'
@@ -3201,9 +3249,10 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
         for fname, fpath in image_files:
             stem = os.path.splitext(fname)[0]
             if stem.lower() == t_low:
-                img = bpy.data.images.get(fname) or bpy.data.images.load(filepath=fpath, check_existing=True)
-                img.alpha_mode = 'CHANNEL_PACKED'
-                return img
+                img = load_or_get_image(fpath, fname)
+                if img:
+                    img.alpha_mode = 'CHANNEL_PACKED'
+                    return img
 
         # 2. Match ignoring common prefixes
         t_no_prefix = re.sub(r'^(avatar_tex_|tex_avatar_|tex_|avatar_)', '', t_low)
@@ -3211,24 +3260,27 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
             stem = os.path.splitext(fname)[0].lower()
             stem_no_prefix = re.sub(r'^(avatar_tex_|tex_avatar_|tex_|avatar_)', '', stem)
             if stem_no_prefix == t_no_prefix or stem == t_no_prefix or stem_no_prefix == t_low:
-                img = bpy.data.images.get(fname) or bpy.data.images.load(filepath=fpath, check_existing=True)
-                img.alpha_mode = 'CHANNEL_PACKED'
-                return img
+                img = load_or_get_image(fpath, fname)
+                if img:
+                    img.alpha_mode = 'CHANNEL_PACKED'
+                    return img
 
         # 3. Prefix / Suffix match
         for fname, fpath in image_files:
             stem = os.path.splitext(fname)[0].lower()
             if stem.startswith(t_low) or t_low.startswith(stem) or stem.endswith(t_low) or t_low.endswith(stem):
-                img = bpy.data.images.get(fname) or bpy.data.images.load(filepath=fpath, check_existing=True)
-                img.alpha_mode = 'CHANNEL_PACKED'
-                return img
+                img = load_or_get_image(fpath, fname)
+                if img:
+                    img.alpha_mode = 'CHANNEL_PACKED'
+                    return img
 
         # 4. Substring match
         for fname, fpath in image_files:
             if t_low in fname.lower() or fname.lower() in t_low:
-                img = bpy.data.images.get(fname) or bpy.data.images.load(filepath=fpath, check_existing=True)
-                img.alpha_mode = 'CHANNEL_PACKED'
-                return img
+                img = load_or_get_image(fpath, fname)
+                if img:
+                    img.alpha_mode = 'CHANNEL_PACKED'
+                    return img
 
         return None
 
@@ -3439,9 +3491,10 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
         for fname, fpath in image_files:
             f_low = fname.lower()
             if ('lightmap' in f_low or 'ligthmap' in f_low) and bp_low in f_low and not any(k in f_low for k in ['color', 'diffuse', 'eff', 'lut', 'curve', 'materialid']):
-                img = bpy.data.images.get(fname) or bpy.data.images.load(filepath=fpath, check_existing=True)
-                img.alpha_mode = 'CHANNEL_PACKED'
-                return img
+                img = load_or_get_image(fpath, fname)
+                if img:
+                    img.alpha_mode = 'CHANNEL_PACKED'
+                    return img
 
         return None
 
@@ -3506,6 +3559,7 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
                         self.set_stocking_texture(TextureType.BODY, body_mat, img)
 
     def import_textures(self, directory):
+        fix_missing_textures(directory)
         image_files = self._collect_image_files(directory)
         json_map = self._build_hsr_json_texture_map(directory)
 
@@ -3727,12 +3781,21 @@ class PunishingGrayRavenAvatarTextureImporter(PunishingGrayRavenTextureImporter)
         self.genshin_shader_version = shader_identifier_service.identify_shader(bpy.data.materials, bpy.data.node_groups)
 
     def import_textures(self, directory):
+        fix_missing_textures(directory)
         for name, folder, files in os.walk(directory):
-            self.files = files
+            if "__MACOSX" in name:
+                continue
+            image_exts = ('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff', '.webp')
             for file in files:
+                if file.startswith("._") or file.startswith("."):
+                    continue
+                if not file.lower().endswith(image_exts):
+                    continue
                 # load the file with the correct alpha mode
-                img_path = directory + "/" + file
-                img = bpy.data.images.load(filepath = img_path, check_existing=True)
+                img_path = os.path.join(name, file)
+                img = load_or_get_image(img_path, file)
+                if not img:
+                    continue
                 img.alpha_mode = 'CHANNEL_PACKED'
 
                 alpha_material = bpy.data.materials.get(f'{self.material_names.ALPHA}')
@@ -3755,13 +3818,25 @@ class PunishingGrayRavenAvatarTextureImporter(PunishingGrayRavenTextureImporter)
                         continue
 
                     materials = [material for material in bpy.data.materials if material.name.replace(JaredNytsPunishingGrayRavenShaderMaterialNames.MATERIAL_PREFIX, '') in texture_body_part_name]
+                    matched_by_name = False
 
                     # Check cases where textures are not prefixed with body part names
                     if not materials:
                         texture_body_part_name = material_identifer_service.search_original_material_user_for_body_part_name(file)
-                        if not texture_body_part_name:
-                            continue
-                        materials = [material for material in bpy.data.materials if material.name.replace(JaredNytsPunishingGrayRavenShaderMaterialNames.MATERIAL_PREFIX, '') in texture_body_part_name]
+                        if texture_body_part_name:
+                            materials = [material for material in bpy.data.materials if material.name.replace(JaredNytsPunishingGrayRavenShaderMaterialNames.MATERIAL_PREFIX, '') in texture_body_part_name]
+                    if not materials:
+                        # Some accessories put the part before the model ID
+                        # (R3Kurumi_clockMd010011.png), not after it.
+                        normalized_file = re.sub(r'[^a-z0-9]', '', os.path.splitext(file)[0].lower())
+                        used_materials = {slot.material for obj in bpy.context.scene.objects if obj.type == 'MESH'
+                                          for slot in obj.material_slots if slot.material}
+                        prefix = JaredNytsPunishingGrayRavenShaderMaterialNames.MATERIAL_PREFIX
+                        materials = [material for material in used_materials
+                                     if material.name.startswith(prefix) and material.node_tree
+                                     and material.node_tree.nodes.get(self.texture_node_names.DIFFUSE)
+                                     and re.sub(r'[^a-z0-9]', '', material.name[len(prefix):].lower()) in normalized_file]
+                        matched_by_name = bool(materials)
 
                     if materials:
                         material = bpy.data.materials.get(max([material.name for material in materials], key=len))
@@ -3792,7 +3867,8 @@ class PunishingGrayRavenAvatarTextureImporter(PunishingGrayRavenTextureImporter)
                                 self.set_lut_texture(TextureType.FACE, material, img)
                             else:
                                 self.set_lut_texture(TextureType.BODY, material, img)
-                        elif file.endswith(f'{body_part_name}.png'):
+                        elif file.endswith(f'{body_part_name}.png') or (matched_by_name and
+                                not self.is_one_texture_identifier_in_texture_name(['UV', 'MC', 'HET'], file)):
                             if 'Face' in file:
                                 self.set_diffuse_texture(TextureType.FACE, material, img)
                             else:
@@ -3828,8 +3904,9 @@ class PunishingGrayRavenAvatarTextureImporter(PunishingGrayRavenTextureImporter)
         if image_exists:
             print(f'Reloading texture! {img}')
             bpy.data.images.remove(image_exists[0])
-            img = bpy.data.images.load(filepath = img_path, check_existing=True)
-            img.alpha_mode = 'CHANNEL_PACKED'
+            img = load_or_get_image(img_path)
+            if img:
+                img.alpha_mode = 'CHANNEL_PACKED'
         return img
 
 class PunishingGrayRavenChibiTextureImporter(PunishingGrayRavenTextureImporter):

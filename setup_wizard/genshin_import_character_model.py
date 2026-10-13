@@ -8,7 +8,7 @@ import math
 import pathlib
 
 import bpy
-from mathutils import Vector
+from mathutils import Matrix, Vector
 from bpy.props import StringProperty
 from bpy.types import Operator
 
@@ -57,9 +57,30 @@ def is_rigging_disabled(context=None):
 
 def _execute_fbx_import(filepath):
     """
-    Executes FBX import using the experimental C++ wm.fbx_import.
-    Falls back to import_scene.fbx if wm.fbx_import is not available.
+    Executes FBX import.
+    In Blender < 4.5, prioritizes BetterFBX if installed.
+    Falls back to experimental C++ wm.fbx_import or standard import_scene.fbx.
     """
+    if os.path.basename(filepath).startswith("._"):
+        real_candidate = os.path.join(os.path.dirname(filepath), os.path.basename(filepath)[2:])
+        if os.path.isfile(real_candidate):
+            filepath = real_candidate
+        else:
+            raise RuntimeError(f"Cannot import invalid macOS metadata file: {filepath}")
+
+    from setup_wizard.utils.better_fbx_utils import (
+        is_blender_version_lower_than_4_5,
+        is_better_fbx_installed,
+    )
+
+    if is_blender_version_lower_than_4_5() and is_better_fbx_installed():
+        try:
+            print(f"[SETUP WIZARD] Importing FBX using BetterFBX: {filepath}")
+            bpy.ops.better_import.fbx(filepath=filepath)
+            return
+        except Exception as e:
+            print(f"[SETUP WIZARD] bpy.ops.better_import.fbx failed ({e}), falling back to standard importer")
+
     if hasattr(bpy.ops.wm, "fbx_import"):
         try:
             bpy.ops.wm.fbx_import(
@@ -305,6 +326,39 @@ def apply_spine_rest_pose(armature):
             pass
 
 
+def normalize_zzz_spine_bind_pose(armature):
+    """Correct inverted FBX spine bind joints before discarding import offsets."""
+    bones = armature.data.bones
+    spine = [bone for bone in bones if bone.name == 'Bip001 Spine'
+             or (bone.name.startswith('Bip001 Spine')
+                 and bone.name[len('Bip001 Spine'):].isdigit())]
+    pelvis, head = bones.get('Bip001 Pelvis'), bones.get('Bip001 Head')
+    if len(spine) < 2 or not pelvis or not head:
+        return
+    bpy.context.view_layer.update()
+    axis = head.head_local - pelvis.head_local
+    if axis.length < 1e-5:
+        return
+    axis.normalize()
+    matrices = {bone.name: armature.pose.bones[bone.name].matrix.copy() for bone in spine}
+    inverted = [bone for bone in spine if bone.parent in spine
+                and (bone.head_local - bone.parent.head_local).dot(axis) < -0.001]
+    if not inverted or any((matrices[bone.name].translation
+                            - matrices[bone.parent.name].translation).dot(axis) <= 0.001
+                           for bone in inverted):
+        return
+    bpy.context.view_layer.objects.active = armature
+    armature.select_set(True)
+    bpy.ops.object.mode_set(mode='EDIT')
+    for name, matrix in matrices.items():
+        armature.data.edit_bones[name].matrix = matrix
+    bpy.ops.object.mode_set(mode='OBJECT')
+    for name in matrices:
+        armature.pose.bones[name].matrix_basis.identity()
+    bpy.context.view_layer.update()
+    print('[ZZZ IMPORT] Corrected inverted spine bind joints:', ', '.join(matrices))
+
+
 def clear_armature_pose(armature):
     """
     Clears all pose transformations (location, rotation, scale) for all bones in the armature.
@@ -446,6 +500,27 @@ class ZZZ_OT_SetUpCharacter(Operator, BasicSetupUIOperator):
     bl_label = "Zenless Zone Zero: Set Up Character (UI)"
 
 
+class PGR_OT_SetUpCharacter(Operator, BasicSetupUIOperator):
+    """Sets Up Character"""
+
+    bl_idname = "punishing_gray_raven.set_up_character"
+    bl_label = "Punishing Gray Raven: Set Up Character (UI)"
+
+
+class HI3_OT_SetUpCharacter(Operator, BasicSetupUIOperator):
+    """Sets Up Character"""
+
+    bl_idname = "honkai_impact_3rd.set_up_character"
+    bl_label = "Honkai Impact 3rd: Set Up Character (UI)"
+
+
+class HNA_OT_SetUpCharacter(Operator, BasicSetupUIOperator):
+    """Sets Up Character"""
+
+    bl_idname = "honkai_nexus_anima.set_up_character"
+    bl_label = "Honkai: Nexus Anima: Set Up Character (UI)"
+
+
 def find_largest_uemodel_file(directory_or_file):
     """
     Finds the largest .uemodel file in the given directory or file path.
@@ -456,7 +531,11 @@ def find_largest_uemodel_file(directory_or_file):
         return None
 
     if os.path.isfile(directory_or_file):
-        if directory_or_file.lower().endswith(".uemodel"):
+        if os.path.basename(directory_or_file).startswith("._"):
+            real_cand = os.path.join(os.path.dirname(directory_or_file), os.path.basename(directory_or_file)[2:])
+            if os.path.isfile(real_cand) and real_cand.lower().endswith(".uemodel"):
+                return real_cand
+        elif directory_or_file.lower().endswith(".uemodel"):
             return directory_or_file
         directory_or_file = os.path.dirname(directory_or_file)
 
@@ -465,7 +544,11 @@ def find_largest_uemodel_file(directory_or_file):
 
     uemodel_files = []
     for root, _, files in os.walk(directory_or_file):
+        if "__MACOSX" in root:
+            continue
         for file_name in files:
+            if file_name.startswith("._") or file_name.startswith("."):
+                continue
             if file_name.lower().endswith(".uemodel"):
                 full_path = os.path.join(root, file_name)
                 try:
@@ -726,10 +809,18 @@ class WW_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
         fbx_path = None
         if not uemodel_path:
             if not os.path.isdir(self.filepath) and self.filepath.lower().endswith(".fbx"):
-                fbx_path = self.filepath
+                if os.path.basename(self.filepath).startswith("._"):
+                    real_c = os.path.join(os.path.dirname(self.filepath), os.path.basename(self.filepath)[2:])
+                    fbx_path = real_c if os.path.isfile(real_c) else None
+                else:
+                    fbx_path = self.filepath
             elif os.path.isdir(self.filepath):
                 for root, _, files in os.walk(self.filepath):
+                    if "__MACOSX" in root:
+                        continue
                     for f in files:
+                        if f.startswith("._") or f.startswith("."):
+                            continue
                         if f.lower().endswith(".fbx"):
                             fbx_path = os.path.join(root, f)
                             break
@@ -875,10 +966,72 @@ def compute_ake_smoothnormal_ws(mesh_obj):
         print(f"[AKE SETUP] smoothnormalWS notice for {mesh_obj.name}: {e}")
 
 
-def handle_ake_post_import(context):
-    """Handles post FBX import operations for Arknights: Endfield: clearing imported pose, rotating -90 deg X to stand upright, normal smoothing, vertex color attributes, face subpart vertex weighting, face mesh joining, and hiding auxiliary parts."""
-    # 0. Clear baked import pose and stand model upright (-90 deg on X)
-    armatures = [o for o in bpy.data.objects if o.type == 'ARMATURE']
+def ensure_ake_upright(armature, objects, context):
+    """Choose a quarter-turn from anatomical landmarks in world rest space.
+
+    Keep upright models unchanged. Missing/degenerate landmarks are ambiguous:
+    accessory bounds and root rotations alone cannot identify a body's up axis.
+    """
+    def find_bone(*names):
+        normalized = {''.join(c for c in b.name.lower() if c.isalnum()): b
+                      for b in armature.data.bones}
+        return next((normalized[name] for name in names if name in normalized), None)
+
+    head = find_bone('bip001head', 'head', 'headjoint')
+    pelvis = find_bone('bip001pelvis', 'pelvis', 'hips', 'hipjoint')
+    if head is None or pelvis is None:
+        print(f"[AKE SETUP] {armature.name}: orientation unknown (missing head/pelvis); skipped rotation.")
+        return False
+
+    context.view_layer.update()
+    world = armature.matrix_world.copy()
+    up = world.to_3x3() @ (head.head_local - pelvis.head_local)
+    if up.length < 1e-6:
+        print(f"[AKE SETUP] {armature.name}: orientation unknown (coincident landmarks); skipped rotation.")
+        return False
+    up.normalize()
+    # Use the feet as a second anatomical check when available.
+    feet = [b for b in (find_bone('bip001lfoot', 'footl'),
+                        find_bone('bip001rfoot', 'footr')) if b is not None]
+    body_up = up.copy()
+    if feet:
+        feet_center = sum((b.head_local for b in feet), Vector()) / len(feet)
+        body_up = world.to_3x3() @ (head.head_local - feet_center)
+        if body_up.length < 1e-6:
+            return False
+        body_up.normalize()
+
+    if min(up.z, body_up.z) >= 0.85:
+        print(f"[AKE SETUP] {armature.name}: already upright; no rotation needed.")
+        return False
+
+    candidates = [(axis, degrees, Matrix.Rotation(math.radians(degrees), 4, axis))
+                  for axis in ('X', 'Y') for degrees in (90, -90, 180)]
+    axis, degrees, rotation = max(
+        candidates, key=lambda item: min((item[2].to_3x3() @ up).z,
+                                        (item[2].to_3x3() @ body_up).z))
+    if min((rotation.to_3x3() @ up).z, (rotation.to_3x3() @ body_up).z) < 0.85:
+        print(f"[AKE SETUP] {armature.name}: ambiguous body orientation; skipped rotation.")
+        return False
+
+    # Rotate imported hierarchy roots together, including detached mesh siblings.
+    # Snapshot matrices first so a parent update cannot cause a second rotation.
+    objects = set(objects)
+    roots = [(obj, obj.matrix_world.copy()) for obj in objects if obj.parent not in objects]
+    pivot = world.translation
+    correction = Matrix.Translation(pivot) @ rotation @ Matrix.Translation(-pivot)
+    for obj, matrix in roots:
+        obj.matrix_world = correction @ matrix
+    context.view_layer.update()
+    print(f"[AKE SETUP] {armature.name}: corrected orientation ({degrees:+d} degrees on {axis}).")
+    return True
+
+
+def handle_ake_post_import(context, imported_objects=None):
+    """Normalize imported AKE orientation, normals, colors and face subparts."""
+    objects = list(imported_objects if imported_objects is not None else context.selected_objects)
+    # 0. Clear baked import pose, then inspect anatomical orientation.
+    armatures = [o for o in objects if o.type == 'ARMATURE']
     if armatures:
         armature = armatures[0]
         orig_mode = bpy.context.object.mode if bpy.context.object else 'OBJECT'
@@ -894,26 +1047,37 @@ def handle_ake_post_import(context):
             armature.select_set(True)
             context.view_layer.objects.active = armature
 
+            # Some NPC irises are rigid meshes parented to an FBX LOD bone.
+            # Bone-chain cleanup changes that bone's tail, which Blender uses
+            # as the rigid parent origin. Preserve the imported world position
+            # before editing bones; iris weights below provide head/eye motion.
+            context.view_layer.update()
+            for mesh in objects:
+                if (mesh.type == 'MESH' and 'iris' in mesh.name.lower()
+                        and mesh.parent == armature and mesh.parent_type == 'BONE'):
+                    world = mesh.matrix_world.copy()
+                    mesh.parent_type = 'OBJECT'
+                    mesh.parent_bone = ''
+                    mesh.matrix_parent_inverse = armature.matrix_world.inverted()
+                    mesh.matrix_world = world
+            context.view_layer.update()
+
             # Select all in pose mode and clear all pose transforms
             bpy.ops.object.mode_set(mode='POSE')
             bpy.ops.pose.select_all(action='SELECT')
             bpy.ops.pose.transforms_clear()
             bpy.ops.object.mode_set(mode='OBJECT')
 
-            # Clearing baked pose makes the character lie flat on the floor because FBX imported with rot_x = +90 deg.
-            # Rotate -90 degrees on X to stand upright.
-            armature.rotation_euler.x -= math.radians(90)
-            context.view_layer.update()
+            ensure_ake_upright(armature, objects, context)
 
-            # Apply rotation transforms across armature and all child meshes
-            meshes = [o for o in bpy.data.objects if o.type == 'MESH']
+            # Bake only this import's armature/mesh rotations for rig generation.
+            meshes = [o for o in objects if o.type == 'MESH']
             bpy.ops.object.select_all(action='DESELECT')
             armature.select_set(True)
             for m in meshes:
                 m.select_set(True)
             context.view_layer.objects.active = armature
             bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
-            print("[AKE SETUP] Cleared import pose, rotated -90 deg on X, and applied transforms successfully.")
             if not is_rigging_disabled(context):
                 reorient_armature_bones(armature)
         except Exception as e:
@@ -926,7 +1090,7 @@ def handle_ake_post_import(context):
                 pass
 
     # 1. Compute smoothnormalWS and ensure Color vertex attribute exists for all meshes
-    for obj in bpy.data.objects:
+    for obj in objects:
         if obj.type == 'MESH':
             compute_ake_smoothnormal_ws(obj)
             mesh = obj.data
@@ -939,7 +1103,7 @@ def handle_ake_post_import(context):
                     pass
 
     # 2. Fix vertex group weighting for face subparts before joining
-    meshes = [o for o in bpy.data.objects if o.type == 'MESH']
+    meshes = [o for o in objects if o.type == 'MESH']
     face_mesh = next((o for o in meshes if 'face_01' in o.name.lower() or 'face' in o.name.lower()), None)
     iris_mesh = next((o for o in meshes if 'iris_01' in o.name.lower() or 'iris' in o.name.lower()), None)
     join_targets = [
@@ -947,23 +1111,19 @@ def handle_ake_post_import(context):
         if o != face_mesh and any(k in o.name.lower() for k in ['eyebrow', 'brow', 'iris', 'eyeshadow', 'eyewhite'])
     ]
 
-    # Assign Bip001_Head and eye bone weights to iris so it moves with the head and eye controllers
+    # Iris joints inherit the head transform without duplicate deform weights.
     if iris_mesh:
-        vg_head = iris_mesh.vertex_groups.get('Bip001_Head') or iris_mesh.vertex_groups.new(name='Bip001_Head')
-        for v in iris_mesh.data.vertices:
-            vg_head.add([v.index], 1.0, 'REPLACE')
+        vg_head = iris_mesh.vertex_groups.get('Bip001_Head')
+        if vg_head:
+            iris_mesh.vertex_groups.remove(vg_head)
 
         vg_lf = iris_mesh.vertex_groups.get('faceLfIrisJoint') or iris_mesh.vertex_groups.new(name='faceLfIrisJoint')
         vg_rt = iris_mesh.vertex_groups.get('faceRtIrisJoint') or iris_mesh.vertex_groups.new(name='faceRtIrisJoint')
-        vg_def_lf = iris_mesh.vertex_groups.get('DEF-eye.L') or iris_mesh.vertex_groups.new(name='DEF-eye.L')
-        vg_def_rt = iris_mesh.vertex_groups.get('DEF-eye.R') or iris_mesh.vertex_groups.new(name='DEF-eye.R')
         for v in iris_mesh.data.vertices:
             if v.co.x > 0:
                 vg_lf.add([v.index], 1.0, 'REPLACE')
-                vg_def_lf.add([v.index], 1.0, 'REPLACE')
             else:
                 vg_rt.add([v.index], 1.0, 'REPLACE')
-                vg_def_rt.add([v.index], 1.0, 'REPLACE')
 
     # Ensure eyebrows and eyeshadow have Bip001_Head vertex group
     for obj in join_targets:
@@ -983,13 +1143,15 @@ def handle_ake_post_import(context):
             context.view_layer.objects.active = face_mesh
             for o in join_targets:
                 o.select_set(True)
+            remaining_objects = [o for o in objects if o not in join_targets]
             bpy.ops.object.join()
+            objects = remaining_objects
         except Exception as e:
             print(f"[AKE SETUP] Face join notice: {e}")
 
 
     # 4. Hide auxiliary vfxpart meshes
-    for o in bpy.data.objects:
+    for o in objects:
         if o.type == 'MESH' and ('vfxpart' in o.name.lower() or 'eyestar' in o.name.lower()):
             try:
                 o.hide_viewport = True
@@ -1029,10 +1191,18 @@ class AKE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
         folder = self.filepath if os.path.isdir(self.filepath) else os.path.dirname(self.filepath)
         fbx_path = None
         if not os.path.isdir(self.filepath) and self.filepath.lower().endswith(".fbx"):
-            fbx_path = self.filepath
+            if os.path.basename(self.filepath).startswith("._"):
+                real_c = os.path.join(os.path.dirname(self.filepath), os.path.basename(self.filepath)[2:])
+                fbx_path = real_c if os.path.isfile(real_c) else None
+            else:
+                fbx_path = self.filepath
         elif os.path.isdir(self.filepath):
             for root, _, files in os.walk(self.filepath):
+                if "__MACOSX" in root:
+                    continue
                 for f in files:
+                    if f.startswith("._") or f.startswith("."):
+                        continue
                     if f.lower().endswith(".fbx"):
                         fbx_path = os.path.join(root, f)
                         break
@@ -1055,10 +1225,11 @@ class AKE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
         except Exception:
             pass
 
+        existing_objects = set(bpy.data.objects)
         if fbx_path:
             _execute_fbx_import(fbx_path)
 
-        handle_ake_post_import(context)
+        handle_ake_post_import(context, [o for o in bpy.data.objects if o not in existing_objects])
 
         self.report({"INFO"}, f"Imported Arknights: Endfield character model")
         if self.next_step_idx:
@@ -1071,6 +1242,109 @@ class AKE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
             )
         super().clear_custom_properties()
         return {"FINISHED"}
+
+
+def setup_zzz_eyeshadow_uv(faceobj=None):
+    """
+    Detects floating upper-eye overlays geometrically and assigns 'Eye Transparent'.
+    The historical function name is retained for callers; UV coordinates are not used.
+    Guarantees that 'Eye Transparent' is always a secondary/separate slot, never slot 0 alone.
+    """
+    if faceobj is None:
+        for obj in bpy.data.objects:
+            if obj.type == "MESH" and "_face" in obj.name.lower() and "weapon" not in obj.name.lower() and "gun" not in obj.name.lower():
+                faceobj = obj
+                break
+        if not faceobj:
+            for obj in bpy.data.objects:
+                if obj.type == "MESH" and "face" in obj.name.lower():
+                    faceobj = obj
+                    break
+    if not faceobj or faceobj.type != 'MESH' or not faceobj.data:
+        return False
+
+    for obj in bpy.data.objects:
+        if "NPC" in obj.name:
+            return False
+
+    mesh = faceobj.data
+    from setup_wizard.utils.zzz_eyeshadow_geometry import classify_zzz_eyeshadow_faces
+    eyeshadow_face_indices = classify_zzz_eyeshadow_faces(faceobj)
+    if not eyeshadow_face_indices:
+        return False
+
+    # Ensure faceobj has a primary material slot for the face skin/head
+    # (Eye Transparent must ALWAYS be a secondary / separate material slot, never slot 0 alone!)
+    had_no_slots = (len(faceobj.material_slots) == 0)
+    if had_no_slots:
+        faceobj.data.materials.append(None)
+        for p in mesh.polygons:
+            p.material_index = 0
+    elif len(faceobj.material_slots) == 1 and faceobj.material_slots[0].material and faceobj.material_slots[0].material.name == "Eye Transparent":
+        # Slot 0 was previously erroneously set to Eye Transparent alone; clear it so it receives the face shader
+        faceobj.material_slots[0].material = None
+        for p in mesh.polygons:
+            p.material_index = 0
+        had_no_slots = True
+
+    # Recompute on every run so prior UV false positives on the iris are repaired.
+    for idx, slot in enumerate(faceobj.material_slots):
+        if idx > 0 and slot.material and slot.material.name == "Eye Transparent":
+            for polygon in mesh.polygons:
+                if polygon.material_index == idx and polygon.index not in eyeshadow_face_indices:
+                    polygon.material_index = 0
+
+    # Find or add 'Eye Transparent' material slot as a separate slot (idx > 0)
+    eye_transp_slot_idx = None
+    for idx, slot in enumerate(faceobj.material_slots):
+        if idx > 0 and slot.material and slot.material.name == "Eye Transparent":
+            eye_transp_slot_idx = idx
+            break
+
+    if eye_transp_slot_idx is None:
+        eye_transp_mat = bpy.data.materials.get("Eye Transparent")
+        if not eye_transp_mat:
+            import os
+            from setup_wizard.import_order import get_shader_file_path
+            from setup_wizard.domain.game_types import GameType
+            blend_path = get_shader_file_path(GameType.ZENLESS_ZONE_ZERO.name, 'outlines')
+            if blend_path and os.path.isfile(blend_path):
+                try:
+                    with bpy.data.libraries.load(blend_path, link=False) as (df, dt):
+                        if "Eye Transparent" in df.materials:
+                            dt.materials = ["Eye Transparent"]
+                    eye_transp_mat = bpy.data.materials.get("Eye Transparent")
+                except Exception as ex:
+                    print(f"Notice loading Eye Transparent: {ex}")
+        if not eye_transp_mat:
+            eye_transp_mat = bpy.data.materials.new(name="Eye Transparent")
+            eye_transp_mat.use_nodes = True
+
+        faceobj.data.materials.append(eye_transp_mat)
+        eye_transp_slot_idx = len(faceobj.material_slots) - 1
+
+    # If the mesh originally had only 1 material slot for the entire face, make sure
+    # all non-eyeshadow faces are assigned to slot 0 (the face material)
+    if had_no_slots or len(faceobj.material_slots) <= 2:
+        for p in mesh.polygons:
+            if p.index not in eyeshadow_face_indices:
+                p.material_index = 0
+
+    # Assign eyeshadow polygons to Eye Transparent slot
+    for p_idx in eyeshadow_face_indices:
+        mesh.polygons[p_idx].material_index = eye_transp_slot_idx
+
+    try:
+        from setup_wizard.services.zzz_outline_mask_service import create_face_outline_mask
+        create_face_outline_mask(faceobj)
+    except Exception as ex_mask:
+        print(f"Notice setting up face outline mask: {ex_mask}")
+
+    return True
+
+fix_zzz_eye_shadow = setup_zzz_eyeshadow_uv
+
+
 
 
 class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties):
@@ -1198,6 +1472,8 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
 
             if character_model_directory:
                 set_active_character_directory(character_model_directory)
+                from setup_wizard.utils.texture_utils import fix_missing_textures
+                fix_missing_textures(character_model_directory)
 
             global IMPORTED_VIA_WIZARD
             IMPORTED_VIA_WIZARD = True
@@ -1226,6 +1502,15 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
     def import_character_model(
         self, character_model_file_path_or_directory, is_character_model_file
     ):
+        if character_model_file_path_or_directory and os.path.isfile(character_model_file_path_or_directory):
+            if os.path.basename(character_model_file_path_or_directory).startswith("._"):
+                real_f = os.path.join(
+                    os.path.dirname(character_model_file_path_or_directory),
+                    os.path.basename(character_model_file_path_or_directory)[2:]
+                )
+                if os.path.isfile(real_f):
+                    character_model_file_path_or_directory = real_f
+
         if self.game_type == GameType.NEVERNESS_TO_EVERNESS.name:
             uemodel_path = find_largest_uemodel_file(character_model_file_path_or_directory)
             if not uemodel_path or not os.path.isfile(uemodel_path):
@@ -1467,6 +1752,17 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
         if self.game_type == GameType.ZENLESS_ZONE_ZERO.name:
             try:
                 _execute_fbx_import(character_model_file_path)
+                # Capture the FBX facial bind correction before any edit-mode
+                # bone cleanup can discard it, including chain connection.
+                if not is_rigging_disabled(bpy.context):
+                    from setup_wizard.character_rig_setup.character_riggers import _is_bangboo_character
+                    from setup_wizard.character_rig_setup.bangboo_rig import preserve_face_bind_rest
+                    for imported in bpy.context.scene.objects:
+                        if imported.name not in existing_objects and imported.type == 'ARMATURE':
+                            if _is_bangboo_character(bpy.context, imported):
+                                preserve_face_bind_rest(imported)
+                            else:
+                                normalize_zzz_spine_bind_pose(imported)
             except Exception as e:
                 # Clean up newly created objects
                 new_objects = [
@@ -1619,7 +1915,7 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                         mesh_obj.hide_viewport = True
                         mesh_obj.hide_render = True
 
-                self.fix_zzz_eye_shadow()
+                # ZZZ eye shadow mesh detection disabled
 
                 if obj and not is_rigging_disabled(bpy.context) and self.game_type in (
                     GameType.GENSHIN_IMPACT.name,
@@ -1664,6 +1960,13 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
             self.report({"ERROR"}, error_message)
             raise RuntimeError(error_message)
 
+        if self.game_type == GameType.GENSHIN_IMPACT.name:
+            import uuid
+            model_id = uuid.uuid4().hex
+            for imported in bpy.data.objects:
+                if imported.name not in existing_objects:
+                    imported['_setup_wizard_model_id'] = model_id
+
         for object in bpy.data.objects:
             if object.type == "MESH" and not object.data.uv_layers.get("UV1"):
                 object.data.uv_layers.new(name="UV1")
@@ -1678,8 +1981,14 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                 object.hide_viewport = True
                 object.hide_render = True
 
+        if self.game_type == GameType.HONKAI_IMPACT_3RD.name:
+            from setup_wizard.utils.hi3_model_utils import hide_hi3_body_shadow_meshes
+            hide_hi3_body_shadow_meshes([obj for obj in bpy.context.scene.objects
+                                        if obj.name not in existing_objects])
+
         if self.game_type == GameType.ARKNIGHTS_ENDFIELD.name:
-            handle_ake_post_import(bpy.context)
+            handle_ake_post_import(bpy.context, [o for o in bpy.data.objects
+                                                  if o.name not in existing_objects])
 
         # Align eye bones and connect bone chains if imported FBX has offsets
         for obj in bpy.data.objects:
@@ -1692,54 +2001,8 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                 except Exception:
                     pass
 
-    def fix_zzz_eye_shadow(self):
-        faceobj = None
-        for obj in bpy.data.objects:
-            if obj.type == "MESH" and "face" in obj.name.lower():
-                faceobj = obj
-                break
-        if faceobj:
-            try:
-                if faceobj.name in bpy.context.view_layer.objects:
-                    faceobj.hide_set(False)
-                    faceobj.hide_viewport = False
-                bpy.context.view_layer.objects.active = faceobj
-                faceobj.select_set(True)
-                if bpy.ops.object.mode_set.poll():
-                    bpy.ops.object.mode_set(mode="OBJECT")
-                bpy.ops.object.select_all(action="DESELECT")
-                faceobj.select_set(True)
-                bpy.context.view_layer.objects.active = faceobj
-
-                bpy.ops.object.mode_set(mode="EDIT")
-                bpy.ops.mesh.select_all(action="DESELECT")
-                if "Eye Transparent" in faceobj.vertex_groups:
-                    faceobj.vertex_groups.active = faceobj.vertex_groups[
-                        "Eye Transparent"
-                    ]
-                    bpy.ops.object.vertex_group_select()
-                    for group in faceobj.vertex_groups:
-                        if "highlight" in group.name.lower():
-                            faceobj.vertex_groups.active = group
-                            bpy.ops.object.vertex_group_deselect()
-                    bpy.ops.mesh.separate(type="SELECTED")
-                if bpy.ops.object.mode_set.poll():
-                    bpy.ops.object.mode_set(mode="OBJECT")
-
-                eye_obj = None
-                for ob in bpy.context.selected_objects:
-                    if ob != faceobj and ob.type == "MESH":
-                        eye_obj = ob
-                        break
-                if eye_obj:
-                    eye_obj.name = "EyeTransparent"
-            except Exception as e:
-                print("fixeyeshadow error:", e)
-                try:
-                    if bpy.ops.object.mode_set.poll():
-                        bpy.ops.object.mode_set(mode="OBJECT")
-                except Exception:
-                    pass
+    def fix_zzz_eye_shadow(self, faceobj=None):
+        return fix_zzz_eye_shadow(faceobj)
 
     def reset_pose_location_and_rotation(self):
         armatures = [
@@ -1780,8 +2043,12 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
 
     def __find_fbx_file(self, directory):
         for root, folder, files in os.walk(directory):
+            if "__MACOSX" in root:
+                continue
             for file_name in files:
-                if ".fbx" in pathlib.Path(file_name).suffix:
+                if file_name.startswith("._") or file_name.startswith("."):
+                    continue
+                if pathlib.Path(file_name).suffix.lower() == ".fbx":
                     return os.path.join(root, file_name)
 
 
@@ -1828,7 +2095,11 @@ class GI_OT_DeleteEmpties(Operator, CustomOperatorProperties):
                 obj = bpy.data.objects.get("Armature")
 
             if obj:
-
+                if not is_rigging_disabled(context):
+                    from setup_wizard.character_rig_setup.character_riggers import _is_bangboo_character
+                    from setup_wizard.character_rig_setup.bangboo_rig import preserve_face_markers
+                    if _is_bangboo_character(context, obj):
+                        preserve_face_markers(obj)
 
                 for object in bpy.data.objects:
                     if object.type == "MESH" and not object.data.uv_layers.get("UV1"):
@@ -1865,6 +2136,26 @@ class GI_OT_DeleteEmpties(Operator, CustomOperatorProperties):
                         should_delete = False
                         break
                 if should_delete:
+                    # If this empty is a root scaling node (e.g. FBX unit scaling 0.01) whose children
+                    # already have coordinate data in meters, resetting the empty's scale to 1.0 prevents
+                    # shrinking the character down to 1 cm.
+                    if any(abs(s - 0.01) < 0.005 for s in object.scale):
+                        already_in_meters = False
+                        for child in object.children:
+                            if child.type == "ARMATURE" and child.data and child.data.bones:
+                                max_b = max((max(abs(c) for c in b.head_local) for b in child.data.bones), default=0.0)
+                                if 0.2 < max_b < 10.0:
+                                    already_in_meters = True
+                                    break
+                            elif child.type == "MESH" and child.data and child.data.vertices:
+                                max_v = max((abs(v.co.z) for v in child.data.vertices[:min(100, len(child.data.vertices))]), default=0.0)
+                                if 0.2 < max_v < 10.0:
+                                    already_in_meters = True
+                                    break
+                        if already_in_meters:
+                            object.scale = (1.0, 1.0, 1.0)
+                            bpy.context.view_layer.update()
+
                     # Unparent any children of this empty, keeping their world transforms
                     for child in object.children:
                         matrix_world = child.matrix_world.copy()
@@ -1958,5 +2249,8 @@ register, unregister = bpy.utils.register_classes_factory(
         NTE_OT_SetUpCharacter,
         WW_OT_SetUpCharacter,
         AKE_OT_SetUpCharacter,
+        PGR_OT_SetUpCharacter,
+        HI3_OT_SetUpCharacter,
+        HNA_OT_SetUpCharacter,
     ]
 )

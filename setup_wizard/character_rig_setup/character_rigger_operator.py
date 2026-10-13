@@ -50,20 +50,15 @@ class HOYOVERSE_OT_rig_character(Operator, ImportHelper, CustomOperatorPropertie
         GameType.NEVERNESS_TO_EVERNESS.name,
         GameType.WUTHERING_WAVES.name,
         GameType.ARKNIGHTS_ENDFIELD.name,
+        GameType.PUNISHING_GRAY_RAVEN.name,
+        GameType.HONKAI_IMPACT_3RD.name,
+        GameType.HONKAI_NEXUS_ANIMA.name,
     ]
 
     def execute(self, context):
         props = getattr(context.scene, "character_rigger_props", None)
         disable_rigging = getattr(props, "disable_rigging", getattr(context.scene, "disable_rigging", False))
         if disable_rigging:
-            try:
-                from setup_wizard.ui.character_settings_utils import stamp_rig_game, hide_eyestar_if_unrigged
-                for obj in context.scene.objects:
-                    if obj.type == 'ARMATURE':
-                        stamp_rig_game(obj, self.game_type)
-                hide_eyestar_if_unrigged(context)
-            except Exception:
-                pass
             self.report(
                 {'INFO'},
                 'Rigging skipped. Disable Rigging is enabled in Setup Settings.'
@@ -318,6 +313,51 @@ def _apply_hair_clothes_physics_impl(self, context):
     return {'FINISHED'}
 
 
+def _remove_hair_clothes_physics_impl(self, context):
+    log_lines = []
+    def log(msg):
+        print(f"[GACHA SETUP LOG] {msg}")
+        log_lines.append(str(msg))
+
+    log("=======================================================")
+    log(">>> Button 'Remove Hair & Clothes Physics' CLICKED!")
+    act = context.active_object
+    log(f"Active object in context: {act.name if act else 'None'} ({act.type if act else 'None'})")
+    log(f"Selected objects: {[o.name for o in context.selected_objects]}")
+
+    from setup_wizard.character_rig_setup.rig_ui_utils import find_target_armature
+    armature = find_target_armature(context)
+    log(f"Target armature resolved: {armature.name if armature else 'None'}")
+
+    if not armature:
+        log("ERROR: No active or selected character armature found in scene!")
+        write_physics_log_datablock(log_lines)
+        self.report({'ERROR'}, "No active or selected character armature found")
+        return {'CANCELLED'}
+
+    log("\n--- Removing Damped Track Physics Constraints on Armature ---")
+    removed_constraints = 0
+    if armature.pose:
+        for pb in armature.pose.bones:
+            for c in pb.constraints:
+                if c.type == 'DAMPED_TRACK' and c.name in ["Hair_Physics_DampedTrack", "Clothes_Physics_DampedTrack"]:
+                    log(f"  • {pb.name:<24} | Constraint: '{c.name}' | Target: {c.subtarget}")
+                    pb.constraints.remove(c)
+                    removed_constraints += 1
+    armature["gi_has_physics"] = False
+    
+    log(f"Total Damped Track constraints removed: {removed_constraints}")
+    log("=======================================================")
+
+    write_physics_log_datablock(log_lines)
+    
+    if removed_constraints > 0:
+        self.report({'INFO'}, f"Removed Hair & Clothes Physics ({removed_constraints} bones affected)")
+    else:
+        self.report({'WARNING'}, "No qualifying hair or clothes bones found in the armature")
+    return {'FINISHED'}
+
+
 class HOYOVERSE_OT_apply_hair_clothes_physics(Operator):
     """Apply Damped Track physics to Hair (0.7) and Clothes (0.4) bone chains"""
     bl_idname = "hoyoverse.apply_hair_clothes_physics"
@@ -327,6 +367,17 @@ class HOYOVERSE_OT_apply_hair_clothes_physics(Operator):
 
     def execute(self, context):
         return _apply_hair_clothes_physics_impl(self, context)
+
+
+class HOYOVERSE_OT_remove_hair_clothes_physics(Operator):
+    """Remove Damped Track physics from Hair and Clothes bone chains"""
+    bl_idname = "hoyoverse.remove_hair_clothes_physics"
+    bl_label = "Remove Hair & Clothes Physics"
+    bl_description = "Removes Damped Track constraints from hair and clothes bones"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        return _remove_hair_clothes_physics_impl(self, context)
 
 
 class HOYOVERSE_OT_apply_hair_dress_physics(Operator):

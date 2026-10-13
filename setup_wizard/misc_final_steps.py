@@ -641,11 +641,11 @@ class HSR_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorPropertie
         return f"{desired_name}.{idx:03d}"
 
 
-class ZZZ_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties):
-    """Finish Setup"""
+class PGR_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties):
+    """Finish Setup for Punishing: Gray Raven"""
 
-    bl_idname = "zenless_zone_zero.finish_setup"
-    bl_label = "Zenless Zone Zero: Finish Setup (UI)"
+    bl_idname = "punishing_gray_raven.finish_setup"
+    bl_label = "Punishing Gray Raven: Finish Setup (UI)"
 
     def execute(self, context):
         result = BasicSetupUIOperator.execute(self, context)
@@ -653,7 +653,79 @@ class ZZZ_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorPropertie
             from setup_wizard.ui.character_settings_utils import stamp_rig_game
             for obj in context.scene.objects:
                 if obj.type == 'ARMATURE' and not any(ign in obj.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig", "wgt"]):
+                    stamp_rig_game(obj, GameType.PUNISHING_GRAY_RAVEN.name)
+        except Exception:
+            pass
+        return result
+
+
+class HI3_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties):
+    """Finish Setup for Honkai Impact 3rd"""
+
+    bl_idname = "honkai_impact_3rd.finish_setup"
+    bl_label = "Honkai Impact 3rd: Finish Setup (UI)"
+
+    def execute(self, context):
+        result = BasicSetupUIOperator.execute(self, context)
+        try:
+            from setup_wizard.ui.character_settings_utils import stamp_rig_game
+            for obj in context.scene.objects:
+                if obj.type == 'ARMATURE' and not any(ign in obj.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig", "wgt"]):
+                    stamp_rig_game(obj, GameType.HONKAI_IMPACT_3RD.name)
+        except Exception:
+            pass
+        from setup_wizard.utils.hi3_model_utils import hide_hi3_body_shadow_meshes
+        hide_hi3_body_shadow_meshes(context.scene.objects)
+        return result
+
+
+class HNA_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties):
+    """Finish Setup for Honkai: Nexus Anima"""
+
+    bl_idname = "honkai_nexus_anima.finish_setup"
+    bl_label = "Honkai: Nexus Anima: Finish Setup (UI)"
+
+    def execute(self, context):
+        result = BasicSetupUIOperator.execute(self, context)
+        try:
+            from setup_wizard.ui.character_settings_utils import stamp_rig_game
+            for obj in context.scene.objects:
+                if obj.type == 'ARMATURE' and not any(ign in obj.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig", "wgt"]):
+                    stamp_rig_game(obj, GameType.HONKAI_NEXUS_ANIMA.name)
+        except Exception:
+            pass
+        return result
+
+
+class ZZZ_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties):
+    """Finish Setup"""
+
+    bl_idname = "zenless_zone_zero.finish_setup"
+    bl_label = "Zenless Zone Zero: Finish Setup (UI)"
+
+    def execute(self, context):
+        # The generic ZZZ lighting steps can relink wheels and widgets afterward.
+        # Consolidate before invoking the next step/export, only for Bangboo rigs.
+        from setup_wizard.character_rig_setup.bangboo_rig import organize_bangboo_collections
+        for rig in list(context.scene.objects):
+            if rig.type == 'ARMATURE' and rig.data.get('bangboo_widget_unit'):
+                organize_bangboo_collections(rig, context)
+        result = BasicSetupUIOperator.execute(self, context)
+        try:
+            from setup_wizard.ui.character_settings_utils import stamp_rig_game
+            for obj in context.scene.objects:
+                if obj.type == 'ARMATURE' and not any(ign in obj.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig", "wgt"]):
                     stamp_rig_game(obj, GameType.ZENLESS_ZONE_ZERO.name)
+
+            if getattr(context.scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
+                import math
+                for obj in bpy.data.objects:
+                    if obj.name.startswith("Light Direction") or obj.name.startswith("Main Light Direction"):
+                        obj.rotation_mode = 'XYZ'
+                        obj.rotation_euler = (math.radians(90.0), 0.0, 0.0)
+
+            from setup_wizard.services.zzz_bloom_service import setup_zzz_bloom
+            setup_zzz_bloom(context.scene)
         except Exception:
             pass
         return result
@@ -1082,6 +1154,10 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
         return None
 
     def execute(self, context):
+        from setup_wizard.genshin_import_character_model import is_rigging_disabled
+        if self.game_type == GameType.HONKAI_NEXUS_ANIMA.name and is_rigging_disabled(context):
+            NextStepInvoker().invoke(self.next_step_idx, self.invoker_type, high_level_step_name=self.high_level_step_name, game_type=self.game_type)
+            return {"FINISHED"}
         if context.object and context.object.mode != "OBJECT":
             try:
                 bpy.ops.object.mode_set(mode="OBJECT")
@@ -1138,13 +1214,16 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
         if "Dehya" in armature.name and armature.animation_data:
             self.clean_character(armature)
 
-        # HSR, ZZZ, NTE, WuWa, and AKE models are typically already oriented correctly; forcing +90° X here breaks them.
+        # HSR, ZZZ, NTE, WuWa, AKE, HI3, HNA, and PGR models are typically already oriented correctly; forcing +90° X here breaks them.
         should_force_upright_rotation = self.game_type not in [
             GameType.ZENLESS_ZONE_ZERO.name,
             GameType.HONKAI_STAR_RAIL.name,
             GameType.NEVERNESS_TO_EVERNESS.name,
             GameType.WUTHERING_WAVES.name,
             GameType.ARKNIGHTS_ENDFIELD.name,
+            GameType.HONKAI_IMPACT_3RD.name,
+            GameType.HONKAI_NEXUS_ANIMA.name,
+            GameType.PUNISHING_GRAY_RAVEN.name,
         ]
 
         try:

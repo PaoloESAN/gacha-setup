@@ -62,6 +62,12 @@ class LightingPanel:
                 {'name': LightingPanelNames.Collections.LIGHTING_PANEL},
             ],
         )
+        for obj in bpy.data.objects:
+            if "colorwheel" in obj.name.lower():
+                try:
+                    obj.hide_render = True
+                except Exception:
+                    pass
 
     def prevent_lighting_issues_when_scaling_character(self, lighting_panel_armature):
         if not lighting_panel_armature:
@@ -251,6 +257,12 @@ class LightingPanel:
                 {'name': LightingPanelNames.Collections.LIGHTING_PANEL},
             ],
         )
+        for obj in bpy.data.objects:
+            if "colorwheel" in obj.name.lower():
+                try:
+                    obj.hide_render = True
+                except Exception:
+                    pass
 
     def prevent_lighting_issues_when_scaling_character(self, lighting_panel_armature):
         if not lighting_panel_armature:
@@ -266,7 +278,7 @@ class LightingPanel:
 
     def connect_lighting_panel_nodes_to_global_material_properties(self, target_materials=None):
         target_trees = set()
-        mats = target_materials if target_materials else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
+        mats = target_materials if target_materials is not None else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
         for mat in mats:
             if getattr(mat, "use_nodes", False) and mat.node_tree:
                 for node in mat.node_tree.nodes:
@@ -274,7 +286,7 @@ class LightingPanel:
                         if "global material properties" in node.node_tree.name.lower() or node.name == 'Global Properties':
                             target_trees.add(node.node_tree)
 
-        if not target_trees:
+        if not target_trees and target_materials is None:
             for ng in bpy.data.node_groups:
                 if "global material properties" in ng.name.lower():
                     target_trees.add(ng)
@@ -295,44 +307,84 @@ class LightingPanel:
 
 
 def disconnect_lighting_panel_nodes_from_global_material_properties(target_materials=None):
-    """Disconnects incoming links from internal lighting panel nodes to Global Properties inputs."""
-    target_trees = set()
-    mats = target_materials if target_materials else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
-    for mat in mats:
+    """Disconnect only lighting-panel links in explicitly supplied materials.
+
+    Missing or empty targets are a no-op. Shared property groups are copied so
+    switching one character's lighting mode cannot disconnect another's panel.
+    """
+    if target_materials is None:
+        return
+    grouped_nodes = {}
+    for mat in set(target_materials):
         if getattr(mat, "use_nodes", False) and mat.node_tree:
             for node in mat.node_tree.nodes:
                 if node.type == 'GROUP' and node.node_tree:
-                    if "global material properties" in node.node_tree.name.lower() or node.name == 'Global Properties':
-                        target_trees.add(node.node_tree)
+                    if "global material properties" in node.node_tree.name.lower() or "global properties" in node.node_tree.name.lower() or node.name == 'Global Properties':
+                        grouped_nodes.setdefault(node.node_tree, []).append(node)
 
-    if not target_trees:
-        for ng in bpy.data.node_groups:
-            if "global material properties" in ng.name.lower():
-                target_trees.add(ng)
-
-    lp_socket_keywords = [
-        "ambient", "sharp lit", "soft lit", "sharp shadow", "soft shadow",
-        "rim lit", "rim shadow", "rim scale", "toggle fresnel", "fresnel color",
-        "fresnel power", "fresnel scaler", "shadow pos"
-    ]
-
-    for tree in target_trees:
-        out_node = tree.nodes.get('Global Properties') or tree.nodes.get('Group Output')
-        if not out_node:
-            continue
-        for inp in out_node.inputs:
-            name_low = inp.name.lower()
-            if "face" in name_low:
-                continue
-            if any(k in name_low for k in lp_socket_keywords):
+    for tree, group_nodes in grouped_nodes.items():
+        if tree.users > len(group_nodes):
+            tree = tree.copy()
+            for node in group_nodes:
+                node.node_tree = tree
+        nodes_to_disconnect = [
+            n for n in tree.nodes
+            if n.name == 'Global Properties' or getattr(n, 'label', '') == 'Global Properties' or n.type == 'GROUP_OUTPUT'
+        ]
+        for out_node in nodes_to_disconnect:
+            for inp in out_node.inputs:
+                if "face" in inp.name.lower():
+                    continue
+                source_socket = get_lighting_panel_source_socket(tree, inp.name)
+                if source_socket is None:
+                    continue
                 for l in list(inp.links):
-                    tree.links.remove(l)
+                    if l.from_socket == source_socket:
+                        tree.links.remove(l)
+
+
+def setup_unrigged_genshin_lighting(context):
+    """Use static lighting for every part of the selected setup model."""
+    from setup_wizard.ui.character_settings_utils import get_character_materials
+
+    selected = [obj for obj in context.selected_objects if obj.type in {'ARMATURE', 'MESH'}]
+    active = context.view_layer.objects.active
+    target = active if active in selected else next(iter(selected), None)
+    if target is None:
+        return
+    model_id = target.get('_setup_wizard_model_id')
+    if target.type == 'MESH':
+        target = target.find_armature() or target
+    model_id = model_id or target.get('_setup_wizard_model_id')
+    _, materials = get_character_materials(context, arm=target)
+    materials = set(materials)
+    if model_id:
+        # Effects and detached mesh parts need not be skinned to the armature.
+        for obj in context.scene.objects:
+            if obj.type == 'MESH' and obj.get('_setup_wizard_model_id') == model_id:
+                materials.update(slot.material for slot in obj.material_slots if slot.material)
+    else:
+        # Older imports have no model ID. Equipment materials retain the Unity
+        # source name, including the model prefix before _Mat and effect suffixes.
+        def equipment_source(mat):
+            source = mat.get('_original_material_name', '')
+            if mat.get('_genshin_equipment') and source.startswith(('Equip_', 'EquipSkin_')):
+                return source.partition('_Mat')[0]
+            return None
+
+        sources = {equipment_source(mat) for mat in materials} - {None}
+        if sources:
+            for obj in context.scene.objects:
+                if obj.type == 'MESH':
+                    materials.update(slot.material for slot in obj.material_slots
+                                     if slot.material and equipment_source(slot.material) in sources)
+    disconnect_lighting_panel_nodes_from_global_material_properties(target_materials=materials)
 
 
 def is_lighting_panel_connected(target_materials=None) -> bool:
     """Checks whether the character's Global Properties node group has incoming links from the Lighting Panel."""
     target_trees = set()
-    mats = target_materials if target_materials else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
+    mats = target_materials if target_materials is not None else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
     for mat in mats:
         if getattr(mat, "use_nodes", False) and mat.node_tree:
             for node in mat.node_tree.nodes:
@@ -340,7 +392,7 @@ def is_lighting_panel_connected(target_materials=None) -> bool:
                     if "global material properties" in node.node_tree.name.lower() or node.name == 'Global Properties':
                         target_trees.add(node.node_tree)
 
-    if not target_trees:
+    if not target_trees and target_materials is None:
         for ng in bpy.data.node_groups:
             if "global material properties" in ng.name.lower():
                 target_trees.add(ng)
@@ -379,7 +431,7 @@ def is_lighting_panel_visible(arm) -> bool:
         return False
     # Blender 4.0+ bone collections
     if hasattr(arm.data, "collections"):
-        coll = arm.data.collections.get("Lighting")
+        coll = arm.data.collections.get("Light Panel") or arm.data.collections.get("Lighting")
         if coll:
             return bool(coll.is_visible)
     b = arm.data.bones.get(LightingPanelNames.Bones.LIGHTING_PANEL)
@@ -392,9 +444,13 @@ def set_lighting_panel_visibility(arm, visible: bool = True):
     """Sets visibility of Lighting Panel bone collection, bones, and helper objects."""
     if arm and arm.type == 'ARMATURE' and arm.data:
         if hasattr(arm.data, "collections"):
-            coll = arm.data.collections.get("Lighting")
-            if coll:
-                coll.is_visible = visible
+            for c_name in ["Light Panel", "Lighting"]:
+                coll = arm.data.collections.get(c_name)
+                if coll:
+                    coll.is_visible = visible
+            coll_extras = arm.data.collections.get("Light Panel Extras")
+            if coll_extras and not visible:
+                coll_extras.is_visible = False
         b = arm.data.bones.get(LightingPanelNames.Bones.LIGHTING_PANEL)
         if b:
             b.hide = not visible
@@ -403,8 +459,12 @@ def set_lighting_panel_visibility(arm, visible: bool = True):
         o_low = obj.name.lower()
         if any(k in o_low for k in ["lighting panel", "lightingpanel", "colorwheel", "colorpicker", "slider-", "origin-"]):
             try:
-                obj.hide_viewport = not visible
-                obj.hide_set(not visible)
+                # Bangboo uses the attached panel's controls; the standalone
+                # color wheel spheres otherwise float above its small body.
+                hide_helper = not visible
+                obj.hide_viewport = hide_helper
+                obj.hide_set(hide_helper)
+                obj.hide_render = True
             except Exception:
                 pass
 
@@ -561,3 +621,248 @@ class GlobalPropertiesNames:
             'valid_output_names': ['Value',],
         },
     }
+
+
+def connect_zzz_lighting_panel(target_materials=None):
+    """
+    Connects ZZZ lighting panel attributes to materials for both Kythera and Legacy shaders.
+    """
+    mats = target_materials if target_materials else [
+        m for m in bpy.data.materials
+        if getattr(m, "use_nodes", False) and m.node_tree
+        and not m.name.startswith("Kythera's ZZZ")
+        and getattr(m, "users", 1) > 0
+    ]
+    
+    # 1. Check for Kythera shader materials
+    lp_attr_group = bpy.data.node_groups.get("ZZZLightPanelAttr")
+    if not lp_attr_group:
+        from setup_wizard.import_order import get_shader_file_path
+        from setup_wizard.domain.game_types import GameType
+        setup_blend = get_shader_file_path(GameType.ZENLESS_ZONE_ZERO.name, file_type='outlines')
+        if setup_blend and os.path.isfile(setup_blend):
+            try:
+                bpy.ops.wm.append(
+                    filepath=os.path.join(setup_blend, "NodeTree", "ZZZLightPanelAttr"),
+                    directory=os.path.join(setup_blend, "NodeTree"),
+                    filename="ZZZLightPanelAttr"
+                )
+                lp_attr_group = bpy.data.node_groups.get("ZZZLightPanelAttr")
+            except Exception:
+                pass
+
+    for mat in mats:
+        if not getattr(mat, "use_nodes", False) or not mat.node_tree:
+            continue
+        if mat.name.startswith("Kythera's ZZZ") or getattr(mat, "users", 1) == 0:
+            continue
+        
+        for node in mat.node_tree.nodes:
+            if node.type == 'GROUP' and node.node_tree:
+                nt_low = node.node_tree.name.lower()
+                if "kythera" in nt_low or "face shader" in nt_low or "zzz shader" in nt_low:
+                    lp_node = next((n for n in mat.node_tree.nodes if n.type == 'GROUP' and n.node_tree and n.node_tree.name == "ZZZLightPanelAttr"), None)
+                    if not lp_node and lp_attr_group:
+                        lp_node = mat.node_tree.nodes.new('ShaderNodeGroup')
+                        lp_node.node_tree = lp_attr_group
+                        lp_node.name = "ZZZLightPanelAttr"
+                        lp_node.location = (node.location.x - 300, node.location.y)
+                    
+                    if lp_node:
+                        is_face = "face" in nt_low or "face" in mat.name.lower()
+                        amb_input_name = "Overall Tint" if is_face and "Overall Tint" in node.inputs else "Ambient Tint"
+                        
+                        links_to_make = [
+                            ("Ambient", amb_input_name),
+                            ("Lit", "Lit Tint"),
+                            ("Shad", "Shadow Tint"),
+                            ("RimLit", "Rim Light Color"),
+                        ]
+                        for out_name, inp_name in links_to_make:
+                            if out_name in lp_node.outputs and inp_name in node.inputs:
+                                target_sock = node.inputs[inp_name]
+                                for l in list(target_sock.links):
+                                    mat.node_tree.links.remove(l)
+                                mat.node_tree.links.new(lp_node.outputs[out_name], target_sock)
+
+                        if ("Left/Right" in node.inputs or "Up/Down" in node.inputs) and "RimScale" in lp_node.outputs:
+                            sep_node = next((n for n in mat.node_tree.nodes if n.type == 'SEPXYZ' and n.name == "ZZZ_Rim_SepXYZ"), None)
+                            if not sep_node:
+                                sep_node = mat.node_tree.nodes.new('ShaderNodeSeparateXYZ')
+                                sep_node.name = "ZZZ_Rim_SepXYZ"
+                                sep_node.location = (lp_node.location.x + 150, lp_node.location.y - 150)
+                            mat.node_tree.links.new(lp_node.outputs["RimScale"], sep_node.inputs["Vector"])
+
+                            map_x = next((n for n in mat.node_tree.nodes if n.type == 'MAP_RANGE' and n.name == "ZZZ_Rim_MapX"), None)
+                            if not map_x:
+                                map_x = mat.node_tree.nodes.new('ShaderNodeMapRange')
+                                map_x.name = "ZZZ_Rim_MapX"
+                                map_x.location = (sep_node.location.x + 180, sep_node.location.y + 60)
+                            map_x.clamp = True
+                            map_x.inputs['From Min'].default_value = 0.0
+                            map_x.inputs['From Max'].default_value = 10.0
+                            map_x.inputs['To Min'].default_value = 0.0
+                            map_x.inputs['To Max'].default_value = 1.0
+                            mat.node_tree.links.new(sep_node.outputs["X"], map_x.inputs["Value"])
+
+                            map_y = next((n for n in mat.node_tree.nodes if n.type == 'MAP_RANGE' and n.name == "ZZZ_Rim_MapY"), None)
+                            if not map_y:
+                                map_y = mat.node_tree.nodes.new('ShaderNodeMapRange')
+                                map_y.name = "ZZZ_Rim_MapY"
+                                map_y.location = (sep_node.location.x + 180, sep_node.location.y - 60)
+                            map_y.clamp = True
+                            map_y.inputs['From Min'].default_value = 0.0
+                            map_y.inputs['From Max'].default_value = 10.0
+                            map_y.inputs['To Min'].default_value = 0.0
+                            map_y.inputs['To Max'].default_value = 1.0
+                            mat.node_tree.links.new(sep_node.outputs["Y"], map_y.inputs["Value"])
+
+                            if "Left/Right" in node.inputs:
+                                for l in list(node.inputs["Left/Right"].links):
+                                    mat.node_tree.links.remove(l)
+                                mat.node_tree.links.new(map_x.outputs["Result"], node.inputs["Left/Right"])
+                            if "Up/Down" in node.inputs:
+                                for l in list(node.inputs["Up/Down"].links):
+                                    mat.node_tree.links.remove(l)
+                                mat.node_tree.links.new(map_y.outputs["Result"], node.inputs["Up/Down"])
+
+    # 2. Check for Legacy shader node groups (Global Material Properties & Global Material Properties FACE)
+    for ng in bpy.data.node_groups:
+        ng_low = ng.name.lower()
+        if "global material properties" in ng_low:
+            lp_node = next((n for n in ng.nodes if n.type == 'GROUP' and n.node_tree and "zzzlightpanelattr" in n.node_tree.name.lower()), None)
+            if not lp_node:
+                continue
+            
+            if "face" in ng_low:
+                mix_node = ng.nodes.get("Mix")
+                vm_node = ng.nodes.get("Vector Math.001")
+                if mix_node:
+                    sock_b = mix_node.inputs.get("B") or (mix_node.inputs[7] if len(mix_node.inputs) > 7 else None)
+                    sock_a = mix_node.inputs.get("A") or (mix_node.inputs[6] if len(mix_node.inputs) > 6 else None)
+                    if sock_b and "Lit" in lp_node.outputs:
+                        for l in list(sock_b.links): ng.links.remove(l)
+                        ng.links.new(lp_node.outputs["Lit"], sock_b)
+                    if sock_a and "Shad" in lp_node.outputs:
+                        for l in list(sock_a.links): ng.links.remove(l)
+                        ng.links.new(lp_node.outputs["Shad"], sock_a)
+                if vm_node and len(vm_node.inputs) > 1 and "Ambient" in lp_node.outputs:
+                    sock_amb = vm_node.inputs[1]
+                    for l in list(sock_amb.links): ng.links.remove(l)
+                    ng.links.new(lp_node.outputs["Ambient"], sock_amb)
+            else:
+                amb_node = ng.nodes.get("Ambient")
+                mix_node = ng.nodes.get("Mix")
+                rim_node = ng.nodes.get("Group.001")
+                if amb_node:
+                    sock_b = amb_node.inputs.get("B") or (amb_node.inputs[7] if len(amb_node.inputs) > 7 else None)
+                    if sock_b and "Ambient" in lp_node.outputs:
+                        for l in list(sock_b.links): ng.links.remove(l)
+                        ng.links.new(lp_node.outputs["Ambient"], sock_b)
+                if mix_node:
+                    sock_b = mix_node.inputs.get("B") or (mix_node.inputs[7] if len(mix_node.inputs) > 7 else None)
+                    sock_a = mix_node.inputs.get("A") or (mix_node.inputs[6] if len(mix_node.inputs) > 6 else None)
+                    if sock_b and "Lit" in lp_node.outputs:
+                        for l in list(sock_b.links): ng.links.remove(l)
+                        ng.links.new(lp_node.outputs["Lit"], sock_b)
+                    if sock_a and "Shad" in lp_node.outputs:
+                        for l in list(sock_a.links): ng.links.remove(l)
+                        ng.links.new(lp_node.outputs["Shad"], sock_a)
+                if rim_node:
+                    for out_name, inp_name in [("RimLit", "Rim Lit"), ("RimShad", "Rim Shadow"), ("RimScale", "Scale")]:
+                        if out_name in lp_node.outputs and inp_name in rim_node.inputs:
+                            sock = rim_node.inputs[inp_name]
+                            for l in list(sock.links): ng.links.remove(l)
+                            ng.links.new(lp_node.outputs[out_name], sock)
+
+
+def disconnect_zzz_lighting_panel(target_materials=None):
+    """
+    Disconnects ZZZ lighting panel attributes from materials for both Kythera and Legacy shaders.
+    """
+    mats_set = set(target_materials) if target_materials else set()
+    for m in bpy.data.materials:
+        if getattr(m, "use_nodes", False) and m.node_tree:
+            if not target_materials or m in mats_set or getattr(m, "users", 1) == 0 or m.name.startswith("Kythera's ZZZ"):
+                mats_set.add(m)
+            else:
+                has_lp = any(
+                    l.from_node and getattr(l.from_node, "node_tree", None) and "zzzlightpanelattr" in l.from_node.node_tree.name.lower()
+                    for n in m.node_tree.nodes if n.type == 'GROUP'
+                    for inp in n.inputs
+                    for l in inp.links
+                )
+                if has_lp:
+                    mats_set.add(m)
+    
+    # 1. Kythera materials
+    for mat in mats_set:
+        if not getattr(mat, "use_nodes", False) or not mat.node_tree:
+            continue
+        for node in mat.node_tree.nodes:
+            if node.type == 'GROUP' and node.node_tree:
+                nt_low = node.node_tree.name.lower()
+                if "kythera" in nt_low or "face shader" in nt_low or "zzz shader" in nt_low:
+                    for inp_name in ["Ambient Tint", "Overall Tint", "Lit Tint", "Shadow Tint", "Rim Light Color", "Left/Right", "Up/Down"]:
+                        if inp_name in node.inputs:
+                            for l in list(node.inputs[inp_name].links):
+                                if l.from_node and (
+                                    (getattr(l.from_node, "node_tree", None) and "zzzlightpanelattr" in l.from_node.node_tree.name.lower())
+                                    or l.from_node.name in ("ZZZ_Rim_SepXYZ", "ZZZ_Rim_MapX", "ZZZ_Rim_MapY")
+                                ):
+                                    mat.node_tree.links.remove(l)
+                    for node_name in ("ZZZ_Rim_SepXYZ", "ZZZ_Rim_MapX", "ZZZ_Rim_MapY"):
+                        extra_node = mat.node_tree.nodes.get(node_name)
+                        if extra_node:
+                            mat.node_tree.nodes.remove(extra_node)
+
+    # 2. Legacy shader node groups
+    for ng in bpy.data.node_groups:
+        ng_low = ng.name.lower()
+        if "global material properties" in ng_low:
+            lp_node = next((n for n in ng.nodes if n.type == 'GROUP' and n.node_tree and "zzzlightpanelattr" in n.node_tree.name.lower()), None)
+            if lp_node:
+                for out_sock in lp_node.outputs:
+                    for l in list(out_sock.links):
+                        ng.links.remove(l)
+
+
+def is_zzz_lighting_panel_connected(target_materials=None) -> bool:
+    """
+    Checks if ZZZ lighting panel attributes are connected to materials/node groups.
+    """
+    if target_materials:
+        mats = target_materials
+    else:
+        mats = [
+            m for m in bpy.data.materials
+            if getattr(m, "use_nodes", False) and m.node_tree
+            and not m.name.startswith("Kythera's ZZZ")
+            and getattr(m, "users", 1) > 0
+        ]
+    
+    # Check Kythera materials
+    for mat in mats:
+        if getattr(mat, "use_nodes", False) and mat.node_tree:
+            if mat.name.startswith("Kythera's ZZZ") or getattr(mat, "users", 1) == 0:
+                continue
+            for node in mat.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree:
+                    nt_low = node.node_tree.name.lower()
+                    if "kythera" in nt_low or "face shader" in nt_low or "zzz shader" in nt_low:
+                        for inp_name in ["Lit Tint", "Shadow Tint", "Ambient Tint", "Overall Tint"]:
+                            if inp_name in node.inputs:
+                                for l in node.inputs[inp_name].links:
+                                    if l.from_node and getattr(l.from_node, "node_tree", None) and "zzzlightpanelattr" in l.from_node.node_tree.name.lower():
+                                        return True
+
+    # Check Legacy groups
+    for ng in bpy.data.node_groups:
+        ng_low = ng.name.lower()
+        if "global material properties" in ng_low:
+            lp_node = next((n for n in ng.nodes if n.type == 'GROUP' and n.node_tree and "zzzlightpanelattr" in n.node_tree.name.lower()), None)
+            if lp_node:
+                for out_sock in lp_node.outputs:
+                    if out_sock.links:
+                        return True
+    return False

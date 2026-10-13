@@ -18,6 +18,7 @@ from setup_wizard.import_order import (
     set_active_character_directory,
 )
 from setup_wizard.texture_import_setup.texture_importer_types import GenshinTextureImporter, TextureImporterFactory, TextureImporterType
+from setup_wizard.utils.texture_utils import fix_missing_textures, load_or_get_image
 
 
 class GameTextureImporter(ABC):
@@ -43,6 +44,10 @@ class GameTextureImporterFactory:
             return WutheringWavesTextureImporterFacade(blender_operator, context)
         elif game_type == GameType.ARKNIGHTS_ENDFIELD.name:
             return ArknightsEndfieldTextureImporterFacade(blender_operator, context)
+        elif game_type == GameType.HONKAI_IMPACT_3RD.name:
+            return HonkaiImpact3rdTextureImporterFacade(blender_operator, context)
+        elif game_type == GameType.HONKAI_NEXUS_ANIMA.name:
+            return HonkaiNexusAnimaTextureImporterFacade(blender_operator, context)
         else:
             raise Exception(f'Unknown {GameType}: {game_type}')
 
@@ -98,13 +103,38 @@ class GenshinImpactTextureImporterFacade(GameTextureImporter):
 
         texture_importer: GenshinTextureImporter = TextureImporterFactory.create(texture_importer_type, GameType.GENSHIN_IMPACT)
         texture_importer.import_textures(directory)
+        # Equipment exports keep their own material JSON and existing texture nodes.
+        for material in bpy.data.materials:
+            if not material.get('_genshin_equipment') or material.name.endswith('Outlines'):
+                continue
+            source = material.get('_original_material_name')
+            path = os.path.join(directory, 'Materials', source + '.json')
+            if not os.path.isfile(path):
+                continue
+            with open(path, encoding='utf-8') as handle:
+                env = json.load(handle).get('m_SavedProperties', {}).get('m_TexEnvs') or {}
+            for prop, node_name, colorspace in [('_MainTex', 'Main_Diffuse', 'sRGB'),
+                                                ('_LightMapTex', 'Main_Lightmap', 'Non-Color'),
+                                                ('_BumpMap', 'Main_Normalmap', 'Non-Color')]:
+                texture = env.get(prop, {}).get('m_Texture', {}).get('Name')
+                node = material.node_tree.nodes.get(node_name)
+                if not texture or node is None:
+                    continue
+                filename = next((f for f in os.listdir(directory) if os.path.splitext(f)[0].lower() == texture.lower()
+                                 and os.path.splitext(f)[1].lower() in {'.png', '.dds', '.tga', '.jpg'}), None)
+                if filename is None:
+                    raise RuntimeError('Missing Genshin equipment texture: ' + texture)
+                image = bpy.data.images.load(os.path.join(directory, filename), check_existing=True)
+                image.colorspace_settings.name = colorspace
+                image.alpha_mode = 'CHANNEL_PACKED'
+                node.image = image
 
         '''
             NPCs and Monsters don't typically have shadow ramps. Turn off using shadow ramp if there are no assets for it.
             If an asset does exist, leave it as the default value (1.0).
         '''
         if (texture_importer_type is TextureImporterType.NPC or texture_importer_type is TextureImporterType.MONSTER) and \
-            not [file for file in [file for name, folder, file in os.walk(directory)][0] if 'Shadow_Ramp' in file]:
+            not [file for file in [file for name, folder, file in os.walk(directory) if '__MACOSX' not in name][0] if not file.startswith('._') and not file.startswith('.') and 'Shadow_Ramp' in file]:
             ShaderConfigurator().update_shader_value(
                 materials = [
                     bpy.data.materials.get('miHoYo - Genshin Hair'),
@@ -269,6 +299,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
             )
             return {'FINISHED'}
 
+        fix_missing_textures(directory)
         self.import_textures_from_folder(directory)
 
         self.blender_operator.report({'INFO'}, 'Imported textures')
@@ -513,14 +544,14 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         
         materials_dir = None
         for d in candidates_dirs:
-            if os.path.isdir(d) and any(f.lower().endswith(".json") for f in os.listdir(d)):
+            if os.path.isdir(d) and any(f.lower().endswith(".json") and not f.startswith("._") and not f.startswith(".") for f in os.listdir(d)):
                 materials_dir = d
                 break
                 
         # Find texture directory
         tex_dir = folder
         if os.path.isdir(folder):
-            if not any(f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg')) for f in os.listdir(folder)):
+            if not any(f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg')) and not f.startswith("._") and not f.startswith(".") for f in os.listdir(folder)):
                 sub = os.path.join(folder, "Textures")
                 if os.path.isdir(sub):
                     tex_dir = sub
@@ -528,7 +559,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         if not materials_dir or not os.path.isdir(tex_dir):
             return {}, tex_dir
 
-        image_files = [f for f in os.listdir(tex_dir) if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff'))]
+        image_files = [f for f in os.listdir(tex_dir) if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff', '.webp')) and not f.startswith("._") and not f.startswith(".")]
         
         def resolve_file(tex_name):
             if not tex_name:
@@ -549,7 +580,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
 
         mat_map = {}
         for jf in os.listdir(materials_dir):
-            if not jf.lower().endswith(".json"):
+            if not jf.lower().endswith(".json") or jf.startswith("._") or jf.startswith("."):
                 continue
             jpath = os.path.join(materials_dir, jf)
             try:
@@ -796,7 +827,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         if not tex_folder:
             tex_folder = folder
 
-        files = os.listdir(tex_folder)
+        files = [f for f in os.listdir(tex_folder) if not f.startswith("._") and not f.startswith(".")]
         
         # Try to find a character name prefix to filter the files (prevents importing other characters' textures if in same folder)
         main_prefix = ""
@@ -837,7 +868,9 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
             if not os.path.isfile(img_path):
                 return None
 
-            img = bpy.data.images.load(img_path, check_existing=True)
+            img = load_or_get_image(img_path, file_name)
+            if not img:
+                return None
             img.colorspace_settings.name = 'sRGB' if is_color else 'Non-Color'
             img.alpha_mode = 'CHANNEL_PACKED'
 
@@ -967,16 +1000,17 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                 if is_alice_pingmu:
                     belt_path = get_belt_texture_path()
                     if belt_path and os.path.isfile(belt_path):
-                        belt_img = bpy.data.images.load(belt_path, check_existing=True)
-                        belt_img.colorspace_settings.name = 'sRGB'
-                        belt_img.alpha_mode = 'CHANNEL_PACKED'
+                        belt_img = load_or_get_image(belt_path)
+                        if belt_img:
+                            belt_img.colorspace_settings.name = 'sRGB'
+                            belt_img.alpha_mode = 'CHANNEL_PACKED'
                         
                         target_socket = None
                         for inp in kythera_group_node.inputs:
                             if inp.name.lower().strip() in ["_d map", "_d", "diffuse", "diffuse texture"]:
                                 target_socket = inp
                                 break
-                        if target_socket:
+                        if target_socket and belt_img:
                             tex_node = mat.node_tree.nodes.get("Texture_D")
                             if not tex_node:
                                 tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
@@ -1025,10 +1059,11 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                         if lm_node:
                             img_path = os.path.join(tex_folder, face_lm) if os.path.isfile(os.path.join(tex_folder, face_lm)) else os.path.join(folder, face_lm)
                             if os.path.isfile(img_path):
-                                img = bpy.data.images.load(img_path, check_existing=True)
-                                img.colorspace_settings.name = 'Non-Color'
-                                img.alpha_mode = 'CHANNEL_PACKED'
-                                lm_node.image = img
+                                img = load_or_get_image(img_path, face_lm)
+                                if img:
+                                    img.colorspace_settings.name = 'Non-Color'
+                                    img.alpha_mode = 'CHANNEL_PACKED'
+                                    lm_node.image = img
                         else:
                             connect_tex_to_socket(mat, kythera_group_node, "Face_Lightmap", ["Light Map", "LightMap", "_Lightmap"], face_lm, is_color=False, y_offset=-280)
 
@@ -1068,9 +1103,10 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                 if is_alice_pingmu:
                     belt_path = get_belt_texture_path()
                     if belt_path and os.path.isfile(belt_path):
-                        belt_img = bpy.data.images.load(belt_path, check_existing=True)
-                        belt_img.colorspace_settings.name = 'sRGB'
-                        belt_img.alpha_mode = 'CHANNEL_PACKED'
+                        belt_img = load_or_get_image(belt_path)
+                        if belt_img:
+                            belt_img.colorspace_settings.name = 'sRGB'
+                            belt_img.alpha_mode = 'CHANNEL_PACKED'
 
                         gmp_node = None
                         for node in mat.node_tree.nodes:
@@ -1078,7 +1114,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                                 gmp_node = node
                                 break
 
-                        if gmp_node:
+                        if gmp_node and belt_img:
                             target_socket = None
                             for inp in gmp_node.inputs:
                                 if "plug shader output" in inp.name.lower():
@@ -1112,16 +1148,17 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                     if face_d:
                         img_path = os.path.join(tex_folder, face_d) if os.path.isfile(os.path.join(tex_folder, face_d)) else os.path.join(folder, face_d)
                         if os.path.isfile(img_path):
-                            img = bpy.data.images.load(img_path, check_existing=True)
-                            img.colorspace_settings.name = 'sRGB'
-                            img.alpha_mode = 'CHANNEL_PACKED'
-                            for node in mat.node_tree.nodes:
-                                if node.type == 'TEX_IMAGE':
-                                    n_low = node.name.lower()
-                                    if any(k in n_low for k in ["face_d", "texture_d", "_d", "diffuse"]):
-                                        node.image = img
-                                    elif not node.image and "lightmap" not in n_low and "shadow" not in n_low:
-                                        node.image = img
+                            img = load_or_get_image(img_path, face_d)
+                            if img:
+                                img.colorspace_settings.name = 'sRGB'
+                                img.alpha_mode = 'CHANNEL_PACKED'
+                                for node in mat.node_tree.nodes:
+                                    if node.type == 'TEX_IMAGE':
+                                        n_low = node.name.lower()
+                                        if any(k in n_low for k in ["face_d", "texture_d", "_d", "diffuse"]):
+                                            node.image = img
+                                        elif not node.image and "lightmap" not in n_low and "shadow" not in n_low:
+                                            node.image = img
 
                     face_lm = res_textures.get('lightmap') or res_textures.get('n')
                     if not face_lm:
@@ -1130,16 +1167,17 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                     if face_lm:
                         img_path = os.path.join(tex_folder, face_lm) if os.path.isfile(os.path.join(tex_folder, face_lm)) else os.path.join(folder, face_lm)
                         if os.path.isfile(img_path):
-                            img_lm = bpy.data.images.load(img_path, check_existing=True)
-                            img_lm.colorspace_settings.name = 'Non-Color'
-                            img_lm.alpha_mode = 'CHANNEL_PACKED'
-                            for node in mat.node_tree.nodes:
-                                if node.type == 'TEX_IMAGE' and "lightmap" in node.name.lower():
-                                    node.image = img_lm
-                                elif node.type == 'GROUP' and node.node_tree and 'face lightmap' in node.node_tree.name.lower():
-                                    for sub_node in node.node_tree.nodes:
-                                        if sub_node.type == 'TEX_IMAGE':
-                                            sub_node.image = img_lm
+                            img_lm = load_or_get_image(img_path, face_lm)
+                            if img_lm:
+                                img_lm.colorspace_settings.name = 'Non-Color'
+                                img_lm.alpha_mode = 'CHANNEL_PACKED'
+                                for node in mat.node_tree.nodes:
+                                    if node.type == 'TEX_IMAGE' and "lightmap" in node.name.lower():
+                                        node.image = img_lm
+                                    elif node.type == 'GROUP' and node.node_tree and 'face lightmap' in node.node_tree.name.lower():
+                                        for sub_node in node.node_tree.nodes:
+                                            if sub_node.type == 'TEX_IMAGE':
+                                                sub_node.image = img_lm
 
                 for node in mat.node_tree.nodes:
                     if node.type == 'TEX_IMAGE':
@@ -1174,22 +1212,24 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                         if best_tex:
                             img_path = os.path.join(tex_folder, best_tex) if os.path.isfile(os.path.join(tex_folder, best_tex)) else os.path.join(folder, best_tex)
                             if os.path.isfile(img_path):
-                                img = bpy.data.images.load(img_path, check_existing=True)
-                                img.colorspace_settings.name = 'sRGB' if suffix == 'd' else 'Non-Color'
-                                img.alpha_mode = 'CHANNEL_PACKED'
-                                node.image = img
+                                img = load_or_get_image(img_path, best_tex)
+                                if img:
+                                    img.colorspace_settings.name = 'sRGB' if suffix == 'd' else 'Non-Color'
+                                    img.alpha_mode = 'CHANNEL_PACKED'
+                                    node.image = img
 
                     elif node.type == 'GROUP' and node.node_tree and 'face lightmap' in node.node_tree.name.lower():
                         face_lm = res_textures.get('lightmap') or res_textures.get('n')
                         if face_lm:
                             img_path = os.path.join(tex_folder, face_lm) if os.path.isfile(os.path.join(tex_folder, face_lm)) else os.path.join(folder, face_lm)
                             if os.path.isfile(img_path):
-                                img = bpy.data.images.load(img_path, check_existing=True)
-                                img.colorspace_settings.name = 'Non-Color'
-                                img.alpha_mode = 'CHANNEL_PACKED'
-                                for sub_node in node.node_tree.nodes:
-                                    if sub_node.type == 'TEX_IMAGE':
-                                        sub_node.image = img
+                                img = load_or_get_image(img_path, face_lm)
+                                if img:
+                                    img.colorspace_settings.name = 'Non-Color'
+                                    img.alpha_mode = 'CHANNEL_PACKED'
+                                    for sub_node in node.node_tree.nodes:
+                                        if sub_node.type == 'TEX_IMAGE':
+                                            sub_node.image = img
 
             # If this is a Hair material and no hair texture was found,
             # remove its material slot (Slot 2+) from mesh objects so the hair inherits Slot 1 (only for ZZZ)
@@ -1250,7 +1290,7 @@ def sync_zzz_outline_textures(folder=None, filtered_files=None, main_prefix=None
 
     if folder and not filtered_files:
         try:
-            filtered_files = os.listdir(folder)
+            filtered_files = [f for f in os.listdir(folder) if not f.startswith("._") and not f.startswith(".")]
         except Exception:
             filtered_files = []
 
@@ -1340,10 +1380,11 @@ def sync_zzz_outline_textures(folder=None, filtered_files=None, main_prefix=None
                             cand_lm = [f for f in filtered_files if "lightmap" in f.lower()]
                             if cand_lm: target_lm = cand_lm[0]
                         if target_lm:
-                            img = bpy.data.images.load(os.path.join(folder, target_lm), check_existing=True)
-                            img.colorspace_settings.name = 'Non-Color'
-                            img.alpha_mode = 'CHANNEL_PACKED'
-                            node.image = img
+                            img = load_or_get_image(os.path.join(folder, target_lm), target_lm)
+                            if img:
+                                img.colorspace_settings.name = 'Non-Color'
+                                img.alpha_mode = 'CHANNEL_PACKED'
+                                node.image = img
                     else:
                         # Diffuse / D image
                         cat_tag = "face" if "face" in outline_lower else ("hair" if "hair" in outline_lower else ("body_2" if "2" in outline_lower else "body"))
@@ -1351,10 +1392,11 @@ def sync_zzz_outline_textures(folder=None, filtered_files=None, main_prefix=None
                         if not cand_d and cat_tag == "body":
                             cand_d = [f for f in filtered_files if f.lower().rsplit(".", 1)[0].endswith("_d") and "body" in f.lower() and "2" not in f.lower() and "3" not in f.lower()]
                         if cand_d:
-                            img = bpy.data.images.load(os.path.join(folder, cand_d[0]), check_existing=True)
-                            img.colorspace_settings.name = 'sRGB'
-                            img.alpha_mode = 'CHANNEL_PACKED'
-                            node.image = img
+                            img = load_or_get_image(os.path.join(folder, cand_d[0]), cand_d[0])
+                            if img:
+                                img.colorspace_settings.name = 'sRGB'
+                                img.alpha_mode = 'CHANNEL_PACKED'
+                                node.image = img
 
 
 def create_outline_image_copy(src_image, colorspace_name='Non-Color', suffix='_outline_lightmap'):
@@ -1600,7 +1642,7 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
         has_textures = False
         if folder and os.path.isdir(folder):
             try:
-                has_textures = any(f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp')) for f in os.listdir(folder))
+                has_textures = any(not f.startswith("._") and not f.startswith(".") and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp')) for f in os.listdir(folder))
             except Exception:
                 has_textures = False
 
@@ -1618,10 +1660,11 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
 
         from setup_wizard.utils.nte_json_parser import load_nte_character_data, get_nte_material_data
 
+        fix_missing_textures(folder)
         database = load_nte_character_data(folder)
         image_files = database.get("image_files_list", [])
         if not image_files and os.path.isdir(folder):
-            image_files = [f for f in os.listdir(folder) if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
+            image_files = [f for f in os.listdir(folder) if not f.startswith("._") and not f.startswith(".") and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
 
         for mat in bpy.data.materials:
             if not mat.use_nodes or not mat.node_tree or mat.name == '材质球' or 'touming' in mat.name.lower():
@@ -1645,10 +1688,11 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
                 if best_diff:
                     img_path = os.path.join(folder, best_diff)
                     if os.path.isfile(img_path):
-                        img = bpy.data.images.load(img_path, check_existing=True)
-                        for node in mat.node_tree.nodes:
-                            if node.type == 'TEX_IMAGE':
-                                node.image = img
+                        img = load_or_get_image(img_path, best_diff)
+                        if img:
+                            for node in mat.node_tree.nodes:
+                                if node.type == 'TEX_IMAGE':
+                                    node.image = img
                 continue
 
             mat_info = get_nte_material_data(mat.name, database)
@@ -1679,37 +1723,40 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
                         if best_diff and target_socket and not target_socket.is_linked:
                             img_path = os.path.join(folder, best_diff)
                             if os.path.isfile(img_path):
-                                img = bpy.data.images.load(img_path, check_existing=True)
-                                tex_node = next((n for n in mat.node_tree.nodes if n.type == 'TEX_IMAGE' and n.image == img), None)
-                                if not tex_node:
-                                    tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
-                                    tex_node.image = img
-                                    tex_node.location = (node.location.x - 320, node.location.y)
-                                mat.node_tree.links.new(tex_node.outputs['Color'], target_socket)
+                                img = load_or_get_image(img_path, best_diff)
+                                if img:
+                                    tex_node = next((n for n in mat.node_tree.nodes if n.type == 'TEX_IMAGE' and n.image == img), None)
+                                    if not tex_node:
+                                        tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
+                                        tex_node.image = img
+                                        tex_node.location = (node.location.x - 320, node.location.y)
+                                    mat.node_tree.links.new(tex_node.outputs['Color'], target_socket)
 
                         mask_socket = node.inputs.get('M') or node.inputs.get('MASK') or node.inputs.get('Mask')
                         if mask_socket and not mask_socket.is_linked:
                             if best_mask:
                                 img_path = os.path.join(folder, best_mask)
                                 if os.path.isfile(img_path):
-                                    img = bpy.data.images.load(img_path, check_existing=True)
-                                    img.colorspace_settings.name = 'Non-Color'
-                                    tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
-                                    tex_node.image = img
-                                    tex_node.location = (node.location.x - 320, node.location.y - 220)
-                                    mat.node_tree.links.new(tex_node.outputs['Color'], mask_socket)
+                                    img = load_or_get_image(img_path, best_mask)
+                                    if img:
+                                        img.colorspace_settings.name = 'Non-Color'
+                                        tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
+                                        tex_node.image = img
+                                        tex_node.location = (node.location.x - 320, node.location.y - 220)
+                                        mat.node_tree.links.new(tex_node.outputs['Color'], mask_socket)
 
                         id_socket = node.inputs.get('ID') or node.inputs.get('Id') or node.inputs.get('id')
                         if id_socket and not id_socket.is_linked:
                             if best_id:
                                 img_path = os.path.join(folder, best_id)
                                 if os.path.isfile(img_path):
-                                    img = bpy.data.images.load(img_path, check_existing=True)
-                                    img.colorspace_settings.name = 'Non-Color'
-                                    tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
-                                    tex_node.image = img
-                                    tex_node.location = (node.location.x - 320, node.location.y - 440)
-                                    mat.node_tree.links.new(tex_node.outputs['Color'], id_socket)
+                                    img = load_or_get_image(img_path, best_id)
+                                    if img:
+                                        img.colorspace_settings.name = 'Non-Color'
+                                        tex_node = mat.node_tree.nodes.new('ShaderNodeTexImage')
+                                        tex_node.image = img
+                                        tex_node.location = (node.location.x - 320, node.location.y - 440)
+                                        mat.node_tree.links.new(tex_node.outputs['Color'], id_socket)
 
                         # Apply JSON parameters to group inputs if available
                         if mat_info:
@@ -1768,6 +1815,7 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
             return
 
         set_active_character_directory(folder)
+        fix_missing_textures(folder)
 
         from setup_wizard.utils.wuwa_texture_utils import (
             split_material_name,
@@ -1782,8 +1830,12 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
 
         all_texture_files = []
         for root, _, files in os.walk(folder):
+            if "__MACOSX" in root:
+                continue
             for file_name in files:
-                if any(file_name.lower().endswith(ext) for ext in ['.png', '.tga', '.dds', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp']):
+                if file_name.startswith("._") or file_name.startswith("."):
+                    continue
+                if any(file_name.lower().endswith(ext) for ext in ['.png', '.tga', '.dds', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp', '.webp']):
                     all_texture_files.append(file_name)
 
         if not all_texture_files:
@@ -2073,7 +2125,11 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
         if base_outline_mat:
             ol_json_ld_map = {}
             for root, _, files in os.walk(folder):
+                if "__MACOSX" in root:
+                    continue
                 for file_name in files:
+                    if file_name.startswith("._") or file_name.startswith("."):
+                        continue
                     if file_name.lower().endswith("_ol.json"):
                         import json
                         try:
@@ -2364,11 +2420,17 @@ class ArknightsEndfieldTextureImporterFacade(GameTextureImporter):
             self.blender_operator.report({'WARNING'}, f"Folder '{folder}' does not exist.")
             return
 
+        fix_missing_textures(folder)
+
         # 1. Scan texture files
         texture_file_map = {}
         for root, _, files in os.walk(folder):
+            if "__MACOSX" in root:
+                continue
             for f in files:
-                if f.lower().endswith(('.png', '.tga', '.jpg', '.jpeg', '.dds', '.tif', '.tiff', '.bmp')):
+                if f.startswith("._") or f.startswith("."):
+                    continue
+                if f.lower().endswith(('.png', '.tga', '.jpg', '.jpeg', '.dds', '.tif', '.tiff', '.bmp', '.webp')):
                     full_p = os.path.join(root, f)
                     texture_file_map[f.lower()] = full_p
                     stem = os.path.splitext(f)[0].lower()
@@ -2377,7 +2439,11 @@ class ArknightsEndfieldTextureImporterFacade(GameTextureImporter):
         # 2. Parse JSON files in Materials/ or character folder if present
         json_tex_mappings = {}
         for root, _, files in os.walk(folder):
+            if "__MACOSX" in root:
+                continue
             for f in files:
+                if f.startswith("._") or f.startswith("."):
+                    continue
                 if f.lower().endswith('.json'):
                     try:
                         with open(os.path.join(root, f), 'r', encoding='utf-8') as jf:
@@ -2491,12 +2557,7 @@ class ArknightsEndfieldTextureImporterFacade(GameTextureImporter):
                 # Load and assign image
                 if matched_path and os.path.isfile(matched_path):
                     img_name = os.path.basename(matched_path)
-                    img = bpy.data.images.get(img_name)
-                    if not img:
-                        try:
-                            img = bpy.data.images.load(matched_path)
-                        except Exception:
-                            img = None
+                    img = load_or_get_image(matched_path, img_name)
                     if img:
                         node.image = img
                         img.alpha_mode = 'CHANNEL_PACKED'
@@ -2520,12 +2581,7 @@ class ArknightsEndfieldTextureImporterFacade(GameTextureImporter):
                         for tf_name, tf_path in texture_file_map.items():
                             core_name = os.path.splitext(os.path.basename(tf_path))[0].lower()
                             if core_name in img_lower or img_lower.startswith(core_name):
-                                cur_img = bpy.data.images.get(os.path.basename(tf_path))
-                                if not cur_img:
-                                    try:
-                                        cur_img = bpy.data.images.load(tf_path)
-                                    except Exception:
-                                        cur_img = None
+                                cur_img = load_or_get_image(tf_path)
                                 if cur_img:
                                     node.image = cur_img
                                     cur_img.alpha_mode = 'CHANNEL_PACKED'
@@ -2551,6 +2607,339 @@ class ArknightsEndfieldTextureImporterFacade(GameTextureImporter):
             high_level_step_name=self.blender_operator.high_level_step_name,
             game_type=self.blender_operator.game_type,
         )
+
+
+'''
+Honkai Impact 3rd Texture Importer Facade
+'''
+class HonkaiImpact3rdTextureImporterFacade(GameTextureImporter):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+
+    @staticmethod
+    def _extract_json_tex_envs(json_data):
+        tex_map = {}
+        if not isinstance(json_data, dict):
+            return tex_map
+        saved = json_data.get("m_SavedProperties") or {}
+        tex_envs = saved.get("m_TexEnvs")
+        if isinstance(tex_envs, dict):
+            for k, v in tex_envs.items():
+                if isinstance(v, dict):
+                    tex_info = v.get("m_Texture") or {}
+                    t_name = tex_info.get("Name") or ""
+                    if t_name:
+                        tex_map[k] = t_name
+        elif isinstance(tex_envs, list):
+            for entry in tex_envs:
+                if isinstance(entry, dict):
+                    k = entry.get("Key") or entry.get("first")
+                    v = entry.get("Value") or entry.get("second") or {}
+                    if k and isinstance(v, dict):
+                        tex_info = v.get("m_Texture") or {}
+                        t_name = tex_info.get("Name") or ""
+                        if t_name:
+                            tex_map[k] = t_name
+        return tex_map
+
+    def import_textures(self):
+        import json
+        cache_enabled = self.context.window_manager.cache_enabled if hasattr(self.context, 'window_manager') and hasattr(self.context.window_manager, 'cache_enabled') else True
+        directory = (
+            getattr(self.blender_operator, 'file_directory', None)
+            or get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH)
+            or (os.path.dirname(self.blender_operator.filepath) if hasattr(self.blender_operator, 'filepath') and self.blender_operator.filepath else None)
+            or get_active_character_directory()
+        )
+
+        if not directory or not os.path.isdir(directory):
+            bpy.ops.genshin.import_textures(
+                'INVOKE_DEFAULT',
+                next_step_idx=self.blender_operator.next_step_idx, 
+                file_directory=self.blender_operator.file_directory,
+                invoker_type=self.blender_operator.invoker_type,
+                high_level_step_name=self.blender_operator.high_level_step_name,
+                game_type=GameType.HONKAI_IMPACT_3RD.name,
+            )
+            return {'FINISHED'}
+
+        search_roots = [os.path.normpath(directory)]
+        parent_dir = os.path.dirname(os.path.normpath(directory))
+        if parent_dir and os.path.isdir(parent_dir) and os.path.basename(os.path.normpath(directory)).lower() in (
+            'textures', 'texture', 'texture2d', 'materials', 'material', 'images'
+        ):
+            if parent_dir not in search_roots:
+                search_roots.insert(0, parent_dir)
+        scene_model_dir = bpy.context.scene.get("setup_wizard_imported_model_dir") if hasattr(bpy.context, "scene") and bpy.context.scene else None
+        if scene_model_dir and os.path.isdir(scene_model_dir):
+            norm_scene_dir = os.path.normpath(scene_model_dir)
+            if norm_scene_dir not in search_roots:
+                search_roots.insert(0, norm_scene_dir)
+
+        for r_dir in search_roots:
+            fix_missing_textures(r_dir)
+
+        image_exts = ('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff', '.webp')
+        texture_file_map = {}
+        material_json_map = {}
+        for base_dir in search_roots:
+            for root, _, files in os.walk(base_dir):
+                if "__MACOSX" in root:
+                    continue
+                for f in files:
+                    if f.startswith("._") or f.startswith("."):
+                        continue
+                    f_low = f.lower()
+                    full_p = os.path.normpath(os.path.join(root, f))
+                    if f_low.endswith(image_exts):
+                        clean_name = os.path.splitext(f)[0].lower()
+                        texture_file_map[clean_name] = full_p
+                        texture_file_map[f_low] = full_p
+                    elif f_low.endswith('.json'):
+                        stem = os.path.splitext(f)[0].lower()
+                        if stem not in material_json_map:
+                            try:
+                                with open(full_p, 'r', encoding='utf-8') as jf:
+                                    jdata = json.load(jf)
+                                if isinstance(jdata, dict) and "m_SavedProperties" in jdata:
+                                    material_json_map[stem] = jdata
+                                    m_name = (jdata.get("m_Name") or "").lower()
+                                    if m_name:
+                                        material_json_map[m_name] = jdata
+                            except Exception:
+                                pass
+
+        def load_img(fpath, colorspace='sRGB'):
+            if not fpath or not os.path.isfile(fpath):
+                return None
+            fname = os.path.basename(fpath)
+            img = load_or_get_image(fpath, fname)
+            if img:
+                img.alpha_mode = 'CHANNEL_PACKED'
+                try:
+                    img.colorspace_settings.name = colorspace
+                except Exception:
+                    pass
+            return img
+
+        def resolve_tex_by_name(tex_name, colorspace='sRGB'):
+            if not tex_name:
+                return None
+            key = os.path.splitext(tex_name)[0].lower()
+            if key in texture_file_map:
+                return load_img(texture_file_map[key], colorspace)
+            return None
+
+        # Pre-locate global facemap texture if present in character folder
+        global_facemap_img = None
+        for k, p in texture_file_map.items():
+            if 'facemap' in k:
+                global_facemap_img = load_img(p, 'Non-Color')
+                break
+
+        for mat in bpy.data.materials:
+            if not mat.use_nodes or not mat.node_tree:
+                continue
+            m_low = mat.name.lower()
+            if 'impacttoon' not in m_low and not m_low.startswith('hoyoverse -') and not m_low.startswith('mihoyo -'):
+                continue
+            if m_low in ('impacttoon - base', 'impacttoon - face', 'impacttoon - hair', 'impacttoon - eye', 'impacttoon - outlines'):
+                continue
+
+            orig_m = (mat.get("_original_material_name") or mat.name.replace("ImpactToon - ", "").replace(" Outlines", "")).strip()
+            orig_low = orig_m.lower()
+
+            is_face = ('face' in orig_low and 'dualface' not in orig_low) or any(
+                n.type == 'GROUP' and n.node_tree and 'ImpactToon - Face' in n.node_tree.name
+                for n in mat.node_tree.nodes
+            )
+            part_key = 'face' if is_face else \
+                       'hair' if 'hair' in orig_low else \
+                       'eye' if 'eye' in orig_low else \
+                       'body' if 'body' in orig_low else orig_low.split('_')[-1]
+
+            jdata = material_json_map.get(orig_low)
+            if not jdata:
+                for jk, jv in material_json_map.items():
+                    if jk == orig_low or jk.endswith(f"_{part_key}"):
+                        jdata = jv
+                        break
+            tex_envs = self._extract_json_tex_envs(jdata) if jdata else {}
+
+            # 1. Match Color/Diffuse (_MainTex / _DiffuseTex1)
+            diff_img = (
+                resolve_tex_by_name(tex_envs.get("_MainTex"), 'sRGB')
+                or resolve_tex_by_name(tex_envs.get("_DiffuseTex1"), 'sRGB')
+            )
+            if not diff_img and not jdata:
+                orig_tex = mat.get('_original_fbx_texture')
+                if orig_tex:
+                    diff_img = resolve_tex_by_name(orig_tex, 'sRGB')
+            if not diff_img and not jdata:
+                for k, p in texture_file_map.items():
+                    if part_key in k and any(x in k for x in ['color', 'diffuse']) and not any(x in k for x in ['lightmap', 'facemap', 'ramp', 'normal', 'mask']):
+                        diff_img = load_img(p, 'sRGB')
+                        break
+
+            # 2. Match Lightmap (_LightMapTex)
+            lm_img = resolve_tex_by_name(tex_envs.get("_LightMapTex"), 'Non-Color')
+            if not lm_img and ("_LightMapTex" not in tex_envs if jdata else True):
+                if diff_img:
+                    d_stem = os.path.splitext(diff_img.name)[0].lower()
+                    for pat in ['_color', '_diffuse']:
+                        if pat in d_stem:
+                            lm_stem = d_stem.replace(pat, '_lightmap')
+                            if lm_stem in texture_file_map:
+                                lm_img = load_img(texture_file_map[lm_stem], 'Non-Color')
+                                break
+                if not lm_img and part_key in ('body', 'hair', 'face', 'eye'):
+                    for k, p in texture_file_map.items():
+                        if f"_{part_key}_" in f"_{k}_" and 'lightmap' in k:
+                            lm_img = load_img(p, 'Non-Color')
+                            break
+
+            # 3. Match FaceMap (_FaceMapTex) and Expression Colormask (_FacExpTex) for Face
+            fm_img = None
+            exp_img = None
+            if is_face:
+                fm_img = resolve_tex_by_name(tex_envs.get("_FaceMapTex"), 'Non-Color') or global_facemap_img
+                exp_img = (
+                    resolve_tex_by_name(tex_envs.get("_FaceExpTex"), 'Non-Color')
+                    or resolve_tex_by_name(tex_envs.get("_FacExpTex"), 'Non-Color')
+                    or resolve_tex_by_name(tex_envs.get("_ColorMaskTex"), 'Non-Color')
+                )
+                if not exp_img:
+                    for k, p in texture_file_map.items():
+                        if 'colormask' in k or 'exptex' in k or 'facexp' in k:
+                            exp_img = load_img(p, 'Non-Color')
+                            break
+
+                # Assign FaceMap to _FaceMap node group
+                if fm_img:
+                    fm_ng = bpy.data.node_groups.get('_FaceMap')
+                    if fm_ng:
+                        for fn in fm_ng.nodes:
+                            if fn.type == 'TEX_IMAGE':
+                                fn.image = fm_img
+                    for n in mat.node_tree.nodes:
+                        if n.type == 'GROUP' and n.node_tree:
+                            sub_fm = n.node_tree.nodes.get('Group')
+                            if sub_fm and sub_fm.type == 'GROUP' and sub_fm.node_tree:
+                                for fn in sub_fm.node_tree.nodes:
+                                    if fn.type == 'TEX_IMAGE':
+                                        fn.image = fm_img
+
+            # Assign to material nodes
+            sh_node = mat.node_tree.nodes.get('Group.005') or mat.node_tree.nodes.get('Outlines')
+            for node in mat.node_tree.nodes:
+                if node.type == 'TEX_IMAGE':
+                    n_label = (node.label or node.name).lower()
+                    n_name = node.name.lower()
+                    if n_name in ('image texture.001', 'outline_diffuse') or ('maintex' in n_label or 'diffuse' in n_label or 'color' in n_label) and 'lightmap' not in n_label and 'exp' not in n_label:
+                        if diff_img:
+                            node.image = diff_img
+                        elif jdata:
+                            # A JSON with no diffuse texture uses its solid _Color;
+                            # do not borrow another part's texture (e.g. EyeShadow).
+                            from setup_wizard.material_data_import_setup.game_material_data_importers import HonkaiImpact3rdMaterialDataImporter
+                            colors, _, _ = HonkaiImpact3rdMaterialDataImporter._extract_props(jdata)
+                            color = colors.get('_Color', (1.0, 1.0, 1.0, 1.0))
+                            node.image = None
+                            if sh_node:
+                                for socket_name, value in (('_MainTex', color), ('_MainTex Alpha', color[3])):
+                                    socket = sh_node.inputs.get(socket_name)
+                                    if socket:
+                                        for link in list(socket.links):
+                                            mat.node_tree.links.remove(link)
+                                        socket.default_value = value
+                    elif n_name in ('image texture', 'outline_lightmap') or ('lightmap' in n_label or 'lightmap' in n_name) and 'exp' not in n_label:
+                        if lm_img:
+                            node.image = lm_img
+                        else:
+                            node.image = None
+                            if sh_node and '_LightmapColor' in sh_node.inputs:
+                                for l in list(sh_node.inputs['_LightmapColor'].links):
+                                    mat.node_tree.links.remove(l)
+                                sh_node.inputs['_LightmapColor'].default_value = (0.0, 0.5, 0.0, 1.0)
+                            if sh_node and '_LightmapAlpha' in sh_node.inputs:
+                                for l in list(sh_node.inputs['_LightmapAlpha'].links):
+                                    mat.node_tree.links.remove(l)
+                                sh_node.inputs['_LightmapAlpha'].default_value = 0.0
+                    elif is_face and (n_name == 'image texture.002' or 'exp' in n_label):
+                        if exp_img:
+                            node.image = exp_img
+                        else:
+                            node.image = None
+                            if sh_node and '_ExpTex' in sh_node.inputs:
+                                for l in list(sh_node.inputs['_ExpTex'].links):
+                                    mat.node_tree.links.remove(l)
+                                sh_node.inputs['_ExpTex'].default_value = (0.0, 0.0, 0.0, 1.0)
+
+        try:
+            from setup_wizard.material_data_import_setup.game_material_data_importers import HonkaiImpact3rdMaterialDataImporter
+            HonkaiImpact3rdMaterialDataImporter.apply_all_hi3_material_data(self.context, directory=directory)
+        except Exception as e:
+            print(f"[HI3 TEXTURES] Notice applying material data: {e}")
+
+        self.blender_operator.report({'INFO'}, 'Successfully imported Honkai Impact 3rd textures!')
+        if cache_enabled and directory:
+            cache_using_cache_key(get_cache(cache_enabled), CHARACTER_MODEL_FOLDER_FILE_PATH, directory)
+
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx,
+            self.blender_operator.invoker_type,
+            file_path_to_cache=directory,
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=GameType.HONKAI_IMPACT_3RD.name,
+        )
+
+
+'''
+Honkai Nexus Anima Texture Importer Facade
+'''
+class HonkaiNexusAnimaTextureImporterFacade(GameTextureImporter):
+    def __init__(self, blender_operator, context):
+        self.blender_operator = blender_operator
+        self.context = context
+
+    def import_textures(self):
+        cache_enabled = self.context.window_manager.cache_enabled if hasattr(self.context, 'window_manager') and hasattr(self.context.window_manager, 'cache_enabled') else True
+        directory = (
+            getattr(self.blender_operator, 'file_directory', None)
+            or get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH)
+            or (os.path.dirname(self.blender_operator.filepath) if hasattr(self.blender_operator, 'filepath') and self.blender_operator.filepath else None)
+            or get_active_character_directory()
+        )
+
+        if not directory or not os.path.isdir(directory):
+            bpy.ops.genshin.import_textures(
+                'INVOKE_DEFAULT',
+                next_step_idx=self.blender_operator.next_step_idx, 
+                file_directory=self.blender_operator.file_directory,
+                invoker_type=self.blender_operator.invoker_type,
+                high_level_step_name=self.blender_operator.high_level_step_name,
+                game_type=GameType.HONKAI_NEXUS_ANIMA.name,
+            )
+            return {'FINISHED'}
+
+        texture_importer_type = TextureImporterType.HSR_AVATAR
+        texture_importer: GenshinTextureImporter = TextureImporterFactory.create(texture_importer_type, GameType.HONKAI_STAR_RAIL)
+        from setup_wizard.utils.hna_material_utils import import_textures
+        import_textures(self.blender_operator)
+
+        self.blender_operator.report({'INFO'}, 'Imported Honkai Nexus Anima textures!')
+        if cache_enabled and directory:
+            cache_using_cache_key(get_cache(cache_enabled), CHARACTER_MODEL_FOLDER_FILE_PATH, directory)
+
+        NextStepInvoker().invoke(
+            self.blender_operator.next_step_idx,
+            self.blender_operator.invoker_type,
+            file_path_to_cache=directory,
+            high_level_step_name=self.blender_operator.high_level_step_name,
+            game_type=GameType.HONKAI_NEXUS_ANIMA.name
+        )
+
 
 
 
