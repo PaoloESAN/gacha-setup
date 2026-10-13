@@ -123,22 +123,51 @@ def get_face_metrics(face_meshes, armature, head_name):
     return fwd, right, up, face_size, fcx
 
 
-def get_widget_collection():
-    name = "WGTS_FaceRig_PGR"
-    coll = bpy.data.collections.get(name)
-    if not coll:
-        coll = bpy.data.collections.new(name)
-        bpy.context.scene.collection.children.link(coll)
-    return coll
+def get_widget_collection(armature):
+    from setup_wizard.ui.character_settings_utils import resolve_character_name
+    from setup_wizard.character_rig_setup.wgts_isolation import (
+        get_char_collection, get_or_create_char_wgts,
+    )
+    name = resolve_character_name(armature, armature.name.removesuffix('Rig'))
+    return get_or_create_char_wgts(get_char_collection(armature, name), name)
+
+
+def consolidate_widgets(armature):
+    from setup_wizard.ui.character_settings_utils import resolve_character_name
+    from setup_wizard.character_rig_setup.wgts_isolation import isolate_wgts_for_character
+    name = resolve_character_name(armature, armature.name.removesuffix('Rig'))
+    isolate_wgts_for_character(armature, name)
 
 
 def make_widget(kind, coll):
     name = f"WGT-PGR_{kind}"
-    existing = bpy.data.objects.get(name)
+    existing = next((o for o in coll.objects if o.name == name or o.name.startswith(name + '.')), None)
     if existing:
         return existing
+    existing = bpy.data.objects.get(name)
+    if existing:
+        other_user = any(o.type == 'ARMATURE' and any(p.custom_shape == existing for p in o.pose.bones)
+                         for o in bpy.data.objects)
+        if other_user:
+            existing = existing.copy()
+        coll.objects.link(existing)
+        return existing
 
-    if kind == 'isaac_blink_top':
+    if kind == 'genshin_eye_master':
+        source = bpy.data.objects.get('eye controller')
+        loaded = False
+        if source is None:
+            import os
+            path = os.path.join(os.path.dirname(__file__), 'RootShape.blend')
+            with bpy.data.libraries.load(path, link=False) as (available, requested):
+                requested.objects = ['eye controller']
+            source = requested.objects[0]
+            loaded = True
+        verts = [tuple(v.co) for v in source.data.vertices]
+        edges = [tuple(e.vertices) for e in source.data.edges]
+        if loaded:
+            bpy.data.objects.remove(source, do_unlink=True)
+    elif kind == 'isaac_blink_top':
         verts = ISAAC_BLINK_TOP_VERTS
         edges = ISAAC_BLINK_TOP_EDGES
     elif kind == 'isaac_blink_bot':
@@ -590,7 +619,7 @@ def setup_pgr_wuwa_face_rig(face_meshes, controls, armature, head_name, fwd, up,
 
     # Pose mode widgets and constraints
     bpy.ops.object.mode_set(mode='POSE')
-    wgt_coll = get_widget_collection()
+    wgt_coll = get_widget_collection(armature)
     color_cache = {}
 
     for c in controls:
@@ -755,7 +784,7 @@ def setup_pgr_eye_tracking(face_meshes, armature, head_name):
     # Split at the head's center plane instead of the vertex-count average.
     head_center = armature.matrix_world @ armature.data.bones[head_name].head_local
     center -= right * (center - head_center).dot(right)
-    distance = face_size * 1.5
+    distance = face_size
     inverse = armature.matrix_world.inverted()
     if bpy.context.object and bpy.context.object.mode != 'OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
@@ -783,19 +812,24 @@ def setup_pgr_eye_tracking(face_meshes, armature, head_name):
     control = armature.pose.bones['Eye-Track-Master']
     control.lock_rotation = (True, True, True)
     control.lock_scale = (True, True, True)
-    control.custom_shape = make_widget('ring', get_widget_collection())
+    control.custom_shape = make_widget('genshin_eye_master', get_widget_collection(armature))
     control.use_custom_shape_bone_size = False
-    control.custom_shape_scale_xyz = (face_size * .15,) * 3
-    # Ring widgets use X/Z; the target's vertical translation is local Y.
-    control.custom_shape_rotation_euler.x = math.pi * .5
+    left = armature.matrix_world @ armature.data.bones['Eye.L'].head_local
+    right_eye = armature.matrix_world @ armature.data.bones['Eye.R'].head_local
+    eye_span = abs((left - right_eye).dot(right))
+    half_width = max(eye_span * .5 + face_size * .12, face_size * .2)
+    control.custom_shape_scale_xyz = (half_width, half_width / 1.3, face_size * .1)
+    # Genshin's eye widget already lies in local X/Y, matching this target.
+    control.custom_shape_rotation_euler = (0, 0, 0)
     if hasattr(armature.data, 'collections'):
         collection = armature.data.collections.get('Face') or armature.data.collections.new('Face')
         collection.assign(control.bone)
         collection.is_visible = True
         for side in ('L', 'R'):
             child = armature.pose.bones[f'Eye.{side}']
-            child.lock_rotation = child.lock_scale = (True, True, True)
-            child.custom_shape = control.custom_shape
+            child.lock_rotation = (True, True, True)
+            child.lock_scale = (False, False, False)
+            child.custom_shape = make_widget('ring', get_widget_collection(armature))
             child.use_custom_shape_bone_size = False
             child.custom_shape_scale_xyz = (face_size * .08,) * 3
             child.custom_shape_rotation_euler.x = math.pi * .5
@@ -832,6 +866,37 @@ def setup_pgr_eye_tracking(face_meshes, armature, head_name):
                     target.transform_space = 'LOCAL_SPACE'
                     target.transform_type = transform
                 driver.expression = f'max(0.0, min(1.0, {sign * 25} * (motion + offset) * {distance!r} / max(0.03, {distance!r} + depth + offset_depth)))'
+        # Native pupil09 shrinks to 40%, pupil12 grows to 120%. Split them
+        # per eye, preserving the original expression keys and their drivers.
+        for label, source_name, factor in (('Small', 'pupil09', -1 / .6), ('Large', 'pupil12', 1 / .2)):
+            source = mesh.data.shape_keys.key_blocks.get(source_name)
+            if source is None:
+                continue
+            basis = mesh.data.shape_keys.key_blocks[0]
+            for side, direction in (('L', 1), ('R', -1)):
+                name = f'PGR-Size-{label}.{side}'
+                key = mesh.data.shape_keys.key_blocks.get(name) or mesh.shape_key_add(name=name, from_mix=False)
+                key.slider_max = 10.0
+                for i, point in enumerate(basis.data):
+                    belongs = direction * (mesh.matrix_world @ point.co - center).dot(right) > 0
+                    key.data[i].co = source.data[i].co if belongs else point.co
+                try:
+                    key.driver_remove('value')
+                except Exception:
+                    pass
+                driver = key.driver_add('value').driver
+                driver.type = 'SCRIPTED'
+                variable = driver.variables.new()
+                variable.name = 'size'
+                variable.type = 'TRANSFORMS'
+                target = variable.targets[0]
+                target.id = armature
+                target.bone_target = f'Eye.{side}'
+                target.transform_space = 'LOCAL_SPACE'
+                target.transform_type = 'SCALE_AVG'
+                driver.expression = f'max(0.0, min(10.0, {factor!r} * (max(0.01, size) - 1.0)))'
+    from setup_wizard.character_rig_setup.pgr_visual_widgets import align_head_controller_widget
+    align_head_controller_widget(armature)
     return True
 
 
@@ -854,6 +919,7 @@ def pgr_face_rig_main():
             import_wuwa_face_panel_blend(bpy.context, faceobj, armature, head_name)
             setup_pgr_panel_movements(face_meshes, armature)
             setup_pgr_eye_tracking(face_meshes, armature, head_name)
+            consolidate_widgets(armature)
             if hasattr(armature.data, 'collections'):
                 fc = armature.data.collections.get("Face")
                 if fc:
@@ -873,6 +939,7 @@ def pgr_face_rig_main():
     controls, fwd, up, face_size = plan_pgr_wuwa_controls(face_meshes, armature, head_name)
     setup_pgr_wuwa_face_rig(face_meshes, controls, armature, head_name, fwd, up, face_size)
     setup_pgr_eye_tracking(face_meshes, armature, head_name)
+    consolidate_widgets(armature)
     if hasattr(armature.data, 'collections'):
         fc = armature.data.collections.get("Face")
         if fc:

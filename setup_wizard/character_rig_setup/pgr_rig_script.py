@@ -1319,6 +1319,11 @@ def rig_character(
 
     # In edit mode, set parent bones.
     bpy.ops.object.mode_set(mode='EDIT')
+    # Apply the quarter-turn to the generated chains so Rigify's automatic
+    # finger alignment cannot overwrite it. Keep every joint in place.
+    for finger in armature.edit_bones:
+        if re.match(r'^(?:ORG-|DEF-|MCH-)?(?:f_(?:index|middle|ring|pinky)|thumb)\.', finger.name):
+            finger.roll += pi / 2
     head_b = armature.edit_bones.get('head')
     head_z = head_b.head.z if head_b else 1.45
 
@@ -3742,6 +3747,9 @@ def rig_character(
                 pb.rotation_mode = 'XYZ'
 
 
+
+    from setup_wizard.character_rig_setup.pgr_visual_widgets import align_hand_ik_widgets
+    align_hand_ik_widgets(this_obj)
 
     # Clean up any leftover RIG_LOG text block
     log_text = bpy.data.texts.get("RIG_LOG")

@@ -5,6 +5,7 @@ from bpy.types import Panel, UILayout
 
 from setup_wizard.domain.game_types import GameType
 from setup_wizard.ui.ui_render_checker import PunishingGrayRavenUIRenderChecker
+from setup_wizard.ui.pgr_character_settings import PGR_PT_CharacterSettings, PGR_OT_CharacterLightingPreset
 
 rigging_global_settings_feature_flag = False
 
@@ -434,6 +435,8 @@ class OperatorFactory:
 
 
 classes = (
+    PGR_PT_CharacterSettings,
+    PGR_OT_CharacterLightingPreset,
     PGR_PT_Setup_Wizard_UI_Layout,
     PGR_PT_Basic_Setup_Wizard_UI_Layout,
     PGR_PT_Advanced_Setup_Wizard_UI_Layout,

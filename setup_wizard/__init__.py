@@ -252,6 +252,8 @@ else:
         unregister_zzz_properties,
     )
     from setup_wizard.ui.pgr_ui_setup_wizard_menu import (
+        PGR_PT_CharacterSettings,
+        PGR_OT_CharacterLightingPreset,
         PGR_PT_Setup_Wizard_UI_Layout,
         PGR_PT_Basic_Setup_Wizard_UI_Layout,
         PGR_PT_Advanced_Setup_Wizard_UI_Layout,
@@ -361,6 +363,8 @@ else:
         HSR_OT_SetUpOutlines,
         HSR_OT_FinishSetup,
         # Punishing: Gray Raven
+        PGR_PT_CharacterSettings,
+        PGR_OT_CharacterLightingPreset,
         PGR_PT_Setup_Wizard_UI_Layout,
         PGR_PT_Basic_Setup_Wizard_UI_Layout,
         PGR_PT_Advanced_Setup_Wizard_UI_Layout,
@@ -552,6 +556,8 @@ else:
         register_gi_properties()
         register_ake_properties()
         register_hi3_properties()
+        from setup_wizard.ui.pgr_character_settings import register_pgr_properties
+        register_pgr_properties()
         register_hna_properties()
         setup_wizard.services.isolation.register()
         if wuwa_frame_change_handler not in bpy.app.handlers.render_init:
@@ -576,6 +582,8 @@ else:
 
 
     def unregister():
+        from setup_wizard.ui.pgr_character_settings import unregister_pgr_properties
+        unregister_pgr_properties()
         unregister_hna_properties()
         unregister_hi3_properties()
         addon_icon_manager.unregister_icons()
