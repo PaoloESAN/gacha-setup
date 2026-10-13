@@ -2149,42 +2149,32 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
     return applied_count
 
 
-def update_hair_physics_influence(influence, context=None):
+def _update_physics_constraint_influence(influence, constraint_name, context=None):
+    """Update only constraints owned by this physics system.
+
+    Isaac eye tracking and head aiming also use constraints named "Damped Track".
+    Neither that default name nor a non-hair bone identifies clothing physics.
+    Applying/rebuilding physics belongs to the Apply Physics operator, not sliders.
+    """
     context = context or bpy.context
     armature_obj = find_target_armature(context)
     if not armature_obj or not armature_obj.pose:
         return 0
     count = 0
     for pb in armature_obj.pose.bones:
-        for c in pb.constraints:
-            if c.type == 'DAMPED_TRACK' and (
-                c.name == "Hair_Physics_DampedTrack" or
-                (c.name == "Damped Track" and any(k in pb.name.lower() for k in ["hair", "ahoge", "bangs", "ponytail", "twintail", "bone00"]))
-            ):
-                c.influence = influence
+        for constraint in pb.constraints:
+            if constraint.type == 'DAMPED_TRACK' and constraint.name == constraint_name:
+                constraint.influence = influence
                 count += 1
-    if count == 0:
-        apply_hair_and_clothes_physics(armature_obj, context, hair_influence=influence)
     return count
+
+
+def update_hair_physics_influence(influence, context=None):
+    return _update_physics_constraint_influence(influence, "Hair_Physics_DampedTrack", context)
 
 
 def update_clothes_physics_influence(influence, context=None):
-    context = context or bpy.context
-    armature_obj = find_target_armature(context)
-    if not armature_obj or not armature_obj.pose:
-        return 0
-    count = 0
-    for pb in armature_obj.pose.bones:
-        for c in pb.constraints:
-            if c.type == 'DAMPED_TRACK' and (
-                c.name == "Clothes_Physics_DampedTrack" or
-                (c.name == "Damped Track" and not any(k in pb.name.lower() for k in ["hair", "ahoge", "bangs", "ponytail", "twintail", "bone00"]))
-            ):
-                c.influence = influence
-                count += 1
-    if count == 0:
-        apply_hair_and_clothes_physics(armature_obj, context, clothes_influence=influence)
-    return count
+    return _update_physics_constraint_influence(influence, "Clothes_Physics_DampedTrack", context)
 
 
 def has_hair_clothes_physics(context=None, armature_obj=None):
