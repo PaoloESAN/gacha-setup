@@ -860,22 +860,7 @@ def rig_character(
         if "DEF-forearm" + x + ".002" in rigifyr.data.edit_bones and "DEF-forearm" + x in rigifyr.data.edit_bones:
             rigifyr.data.edit_bones["DEF-forearm" + x + ".002"].parent = rigifyr.data.edit_bones["DEF-forearm" + x]
 
-    # HI3 auxiliary skin bones must follow the matching Rigify segment.
-    # The second twist sits halfway along the limb; the elbow sits at its end.
-    # Parenting all of them to the first segment pulls the sleeve away on bends.
-    for side in ("L", "R"):
-        for source_name, parent_name in (
-            (f"Bone_{side}_UpperArm_Twist_01", f"DEF-upper_arm.{side}"),
-            (f"Bone_{side}_UpperArm_Twist_02", f"DEF-upper_arm.{side}.001"),
-            (f"Bone_{side}_ForeArm_Twist_01", f"DEF-forearm.{side}"),
-            (f"Bone_{side}_ForeArm_Twist_02", f"DEF-forearm.{side}.001"),
-            (f"Bone_Elbow_{side}", f"DEF-upper_arm.{side}.001"),
-        ):
-            child = rigifyr.data.edit_bones.get(source_name)
-            parent = rigifyr.data.edit_bones.get(parent_name)
-            if child and parent:
-                child.use_connect = False
-                child.parent = parent
+    setup_hi3_arm_parenting(rigifyr)
 
     # Ensure Root_M and pelvic/hip root bones follow DEF-spine
     target_hip_parent = (
@@ -2010,6 +1995,10 @@ def rig_character(
 
 
    
+    # Appended elbow pin mechanisms must not depend on the deformation
+    # bones that their own Copy Location constraints drive.
+    setup_hi3_arm_parenting(our_char)
+
     # Reuse the eyes detected on the source model, including HI3 Bone_Eye_*_01.
     # Tracking proxies face forward independently of the imported bone axes;
     # LOCAL_OWNER_ORIENT below transfers their rotation delta to the real eyes.
@@ -4003,6 +3992,8 @@ def rig_character(
         shape.hide_render = True
     our_char.data.show_bone_custom_shapes = True
 
+    setup_thumb_control_widgets(our_char)
+
     # Orient the existing Y/Z hand widget over the palm, anchored at the wrist.
     for side in ('L', 'R'):
         pb = our_char.pose.bones.get('hand_ik.' + side)
@@ -4031,6 +4022,49 @@ def rig_character(
         breast = our_char.pose.bones.get('breast.' + side)
         if breast:
             breast.custom_shape_scale_xyz = (0.45,) * 3
+
+
+def setup_hi3_arm_parenting(rig):
+    """Repair HI3 arm skin bindings and elbow pin parents in Edit Mode."""
+    bones = rig.data.edit_bones
+    for side in ('L', 'R'):
+        for source_name, parent_name in (
+            (f'Bone_{side}_UpperArm_Twist_01', f'DEF-upper_arm.{side}'),
+            (f'Bone_{side}_UpperArm_Twist_02', f'DEF-upper_arm.{side}.001'),
+            (f'Bone_{side}_ForeArm_Twist_01', f'DEF-forearm.{side}'),
+            (f'Bone_{side}_ForeArm_Twist_02', f'DEF-forearm.{side}.001'),
+            (f'Bone_Elbow_{side}', f'DEF-upper_arm.{side}.001'),
+            (f'Mobius_Bone_UpperArmTwist_{side}_01', f'DEF-upper_arm.{side}'),
+            (f'Mobius_Bone_UpperArmTwist_{side}_02', f'DEF-upper_arm.{side}.001'),
+            # This bone skins the forearm, despite its imported upper-arm parent.
+            (f'Mobius_Bone_Twist_{side}', f'DEF-forearm.{side}'),
+        ):
+            child = bones.get(source_name)
+            parent = bones.get(parent_name)
+            if child is not None and parent is not None:
+                child.use_connect = False
+                child.parent = parent
+
+        pin = bones.get(f'MCH-forearm_tweak-pin.parent.{side}')
+        if pin is not None:
+            # DEF-forearm -> pin -> forearm_tweak -> DEF-forearm is a cycle,
+            # even when tweak_pin is zero. The parent switch supplies the frame.
+            pin.use_connect = False
+            pin.parent = None
+
+
+def setup_thumb_control_widgets(rig):
+    """Keep thumb master widgets on the posed thumb when detail controls move."""
+    for side in ('L', 'R'):
+        master = rig.pose.bones.get('thumb.01_master.' + side)
+        thumb = rig.pose.bones.get('ORG-thumb.01.' + side)
+        if master is not None and thumb is not None:
+            # Rigify already uses the ORG bones to display finger detail widgets.
+            # The master has a separate transform and otherwise stays behind
+            # when the first detail control is translated or rotated.
+            # This changes display only; parenting/constraints would create a
+            # dependency cycle because the master drives this same thumb.
+            master.custom_shape_transform = thumb
 
 
 def setup_neck_and_head_follow(neck_follow_value=1.0, head_follow_value=1.0):
