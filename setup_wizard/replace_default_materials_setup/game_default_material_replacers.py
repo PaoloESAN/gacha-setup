@@ -1121,6 +1121,14 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 
     def __clone_material_and_rename(self, material_slot, mesh_body_part_name_template, mesh_body_part_name):
         template_material = bpy.data.materials.get(mesh_body_part_name_template)
+        if not template_material and mesh_body_part_name_template in (
+                f'{self.material_names.MATERIAL_PREFIX}Body1',
+                f'{self.material_names.MATERIAL_PREFIX}Body2'):
+            # Newer Genshin templates use Body01/Body02, or share Body.
+            # Keep the cloned Dress material distinct and transfer its texture.
+            numbered_name = mesh_body_part_name_template.replace('Body', 'Body0')
+            template_material = (bpy.data.materials.get(numbered_name)
+                                 or bpy.data.materials.get(self.material_names.BODY))
         if not template_material:
             print(f'WARNING: Template material "{mesh_body_part_name_template}" not found, cannot clone for "{mesh_body_part_name}"')
             return None
