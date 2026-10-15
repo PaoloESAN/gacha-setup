@@ -81,6 +81,8 @@ Thanks to all those who collaborated on the original project:
 * **VaSTuan** — Multi-character support
 * **zmecyyyy** — Rig review
 * **crabnuts** — Rig reference
+* **[nomianims](https://x.com/nomianims)**
+* **[emy_purpl](https://x.com/emy_purpl)** — [YouTube](https://www.youtube.com/@emypurpl) · [X](https://x.com/emy_purpl)
 * **Genshin Impact**:
   * **Shader**: [Blender-miHoYo-Shaders](https://github.com/festivize/Blender-miHoYo-Shaders) by Festivity
   * **Genshin review**: VANS
@@ -103,7 +105,6 @@ Thanks to all those who collaborated on the original project:
   * **Shader**: [Gustling Waters](https://github.com/nytsjared/Gustling-Waters) by [@nytsjared](https://github.com/nytsjared)
   * **Base Addon & Rigging**: [Blender-WuWa-Character-Setup](https://github.com/fnoji/Blender-WuWa-Character-Setup) by [@fnoji](https://github.com/fnoji)
   * **Face Rig**: Akatsuki
-  * **emy_purpl**
 * **AKE / Arknights: Endfield**:
   * **Setup**: Xiyang
   * **Shader**: Endfield PBRToon

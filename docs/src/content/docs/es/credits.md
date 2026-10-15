@@ -39,6 +39,7 @@ description: Agradecimientos, colaboradores y créditos de recursos.
 - **VaSTuan** — Soporte multipersonaje
 - **zmecyyyy** — Revisión de rig
 - **crabnuts** — Referencia de rig
+- **[nomianims](https://x.com/nomianims)**
 - **Icono del Logo** — <a href="https://www.flaticon.com/free-icons/star" title="star icons">Star icons created by Magnific - Flaticon</a>
 
 <div class="disclaimer-text">

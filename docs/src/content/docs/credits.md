@@ -41,6 +41,7 @@ description: Acknowledgements, contributors, and assets credits.
 - **VaSTuan** — Multi-character support
 - **zmecyyyy** — Rig review
 - **crabnuts** — Rig reference
+- **[nomianims](https://x.com/nomianims)**
 - **Logo Icon** — <a href="https://www.flaticon.com/free-icons/star" title="star icons">Star icons created by Magnific - Flaticon</a>
 
 <div class="disclaimer-text">
