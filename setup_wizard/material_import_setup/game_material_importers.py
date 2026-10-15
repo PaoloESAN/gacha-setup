@@ -160,6 +160,7 @@ class GenshinImpactMaterialImporterFacade(GameMaterialImporter):
         {'name': V3_BonnyFestivityGenshinImpactMaterialNames.PUPIL},
         {'name': V3_BonnyFestivityGenshinImpactMaterialNames.NEW_PUPIL},
         {'name': V3_BonnyFestivityGenshinImpactMaterialNames.HIGHLIGHT},
+        {'name': V3_BonnyFestivityGenshinImpactMaterialNames.WEAPON},
         {'name': V4_PrimoToonGenshinImpactMaterialNames.VFX},
     ]
     OUTLINES_FILE_PATH = GENSHIN_IMPACT_OUTLINES_FILE_PATH

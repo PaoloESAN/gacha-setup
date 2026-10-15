@@ -306,6 +306,10 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
                 stem = PurePosixPath(file.name).stem
                 equipment = next((m for m in bpy.data.materials if m.get('_genshin_equipment')
                                   and m.get('_original_material_name') == stem), None)
+                if equipment is None and any(m.get('_genshin_equipment') for m in bpy.data.materials):
+                    # Alternate weapon skins in the folder must not overwrite
+                    # the shared Body template or another equipment material.
+                    continue
                 body_part = equipment.name.removeprefix(self.material_names.MATERIAL_PREFIX) if equipment else 'Body'
                 character_type = CharacterType.GI_EQUIPMENT
             elif file.name.endswith('Glass_Mat.json'):

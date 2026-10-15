@@ -107,6 +107,10 @@ class GenshinImpactTextureImporterFacade(GameTextureImporter):
         for material in bpy.data.materials:
             if not material.get('_genshin_equipment') or material.name.endswith('Outlines'):
                 continue
+            if material.get('_genshin_weapon_template'):
+                from setup_wizard.utils.genshin_weapon_material_utils import import_weapon_textures
+                import_weapon_textures(material, directory)
+                continue
             source = material.get('_original_material_name')
             path = os.path.join(directory, 'Materials', source + '.json')
             if not os.path.isfile(path):

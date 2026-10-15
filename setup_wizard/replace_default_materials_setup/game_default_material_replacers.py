@@ -780,7 +780,7 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 
                 if (material_name.startswith(('Equip_', 'EquipSkin_'))
                         or mesh.name.startswith(('Equip_', 'EquipSkin_'))):
-                    # Keep Unity materials distinct without adding shader nodes.
+                    # Keep each equipment slot distinct and use the weapons template.
                     source = material_name or mesh.name
                     folder = get_active_character_directory()
                     path = os.path.join(folder, 'Materials', source + '.json') if folder else ''
@@ -792,10 +792,14 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     name = self.material_names.MATERIAL_PREFIX + ('Eff_' if effect else '') + source
                     material = bpy.data.materials.get(name)
                     if material is None:
-                        template = bpy.data.materials.get(self.material_names.BODY)
+                        template = (bpy.data.materials.get(getattr(self.material_names, 'WEAPON', ''))
+                                    or bpy.data.materials.get(self.material_names.BODY))
                         if template is None:
-                            raise RuntimeError('Missing Genshin body shader for: ' + source)
+                            raise RuntimeError('Missing Genshin equipment shader for: ' + source)
                         material = template.copy()
+                        if material.get('_genshin_weapon_template'):
+                            from setup_wizard.utils.genshin_weapon_material_utils import localize_weapon_texture_groups
+                            localize_weapon_texture_groups(material)
                         material.name = name
                         material.use_fake_user = True
                     material['_original_material_name'] = source
