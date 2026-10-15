@@ -1415,6 +1415,24 @@ def rig_character(
     armature.edit_bones['ORG-shoulder.L'].parent = armature.edit_bones['DEF-spine.002']
     armature.edit_bones['ORG-shoulder.R'].parent = armature.edit_bones['DEF-spine.002']
 
+    # The IK parent switch must not depend on the shoulder that follows that
+    # same IK hand. Even a zero-weight Armature target creates a dependency in
+    # Blender. Keep a separate shoulder rest frame attached to the chest.
+    for side in ('L', 'R'):
+        shoulder = armature.edit_bones[f'ORG-shoulder.{side}']
+        parent_name = f'MCH-shoulder_parent.{side}'
+        parent = armature.edit_bones.new(parent_name)
+        parent.head = shoulder.head.copy()
+        parent.tail = shoulder.tail.copy()
+        parent.roll = shoulder.roll
+        parent.parent = shoulder.parent
+        parent.use_deform = False
+        for constraint in bpy.context.object.pose.bones[f'MCH-hand_ik.parent.{side}'].constraints:
+            if constraint.type == 'ARMATURE':
+                for target in constraint.targets:
+                    if target.subtarget == shoulder.name:
+                        target.subtarget = parent_name
+
      
     
     # RENAME imported bones
@@ -2920,6 +2938,11 @@ def rig_character(
                 this_obj.animation_data.drivers.remove(d)
             except Exception:
                 pass
+
+    # Consolidate the temporary NPC widget collections after all appended
+    # shapes have been assigned, just as the playable-character rig does.
+    from setup_wizard.character_rig_setup.wgts_isolation import isolate_wgts_for_character
+    isolate_wgts_for_character(this_obj, char_name, char_coll=char_coll)
 
     # MOVING OF BONES END -------------------------------    
 def setup_neck_and_head_follow(neck_follow_value, head_follow_value):
