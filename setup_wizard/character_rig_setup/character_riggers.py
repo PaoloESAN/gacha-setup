@@ -331,6 +331,9 @@ class GenshinImpactCharacterRigger(CharacterRigger):
             or next((o for o in bpy.data.objects if o.type == 'ARMATURE' and o.name.endswith("Rig")), None)
             or _get_character_armature(self.context)
         )
+        from setup_wizard.character_rig_setup.genshin_wrist_twist import setup_wrist_twist
+        setup_wrist_twist(target_rig)
+
         if target_rig and hasattr(target_rig.data, "collections"):
             colls = target_rig.data.collections
             root_coll = colls.get("Root") or colls.new("Root")
