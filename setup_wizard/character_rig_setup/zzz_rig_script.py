@@ -3787,6 +3787,19 @@ def rig_character(
     def generate_string_for_head_controller_slider():
         return '\n        if is_selected({"head-controller"}):\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Tracker Controller", slider=True)\n        if is_selected({"head"}):\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Tracker Controller", slider=True)'
 
+    from setup_wizard.character_rig_setup.remielle_wings_rig import (
+        setup_remielle_wings_rig,
+        assign_remielle_wing_collections,
+        generate_remielle_wing_ui_splice,
+        is_remielle_wing_bone_name,
+    )
+    _is_remielle_char = setup_remielle_wings_rig(
+        this_obj,
+        original_name=original_name,
+        char_name=char_name,
+        assign_bone_to_group_fn=assign_bone_to_group,
+    )
+
     splices = [
         {"divider": "num_rig_separators[0] += 1", "text": generate_string_for_parent_switch("forearm_tweak-pin.L")},
         {"divider": "num_rig_separators[0] += 1", "text": generate_string_for_limb_pin("forearm_tweak-pin.L", "upper_arm_parent.L", "forearm_tweak.L", "Elbow Pin")},
@@ -3804,6 +3817,8 @@ def rig_character(
         {"divider": "num_rig_separators[0] += 1", "text": generate_string_for_head_controller_slider()},
         {"divider": "num_rig_separators[0] += 1", "text": generate_string_for_parent_switch("head-controller")},
     ]
+    if _is_remielle_char:
+        splices.append({"divider": "num_rig_separators[0] += 1", "text": generate_remielle_wing_ui_splice()})
 
     modify_and_run_rig_ui_script(this_obj, original_name, char_name=char_name, extra_splices=splices)
     
@@ -4391,6 +4406,9 @@ def rig_character(
             if b_name.startswith("DEF-") or b_name.startswith("ORG-") or b_name.startswith("MCH-"):
                 continue
 
+            if _is_remielle_char and is_remielle_wing_bone_name(b_name):
+                continue
+
             if b_name.endswith("_tip") or b_name in all_skirt_tip_bones:
                 bone_to_layer(b_name, 25, "Other")
                 continue
@@ -4437,6 +4455,9 @@ def rig_character(
     fast_bone_move(all_skirt_deform_bones, 24, "Cage")
     fast_bone_move(all_skirt_ctrl_bones, 22, "Clothes")
     fast_bone_move(all_skirt_tip_bones, 25, "Other")
+
+    if _is_remielle_char:
+        assign_remielle_wing_collections(this_obj)
 
     # Dedicated Tails bone collection (Rig Layers): tail chains.
     # Runs after loop_place_physics (which drops "tail" bones into Clothes).

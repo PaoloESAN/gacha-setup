@@ -997,6 +997,7 @@ def distribute_standard_rig_bones(
             or b.name.startswith("Bip")
             or b.name.startswith("joint_")
             or b.name.startswith("skn_")
+            or any(wk in b_low for wk in ("winga", "wingc", "wingd", "clafeather", "mch-wing"))
         ):
             continue
 
@@ -1323,6 +1324,28 @@ def build_rig_layers_ui_code(original_name, setup_version):
                 "\n            " + make_layer_str("Tails", 22, vers) +
                 "\n            row = split.row(align=True)" +
                 "\n            " + make_solo_str("Tails") +
+                "\n            if 'Wings (FK)' in collection:\n" +
+                "                row = col.row()\n" +
+                "                split = row.split(align=True, factor=split_size)\n" +
+                "                row = split.row(align=True)\n" +
+                "                row.prop(collection['Wings (FK)'], 'is_visible', toggle=True, text='Wings (FK)')\n" +
+                "                row = split.row(align=True)\n" +
+                "                row.prop(collection['Wings (FK)'], 'is_solo', toggle=True, text='★')\n" +
+                "            for _w_grp in ('Wing A', 'Wing C', 'Wing D'):\n" +
+                "                _w_ik = _w_grp + ' (IK)'\n" +
+                "                _w_fk = _w_grp + ' (FK)'\n" +
+                "                if _w_ik in collection or _w_fk in collection:\n" +
+                "                    row = col.row()\n" +
+                "                    split = row.split(factor=split_small, align=True)\n" +
+                "                    row_tweaks = split.row(align=True)\n" +
+                "                    if _w_ik in collection: row_tweaks.prop(collection[_w_ik], 'is_visible', toggle=True, text=_w_ik)\n" +
+                "                    row_tweaks = split.row(align=True)\n" +
+                "                    if _w_ik in collection: row_tweaks.prop(collection[_w_ik], 'is_solo', toggle=True, text='★')\n" +
+                "                    split = row.split(factor=split_small, align=True)\n" +
+                "                    row_pivots = split.row(align=True)\n" +
+                "                    if _w_fk in collection: row_pivots.prop(collection[_w_fk], 'is_visible', toggle=True, text=_w_fk)\n" +
+                "                    row_pivots = split.row(align=True)\n" +
+                "                    if _w_fk in collection: row_pivots.prop(collection[_w_fk], 'is_solo', toggle=True, text='★')" +
                 "\n            row = col.row()" +
                 # Cage / Other
                 "\n            split = row.split(factor=split_small, align=True)" +
@@ -1899,7 +1922,8 @@ def apply_hair_and_clothes_physics(armature_obj=None, context=None, hair_influen
             "eyebone", "eye", "tooth", "teeth", "tongue", "mouth", "jaw", "brow", "lip", "nose",
             "cheek", "plate", "twist", "sa01", "sa02", "fa01", "skirtallf", "prop", "light",
             "finger", "thumb", "heel", "camera", "case", "chest", "breast",
-            "face", "wink", "slider", "ctrl", "control"
+            "face", "wink", "slider", "ctrl", "control",
+            "winga", "wingc", "wingd", "clafeather", "mch-wing"
         ]):
             return True
         if (
