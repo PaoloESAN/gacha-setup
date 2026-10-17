@@ -109,7 +109,7 @@ def execute_pipeline(game_key, char_dir, model_file, target_suite):
             run_op("ake_setup_outlines", bpy.ops.arknights_endfield.set_up_outlines, game_type=game_type, file_directory=char_dir, next_step_idx=-1, invoker_type="", high_level_step_name="")
 
         if hasattr(bpy.ops.genshin, "fix_transformations"):
-            run_op("fix_transformations", bpy.ops.genshin.fix_transformations)
+            run_op("fix_transformations", bpy.ops.genshin.fix_transformations, game_type=game_type)
 
     # Rigging & Face Rig / Head driver steps
     if target_suite in ("facerig", "rig", "charactersettings"):
@@ -120,7 +120,8 @@ def execute_pipeline(game_key, char_dir, model_file, target_suite):
         elif game_key == "wuwa":
             run_op("wuwa_setup_head_driver", bpy.ops.wuthering_waves.setup_head_driver)
         elif hasattr(bpy.ops.genshin, "setup_head_driver"):
-            run_op("setup_head_driver", bpy.ops.genshin.setup_head_driver)
+            run_op("setup_head_driver", bpy.ops.genshin.setup_head_driver,
+                   game_type=game_type, next_step_idx=-1, invoker_type="", high_level_step_name="")
 
         if hasattr(bpy.ops.genshin, "set_color_management_to_standard"):
             run_op("set_color_management_to_standard", bpy.ops.genshin.set_color_management_to_standard)

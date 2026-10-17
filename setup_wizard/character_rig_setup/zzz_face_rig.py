@@ -93,6 +93,7 @@ def shapekeyrename(keyblock):
         "Mouth_啧_R_Ben": "Fac_Mth_R_Out", "Mouth_啧_L_Ben": "Fac_Mth_L_Out",
         "Mouth_Ii1": "Fac_Mth_Ii",
         "Fac_Mth_Aa": "Fac_Mth_Aa1",
+        "Fac_Mth_AaShout": "Fac_Mth_Aa3Shout",
         "Fac_Mth_ooR": "Fac_Mth_R_Out", "Fac_Mth_Roo": "Fac_Mth_R_In",
         "Fac_Mth_Loo": "Fac_Mth_L_Out", "Fac_Mth_ooL": "Fac_Mth_L_In",
         "Fac_Mth_oo_RDown": "Fac_Mth_R_Down", "Fac_Mth_LDown_oo": "Fac_Mth_L_Down",
@@ -126,16 +127,16 @@ def shapekeyrename(keyblock):
         "Mouth_oo→": "Fac_Mth_L_Out", "Mouth_oo↘": "Fac_Mth_L_Down",
         "Mouth_Oo": "Fac_Mth_Oo", "Mouth_Uu": "Fac_Mth_Uu", "Mouth_UuOo": "Fac_Mth_UuOo",
     }
-    for key in rename_map.keys():
-        try:
-            keyblock[key].name = rename_map[key]
-        except Exception:
-            for sk in keyblock:
-                if key in sk.name:
-                    sk.name = rename_map[key]
-    for sk in keyblock:
-        if sk.name.endswith("_Ben"):
-            sk.name = sk.name[:-4]
+    for sk in list(keyblock):
+        name = sk.name
+        target = rename_map.get(name)
+        if target is None and name.endswith('_Ben'):
+            base = name[:-4]
+            target = rename_map.get(base, base)
+        # Aa is an alias, not a prefix: Aa1, Aa2 and AaTalk are independent
+        # expressions. Substring replacement collapsed them into Aa1.001 etc.
+        if target and (target not in keyblock or keyblock[target] == sk):
+            sk.name = target
 
 
 def find_armature_and_head(mesh_obj):
@@ -590,6 +591,56 @@ def face_frame(mesh_obj, armature=None):
     return fwd, right, up, face_size
 
 
+def mouth_boundary_landmarks(mesh_obj, estimate, fwd, right, up, face_size):
+    """Find the neutral lip opening, excluding eyes, neck and inner mouth parts."""
+    counts = {}
+    for polygon in mesh_obj.data.polygons:
+        for edge in polygon.edge_keys:
+            counts[edge] = counts.get(edge, 0) + 1
+    adjacency = {}
+    for (a, b), count in counts.items():
+        if count == 1:
+            adjacency.setdefault(a, set()).add(b)
+            adjacency.setdefault(b, set()).add(a)
+    remaining = set(adjacency)
+    candidates = []
+    mw = mesh_obj.matrix_world
+    basis = mesh_obj.data.shape_keys.reference_key if mesh_obj.data.shape_keys else None
+    vertices = basis.data if basis else mesh_obj.data.vertices
+    while remaining:
+        pending = [remaining.pop()]
+        indices = []
+        while pending:
+            index = pending.pop()
+            indices.append(index)
+            for neighbour in adjacency[index]:
+                if neighbour in remaining:
+                    remaining.remove(neighbour)
+                    pending.append(neighbour)
+        if len(indices) < 4 or any(len(adjacency[i]) != 2 for i in indices):
+            continue
+        points = [mw @ vertices[i].co for i in indices]
+        r = [p.dot(right) for p in points]
+        u = [p.dot(up) for p in points]
+        width, height = max(r) - min(r), max(u) - min(u)
+        center = sum(points, Vector()) / len(points)
+        if not (face_size * 0.06 < width < face_size * 0.6 and height < width * 0.5):
+            continue
+        if (abs((center - estimate).dot(right)) > face_size * 0.15
+                or abs((center - estimate).dot(up)) > face_size * 0.15):
+            continue
+        # Choose the front lip loop rather than teeth/tongue boundaries.
+        candidates.append((center.dot(fwd), points, r, u))
+    if not candidates:
+        return None
+    _, points, r, u = max(candidates, key=lambda item: item[0])
+    center = sum(points, Vector()) / len(points)
+    center += right * ((max(r) + min(r)) * 0.5 - center.dot(right))
+    center += up * ((max(u) + min(u)) * 0.5 - center.dot(up))
+    edges = max(points, key=lambda p: p.dot(right)), min(points, key=lambda p: p.dot(right))
+    return center, edges, (max(r) - min(r), max(u) - min(u))
+
+
 def plan_controls(mesh_obj, fwd, right, up, face_size):
     if not mesh_obj or not mesh_obj.data or not mesh_obj.data.shape_keys:
         return []
@@ -633,10 +684,10 @@ def plan_controls(mesh_obj, fwd, right, up, face_size):
         brow = ((eyeL + eyeR) * 0.5) + up * face_size * 0.10
     eyeC = (eyeL + eyeR) * 0.5
 
-    mouth_raise = up * (face_size * MOUTH_RAISE_F)
-    mouth = mouth + mouth_raise
-
-    mouth_edges = feature_extreme(mesh_obj, MOUTH_KEYS, right)
+    landmarks = mouth_boundary_landmarks(mesh_obj, mouth, fwd, right, up, face_size)
+    mouth_raise = Vector() if landmarks else up * (face_size * MOUTH_RAISE_F)
+    mouth = landmarks[0] if landmarks else mouth + mouth_raise
+    mouth_edges = landmarks[1] if landmarks else feature_extreme(mesh_obj, MOUTH_KEYS, right)
 
     def corner(side):
         cc = feature_centroid(mesh_obj,
@@ -652,7 +703,7 @@ def plan_controls(mesh_obj, fwd, right, up, face_size):
         s = 1.0 if (side == 'L') != FLIP_EYE_LR else -1.0
         return mouth + right * (s * face_size * 0.06)
 
-    mouth_ext = feature_extent(mesh_obj, MOUTH_KEYS, right, up)
+    mouth_ext = landmarks[2] if landmarks else feature_extent(mesh_obj, MOUTH_KEYS, right, up)
     if mouth_ext:
         mw2, mh2 = mouth_ext[0] * 0.5 * MOUTH_SHIFT_F, mouth_ext[1] * 0.5 * MOUTH_SHIFT_F
     else:
@@ -672,10 +723,16 @@ def plan_controls(mesh_obj, fwd, right, up, face_size):
     if ud[0] in keyblock: drv.append({'key': ud[0], 'axis': 'Z', 'dir': +1})
     if ud[1] in keyblock: drv.append({'key': ud[1], 'axis': 'Z', 'dir': -1})
     if drv:
+        lip_scale = Vector((face_size * 0.09,) * 3)
+        lip_center = Vector(tuple((min(v[i] for v in LIPS_MASTER_VERTS)
+                                   + max(v[i] for v in LIPS_MASTER_VERTS)) * 0.5
+                                  for i in range(3)))
+        lip_translation = Vector(tuple(-lip_center[i] * lip_scale[i] for i in range(3)))
         controls.append({'name': 'CTRL-Mouth-Shift', 'collection': 'Face Main',
                          'color': COL_VISEME, 'group': 'Face Mouth',
                          'head': place(mouth), 'widget': 'lipsmaster', 'lim': LIM,
-                         'free': ('X', 'Z'), 'range': 'both', 'shape_scale': Vector((face_size * 0.09,) * 3),
+                         'free': ('X', 'Z'), 'range': 'both', 'shape_scale': lip_scale,
+                         'shape_translation': lip_translation if landmarks else Vector(),
                          'drivers': drv})
 
     vud = vkey("Fac_Mth_Ii", "Fac_Mth_Aa1")
@@ -1364,6 +1421,7 @@ def setup_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_size):
             pass
         ss = c.get('shape_scale')
         pb.custom_shape_scale_xyz = ss if ss is not None else Vector((lim * WIDGET_F,) * 3)
+        pb.custom_shape_translation = c.get('shape_translation', Vector())
         sr = c.get('shape_rotation')
         if sr is not None:
             try:
@@ -2393,30 +2451,37 @@ def setup_facerig_detail_panel(faceobj, armature, head_name, keyblock):
 
 
 
+def find_face_mesh(context):
+    """Choose a face belonging to the active character, not the first in the file."""
+    active = context.view_layer.objects.active
+    armature = active if active and active.type == 'ARMATURE' else None
+    if active and active.type == 'MESH':
+        armature = active.find_armature()
+    if armature is None:
+        armature = next((o for o in context.selected_objects if o.type == 'ARMATURE'), None)
+    candidates = []
+    for obj in context.scene.objects:
+        if obj.type != 'MESH':
+            continue
+        name = obj.name.casefold()
+        if not ('face' in name or 'head' in name):
+            continue
+        if any(word in name for word in ('weapon_', 'wpn_', 'garape_', 'grape_', 'gun_', 'sword_')):
+            continue
+        if armature and obj.find_armature() != armature and obj.parent != armature:
+            continue
+        keys = obj.data.shape_keys.key_blocks if obj.data and obj.data.shape_keys else []
+        feature_count = sum(any(token in key.name.casefold() for token in ('mth', 'mouth', 'eye', 'ebr')) for key in keys)
+        candidates.append((feature_count, 'face' in name, obj.name, obj))
+    return max(candidates, key=lambda item: item[:3])[3] if candidates else None
+
+
 def zzz_face_rig_main():
     try:
         if bpy.context.object and bpy.context.object.mode != 'OBJECT':
             bpy.ops.object.mode_set(mode='OBJECT')
 
-        faceobj = None
-        for obj in bpy.data.objects:
-            if obj.type != 'MESH':
-                continue
-            n = obj.name.lower()
-            if any(ign in n for ign in ["weapon_", "wpn_", "garape_", "grape_", "gun_", "sword_"]):
-                continue
-            if "face" in n or "_face" in n or "head" in n:
-                if obj.data and obj.data.shape_keys is not None:
-                    faceobj = obj
-                    break
-                if faceobj is None:
-                    faceobj = obj
-
-        if faceobj is None:
-            for obj in bpy.data.objects:
-                if obj.type == 'MESH' and ('face' in obj.name.lower() or 'head' in obj.name.lower()):
-                    faceobj = obj
-                    break
+        faceobj = find_face_mesh(bpy.context)
 
         if faceobj is None:
             print("[ZZZ Face Rig] No face mesh found in the scene.")
