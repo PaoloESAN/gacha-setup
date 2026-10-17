@@ -343,19 +343,37 @@ def disconnect_lighting_panel_nodes_from_global_material_properties(target_mater
                         tree.links.remove(l)
 
 
-def setup_unrigged_genshin_lighting(context):
-    """Use static lighting for every part of the selected setup model."""
+def setup_unrigged_genshin_lighting(context, only_if_panel_missing=False, target_object=None):
+    """Use static lighting for the selected model when no panel supplies it."""
     from setup_wizard.ui.character_settings_utils import get_character_materials
 
     selected = [obj for obj in context.selected_objects if obj.type in {'ARMATURE', 'MESH'}]
     active = context.view_layer.objects.active
-    target = active if active in selected else next(iter(selected), None)
+    target = target_object or (active if active in selected else next(iter(selected), None))
     if target is None:
         return
     model_id = target.get('_setup_wizard_model_id')
     if target.type == 'MESH':
         target = target.find_armature() or target
     model_id = model_id or target.get('_setup_wizard_model_id')
+    if only_if_panel_missing:
+        # Enabling rigging does not guarantee a panel was installed: rigging
+        # can be skipped for missing dependencies, or the panel can be disabled.
+        # Unbound lightPanel attributes evaluate to black in classic EEVEE.
+        for obj in context.scene.objects:
+            if obj.type != 'MESH':
+                continue
+            if not (obj == target or obj.find_armature() == target
+                    or (model_id and obj.get('_setup_wizard_model_id') == model_id)):
+                continue
+            for modifier in obj.modifiers:
+                if modifier.type != 'NODES' or 'Light Vectors' not in modifier.name:
+                    continue
+                if all(get_modifier_property(modifier, key) is not None for key in (
+                    LightingPanelNames.GeometryNodeInputs.AMBIENT_COLOR_WHEEL,
+                    LightingPanelNames.GeometryNodeInputs.AMBIENT_COLOR_PICKER,
+                )):
+                    return
     _, materials = get_character_materials(context, arm=target)
     materials = set(materials)
     if model_id:

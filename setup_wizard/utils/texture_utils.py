@@ -125,10 +125,11 @@ def scan_directory_for_textures(directory):
     if not os.path.isdir(directory):
         return filename_map, stem_map
 
-    for root, _, files in os.walk(directory):
+    for root, folders, files in os.walk(directory):
+        folders.sort(key=str.casefold)
         if '__MACOSX' in root or '.git' in root:
             continue
-        for f in files:
+        for f in sorted(files, key=str.casefold):
             if f.startswith('.') or f.startswith('._'):
                 continue
             ext = os.path.splitext(f)[1].lower()
@@ -136,7 +137,7 @@ def scan_directory_for_textures(directory):
                 full_p = normalize_path(os.path.join(root, f))
                 f_low = _filename_key(f)
                 stem_low = _filename_key(os.path.splitext(f)[0])
-                filename_map[f_low] = full_p
+                filename_map.setdefault(f_low, full_p)
                 if stem_low not in stem_map:
                     stem_map[stem_low] = full_p
     return filename_map, stem_map
@@ -213,7 +214,7 @@ def fix_missing_textures(directory=None):
         fp_basename = clean_fp.split('/')[-1] if clean_fp else ''
         clean_fp_basename = _filename_key(re.sub(r'\.\d{3}$', '', fp_basename))
 
-        candidates = [clean_name, clean_fp_basename]
+        candidates = [clean_fp_basename, clean_name]
         matched_path = None
         for c in candidates:
             if not c:
@@ -226,20 +227,8 @@ def fix_missing_textures(directory=None):
                 matched_path = stem_map[c_stem]
                 break
 
-        # 3c. Fuzzy matching (if candidate stem matches file stem substring)
-        if not matched_path:
-            for c in candidates:
-                if not c:
-                    continue
-                c_stem = os.path.splitext(c)[0]
-                if not c_stem or len(c_stem) < 3:
-                    continue
-                for s_key, s_path in stem_map.items():
-                    if c_stem in s_key or s_key in c_stem:
-                        matched_path = s_path
-                        break
-                if matched_path:
-                    break
+        # Never repair a missing color image using the first substring match:
+        # a same-prefix lightmap/mask is a different asset, not a moved image.
 
         if matched_path and os.path.exists(matched_path):
             image.filepath = matched_path
@@ -271,20 +260,18 @@ def load_or_get_image(filepath, fname=None):
         print(f"[TEXTURE UTILS] Texture file not found: {filepath}")
         return None
 
-    img = find_image_datablock(fname)
+    # Blender image names are display labels and may be truncated or acquire
+    # .001 suffixes. Identity is the resolved file path, not the label/order.
+    img = next((image for image in bpy.data.images
+                if image.filepath and os.path.normcase(absolute_texture_path(
+                    image.filepath, getattr(image, 'library', None))) == os.path.normcase(norm_fp)), None)
     if img and is_image_missing_or_invalid(img):
-        img.filepath = norm_fp
         try:
             img.reload()
         except Exception as ex:
             print(f"[TEXTURE UTILS] Failed to reload '{norm_fp}': {ex}")
         if is_image_missing_or_invalid(img):
             return None
-    elif img:
-        # A different character may have an image with the same filename.
-        existing_path = absolute_texture_path(img.filepath, getattr(img, 'library', None))
-        if os.path.normcase(existing_path) != os.path.normcase(norm_fp):
-            img = None
     if img is None:
         try:
             img = bpy.data.images.load(filepath=norm_fp, check_existing=True)
