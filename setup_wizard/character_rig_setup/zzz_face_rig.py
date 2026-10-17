@@ -295,7 +295,22 @@ def build_mouth_bone_controls(armature, fwd, up, right, face_size):
 def build_extra_face_bone_controls(armature, fwd, up, right, face_size):
     controls = []
     extra_bones = find_extra_face_bones(armature)
+    eye_L, eye_R = find_eye_bone_pair(armature)
+    eyes = {'L': eye_L, 'R': eye_R}
     for bn in extra_bones:
+        parent = None
+        if 'highlight' in bn.lower():
+            # Follow the posed eye, rather than leaving the highlight control
+            # fixed on Face-Root while its Copy Location drives the highlight.
+            # The control's hook remains its child, preserving local offsets.
+            ancestor = armature.data.bones[bn].parent
+            while ancestor is not None:
+                if ancestor.name in (eye_L, eye_R):
+                    parent = ancestor.name
+                    break
+                ancestor = ancestor.parent
+            if parent is None:
+                parent = eyes.get(eyebrow_side(bn))
         head_world = armature.matrix_world @ armature.data.bones[bn].head_local
         front = head_world + fwd * (face_size * 0.10)
         ctrl_name = 'CTRL-' + bn.strip().replace(' ', '_')
@@ -312,6 +327,7 @@ def build_extra_face_bone_controls(armature, fwd, up, right, face_size):
             'shape_scale': Vector((face_size * 0.030,) * 3),
             'kind': 'fk',
             'target_bone': bn,
+            'parent': parent,
             'hook_name': ctrl_name + '_Hook',
             'hook_head': head_world,
             'drivers': []
