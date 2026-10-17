@@ -275,6 +275,7 @@ def launch_job(
         "originating_scene_name": context.scene.name,
         "game_type": game_type or job.get("game_type", ""),
         "is_archive": bool(archive_file),
+        "character_directory": character_dir,
     }
 
     scene = context.scene
@@ -354,6 +355,7 @@ def _poll_job():
                 manifest_loose_objects=manifest_loose,
                 target_scene=scene,
                 game_type=effective_game_type,
+                character_directory=_ACTIVE_JOB.get('character_directory', ''),
             )
             scene.gacha_setup_status = "Setup completed successfully."
 
@@ -396,6 +398,7 @@ def append_result(
     manifest_loose_objects=None,
     target_scene=None,
     game_type="",
+    character_directory="",
 ):
     """
     Appends finished character from the temporary .blend into target scene,
@@ -407,6 +410,7 @@ def append_result(
         raise FileNotFoundError(f"Result file not found: {result_path}")
 
     canonical_widgets = face_widget_manager.capture_existing_face_widgets()
+    existing_images = set(bpy.data.images)
 
     # Detect if this is a Zenless Zone Zero character import
     is_zzz = ("ZENLESS" in str(game_type).upper() or str(game_type).upper() == "ZZZ")
@@ -485,6 +489,14 @@ def append_result(
                             s_mat.use_fake_user = True
             except Exception as ex:
                 print(f"[GACHA SETUP] ZZZ eye shader fallback import notice: {ex}")
+
+    # The foreground process may resolve // paths against a different file/cwd.
+    # Restore only the new images, never textures from existing characters.
+    from setup_wizard.utils.texture_utils import prepare_image_paths
+    imported_images = [img for img in bpy.data.images if img not in existing_images]
+    missing = prepare_image_paths(character_directory, images=imported_images, source_blend=result_path)
+    if missing:
+        print(f"[GACHA SETUP] Unresolved texture files: {', '.join(missing)}")
 
     target = target_scene or bpy.context.scene
     scene_root = target.collection

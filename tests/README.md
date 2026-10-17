@@ -92,6 +92,14 @@ tests/
 
 ## How to Run Tests
 
+The isolated texture-path regression runs in fresh Blender processes and checks
+Windows exporter paths, Unicode filenames, saved/unsaved destinations, packed
+images, temporary-folder cleanup and isolation from other characters:
+
+```bash
+blender --background --python-exit-code 1 --python tests/isolated_texture_paths_blender.py
+```
+
 ### Command-Line Options
 - `--blender` / `-b`: Path to the Blender executable (e.g. `"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"` or `"D:\GOOENGINE\goo-engine-4.4.3-windows+8ab20b9\blender.exe"`). Defaults to auto-detecting an installed Blender instance if omitted.
 - `--character` / `--characters` / `-c`: One or more character folder names or paths to test (e.g. `collei-a-new-leaf`, `roxy-default`).
