@@ -134,16 +134,52 @@ def connect_armature_bone_chains(armature):
         ebs = armature.data.edit_bones
 
         # 1. Connect parent tail to child head for single-child bones (e.g. finger segments)
+        #    and for core Biped limb bones that also carry twist/skirt/helper children.
+        primary_limb_children = {
+            "bip001 l thigh": "bip001 l calf",
+            "bip001 r thigh": "bip001 r calf",
+            "bip001 l calf": "bip001 l foot",
+            "bip001 r calf": "bip001 r foot",
+            "bip001 l foot": "bip001 l toe0",
+            "bip001 r foot": "bip001 r toe0",
+            "bip001 l upperarm": "bip001 l forearm",
+            "bip001 r upperarm": "bip001 r forearm",
+            "bip001 l forearm": "bip001 l hand",
+            "bip001 r forearm": "bip001 r hand",
+        }
         for eb in ebs:
             if len(eb.children) == 1:
                 child = eb.children[0]
                 vec = child.head - eb.head
                 if vec.length > 0.0005:
                     eb.tail = child.head.copy()
+            elif len(eb.children) > 1:
+                target_child_low = primary_limb_children.get(eb.name.lower())
+                if target_child_low:
+                    child = next((c for c in eb.children if c.name.lower() == target_child_low), None)
+                    if child:
+                        vec = child.head - eb.head
+                        if vec.length > 0.0005:
+                            eb.tail = child.head.copy()
 
-        # 2. For leaf bones with a parent (e.g. fingertip bones), extend along parent bone direction
+        # 2. For leaf bones with a parent (e.g. fingertip bones), extend along parent bone direction.
+        #    For Toe0 leaf bones, extend horizontally forward rather than downward into the floor.
         for eb in ebs:
             if len(eb.children) == 0 and eb.parent:
+                eb_low = eb.name.lower()
+                if "toe0" in eb_low or eb_low in ("toes_l", "toes_r"):
+                    p = eb.parent
+                    p_vec = eb.head - p.head
+                    if abs(eb.head.y) > 0.3 and abs(eb.head.z) < 0.3:
+                        # Y-up raw FBX space: forward is +Z or -Z depending on foot direction
+                        fwd_z = p_vec.z if abs(p_vec.z) > 1e-4 else 0.05
+                        eb.tail = Vector((eb.head.x, eb.head.y, eb.head.z + (0.05 if fwd_z >= 0 else -0.05)))
+                    else:
+                        # Z-up space: forward is -Y
+                        fwd_y = p_vec.y if abs(p_vec.y) > 1e-4 else -0.05
+                        eb.tail = Vector((eb.head.x, eb.head.y + (-0.05 if fwd_y <= 0 else 0.05), eb.head.z))
+                    eb.roll = 0.0
+                    continue
                 p = eb.parent
                 p_vec = p.tail - p.head
                 if p_vec.length > 0.0005:

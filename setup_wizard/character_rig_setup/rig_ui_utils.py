@@ -109,7 +109,8 @@ _STEM_NOISE_TOKENS = {
 _ASSET_DIR_NAMES = {
     "textures", "texture", "materials", "material", "maps", "images",
     "shaders", "shader", "assets", "asset", "models", "model", "fbx",
-    "blend", "blends", "chars", "characters", "common", "shared",
+    "blend", "blends", "chars", "characters", "common", "shared", "default",
+    "absinthe dream", "magic academy uniform",
 }
 
 
@@ -158,11 +159,19 @@ def _parse_folder_name(folder):
     """Character candidate from a model folder basename (first survivor).
 
     "Zankou swimsuit" -> Zankou, "firefly-spring-missive" -> Firefly,
-    "Perlica" -> Perlica. Returns "" for generic asset folders.
+    "Perlica" -> Perlica. Walks up to parent directory if basename is a
+    generic asset folder (e.g. "Default" inside "elysia-miss-pink-elf").
     """
-    base = os.path.basename(os.path.normpath(str(folder or "")))
-    if not base or base.lower() in _ASSET_DIR_NAMES:
+    norm_folder = os.path.normpath(str(folder or ""))
+    base = os.path.basename(norm_folder)
+    if not base:
         return ""
+    if base.lower() in _ASSET_DIR_NAMES:
+        parent_dir = os.path.dirname(norm_folder)
+        parent_base = os.path.basename(parent_dir) if parent_dir and parent_dir != norm_folder else ""
+        if not parent_base or parent_base.lower() in _ASSET_DIR_NAMES:
+            return ""
+        base = parent_base
     return _parse_stem_name(base, prefer="first")
 
 

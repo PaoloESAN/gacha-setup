@@ -45,16 +45,21 @@ def is_blender_3():
     return bpy.app.version[0] == 3
 
 
-def find_face_meshes():
+def find_face_meshes(armature=None):
     meshes = []
     for obj in bpy.context.view_layer.objects:
-        if obj.type == 'MESH' and obj.data and obj.data.shape_keys:
+        if armature is not None and not any(
+            mod.type == 'ARMATURE' and mod.object == armature for mod in obj.modifiers
+        ):
+            continue
+        if obj.type == 'MESH' and obj.data and obj.data.shape_keys and len(obj.data.shape_keys.key_blocks) > 1:
             n = obj.name.lower()
-            if any(k in n for k in ["face", "eyebrow", "eyeshape", "eye", "head", "mouth"]) and not any(ign in n for ign in ["weapon", "toy", "gun"]):
-                meshes.append(obj)
-    if not meshes:
-        for obj in bpy.data.objects:
-            if obj.type == 'MESH' and obj.data and obj.data.shape_keys:
+            face_tokens = ("face", "eyebrow", "eyeshape", "eye", "head", "mouth")
+            facial_keys = any(
+                any(token in key.name.lower() for token in ("eye", "mouth", "brow", "blink", "wink", "smile", "lip"))
+                for key in list(obj.data.shape_keys.key_blocks)[1:]
+            )
+            if (any(k in n for k in face_tokens) or facial_keys) and not any(ign in n for ign in ["weapon", "toy", "gun"]):
                 meshes.append(obj)
     return meshes
 
@@ -680,11 +685,20 @@ def setup_hi3_wuwa_face_rig(face_meshes, controls, armature, head_name, fwd, up,
 
 
 def hi3_face_rig_main():
-    face_meshes = find_face_meshes()
     try:
-        armature, head_name = find_armature_and_head(face_meshes)
+        active = bpy.context.active_object
+        if active and active.type == 'ARMATURE' and active.data.get('rig_id'):
+            armature = active
+            head_name = next(name for name in HEAD_CANDIDATES if name in armature.data.bones)
+        else:
+            armature, head_name = find_armature_and_head(find_face_meshes())
     except Exception as e:
         print(f"[HI3 Face Rig] Notice: {e}")
+        return
+
+    face_meshes = find_face_meshes(armature)
+    if not face_meshes:
+        print("[HI3 Face Rig] Skipped: character has no facial shape keys beyond Basis.")
         return
 
     # 1. Import WuWa 3D Face Panel

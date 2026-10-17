@@ -2463,8 +2463,8 @@ class HonkaiImpact3rdGeometryNodesSetup(GameGeometryNodesSetup):
                             except Exception:
                                 pass
 
-            # 2. Outlines modifier (skip Eye, Eyebrow, EyeShape)
-            if obj_low in ('eye', 'eyebrow', 'eyeshape') or any(ign in obj_low for ign in ['eyebrow', 'eyeshape', 'eyestar']) or obj_low.endswith(('_eye', '.eye')):
+            # 2. Outlines modifier (skip Eye, Eyes, Eyes2, Eye_L, Eye_R, Eyebrow, EyeShape, Mouth)
+            if obj_low in ('eye', 'eyes', 'eyes2', 'eye_l', 'eye_r', 'eyebrow', 'eyeshape', 'mouth') or any(ign in obj_low for ign in ['eyebrow', 'eyeshape', 'eyestar', 'eye_l', 'eye_r']) or obj_low.endswith(('_eye', '.eye', '_eyes', '.eyes')):
                 continue
 
             if outline_ng:
@@ -2594,11 +2594,7 @@ class HonkaiImpact3rdGeometryNodesSetup(GameGeometryNodesSetup):
             HonkaiImpact3rdMaterialDataImporter.apply_all_hi3_material_data(self.context)
         except Exception as e:
             print(f"[HI3 GEOMETRY NODES] Notice applying material data: {e}")
-
-        NextStepInvoker().invoke(
-            self.blender_operator.next_step_idx, 
-            self.blender_operator.invoker_type, 
-            high_level_step_name=self.blender_operator.high_level_step_name,
-            game_type=self.blender_operator.game_type,
-        )
+        # GI_OT_SetUpGeometryNodes advances the workflow after this returns.
+        # Advancing here too runs all following steps twice, rebuilding an
+        # already generated rig and binding its widget meshes to the body.
 
