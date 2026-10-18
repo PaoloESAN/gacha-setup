@@ -339,6 +339,15 @@ class ArknightsEndfieldMaterialDefaultValueSetter(MaterialDefaultValueSetter):
                 continue
             mat_name = mat.name.lower()
 
+            # Face defaults also apply when no material JSON is available,
+            # including the template referenced by the Facemat modifier.
+            for node in mat.node_tree.nodes:
+                if (node.type == 'GROUP' and node.node_tree
+                        and node.node_tree.name.startswith('Arknights: Endfield_PBRToonBaseFace')):
+                    for name, value in (('SmoothnessMax', 0.0), ('Face Final brightness', 1.5)):
+                        if name in node.inputs:
+                            node.inputs[name].default_value = value
+
             matched_json = None
             for j_stem, j_content in json_data.items():
                 if j_stem in mat_name or mat_name in j_stem:
@@ -410,12 +419,12 @@ class ArknightsEndfieldMaterialDefaultValueSetter(MaterialDefaultValueSetter):
                         except Exception:
                             pass
 
-                    # AKE shader defaults: SmoothnessMax 2.0 (1.0 on hair, max), NormalStrength 1.5, ToonFresnelPow 7.0 on hair, Front R Smo 1.7 on face
+                    # SmoothnessMax: face 0.0, hair 1.0, other materials 2.0.
                     is_hair = 'hair' in mat_name
                     is_face = 'face' in mat_name
                     if 'SmoothnessMax' in inputs:
                         try:
-                            inputs['SmoothnessMax'].default_value = 1.0 if is_hair else 2.0
+                            inputs['SmoothnessMax'].default_value = 0.0 if is_face else (1.0 if is_hair else 2.0)
                         except Exception:
                             pass
 
