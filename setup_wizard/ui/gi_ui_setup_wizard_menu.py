@@ -1,3 +1,4 @@
+from setup_wizard.utilites.new_lights import draw_lights_plus
 # Author: michael-gh1
 
 import bpy
@@ -2146,6 +2147,8 @@ class GI_PT_Rig_Character_Settings(Panel):
                 col_colors.prop(scene, "gi_rim_lit_color", text="Rim Lit")
                 col_colors.prop(scene, "gi_rim_shadow_color", text="Rim Shadow")
                 col_colors.prop(scene, "gi_rim_scale", text="Rim Scale")
+
+        draw_lights_plus(layout, context)
 
         # 3. Fresnel (Toggle checkbox + Power slider + Scaler slider)
         # In Lighting Panel mode, Toggle Fresnel must NOT be visible

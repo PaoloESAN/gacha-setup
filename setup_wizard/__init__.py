@@ -556,6 +556,8 @@ else:
                         bpy.utils.register_class(cls_prop)
                     except Exception:
                         pass
+        from setup_wizard.utilites.new_lights import register as register_new_lights
+        register_new_lights()
         register_wuwa_properties()
         register_zzz_properties()
         register_hsr_properties()
@@ -588,6 +590,8 @@ else:
 
 
     def unregister():
+        from setup_wizard.utilites.new_lights import unregister as unregister_new_lights
+        unregister_new_lights()
         from setup_wizard.ui.pgr_character_settings import unregister_pgr_properties
         unregister_pgr_properties()
         unregister_hna_properties()

@@ -1,3 +1,4 @@
+from setup_wizard.utilites.new_lights import draw_lights_plus
 # Author: michael-gh1 (adapted for ZZZ)
 
 import bpy
@@ -1081,6 +1082,7 @@ class ZZZ_PT_Rig_Character_Settings(Panel):
                 col_light = layout.column(align=True)
                 col_light.label(text="Lighting Mode:")
                 col_light.prop(scene, "zzz_light_mode", text="")
+                draw_lights_plus(layout, context)
 
                 if getattr(scene, "zzz_light_mode", "0") == "6":
                     box_shading = layout.box()
@@ -1105,6 +1107,7 @@ class ZZZ_PT_Rig_Character_Settings(Panel):
                     if getattr(scene, "zzz_light_mode", "0") == "6":
                         col_rim.prop(scene, "zzz_rim_light_color", text="Color")
             else:
+                draw_lights_plus(layout, context)
                 if not is_legacy:
                     box_rim = layout.box()
                     box_rim.label(text="Rim Light", icon="LIGHT_SUN")
@@ -1113,6 +1116,7 @@ class ZZZ_PT_Rig_Character_Settings(Panel):
             col_light = layout.column(align=True)
             col_light.label(text="Lighting Mode:")
             col_light.prop(scene, "zzz_light_mode", text="")
+            draw_lights_plus(layout, context)
 
             if getattr(scene, "zzz_light_mode", "0") == "6":
                 box_shading = layout.box()

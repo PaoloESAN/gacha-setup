@@ -1,3 +1,4 @@
+from setup_wizard.utilites.new_lights import draw_lights_plus
 # Based on Blender-WuWa-Character-Setup by @fnoji and @nytsjared
 # Adapted for Gacha Setup by PaoloESAN
 # Licensed under GPL-3.0-or-later
@@ -333,6 +334,8 @@ class WW_PT_Rig_Character_Settings(Panel):
             col_colors.prop(scene, "ww_light_color", text="Light")
             col_colors.prop(scene, "ww_shadow_color", text="Shadow")
             col_colors.prop(scene, "ww_rim_color", text="Rim")
+
+        draw_lights_plus(layout, context)
 
         # 3. Blush
         layout.prop(scene, "ww_blush_value", text="Blush", slider=True)

@@ -356,6 +356,10 @@ def _resolve_settings_armature_uncached(context):
         obj = getattr(context, "active_object", None) or getattr(context, "object", None)
     except Exception:
         obj = None
+    # An active scene light/camera must not borrow a character from selection
+    # or from the scene-wide fallback (even when parented to a character rig).
+    if obj is None or getattr(obj, 'type', None) in {'LIGHT', 'CAMERA'}:
+        return None
     candidates = []
     if obj is not None:
         candidates.append(obj)

@@ -1,3 +1,4 @@
+from setup_wizard.utilites.new_lights import draw_lights_plus
 # Arknights: Endfield UI Setup Wizard Menu
 # Adapted for Gacha Setup Wizard
 
@@ -1014,6 +1015,8 @@ class AKE_PT_Rig_Character_Settings(Panel):
             col_colors.prop(scene, "ake_base_color", text="Base Color")
             col_colors.prop(scene, "ake_fresnel_inside", text="Fresnel Inside")
             col_colors.prop(scene, "ake_fresnel_outside", text="Fresnel Outside")
+
+        draw_lights_plus(layout, context)
 
         # 3. General Shading (does not affect hair: hair has its own sliders)
         box_shading = layout.box()

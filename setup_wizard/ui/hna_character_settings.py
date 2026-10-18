@@ -1,3 +1,4 @@
+from setup_wizard.utilites.new_lights import draw_lights_plus
 """Minimal HNA Character Settings: physics and rim intensity only."""
 import bpy
 from bpy.props import FloatProperty
@@ -74,6 +75,7 @@ class HNA_PT_CharacterSettings(Panel):
 
     def draw(self, context):
         arm, materials = get_character_materials(context)
+        draw_lights_plus(self.layout, context)
         rim = self.layout.box()
         rim.label(text='Rim', icon='SHADING_RENDERED')
         if any(rim_sockets(mat) for mat in materials):

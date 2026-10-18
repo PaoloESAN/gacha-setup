@@ -1,3 +1,4 @@
+from setup_wizard.utilites.new_lights import draw_lights_plus
 """Per-character controls for the bundled HI3 ImpactToon shader."""
 import bpy
 from bpy.props import EnumProperty
@@ -346,6 +347,8 @@ class HI3_PT_CharacterSettings(Panel):
                 socket = output.inputs.get(name)
                 if socket:
                     colors.prop(socket, 'default_value', text=name.replace(' Colour', ''))
+        draw_lights_plus(layout, context)
+
         outlines = layout.box()
         outlines.label(text='Outlines', icon='STROKE')
         outline_controls = outlines.column(align=True)
