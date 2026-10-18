@@ -351,6 +351,12 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
             material_data_parser = self.get_material_data_json_parser(json_material_data)
 
             material, outlines_material, night_soul_outlines_material = self.find_material_and_outline_material_for_body_part(body_part)
+            if material and material.get('_genshin_weapon_elements'):
+                from setup_wizard.utils.genshin_weapon_elements import find_weapon_outline
+                outlines_material = find_weapon_outline(material)
+                night_soul_outlines_material = None
+                if outlines_material:
+                    material['_gi_element_outline'] = outlines_material
             outline_material_group: OutlineMaterialGroup = OutlineMaterialGroup(material, outlines_material, night_soul_outlines_material)
 
             # Skirk's Dress2 material data JSON is for her StarCloak
@@ -371,7 +377,9 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
                 continue
 
             if not outlines_material:
-                if file.name.startswith('Eff_'):
+                if material.get('_genshin_weapon_elements'):
+                    pass  # A transparent weapon part intentionally has no outline.
+                elif file.name.startswith('Eff_'):
                     # Transparent effects intentionally get no outline
                     # materials (see the 'Eff' outline ignore keyword), so
                     # only the main material data is applied for them.

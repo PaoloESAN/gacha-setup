@@ -2073,6 +2073,9 @@ class GI_PT_Rig_Character_Settings(Panel):
     @classmethod
     def poll(cls, context):
         try:
+            from setup_wizard.utils.genshin_weapon_elements import settings_target
+            if settings_target(context):
+                return True
             from setup_wizard.ui.character_settings_utils import is_game_armature
             return is_game_armature(context, "GENSHIN_IMPACT")
         except Exception:
@@ -2091,6 +2094,14 @@ class GI_PT_Rig_Character_Settings(Panel):
 
         from setup_wizard.ui.character_settings_utils import resolve_settings_armature, has_active_character_changed
         arm = resolve_settings_armature(context)
+
+        from setup_wizard.utils.genshin_weapon_elements import settings_target
+        weapon = settings_target(context)
+        if weapon:
+            box_elements = layout.box()
+            box_elements.label(text="Weapon Elements", icon="MATERIAL")
+            box_elements.prop(weapon, "gi_weapon_element", text="Element")
+            return
 
         # Defer property pull to avoid illegal ID write in draw context
         if has_active_character_changed(context):
@@ -2258,6 +2269,8 @@ def _on_character_selection_change(scene, depsgraph=None):
 
 
 def register_gi_properties():
+    from setup_wizard.utils import genshin_weapon_elements
+    genshin_weapon_elements.register()
     if _on_character_selection_change not in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.append(_on_character_selection_change)
 
@@ -2481,6 +2494,8 @@ def register_gi_properties():
 
 
 def unregister_gi_properties():
+    from setup_wizard.utils import genshin_weapon_elements
+    genshin_weapon_elements.unregister()
     if _on_character_selection_change in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.remove(_on_character_selection_change)
 
