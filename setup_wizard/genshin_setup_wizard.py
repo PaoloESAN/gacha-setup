@@ -236,13 +236,8 @@ def on_register():
         }
 
         for search_key, (default_module, filename) in addons_to_check.items():
-            if search_key == 'ueformat':
-                from bpy_extras import io_utils
-                if not hasattr(io_utils, 'poll_file_object_drop'):
-                    # The bundled UEFormat uses this newer Blender API. FBX
-                    # setups do not need it, so skip an incompatible dependency.
-                    print('[SETUP WIZARD] Skipping bundled UEFormat: file-drop API unavailable.')
-                    continue
+            # Bundled UEFormat supplies fallbacks for Blender 4.1's missing
+            # file-drop helpers; their absence must not disable model import.
             if is_addon_enabled_or_installed(search_key):
                 continue
             if filename:

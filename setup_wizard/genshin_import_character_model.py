@@ -40,6 +40,27 @@ SHADER_COLOR_ATTRIBUTE_NAME = "Col"
 IMPORTED_VIA_WIZARD = False
 
 
+def _import_nte_uemodel(context, filepath):
+    """Require a registered importer and a real mesh before continuing setup."""
+    operator = bpy.ops.uf.import_uemodel
+    try:
+        operator.get_rna_type()
+    except (KeyError, AttributeError, RuntimeError) as exc:
+        raise RuntimeError("UEFormat is not enabled. Enable/install the bundled UEFormat add-on.") from exc
+
+    if hasattr(context.scene, 'uf_settings'):
+        context.scene.uf_settings.reorient_bones = True
+    existing = set(context.scene.objects)
+    result = operator(
+        'EXEC_DEFAULT', filepath=filepath, directory=os.path.dirname(filepath),
+        files=[{"name": os.path.basename(filepath)}],
+    )
+    if result != {'FINISHED'}:
+        raise RuntimeError(f"UEFormat import failed: {result}")
+    if not any(obj.type == 'MESH' for obj in set(context.scene.objects) - existing):
+        raise RuntimeError(f"UEFormat imported no mesh objects from {filepath}")
+
+
 def is_rigging_disabled(context=None):
     """
     Checks if 'Disable Rigging' is enabled in the setup wizard settings.
@@ -748,65 +769,9 @@ class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
 
         existing_objects = set(context.scene.objects)
 
-        if hasattr(bpy.ops, 'uf') and hasattr(bpy.ops.uf, 'import_uemodel'):
-            imported_ok = False
-
-            if hasattr(context.scene, 'uf_settings') and hasattr(context.scene.uf_settings, 'reorient_bones'):
-                try:
-                    context.scene.uf_settings.reorient_bones = True
-                    print(f"[NTE SETUP] Set context.scene.uf_settings.reorient_bones = True")
-                except Exception as e_set:
-                    print(f"[NTE SETUP] Notice setting reorient_bones: {e_set}")
-
-            # Method 1: Pass directory + files collection + filepath (UEFormat ImportHelper standard)
-            try:
-                bpy.ops.uf.import_uemodel(
-                    filepath=uemodel_path,
-                    directory=folder,
-                    files=[{"name": filename}]
-                )
-                imported_ok = True
-            except Exception as e1:
-                print(f"[NTE SETUP] Method 1 uf.import_uemodel notice: {e1}")
-
-            # Method 2: Pass directory + files collection with EXEC_DEFAULT
-            if not imported_ok:
-                try:
-                    bpy.ops.uf.import_uemodel(
-                        'EXEC_DEFAULT',
-                        filepath=uemodel_path,
-                        directory=folder,
-                        files=[{"name": filename}]
-                    )
-                    imported_ok = True
-                except Exception as e2:
-                    print(f"[NTE SETUP] Method 2 uf.import_uemodel notice: {e2}")
-
-            # Method 3: Pass filepath only
-            if not imported_ok:
-                try:
-                    bpy.ops.uf.import_uemodel(filepath=uemodel_path)
-                    imported_ok = True
-                except Exception as e3:
-                    print(f"[NTE SETUP] Method 3 uf.import_uemodel notice: {e3}")
-
-            # Method 4: Fallback execute with filepath only
-            if not imported_ok:
-                try:
-                    bpy.ops.uf.import_uemodel('EXEC_DEFAULT', filepath=uemodel_path)
-                    imported_ok = True
-                except Exception as e4:
-                    self.report({"WARNING"}, f"UEFormat import notice: {e4}")
-
-            self.report({"INFO"}, f"Imported NTE character model: {filename}")
-
-            try:
-                _package_nte_import_into_collection(context, uemodel_path, folder, existing_objects)
-            except Exception as e_pkg:
-                print(f"[NTE SETUP] Collection packaging notice: {e_pkg}")
-        else:
-            self.report({"ERROR"}, "UEFormat add-on is not enabled or available.")
-            return {"CANCELLED"}
+        _import_nte_uemodel(context, uemodel_path)
+        _package_nte_import_into_collection(context, uemodel_path, folder, existing_objects)
+        self.report({"INFO"}, f"Imported NTE character model: {filename}")
 
         return {"FINISHED"}
 
@@ -1564,62 +1529,12 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
             except Exception:
                 pass
 
-            if hasattr(bpy.context.scene, 'uf_settings') and hasattr(bpy.context.scene.uf_settings, 'reorient_bones'):
-                try:
-                    bpy.context.scene.uf_settings.reorient_bones = True
-                except Exception:
-                    pass
-
             existing_nte_objects = set(bpy.context.scene.objects)
-
-            if hasattr(bpy.ops, 'uf') and hasattr(bpy.ops.uf, 'import_uemodel'):
-                imported_ok = False
-                try:
-                    bpy.ops.uf.import_uemodel(
-                        filepath=uemodel_path,
-                        directory=folder,
-                        files=[{"name": filename}]
-                    )
-                    imported_ok = True
-                except Exception as e1:
-                    print(f"[NTE SETUP] Method 1 uf.import_uemodel notice: {e1}")
-
-                if not imported_ok:
-                    try:
-                        bpy.ops.uf.import_uemodel(
-                            'EXEC_DEFAULT',
-                            filepath=uemodel_path,
-                            directory=folder,
-                            files=[{"name": filename}]
-                        )
-                        imported_ok = True
-                    except Exception as e2:
-                        print(f"[NTE SETUP] Method 2 uf.import_uemodel notice: {e2}")
-
-                if not imported_ok:
-                    try:
-                        bpy.ops.uf.import_uemodel(filepath=uemodel_path)
-                        imported_ok = True
-                    except Exception as e3:
-                        print(f"[NTE SETUP] Method 3 uf.import_uemodel notice: {e3}")
-
-                if not imported_ok:
-                    try:
-                        bpy.ops.uf.import_uemodel('EXEC_DEFAULT', filepath=uemodel_path)
-                        imported_ok = True
-                    except Exception as e4:
-                        self.report({"WARNING"}, f"UEFormat import notice: {e4}")
-
-                self.report({"INFO"}, f"Imported NTE character model (largest .uemodel): {filename}")
-                try:
-                    _package_nte_import_into_collection(
-                        bpy.context, uemodel_path, folder, existing_nte_objects)
-                except Exception as e_pkg:
-                    print(f"[NTE SETUP] Collection packaging notice: {e_pkg}")
-                return
-            else:
-                self.report({"ERROR"}, "UEFormat add-on is not enabled or available.")
-                raise RuntimeError("UEFormat add-on is not enabled or available.")
+            _import_nte_uemodel(bpy.context, uemodel_path)
+            _package_nte_import_into_collection(
+                bpy.context, uemodel_path, folder, existing_nte_objects)
+            self.report({"INFO"}, f"Imported NTE character model (largest .uemodel): {filename}")
+            return
 
         if self.game_type == GameType.WUTHERING_WAVES.name:
             uemodel_path = find_largest_uemodel_file(character_model_file_path_or_directory)
