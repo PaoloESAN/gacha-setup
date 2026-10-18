@@ -225,15 +225,14 @@ else:
     from setup_wizard.ui.unified_ui_setup_wizard_menu import (
         CSW_PT_Updater_UI_Layout,
         CSW_PT_Unified_Character_Setup_Wizard_UI_Layout,
-        CSW_PT_Utilities_UI_Layout,
         CSW_PT_Old_Setup_UI_Layout,
-        CSW_OT_JideehCamera,
-        CSW_OT_CreateCameraPro,
-        CSW_OT_CreateJideehCamrig,
         CSW_OT_SelectGame,
         CSW_MT_GameSelectorMenu,
     )
-    from setup_wizard.utils.eye_through_hair import CSW_OT_EyeThroughHair
+    from setup_wizard.utilites.ui import CSW_PT_Utilities_UI_Layout, CSW_OT_JideehCamera
+    from setup_wizard.utilites.jideeh_cam_rig import CSW_OT_CreateCameraPro, CSW_OT_CreateJideehCamrig
+    from setup_wizard.utilites.eye_through_hair import CSW_OT_EyeThroughHair
+    from setup_wizard.utilites.hair_shadows import CSW_OT_HairShadows
 
     # HSR_PT_UI_Compositing_Panel_Post_Processing_UI_Layout
     from setup_wizard.ui.zzz_ui_setup_wizard_menu import (
@@ -320,6 +319,7 @@ else:
         CSW_OT_CreateCameraPro,
         CSW_OT_CreateJideehCamrig,
         CSW_OT_EyeThroughHair,
+        CSW_OT_HairShadows,
         CSW_PT_Old_Setup_UI_Layout,
         GI_PT_Basic_Setup_Wizard_UI_Layout,
         GI_PT_Advanced_Setup_Wizard_UI_Layout,
