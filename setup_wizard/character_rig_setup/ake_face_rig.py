@@ -18,9 +18,10 @@ ENDFIELD_FACE_MAPPING = {
     "browLf03Joint": {"master": "Eyebrow-Master.L", "deform": "brow_Mid_L"},
     "browLf04Joint": {"master": "Eyebrow-Master.L", "deform": "brow_Mid_L"},
     "browLf05Joint": {"master": "Eyebrow-Master.L", "deform": "brow_Out_L"},
-    "browLineLf01Joint": {"master": "Eyebrow-Master.L", "deform": "eyebrow_Inn_L"},
-    "browLineLf02Joint": {"master": "Eyebrow-Master.L", "deform": "eyebrow_Mid_L"},
-    "browLineLf03Joint": {"master": "Eyebrow-Master.L", "deform": "eyebrow_Out_L"},
+    # This lower line sits on the upper lid, below the actual eyebrow.
+    "browLineLf01Joint": {"master": "Eye-Master.L", "deform": "eyebrow_Inn_L"},
+    "browLineLf02Joint": {"master": "Eye-Master.L", "deform": "eyebrow_Mid_L"},
+    "browLineLf03Joint": {"master": "Eye-Master.L", "deform": "eyebrow_Out_L"},
 
     # Eyebrows Right
     "browRt01Joint": {"master": "Eyebrow-Master.R", "deform": "brow_Inn_R"},
@@ -28,9 +29,9 @@ ENDFIELD_FACE_MAPPING = {
     "browRt03Joint": {"master": "Eyebrow-Master.R", "deform": "brow_Mid_R"},
     "browRt04Joint": {"master": "Eyebrow-Master.R", "deform": "brow_Mid_R"},
     "browRt05Joint": {"master": "Eyebrow-Master.R", "deform": "brow_Out_R"},
-    "browLineRt01Joint": {"master": "Eyebrow-Master.R", "deform": "eyebrow_Inn_R"},
-    "browLineRt02Joint": {"master": "Eyebrow-Master.R", "deform": "eyebrow_Mid_R"},
-    "browLineRt03Joint": {"master": "Eyebrow-Master.R", "deform": "eyebrow_Out_R"},
+    "browLineRt01Joint": {"master": "Eye-Master.R", "deform": "eyebrow_Inn_R"},
+    "browLineRt02Joint": {"master": "Eye-Master.R", "deform": "eyebrow_Mid_R"},
+    "browLineRt03Joint": {"master": "Eye-Master.R", "deform": "eyebrow_Out_R"},
 
     # Eyes & Eyelids Left
     "eyeLf01Joint": {"master": "Eye-Master.L", "deform": "eyeconner_inn_L"},
@@ -338,6 +339,85 @@ def align_endfield_mouth_panel(rig, context):
     context.view_layer.update()
 
 
+def lower_endfield_upper_face_widgets(rig):
+    """Lower eye/brow panel widgets 10 mm, preserving eye tracking and scale."""
+    fixed_controls = {'Eye-Scale-Control.L', 'Eye-Scale-Control.R'}
+    tracking = rig.pose.bones.get('Eye-Track-Master')
+    if tracking:
+        fixed_controls.update(bone.name for bone in [tracking, *tracking.children_recursive])
+    names = {name for name in fixed_controls if name in rig.pose.bones}
+    for root_name in ('Eye-Master.L', 'Eye-Master.R', 'eye_All_L', 'eye_All_R',
+                      'Eyebrow-Master.L', 'Eyebrow-Master.R', 'Eye-Track-Master'):
+        root = rig.pose.bones.get(root_name)
+        if root:
+            names.update(bone.name for bone in [root, *root.children_recursive])
+    for name in names:
+        bone = rig.pose.bones[name]
+        if bone.custom_shape is None:
+            continue
+        reference = bone.custom_shape_transform or bone
+        previous = bone.get('_ake_upper_face_display_offset')
+        if previous is not None:
+            bone.custom_shape_translation -= Vector(previous)
+        elif '_ake_upper_face_display_drop' in bone:
+            # Undo the old offset, which incorrectly divided translation by
+            # bone length and sent short facial widgets far below the face.
+            old = rig.matrix_world.to_3x3().inverted() @ Vector((0, 0, -bone['_ake_upper_face_display_drop']))
+            old = reference.bone.matrix_local.to_3x3().inverted() @ old
+            if bone.use_custom_shape_bone_size:
+                old /= max(bone.bone.length, 1e-8)
+            bone.custom_shape_translation -= old
+        if bone.name in fixed_controls:
+            # Undo earlier panel offsets on tracking/scale widgets, which
+            # should stay at their original eye-aligned positions.
+            for key in ('_ake_upper_face_display_offset', '_ake_upper_face_display_drop'):
+                if key in bone:
+                    del bone[key]
+            continue
+        # Blender translates custom shapes BEFORE applying their size/length.
+        display_axes = (rig.matrix_world @ reference.matrix).to_3x3()
+        offset = display_axes.inverted_safe() @ Vector((0, 0, -0.010))
+        bone.custom_shape_translation += offset
+        bone['_ake_upper_face_display_offset'] = tuple(offset)
+        if '_ake_upper_face_display_drop' in bone:
+            del bone['_ake_upper_face_display_drop']
+
+
+def separate_endfield_browline_controls(rig, context):
+    """Keep the lower eye line independent of the upper eyebrow controls."""
+    context.view_layer.objects.active = rig
+    if rig.mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.ops.object.mode_set(mode='EDIT')
+    for side in ('L', 'R'):
+        parent = rig.data.edit_bones.get(f'eye_All_{side}')
+        if parent is None:
+            continue
+        for segment in ('Inn', 'Mid', 'Out'):
+            for suffix in ('', '.001'):
+                bone = rig.data.edit_bones.get(f'eyebrow_{segment}_{side}{suffix}')
+                if bone:
+                    bone.use_connect = False
+                    bone.parent = parent
+    bpy.ops.object.mode_set(mode='OBJECT')
+    for side in ('L', 'R'):
+        for segment, lid in (('Inn', 'inn'), ('Mid', 'M'), ('Out', 'out')):
+            control = rig.pose.bones.get(f'eyebrow_{segment}_{side}.001')
+            target = rig.pose.bones.get(f'eyeup_{lid}_{side}.001')
+            if not control or not target:
+                continue
+            for constraint in list(control.constraints):
+                if ((constraint.type == 'ACTION' and constraint.subtarget == f'Eyebrow-Shape-Control.{side}')
+                        or constraint.name == 'AKE Upper Lid Follow'):
+                    control.constraints.remove(constraint)
+            follow = control.constraints.new('COPY_TRANSFORMS')
+            follow.name = 'AKE Upper Lid Follow'
+            follow.target, follow.subtarget = rig, target.name
+            follow.owner_space, follow.target_space = 'LOCAL', 'LOCAL_OWNER_ORIENT'
+            follow.mix_mode = 'AFTER'
+    context.view_layer.update()
+
+
 def bind_isaac_face_deformations(body_rig, face_mapping):
     """Refresh imported facial bindings without appending another control rig."""
     assigned_count = 0
@@ -461,6 +541,11 @@ def setup_endfield_isaac_face_rig(body_rig, context=None, face_mapping=None, eye
 
     is_endfield = face_mapping is None
     face_mapping = ENDFIELD_FACE_MAPPING if face_mapping is None else face_mapping
+    if is_endfield:
+        from setup_wizard.utils.ake_skin_weights import repair_duplicated_face_head_weights
+        repaired = repair_duplicated_face_head_weights(body_rig, context.scene.objects)
+        if repaired:
+            print(f"[AKE FACE RIG] Removed duplicate head weights from {repaired} facial vertices.")
     eyes = _resolve_isaac_eyes(body_rig, eye_names)
 
     # Idempotency (HSR parity): an already-fused body rig carries the FaceRig
@@ -469,10 +554,12 @@ def setup_endfield_isaac_face_rig(body_rig, context=None, face_mapping=None, eye
         if "Eye-Track-Master" in body_rig.data.bones:
             if is_endfield:
                 align_endfield_mouth_panel(body_rig, context)
+                separate_endfield_browline_controls(body_rig, context)
             bind_isaac_face_deformations(body_rig, face_mapping)
             bind_isaac_eye_tracking(body_rig, eyes, eye_pivots, context)
             if is_endfield:
                 bind_endfield_iris_scale(body_rig, eyes, context)
+                lower_endfield_upper_face_widgets(body_rig)
             print("[AKE FACE RIG] FaceRig already fused; facial bindings and eye tracking refreshed.")
             return body_rig
     except Exception:
@@ -791,6 +878,7 @@ def setup_endfield_isaac_face_rig(body_rig, context=None, face_mapping=None, eye
 
     if is_endfield:
         align_endfield_mouth_panel(body_rig, context)
+        separate_endfield_browline_controls(body_rig, context)
     assigned_count = bind_isaac_face_deformations(body_rig, face_mapping)
 
     # Post-fuse Child Of inverse fix (HSR parity): recompute in body-rig space
@@ -811,6 +899,7 @@ def setup_endfield_isaac_face_rig(body_rig, context=None, face_mapping=None, eye
     bind_isaac_eye_tracking(body_rig, eyes, eye_pivots, context)
     if is_endfield:
         bind_endfield_iris_scale(body_rig, eyes, context)
+        lower_endfield_upper_face_widgets(body_rig)
 
     # Hide the "Face" bone collection on the body rig as requested
     if hasattr(body_rig.data, "collections"):

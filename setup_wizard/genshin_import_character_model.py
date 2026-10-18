@@ -1161,13 +1161,12 @@ def handle_ake_post_import(context, imported_objects=None):
             else:
                 vg_rt.add([v.index], 1.0, 'REPLACE')
 
-    # Ensure eyebrows and eyeshadow have Bip001_Head vertex group
+    # Only rigid/unskinned subparts need fallback head weights. Adding head=1
+    # over existing eyelash/eyelid weights halves their facial deformation.
+    from setup_wizard.utils.ake_skin_weights import ensure_head_fallback_weights
     for obj in join_targets:
-        if obj and obj != iris_mesh:
-            if 'Bip001_Head' not in obj.vertex_groups:
-                vg = obj.vertex_groups.new(name='Bip001_Head')
-                for v in obj.data.vertices:
-                    vg.add([v.index], 1.0, 'REPLACE')
+        if obj and obj != iris_mesh and armatures:
+            ensure_head_fallback_weights(obj, armatures[0])
 
     # Join face subparts into face_mesh
     if face_mesh and join_targets:
