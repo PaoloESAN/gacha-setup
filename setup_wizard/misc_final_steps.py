@@ -98,16 +98,8 @@ def setup_wuwa_compositor_nodes(context=None, scene=None):
     if not os.path.exists(target_blend):
         target_blend = os.path.join(addon_dir, "shaders", "wuwa", "Gustling Waters.blend")
 
-    # Load GranTurismoWrapper and its dependency node groups from blend if not already in data
-    if os.path.exists(target_blend):
-        try:
-            with bpy.data.libraries.load(target_blend, link=False) as (data_from, data_to):
-                data_to.node_groups = [
-                    g for g in data_from.node_groups
-                    if g not in bpy.data.node_groups and ('GranTurismo' in g or 'Compositing' in g or g in ('H_f', 'W_f', 'smoothstep'))
-                ]
-        except Exception as e_load:
-            print(f"[WUWA COMPOSITING] Notice loading node groups: {e_load}")
+    from setup_wizard.services.compositor_sources import load_group
+    gt_group = load_group(target_blend, "GranTurismoWrapper [APPEND]")
 
     # Access or create compositor tree
     tree = None
@@ -127,7 +119,6 @@ def setup_wuwa_compositor_nodes(context=None, scene=None):
     rl = tree.nodes.new(type="CompositorNodeRLayers")
     rl.location = (-300, 0)
 
-    gt_group = bpy.data.node_groups.get("GranTurismoWrapper [APPEND]")
     if gt_group:
         grp_node = tree.nodes.new(type="CompositorNodeGroup")
         grp_node.node_tree = gt_group
@@ -155,15 +146,6 @@ def setup_wuwa_compositor_nodes(context=None, scene=None):
         except Exception:
             pass
 
-    # Clean up any duplicate or leftover scenes so only the active scene remains
-    current_scene = scene
-    for sc in list(bpy.data.scenes):
-        if sc != current_scene and (sc.name.startswith("Scene.") or "Scene.001" in sc.name or sc.name in ["Scene.001", "Scene.002", "Preview"]):
-            try:
-                bpy.data.scenes.remove(sc, do_unlink=True)
-            except Exception:
-                pass
-
 
 class WW_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
     """Setup Wuthering Waves Compositor Post-Processing Nodes"""
@@ -176,7 +158,8 @@ class WW_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
             setup_wuwa_compositor_nodes(context)
             self.report({'INFO'}, "Wuthering Waves compositor nodes configured.")
         except Exception as ex:
-            self.report({'WARNING'}, f"Compositor setup notice: {ex}")
+            self.report({'ERROR'}, f"Compositor setup failed: {ex}")
+            return {'CANCELLED'}
         return {'FINISHED'}
 
 
@@ -188,64 +171,8 @@ def setup_ake_compositor_nodes(context=None, scene=None):
     if not os.path.exists(target_blend):
         target_blend = os.path.join(addon_dir, "shaders", "ake", "AKE.blend")
 
-    if os.path.exists(target_blend):
-        try:
-            with bpy.data.libraries.load(target_blend, link=False) as (data_from, data_to):
-                data_to.node_groups = [
-                    g for g in data_from.node_groups
-                    if g not in bpy.data.node_groups and 'Compositing' in g
-                ]
-        except Exception as e_load:
-            print(f"[AKE COMPOSITING] Notice loading node groups: {e_load}")
-
-    comp_ng = bpy.data.node_groups.get("Compositing Nodetree")
-
-    if hasattr(scene, "compositing_node_group") and comp_ng:
-        scene.compositing_node_group = comp_ng
-    else:
-        scene.use_nodes = True
-        tree = getattr(scene, "node_tree", None)
-        if tree and comp_ng:
-            tree.nodes.clear()
-            rl = tree.nodes.new(type="CompositorNodeRLayers")
-            rl.location = (-300, 0)
-            grp_node = tree.nodes.new(type="CompositorNodeGroup")
-            grp_node.node_tree = comp_ng
-            grp_node.location = (0, 0)
-            if "Image" in rl.outputs and "Image" in grp_node.inputs:
-                tree.links.new(rl.outputs["Image"], grp_node.inputs["Image"])
-            elif grp_node.inputs:
-                tree.links.new(rl.outputs[0], grp_node.inputs[0])
-
-            out_type = "NodeGroupOutput" if bpy.app.version >= (5, 0, 0) else "CompositorNodeComposite"
-            comp = tree.nodes.new(type=out_type)
-            comp.location = (300, 100)
-            out_socket = comp.inputs.get("Image") or (comp.inputs[0] if comp.inputs else None)
-            grp_out = grp_node.outputs.get("Image") or grp_node.outputs.get("Result") or (grp_node.outputs[0] if grp_node.outputs else None)
-            if out_socket and grp_out:
-                tree.links.new(grp_out, out_socket)
-
-    # Clean up any duplicate / imported scenes (e.g. Scene.001 from AKE.blend) so only the active scene remains
-    current_scene = scene
-    for sc in list(bpy.data.scenes):
-        if sc != current_scene and (sc.name.startswith("Scene.") or sc.name in ["Scene.001", "Scene.002", "Preview"]):
-            try:
-                bpy.data.scenes.remove(sc, do_unlink=True)
-            except Exception:
-                pass
-
-    # Ensure Render Layers node points to the active scene
-    try:
-        tree = scene.compositing_node_group if hasattr(scene, "compositing_node_group") and getattr(scene, "compositing_node_group", None) else getattr(scene, "node_tree", None)
-        if tree:
-            rl_node = next((n for n in tree.nodes if getattr(n, "type", "") in ("R_LAYERS", "RENDER_LAYERS") or "RLayers" in getattr(n, "bl_idname", "") or "RenderLayers" in getattr(n, "bl_idname", "")), None)
-            if rl_node:
-                try:
-                    rl_node.scene = current_scene
-                except Exception:
-                    pass
-    except Exception:
-        pass
+    from setup_wizard.services.compositor_sources import copy_scene_compositor
+    copy_scene_compositor(target_blend, scene)
 
 
 class AKE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
@@ -259,7 +186,8 @@ class AKE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
             setup_ake_compositor_nodes(context)
             self.report({'INFO'}, "Arknights Endfield compositor nodes configured.")
         except Exception as ex:
-            self.report({'WARNING'}, f"Compositor setup notice: {ex}")
+            self.report({'ERROR'}, f"Compositor setup failed: {ex}")
+            return {'CANCELLED'}
 
         if self.next_step_idx:
             NextStepInvoker().invoke(
@@ -955,20 +883,13 @@ class NTE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
                     if rl_img and viewer_in:
                         node_tree.links.new(rl_img, viewer_in)
 
-            # 5. REMOVE TEMPORARY / DUPLICATE SCENES SO ONLY THE ACTIVE SCENE REMAINS
+            # Remove only scenes appended for this compositor, preserving user scenes.
             for sc in temp_scenes:
                 if sc and sc != scene and sc.name in bpy.data.scenes:
                     try:
                         bpy.data.scenes.remove(sc, do_unlink=True)
                     except Exception as ex_sc:
                         print(f"Notice removing temp scene {sc.name}: {ex_sc}")
-
-            for sc in list(bpy.data.scenes):
-                if sc != scene and ("Scene.001" in sc.name or sc.name.startswith("Scene.")):
-                    try:
-                        bpy.data.scenes.remove(sc, do_unlink=True)
-                    except Exception:
-                        pass
 
             # 6. ENSURE RENDER LAYERS POINTS TO ACTIVE SCENE
             rl_node = next((n for n in node_tree.nodes if getattr(n, "type", "") in ("R_LAYERS", "RENDER_LAYERS") or "RLayers" in n.bl_idname or "RenderLayers" in n.bl_idname), None)

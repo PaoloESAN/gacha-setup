@@ -57,6 +57,11 @@ else:
     from setup_wizard.genshin_compositing_node_setup import (
         GI_OT_PostProcessingCompositingSetup,
     )
+    from setup_wizard.ui.compositor_setup import (
+        GACHA_OT_RunCompositing,
+        GACHA_PT_CompositorSetup,
+        GACHA_PT_CompositorBasicSetup,
+    )
     from setup_wizard.genshin_import_character_model import (
         GI_OT_SetUpCharacter,
         HSR_OT_SetUpCharacter,
@@ -177,7 +182,6 @@ else:
         GI_PT_UI_Finish_Setup_Menu,
         GI_PT_UI_Materials_Menu,
         GI_PT_UI_Outlines_Menu,
-        GI_PT_UI_Post_Processing_Node_Editor_Setup_Menu,
         GI_PT_UI_Post_Processing_Setup_Menu,
         GI_PT_Rig_Character_Settings,
         GI_OT_SetupLightingPanel,
@@ -333,7 +337,9 @@ else:
         GI_OT_SelectLightingPanel,
         GI_OT_ToggleLightingPanelVisibility,
         GI_PT_UI_Post_Processing_Setup_Menu,
-        GI_PT_UI_Post_Processing_Node_Editor_Setup_Menu,
+        GACHA_OT_RunCompositing,
+        GACHA_PT_CompositorSetup,
+        GACHA_PT_CompositorBasicSetup,
         GI_OT_GenshinSetupWizardUI,
         GI_OT_SetUpCharacter,
         GI_OT_ClearPose,

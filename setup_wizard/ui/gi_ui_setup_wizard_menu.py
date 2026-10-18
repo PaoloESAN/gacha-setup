@@ -430,41 +430,6 @@ class GI_PT_UI_Post_Processing_Setup_Menu(Panel, GenshinImpactUIRenderChecker):
         )
 
 
-class GI_PT_UI_Post_Processing_Node_Editor_Setup_Menu(Panel, GenshinImpactUIRenderChecker):
-    bl_label = "Compositing Setup Wizard"
-    bl_idname = "GI_PT_Custom_Compositing_Node_UI_Layout"
-    bl_space_type = "NODE_EDITOR"
-    bl_region_type = "UI"
-    bl_category = "Genshin - Setup Wizard"
-
-    def draw(self, context):
-        layout = self.layout
-        row = layout.row()
-        sub_layout = layout.box()
-        window_manager = context.window_manager
-
-        row.prop(window_manager, 'cache_enabled')
-        OperatorFactory.create(
-            row,
-            'genshin.clear_cache_operator',
-            'Clear Cache',
-            'TRASH',
-            game_type=GameType.GENSHIN_IMPACT.name,
-        )
-        OperatorFactory.create(
-            sub_layout,
-            'hoyoverse.custom_composite_node_setup',
-            'Set Up Compositing Nodes',
-            'NODE_COMPOSITING'
-        )
-        OperatorFactory.create(
-            sub_layout,
-            'hoyoverse.post_processing_default_settings',
-            'Set HYV-PP Defaults',
-            'FILE_REFRESH'
-        )
-
-
 '''
     This factory is intended to help create a UI element's operator (or the action it takes) when pressed.
     While it currently doesn't do anything too grand, it may provide future flexibility.
