@@ -20,7 +20,6 @@ from setup_wizard.material_import_setup.empty_names import LightDirectionEmptyNa
 from setup_wizard.outline_import_setup.outline_node_groups import OutlineNodeGroupNames
 from setup_wizard.texture_import_setup.texture_node_names import V4_GenshinImpactTextureNodeNames
 from setup_wizard.utils.modifier_utils import get_modifier_property, set_modifier_property, get_modifier_inputs, get_modifier_outputs, set_property_field
-from setup_wizard.import_order import NextStepInvoker
 
 
 
@@ -2078,12 +2077,8 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
 
         self.outlineshader_sync()
 
-        NextStepInvoker().invoke(
-            self.blender_operator.next_step_idx, 
-            self.blender_operator.invoker_type,
-            high_level_step_name=self.blender_operator.high_level_step_name,
-            game_type=self.blender_operator.game_type,
-        )
+        # GI_OT_SetUpGeometryNodes advances the workflow after this returns.
+        # Advancing here too reruns all later steps against an already built rig.
 
     def outlineshader_sync(self):
         def findimg(name):

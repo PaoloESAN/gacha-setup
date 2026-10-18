@@ -1567,7 +1567,7 @@ def get_facerig_bone_collection(armature, name=FACERIG_COLLECTION):
     return None
 
 
-def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
+def setup_lookat_eyes(armature, head_name, fwd, up, face_size, mesh_obj=None):
     if bpy.context.object and bpy.context.object.mode != 'OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
     bpy.context.view_layer.objects.active = armature
@@ -1640,6 +1640,14 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
         sep = face_size * 0.1
     blen = max(sep * 0.5, face_size * BONE_LEN_F * 2.0)
     offset = min(face_size * EYE_LOOK_FWD_F, sep * 3.0)
+    control_offset = offset
+    if mesh_obj and mesh_obj.type == 'MESH' and mesh_obj.data.vertices:
+        # Eye pivots may sit well behind the skin (Nicole). Measure clearance
+        # from the face surface rather than only from those pivots.
+        mesh_to_arm = amw_inv @ mesh_obj.matrix_world
+        front = max((mesh_to_arm @ v.co).dot(fwd_arm) for v in mesh_obj.data.vertices)
+        eye_depth = min(p.dot(fwd_arm) for p in e_heads.values())
+        control_offset = max(offset, front - eye_depth + face_size * EYE_LOOK_FWD_F)
 
     parent_bone = eb.get(head_name) if head_name else None
     if parent_bone is None and eye_L_name in eb:
@@ -1650,7 +1658,9 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size):
     for eye_name, ctl_name, mch_name in PAIRS:
         gd = gaze_dirs.get(eye_name, fwd_arm)
         aim_heads[eye_name] = e_heads[eye_name] + gd * offset
-        ctrl_heads[eye_name] = e_heads[eye_name] + fwd_arm * offset
+        # Keep the hidden aim targets at their original rest positions so
+        # spacing the three visible controls does not rotate the eyes.
+        ctrl_heads[eye_name] = e_heads[eye_name] + fwd_arm * control_offset
 
     master_head = (ctrl_heads[eye_L_name] + ctrl_heads[eye_R_name]) * 0.5
     mb = eb.new(MASTER)
@@ -2566,7 +2576,7 @@ def zzz_face_rig_main():
         if controls:
             setup_face_rig(faceobj, controls, armature, head_name, fwd, up, face_size)
         try:
-            setup_lookat_eyes(armature, head_name, fwd, up, face_size)
+            setup_lookat_eyes(armature, head_name, fwd, up, face_size, faceobj)
         except Exception as e_eye:
             print(f"[ZZZ Face Rig Warning] setup_lookat_eyes skipped: {e_eye}")
         hide_mechanism_bones(armature)

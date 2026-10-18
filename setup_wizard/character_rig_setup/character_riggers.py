@@ -107,6 +107,13 @@ def _get_character_armature(context):
 
 def _is_bangboo_character(context, armature):
     """Detect Bangboo names on the imported file or this character's objects."""
+    # Agents can carry Bangboo accessories (Nicole's Low/HighBangboo meshes).
+    # Those names must never override an agent's humanoid skeleton.
+    if ('DEF-spine.006' in armature.data.bones or any(
+        b.name.startswith('Bip') and b.name.endswith(' Pelvis')
+        for b in armature.data.bones
+    )):
+        return False
     names = [armature.name, armature.data.name]
     character_objects = [armature]
     for obj in context.scene.objects:
