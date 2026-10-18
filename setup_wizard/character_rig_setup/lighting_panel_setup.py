@@ -277,6 +277,14 @@ class LightingPanel:
             lighting_panel_bone_data.inherit_scale = 'NONE'
 
     def connect_lighting_panel_nodes_to_global_material_properties(self, target_materials=None):
+        if target_materials is None:
+            # Setup can append the outline shader separately from the body.
+            # Consolidate those copies before wiring the lighting panel.
+            from setup_wizard.ui.character_settings_utils import get_character_materials, ensure_character_node_trees_isolated
+            for arm in list(bpy.data.objects):
+                if arm.type == 'ARMATURE':
+                    _, materials = get_character_materials(arm=arm)
+                    ensure_character_node_trees_isolated(arm, materials)
         target_trees = set()
         mats = target_materials if target_materials is not None else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
         for mat in mats:
@@ -323,7 +331,7 @@ def disconnect_lighting_panel_nodes_from_global_material_properties(target_mater
                         grouped_nodes.setdefault(node.node_tree, []).append(node)
 
     for tree, group_nodes in grouped_nodes.items():
-        if tree.users > len(group_nodes):
+        if tree.users - int(tree.use_fake_user) > len(group_nodes):
             tree = tree.copy()
             for node in group_nodes:
                 node.node_tree = tree
@@ -396,6 +404,8 @@ def setup_unrigged_genshin_lighting(context, only_if_panel_missing=False, target
                 if obj.type == 'MESH':
                     materials.update(slot.material for slot in obj.material_slots
                                      if slot.material and equipment_source(slot.material) in sources)
+    from setup_wizard.ui.character_settings_utils import ensure_character_node_trees_isolated
+    ensure_character_node_trees_isolated(target, materials)
     disconnect_lighting_panel_nodes_from_global_material_properties(target_materials=materials)
 
 

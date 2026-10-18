@@ -55,6 +55,9 @@ assert isolated.nodes['Global Properties'].inputs['Custom Shader Input'].is_link
 assert len(tree.links) == 3
 assert is_lighting_panel_connected([materials[1]])
 print('PASS: only the target character loses its panel link, even with a shared group')
+isolated.use_fake_user = True
+disconnect([materials[0]])
+assert nodes[0].node_tree == isolated, 'A fake user must not trigger another isolation copy'
 
 LightingPanel('').connect_lighting_panel_nodes_to_global_material_properties([materials[0]])
 assert is_lighting_panel_connected([materials[0]])

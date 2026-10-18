@@ -515,11 +515,36 @@ def get_character_materials(context=None, arm=None):
     if arm is None:
         return None, []
     import bpy
+    from setup_wizard.utils.modifier_utils import get_modifier_property
     mats = []
     seen = set()
+    visited_groups = set()
+
+    def geometry_materials(tree):
+        if tree in visited_groups:
+            return
+        visited_groups.add(tree)
+        for node in tree.nodes:
+            for socket in node.inputs:
+                value = getattr(socket, 'default_value', None)
+                if not socket.is_linked and isinstance(value, bpy.types.Material):
+                    yield value
+            if node.type == 'GROUP' and node.node_tree:
+                yield from geometry_materials(node.node_tree)
+
     for mesh in _iter_rig_meshes(arm):
-        for slot in getattr(mesh, "material_slots", []) or []:
-            mat = getattr(slot, "material", None)
+        mesh_materials = [slot.material for slot in mesh.material_slots if slot.material]
+        for modifier in mesh.modifiers:
+            if modifier.type != 'NODES' or not modifier.node_group:
+                continue
+            tree = modifier.node_group
+            for item in tree.interface.items_tree:
+                if item.item_type == 'SOCKET' and item.in_out == 'INPUT' and item.socket_type == 'NodeSocketMaterial':
+                    value = get_modifier_property(modifier, item.identifier)
+                    if isinstance(value, bpy.types.Material):
+                        mesh_materials.append(value)
+            mesh_materials.extend(geometry_materials(tree))
+        for mat in mesh_materials:
             if mat and mat.name not in seen:
                 seen.add(mat.name)
                 mats.append(mat)
@@ -690,77 +715,89 @@ def reset_last_settings_arm():
 
 
 def ensure_character_node_trees_isolated(arm, mats, force=False):
+    """Share one compatible properties tree per character, including outlines.
+
+    Append and earlier isolation runs can leave .001/.002 copies in different
+    materials. Consolidate those copies before isolating from other characters.
+    Distinct shader families/interfaces keep their own independent controls.
     """
-    Ensures that character-setting node groups (such as 'Global Material Properties')
-    in mats are uniquely owned by this character.
-    Fast path: skips immediately if all relevant groups are already owned by this character.
-    """
-    if not arm or not mats:
+    if not arm or not mats or not getattr(arm, 'name', ''):
         return
-    arm_name = getattr(arm, "name", "")
-    if not arm_name:
-        return
-
-    # 1. Collect only relevant property node groups (e.g. "Global Material Properties")
-    relevant_nodes = []
-    needs_isolation = False
-
-    for m in mats:
-        if not getattr(m, "node_tree", None):
-            continue
-        for n in m.node_tree.nodes:
-            if n.type == 'GROUP' and n.node_tree:
-                t = n.node_tree
-                t_name = t.name.lower()
-                if "global" in t_name or "properties" in t_name or "_owner_armature" in t:
-                    relevant_nodes.append((n, t))
-                    if t.get("_owner_armature") != arm_name:
-                        needs_isolation = True
-
-    if not needs_isolation and not force:
-        return
-
     import bpy
+    import re
+    from collections import defaultdict, Counter
 
-    # 2. Trees used by other armatures: computed lazily (only needed for un-owned trees)
-    other_trees_cache = []
-
-    def _get_other_trees():
-        if other_trees_cache:
-            return other_trees_cache[0]
-        other_trees = set()
-        for o_arm in bpy.data.objects:
-            if o_arm.type != 'ARMATURE' or o_arm == arm:
+    families = defaultdict(list)
+    for mat in set(mats):
+        if not mat.node_tree:
+            continue
+        for node in mat.node_tree.nodes:
+            tree = getattr(node, 'node_tree', None)
+            if node.type != 'GROUP' or tree is None:
                 continue
-            for mesh in _iter_rig_meshes(o_arm):
-                for slot in getattr(mesh, "material_slots", []) or []:
-                    m = getattr(slot, "material", None)
-                    if m and getattr(m, "node_tree", None):
-                        for n in m.node_tree.nodes:
-                            if n.type == 'GROUP' and n.node_tree:
-                                other_trees.add(n.node_tree)
-        other_trees_cache.append(other_trees)
+            if not any(k in tree.name.lower() for k in ('global', 'properties')) and '_owner_armature' not in tree:
+                continue
+            family = re.sub(r'\.\d{3}$', '', tree.name).lower()
+            interface = tuple((s.name, s.in_out, s.socket_type) for s in tree.interface.items_tree if s.item_type == 'SOCKET')
+            families[(family, interface)].append((node, tree, mat))
+
+    # A genuinely shared tree must stay independent in the other character.
+    other_trees = None
+    def external_trees():
+        nonlocal other_trees
+        if other_trees is None:
+            other_trees = set()
+            for other in bpy.data.objects:
+                if other.type != 'ARMATURE' or other == arm:
+                    continue
+                _, materials = get_character_materials(arm=other)
+                for mat in materials:
+                    if mat.node_tree:
+                        other_trees.update(n.node_tree for n in mat.node_tree.nodes if n.type == 'GROUP' and n.node_tree)
         return other_trees
 
-    # 3. Remap trees ensuring all materials of this armature share the same isolated tree
-    remapped_trees = {}
-
-    for n, t in relevant_nodes:
-        if t in remapped_trees:
-            n.node_tree = remapped_trees[t]
-            continue
-        owner = t.get("_owner_armature")
-        if owner == arm_name:
-            remapped_trees[t] = t
-            continue
-        if owner is not None or t in _get_other_trees():
-            target_tree = t.copy()
-            target_tree["_owner_armature"] = arm_name
-            remapped_trees[t] = target_tree
-            n.node_tree = target_tree
-        else:
-            t["_owner_armature"] = arm_name
-            remapped_trees[t] = t
-
-
-
+    retired = set()
+    canonical_trees = set()
+    for references in families.values():
+        trees = {tree for _, tree, _ in references}
+        main_counts = Counter(tree for _, tree, mat in references if 'outline' not in mat.name.lower())
+        counts = Counter(tree for _, tree, _ in references)
+        canonical = max(trees, key=lambda t: (t.get('_owner_armature') == arm.name, main_counts[t], counts[t], -len(t.name)))
+        real_users = canonical.users - int(canonical.use_fake_user)
+        if ((real_users > counts[canonical] or canonical.get('_owner_armature') != arm.name or force)
+                and canonical in external_trees()):
+            canonical = canonical.copy()
+        canonical['_owner_armature'] = arm.name
+        canonical_trees.add(canonical)
+        for node, tree, _ in references:
+            if tree == canonical:
+                continue
+            # Match sockets by name, even when Append assigned different IDs.
+            host = node.id_data
+            incoming = [(s.name, l.from_socket) for s in node.inputs for l in list(s.links)]
+            outgoing = [(s.name, l.to_socket) for s in node.outputs for l in list(s.links)]
+            defaults = {s.name: tuple(s.default_value) if hasattr(s.default_value, '__len__') and not isinstance(s.default_value, str) else s.default_value
+                        for s in node.inputs if hasattr(s, 'default_value')}
+            node.node_tree = canonical
+            for socket in [*node.inputs, *node.outputs]:
+                for link in list(socket.links):
+                    host.links.remove(link)
+            for name, value in defaults.items():
+                if name in node.inputs:
+                    node.inputs[name].default_value = value
+            for name, source in incoming:
+                if name in node.inputs:
+                    host.links.new(source, node.inputs[name])
+            for name, destination in outgoing:
+                if name in node.outputs:
+                    host.links.new(node.outputs[name], destination)
+            retired.add(tree)
+    for tree in retired:
+        if tree.users <= int(tree.use_fake_user):
+            tree.use_fake_user = False
+            if tree.users == 0:
+                bpy.data.node_groups.remove(tree)
+    for tree in canonical_trees:
+        base = re.sub(r'\.\d{3}$', '', tree.name)
+        if base not in bpy.data.node_groups:
+            tree.name = base

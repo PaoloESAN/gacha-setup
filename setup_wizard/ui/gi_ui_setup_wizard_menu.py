@@ -777,6 +777,9 @@ def update_gi_lighting_control_type(self, context=None):
 
     try:
         _, mats = get_character_materials(context, arm)
+        if arm and mats:
+            from setup_wizard.ui.character_settings_utils import ensure_character_node_trees_isolated
+            ensure_character_node_trees_isolated(arm, mats)
     except Exception:
         mats = []
 
