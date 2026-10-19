@@ -21,10 +21,12 @@ from setup_wizard.genshin_import_character_model import setup_zzz_eyeshadow_uv, 
 
 for folder, expected_count in [
     ('wise-default', 44), ('miyabi-dignified-blossom', 40),
-    ('belle-summer-skies', 42), ('jane-doe-hidden-nightfade', 134),
+    ('belle-summer-skies', 42), ('jane-doe-hidden-nightfade', 40),
     ('evelyn-chevalier-a-moth-to-light', 42), ('seed-flower-in-bloom', 36),
-    ('cissia-snake-mouse-game', 204), ('Avatar_Female_Size02_Lindverne_UI', 44),
+    ('cissia-snake-mouse-game', 42), ('Avatar_Female_Size02_Lindverne_UI', 44),
     ('nicole-demara-lil-sassy', 42),
+    ('Avatar_Female_Size03_Sunbringer_UI', 40), ('roxy-default', 46),
+    ('norma-hollowell-immunity-to-fools', 46),
 ]:
     bpy.ops.wm.read_factory_settings(use_empty=True)
     model = next((ROOT/'chars/zzz'/folder).rglob('*.fbx'))
@@ -32,9 +34,20 @@ for folder, expected_count in [
     # import leaves head tails pointing forward and hid the original bug.
     _execute_fbx_import(str(model))
     face = next(o for o in bpy.data.objects if o.type == 'MESH' and 'face' in o.name.lower())
+    unrigged_classified = classify_zzz_eyeshadow_faces(face)
     reorient_armature_bones(face.find_armature())
     classified = classify_zzz_eyeshadow_faces(face)
+    assert classified == unrigged_classified, (folder, 'original skeleton differs from rigging cleanup')
     assert len(classified) == expected_count, (folder, len(classified))
+    # These are opaque upper strips, not the floating shadow sheets below.
+    upper_strip_anchors = {
+        'jane-doe-hidden-nightfade': {2531, 2555, 2786, 2810},
+        'cissia-snake-mouse-game': {2590, 2897},
+        'Avatar_Female_Size03_Sunbringer_UI': {40, 60, 444, 464},
+        'roxy-default': {2531, 2843},
+        'norma-hollowell-immunity-to-fools': {2624, 2867},
+    }.get(folder, set())
+    assert not classified.intersection(upper_strip_anchors), (folder, 'upper strips became transparent')
     # Known front-sclera polygons in the real FBX fixtures are head-skinned,
     # so eye-weight protection alone cannot catch these previous false positives.
     sclera_anchors = {'nicole-demara-lil-sassy': {2270, 2714},
@@ -79,7 +92,7 @@ for folder, expected_count in [
     face.data.materials.append(transparent)
     for p in face.data.polygons:
         # Reproduce the old false positive on eye-skinned iris polygons.
-        p.material_index = int(p.index in sclera_anchors or any(v in eye_vertices for v in p.vertices))
+        p.material_index = int(p.index in sclera_anchors | upper_strip_anchors or any(v in eye_vertices for v in p.vertices))
     assert setup_zzz_eyeshadow_uv(face)
     assigned = {p.index for p in face.data.polygons if p.material_index == 1}
     assert assigned == classified

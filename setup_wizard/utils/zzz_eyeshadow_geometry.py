@@ -147,19 +147,34 @@ def classify_zzz_eyeshadow_faces(face_object):
         horizontal = [coordinates[i].dot(right) for i in weighted[side]]
         eye_width = max(horizontal) - min(horizontal)
         for x in (-0.2, 0.0, 0.2):
-            for z in (0.0, 0.1, 0.2):
+            # Follow the lower edge of the floating layer, independently in
+            # each column. Counting every hit farther up also admits stacked
+            # eyeliner/eyelash strips above the actual shadow (Jane, Cissia).
+            for z in (-0.04, 0.0, 0.04, 0.08, 0.12, 0.16, 0.2):
                 probe = center + right * (x * eye_width) + up * (z * eye_height)
                 origin = probe + forward * eye_height * 4
                 eye_hit, _, _, _ = eye_surface.ray_cast(origin, -forward, eye_height * 8)
                 hit, _, polygon_index, _ = front_surface.ray_cast(origin, -forward, eye_height * 8)
                 if hit is not None and eye_hit is not None and epsilon < (hit - eye_hit).dot(forward) < eye_height * 0.3:
                     number = polygon_islands[polygon_index]
+                    if number in shells:
+                        continue
                     supported_islands[number] = supported_islands.get(number, 0) + 1
+                    break
     selected = set()
     for number, island in enumerate(islands):
         if number in shells:
             continue
         if supported_islands.get(number, 0) < 2:
+            continue
+        vertices = {v for index in island for v in mesh.polygons[index].vertices}
+        center = sum((coordinates[v] for v in vertices), Vector()) / len(vertices)
+        side = min(centers, key=lambda s: (center - centers[s]).length)
+        eye_horizontal = [coordinates[v].dot(right) for v in weighted[side]]
+        horizontal = [coordinates[v].dot(right) for v in vertices]
+        # Small detached lash pieces can be the first surface in a column,
+        # but a shadow sheet must span most of the eye's central width.
+        if max(horizontal) - min(horizontal) < (max(eye_horizontal) - min(eye_horizontal)) * 0.65:
             continue
         qualifying = 0
         overlapping = 0
