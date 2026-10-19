@@ -2943,6 +2943,14 @@ class NevernessToEvernessDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     slot.material = new_mat
                     mat = new_mat
 
+                # The shadow template can be Dithered. eye_bantou needs alpha
+                # blending on the assigned copy, including repeated setup.
+                if template_to_use == "目影":
+                    if hasattr(mat, 'surface_render_method'):
+                        mat.surface_render_method = 'BLENDED'
+                    elif hasattr(mat, 'blend_method'):
+                        mat.blend_method = 'BLEND'
+
                 if mat and mat.use_nodes and mat.node_tree:
                     nodes = mat.node_tree.nodes
                     for node in nodes:

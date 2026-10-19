@@ -741,6 +741,16 @@ class NTE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
 
             # 3. IF SOURCE TREE FOUND IN BLEND FILE, CLONE ENTIRE NODE TREE
             if source_tree and source_tree.nodes:
+                # Blender 5 stores the scene compositor as a node group. Its
+                # output sockets must exist before cloning Group Output links.
+                if hasattr(source_tree, 'interface') and hasattr(node_tree, 'interface'):
+                    node_tree.interface.clear()
+                    for item in source_tree.interface.items_tree:
+                        if item.item_type == 'SOCKET':
+                            socket = node_tree.interface.new_socket(
+                                name=item.name, in_out=item.in_out, socket_type=item.socket_type)
+                            if hasattr(item, 'default_value') and hasattr(socket, 'default_value'):
+                                socket.default_value = item.default_value
                 node_map = {}
                 for src_node in source_tree.nodes:
                     # Skip static placeholder image nodes
@@ -794,8 +804,12 @@ class NTE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
                         from_node = node_map.get(link.from_node)
                         to_node = node_map.get(link.to_node)
                         if from_node and to_node:
-                            from_socket = from_node.outputs.get(link.from_socket.name) or (from_node.outputs[link.from_socket.index] if link.from_socket.index < len(from_node.outputs) else None)
-                            to_socket = to_node.inputs.get(link.to_socket.name) or (to_node.inputs[link.to_socket.index] if link.to_socket.index < len(to_node.inputs) else None)
+                            # Sockets have no .index in Blender 5. Match their
+                            # collection positions, preserving duplicate names.
+                            from_index = list(link.from_node.outputs).index(link.from_socket)
+                            to_index = list(link.to_node.inputs).index(link.to_socket)
+                            from_socket = from_node.outputs[from_index] if from_index < len(from_node.outputs) else from_node.outputs.get(link.from_socket.name)
+                            to_socket = to_node.inputs[to_index] if to_index < len(to_node.inputs) else to_node.inputs.get(link.to_socket.name)
                             if from_socket and to_socket:
                                 node_tree.links.new(from_socket, to_socket)
                     except Exception as ex_link:

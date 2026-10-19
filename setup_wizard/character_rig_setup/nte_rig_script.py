@@ -12,6 +12,38 @@ from setup_wizard.character_rig_setup.rig_ui_utils import (
     safe_expykit_convert_bone_names,
 )
 
+
+def _align_finger_axes(edit_bones, source_bones):
+    """Align the four fingers to the palm; preserve the existing thumb frame."""
+    for side in ("L", "R"):
+        hand = edit_bones.get(f'hand.{side}')
+        index = edit_bones.get(f'f_index.01.{side}')
+        pinky = edit_bones.get(f'f_pinky.01.{side}')
+        if not (hand and index and pinky):
+            continue
+        normal = (index.head - hand.head).cross(pinky.head - hand.head)
+        if normal.length < 1e-8:
+            continue
+        normal.normalize()
+        for finger in ("f_index", "f_middle", "f_ring", "f_pinky"):
+            names = [f"{finger}.{joint:02d}.{side}" for joint in (1, 2, 3)]
+            for name in names:
+                bone = edit_bones.get(name)
+                if bone:
+                    # A curl hinge lies across the palm, not along its normal.
+                    # Some imports already provide that frame; a fixed quarter
+                    # turn would break them while fixing Akane's straight hand.
+                    target = normal - bone.y_axis * normal.dot(bone.y_axis)
+                    if target.length < 1e-8:
+                        continue
+                    target.normalize()
+                    if target.dot(bone.z_axis) < 0:
+                        target.negate()
+                    bone.align_roll(target)
+                    source = source_bones.get(name) or source_bones.get("DEF-" + name)
+                    if source:
+                        source.roll = bone.roll
+
 def _is_already_rigged(arm_obj):
     """Detecta si el armature ya es un rig Rigify generado (evita doble-rig,
     que deja roots/widgets rotos). Solo casos seguros: plate-settings o rig_id
@@ -478,10 +510,12 @@ def rig_character(
                 if cross_vec.length > 0.0001:
                     index_plane_normal = cross_vec.normalized()
 
+            # Straight index chains have no plane normal. Bone matrices are
+            # 4x4, so use their 3D rotation axes for the cross products below.
             if not index_plane_normal and hand_mb:
-                index_plane_normal = hand_mb.matrix.col[2].normalized()
+                index_plane_normal = hand_mb.matrix.to_3x3().col[2].normalized()
             elif not index_plane_normal and hand_ab:
-                index_plane_normal = hand_ab.matrix.col[2].normalized()
+                index_plane_normal = hand_ab.matrix.to_3x3().col[2].normalized()
 
             if index_plane_normal:
                 for fname in ["f_index", "f_middle", "f_ring", "f_pinky"]:
@@ -504,22 +538,9 @@ def rig_character(
                         if orig_b:
                             orig_b.roll = b_meta.roll
 
-        # Thumb alignment using vector from thumb knuckle to index knuckle so flexing points directly into palm
-        for side in [".L", ".R"]:
-            thumb_01 = metarm_ebs.get(f"thumb.01{side}")
-            index_01 = metarm_ebs.get(f"f_index.01{side}")
-            if thumb_01 and index_01:
-                v_towards_index = (index_01.head - thumb_01.head).normalized()
-                for idx in ["01", "02", "03"]:
-                    t_meta = metarm_ebs.get(f"thumb.{idx}{side}")
-                    if t_meta:
-                        dir_t = (t_meta.tail - t_meta.head).normalized()
-                        z_target_thumb = v_towards_index.cross(dir_t)
-                        if z_target_thumb.length > 0.0001:
-                            t_meta.align_roll(z_target_thumb)
-                            orig_b = armature_ebs.get(t_meta.name) or armature_ebs.get("DEF-" + t_meta.name)
-                            if orig_b:
-                                orig_b.roll = t_meta.roll
+        # Rotating generated controls alone leaves Rigify's scale-driven curl
+        # and IK hinges on the old axes. Generate all three from this roll.
+        _align_finger_axes(metarm_ebs, armature_ebs)
 
         # Set primary rotation axis in Pose mode on metarig for fingers and thumb
         bpy.ops.object.mode_set(mode='POSE')
@@ -528,7 +549,9 @@ def rig_character(
             for side in [".L", ".R"]:
                 p_b = metapose.bones.get(f"{fname}.01{side}")
                 if p_b and hasattr(p_b, 'rigify_parameters'):
-                    p_b.rigify_parameters.primary_rotation_axis = "X"
+                    # WuWa lets Rigify infer the thumb hinge from its own
+                    # chain, instead of forcing the four-finger palm frame.
+                    p_b.rigify_parameters.primary_rotation_axis = "automatic" if fname == "thumb" else "X"
 
         bpy.ops.object.mode_set(mode='OBJECT')
         bpy.ops.object.select_all(action='DESELECT')
@@ -903,6 +926,12 @@ def rig_character(
             for bone in armature_obj.data.bones:
                 b_name = bone.name
                 b_low = b_name.lower()
+                # NTE imports weapon attachment joints without the weapons.
+                # Keep these joints for compatibility, outside visible controls.
+                if b_low in {'lhand_weapon', 'rhand_weapon'}:
+                    b2c_func(b_name, 25, "Other")
+                    bone.hide = True
+                    continue
                 # Skip ALL control bones, standard Rigify limbs/fingers, and raw deform/twist/base bones
                 if (
                     b_name.startswith("DEF-")
@@ -955,6 +984,10 @@ def rig_character(
             physics_bone_callback=nte_physics_classifier,
             detect_prop_keyword=False,
         )
+        for name in ("Weapon", "Props"):
+            collection = rigifyr.data.collections.get(name)
+            if collection and not collection.bones:
+                collection.is_visible = False
 
     elif rigifyr:
         for bone in rigifyr.data.bones:

@@ -1582,7 +1582,7 @@ class NevernessToEvernessCharacterRigger(CharacterRigger):
                     character_rigger_props.use_head_tracker
                 )
             except Exception as ex:
-                self.blender_operator.report({'ERROR'}, f"Failed to rig NTE character: {ex}")
+                raise RuntimeError(f"Failed to rig NTE character: {ex}") from ex
 
         try:
             from setup_wizard.character_rig_setup.nte_face_rig import nte_face_rig_main
