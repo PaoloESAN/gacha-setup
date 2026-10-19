@@ -219,3 +219,47 @@ for obj in character_objects(arm_a):
             continue
         assert next(n for n in mat.node_tree.nodes if n.get(TAG)).inputs['Index'].default_value == 2
 print('PASS: full character coverage, nested modifier materials, shared isolation, three modes, valid shader links, idempotency and save/reopen', flush=True)
+
+# ColorWheel names can belong to the material, its shader group, or just the
+# object. Restore older wrappers without removing Lights+ from shared body skin.
+arm_b = bpy.data.objects['Character B']
+from setup_wizard.utilites.new_lights import light_group
+group = light_group()
+bpy.context.view_layer.objects.active = arm_a
+named = material('Color-Wheel-Ambient')
+wheel_named = mesh('Lighting display', arm_a, named)
+generic = material('Generic shared display')
+body_shared = mesh('Shared body skin', arm_a, generic)
+assert bpy.ops.gacha.setup_new_lights('EXEC_DEFAULT') == {'FINISHED'}
+wrapped = body_shared.material_slots[0].material
+assert any(n.get(TAG) for n in wrapped.node_tree.nodes)
+wheel_a = mesh('ColorWheel-Lit.001', arm_a, wrapped)
+wheel_b = mesh('Color_Wheel-Lit', arm_b, wrapped)
+grouped = material('Renamed display material')
+wheel_group = bpy.data.node_groups.new('Color Wheel Shader', 'ShaderNodeTree')
+grouped.node_tree.nodes.new('ShaderNodeGroup').node_tree = wheel_group
+wheel_by_group = mesh('Renamed lighting display', arm_a, grouped)
+
+# Simulate an earlier setup on a named wheel material.
+t = named.node_tree
+out = t.nodes['Material Output']
+old = t.nodes.new('ShaderNodeGroup'); old.node_tree = group; old[TAG] = True
+t.links.new(t.nodes['Principled BSDF'].outputs[0], old.inputs['Shader'])
+t.links.new(old.outputs[0], out.inputs['Surface'])
+assert needs_setup(arm_a)
+assert bpy.ops.gacha.setup_new_lights('EXEC_DEFAULT') == {'FINISHED'}
+for wheel in (wheel_named, wheel_a, wheel_by_group):
+    mat = wheel.material_slots[0].material
+    assert not any(n.get(TAG) for n in mat.node_tree.nodes), wheel.name
+    assert mat.node_tree.nodes['Material Output'].inputs['Surface'].links[0].from_node.type == 'BSDF_PRINCIPLED'
+assert wheel_a.material_slots[0].material != body_shared.material_slots[0].material
+assert any(n.get(TAG) for n in body_shared.material_slots[0].material.node_tree.nodes)
+assert any(n.get(TAG) for n in wheel_b.material_slots[0].material.node_tree.nodes), 'Other character changed'
+assert not needs_setup(arm_a), 'Excluded wheels must not keep the setup button visible'
+for mode in ('DEFAULT', 'LIGHT_COLOR', 'DIFFUSE'):
+    arm_a.gacha_lights_plus_mode = mode
+    assert all(not any(n.get(TAG) for n in wheel.material_slots[0].material.node_tree.nodes)
+               for wheel in (wheel_named, wheel_a, wheel_by_group))
+assert bpy.ops.gacha.setup_new_lights('EXEC_DEFAULT') == {'FINISHED'}
+assert not needs_setup(arm_a)
+print('PASS: ColorWheel materials, groups and objects stay unchanged across all modes; old wrappers restored; shared body materials and other characters isolated', flush=True)

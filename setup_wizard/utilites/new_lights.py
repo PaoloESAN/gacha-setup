@@ -10,6 +10,8 @@ from setup_wizard.utils.modifier_utils import get_modifier_property, set_modifie
 TAG = '_gacha_lights_plus'
 MODE = '_gacha_lights_plus_mode'
 VERSION = '_gacha_lights_plus_version'
+COLOR_VERSION = '_gacha_lights_plus_color_version'
+CURRENT_COLOR_VERSION = 3
 
 
 def supported():
@@ -95,17 +97,42 @@ def is_genshin_highlight(material, owner=None):
     return material.name.lower().startswith(('hoyoverse - ', 'mihoyo - '))
 
 
+def is_color_wheel(value):
+    names = [value.name, str(value.get('_original_material_name', ''))]
+    tree = getattr(value, 'node_tree', None)
+    if tree:
+        names.extend(n.node_tree.name for n in tree.nodes if n.type == 'GROUP' and n.node_tree)
+    return any('colorwheel' in ''.join(c for c in name.lower() if c.isalnum()) for name in names)
+
+
+def excluded_materials(objects, owner):
+    materials = {m for obj in objects for m in object_materials(obj)}
+    wheels = {m for obj in objects if is_color_wheel(obj) for m in object_materials(obj)}
+    return wheels | {m for m in materials if is_color_wheel(m) or is_genshin_highlight(m, owner)}
+
+
 def is_light_node(node):
-    return bool(node.get(TAG) or (node.type == 'GROUP' and node.node_tree
-                                and node.node_tree.get(VERSION) == 1))
+    if node.type != 'GROUP' or node.node_tree is None:
+        return False
+    return bool(node.get(TAG) or node.node_tree.get(VERSION) or (
+        node.node_tree.name.startswith('New Light Type')
+        and node.inputs.get('Index') is not None and node.inputs.get('Shader') is not None
+        and node.outputs.get('Shader') is not None))
 
 
-def localize_materials(objects, owner=None):
+def has_setup(owner):
+    return bool(owner.get(TAG) or any(
+        material.node_tree and any(is_light_node(n) for n in material.node_tree.nodes)
+        for obj in character_objects(owner) for material in object_materials(obj)))
+
+
+def localize_materials(objects, owner=None, force=False):
     """Copy shared materials and only the geometry groups that reference them."""
     materials = {m for obj in objects for m in object_materials(obj)}
     external = {m for obj in bpy.data.objects if obj not in objects for m in object_materials(obj)}
+    excluded = excluded_materials(objects, owner)
     replacements = {m: m.copy() for m in materials & external
-                    if not is_genshin_highlight(m, owner)
+                    if force or m not in excluded
                     or (m.node_tree and any(is_light_node(n) for n in m.node_tree.nodes))}
     if not replacements:
         return materials
@@ -159,16 +186,25 @@ def localize_materials(objects, owner=None):
 
 def light_group():
     group = next((g for g in bpy.data.node_groups if g.get(VERSION) == 1), None)
-    if group:
+    if group and group.get(COLOR_VERSION) == CURRENT_COLOR_VERSION:
         return group
     path = Path(__file__).with_name('NewLights.blend')
     with bpy.data.libraries.load(str(path), link=False) as (source, target):
         target.node_groups = ['New Light Type']
-    return target.node_groups[0]
+    updated = target.node_groups[0]
+    if group:
+        name = group.name
+        group.user_remap(updated)
+        bpy.data.node_groups.remove(group)
+        updated.name = name
+    return updated
 
 
-def setup_material(material, owner, group):
-    excluded = is_genshin_highlight(material, owner)
+def setup_material(material, owner, group, exclusions=None):
+    if material.is_grease_pencil:
+        return 0
+    excluded = material in (exclusions if exclusions is not None
+                            else excluded_materials(character_objects(owner), owner))
     if not excluded:
         material.use_nodes = True
     tree = material.node_tree
@@ -200,7 +236,6 @@ def setup_material(material, owner, group):
         source = surface.links[0].from_socket
         node = tree.nodes.new('ShaderNodeGroup')
         node.node_tree = group
-        node.name = node.label = 'Lights+'
         node[TAG] = True
         node.location = (output.location.x - 220, output.location.y)
         node.width = 200
@@ -222,11 +257,14 @@ def get_mode(self):
 
 def set_mode(self, value):
     self[MODE] = int(value)
-    if self.get(TAG):
+    if has_setup(self):
         # Store the selected mode in the materials too: it survives saving and
         # Append without depending on evaluation of unused GN material drivers.
-        for material in localize_materials(character_objects(self), self):
-            if not material.node_tree or is_genshin_highlight(material, self):
+        objects = character_objects(self)
+        materials = localize_materials(objects, self)
+        excluded = excluded_materials(objects, self)
+        for material in materials:
+            if not material.node_tree or material in excluded:
                 continue
             for node in material.node_tree.nodes:
                 if node.get(TAG):
@@ -254,8 +292,14 @@ class GACHA_OT_SetupNewLights(Operator):
         group = light_group()
         if MODE not in owner:
             owner[MODE] = 0
+        # A wheel can share a generic material with a character mesh. Isolate
+        # its copy first so restoring the wheel cannot strip the body's effect.
+        wheels = {obj for obj in objects if is_color_wheel(obj)}
+        if wheels:
+            localize_materials(wheels, owner, force=True)
         materials = localize_materials(objects, owner)
-        count = sum(bool(setup_material(m, owner, group)) for m in materials)
+        excluded = excluded_materials(objects, owner)
+        count = sum(bool(setup_material(m, owner, group, excluded)) for m in materials)
         owner[TAG] = True
         self.report({'INFO'}, f'Lights+ configured on {count} character materials')
         return {'FINISHED'}
@@ -263,9 +307,13 @@ class GACHA_OT_SetupNewLights(Operator):
 
 def needs_setup(owner):
     """Inspect the current outputs, including newly added modifier materials."""
-    materials = {m for obj in character_objects(owner) for m in object_materials(obj)}
+    objects = character_objects(owner)
+    materials = {m for obj in objects for m in object_materials(obj)}
+    excluded = excluded_materials(objects, owner)
     for material in materials:
-        if is_genshin_highlight(material, owner):
+        if material.is_grease_pencil:
+            continue
+        if material in excluded:
             if material.node_tree and any(is_light_node(n) for n in material.node_tree.nodes):
                 return True  # Offer setup once to remove the previous wrapper.
             continue
@@ -278,8 +326,8 @@ def needs_setup(owner):
             if not surface or not surface.is_linked:
                 continue
             node = surface.links[0].from_node
-            if not (node.type == 'GROUP' and node.node_tree
-                    and node.node_tree.get(VERSION) == 1
+            if not (node.type == 'GROUP' and node.node_tree and is_light_node(node)
+                    and node.node_tree.get(COLOR_VERSION) == CURRENT_COLOR_VERSION
                     and node.inputs.get('Index') and node.inputs.get('Shader')
                     and node.inputs['Shader'].is_linked):
                 return True
@@ -294,9 +342,11 @@ def draw_lights_plus(layout, context):
         return
     box = layout.box()
     box.label(text='Lights+', icon='LIGHT')
+    installed = has_setup(owner)
     if needs_setup(owner):
-        box.operator('gacha.setup_new_lights', text='Setup New Lights', icon='LIGHT_SUN')
-    if owner.get(TAG):
+        text = 'Update Lights+' if installed else 'Setup New Lights'
+        box.operator('gacha.setup_new_lights', text=text, icon='LIGHT_SUN')
+    if installed:
         box.prop(owner, 'gacha_lights_plus_mode', text='Mode')
 
 

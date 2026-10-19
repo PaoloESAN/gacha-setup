@@ -234,8 +234,8 @@ def get_lighting_panel_source_socket(tree, socket_name):
         if n:
             return n.outputs.get("Color") or n.outputs.get("Value") or (n.outputs[0] if n.outputs else None)
 
-    # Shadow Position Offset / Shadow Position
-    if "shadow" in s_low and "pos" in s_low:
+    # The panel controls the relative offset, not material shadow thresholds.
+    if "shadow" in s_low and "pos" in s_low and "offset" in s_low:
         n = find_lighting_node(tree, "ShadowPos") or find_lighting_node(tree, "Shadow Position")
         if n:
             return n.outputs.get("Value") or (n.outputs[0] if n.outputs else None)
@@ -302,6 +302,37 @@ def get_lighting_panel_source_socket(tree, socket_name):
     return None
 
 
+def repair_genshin_shadow_offset_links(materials):
+    """Route the global offset to every shader, preserving material thresholds.
+
+    Some PrimoToon templates connect Face Shadow Softness to the body offset.
+    Repair material instances as well as new imports, without editing shaders.
+    """
+    for material in materials:
+        tree = material.node_tree
+        if tree is None:
+            continue
+        properties = next((node for node in tree.nodes if node.type == 'GROUP'
+                           and node.node_tree and (
+                               'global material properties' in node.node_tree.name.lower()
+                               or node.name == 'Global Properties')
+                           and node.outputs.get('Shadow Position Offset') is not None), None)
+        if properties is None:
+            continue
+        source = properties.outputs['Shadow Position Offset']
+        changed = False
+        for node in tree.nodes:
+            if node.type != 'GROUP' or node == properties:
+                continue
+            target = node.inputs.get('Shadow Position Offset')
+            if target is not None and not any(link.from_socket == source for link in target.links):
+                tree.links.new(source, target)
+                changed = True
+        if changed:
+            tree.update_tag()
+            material.update_tag()
+
+
 class LightingPanel:
     def __init__(self, lighting_panel_filepath):
         self.lighting_panel_filepath = lighting_panel_filepath
@@ -361,6 +392,7 @@ class LightingPanel:
                     ensure_character_node_trees_isolated(arm, materials)
         target_trees = set()
         mats = target_materials if target_materials is not None else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
+        repair_genshin_shadow_offset_links(mats)
         for mat in mats:
             if getattr(mat, "use_nodes", False) and mat.node_tree:
                 for node in mat.node_tree.nodes:
