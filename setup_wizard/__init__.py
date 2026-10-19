@@ -517,6 +517,8 @@ else:
         try:
             from setup_wizard.optimization.blender_rimlight_patch import patch_all_rimlight_groups_for_blender
             patch_all_rimlight_groups_for_blender()
+            from setup_wizard.character_rig_setup.lighting_panel_setup import patch_fresnel_toggle_links
+            patch_fresnel_toggle_links()
         except Exception:
             pass
         return None
@@ -556,6 +558,8 @@ else:
                         bpy.utils.register_class(cls_prop)
                     except Exception:
                         pass
+        from setup_wizard.character_rig_setup.lighting_panel_setup import register_fresnel_repair
+        register_fresnel_repair()
         from setup_wizard.utilites.new_lights import register as register_new_lights
         register_new_lights()
         register_wuwa_properties()
@@ -592,6 +596,8 @@ else:
     def unregister():
         from setup_wizard.utilites.new_lights import unregister as unregister_new_lights
         unregister_new_lights()
+        from setup_wizard.character_rig_setup.lighting_panel_setup import unregister_fresnel_repair
+        unregister_fresnel_repair()
         from setup_wizard.ui.pgr_character_settings import unregister_pgr_properties
         unregister_pgr_properties()
         unregister_hna_properties()

@@ -1159,6 +1159,8 @@ def pull_gi_panel_values(scene, context, force=False):
 
         if mats:
             ensure_character_node_trees_isolated(arm, mats)
+            from setup_wizard.character_rig_setup.lighting_panel_setup import patch_fresnel_toggle_links
+            patch_fresnel_toggle_links(mats)
 
         _is_updating_gi_props = True
         try:

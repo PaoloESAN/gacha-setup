@@ -98,6 +98,74 @@ def find_lighting_node(tree, name_or_label):
     return None
 
 
+_FRESNEL_SWITCH_NODE = 'Blender_Fresnel_Toggle_Threshold'
+
+
+def _fresnel_switch_socket(tree, source):
+    """Suppress slider roundoff before Blender converts the float to a bool."""
+    if bpy.app.version < (5, 3, 0) or source.type != 'VALUE':
+        return source
+    if source.node.name == _FRESNEL_SWITCH_NODE:
+        return source
+    switch = tree.nodes.get(_FRESNEL_SWITCH_NODE)
+    if switch is None:
+        switch = tree.nodes.new('ShaderNodeMath')
+        switch.name = _FRESNEL_SWITCH_NODE
+        switch.label = 'Fresnel Toggle Threshold'
+        switch.location = (source.node.location.x + 180, source.node.location.y - 100)
+    switch.operation = 'GREATER_THAN'
+    switch.inputs[1].default_value = 0.5
+    if not switch.inputs[0].is_linked or switch.inputs[0].links[0].from_socket != source:
+        tree.links.new(source, switch.inputs[0])
+    return switch.outputs[0]
+
+
+def patch_fresnel_toggle_links(target_materials=None):
+    """Give imported 5.3 lighting panels an exact 0/1 Fresnel toggle."""
+    if bpy.app.version < (5, 3, 0):
+        return False
+    if target_materials is None:
+        trees = {t for t in bpy.data.node_groups if 'global material properties' in t.name.lower()}
+    else:
+        trees = {n.node_tree for m in target_materials if m.node_tree
+                 for n in m.node_tree.nodes if n.type == 'GROUP' and n.node_tree
+                 and 'global material properties' in n.node_tree.name.lower()}
+    changed = False
+    for tree in trees:
+        for node in list(tree.nodes):
+            if node.type != 'GROUP_OUTPUT':
+                continue
+            toggle = node.inputs.get('Toggle Fresnel')
+            if toggle is None or toggle.type != 'BOOLEAN' or not toggle.is_linked:
+                continue
+            source = toggle.links[0].from_socket
+            switched = _fresnel_switch_socket(tree, source)
+            if switched != source:
+                tree.links.new(switched, toggle)
+                changed = True
+    return changed
+
+
+@bpy.app.handlers.persistent
+def repair_fresnel_after_import(_context):
+    # Append does not emit load_post and may leave no active object.
+    patch_fresnel_toggle_links()
+
+
+def register_fresnel_repair():
+    for name in ('blend_import_post', 'load_post'):
+        handlers = getattr(bpy.app.handlers, name, None)
+        if handlers is not None and repair_fresnel_after_import not in handlers:
+            handlers.append(repair_fresnel_after_import)
+
+
+def unregister_fresnel_repair():
+    for name in ('blend_import_post', 'load_post'):
+        handlers = getattr(bpy.app.handlers, name, None)
+        if handlers is not None and repair_fresnel_after_import in handlers:
+            handlers.remove(repair_fresnel_after_import)
+
+
 def get_lighting_panel_source_socket(tree, socket_name):
     """
     Given an input socket name on Global Properties (Group Output),
@@ -152,7 +220,13 @@ def get_lighting_panel_source_socket(tree, socket_name):
     if "toggle" in s_low and "fresnel" in s_low:
         n = find_lighting_node(tree, "ToggleFresnel") or find_lighting_node(tree, "Toggle Fresnel")
         if n:
-            return n.outputs.get("Value") or (n.outputs[0] if n.outputs else None)
+            source = n.outputs.get("Value") or (n.outputs[0] if n.outputs else None)
+            boolean_output = any(node.type == 'GROUP_OUTPUT'
+                                 and (socket := node.inputs.get(socket_name)) is not None
+                                 and socket.type == 'BOOLEAN' for node in tree.nodes)
+            if source is not None and boolean_output:
+                return _fresnel_switch_socket(tree, source)
+            return source
 
     # Fresnel Power
     if "fresnel" in s_low and ("power" in s_low or "size" in s_low):
@@ -346,8 +420,11 @@ def disconnect_lighting_panel_nodes_from_global_material_properties(target_mater
                 source_socket = get_lighting_panel_source_socket(tree, inp.name)
                 if source_socket is None:
                     continue
+                panel_sources = {source_socket}
+                if source_socket.node.name == _FRESNEL_SWITCH_NODE:
+                    panel_sources.update(link.from_socket for link in source_socket.node.inputs[0].links)
                 for l in list(inp.links):
-                    if l.from_socket == source_socket:
+                    if l.from_socket in panel_sources:
                         tree.links.remove(l)
 
 
