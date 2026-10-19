@@ -2570,6 +2570,37 @@ def rig_character(
         co.target_space = 'LOCAL_OWNER_ORIENT'
         co.owner_space = 'LOCAL'
 
+        # Some HI3 eyes have a tracking root near the head and a weighted
+        # child (e.g. Bone_Eye_L_End) at the iris. Scaling the root moves the
+        # entire iris towards the head. Scale only the first weighted bones
+        # in each branch, keeping the tracking root and its offsets intact.
+        eye_chain = [eye_bone, *eye_bone.children_recursive]
+        weighted_names = set()
+        for mesh in bpy.context.scene.objects:
+            if mesh.type != 'MESH' or mesh.find_armature() != our_char:
+                continue
+            groups = {group.index: group.name for group in mesh.vertex_groups
+                      if group.name in {bone.name for bone in eye_chain}}
+            for vertex in mesh.data.vertices:
+                weighted_names.update(groups[weight.group] for weight in vertex.groups
+                                      if weight.group in groups and weight.weight > 1e-6)
+        scale_bones = [bone for bone in eye_chain if bone.name in weighted_names
+                       and not any(parent.name in weighted_names
+                                   for parent in bone.parent_recursive if parent in eye_chain)]
+        for control_name in ("eyetrack", target_name):
+            control = our_char.pose.bones.get(control_name)
+            if control is None:
+                continue
+            control.lock_scale = (False, False, False)
+            for scale_bone in scale_bones:
+                scale = scale_bone.constraints.new('COPY_SCALE')
+                scale.name = "HI3 Eye Scale " + control_name
+                scale.target = our_char
+                scale.subtarget = control_name
+                scale.target_space = 'LOCAL'
+                scale.owner_space = 'LOCAL'
+                scale.use_offset = True
+
     # Let's add empty 'child of' constraints to limbs, torso and root. Ready to use in case char holds obj/stands on obj
     def add_child_of(bone_name):
         this_bone = bpy.context.scene.objects[rig_name].pose.bones[bone_name]
