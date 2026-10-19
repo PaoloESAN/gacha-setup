@@ -263,16 +263,6 @@ class AKE_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorPropertie
         except Exception as e_org:
             print(f"[AKE FINISH] Notice organizing Lighting and WGTS collections: {e_org}")
 
-        # Ensure all outline modifiers are disabled in viewport and render
-        try:
-            for obj in bpy.data.objects:
-                for mod in obj.modifiers:
-                    if 'outline' in mod.name.lower() or (mod.type == 'NODES' and mod.node_group and 'outline' in mod.node_group.name.lower()):
-                        mod.show_viewport = False
-                        mod.show_render = False
-        except Exception as e_mod:
-            print(f"[AKE FINISH] Notice disabling outline modifiers: {e_mod}")
-
         # Remove any extra scenes created during append or setup (e.g. Scene.001 from AKE.blend)
         try:
             current_scene = context.scene
