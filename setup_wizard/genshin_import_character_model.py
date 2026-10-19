@@ -1079,6 +1079,9 @@ def handle_ake_post_import(context, imported_objects=None):
                 m.select_set(True)
             context.view_layer.objects.active = armature
             bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
+            context.view_layer.update()
+            from setup_wizard.utils.ake_skin_weights import bind_lod_accessories
+            bind_lod_accessories(armature, objects)
             if not is_rigging_disabled(context):
                 reorient_armature_bones(armature)
         except Exception as e:

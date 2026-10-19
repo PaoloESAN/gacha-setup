@@ -131,6 +131,50 @@ def _isaac_iris_center(rig, side, name, context):
     return rig.data.bones[name].head_local.copy()
 
 
+def _isaac_eye_socket(rig, side, name, position, context):
+    """Recover invalid exported sockets from the curved iris surface."""
+    inverse = rig.matrix_world.inverted()
+    points = []
+    candidates = [f'face{"Lf" if side == "L" else "Rt"}IrisJoint', f'DEF-eye.{side}', name]
+    for candidate in dict.fromkeys(candidates):
+        for mesh in context.scene.objects:
+            if (mesh.type != 'MESH' or not any(mod.type == 'ARMATURE' and mod.object == rig
+                                             for mod in mesh.modifiers)):
+                continue
+            group = mesh.vertex_groups.get(candidate)
+            if group is None:
+                continue
+            transform = inverse @ mesh.matrix_world
+            points.extend(transform @ vertex.co for vertex in mesh.data.vertices
+                          if any(g.group == group.index and g.weight > .9 for g in vertex.groups))
+        if points:
+            break
+    if len(points) < 6:
+        return position
+    center = sum(points, Vector()) / len(points)
+    extent = max(max(p[i] for p in points) - min(p[i] for p in points) for i in range(3))
+    if extent < 1e-8 or extent * .05 < (position - center).length < extent * 4:
+        return position
+    # Some FBX sockets (Typhoeus) retain export-space coordinates while the
+    # iris is in armature space. A sphere fit supplies a nearby rotation pivot
+    # without changing the imported bones or the mesh's neutral transform.
+    offsets = [(p - center) / extent for p in points]
+    covariance = Matrix([[sum(p[i] * p[j] for p in offsets) for j in range(3)] for i in range(3)])
+    rhs = Vector([sum(p[i] * p.length_squared * .5 for p in offsets) for i in range(3)])
+    try:
+        fitted = center + (covariance.inverted() @ rhs) * extent
+        radius = sum((p - fitted).length for p in points) / len(points)
+        residual = math.sqrt(sum(((p - fitted).length - radius) ** 2 for p in points) / len(points))
+        if extent * .25 < radius < extent * 4 and residual < extent * .05:
+            return fitted
+    except ValueError:
+        pass
+    # Flat surfaces cannot determine a sphere. Put the pivot behind the iris
+    # using the imported character's forward frame instead of a distant joint.
+    backward = (inverse.to_3x3() @ Vector((0, 1, 0))).normalized()
+    return center + backward * extent
+
+
 def bind_isaac_eye_tracking(rig, eyes, pivots=None, context=None):
     """Rotate the iris around its socket without translating it with the gaze target."""
     context = context or bpy.context
@@ -148,6 +192,7 @@ def bind_isaac_eye_tracking(rig, eyes, pivots=None, context=None):
         positions[side] = (pivot.head_local.copy() if pivot else
                            Vector(saved_socket) if saved_socket is not None else
                            rig.data.bones[name].head_local.copy())
+        positions[side] = _isaac_eye_socket(rig, side, name, positions[side], context)
         follow = rig.pose.bones.get(f"Eye-Track-Follow.{side}")
         if follow:
             target = follow.bone.head_local.copy()

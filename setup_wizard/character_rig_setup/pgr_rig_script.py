@@ -3788,6 +3788,9 @@ def rig_character(
             ensure_character_collection(bpy.context, _rig_pkg, char_name)
     except Exception as e_pkg:
         print(f"[PGR RIG] Final collection packaging notice: {e_pkg}")
+
+    from setup_wizard.character_rig_setup.pole_targets import setup_pole_targets
+    setup_pole_targets(this_obj, use_arm_ik_poles, use_leg_ik_poles)
     
 def setup_neck_and_head_follow(neck_follow_value=1.0, head_follow_value=1.0):
     if bpy.context.object and hasattr(bpy.context.object, "pose") and bpy.context.object.pose:

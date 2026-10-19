@@ -2221,7 +2221,7 @@ def rig_wuthering_waves_character(context=None):
 
             wgts_collection.hide_viewport = True
 
-        # IK Pole property (paridad ZZZ/NTE: solo con flags, default OFF)
+        # IK Pole property follows the shared options (disabled by default).
         _pole_props = getattr(context.scene, "character_rigger_props", None)
         _pole_arm = getattr(_pole_props, "use_arm_ik_poles", False) if _pole_props else False
         _pole_leg = getattr(_pole_props, "use_leg_ik_poles", False) if _pole_props else False
@@ -2443,6 +2443,8 @@ def rig_wuthering_waves_character(context=None):
 
         unlock_wuwa_secondary_bones(RigArmatureObj)
 
+    from setup_wizard.character_rig_setup.pole_targets import setup_pole_targets
+    setup_pole_targets(RigArmatureObj)
     return True
 
 

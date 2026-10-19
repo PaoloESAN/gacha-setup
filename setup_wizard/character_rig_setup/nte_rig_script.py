@@ -1398,6 +1398,9 @@ def rig_character(
     except Exception as ex_light:
         print(f"[NTE RIG] light empties delete notice: {ex_light}")
 
+    from setup_wizard.character_rig_setup.pole_targets import setup_pole_targets
+    setup_pole_targets(rigifyr, use_arm_ik_poles, use_leg_ik_poles)
+
 
 def _ensure_root_trio(rigifyr):
     """Garantiza root/root.001/root.002 con cadena root.002->root.001->root (ZZZ).

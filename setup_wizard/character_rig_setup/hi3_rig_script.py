@@ -4097,6 +4097,9 @@ def rig_character(
         if breast:
             breast.custom_shape_scale_xyz = (0.45,) * 3
 
+    from setup_wizard.character_rig_setup.pole_targets import setup_pole_targets
+    setup_pole_targets(our_char, use_arm_ik_poles, use_leg_ik_poles)
+
 
 def setup_hi3_arm_parenting(rig):
     """Repair HI3 arm/leg/pelvis/skirt skin bindings and elbow pin parents in Edit Mode."""

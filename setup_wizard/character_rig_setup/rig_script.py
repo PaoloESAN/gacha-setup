@@ -5700,6 +5700,9 @@ def rig_character(
     except Exception as e_wgts:
         print(f"[GI RIG] Final WGTS sweep notice: {e_wgts}")
 
+    from setup_wizard.character_rig_setup.pole_targets import setup_pole_targets
+    setup_pole_targets(this_obj, use_arm_ik_poles, use_leg_ik_poles)
+
 
 def setup_neck_and_head_follow(neck_follow_value, head_follow_value):
     bpy.context.object.pose.bones["torso"]["neck_follow"] = neck_follow_value

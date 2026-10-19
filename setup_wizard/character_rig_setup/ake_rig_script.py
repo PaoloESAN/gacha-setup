@@ -1496,4 +1496,7 @@ def rig_character(
     print(f"[AKE RIG] Character '{char_name}' rigged successfully!")
     for side, world_center in socket_centers.items():
         rigifyr[f'ake_eye_socket_{side}'] = tuple(rigifyr.matrix_world.inverted() @ world_center)
+
+    from setup_wizard.character_rig_setup.pole_targets import setup_pole_targets
+    setup_pole_targets(rigifyr, use_arm_ik_poles, use_leg_ik_poles)
     return rigifyr

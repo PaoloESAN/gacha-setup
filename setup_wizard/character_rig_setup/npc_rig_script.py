@@ -2944,6 +2944,9 @@ def rig_character(
     from setup_wizard.character_rig_setup.wgts_isolation import isolate_wgts_for_character
     isolate_wgts_for_character(this_obj, char_name, char_coll=char_coll)
 
+    from setup_wizard.character_rig_setup.pole_targets import setup_pole_targets
+    setup_pole_targets(this_obj, use_arm_ik_poles, use_leg_ik_poles)
+
     # MOVING OF BONES END -------------------------------    
 def setup_neck_and_head_follow(neck_follow_value, head_follow_value):
     bpy.context.object.pose.bones["torso"]["neck_follow"] = neck_follow_value
