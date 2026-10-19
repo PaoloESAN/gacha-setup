@@ -2140,6 +2140,11 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         obj.rotation_mode = 'XYZ'
                         obj.rotation_euler = (math.radians(90.0), 0.0, 0.0)
 
+        from setup_wizard.utils.zzz_eye_highlights import assign_zzz_eye_highlights
+        highlight_material = bpy.data.materials.get('ZZZ Shader EyeHighlights')
+        for mesh in meshes:
+            assign_zzz_eye_highlights(mesh, highlight_material)
+
         try:
             from setup_wizard.optimization.blender_rimlight_patch import patch_all_rimlight_groups_for_blender
             patch_all_rimlight_groups_for_blender()

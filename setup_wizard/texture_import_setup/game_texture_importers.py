@@ -476,7 +476,13 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
             if 'lightmap' in f.lower() and (f.lower().endswith('.png') or f.lower().endswith('.tga') or f.lower().endswith('.dds'))
         ]
         if not lm_candidates:
-            return self._find_best_texture(mat_name, mesh_names, 'm', image_files, char_prefix)
+            # The generic matcher can return the diffuse when no M map exists.
+            # Leave this unresolved so the shader's bundled lightmap is used.
+            import re
+            masks = [f for f in image_files
+                     if re.search(r'_m(?:[_.]|$)', f.lower())
+                     and any(k in f.lower() for k in ('face', 'head', 'cara', 'rostro'))]
+            return self._find_best_texture(mat_name, mesh_names, 'm', masks, char_prefix) if masks else None
         if len(lm_candidates) == 1:
             return lm_candidates[0]
         
@@ -490,6 +496,26 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                 best_sc = sc
                 best = f
         return best
+
+    @staticmethod
+    def _set_face_lightmap_group(group, image=None, face_objects=()):
+        # Only the connected image is the character slot. The other nodes hold
+        # bundled alternatives and must survive imports and repeated setup.
+        active = group.nodes.get('Face_Lightmap')
+        if not active or active.type != 'TEX_IMAGE':
+            return
+        if image is None:
+            reserves = [n.image for n in group.nodes
+                        if n != active and n.type == 'TEX_IMAGE' and n.image
+                        and 'lightmap' in n.image.name.lower()]
+            from setup_wizard.utils.zzz_face_lightmap_fit import select_face_lightmap
+            image = select_face_lightmap(reserves, face_objects)
+            image = image or next((img for img in reserves
+                          if img.name.lower().split('.png')[0] == 'female_face_lightmap'),
+                         reserves[0] if reserves else None)
+        if image is not None:
+            image.colorspace_settings.name = 'Non-Color'
+            active.image = image
 
     def _find_best_face_diffuse(self, mat_name, mesh_names, image_files, char_prefix=''):
         import re
@@ -1179,9 +1205,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                                     if node.type == 'TEX_IMAGE' and "lightmap" in node.name.lower():
                                         node.image = img_lm
                                     elif node.type == 'GROUP' and node.node_tree and 'face lightmap' in node.node_tree.name.lower():
-                                        for sub_node in node.node_tree.nodes:
-                                            if sub_node.type == 'TEX_IMAGE':
-                                                sub_node.image = img_lm
+                                        self._set_face_lightmap_group(node.node_tree, img_lm)
 
                 for node in mat.node_tree.nodes:
                     if node.type == 'TEX_IMAGE':
@@ -1224,6 +1248,9 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
 
                     elif node.type == 'GROUP' and node.node_tree and 'face lightmap' in node.node_tree.name.lower():
                         face_lm = res_textures.get('lightmap') or res_textures.get('n')
+                        face_objects = [obj for obj in bpy.data.objects if obj.type == 'MESH'
+                                        and any(slot.material == mat for slot in obj.material_slots)]
+                        self._set_face_lightmap_group(node.node_tree, face_objects=face_objects)
                         if face_lm:
                             img_path = os.path.join(tex_folder, face_lm) if os.path.isfile(os.path.join(tex_folder, face_lm)) else os.path.join(folder, face_lm)
                             if os.path.isfile(img_path):
@@ -1231,9 +1258,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                                 if img:
                                     img.colorspace_settings.name = 'Non-Color'
                                     img.alpha_mode = 'CHANNEL_PACKED'
-                                    for sub_node in node.node_tree.nodes:
-                                        if sub_node.type == 'TEX_IMAGE':
-                                            sub_node.image = img
+                                    self._set_face_lightmap_group(node.node_tree, img)
 
             # If this is a Hair material and no hair texture was found,
             # remove its material slot (Slot 2+) from mesh objects so the hair inherits Slot 1 (only for ZZZ)

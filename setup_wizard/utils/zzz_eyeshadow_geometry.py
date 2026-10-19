@@ -119,6 +119,24 @@ def classify_zzz_eyeshadow_faces(face_object):
             islands.append(island)
     if not islands:
         return set()
+    # UV seams can split a head-skinned sclera into two coincident sheets.
+    # They share most of their contour, unlike the smaller upper-eye overlay.
+    # Protect both sheets even though neither carries an eye bone's weights.
+    tolerance = eye_height * 0.00001
+    island_positions = [
+        {tuple(round(component / tolerance) for component in coordinates[v])
+         for index in island for v in mesh.polygons[index].vertices}
+        for island in islands
+    ]
+    shells = set()
+    for i, positions in enumerate(island_positions):
+        for j in range(i):
+            other = island_positions[j]
+            shared = len(positions & other)
+            if shared >= max(len(positions), len(other)) * 0.6:
+                shells.update((i, j))
+    # Keep them in the occlusion surface: removing them would expose the
+    # eyelids behind them and make those become new false positives.
     candidate_polygons = [list(mesh.polygons[index].vertices) for island in islands for index in island]
     front_surface = BVHTree.FromPolygons(coordinates, candidate_polygons)
     polygon_islands = [number for number, island in enumerate(islands) for _ in island]
@@ -139,6 +157,8 @@ def classify_zzz_eyeshadow_faces(face_object):
                     supported_islands[number] = supported_islands.get(number, 0) + 1
     selected = set()
     for number, island in enumerate(islands):
+        if number in shells:
+            continue
         if supported_islands.get(number, 0) < 2:
             continue
         qualifying = 0

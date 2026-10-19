@@ -75,7 +75,15 @@ ver = _blender_ver
 
 
 def shapekeyrename(keyblock):
+    # Nicole's source asset names the two upward corners opposite to its
+    # inward/outward/downward keys. Normalize them before removing the suffix.
+    nicole_corner_up = {
+        'Mouth_↖oo_NuoCha': 'Fac_Mth_R_Up',
+        'Mouth_oo↗_NuoCha': 'Fac_Mth_L_Up',
+    }
     for sk in keyblock:
+        if sk.name in nicole_corner_up:
+            sk.name = nicole_corner_up[sk.name]
         if sk.name.endswith("_Unagi") or sk.name.endswith("_Anton") or sk.name.endswith("_Corin"):
             sk.name = sk.name[:-6]
         if sk.name.endswith("_NuoCha"):

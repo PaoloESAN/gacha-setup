@@ -8,14 +8,23 @@ import bpy
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+original_resource = bpy.utils.user_resource
+def isolated_resource(kind, path='', create=False):
+    if kind in {'SCRIPTS', 'CONFIG'}:
+        target = ROOT / '.tmp/zzz-eyeshadow-test' / kind.lower() / path
+        target.mkdir(parents=True, exist_ok=True)
+        return str(target)
+    return original_resource(kind, path=path, create=create)
+bpy.utils.user_resource = isolated_resource
 from setup_wizard.utils.zzz_eyeshadow_geometry import classify_zzz_eyeshadow_faces
 from setup_wizard.genshin_import_character_model import setup_zzz_eyeshadow_uv, _execute_fbx_import, reorient_armature_bones
 
 for folder, expected_count in [
     ('wise-default', 44), ('miyabi-dignified-blossom', 40),
     ('belle-summer-skies', 42), ('jane-doe-hidden-nightfade', 134),
-    ('evelyn-chevalier-a-moth-to-light', 232), ('seed-flower-in-bloom', 36),
+    ('evelyn-chevalier-a-moth-to-light', 42), ('seed-flower-in-bloom', 36),
     ('cissia-snake-mouse-game', 204), ('Avatar_Female_Size02_Lindverne_UI', 44),
+    ('nicole-demara-lil-sassy', 42),
 ]:
     bpy.ops.wm.read_factory_settings(use_empty=True)
     model = next((ROOT/'chars/zzz'/folder).rglob('*.fbx'))
@@ -26,6 +35,11 @@ for folder, expected_count in [
     reorient_armature_bones(face.find_armature())
     classified = classify_zzz_eyeshadow_faces(face)
     assert len(classified) == expected_count, (folder, len(classified))
+    # Known front-sclera polygons in the real FBX fixtures are head-skinned,
+    # so eye-weight protection alone cannot catch these previous false positives.
+    sclera_anchors = {'nicole-demara-lil-sassy': {2270, 2714},
+                     'evelyn-chevalier-a-moth-to-light': {2499, 2755}}.get(folder, set())
+    assert not classified.intersection(sclera_anchors)
     eye_group_indices = {g.index for g in face.vertex_groups if 'eye' in g.name.lower()
                          and not any(k in g.name.lower() for k in ('brow', 'lid', 'lash', 'shadow', 'track', 'ctrl', 'mch', 'org'))}
     eye_vertices = {v.index for v in face.data.vertices if any(g.group in eye_group_indices and g.weight > 0.1 for g in v.groups)}
@@ -65,7 +79,7 @@ for folder, expected_count in [
     face.data.materials.append(transparent)
     for p in face.data.polygons:
         # Reproduce the old false positive on eye-skinned iris polygons.
-        p.material_index = int(any(v in eye_vertices for v in p.vertices))
+        p.material_index = int(p.index in sclera_anchors or any(v in eye_vertices for v in p.vertices))
     assert setup_zzz_eyeshadow_uv(face)
     assigned = {p.index for p in face.data.polygons if p.material_index == 1}
     assert assigned == classified
