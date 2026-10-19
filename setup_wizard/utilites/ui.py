@@ -45,6 +45,9 @@ class CSW_PT_Utilities_UI_Layout(Panel):
             row_eye.operator("setup_wizard.eye_through_hair", text="Eye Through Hair", icon="HIDE_OFF")
             doc_eye = row_eye.operator("wm.url_open", text="", icon="TEXT")
             doc_eye.url = "https://gacha-setup.pages.dev/utilities/#eye-through-hair"
-            col.operator("setup_wizard.hair_shadows", text="Hair Shadows", icon="SHADING_RENDERED")
+            row_hair = col.row(align=True)
+            row_hair.operator("setup_wizard.hair_shadows", text="Hair Shadows", icon="SHADING_RENDERED")
+            doc_hair = row_hair.operator("wm.url_open", text="", icon="TEXT")
+            doc_hair.url = "https://gacha-setup.pages.dev/utilities/#hair-shadows"
 
 
