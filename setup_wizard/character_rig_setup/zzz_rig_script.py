@@ -4650,6 +4650,11 @@ def rig_character(
                     wobj.data = wgt_arm_pole.data
 
     setup_zzz_pole_targets(this_obj)
+    from setup_wizard.utils.zzz_foot_widgets import align_zzz_foot_widgets
+    align_zzz_foot_widgets(this_obj)
+    # FBX pelvis helpers otherwise remain fixed when lifting the thigh.
+    from setup_wizard.utils.zzz_hip_follow import setup_zzz_hip_follow
+    setup_zzz_hip_follow(this_obj)
     log_text = bpy.data.texts.get("RIG_LOG")
     if log_text:
         bpy.data.texts.remove(log_text)
