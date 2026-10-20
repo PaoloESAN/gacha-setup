@@ -71,7 +71,7 @@ Thanks to all those who collaborated on the original project:
 * [@BonnyAnimations](https://github.com/BonnyAnimations) — [YouTube](https://www.youtube.com/@BonnyAnimations) | [Twitter](https://x.com/BonnyTweetsOFF)
 * Enthralpy — [YouTube](https://www.youtube.com/@Enthralpy) | [Twitter](https://x.com/Enthralpy)
 * [@OctavoPE](https://github.com/OctavoPE) — [Twitter](https://x.com/Llama3D)
-* [@nytsjared](https://github.com/nytsjared)
+* [@nytsjared](https://github.com/nytsjared) — WuWa & PGR Shader
 * SubutaiProduction — [YouTube](https://www.youtube.com/@SubutaiProduction) | [Twitter](https://twitter.com/SubutaiEdits)
 * Aiko — [YouTube](https://www.youtube.com/@AikoDesu) | [Twitter](https://x.com/Aiko__ya)
 
@@ -88,10 +88,11 @@ Thanks to all those who collaborated on the original project:
 * **[nomianims](https://x.com/nomianims)**
 * **[emy_purpl](https://x.com/emy_purpl)** — [YouTube](https://www.youtube.com/@emypurpl) · [X](https://x.com/emy_purpl)
 * **ae_gm** — Genshin weapon reviewer
-* **stalomeow**
-* **max**
-* **poke** — zzz setup
-* **cocopops**
+* **stalomeow** — HNA Shader
+* **max** — HI3 Shader
+* **poke** — ZZZ setup
+* **cocopops** — Lights+
+* **[aeo](https://www.youtube.com/@aeo_346)**
 * **Genshin Impact**:
   * **Shader**: [Blender-miHoYo-Shaders](https://github.com/festivize/Blender-miHoYo-Shaders) by Festivity
   * **Genshin review**: VANS
@@ -103,12 +104,11 @@ Thanks to all those who collaborated on the original project:
   * **Shader**: Kytherity, Just_ScaasI, BonnyAnimations, Aiko
   * **Rigging + Scripting**: Enthralpy
   * **Supervised and made possible by**: Stormz67
-  * **Face Rig**: [@jideeh](https://github.com/Jideeh1)
+  * **ZZZ Tools & Rigging**: [@jideeh](https://github.com/Jideeh1)
     * **Poke / Enthralpy**: Driver Logic
     * **Isaac / Just_ScaasI**: Facerig Logic + Widgets
     * **The_Crabnuts / Kan_Natto**: Facerig Logic + Widgets
 * **NTE**:
-  * **Shader**: Omatsuri Discord
   * **Rig**: 矩阵映画
 * **WuWa / Wuthering Waves**:
   * **Shader**: [Gustling Waters](https://github.com/nytsjared/Gustling-Waters) by [@nytsjared](https://github.com/nytsjared)
@@ -121,7 +121,7 @@ Thanks to all those who collaborated on the original project:
 * **Hair & Clothes Physics**:
   * [thewindlead](https://www.youtube.com/@thewindlead)
 * **Assets**:
-  * **Hiragara**: Character assets
+  * **Hiragara**: Character assets & beta tester
   * **HoyoToon**: Assets · [Discord](https://discord.com/invite/hoyotoon)
 * **Logo Icon**: <a href="https://www.flaticon.com/free-icons/star" title="star icons">Star icons created by Magnific - Flaticon</a>
 
