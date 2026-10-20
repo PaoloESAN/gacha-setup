@@ -145,6 +145,13 @@ def rig_character(
                     right_eye_bone_name = b.name
                     break
 
+    from setup_wizard.utils.hi3_model_utils import eye_bone_deforms_mesh
+    left_eye_exists = left_eye_exists and eye_bone_deforms_mesh(head_bone_arm_target, left_eye_bone_name)
+    right_eye_exists = right_eye_exists and eye_bone_deforms_mesh(head_bone_arm_target, right_eye_bone_name)
+    if not left_eye_exists:
+        left_eye_bone_name = None
+    if not right_eye_exists:
+        right_eye_bone_name = None
     no_eyes = not (left_eye_exists or right_eye_exists)
 
     # Correct head bone shape: line up head bone's tail X & Y to head bone's head, eye bone Z as height
@@ -184,8 +191,8 @@ def rig_character(
             or temp_armature.edit_bones.get("foot.R")
         )
         if r_foot_bone:
-            r_foot_bone.tail = (-0.040187, -0.078244, 0.005803)
-            r_foot_bone.roll = 1.5708
+            r_foot_bone.tail = (r_foot_bone.head.x, -0.078244, 0.005803)
+            r_foot_bone.roll = 0.0
 
         l_foot_bone = (
             temp_armature.edit_bones.get("Ankle_L")
@@ -194,8 +201,8 @@ def rig_character(
             or temp_armature.edit_bones.get("foot.L")
         )
         if l_foot_bone:
-            l_foot_bone.tail = (0.040187, -0.078244, 0.005803)
-            l_foot_bone.roll = 1.5708
+            l_foot_bone.tail = (l_foot_bone.head.x, -0.078244, 0.005803)
+            l_foot_bone.roll = 0.0
 
     bpy.ops.object.mode_set(mode='OBJECT')
     bpy.context.view_layer.objects.active = head_bone_arm_target
@@ -533,6 +540,8 @@ def rig_character(
 
     attachfeets('DEF-foot.L', 'DEF-toe.L')
     attachfeets('DEF-foot.R', 'DEF-toe.R')
+    attachfeets('DEF-shin.L', 'DEF-foot.L')
+    attachfeets('DEF-shin.R', 'DEF-foot.R')
     attachfeets('DEF-upper_arm.L', 'DEF-forearm.L')
     attachfeets('DEF-upper_arm.R', 'DEF-forearm.R')
     attachfeets('DEF-thigh.L', 'DEF-shin.L')
@@ -555,8 +564,9 @@ def rig_character(
     for x in ['.L', '.R']:
         toe = 'DEF-toe'
         if toe + x in armature.edit_bones:
+            armature.edit_bones[toe + x].tail.x = armature.edit_bones[toe + x].head.x
             armature.edit_bones[toe + x].tail.z = armature.edit_bones[toe + x].head.z
-            armature.edit_bones[toe + x].tail.y -= 0.05
+            armature.edit_bones[toe + x].tail.y = armature.edit_bones[toe + x].head.y - 0.05
             armature.edit_bones[toe + x].roll = 0
 
     bpy.ops.armature.select_all(action='DESELECT')
@@ -636,6 +646,12 @@ def rig_character(
         heel_name = f'heel.02.{side}'
         foot_name = f'foot.{side}'
         toe_name = f'toe.{side}'
+        if toe_name in metarm.edit_bones:
+            tb = metarm.edit_bones[toe_name]
+            tb.tail.x = tb.head.x
+            tb.tail.z = tb.head.z
+            tb.tail.y = tb.head.y - 0.05
+            tb.roll = 0.0
         if heel_name in metarm.edit_bones and foot_name in metarm.edit_bones:
             heel_b = metarm.edit_bones[heel_name]
             foot_b = metarm.edit_bones[foot_name]
@@ -663,12 +679,12 @@ def rig_character(
                         toe_dir_y = -1.0  # HSR convention: toes point -Y, heel is +Y
                     rear_sign = -1.0 if toe_dir_y > 0 else 1.0
                     rear_y = ankle.y + rear_sign * 0.06
-                    # Sole height: toe head if sane, else foot tail, else ground 0.
+                    # Sole height: use actual toe/ball height (supports elevated characters like Vita at z~0.85m).
                     ground_z = 0.0
-                    if toe_pos is not None and abs(toe_pos.z) < 0.15:
+                    if toe_pos is not None and abs(toe_pos.z) < 2.0:
                         ground_z = toe_pos.z
-                    elif abs(foot_b.tail.z) < 0.15:
-                        ground_z = min(foot_b.tail.z, 0.02)
+                    elif abs(foot_b.tail.z) < 2.0:
+                        ground_z = foot_b.tail.z
                     # Lateral X span (mirrored per side), matching Expy-kit layout.
                     half_width = 0.04
                     side_sign = 1.0 if side == 'L' else -1.0
@@ -860,22 +876,7 @@ def rig_character(
         if "DEF-forearm" + x + ".002" in rigifyr.data.edit_bones and "DEF-forearm" + x in rigifyr.data.edit_bones:
             rigifyr.data.edit_bones["DEF-forearm" + x + ".002"].parent = rigifyr.data.edit_bones["DEF-forearm" + x]
 
-    # HI3 auxiliary skin bones must follow the matching Rigify segment.
-    # The second twist sits halfway along the limb; the elbow sits at its end.
-    # Parenting all of them to the first segment pulls the sleeve away on bends.
-    for side in ("L", "R"):
-        for source_name, parent_name in (
-            (f"Bone_{side}_UpperArm_Twist_01", f"DEF-upper_arm.{side}"),
-            (f"Bone_{side}_UpperArm_Twist_02", f"DEF-upper_arm.{side}.001"),
-            (f"Bone_{side}_ForeArm_Twist_01", f"DEF-forearm.{side}"),
-            (f"Bone_{side}_ForeArm_Twist_02", f"DEF-forearm.{side}.001"),
-            (f"Bone_Elbow_{side}", f"DEF-upper_arm.{side}.001"),
-        ):
-            child = rigifyr.data.edit_bones.get(source_name)
-            parent = rigifyr.data.edit_bones.get(parent_name)
-            if child and parent:
-                child.use_connect = False
-                child.parent = parent
+    setup_hi3_arm_parenting(rigifyr)
 
     # Ensure Root_M and pelvic/hip root bones follow DEF-spine
     target_hip_parent = (
@@ -1006,11 +1007,43 @@ def rig_character(
                     if target_def not in obj_item.vertex_groups:
                         vg.name = target_def
 
+    # Bind any unparented character weapon/prop meshes (e.g. Kiana's EmptyGun pistols, Mobius's Bone018 cross)
+    # so they follow the character rig when moving root or torso.
+    for obj_item in bpy.data.objects:
+        if obj_item.type != 'MESH' or obj_item.name in character_mesh_transforms:
+            continue
+        if obj_item.name.startswith("WGT") or any(c.name.lower().startswith(("wgt", "wgts", "lights")) for c in obj_item.users_collection):
+            continue
+        if obj_item.parent is None and len(obj_item.vertex_groups) == 0 and obj_item.data and len(obj_item.data.vertices) > 0:
+            mw_saved = obj_item.matrix_world.copy()
+            obj_item.parent = our_char
+            obj_item.matrix_parent_inverse = our_char.matrix_world.inverted()
+            obj_item.matrix_world = mw_saved
+            vg = obj_item.vertex_groups.get("DEF-spine") or obj_item.vertex_groups.new(name="DEF-spine")
+            vg.add(list(range(len(obj_item.data.vertices))), 1.0, 'REPLACE')
+            has_arm_mod = any(m.type == 'ARMATURE' and m.object == our_char for m in obj_item.modifiers)
+            if not has_arm_mod:
+                arm_mod = obj_item.modifiers.new(name="Armature", type='ARMATURE')
+                arm_mod.object = our_char
+
     try:
         head_driver_obj = bpy.data.objects.get("Head Driver") or bpy.data.objects.get("Head Origin") or bpy.data.objects.get("Head Direction")
-        if head_driver_obj and "Child Of" in head_driver_obj.constraints:
-            bpy.context.view_layer.objects.active = head_driver_obj
-            bpy.ops.constraint.childof_set_inverse(constraint="Child Of", owner='OBJECT')
+        if head_driver_obj:
+            head_b_ref = our_char.data.bones.get("head") or our_char.data.bones.get("DEF-spine.006")
+            if head_b_ref:
+                target_head_world = our_char.matrix_world @ head_b_ref.head_local
+                if (head_driver_obj.location - target_head_world).length > 0.25:
+                    head_driver_obj.location = target_head_world.copy()
+                    bpy.context.view_layer.update()
+            if "Child Of" in head_driver_obj.constraints:
+                con = head_driver_obj.constraints["Child Of"]
+                con.target = our_char
+                con.subtarget = "head" if "head" in our_char.data.bones else "DEF-spine.006"
+                head_pb = our_char.pose.bones.get(con.subtarget)
+                if head_pb:
+                    con.inverse_matrix = (our_char.matrix_world @ head_pb.matrix).inverted()
+                bpy.context.view_layer.objects.active = head_driver_obj
+                bpy.ops.constraint.childof_set_inverse(constraint="Child Of", owner='OBJECT')
     except Exception:
         pass
 
@@ -1853,14 +1886,19 @@ def rig_character(
                     toe_ik = f'toe_ik.{side}'
                     spin_ik = f'foot_spin_ik.{side}'
                     anchor_y = f_pos.y + 0.06
+                    sole_z = f_pos.z
                     ref_y = None
                     if spin_ik in armature.edit_bones:
                         ref_y = armature.edit_bones[spin_ik].head.y
+                        sole_z = armature.edit_bones[spin_ik].head.z
                     elif toe_ik in armature.edit_bones:
                         ref_y = armature.edit_bones[toe_ik].head.y
+                        sole_z = armature.edit_bones[toe_ik].head.z
+                    else:
+                        sole_z = armature.edit_bones[foot_ik].tail.z
                     if ref_y is not None and abs(ref_y - f_pos.y) > 1e-5:
                         anchor_y = f_pos.y + (0.06 if (ref_y - f_pos.y) < 0 else -0.06)
-                    h_pos = Vector((f_pos.x, anchor_y, 0.0))
+                    h_pos = Vector((f_pos.x, anchor_y, sole_z))
                     offset = h_pos - orig_head
                     if orig_vec.length < 1e-5:
                         # Degenerate source: fall back to lateral heel vector.
@@ -2010,6 +2048,10 @@ def rig_character(
 
 
    
+    # Appended elbow pin mechanisms must not depend on the deformation
+    # bones that their own Copy Location constraints drive.
+    setup_hi3_arm_parenting(our_char)
+
     # Reuse the eyes detected on the source model, including HI3 Bone_Eye_*_01.
     # Tracking proxies face forward independently of the imported bone axes;
     # LOCAL_OWNER_ORIENT below transfers their rotation delta to the real eyes.
@@ -2405,10 +2447,11 @@ def rig_character(
         depsgraph.update()
 
     try:
-        add_driver_to_bone_transform("eyelid-invis-control", 
-        "location", 1, [
-            {"var_name":"var", "var_type":"TRANSFORMS", "target":"eyetrack", "trans_space":"LOCAL_SPACE", "trans_type":"LOC_Y"}
-        ], "var * 5")
+        if not no_eyes:
+            add_driver_to_bone_transform("eyelid-invis-control",
+            "location", 1, [
+                {"var_name":"var", "var_type":"TRANSFORMS", "target":"eyetrack", "trans_space":"LOCAL_SPACE", "trans_type":"LOC_Y"}
+            ], "var * 5")
     except: 
         pass
         
@@ -2526,6 +2569,37 @@ def rig_character(
         co.subtarget = proxy_name
         co.target_space = 'LOCAL_OWNER_ORIENT'
         co.owner_space = 'LOCAL'
+
+        # Some HI3 eyes have a tracking root near the head and a weighted
+        # child (e.g. Bone_Eye_L_End) at the iris. Scaling the root moves the
+        # entire iris towards the head. Scale only the first weighted bones
+        # in each branch, keeping the tracking root and its offsets intact.
+        eye_chain = [eye_bone, *eye_bone.children_recursive]
+        weighted_names = set()
+        for mesh in bpy.context.scene.objects:
+            if mesh.type != 'MESH' or mesh.find_armature() != our_char:
+                continue
+            groups = {group.index: group.name for group in mesh.vertex_groups
+                      if group.name in {bone.name for bone in eye_chain}}
+            for vertex in mesh.data.vertices:
+                weighted_names.update(groups[weight.group] for weight in vertex.groups
+                                      if weight.group in groups and weight.weight > 1e-6)
+        scale_bones = [bone for bone in eye_chain if bone.name in weighted_names
+                       and not any(parent.name in weighted_names
+                                   for parent in bone.parent_recursive if parent in eye_chain)]
+        for control_name in ("eyetrack", target_name):
+            control = our_char.pose.bones.get(control_name)
+            if control is None:
+                continue
+            control.lock_scale = (False, False, False)
+            for scale_bone in scale_bones:
+                scale = scale_bone.constraints.new('COPY_SCALE')
+                scale.name = "HI3 Eye Scale " + control_name
+                scale.target = our_char
+                scale.subtarget = control_name
+                scale.target_space = 'LOCAL'
+                scale.owner_space = 'LOCAL'
+                scale.use_offset = True
 
     # Let's add empty 'child of' constraints to limbs, torso and root. Ready to use in case char holds obj/stands on obj
     def add_child_of(bone_name):
@@ -4003,6 +4077,28 @@ def rig_character(
         shape.hide_render = True
     our_char.data.show_bone_custom_shapes = True
 
+    # The template is also used while building the rig, so remove its unused
+    # tracking controls only after setup has finished referencing them.
+    unused_eye_bones = set()
+    for exists, side, proxy in (
+        (left_eye_exists, 'L', '+EyeBone L A01.001'),
+        (right_eye_exists, 'R', '+EyeBone R A01.001'),
+    ):
+        if not exists:
+            unused_eye_bones.update(('eyetrack_' + side, proxy))
+    if no_eyes:
+        unused_eye_bones.add('eyetrack')
+    if unused_eye_bones:
+        bpy.context.view_layer.objects.active = our_char
+        bpy.ops.object.mode_set(mode='EDIT')
+        for name in unused_eye_bones:
+            bone = our_char.data.edit_bones.get(name)
+            if bone is not None:
+                our_char.data.edit_bones.remove(bone)
+        bpy.ops.object.mode_set(mode='OBJECT')
+
+    setup_thumb_control_widgets(our_char)
+
     # Orient the existing Y/Z hand widget over the palm, anchored at the wrist.
     for side in ('L', 'R'):
         pb = our_char.pose.bones.get('hand_ik.' + side)
@@ -4023,14 +4119,82 @@ def rig_character(
             base = Vector((0, min(v.co.y for v in pb.custom_shape.data.vertices), 0))
             pb.custom_shape_transform = None
             pb.use_custom_shape_bone_size = False
-            pb.custom_shape_scale_xyz = (0.65,) * 3
+            pb.custom_shape_scale_xyz = (0.85,) * 3
             pb.custom_shape_rotation_euler = rotation.to_euler()
-            pb.custom_shape_translation = -(rotation @ (base * 0.65)) + bone_axes_inverse @ (dorsal * 0.025)
+            pb.custom_shape_translation = -(rotation @ (base * 0.85)) + bone_axes_inverse @ (dorsal * 0.025)
 
     for side in ('L', 'R'):
         breast = our_char.pose.bones.get('breast.' + side)
         if breast:
             breast.custom_shape_scale_xyz = (0.45,) * 3
+
+    from setup_wizard.character_rig_setup.pole_targets import setup_pole_targets
+    setup_pole_targets(our_char, use_arm_ik_poles, use_leg_ik_poles)
+
+
+def setup_hi3_arm_parenting(rig):
+    """Repair HI3 arm/leg/pelvis/skirt skin bindings and elbow pin parents in Edit Mode."""
+    bones = rig.data.edit_bones
+    for side in ('L', 'R'):
+        for source_name, parent_name in (
+            (f'Bone_{side}_UpperArm_Twist_01', f'DEF-upper_arm.{side}'),
+            (f'Bone_{side}_UpperArm_Twist_02', f'DEF-upper_arm.{side}.001'),
+            (f'Bone_{side}_ForeArm_Twist_01', f'DEF-forearm.{side}'),
+            (f'Bone_{side}_ForeArm_Twist_02', f'DEF-forearm.{side}.001'),
+            (f'Bone_Elbow_{side}', f'DEF-upper_arm.{side}.001'),
+            (f'Mobius_Bone_UpperArmTwist_{side}_01', f'DEF-upper_arm.{side}'),
+            (f'Mobius_Bone_UpperArmTwist_{side}_02', f'DEF-upper_arm.{side}.001'),
+            # This bone skins the forearm, despite its imported upper-arm parent.
+            (f'Mobius_Bone_Twist_{side}', f'DEF-forearm.{side}'),
+            (f'Elysia_Bone_UpperArmTwist_{side}_01', f'DEF-upper_arm.{side}'),
+            (f'Elysia_Bone_UpperArmTwist_{side}_02', f'DEF-upper_arm.{side}.001'),
+            (f'Elysia_Bone_Twist_{side}', f'DEF-forearm.{side}'),
+            (f'Elysia_C1_Bone_Sleeve_{side}', f'DEF-forearm.{side}.001'),
+            (f'Bone_{side}_Calf_Twist_01', f'DEF-shin.{side}'),
+            (f'Bone_{side}_Calf_Twist_02', f'DEF-shin.{side}.001'),
+            (f'Bone_ {side}_Calf_Twist_01', f'DEF-shin.{side}'),
+            (f'Bone_ {side}_Calf_Twist_02', f'DEF-shin.{side}.001'),
+            (f'Bone_Knee_{side}', f'DEF-thigh.{side}.001'),
+            (f'Bone_C8_Ruarm_Sleeve_{side}_Root', f'DEF-upper_arm.{side}.001'),
+            (f'Bone_C8_Rcalf_Ribbon_{side}_Root', f'DEF-shin.{side}.001'),
+        ):
+            child = bones.get(source_name)
+            parent = bones.get(parent_name)
+            if child is not None and parent is not None:
+                child.use_connect = False
+                child.parent = parent
+
+        pin = bones.get(f'MCH-forearm_tweak-pin.parent.{side}')
+        if pin is not None:
+            # DEF-forearm -> pin -> forearm_tweak -> DEF-forearm is a cycle,
+            # even when tweak_pin is zero. The parent switch supplies the frame.
+            pin.use_connect = False
+            pin.parent = None
+
+    def_spine = bones.get('DEF-spine')
+    if def_spine is not None:
+        for b in bones:
+            b_low = b.name.lower()
+            if 'pelvistwist' in b_low:
+                b.use_connect = False
+                b.parent = def_spine
+            elif b.name in ('Avater_Bone_MS_C1_04_01_Skirt_B_01', 'Avater_Bone_MS_C1_04_01_Skirt_F_01'):
+                b.use_connect = False
+                b.parent = def_spine
+
+
+def setup_thumb_control_widgets(rig):
+    """Keep thumb master widgets on the posed thumb when detail controls move."""
+    for side in ('L', 'R'):
+        master = rig.pose.bones.get('thumb.01_master.' + side)
+        thumb = rig.pose.bones.get('ORG-thumb.01.' + side)
+        if master is not None and thumb is not None:
+            # Rigify already uses the ORG bones to display finger detail widgets.
+            # The master has a separate transform and otherwise stays behind
+            # when the first detail control is translated or rotated.
+            # This changes display only; parenting/constraints would create a
+            # dependency cycle because the master drives this same thumb.
+            master.custom_shape_transform = thumb
 
 
 def setup_neck_and_head_follow(neck_follow_value=1.0, head_follow_value=1.0):

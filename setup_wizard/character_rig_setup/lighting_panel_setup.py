@@ -98,6 +98,74 @@ def find_lighting_node(tree, name_or_label):
     return None
 
 
+_FRESNEL_SWITCH_NODE = 'Blender_Fresnel_Toggle_Threshold'
+
+
+def _fresnel_switch_socket(tree, source):
+    """Suppress slider roundoff before Blender converts the float to a bool."""
+    if bpy.app.version < (5, 3, 0) or source.type != 'VALUE':
+        return source
+    if source.node.name == _FRESNEL_SWITCH_NODE:
+        return source
+    switch = tree.nodes.get(_FRESNEL_SWITCH_NODE)
+    if switch is None:
+        switch = tree.nodes.new('ShaderNodeMath')
+        switch.name = _FRESNEL_SWITCH_NODE
+        switch.label = 'Fresnel Toggle Threshold'
+        switch.location = (source.node.location.x + 180, source.node.location.y - 100)
+    switch.operation = 'GREATER_THAN'
+    switch.inputs[1].default_value = 0.5
+    if not switch.inputs[0].is_linked or switch.inputs[0].links[0].from_socket != source:
+        tree.links.new(source, switch.inputs[0])
+    return switch.outputs[0]
+
+
+def patch_fresnel_toggle_links(target_materials=None):
+    """Give imported 5.3 lighting panels an exact 0/1 Fresnel toggle."""
+    if bpy.app.version < (5, 3, 0):
+        return False
+    if target_materials is None:
+        trees = {t for t in bpy.data.node_groups if 'global material properties' in t.name.lower()}
+    else:
+        trees = {n.node_tree for m in target_materials if m.node_tree
+                 for n in m.node_tree.nodes if n.type == 'GROUP' and n.node_tree
+                 and 'global material properties' in n.node_tree.name.lower()}
+    changed = False
+    for tree in trees:
+        for node in list(tree.nodes):
+            if node.type != 'GROUP_OUTPUT':
+                continue
+            toggle = node.inputs.get('Toggle Fresnel')
+            if toggle is None or toggle.type != 'BOOLEAN' or not toggle.is_linked:
+                continue
+            source = toggle.links[0].from_socket
+            switched = _fresnel_switch_socket(tree, source)
+            if switched != source:
+                tree.links.new(switched, toggle)
+                changed = True
+    return changed
+
+
+@bpy.app.handlers.persistent
+def repair_fresnel_after_import(_context):
+    # Append does not emit load_post and may leave no active object.
+    patch_fresnel_toggle_links()
+
+
+def register_fresnel_repair():
+    for name in ('blend_import_post', 'load_post'):
+        handlers = getattr(bpy.app.handlers, name, None)
+        if handlers is not None and repair_fresnel_after_import not in handlers:
+            handlers.append(repair_fresnel_after_import)
+
+
+def unregister_fresnel_repair():
+    for name in ('blend_import_post', 'load_post'):
+        handlers = getattr(bpy.app.handlers, name, None)
+        if handlers is not None and repair_fresnel_after_import in handlers:
+            handlers.remove(repair_fresnel_after_import)
+
+
 def get_lighting_panel_source_socket(tree, socket_name):
     """
     Given an input socket name on Global Properties (Group Output),
@@ -152,7 +220,13 @@ def get_lighting_panel_source_socket(tree, socket_name):
     if "toggle" in s_low and "fresnel" in s_low:
         n = find_lighting_node(tree, "ToggleFresnel") or find_lighting_node(tree, "Toggle Fresnel")
         if n:
-            return n.outputs.get("Value") or (n.outputs[0] if n.outputs else None)
+            source = n.outputs.get("Value") or (n.outputs[0] if n.outputs else None)
+            boolean_output = any(node.type == 'GROUP_OUTPUT'
+                                 and (socket := node.inputs.get(socket_name)) is not None
+                                 and socket.type == 'BOOLEAN' for node in tree.nodes)
+            if source is not None and boolean_output:
+                return _fresnel_switch_socket(tree, source)
+            return source
 
     # Fresnel Power
     if "fresnel" in s_low and ("power" in s_low or "size" in s_low):
@@ -160,8 +234,8 @@ def get_lighting_panel_source_socket(tree, socket_name):
         if n:
             return n.outputs.get("Color") or n.outputs.get("Value") or (n.outputs[0] if n.outputs else None)
 
-    # Shadow Position Offset / Shadow Position
-    if "shadow" in s_low and "pos" in s_low:
+    # The panel controls the relative offset, not material shadow thresholds.
+    if "shadow" in s_low and "pos" in s_low and "offset" in s_low:
         n = find_lighting_node(tree, "ShadowPos") or find_lighting_node(tree, "Shadow Position")
         if n:
             return n.outputs.get("Value") or (n.outputs[0] if n.outputs else None)
@@ -228,6 +302,37 @@ def get_lighting_panel_source_socket(tree, socket_name):
     return None
 
 
+def repair_genshin_shadow_offset_links(materials):
+    """Route the global offset to every shader, preserving material thresholds.
+
+    Some PrimoToon templates connect Face Shadow Softness to the body offset.
+    Repair material instances as well as new imports, without editing shaders.
+    """
+    for material in materials:
+        tree = material.node_tree
+        if tree is None:
+            continue
+        properties = next((node for node in tree.nodes if node.type == 'GROUP'
+                           and node.node_tree and (
+                               'global material properties' in node.node_tree.name.lower()
+                               or node.name == 'Global Properties')
+                           and node.outputs.get('Shadow Position Offset') is not None), None)
+        if properties is None:
+            continue
+        source = properties.outputs['Shadow Position Offset']
+        changed = False
+        for node in tree.nodes:
+            if node.type != 'GROUP' or node == properties:
+                continue
+            target = node.inputs.get('Shadow Position Offset')
+            if target is not None and not any(link.from_socket == source for link in target.links):
+                tree.links.new(source, target)
+                changed = True
+        if changed:
+            tree.update_tag()
+            material.update_tag()
+
+
 class LightingPanel:
     def __init__(self, lighting_panel_filepath):
         self.lighting_panel_filepath = lighting_panel_filepath
@@ -277,8 +382,17 @@ class LightingPanel:
             lighting_panel_bone_data.inherit_scale = 'NONE'
 
     def connect_lighting_panel_nodes_to_global_material_properties(self, target_materials=None):
+        if target_materials is None:
+            # Setup can append the outline shader separately from the body.
+            # Consolidate those copies before wiring the lighting panel.
+            from setup_wizard.ui.character_settings_utils import get_character_materials, ensure_character_node_trees_isolated
+            for arm in list(bpy.data.objects):
+                if arm.type == 'ARMATURE':
+                    _, materials = get_character_materials(arm=arm)
+                    ensure_character_node_trees_isolated(arm, materials)
         target_trees = set()
         mats = target_materials if target_materials is not None else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
+        repair_genshin_shadow_offset_links(mats)
         for mat in mats:
             if getattr(mat, "use_nodes", False) and mat.node_tree:
                 for node in mat.node_tree.nodes:
@@ -323,7 +437,7 @@ def disconnect_lighting_panel_nodes_from_global_material_properties(target_mater
                         grouped_nodes.setdefault(node.node_tree, []).append(node)
 
     for tree, group_nodes in grouped_nodes.items():
-        if tree.users > len(group_nodes):
+        if tree.users - int(tree.use_fake_user) > len(group_nodes):
             tree = tree.copy()
             for node in group_nodes:
                 node.node_tree = tree
@@ -338,24 +452,45 @@ def disconnect_lighting_panel_nodes_from_global_material_properties(target_mater
                 source_socket = get_lighting_panel_source_socket(tree, inp.name)
                 if source_socket is None:
                     continue
+                panel_sources = {source_socket}
+                if source_socket.node.name == _FRESNEL_SWITCH_NODE:
+                    panel_sources.update(link.from_socket for link in source_socket.node.inputs[0].links)
                 for l in list(inp.links):
-                    if l.from_socket == source_socket:
+                    if l.from_socket in panel_sources:
                         tree.links.remove(l)
 
 
-def setup_unrigged_genshin_lighting(context):
-    """Use static lighting for every part of the selected setup model."""
+def setup_unrigged_genshin_lighting(context, only_if_panel_missing=False, target_object=None):
+    """Use static lighting for the selected model when no panel supplies it."""
     from setup_wizard.ui.character_settings_utils import get_character_materials
 
     selected = [obj for obj in context.selected_objects if obj.type in {'ARMATURE', 'MESH'}]
     active = context.view_layer.objects.active
-    target = active if active in selected else next(iter(selected), None)
+    target = target_object or (active if active in selected else next(iter(selected), None))
     if target is None:
         return
     model_id = target.get('_setup_wizard_model_id')
     if target.type == 'MESH':
         target = target.find_armature() or target
     model_id = model_id or target.get('_setup_wizard_model_id')
+    if only_if_panel_missing:
+        # Enabling rigging does not guarantee a panel was installed: rigging
+        # can be skipped for missing dependencies, or the panel can be disabled.
+        # Unbound lightPanel attributes evaluate to black in classic EEVEE.
+        for obj in context.scene.objects:
+            if obj.type != 'MESH':
+                continue
+            if not (obj == target or obj.find_armature() == target
+                    or (model_id and obj.get('_setup_wizard_model_id') == model_id)):
+                continue
+            for modifier in obj.modifiers:
+                if modifier.type != 'NODES' or 'Light Vectors' not in modifier.name:
+                    continue
+                if all(get_modifier_property(modifier, key) is not None for key in (
+                    LightingPanelNames.GeometryNodeInputs.AMBIENT_COLOR_WHEEL,
+                    LightingPanelNames.GeometryNodeInputs.AMBIENT_COLOR_PICKER,
+                )):
+                    return
     _, materials = get_character_materials(context, arm=target)
     materials = set(materials)
     if model_id:
@@ -378,6 +513,8 @@ def setup_unrigged_genshin_lighting(context):
                 if obj.type == 'MESH':
                     materials.update(slot.material for slot in obj.material_slots
                                      if slot.material and equipment_source(slot.material) in sources)
+    from setup_wizard.ui.character_settings_utils import ensure_character_node_trees_isolated
+    ensure_character_node_trees_isolated(target, materials)
     disconnect_lighting_panel_nodes_from_global_material_properties(target_materials=materials)
 
 

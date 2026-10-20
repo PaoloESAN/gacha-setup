@@ -272,7 +272,8 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
         settings_header.label(text="Setup Settings", icon="PREFERENCES")
 
         settings_col = settings_box.column()
-        if selected_game == GameType.ZENLESS_ZONE_ZERO.name and hasattr(context.scene, "zzz_shader_type"):
+        if (selected_game == GameType.ZENLESS_ZONE_ZERO.name
+                and bpy.app.version >= (5, 2, 0) and hasattr(context.scene, "zzz_shader_type")):
             settings_col.prop(context.scene, "zzz_shader_type", text="Shader")
             if getattr(context.scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
                 row_by = settings_col.row(align=True)
@@ -288,54 +289,6 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
                 sliders_col.prop(props, "hair_physics_influence", text="Hair", slider=True)
                 sliders_col.prop(props, "clothes_physics_influence", text="Clothes", slider=True)
             settings_col.prop(props, "disable_rigging", text="Disable Rigging")
-
-
-from setup_wizard.camera_rig.jideeh_cam_rig import (
-    build as build_jideeh_camrig,
-    CSW_OT_CreateCameraPro,
-    CSW_OT_CreateJideehCamrig,
-)
-
-
-class CSW_OT_JideehCamera(bpy.types.Operator):
-    bl_idname = "setup_wizard.jideeh_camera"
-    bl_label = "Camera Pro"
-    bl_description = "Create Camera Pro in the active scene"
-    bl_options = {'REGISTER', 'UNDO'}
-
-    def execute(self, context):
-        try:
-            rig, cam = build_jideeh_camrig(context)
-            self.report({'INFO'}, f"Successfully created Camera Pro: '{rig.name}'")
-            return {'FINISHED'}
-        except Exception as e:
-            self.report({'ERROR'}, f"Failed to create Camera Pro: {e}")
-            return {'CANCELLED'}
-
-
-class CSW_PT_Utilities_UI_Layout(Panel):
-    bl_label = "Utilities"
-    bl_idname = 'CSW_PT_Utilities_UI_Layout'
-    bl_space_type = "VIEW_3D"
-    bl_region_type = "UI"
-    bl_category = "Gacha Setup"
-    bl_order = 2
-
-    def draw(self, context):
-        layout = self.layout
-        col = layout.column(align=True)
-
-        row_cam = col.row(align=True)
-        row_cam.operator("setup_wizard.create_camera_pro", text="Jideeh's Camera", icon="CAMERA_DATA")
-        doc_cam = row_cam.operator("wm.url_open", text="", icon="TEXT")
-        doc_cam.url = "https://gacha-setup.pages.dev/utilities/#jideehs-camera"
-
-        from setup_wizard.utils.eye_through_hair import supports_eye_through_hair
-        if supports_eye_through_hair():
-            row_eye = col.row(align=True)
-            row_eye.operator("setup_wizard.eye_through_hair", text="Eye Through Hair", icon="HIDE_OFF")
-            doc_eye = row_eye.operator("wm.url_open", text="", icon="TEXT")
-            doc_eye.url = "https://gacha-setup.pages.dev/utilities/#eye-through-hair"
 
 
 class CSW_PT_Old_Setup_UI_Layout(Panel):

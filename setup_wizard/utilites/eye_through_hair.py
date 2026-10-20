@@ -1,9 +1,9 @@
 import bpy
 import bmesh
-from typing import List, Optional, Tuple, Set
+from typing import List, Tuple, Set
 
 try:
-    from .modifier_utils import set_modifier_property
+    from ..utils.modifier_utils import set_modifier_property
 except ImportError:
     try:
         from setup_wizard.utils.modifier_utils import set_modifier_property
@@ -68,6 +68,8 @@ def ensure_aov_passes(view_layer: bpy.types.ViewLayer) -> Tuple[bool, bool]:
         if hasattr(aov, "type"):
             aov.type = 'COLOR'
 
+    from .compositor_effects import order_aov_passes
+    order_aov_passes(bpy.context.scene, view_layer)
     return True, True
 
 
@@ -359,20 +361,6 @@ def configure_hair_materials_blended(context: bpy.types.Context) -> int:
     return count
 
 
-def _get_socket(collection, name: Optional[str] = None, identifier: Optional[str] = None):
-    """Safely retrieves a socket from inputs/outputs by identifier or name."""
-    if identifier:
-        for s in collection:
-            if s.identifier == identifier:
-                return s
-    for s in collection:
-        if hasattr(s, 'enabled') and not s.enabled:
-            continue
-        if name and s.name == name:
-            return s
-    return None
-
-
 def get_or_create_compositor_tree(scene: bpy.types.Scene) -> bpy.types.NodeTree:
     """
     Retrieves or creates the compositor node tree across Blender 4.x / Goo Engine
@@ -388,199 +376,11 @@ def get_or_create_compositor_tree(scene: bpy.types.Scene) -> bpy.types.NodeTree:
         return getattr(scene, "node_tree", None)
 
 
-def _link_replace(links, from_socket, to_socket):
-    """Links from_socket -> to_socket, first removing any existing links into
-    to_socket (Blender does not reliably auto-replace, and legacy trees may
-    hold stale links)."""
-    if not from_socket or not to_socket:
-        return
-    try:
-        for l in list(to_socket.links):
-            links.remove(l)
-    except Exception:
-        pass
-    try:
-        getattr(links, "new")(from_socket, to_socket)
-    except Exception:
-        pass
-
-
 def setup_compositor_nodes(scene: bpy.types.Scene) -> bool:
-    """
-    Configures compositor nodes with the Eye Through Hair mix FIRST in the
-    chain (right after Render Layers) so every downstream node (post
-    processing, color grading, ...) applies to the already-mixed result:
-    - Finds or creates Render Layers node.
-    - Finds or creates Multiply Math node (Eye mask * 0.5).
-    - Finds or creates Mix Color node ('Eye Through Hair Mix').
-    - Mix A <- Render Layers Image, Mix B <- Render Layers Eye color,
-      Mix Factor <- Multiply(Eye mask) output.
-    - Mix Result -> every node previously fed by Render Layers Image.
-    """
+    """Expose the effect as one Eye See Through group with an Opacity control."""
+    from .compositor_effects import setup_eye_group
     tree = get_or_create_compositor_tree(scene)
-    if not tree:
-        return False
-
-    nodes = tree.nodes
-    links = tree.links
-
-    MIX_LABELS = ("Eye Through Hair Mix", "See-Through Mix")
-    MATH_NAME = "Math (Eye Through Hair Multiply)"
-    MIX_NAME = "Mix (Eye Through Hair)"
-
-    # 1. Render Layers node
-    rl_node = next((n for n in nodes if n.type == 'R_LAYERS'), None)
-    if not rl_node:
-        rl_node = nodes.new(type="CompositorNodeRLayers")
-        rl_node.location = (-420, 200)
-
-    rl_image_socket = rl_node.outputs.get("Image")
-    if not rl_image_socket:
-        return False
-
-    # 2. Output node (only needed as fallback / legacy-restore target)
-    out_node = next(
-        (n for n in nodes if getattr(n, "type", "") in ("COMPOSITE", "GROUP_OUTPUT", "OUTPUT_GROUP")
-         or "Composite" in n.bl_idname or "GroupOutput" in n.bl_idname),
-        None
-    )
-    if not out_node:
-        out_type = "NodeGroupOutput" if (hasattr(scene, "compositing_node_group") and scene.compositing_node_group) else "CompositorNodeComposite"
-        out_node = nodes.new(type=out_type)
-        out_node.location = (520, 200)
-
-    # In Blender 5+ NodeGroupOutput needs an Image output socket on the node group interface if empty
-    if hasattr(tree, "interface") and not tree.interface.items_tree:
-        try:
-            tree.interface.new_socket(name="Image", in_out="OUTPUT", socket_type="NodeSocketColor")
-        except Exception:
-            pass
-
-    out_input_socket = out_node.inputs.get("Image") or (out_node.inputs[0] if out_node.inputs else None)
-
-    # 3. Find or create Multiply Math node (ShaderNodeMath in B5+, CompositorNodeMath in B4 / Goo)
-    math_node = next((n for n in nodes if n.name == MATH_NAME), None)
-    if not math_node:
-        for ntype in ["ShaderNodeMath", "CompositorNodeMath"]:
-            try:
-                math_node = nodes.new(type=ntype)
-                break
-            except Exception:
-                pass
-        # Default Value 2 = 0.500 only on creation; re-running must keep
-        # the user's adjusted value.
-        if math_node and len(math_node.inputs) > 1:
-            math_node.inputs[1].default_value = 0.500
-
-    if not math_node:
-        return False
-
-    math_node.name = MATH_NAME
-    math_node.label = "Multiply"
-    math_node.operation = 'MULTIPLY'
-
-    # 4. Find or create Mix Color node (ShaderNodeMix in B5+, CompositorNodeMixRGB in B4 / Goo)
-    mix_node = next(
-        (n for n in nodes if n.name == MIX_NAME or getattr(n, "label", "") in MIX_LABELS),
-        None
-    )
-    if not mix_node:
-        for ntype in ["ShaderNodeMix", "CompositorNodeMixRGB", "CompositorNodeMix"]:
-            try:
-                mix_node = nodes.new(type=ntype)
-                break
-            except Exception:
-                pass
-
-    if not mix_node:
-        return False
-
-    mix_node.name = MIX_NAME
-    mix_node.label = "Eye Through Hair Mix"
-
-    if hasattr(mix_node, "data_type"):
-        mix_node.data_type = 'RGBA'
-    if hasattr(mix_node, "blend_type"):
-        mix_node.blend_type = 'MIX'
-    if hasattr(mix_node, "clamp_factor"):
-        mix_node.clamp_factor = True
-    if hasattr(mix_node, "clamp_result"):
-        mix_node.clamp_result = False
-
-    mix_result_output = (
-        _get_socket(mix_node.outputs, identifier="Result_Color")
-        or _get_socket(mix_node.outputs, identifier="Image")
-        or _get_socket(mix_node.outputs, name="Result")
-        or mix_node.outputs[0]
-    )
-
-    # 5. Insert at the FRONT: collect everything fed by Render Layers Image
-    # (excluding our own nodes) and re-feed it from the Mix Result.
-    downstream_links = [
-        (l.to_socket, l.from_socket) for l in list(rl_image_socket.links)
-        if l.to_node not in (mix_node, math_node)
-    ]
-
-    # Connect Render Layers "Eye mask" -> Multiply input 0
-    eye_mask_socket = rl_node.outputs.get("Eye mask") or rl_node.outputs.get("Eye Mask")
-    if eye_mask_socket and len(math_node.inputs) > 0:
-        _link_replace(links, eye_mask_socket, math_node.inputs[0])
-
-    # Connect Factor from Math output
-    mix_fac_input = (
-        _get_socket(mix_node.inputs, identifier="Factor_Float")
-        or _get_socket(mix_node.inputs, identifier="Fac")
-        or _get_socket(mix_node.inputs, name="Factor")
-        or _get_socket(mix_node.inputs, name="Fac")
-        or mix_node.inputs[0]
-    )
-    math_output_socket = _get_socket(math_node.outputs, identifier="Value") or math_node.outputs[0]
-    if mix_fac_input and math_output_socket:
-        _link_replace(links, math_output_socket, mix_fac_input)
-
-    # Connect Input A: straight from Render Layers Image
-    mix_a_input = (
-        _get_socket(mix_node.inputs, identifier="A_Color")
-        or _get_socket(mix_node.inputs, identifier="Image")
-        or _get_socket(mix_node.inputs, identifier="Image1")
-        or _get_socket(mix_node.inputs, name="A")
-        or (mix_node.inputs[1] if len(mix_node.inputs) > 1 else None)
-    )
-    if mix_a_input:
-        _link_replace(links, rl_image_socket, mix_a_input)
-
-    # Connect Input B: from Render Layers "Eye color"
-    mix_b_input = (
-        _get_socket(mix_node.inputs, identifier="B_Color")
-        or _get_socket(mix_node.inputs, identifier="Image_001")
-        or _get_socket(mix_node.inputs, identifier="Image2")
-        or _get_socket(mix_node.inputs, name="B")
-        or (mix_node.inputs[2] if len(mix_node.inputs) > 2 else None)
-    )
-    eye_color_socket = rl_node.outputs.get("Eye color") or rl_node.outputs.get("Eye Color")
-    if eye_color_socket and mix_b_input:
-        _link_replace(links, eye_color_socket, mix_b_input)
-
-    # Re-feed former Render Layers consumers from the Mix Result
-    for to_socket, _from_socket in downstream_links:
-        try:
-            _link_replace(links, mix_result_output, to_socket)
-        except Exception:
-            pass
-
-    # Fallback: nothing consumed Render Layers Image (fresh tree) -> feed
-    # the final output directly so the result stays visible.
-    if not downstream_links and out_input_socket and not out_input_socket.is_linked:
-        try:
-            _link_replace(links, mix_result_output, out_input_socket)
-        except Exception:
-            pass
-
-    # Layout: right after Render Layers, matching the reference setup.
-    math_node.location = (rl_node.location.x + 220, rl_node.location.y - 160)
-    mix_node.location = (rl_node.location.x + 460, rl_node.location.y - 20)
-
-    return True
+    return bool(tree and setup_eye_group(scene, tree))
 
 
 def set_viewport_compositor_always(context: bpy.types.Context) -> None:

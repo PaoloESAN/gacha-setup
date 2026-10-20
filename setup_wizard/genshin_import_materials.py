@@ -77,6 +77,11 @@ class AKE_OT_SetUpOutlines(Operator, BasicSetupUIOperator, CustomOperatorPropert
     def execute(self, context):
         ng_outline = bpy.data.node_groups.get('Outlines')
         dots_mat = bpy.data.materials.get('Dots Stroke')
+        from setup_wizard.import_order import get_active_character_directory
+        from setup_wizard.utils.ake_outline_textures import StrokeTextures
+        strokes = StrokeTextures(
+            getattr(self, 'file_directory', '') or get_active_character_directory()
+            or context.scene.get('setup_wizard_imported_model_dir'))
 
         # Configure Dots Stroke material for inverted hull outlines
         if dots_mat:
@@ -121,36 +126,24 @@ class AKE_OT_SetUpOutlines(Operator, BasicSetupUIOperator, CustomOperatorPropert
                     mod = o.modifiers.new('Outlines', 'NODES')
                 if ng_outline:
                     mod.node_group = ng_outline
+                mod.show_viewport = True
+                mod.show_render = True
                 
                 # Set modifier inputs in Blender 5.2 and legacy versions
                 def _set_input(target_mod, ident_or_name, val):
-                    if hasattr(target_mod, 'properties') and target_mod.properties and hasattr(target_mod.properties, 'inputs'):
-                        sock = getattr(target_mod.properties.inputs, ident_or_name, None)
-                        if not sock and target_mod.node_group and hasattr(target_mod.node_group, 'interface'):
-                            for item in target_mod.node_group.interface.items_tree:
-                                if getattr(item, 'item_type', '') == 'SOCKET' and item.name == ident_or_name:
-                                    sock = getattr(target_mod.properties.inputs, item.identifier, None)
-                                    break
-                        if sock and hasattr(sock, 'value'):
-                            try:
-                                sock.value = val
-                                return True
-                            except Exception:
-                                pass
-                    try:
-                        target_mod[ident_or_name] = val
-                        return True
-                    except Exception:
-                        pass
-                    return False
+                    set_modifier_property(target_mod, ident_or_name, val)
 
-                _set_input(mod, 'Input_2', 0.001)
-                _set_input(mod, '描边宽度', 0.001)
+                _set_input(mod, 'Input_2', 0.0005)
+                _set_input(mod, '描边宽度', 0.0005)
                 if dots_mat:
                     _set_input(mod, 'Input_3', dots_mat)
                     _set_input(mod, '描边材质', dots_mat)
                 _set_input(mod, 'Input_4', True)
                 _set_input(mod, '使用顶点色控制', True)
+                stroke = strokes.for_mesh(o)
+                _set_input(mod, '_ST', stroke)
+                _set_input(mod, '使用ST', stroke is not None)
+                o.update_tag()
 
         self.report({'INFO'}, 'Arknights Endfield outlines configured.')
         next_step = getattr(self, 'next_step_idx', 0)
@@ -645,7 +638,7 @@ class NTE_OT_SetUpOutlines(Operator, BasicSetupUIOperator, CustomOperatorPropert
 
         try:
             from setup_wizard.replace_default_materials_setup.game_default_material_replacers import ensure_hair_white_texture
-            from setup_wizard.utils.active_character_directory_store import get_active_character_directory
+            from setup_wizard.import_order import get_active_character_directory
             folder = get_active_character_directory() or context.scene.get("setup_wizard_imported_model_dir")
             ensure_hair_white_texture(folder)
         except Exception as ex:

@@ -38,7 +38,7 @@ class HYV_OT_SetUpScreenSpaceReflections(Operator, CustomOperatorProperties):
     bl_label = 'HoYoverse: Set Up Screen Space Reflections'
 
     def execute(self, context):
-        eevee = context.scene.eevee
+        eevee = getattr(context.scene, 'eevee', None)
         # Blender 4.2+ / Blender 5.x EEVEE Next Raytracing
         if hasattr(eevee, "use_raytracing"):
             try:

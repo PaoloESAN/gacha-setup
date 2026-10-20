@@ -19,73 +19,6 @@ from setup_wizard.character_rig_setup.rig_ui_utils import (
 )
 
 
-def create_pole_arrow_widget(name, radius=1.125, length=1.5):
-    """Create a 4-sided wireframe pyramid arrowhead widget matching Miyabi IK pole widget."""
-    obj = bpy.data.objects.get(name)
-    mesh = bpy.data.meshes.get(name)
-    if not mesh:
-        mesh = bpy.data.meshes.new(name)
-    else:
-        mesh.clear_geometry()
-
-    verts = [
-        (0.0, length, 0.0),       # 0: reference vert (matching Miyabi)
-        (0.0, 0.0, -radius),      # 1: base -Z
-        (radius, 0.0, 0.0),       # 2: base +X
-        (0.0, 0.0, radius),       # 3: base +Z
-        (-radius, 0.0, 0.0),      # 4: base -X
-        (0.0, -length, 0.0),      # 5: apex tip (pointing outward away from joint)
-    ]
-    edges = [
-        (1, 2), (2, 3), (3, 4), (1, 4),  # base diamond
-        (1, 5), (2, 5), (3, 5), (4, 5),  # pyramid sides to apex
-    ]
-    mesh.from_pydata(verts, edges, [])
-    mesh.update()
-
-    if not obj:
-        obj = bpy.data.objects.new(name, mesh)
-        wgts_colls = [c for c in bpy.data.collections if c.name.startswith("WGTS")]
-        if wgts_colls:
-            wgts_colls[0].objects.link(obj)
-        elif bpy.context.scene.collection:
-            bpy.context.scene.collection.objects.link(obj)
-    else:
-        obj.data = mesh
-    return obj
-
-
-def create_pole_line_widget(name):
-    """Create a 1-segment line widget from (0,0,0) to (0,1,0) for VIS stretch bones."""
-    obj = bpy.data.objects.get(name)
-    mesh = bpy.data.meshes.get(name)
-    if not mesh:
-        mesh = bpy.data.meshes.new(name)
-    else:
-        mesh.clear_geometry()
-
-    verts = [
-        (0.0, 0.0, 0.0),
-        (0.0, 1.0, 0.0),
-    ]
-    edges = [
-        (0, 1),
-    ]
-    mesh.from_pydata(verts, edges, [])
-    mesh.update()
-
-    if not obj:
-        obj = bpy.data.objects.new(name, mesh)
-        wgts_colls = [c for c in bpy.data.collections if c.name.startswith("WGTS")]
-        if wgts_colls:
-            wgts_colls[0].objects.link(obj)
-        elif bpy.context.scene.collection:
-            bpy.context.scene.collection.objects.link(obj)
-    else:
-        obj.data = mesh
-    return obj
-
-
 def rig_character(
         file_path,
         lighting_panel_version, 
@@ -3787,6 +3720,19 @@ def rig_character(
     def generate_string_for_head_controller_slider():
         return '\n        if is_selected({"head-controller"}):\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Tracker Controller", slider=True)\n        if is_selected({"head"}):\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Tracker Controller", slider=True)'
 
+    from setup_wizard.character_rig_setup.remielle_wings_rig import (
+        setup_remielle_wings_rig,
+        assign_remielle_wing_collections,
+        generate_remielle_wing_ui_splice,
+        is_remielle_wing_bone_name,
+    )
+    _is_remielle_char = setup_remielle_wings_rig(
+        this_obj,
+        original_name=original_name,
+        char_name=char_name,
+        assign_bone_to_group_fn=assign_bone_to_group,
+    )
+
     splices = [
         {"divider": "num_rig_separators[0] += 1", "text": generate_string_for_parent_switch("forearm_tweak-pin.L")},
         {"divider": "num_rig_separators[0] += 1", "text": generate_string_for_limb_pin("forearm_tweak-pin.L", "upper_arm_parent.L", "forearm_tweak.L", "Elbow Pin")},
@@ -3804,6 +3750,8 @@ def rig_character(
         {"divider": "num_rig_separators[0] += 1", "text": generate_string_for_head_controller_slider()},
         {"divider": "num_rig_separators[0] += 1", "text": generate_string_for_parent_switch("head-controller")},
     ]
+    if _is_remielle_char:
+        splices.append({"divider": "num_rig_separators[0] += 1", "text": generate_remielle_wing_ui_splice()})
 
     modify_and_run_rig_ui_script(this_obj, original_name, char_name=char_name, extra_splices=splices)
     
@@ -4391,6 +4339,9 @@ def rig_character(
             if b_name.startswith("DEF-") or b_name.startswith("ORG-") or b_name.startswith("MCH-"):
                 continue
 
+            if _is_remielle_char and is_remielle_wing_bone_name(b_name):
+                continue
+
             if b_name.endswith("_tip") or b_name in all_skirt_tip_bones:
                 bone_to_layer(b_name, 25, "Other")
                 continue
@@ -4437,6 +4388,9 @@ def rig_character(
     fast_bone_move(all_skirt_deform_bones, 24, "Cage")
     fast_bone_move(all_skirt_ctrl_bones, 22, "Clothes")
     fast_bone_move(all_skirt_tip_bones, 25, "Other")
+
+    if _is_remielle_char:
+        assign_remielle_wing_collections(this_obj)
 
     # Dedicated Tails bone collection (Rig Layers): tail chains.
     # Runs after loop_place_physics (which drops "tail" bones into Clothes).
@@ -4544,91 +4498,12 @@ def rig_character(
                 pb.custom_shape_scale_xyz = (0.08, 0.08, 0.08)
                 pb.rotation_mode = 'XYZ'
 
-    # Setup ZZZ 2-part dynamic pole targets (arrowhead pyramid + dynamic stretching visualizer line, matching Miyabi reference)
-    def setup_zzz_pole_targets(rig_obj):
-        wgt_leg_pole = create_pole_arrow_widget("WGT-IK_Leg_Pole", radius=1.125, length=1.5)
-        wgt_arm_pole = create_pole_arrow_widget("WGT-IK_Arm_Pole", radius=0.70125, length=0.935)
-        wgt_vis_leg = create_pole_line_widget("WGT-VIS-IK_Leg_Pole")
-        wgt_vis_arm = create_pole_line_widget("WGT-VIS-IK_Arm_Pole")
+    from setup_wizard.utils.zzz_foot_widgets import align_zzz_foot_widgets
+    align_zzz_foot_widgets(this_obj)
+    # FBX pelvis helpers otherwise remain fixed when lifting the thigh.
+    from setup_wizard.utils.zzz_hip_follow import setup_zzz_hip_follow
+    setup_zzz_hip_follow(this_obj)
 
-        pole_configs = [
-            # (pole_name, vis_name, joint_name, parent_name, arrow_wgt, vis_wgt, scale_xyz)
-            ("thigh_ik_target.L", "VIS-thigh_ik_target.L", "MCH-shin_ik.L", "thigh_parent.L", wgt_leg_pole, wgt_vis_leg, (1.0, 1.0, 1.0)),
-            ("thigh_ik_target.R", "VIS-thigh_ik_target.R", "MCH-shin_ik.R", "thigh_parent.R", wgt_leg_pole, wgt_vis_leg, (-1.0, 1.0, 1.0)),
-            ("upper_arm_ik_target.L", "VIS-upper_arm_ik_target.L", "MCH-forearm_ik.L", "upper_arm_parent.L", wgt_arm_pole, wgt_vis_arm, (1.0, 1.0, 1.0)),
-            ("upper_arm_ik_target.R", "VIS-upper_arm_ik_target.R", "MCH-forearm_ik.R", "upper_arm_parent.R", wgt_arm_pole, wgt_vis_arm, (-1.0, 1.0, 1.0)),
-        ]
-
-        for pole_name, vis_name, joint_name, parent_name, arrow_wgt, vis_wgt, scale_xyz in pole_configs:
-            pb_pole = rig_obj.pose.bones.get(pole_name)
-            pb_vis = rig_obj.pose.bones.get(vis_name)
-
-            if pb_vis:
-                pb_vis.bone.hide_select = True
-                pb_vis.custom_shape = vis_wgt
-                pb_vis.use_custom_shape_bone_size = True
-                pb_vis.custom_shape_scale_xyz = (1.0, 1.0, 1.0)
-                pb_vis.custom_shape_translation = (0.0, 0.0, 0.0)
-                pb_vis.custom_shape_rotation_euler = (0.0, 0.0, 0.0)
-
-                # STRETCH_TO constraint targeting the joint bone
-                c = pb_vis.constraints.get("Stretch To") or pb_vis.constraints.new('STRETCH_TO')
-                c.name = "Stretch To"
-                c.target = rig_obj
-                c.subtarget = joint_name
-                c.volume = 'NO_VOLUME'
-                c.keep_axis = 'SWING_Y'
-
-                # Hide driver: VIS line hides whenever pole bone hides or when pole_vector is False
-                try:
-                    if rig_obj.animation_data:
-                        for d_b in list(rig_obj.animation_data.drivers):
-                            if d_b.data_path == f'pose.bones["{vis_name}"].hide':
-                                rig_obj.animation_data.drivers.remove(d_b)
-                    pb_vis.hide = False
-
-                    fcurve = pb_vis.driver_add('hide')
-                    d = fcurve.driver
-                    d.type = 'SCRIPTED'
-                    for v in list(d.variables):
-                        d.variables.remove(v)
-
-                    v_pv = d.variables.new()
-                    v_pv.name = 'pv'
-                    v_pv.type = 'SINGLE_PROP'
-                    v_pv.targets[0].id = rig_obj
-                    v_pv.targets[0].data_path = f'pose.bones["{parent_name}"]["pole_vector"]'
-
-                    v_ph = d.variables.new()
-                    v_ph.name = 'ph'
-                    v_ph.type = 'SINGLE_PROP'
-                    v_ph.targets[0].id = rig_obj
-                    v_ph.targets[0].data_path = f'pose.bones["{pole_name}"].hide'
-
-                    d.expression = 'bool(ph) or (1.0 - pv > 0.5)'
-                except Exception as e_drv:
-                    print(f"[ZZZ RIG] VIS pole hide driver notice: {e_drv}")
-                    _rig_log.append(f"VIS pole hide driver error: {e_drv}")
-
-            if pb_pole:
-                pb_pole.custom_shape = arrow_wgt
-                if pb_vis:
-                    pb_pole.custom_shape_transform = pb_vis
-                pb_pole.use_custom_shape_bone_size = True
-                pb_pole.custom_shape_scale_xyz = scale_xyz
-                pb_pole.custom_shape_translation = (0.0, 0.0, 0.0)
-                pb_pole.custom_shape_rotation_euler = (0.0, 0.0, 0.0)
-
-        # Sync any legacy WGT objects created by Rigify
-        for wgt_name in [obj.name for obj in bpy.data.objects if ("thigh_ik_target" in obj.name or "upper_arm_ik_target" in obj.name) and obj.name.startswith("WGT-")]:
-            wobj = bpy.data.objects.get(wgt_name)
-            if wobj and wobj.data and not wobj.name.startswith("WGT-IK_") and not wobj.name.startswith("WGT-VIS-"):
-                if "thigh" in wgt_name:
-                    wobj.data = wgt_leg_pole.data
-                else:
-                    wobj.data = wgt_arm_pole.data
-
-    setup_zzz_pole_targets(this_obj)
     log_text = bpy.data.texts.get("RIG_LOG")
     if log_text:
         bpy.data.texts.remove(log_text)
@@ -4650,6 +4525,9 @@ def rig_character(
         isolate_wgts_for_character(_rig_final, char_name)
     except Exception as e_wgts:
         print(f"[ZZZ RIG] Final WGTS sweep notice: {e_wgts}")
+
+    from setup_wizard.character_rig_setup.pole_targets import setup_pole_targets
+    setup_pole_targets(this_obj, use_arm_ik_poles, use_leg_ik_poles)
     
 def setup_neck_and_head_follow(neck_follow_value=1.0, head_follow_value=1.0):
     if bpy.context.object and hasattr(bpy.context.object, "pose") and bpy.context.object.pose:

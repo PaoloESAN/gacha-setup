@@ -40,6 +40,27 @@ SHADER_COLOR_ATTRIBUTE_NAME = "Col"
 IMPORTED_VIA_WIZARD = False
 
 
+def _import_nte_uemodel(context, filepath):
+    """Require a registered importer and a real mesh before continuing setup."""
+    operator = bpy.ops.uf.import_uemodel
+    try:
+        operator.get_rna_type()
+    except (KeyError, AttributeError, RuntimeError) as exc:
+        raise RuntimeError("UEFormat is not enabled. Enable/install the bundled UEFormat add-on.") from exc
+
+    if hasattr(context.scene, 'uf_settings'):
+        context.scene.uf_settings.reorient_bones = True
+    existing = set(context.scene.objects)
+    result = operator(
+        'EXEC_DEFAULT', filepath=filepath, directory=os.path.dirname(filepath),
+        files=[{"name": os.path.basename(filepath)}],
+    )
+    if result != {'FINISHED'}:
+        raise RuntimeError(f"UEFormat import failed: {result}")
+    if not any(obj.type == 'MESH' for obj in set(context.scene.objects) - existing):
+        raise RuntimeError(f"UEFormat imported no mesh objects from {filepath}")
+
+
 def is_rigging_disabled(context=None):
     """
     Checks if 'Disable Rigging' is enabled in the setup wizard settings.
@@ -134,16 +155,52 @@ def connect_armature_bone_chains(armature):
         ebs = armature.data.edit_bones
 
         # 1. Connect parent tail to child head for single-child bones (e.g. finger segments)
+        #    and for core Biped limb bones that also carry twist/skirt/helper children.
+        primary_limb_children = {
+            "bip001 l thigh": "bip001 l calf",
+            "bip001 r thigh": "bip001 r calf",
+            "bip001 l calf": "bip001 l foot",
+            "bip001 r calf": "bip001 r foot",
+            "bip001 l foot": "bip001 l toe0",
+            "bip001 r foot": "bip001 r toe0",
+            "bip001 l upperarm": "bip001 l forearm",
+            "bip001 r upperarm": "bip001 r forearm",
+            "bip001 l forearm": "bip001 l hand",
+            "bip001 r forearm": "bip001 r hand",
+        }
         for eb in ebs:
             if len(eb.children) == 1:
                 child = eb.children[0]
                 vec = child.head - eb.head
                 if vec.length > 0.0005:
                     eb.tail = child.head.copy()
+            elif len(eb.children) > 1:
+                target_child_low = primary_limb_children.get(eb.name.lower())
+                if target_child_low:
+                    child = next((c for c in eb.children if c.name.lower() == target_child_low), None)
+                    if child:
+                        vec = child.head - eb.head
+                        if vec.length > 0.0005:
+                            eb.tail = child.head.copy()
 
-        # 2. For leaf bones with a parent (e.g. fingertip bones), extend along parent bone direction
+        # 2. For leaf bones with a parent (e.g. fingertip bones), extend along parent bone direction.
+        #    For Toe0 leaf bones, extend horizontally forward rather than downward into the floor.
         for eb in ebs:
             if len(eb.children) == 0 and eb.parent:
+                eb_low = eb.name.lower()
+                if "toe0" in eb_low or eb_low in ("toes_l", "toes_r"):
+                    p = eb.parent
+                    p_vec = eb.head - p.head
+                    if abs(eb.head.y) > 0.3 and abs(eb.head.z) < 0.3:
+                        # Y-up raw FBX space: forward is +Z or -Z depending on foot direction
+                        fwd_z = p_vec.z if abs(p_vec.z) > 1e-4 else 0.05
+                        eb.tail = Vector((eb.head.x, eb.head.y, eb.head.z + (0.05 if fwd_z >= 0 else -0.05)))
+                    else:
+                        # Z-up space: forward is -Y
+                        fwd_y = p_vec.y if abs(p_vec.y) > 1e-4 else -0.05
+                        eb.tail = Vector((eb.head.x, eb.head.y + (-0.05 if fwd_y <= 0 else 0.05), eb.head.z))
+                    eb.roll = 0.0
+                    continue
                 p = eb.parent
                 p_vec = p.tail - p.head
                 if p_vec.length > 0.0005:
@@ -712,65 +769,9 @@ class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
 
         existing_objects = set(context.scene.objects)
 
-        if hasattr(bpy.ops, 'uf') and hasattr(bpy.ops.uf, 'import_uemodel'):
-            imported_ok = False
-
-            if hasattr(context.scene, 'uf_settings') and hasattr(context.scene.uf_settings, 'reorient_bones'):
-                try:
-                    context.scene.uf_settings.reorient_bones = True
-                    print(f"[NTE SETUP] Set context.scene.uf_settings.reorient_bones = True")
-                except Exception as e_set:
-                    print(f"[NTE SETUP] Notice setting reorient_bones: {e_set}")
-
-            # Method 1: Pass directory + files collection + filepath (UEFormat ImportHelper standard)
-            try:
-                bpy.ops.uf.import_uemodel(
-                    filepath=uemodel_path,
-                    directory=folder,
-                    files=[{"name": filename}]
-                )
-                imported_ok = True
-            except Exception as e1:
-                print(f"[NTE SETUP] Method 1 uf.import_uemodel notice: {e1}")
-
-            # Method 2: Pass directory + files collection with EXEC_DEFAULT
-            if not imported_ok:
-                try:
-                    bpy.ops.uf.import_uemodel(
-                        'EXEC_DEFAULT',
-                        filepath=uemodel_path,
-                        directory=folder,
-                        files=[{"name": filename}]
-                    )
-                    imported_ok = True
-                except Exception as e2:
-                    print(f"[NTE SETUP] Method 2 uf.import_uemodel notice: {e2}")
-
-            # Method 3: Pass filepath only
-            if not imported_ok:
-                try:
-                    bpy.ops.uf.import_uemodel(filepath=uemodel_path)
-                    imported_ok = True
-                except Exception as e3:
-                    print(f"[NTE SETUP] Method 3 uf.import_uemodel notice: {e3}")
-
-            # Method 4: Fallback execute with filepath only
-            if not imported_ok:
-                try:
-                    bpy.ops.uf.import_uemodel('EXEC_DEFAULT', filepath=uemodel_path)
-                    imported_ok = True
-                except Exception as e4:
-                    self.report({"WARNING"}, f"UEFormat import notice: {e4}")
-
-            self.report({"INFO"}, f"Imported NTE character model: {filename}")
-
-            try:
-                _package_nte_import_into_collection(context, uemodel_path, folder, existing_objects)
-            except Exception as e_pkg:
-                print(f"[NTE SETUP] Collection packaging notice: {e_pkg}")
-        else:
-            self.report({"ERROR"}, "UEFormat add-on is not enabled or available.")
-            return {"CANCELLED"}
+        _import_nte_uemodel(context, uemodel_path)
+        _package_nte_import_into_collection(context, uemodel_path, folder, existing_objects)
+        self.report({"INFO"}, f"Imported NTE character model: {filename}")
 
         return {"FINISHED"}
 
@@ -1078,6 +1079,9 @@ def handle_ake_post_import(context, imported_objects=None):
                 m.select_set(True)
             context.view_layer.objects.active = armature
             bpy.ops.object.transform_apply(location=False, rotation=True, scale=False)
+            context.view_layer.update()
+            from setup_wizard.utils.ake_skin_weights import bind_lod_accessories
+            bind_lod_accessories(armature, objects)
             if not is_rigging_disabled(context):
                 reorient_armature_bones(armature)
         except Exception as e:
@@ -1125,13 +1129,12 @@ def handle_ake_post_import(context, imported_objects=None):
             else:
                 vg_rt.add([v.index], 1.0, 'REPLACE')
 
-    # Ensure eyebrows and eyeshadow have Bip001_Head vertex group
+    # Only rigid/unskinned subparts need fallback head weights. Adding head=1
+    # over existing eyelash/eyelid weights halves their facial deformation.
+    from setup_wizard.utils.ake_skin_weights import ensure_head_fallback_weights
     for obj in join_targets:
-        if obj and obj != iris_mesh:
-            if 'Bip001_Head' not in obj.vertex_groups:
-                vg = obj.vertex_groups.new(name='Bip001_Head')
-                for v in obj.data.vertices:
-                    vg.add([v.index], 1.0, 'REPLACE')
+        if obj and obj != iris_mesh and armatures:
+            ensure_head_fallback_weights(obj, armatures[0])
 
     # Join face subparts into face_mesh
     if face_mesh and join_targets:
@@ -1529,62 +1532,12 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
             except Exception:
                 pass
 
-            if hasattr(bpy.context.scene, 'uf_settings') and hasattr(bpy.context.scene.uf_settings, 'reorient_bones'):
-                try:
-                    bpy.context.scene.uf_settings.reorient_bones = True
-                except Exception:
-                    pass
-
             existing_nte_objects = set(bpy.context.scene.objects)
-
-            if hasattr(bpy.ops, 'uf') and hasattr(bpy.ops.uf, 'import_uemodel'):
-                imported_ok = False
-                try:
-                    bpy.ops.uf.import_uemodel(
-                        filepath=uemodel_path,
-                        directory=folder,
-                        files=[{"name": filename}]
-                    )
-                    imported_ok = True
-                except Exception as e1:
-                    print(f"[NTE SETUP] Method 1 uf.import_uemodel notice: {e1}")
-
-                if not imported_ok:
-                    try:
-                        bpy.ops.uf.import_uemodel(
-                            'EXEC_DEFAULT',
-                            filepath=uemodel_path,
-                            directory=folder,
-                            files=[{"name": filename}]
-                        )
-                        imported_ok = True
-                    except Exception as e2:
-                        print(f"[NTE SETUP] Method 2 uf.import_uemodel notice: {e2}")
-
-                if not imported_ok:
-                    try:
-                        bpy.ops.uf.import_uemodel(filepath=uemodel_path)
-                        imported_ok = True
-                    except Exception as e3:
-                        print(f"[NTE SETUP] Method 3 uf.import_uemodel notice: {e3}")
-
-                if not imported_ok:
-                    try:
-                        bpy.ops.uf.import_uemodel('EXEC_DEFAULT', filepath=uemodel_path)
-                        imported_ok = True
-                    except Exception as e4:
-                        self.report({"WARNING"}, f"UEFormat import notice: {e4}")
-
-                self.report({"INFO"}, f"Imported NTE character model (largest .uemodel): {filename}")
-                try:
-                    _package_nte_import_into_collection(
-                        bpy.context, uemodel_path, folder, existing_nte_objects)
-                except Exception as e_pkg:
-                    print(f"[NTE SETUP] Collection packaging notice: {e_pkg}")
-                return
-            else:
-                self.report({"ERROR"}, "UEFormat add-on is not enabled or available.")
-                raise RuntimeError("UEFormat add-on is not enabled or available.")
+            _import_nte_uemodel(bpy.context, uemodel_path)
+            _package_nte_import_into_collection(
+                bpy.context, uemodel_path, folder, existing_nte_objects)
+            self.report({"INFO"}, f"Imported NTE character model (largest .uemodel): {filename}")
+            return
 
         if self.game_type == GameType.WUTHERING_WAVES.name:
             uemodel_path = find_largest_uemodel_file(character_model_file_path_or_directory)

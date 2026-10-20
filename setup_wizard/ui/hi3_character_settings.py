@@ -1,3 +1,4 @@
+from setup_wizard.utilites.new_lights import draw_lights_plus
 """Per-character controls for the bundled HI3 ImpactToon shader."""
 import bpy
 from bpy.props import EnumProperty
@@ -66,6 +67,49 @@ def configure_hi3_materials(materials):
                     mat['_hi3_outline_defaults_v2'] = True
 
 
+def _upgrade_legacy_eye_atlas_nodes(materials):
+    """Upgrades any legacy HI3_Atlas_Mapping ShaderNodeMapping on 4x4 eye materials to HI3_Eye_Atlas_Controller."""
+    from setup_wizard.material_data_import_setup.game_material_data_importers import HonkaiImpact3rdMaterialDataImporter
+    for mat in materials:
+        if not mat or not mat.node_tree:
+            continue
+        nt = mat.node_tree
+        if nt.nodes.get("HI3_Eye_Atlas_Controller"):
+            continue
+        legacy_map = nt.nodes.get("HI3_Atlas_Mapping")
+        if not legacy_map or legacy_map.type != 'MAPPING':
+            continue
+        orig_m = (mat.get("_original_material_name") or mat.name.replace("ImpactToon - ", "").replace(" Outlines", "")).strip().lower()
+        if "eye" not in orig_m:
+            continue
+        sc = legacy_map.inputs["Scale"].default_value
+        loc = legacy_map.inputs["Location"].default_value
+        if abs(sc[0] - 0.25) <= 1e-3 and abs(sc[1] - 0.25) <= 1e-3:
+            HonkaiImpact3rdMaterialDataImporter._apply_uv_scale_offset(
+                mat, (float(sc[0]), float(sc[1])), (float(loc[0]), float(loc[1])), orig_low=orig_m
+            )
+
+
+def _eye_controller_nodes(materials):
+    """Returns list of (mat, grp_node, side) for HI3_Eye_Atlas_Controller nodes on eye materials."""
+    result = []
+    for mat in materials:
+        if not mat or not mat.node_tree or "outlines" in mat.name.lower():
+            continue
+        grp = mat.node_tree.nodes.get("HI3_Eye_Atlas_Controller")
+        if not grp or grp.type != 'GROUP':
+            continue
+        orig_low = (mat.get("_original_material_name") or mat.name).lower()
+        side = mat.get("_hi3_eye_side")
+        if not side:
+            is_left = ("lefteye" in orig_low or (
+                "Is Left Eye" in grp.inputs and grp.inputs["Is Left Eye"].default_value >= 0.5
+            ))
+            side = "L" if is_left else "R"
+        result.append((mat, grp, side))
+    return result
+
+
 def prepare_character_settings(arm, materials):
     ensure_character_node_trees_isolated(arm, materials)
     nodes = _global_nodes(materials)
@@ -108,7 +152,45 @@ def prepare_character_settings(arm, materials):
                 source = global_node.outputs['Exp Blush Intensity']
                 if not any(link.from_socket == source for link in target.links):
                     mat.node_tree.links.new(source, target)
+
+    # Wire 4x4 Eye Atlas Controllers (Left Eye Type / Right Eye Type 1..8)
+    _upgrade_legacy_eye_atlas_nodes(materials)
+    eye_ctrls = _eye_controller_nodes(materials)
+    if eye_ctrls:
+        for side_code, sock_name in (("L", "Left Eye Type"), ("R", "Right Eye Type")):
+            side_nodes = [(m, g) for (m, g, s) in eye_ctrls if s == side_code]
+            if not side_nodes:
+                continue
+            eye_sock = _interface_socket(tree, sock_name, 'OUTPUT')
+            init_val = int(side_nodes[0][1].inputs['Eye Type'].default_value) if 'Eye Type' in side_nodes[0][1].inputs else 1
+            init_val = max(1, min(8, init_val))
+            if not eye_sock:
+                if hasattr(tree, 'interface'):
+                    eye_sock = tree.interface.new_socket(
+                        name=sock_name, in_out='OUTPUT', socket_type='NodeSocketInt'
+                    )
+                else:
+                    eye_sock = tree.outputs.new('NodeSocketInt', sock_name)
+                eye_sock.min_value = 1
+                eye_sock.max_value = 8
+                eye_sock.default_value = init_val
+                if sock_name in output.inputs:
+                    output.inputs[sock_name].default_value = init_val
+            else:
+                eye_sock.min_value = 1
+                eye_sock.max_value = 8
+            for mat, grp_node in side_nodes:
+                nt = mat.node_tree
+                global_node = next((n for n in nt.nodes if n.type == 'GROUP' and n.node_tree == tree), None)
+                if not global_node or sock_name not in global_node.outputs or 'Eye Type' not in grp_node.inputs:
+                    continue
+                source = global_node.outputs[sock_name]
+                target = grp_node.inputs['Eye Type']
+                if not any(link.from_socket == source for link in target.links):
+                    nt.links.new(source, target)
+
     tree['_hi3_character_settings_ready'] = True
+    tree['_hi3_eye_settings_ready'] = True
     return output
 
 
@@ -118,7 +200,10 @@ def _ready_output(arm, materials):
                         or not n.node_tree.get('_hi3_character_settings_ready')
                         or not n.node_tree.get('_hi3_settings_defaults_v2') for n in nodes):
         return None
-    return nodes[0].node_tree.nodes['Global Properties']
+    tree = nodes[0].node_tree
+    if not tree.get('_hi3_eye_settings_ready'):
+        return None
+    return tree.nodes['Global Properties']
 
 
 def _prepare_selected():
@@ -262,6 +347,8 @@ class HI3_PT_CharacterSettings(Panel):
                 socket = output.inputs.get(name)
                 if socket:
                     colors.prop(socket, 'default_value', text=name.replace(' Colour', ''))
+        draw_lights_plus(layout, context)
+
         outlines = layout.box()
         outlines.label(text='Outlines', icon='STROKE')
         outline_controls = outlines.column(align=True)
@@ -275,10 +362,18 @@ class HI3_PT_CharacterSettings(Panel):
         if shadow_position:
             shadow.column(align=True).prop(shadow_position, 'default_value', text='Shadow Position', slider=True)
         blush = output.inputs.get('Exp Blush Intensity')
-        if blush:
+        left_eye = output.inputs.get('Left Eye Type')
+        right_eye = output.inputs.get('Right Eye Type')
+        if blush or left_eye or right_eye:
             face = layout.box()
             face.label(text='Face', icon='USER')
-            face.column(align=True).prop(blush, 'default_value', text='Exp Blush Intensity', slider=True)
+            face_col = face.column(align=True)
+            if blush:
+                face_col.prop(blush, 'default_value', text='Exp Blush Intensity', slider=True)
+            if left_eye:
+                face_col.prop(left_eye, 'default_value', text='Left Eye Type', slider=True)
+            if right_eye:
+                face_col.prop(right_eye, 'default_value', text='Right Eye Type', slider=True)
         _draw_physics(layout, context)
 
 

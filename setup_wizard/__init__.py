@@ -3,7 +3,7 @@ import os
 bl_info = {
     "name": "Gacha Setup",
     "author": "Mken, OctavoPE, Enthralpy, PaoloESAN",
-    "version": (3, 8, 0),
+    "version": (3, 8, 1),
     "blender": (4, 1, 0),
     "location": "3D View > Sidebar > Gacha Setup",
     "description": "An addon to streamline the character model setup process for Gacha games in Blender 4.1+",
@@ -56,6 +56,11 @@ else:
     )
     from setup_wizard.genshin_compositing_node_setup import (
         GI_OT_PostProcessingCompositingSetup,
+    )
+    from setup_wizard.ui.compositor_setup import (
+        GACHA_OT_RunCompositing,
+        GACHA_PT_CompositorSetup,
+        GACHA_PT_CompositorBasicSetup,
     )
     from setup_wizard.genshin_import_character_model import (
         GI_OT_SetUpCharacter,
@@ -177,7 +182,6 @@ else:
         GI_PT_UI_Finish_Setup_Menu,
         GI_PT_UI_Materials_Menu,
         GI_PT_UI_Outlines_Menu,
-        GI_PT_UI_Post_Processing_Node_Editor_Setup_Menu,
         GI_PT_UI_Post_Processing_Setup_Menu,
         GI_PT_Rig_Character_Settings,
         GI_OT_SetupLightingPanel,
@@ -225,15 +229,14 @@ else:
     from setup_wizard.ui.unified_ui_setup_wizard_menu import (
         CSW_PT_Updater_UI_Layout,
         CSW_PT_Unified_Character_Setup_Wizard_UI_Layout,
-        CSW_PT_Utilities_UI_Layout,
         CSW_PT_Old_Setup_UI_Layout,
-        CSW_OT_JideehCamera,
-        CSW_OT_CreateCameraPro,
-        CSW_OT_CreateJideehCamrig,
         CSW_OT_SelectGame,
         CSW_MT_GameSelectorMenu,
     )
-    from setup_wizard.utils.eye_through_hair import CSW_OT_EyeThroughHair
+    from setup_wizard.utilites.ui import CSW_PT_Utilities_UI_Layout, CSW_OT_JideehCamera
+    from setup_wizard.utilites.jideeh_cam_rig import CSW_OT_CreateCameraPro, CSW_OT_CreateJideehCamrig
+    from setup_wizard.utilites.eye_through_hair import CSW_OT_EyeThroughHair
+    from setup_wizard.utilites.hair_shadows import CSW_OT_HairShadows
 
     # HSR_PT_UI_Compositing_Panel_Post_Processing_UI_Layout
     from setup_wizard.ui.zzz_ui_setup_wizard_menu import (
@@ -320,6 +323,7 @@ else:
         CSW_OT_CreateCameraPro,
         CSW_OT_CreateJideehCamrig,
         CSW_OT_EyeThroughHair,
+        CSW_OT_HairShadows,
         CSW_PT_Old_Setup_UI_Layout,
         GI_PT_Basic_Setup_Wizard_UI_Layout,
         GI_PT_Advanced_Setup_Wizard_UI_Layout,
@@ -333,7 +337,9 @@ else:
         GI_OT_SelectLightingPanel,
         GI_OT_ToggleLightingPanelVisibility,
         GI_PT_UI_Post_Processing_Setup_Menu,
-        GI_PT_UI_Post_Processing_Node_Editor_Setup_Menu,
+        GACHA_OT_RunCompositing,
+        GACHA_PT_CompositorSetup,
+        GACHA_PT_CompositorBasicSetup,
         GI_OT_GenshinSetupWizardUI,
         GI_OT_SetUpCharacter,
         GI_OT_ClearPose,
@@ -511,6 +517,8 @@ else:
         try:
             from setup_wizard.optimization.blender_rimlight_patch import patch_all_rimlight_groups_for_blender
             patch_all_rimlight_groups_for_blender()
+            from setup_wizard.character_rig_setup.lighting_panel_setup import patch_fresnel_toggle_links
+            patch_fresnel_toggle_links()
         except Exception:
             pass
         return None
@@ -550,6 +558,10 @@ else:
                         bpy.utils.register_class(cls_prop)
                     except Exception:
                         pass
+        from setup_wizard.character_rig_setup.lighting_panel_setup import register_fresnel_repair
+        register_fresnel_repair()
+        from setup_wizard.utilites.new_lights import register as register_new_lights
+        register_new_lights()
         register_wuwa_properties()
         register_zzz_properties()
         register_hsr_properties()
@@ -582,6 +594,10 @@ else:
 
 
     def unregister():
+        from setup_wizard.utilites.new_lights import unregister as unregister_new_lights
+        unregister_new_lights()
+        from setup_wizard.character_rig_setup.lighting_panel_setup import unregister_fresnel_repair
+        unregister_fresnel_repair()
         from setup_wizard.ui.pgr_character_settings import unregister_pgr_properties
         unregister_pgr_properties()
         unregister_hna_properties()

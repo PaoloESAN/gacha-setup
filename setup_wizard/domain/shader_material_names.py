@@ -101,6 +101,7 @@ class V2_FestivityGenshinImpactMaterialNames(ShaderMaterialNames):
 class V3_BonnyFestivityGenshinImpactMaterialNames(ShaderMaterialNames):
     MATERIAL_PREFIX = 'HoYoverse - Genshin '
     MATERIAL_PREFIX_AFTER_RENAME = 'HoYoverse - '
+    WEAPON = f'{MATERIAL_PREFIX}Weapons'
     BODY = f'{MATERIAL_PREFIX}Body'
     BODY1 = f'{MATERIAL_PREFIX}Body1'
     BODY2 = f'{MATERIAL_PREFIX}Body2'

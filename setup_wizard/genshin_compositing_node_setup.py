@@ -15,7 +15,7 @@ from setup_wizard.setup_wizard_operator_base_classes import BasicSetupUIOperator
 
 NAME_OF_DEFAULT_SCENE = 'Scene'
 
-NAME_OF_COMPOSITE_NODE = 'Group'
+NAME_OF_COMPOSITE_NODE = 'HoYoverse Post Processing'
 NAME_OF_GRAN_TURISMO_NODE_TREE = 'GranTurismoWrapper [APPEND]'
 NAME_OF_HOYOVERSE_POST_PROCESSING_NODE_TREE = 'HoYoverse - Post Processing'
 
@@ -179,12 +179,8 @@ class HYV_OT_CustomCompositeNodeSetup(Operator, ImportHelper, CustomOperatorProp
         # TODO: This does not work unless INVOKE_DEFAULT with a modal or some window appears to update the Blender UI
         # self.switch_to_compositor()
 
-        composite_node_group = None
-        for composite_node_group_name in self.names_of_node_groups:
-            composite_node_group = bpy.data.node_groups.get(composite_node_group_name)
-            if composite_node_group:
-                break
-
+        composite_node_group = next((g for g in bpy.data.node_groups
+                                    if g.get('_gacha_compositor_source') == composite_blend_file_path), None)
         if not composite_node_group and composite_blend_file_path:
             name_of_composite_node_group = self.append_composite_node_group(composite_blend_file_path)
             composite_node_group = bpy.data.node_groups.get(name_of_composite_node_group)
@@ -193,10 +189,10 @@ class HYV_OT_CustomCompositeNodeSetup(Operator, ImportHelper, CustomOperatorProp
 
         scene = context.scene
         composite_node = get_node_tree(scene).nodes.get(NAME_OF_COMPOSITE_NODE)
-        if not composite_node or \
-            (composite_node and (composite_node.node_tree.name not in self.names_of_node_groups)):
+        if not composite_node or composite_node.bl_idname != 'CompositorNodeGroup':
             self.create_compositor_node_group(composite_node_group.name)
         else:
+            composite_node.node_tree = composite_node_group
             self.logs += f'{composite_node_group.name} node already created, skipping and not creating new node.\n'
 
         viewer_node = get_node_tree(scene).nodes.get(NAME_OF_VIEWER_NODE)
@@ -234,18 +230,14 @@ class HYV_OT_CustomCompositeNodeSetup(Operator, ImportHelper, CustomOperatorProp
     '''
 
     def append_composite_node_group(self, composite_node_group_blend_file_path):
-        inner_path = 'NodeTree'
-
-        for node_group_name in self.names_of_node_groups:
-            bpy.ops.wm.append(
-                filepath=os.path.join(composite_node_group_blend_file_path, inner_path, node_group_name),
-                directory=os.path.join(composite_node_group_blend_file_path, inner_path),
-                filename=node_group_name
-            )
-            
-            if bpy.data.node_groups.get(node_group_name):
-                self.logs += f'Appended {node_group_name}\n'
-                return node_group_name
+        from setup_wizard.services.compositor_sources import load_group
+        with bpy.data.libraries.load(composite_node_group_blend_file_path, link=False) as (source, target):
+            name = next((n for n in self.names_of_node_groups if n in source.node_groups), None)
+        if name is None:
+            raise RuntimeError('No HoYoverse post-processing group found in shader')
+        group = load_group(composite_node_group_blend_file_path, name)
+        self.logs += f'Appended {group.name}\n'
+        return group.name
 
     # Important to create using node_tree.nodes.new() instead of bpy.ops.node.add_node()
     def create_compositor_node_group(self, node_name):
@@ -254,6 +246,7 @@ class HYV_OT_CustomCompositeNodeSetup(Operator, ImportHelper, CustomOperatorProp
             type='CompositorNodeGroup'
         )
         node.node_tree = bpy.data.node_groups.get(node_name)
+        node.name = NAME_OF_COMPOSITE_NODE
         self.logs += f'Created {node_name} node tree\n'
 
     # Important to create using node_tree.nodes.new() instead of bpy.ops.node.add_node()
@@ -341,7 +334,7 @@ class HYV_OT_HoyoversePostProcessingDefaultSettings(Operator, ImportHelper, Cust
             tree.use_opencl = False
         if hasattr(tree, "use_two_pass"):
             tree.use_two_pass = True
-        if hasattr(bpy.context.scene.eevee, "use_bloom"):
+        if hasattr(getattr(bpy.context.scene, "eevee", None), "use_bloom"):
             bpy.context.scene.eevee.use_bloom = False
         bpy.context.scene.render.film_transparent = False
 

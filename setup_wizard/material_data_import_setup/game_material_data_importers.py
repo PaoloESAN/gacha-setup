@@ -6,6 +6,7 @@ from pathlib import PurePosixPath
 from typing import List, Union
 import bpy
 from bpy.types import Operator, Context, Material
+from mathutils import Vector
 
 from setup_wizard.domain.body_hair_ramp_switch_values import BodyHairRampSwitchValues
 from setup_wizard.logger import log_function
@@ -306,6 +307,10 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
                 stem = PurePosixPath(file.name).stem
                 equipment = next((m for m in bpy.data.materials if m.get('_genshin_equipment')
                                   and m.get('_original_material_name') == stem), None)
+                if equipment is None and any(m.get('_genshin_equipment') for m in bpy.data.materials):
+                    # Alternate weapon skins in the folder must not overwrite
+                    # the shared Body template or another equipment material.
+                    continue
                 body_part = equipment.name.removeprefix(self.material_names.MATERIAL_PREFIX) if equipment else 'Body'
                 character_type = CharacterType.GI_EQUIPMENT
             elif file.name.endswith('Glass_Mat.json'):
@@ -346,6 +351,12 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
             material_data_parser = self.get_material_data_json_parser(json_material_data)
 
             material, outlines_material, night_soul_outlines_material = self.find_material_and_outline_material_for_body_part(body_part)
+            if material and material.get('_genshin_weapon_elements'):
+                from setup_wizard.utils.genshin_weapon_elements import find_weapon_outline
+                outlines_material = find_weapon_outline(material)
+                night_soul_outlines_material = None
+                if outlines_material:
+                    material['_gi_element_outline'] = outlines_material
             outline_material_group: OutlineMaterialGroup = OutlineMaterialGroup(material, outlines_material, night_soul_outlines_material)
 
             # Skirk's Dress2 material data JSON is for her StarCloak
@@ -366,7 +377,9 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
                 continue
 
             if not outlines_material:
-                if file.name.startswith('Eff_'):
+                if material.get('_genshin_weapon_elements'):
+                    pass  # A transparent weapon part intentionally has no outline.
+                elif file.name.startswith('Eff_'):
                     # Transparent effects intentionally get no outline
                     # materials (see the 'Eff' outline ignore keyword), so
                     # only the main material data is applied for them.
@@ -913,6 +926,225 @@ class HonkaiImpact3rdMaterialDataImporter(GameMaterialDataImporter):
 
         return colors, floats, keywords
 
+    @staticmethod
+    def _extract_tex_envs(jdata):
+        tex_envs = {}
+        if not isinstance(jdata, dict):
+            return tex_envs
+        saved = jdata.get("m_SavedProperties") or {}
+        raw_tex = saved.get("m_TexEnvs")
+        tex_items = []
+        if isinstance(raw_tex, dict):
+            tex_items = list(raw_tex.items())
+        elif isinstance(raw_tex, list):
+            for entry in raw_tex:
+                if isinstance(entry, dict):
+                    k = entry.get("Key") or entry.get("first")
+                    v = entry.get("Value") or entry.get("second")
+                    if k and isinstance(v, dict):
+                        tex_items.append((k, v))
+        for k, v in tex_items:
+            if not isinstance(v, dict):
+                continue
+            sc = v.get("m_Scale") or {}
+            of = v.get("m_Offset") or {}
+            tex_ref = v.get("m_Texture") or {}
+            sx = float(sc.get("X", sc.get("x", 1.0)))
+            sy = float(sc.get("Y", sc.get("y", 1.0)))
+            ox = float(of.get("X", of.get("x", 0.0)))
+            oy = float(of.get("Y", of.get("y", 0.0)))
+            is_null = bool(tex_ref.get("IsNull", False)) or (
+                tex_ref.get("m_PathID", 0) == 0 and not tex_ref.get("Name")
+            )
+            tex_envs[k] = {
+                "scale": (sx, sy),
+                "offset": (ox, oy),
+                "name": str(tex_ref.get("Name") or ""),
+                "path_id": tex_ref.get("m_PathID", 0),
+                "is_null": is_null,
+            }
+        return tex_envs
+
+    @staticmethod
+    def _ensure_eye_atlas_node_group():
+        """Creates or returns the 'HI3 Eye Atlas Controller' ShaderNodeTree.
+
+        Maps an 'Eye Type' index (1..8) and 'Is Left Eye' (0 or 1) to the 8 expression pairs
+        of a 4x4 HI3 eye texture sheet:
+          - Pair idx = floor(clamp(Eye Type, 1, 8) - 1) in 0..7
+          - Column pair (0 or 1) = floor(idx / 4) -> base X = col_pair * 0.5 + (0.25 if Is Left Eye else 0.0)
+          - Row (0..3 from bottom to top) = idx % 4 -> Y = row * 0.25
+        """
+        ng_name = "HI3 Eye Atlas Controller"
+        ng = bpy.data.node_groups.get(ng_name)
+        if ng and ng.get("_hi3_eye_atlas_v1"):
+            return ng
+        if not ng:
+            ng = bpy.data.node_groups.new(ng_name, "ShaderNodeTree")
+        ng.nodes.clear()
+        if hasattr(ng, "interface"):
+            ng.interface.clear()
+            s_uv = ng.interface.new_socket(name="UV", in_out="INPUT", socket_type="NodeSocketVector")
+            s_type = ng.interface.new_socket(name="Eye Type", in_out="INPUT", socket_type="NodeSocketInt")
+            s_type.min_value = 1
+            s_type.max_value = 8
+            s_type.default_value = 1
+            s_left = ng.interface.new_socket(name="Is Left Eye", in_out="INPUT", socket_type="NodeSocketFloat")
+            s_left.min_value = 0.0
+            s_left.max_value = 1.0
+            s_left.default_value = 0.0
+            s_scale = ng.interface.new_socket(name="Scale", in_out="INPUT", socket_type="NodeSocketVector")
+            s_scale.default_value = (0.25, 0.25, 1.0)
+            ng.interface.new_socket(name="Vector", in_out="OUTPUT", socket_type="NodeSocketVector")
+        else:
+            ng.inputs.clear()
+            ng.outputs.clear()
+            ng.inputs.new("NodeSocketVector", "UV")
+            s_type = ng.inputs.new("NodeSocketInt", "Eye Type")
+            s_type.min_value = 1
+            s_type.max_value = 8
+            s_type.default_value = 1
+            s_left = ng.inputs.new("NodeSocketFloat", "Is Left Eye")
+            s_left.min_value = 0.0
+            s_left.max_value = 1.0
+            s_left.default_value = 0.0
+            s_scale = ng.inputs.new("NodeSocketVector", "Scale")
+            s_scale.default_value = (0.25, 0.25, 1.0)
+            ng.outputs.new("NodeSocketVector", "Vector")
+
+        n_in = ng.nodes.new("NodeGroupInput")
+        n_in.location = (-800, 0)
+        n_out = ng.nodes.new("NodeGroupOutput")
+        n_out.location = (600, 0)
+
+        def _math(op, loc, val1=None, val2=None, clamp=False):
+            m = ng.nodes.new("ShaderNodeMath")
+            m.operation = op
+            m.location = loc
+            m.use_clamp = clamp
+            if val1 is not None:
+                m.inputs[0].default_value = val1
+            if val2 is not None and len(m.inputs) > 1:
+                m.inputs[1].default_value = val2
+            return m
+
+        # Clamp Eye Type to [1, 8]: max(1, min(8, Eye Type))
+        m_min8 = _math('MINIMUM', (-600, 100), val2=8.0)
+        ng.links.new(n_in.outputs["Eye Type"], m_min8.inputs[0])
+        m_max1 = _math('MAXIMUM', (-450, 100), val2=1.0)
+        ng.links.new(m_min8.outputs[0], m_max1.inputs[0])
+        m_sub1 = _math('SUBTRACT', (-300, 100), val2=1.0)
+        ng.links.new(m_max1.outputs[0], m_sub1.inputs[0])
+        m_idx = _math('FLOOR', (-150, 100))
+        ng.links.new(m_sub1.outputs[0], m_idx.inputs[0])
+
+        # col_pair = floor(idx / 4.0)
+        m_div4 = _math('DIVIDE', (0, 220), val2=4.0)
+        ng.links.new(m_idx.outputs[0], m_div4.inputs[0])
+        m_col_pair = _math('FLOOR', (150, 220))
+        ng.links.new(m_div4.outputs[0], m_col_pair.inputs[0])
+
+        # base_x = col_pair * 0.5 + Is_Left_Eye * 0.25
+        m_col_x = _math('MULTIPLY', (300, 220), val2=0.5)
+        ng.links.new(m_col_pair.outputs[0], m_col_x.inputs[0])
+        m_side_x = _math('MULTIPLY', (150, 80), val2=0.25)
+        ng.links.new(n_in.outputs["Is Left Eye"], m_side_x.inputs[0])
+        m_off_x = _math('ADD', (450, 160))
+        ng.links.new(m_col_x.outputs[0], m_off_x.inputs[0])
+        ng.links.new(m_side_x.outputs[0], m_off_x.inputs[1])
+
+        # row = idx % 4.0 -> off_y = row * 0.25
+        m_mod4 = _math('MODULO', (0, -60), val2=4.0)
+        ng.links.new(m_idx.outputs[0], m_mod4.inputs[0])
+        m_off_y = _math('MULTIPLY', (200, -60), val2=0.25)
+        ng.links.new(m_mod4.outputs[0], m_off_y.inputs[0])
+
+        # Combine XYZ for Location
+        n_comb = ng.nodes.new("ShaderNodeCombineXYZ")
+        n_comb.location = (380, -20)
+        ng.links.new(m_off_x.outputs[0], n_comb.inputs["X"])
+        ng.links.new(m_off_y.outputs[0], n_comb.inputs["Y"])
+
+        # Mapping node (POINT): Vector = UV * Scale + Location
+        n_map = ng.nodes.new("ShaderNodeMapping")
+        n_map.vector_type = 'POINT'
+        n_map.location = (480, 100)
+        ng.links.new(n_in.outputs["UV"], n_map.inputs["Vector"])
+        ng.links.new(n_in.outputs["Scale"], n_map.inputs["Scale"])
+        ng.links.new(n_comb.outputs["Vector"], n_map.inputs["Location"])
+        ng.links.new(n_map.outputs["Vector"], n_out.inputs["Vector"])
+
+        ng["_hi3_eye_atlas_v1"] = True
+        return ng
+
+    @classmethod
+    def _apply_uv_scale_offset(cls, mat, scale, offset, orig_low=""):
+        if not mat or not mat.use_nodes or not mat.node_tree:
+            return
+        sx, sy = scale
+        ox, oy = offset
+        if abs(sx - 1.0) <= 1e-4 and abs(sy - 1.0) <= 1e-4 and abs(ox) <= 1e-4 and abs(oy) <= 1e-4:
+            return
+        nt = mat.node_tree
+        uv_group = nt.nodes.get("Group")
+        if not uv_group:
+            for n in nt.nodes:
+                if n.type == 'GROUP' and n.node_tree and 'combine uv' in n.node_tree.name.lower():
+                    uv_group = n
+                    break
+        if not uv_group:
+            return
+        uv_out = uv_group.outputs.get("Result") or (uv_group.outputs[0] if len(uv_group.outputs) > 0 else None)
+        if not uv_out:
+            return
+
+        is_eye_4x4 = ("eye" in orig_low and abs(sx - 0.25) <= 1e-3 and abs(sy - 0.25) <= 1e-3)
+        if is_eye_4x4:
+            old_map = nt.nodes.get("HI3_Atlas_Mapping")
+            if old_map and old_map.type != 'GROUP':
+                nt.nodes.remove(old_map)
+            ctrl_ng = cls._ensure_eye_atlas_node_group()
+            grp_node = nt.nodes.get("HI3_Eye_Atlas_Controller")
+            if not grp_node or grp_node.type != 'GROUP':
+                grp_node = nt.nodes.new("ShaderNodeGroup")
+                grp_node.name = "HI3_Eye_Atlas_Controller"
+            grp_node.node_tree = ctrl_ng
+            is_left = ("lefteye" in orig_low or abs(ox - 0.25) <= 1e-3 or abs(ox - 0.75) <= 1e-3)
+            grp_node.label = "HI3 Left Eye Controller" if is_left else "HI3 Right Eye Controller"
+            grp_node.location = (uv_group.location.x + 180, uv_group.location.y)
+            if "Is Left Eye" in grp_node.inputs:
+                grp_node.inputs["Is Left Eye"].default_value = 1.0 if is_left else 0.0
+            if "Scale" in grp_node.inputs:
+                grp_node.inputs["Scale"].default_value = (sx, sy, 1.0)
+            # Compute initial Eye Type (1..8) from initial offset (ox, oy)
+            col_pair = 1 if ox >= 0.49 else 0
+            row_idx = max(0, min(3, int(round(oy / 0.25))))
+            initial_type = col_pair * 4 + row_idx + 1
+            if "Eye Type" in grp_node.inputs and not mat.get("_hi3_eye_controller_init"):
+                grp_node.inputs["Eye Type"].default_value = initial_type
+                mat["_hi3_eye_controller_init"] = True
+            mat["_hi3_eye_side"] = "L" if is_left else "R"
+            nt.links.new(uv_out, grp_node.inputs["UV"])
+            for tex_name in ("Image Texture.001", "Outline_Diffuse"):
+                tex_node = nt.nodes.get(tex_name)
+                if tex_node and "Vector" in tex_node.inputs:
+                    nt.links.new(grp_node.outputs["Vector"], tex_node.inputs["Vector"])
+            return
+
+        map_node = nt.nodes.get("HI3_Atlas_Mapping")
+        if not map_node:
+            map_node = nt.nodes.new("ShaderNodeMapping")
+            map_node.name = "HI3_Atlas_Mapping"
+            map_node.label = "HI3 Atlas Mapping"
+        map_node.vector_type = 'POINT'
+        map_node.inputs['Scale'].default_value = (sx, sy, 1.0)
+        map_node.inputs['Location'].default_value = (ox, oy, 0.0)
+        nt.links.new(uv_out, map_node.inputs['Vector'])
+        for tex_name in ("Image Texture.001", "Outline_Diffuse"):
+            tex_node = nt.nodes.get(tex_name)
+            if tex_node and "Vector" in tex_node.inputs:
+                nt.links.new(map_node.outputs['Vector'], tex_node.inputs['Vector'])
+
     @classmethod
     def apply_all_hi3_material_data(cls, context=None, directory=None):
         ctx = context or bpy.context
@@ -971,6 +1203,9 @@ class HonkaiImpact3rdMaterialDataImporter(GameMaterialDataImporter):
                 except Exception:
                     pass
 
+        eye_atlas_tex_ids = set()
+        mouth_materials_using_eye_atlas = set()
+
         for mat in bpy.data.materials:
             if not mat.use_nodes or not mat.node_tree:
                 continue
@@ -990,17 +1225,52 @@ class HonkaiImpact3rdMaterialDataImporter(GameMaterialDataImporter):
             jdata = material_json_map.get(orig_low)
             if not jdata:
                 for jk, jv in material_json_map.items():
-                    if jk == orig_low or jk.endswith(f"_{part_key}"):
+                    if jk == orig_low or jk.endswith(f"_{orig_low}"):
+                        jdata = jv
+                        break
+            if not jdata:
+                for jk, jv in material_json_map.items():
+                    if jk.endswith(f"_{part_key}"):
                         jdata = jv
                         break
             colors, floats, keywords = cls._extract_props(jdata) if jdata else ({}, {}, [])
+            tex_envs = cls._extract_tex_envs(jdata) if jdata else {}
+            main_tex_info = tex_envs.get("_MainTex") or {}
+            uv_scale = main_tex_info.get("scale", (1.0, 1.0))
+            uv_offset = main_tex_info.get("offset", (0.0, 0.0))
+            main_tex_is_null = bool(main_tex_info.get("is_null", False))
+            is_atlas = (abs(uv_scale[0] - 1.0) > 1e-4 or abs(uv_scale[1] - 1.0) > 1e-4 or abs(uv_offset[0]) > 1e-4 or abs(uv_offset[1]) > 1e-4)
+
+            if is_atlas:
+                cls._apply_uv_scale_offset(mat, uv_scale, uv_offset, orig_low=orig_low)
+                if "eye" in orig_low:
+                    tex_id = main_tex_info.get("name") or main_tex_info.get("path_id")
+                    if tex_id:
+                        eye_atlas_tex_ids.add(tex_id)
+
+            is_eye_decal = ("lefteye" in orig_low or "righteye" in orig_low or ("eye" in orig_low and is_atlas))
+            is_eyeshadow_overlay = ("eyeshadow" in orig_low or "shadow_eye" in orig_low) and main_tex_is_null
 
             use_alpha = 1.0 if (
                 floats.get("_UseAlphaClip", 0.0) == 1.0
                 or floats.get("_EnableAlphaTest", 0.0) == 1.0
                 or floats.get("_AlphaClip", 0.0) == 1.0
+                or is_eye_decal
+                or is_eyeshadow_overlay
             ) else 0.0
-            cutoff = floats.get("_AlphaClipThreshold", floats.get("_CutOff", 0.5))
+            cutoff = floats.get("_AlphaClipThreshold", floats.get("_CutOff", 0.05 if is_eye_decal else 0.5))
+
+            if is_eye_decal or is_eyeshadow_overlay:
+                if hasattr(mat, "surface_render_method"):
+                    try:
+                        mat.surface_render_method = 'BLENDED'
+                    except Exception:
+                        pass
+
+            if "mouth" in orig_low and is_atlas:
+                tex_id = main_tex_info.get("name") or main_tex_info.get("path_id")
+                if tex_id:
+                    mouth_materials_using_eye_atlas.add((mat.name, tex_id))
 
             # 1. Outline material
             ol_node = mat.node_tree.nodes.get("Outlines")
@@ -1069,6 +1339,8 @@ class HonkaiImpact3rdMaterialDataImporter(GameMaterialDataImporter):
                     or colors.get("_ShadowMultColor")
                     or (0.9, 0.7, 0.75, 1.0)
                 )
+                if part_key == 'eye' and not any(k in orig_low for k in ('eyebrow', 'eyeshadow', 'shadow_eye')):
+                    s1 = (1.0, 1.0, 1.0, 1.0)
                 _set_sock(sh_node, "_FirstShadowMultColor", (s1[0], s1[1], s1[2], 1.0))
                 for idx in range(2, 6):
                     si = (
@@ -1084,11 +1356,85 @@ class HonkaiImpact3rdMaterialDataImporter(GameMaterialDataImporter):
                 lsc = colors.get("_LightSpecColor", (1.0, 1.0, 1.0, 1.0))
                 _set_sock(sh_node, "_LightSpecColor", (lsc[0], lsc[1], lsc[2], 1.0))
 
+                if is_eyeshadow_overlay:
+                    _set_sock(sh_node, "_MainTex Alpha", 0.0)
                 _set_sock(sh_node, "Use Alpha", use_alpha)
                 _set_sock(sh_node, "0 = Emission, 1 = Transparency", 1.0)
                 _set_sock(sh_node, "Transparency Cutoff", cutoff)
                 _set_sock(sh_node, "Emission Tint", (0.0, 0.0, 0.0, 1.0))
                 _set_sock(sh_node, "Emission Strength", 0.0)
+
+        cls._fix_hi3_eye_and_mouth_meshes(eye_atlas_tex_ids, mouth_materials_using_eye_atlas)
+        try:
+            from setup_wizard.ui.character_settings_utils import get_character_materials
+            from setup_wizard.ui.hi3_character_settings import prepare_character_settings
+            arm, mats = get_character_materials(ctx)
+            if arm and mats:
+                prepare_character_settings(arm, mats)
+        except Exception:
+            pass
+
+    @classmethod
+    def _fix_hi3_eye_and_mouth_meshes(cls, eye_atlas_tex_ids, mouth_materials_using_eye_atlas):
+        """Fixes coplanar eye decal z-fighting (Eye_L / Eye_R on Face), hides Mouth decals mapped to eye atlas, and hides duplicate Eyes2 mesh."""
+        face_obj = next((o for o in bpy.data.objects if o.type == 'MESH' and o.name.lower() == 'face'), None)
+        face_coords = set()
+        if face_obj and face_obj.data and face_obj.data.vertices:
+            face_coords = {
+                (round(v.co.x, 4), round(v.co.y, 4), round(v.co.z, 4))
+                for v in face_obj.data.vertices
+            }
+
+        eyes_obj = next((o for o in bpy.data.objects if o.type == 'MESH' and o.name.lower() == 'eyes'), None)
+        eyes2_obj = next((o for o in bpy.data.objects if o.type == 'MESH' and o.name.lower() == 'eyes2'), None)
+        if eyes_obj and eyes2_obj:
+            eyes2_obj.hide_viewport = True
+            eyes2_obj.hide_render = True
+            try:
+                eyes2_obj.hide_set(True)
+            except Exception:
+                pass
+
+        bad_mouth_mat_names = {
+            mat_name for mat_name, tex_id in mouth_materials_using_eye_atlas
+            if tex_id in eye_atlas_tex_ids
+        }
+
+        for obj in bpy.data.objects:
+            if obj.type != 'MESH' or not obj.data:
+                continue
+            o_low = obj.name.lower()
+            if o_low == 'mouth' and bad_mouth_mat_names:
+                if any(ms.material and ms.material.name in bad_mouth_mat_names for ms in obj.material_slots):
+                    obj.hide_viewport = True
+                    obj.hide_render = True
+                    try:
+                        obj.hide_set(True)
+                    except Exception:
+                        pass
+            elif o_low in ('eye_l', 'eye_r') and face_coords and not obj.get("_hi3_eye_decal_offset"):
+                verts = obj.data.vertices
+                if len(verts) > 0:
+                    matches = sum(
+                        1 for v in verts
+                        if (round(v.co.x, 4), round(v.co.y, 4), round(v.co.z, 4)) in face_coords
+                    )
+                    if matches > len(verts) * 0.5:
+                        # Determine local forward axis corresponding to world -Y (character forward)
+                        try:
+                            world_fwd = Vector((0.0, -1.0, 0.0))
+                            local_fwd = (obj.matrix_world.to_3x3().inverted() @ world_fwd)
+                            if local_fwd.length > 1e-6:
+                                local_fwd.normalize()
+                            else:
+                                local_fwd = Vector((0.0, 0.0, 1.0))
+                        except Exception:
+                            local_fwd = Vector((0.0, 0.0, 1.0))
+                        offset_vec = local_fwd * 0.0005
+                        for v in verts:
+                            v.co += offset_vec
+                        obj.data.update()
+                        obj["_hi3_eye_decal_offset"] = True
 
     def import_material_data(self):
         directory = getattr(self.blender_operator, "file_directory", None) or (

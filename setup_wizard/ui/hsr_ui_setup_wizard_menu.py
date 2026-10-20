@@ -1,3 +1,4 @@
+from setup_wizard.utilites.new_lights import draw_lights_plus
 # Author: michael-gh1
 
 import bpy
@@ -769,6 +770,8 @@ class HSR_PT_Rig_Character_Settings(Panel):
             col_colors.prop(scene, "hsr_shadow_color", text="Shadow")
             col_colors.prop(scene, "hsr_sharp_lit_color", text="Sharp Lit")
             col_colors.prop(scene, "hsr_sharp_shadow_color", text="Sharp Shadow")
+
+        draw_lights_plus(layout, context)
 
         # 3. Expressions (3 sliders)
         box_exp = layout.box()

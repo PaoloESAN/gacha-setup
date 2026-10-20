@@ -12,6 +12,7 @@ addon_utils.enable('setup_wizard', default_set=False)
 from setup_wizard.character_rig_setup.lighting_panel_setup import (
     LightingPanel, get_lighting_panel_source_socket, setup_unrigged_genshin_lighting,
 )
+from setup_wizard.utils.modifier_utils import set_modifier_property
 
 with bpy.data.libraries.load(str(ROOT / 'setup_wizard/shaders/gi/HoYoverse - PrimoToon v4.0.blend'), link=False) as (src, dst):
     dst.materials = ['HoYoverse - Genshin Body']
@@ -85,14 +86,36 @@ assert all(not property_node(guard_material).node_tree.nodes['Global Properties'
 assert len(shared.links) == before
 print('PASS: model ID includes detached effects without equipment names or armature links')
 
-# Re-enable rig generation: the same lighting step must keep panel connections.
+# A rigging preference alone cannot supply the shader's panel attributes.
 LightingPanel('').connect_lighting_panel_nodes_to_global_material_properties([first, guard_material])
 props.disable_rigging = False
 assert bpy.ops.genshin.setup_head_driver(**kwargs) == {'FINISHED'}
+assert all(not new_output.inputs[name].is_linked for name in panel_inputs)
+assert len(shared.links) == before
+print('PASS: rigging enabled without a configured panel still uses static lighting')
+
+# A configured panel on this model must retain its controls.
+group = bpy.data.node_groups.new('Test Light Vectors', 'GeometryNodeTree')
+for name in ('Wheel', 'Picker'):
+    group.interface.new_socket(name=name, in_out='INPUT', socket_type='NodeSocketObject')
+modifier = weapon.modifiers.new('Light Vectors Weapon', 'NODES')
+modifier.node_group = group
+set_modifier_property(modifier, 'Socket_0', weapon)
+set_modifier_property(modifier, 'Socket_1', guard)
+LightingPanel('').connect_lighting_panel_nodes_to_global_material_properties([first, guard_material])
+assert bpy.ops.genshin.setup_head_driver(**kwargs) == {'FINISHED'}
 assert all(new_output.inputs[name].is_linked for name in panel_inputs)
-print('PASS: lighting step keeps the panel connected when Disable Rigging is off')
+print('PASS: lighting step preserves a configured panel when rigging is enabled')
 
 bpy.ops.object.select_all(action='DESELECT')
 setup_unrigged_genshin_lighting(bpy.context)
 assert all(new_output.inputs[name].is_linked for name in panel_inputs)
 print('PASS: no selected setup model means no lighting changes')
+
+# The pipeline can keep the last import active while deselecting it.
+assert bpy.context.view_layer.objects.active == weapon
+props.disable_rigging = True
+assert bpy.ops.genshin.setup_head_driver(**kwargs) == {'FINISHED'}
+assert all(not new_output.inputs[name].is_linked for name in panel_inputs)
+assert len(shared.links) == before
+print('PASS: lighting step finishes a stamped active import after deselection')

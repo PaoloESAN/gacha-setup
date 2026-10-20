@@ -23,6 +23,9 @@ class MaterialDataAppliersFactory:
         if game_type == GameType.GENSHIN_IMPACT.name:
             shader_identifier_service = ShaderIdentifierServiceFactory.create(game_type)
             shader = shader_identifier_service.identify_shader(bpy.data.materials, bpy.data.node_groups)
+            if (outline_material_group.material is not None
+                    and outline_material_group.material.get('_genshin_weapon_template')):
+                return [GenshinWeaponMaterialDataApplier(material_data_parser, outline_material_group)]
             if character_type is CharacterType.GI_EQUIPMENT:
                 if shader is GenshinImpactShaders.V1_GENSHIN_IMPACT_SHADER or \
                     shader is GenshinImpactShaders.V2_GENSHIN_IMPACT_SHADER or \
@@ -1137,6 +1140,27 @@ class V4_MaterialDataApplier(V3_MaterialDataApplier):
                 except (ValueError, TypeError):
                     pass
         return material_json_value
+
+
+class GenshinWeaponMaterialDataApplier(V4_MaterialDataApplier):
+    def set_up_mesh_material_data(self):
+        # Keep the bundled PrimoToon outline handling.
+        super().set_up_mesh_material_data()
+        from setup_wizard.utils.genshin_weapon_material_utils import apply_weapon_properties, iter_shader_image_nodes
+        shader = self.material.node_tree.nodes['Body Shader']
+        colors = vars(self.material_data_parser.m_colors)
+        floats = vars(self.material_data_parser.m_floats)
+        apply_weapon_properties(self.material, shader, colors, floats)
+        if self.material.get('_genshin_weapon_elements'):
+            from setup_wizard.utils.genshin_weapon_elements import sync_weapon_sheathe
+            for obj in bpy.context.scene.objects:
+                if obj.type == 'MESH' and any(s.material == self.material for s in obj.material_slots):
+                    sync_weapon_sheathe(obj.find_armature() or obj)
+                    break
+        # A missing ramp must not sample a texture left over from the template.
+        shader.inputs['Use Specular Ramp'].default_value = float(any(
+            node.get('_genshin_texture_property') == '_MTSpecularRamp' and node.image is not None
+            for node in iter_shader_image_nodes(self.material.node_tree)))
 
 
 class V1_HoYoToonMaterialDataApplier(V3_MaterialDataApplier):

@@ -314,6 +314,57 @@ class ArknightsEndfieldMaterialDefaultValueSetter(MaterialDefaultValueSetter):
     def __init__(self, character_folder: str = None) -> None:
         self.character_folder = character_folder
 
+    @staticmethod
+    def _set_surface_opacity(node, opaque):
+        """Keep packed diffuse alpha for shading, but ignore it for opaque surfaces."""
+        tree = node.node_tree
+        if not tree or not (tree.name == 'Arknights: Endfield_PBRToonBase'
+                            or tree.name.startswith('Arknights: Endfield_PBRToonBase.')):
+            return
+        socket_name = 'Opaque Surface'
+        if socket_name not in node.inputs:
+            # The bundled shader multiplies diffuse alpha by its Alpha control.
+            # Change only that opacity branch; diffuse alpha also masks lighting.
+            opacity_link = None
+            for link in tree.links:
+                if (link.to_node.type != 'MATH' or link.to_node.operation != 'MULTIPLY'
+                        or link.from_node.type != 'GROUP_INPUT'
+                        or link.from_socket.name != 'Alpha'):
+                    continue
+                multiply = link.to_node
+                if not any(out.to_node.type == 'GROUP' and out.to_socket.name == 'Alpha'
+                           for output in multiply.outputs for out in output.links):
+                    continue
+                for inp in multiply.inputs:
+                    if not inp.is_linked or inp == link.to_socket:
+                        continue
+                    candidate = inp.links[0]
+                    source = candidate.from_socket
+                    while source.node.type == 'REROUTE' and source.node.inputs[0].is_linked:
+                        source = source.node.inputs[0].links[0].from_socket
+                    if source.node.type == 'GROUP_INPUT' and source.name == '_D(sRGB).A':
+                        opacity_link = candidate
+                        break
+                if opacity_link:
+                    break
+            if opacity_link is None:
+                return
+            source, target = opacity_link.from_socket, opacity_link.to_socket
+            interface_socket = tree.interface.new_socket(
+                name=socket_name, in_out='INPUT', socket_type='NodeSocketBool')
+            interface_socket.default_value = False
+            interface_socket.description = 'Ignore diffuse texture alpha for surface opacity'
+            group_input = next(n for n in tree.nodes if n.type == 'GROUP_INPUT')
+            maximum = tree.nodes.new('ShaderNodeMath')
+            maximum.operation = 'MAXIMUM'
+            maximum.name = 'AKE Surface Opacity'
+            maximum.label = 'Opaque surface override'
+            maximum.location = (target.node.location.x - 180, target.node.location.y - 100)
+            tree.links.new(source, maximum.inputs[0])
+            tree.links.new(group_input.outputs[socket_name], maximum.inputs[1])
+            tree.links.new(maximum.outputs[0], target)
+        node.inputs[socket_name].default_value = opaque
+
     def set_default_values(self):
         import os, json
         from setup_wizard.import_order import get_active_character_directory
@@ -339,6 +390,15 @@ class ArknightsEndfieldMaterialDefaultValueSetter(MaterialDefaultValueSetter):
                 continue
             mat_name = mat.name.lower()
 
+            # Face defaults also apply when no material JSON is available,
+            # including the template referenced by the Facemat modifier.
+            for node in mat.node_tree.nodes:
+                if (node.type == 'GROUP' and node.node_tree
+                        and node.node_tree.name.startswith('Arknights: Endfield_PBRToonBaseFace')):
+                    for name, value in (('SmoothnessMax', 0.0), ('Face Final brightness', 1.5)):
+                        if name in node.inputs:
+                            node.inputs[name].default_value = value
+
             matched_json = None
             for j_stem, j_content in json_data.items():
                 if j_stem in mat_name or mat_name in j_stem:
@@ -360,11 +420,24 @@ class ArknightsEndfieldMaterialDefaultValueSetter(MaterialDefaultValueSetter):
             surface_type = float(floats.get('_SurfaceType', 0.0) or 0.0)
             blend_mode = float(floats.get('_BlendMode', 0.0) or 0.0)
             alpha_clip = float(floats.get('_AlphaClip', 0.0) or 0.0)
+            surface = float(floats.get('_Surface', 0.0) or 0.0)
+            alpha_test = float(floats.get('_EnableAlphaTest', 0.0) or 0.0)
+            has_surface_settings = any(k in floats for k in (
+                '_SurfaceType', '_Surface', '_BlendMode', '_AlphaClip', '_EnableAlphaTest'))
+            is_eye_shadow = any(k in mat_name for k in (
+                'eyeshadow', 'eyewhite', 'whiteshadow', 'eye_shadow'))
             
-            if 'body' in mat_name and not any(k in mat_name for k in ['eyeshadow', 'eyewhite', 'whiteshadow', 'eye_shadow']):
+            if is_eye_shadow:
+                is_transp = True
+            elif 'body' in mat_name:
                 is_transp = False
+            elif has_surface_settings:
+                # Cloth numbers identify texture sets, not transparency modes.
+                is_transp = any(v > 0.0 for v in (
+                    surface_type, surface, blend_mode, alpha_clip, alpha_test))
             else:
-                is_transp = (surface_type > 0.0 or blend_mode > 0.0 or alpha_clip > 0.0 or any(k in mat_name for k in ['cloth_03', 'cloth_04', 'cloth_07', 'cloth_08', 'vfxpart', 'eyeshadow', 'eyewhite', 'whiteshadow', 'eye_shadow']))
+                is_transp = any(k in mat_name for k in (
+                    'cloth_03', 'cloth_04', 'cloth_07', 'cloth_08', 'vfxpart'))
 
             if is_transp:
                 try:
@@ -388,6 +461,7 @@ class ArknightsEndfieldMaterialDefaultValueSetter(MaterialDefaultValueSetter):
             # Update shader node group inputs
             for node in mat.node_tree.nodes:
                 if node.type == 'GROUP' and node.node_tree:
+                    self._set_surface_opacity(node, not is_transp)
                     inputs = node.inputs
                     if 'BaseColor' in inputs and '_BaseColor' in colors:
                         c = colors['_BaseColor']
@@ -410,12 +484,12 @@ class ArknightsEndfieldMaterialDefaultValueSetter(MaterialDefaultValueSetter):
                         except Exception:
                             pass
 
-                    # AKE shader defaults: SmoothnessMax 2.0 (1.0 on hair, max), NormalStrength 1.5, ToonFresnelPow 7.0 on hair, Front R Smo 1.7 on face
+                    # SmoothnessMax: face 0.0, hair 1.0, other materials 2.0.
                     is_hair = 'hair' in mat_name
                     is_face = 'face' in mat_name
                     if 'SmoothnessMax' in inputs:
                         try:
-                            inputs['SmoothnessMax'].default_value = 1.0 if is_hair else 2.0
+                            inputs['SmoothnessMax'].default_value = 0.0 if is_face else (1.0 if is_hair else 2.0)
                         except Exception:
                             pass
 

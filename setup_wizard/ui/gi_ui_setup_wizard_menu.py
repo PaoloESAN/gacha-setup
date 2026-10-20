@@ -1,3 +1,4 @@
+from setup_wizard.utilites.new_lights import draw_lights_plus
 # Author: michael-gh1
 
 import bpy
@@ -430,41 +431,6 @@ class GI_PT_UI_Post_Processing_Setup_Menu(Panel, GenshinImpactUIRenderChecker):
         )
 
 
-class GI_PT_UI_Post_Processing_Node_Editor_Setup_Menu(Panel, GenshinImpactUIRenderChecker):
-    bl_label = "Compositing Setup Wizard"
-    bl_idname = "GI_PT_Custom_Compositing_Node_UI_Layout"
-    bl_space_type = "NODE_EDITOR"
-    bl_region_type = "UI"
-    bl_category = "Genshin - Setup Wizard"
-
-    def draw(self, context):
-        layout = self.layout
-        row = layout.row()
-        sub_layout = layout.box()
-        window_manager = context.window_manager
-
-        row.prop(window_manager, 'cache_enabled')
-        OperatorFactory.create(
-            row,
-            'genshin.clear_cache_operator',
-            'Clear Cache',
-            'TRASH',
-            game_type=GameType.GENSHIN_IMPACT.name,
-        )
-        OperatorFactory.create(
-            sub_layout,
-            'hoyoverse.custom_composite_node_setup',
-            'Set Up Compositing Nodes',
-            'NODE_COMPOSITING'
-        )
-        OperatorFactory.create(
-            sub_layout,
-            'hoyoverse.post_processing_default_settings',
-            'Set HYV-PP Defaults',
-            'FILE_REFRESH'
-        )
-
-
 '''
     This factory is intended to help create a UI element's operator (or the action it takes) when pressed.
     While it currently doesn't do anything too grand, it may provide future flexibility.
@@ -522,7 +488,7 @@ GI_LIGHT_PRESETS = {
         "soft_lit": (1.0, 1.0, 1.0),
         "sharp_shadow": (1.0, 1.0, 1.0),
         "soft_shadow": (1.0, 1.0, 1.0),
-        "shadow_position": 0.55,
+        "shadow_position": 0.0,
         "day_night": 0.0,
         "rim_lit": (1.0, 1.0, 1.0),
         "rim_shadow": (1.0, 1.0, 1.0),
@@ -534,7 +500,7 @@ GI_LIGHT_PRESETS = {
         "soft_lit": (1.0, 0.88, 0.75),
         "sharp_shadow": (0.6, 0.6, 0.8),
         "soft_shadow": (0.65, 0.65, 0.85),
-        "shadow_position": 0.55,
+        "shadow_position": 0.0,
         "day_night": 0.0,
         "rim_lit": (1.0, 0.82, 0.66),
         "rim_shadow": (0.6, 0.5, 0.7),
@@ -546,7 +512,7 @@ GI_LIGHT_PRESETS = {
         "soft_lit": (1.0, 1.0, 1.0),
         "sharp_shadow": (0.75, 0.75, 0.85),
         "soft_shadow": (0.8, 0.8, 0.9),
-        "shadow_position": 0.55,
+        "shadow_position": 0.0,
         "day_night": 0.0,
         "rim_lit": (1.0, 1.0, 1.0),
         "rim_shadow": (0.6, 0.6, 0.7),
@@ -558,7 +524,7 @@ GI_LIGHT_PRESETS = {
         "soft_lit": (1.0, 0.65, 0.45),
         "sharp_shadow": (0.45, 0.4, 0.65),
         "soft_shadow": (0.5, 0.45, 0.7),
-        "shadow_position": 0.55,
+        "shadow_position": 0.0,
         "day_night": 0.0,
         "rim_lit": (1.0, 0.8, 0.5),
         "rim_shadow": (0.5, 0.35, 0.6),
@@ -570,7 +536,7 @@ GI_LIGHT_PRESETS = {
         "soft_lit": (0.6, 0.7, 0.9),
         "sharp_shadow": (0.2, 0.25, 0.45),
         "soft_shadow": (0.25, 0.3, 0.5),
-        "shadow_position": 0.55,
+        "shadow_position": 0.0,
         "day_night": 1.0,
         "rim_lit": (0.5, 0.7, 1.0),
         "rim_shadow": (0.2, 0.3, 0.5),
@@ -582,7 +548,7 @@ GI_LIGHT_PRESETS = {
         "soft_lit": (0.75, 0.8, 0.85),
         "sharp_shadow": (0.4, 0.45, 0.55),
         "soft_shadow": (0.45, 0.5, 0.6),
-        "shadow_position": 0.55,
+        "shadow_position": 0.0,
         "day_night": 0.3,
         "rim_lit": (0.6, 0.7, 0.8),
         "rim_shadow": (0.3, 0.35, 0.45),
@@ -675,7 +641,7 @@ def extract_character_lighting_inputs(arm=None, mats=None, context=None):
             ("Soft Lit Colour", "soft_lit"), ("Soft Lit Color", "soft_lit"),
             ("Sharp Shadow Colour", "sharp_shadow"), ("Sharp Shadow Color", "sharp_shadow"),
             ("Soft Shadow Colour", "soft_shadow"), ("Soft Shadow Color", "soft_shadow"),
-            ("Shadow Position", "shadow_position"), ("Shadow Position Offset", "shadow_position"),
+            ("Shadow Position Offset", "shadow_position"),
             ("Day/Night", "day_night"), ("Warm / Cold Ramps", "day_night"),
             ("Rim Lit", "rim_lit"),
             ("Rim Shadow", "rim_shadow"),
@@ -699,7 +665,7 @@ def extract_character_lighting_inputs(arm=None, mats=None, context=None):
                             ("Soft Lit Colour", "soft_lit"), ("Soft Lit Color", "soft_lit"),
                             ("Sharp Shadow Colour", "sharp_shadow"), ("Sharp Shadow Color", "sharp_shadow"),
                             ("Soft Shadow Colour", "soft_shadow"), ("Soft Shadow Color", "soft_shadow"),
-                            ("Shadow Position", "shadow_position"), ("Shadow Position Offset", "shadow_position"),
+                            ("Shadow Position Offset", "shadow_position"),
                             ("Day/Night", "day_night"), ("Warm / Cold Ramps", "day_night"),
                             ("Rim Lit", "rim_lit"),
                             ("Rim Shadow", "rim_shadow"),
@@ -777,6 +743,9 @@ def update_gi_lighting_control_type(self, context=None):
 
     try:
         _, mats = get_character_materials(context, arm)
+        if arm and mats:
+            from setup_wizard.ui.character_settings_utils import ensure_character_node_trees_isolated
+            ensure_character_node_trees_isolated(arm, mats)
     except Exception:
         mats = []
 
@@ -962,7 +931,7 @@ def sync_genshin_shader_properties(scene=None, context=None):
     if len(soft_shadow_col) == 3:
         soft_shadow_col.append(1.0)
 
-    shadow_pos = float(getattr(scene, "gi_shadow_position", 0.55))
+    shadow_pos = float(getattr(scene, "gi_shadow_position", 0.0))
     catch_shadows_on = bool(getattr(scene, "gi_catch_shadows", False))
     catch_shadows = 1.0 if catch_shadows_on else 0.0
     day_night = float(getattr(scene, "gi_day_night", 0.0))
@@ -991,7 +960,7 @@ def sync_genshin_shader_properties(scene=None, context=None):
         "Soft Lit Colour": soft_lit_col,
         "Sharp Shadow Colour": sharp_shadow_col,
         "Soft Shadow Colour": soft_shadow_col,
-        "Shadow Position": shadow_pos,
+        "Shadow Position Offset": shadow_pos,
         # New shader uses boolean "Toggle Catch Shadows"; keep legacy
         # float "Catch Shadows" for older shader versions.
         "Toggle Catch Shadows": catch_shadows_on,
@@ -1018,6 +987,8 @@ def sync_genshin_shader_properties(scene=None, context=None):
     # 2. Find target Global Material Properties node group(s)
     target_trees = set()
     mats_to_update = target_materials if target_materials else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
+    from setup_wizard.character_rig_setup.lighting_panel_setup import repair_genshin_shadow_offset_links
+    repair_genshin_shadow_offset_links(mats_to_update)
     for mat in mats_to_update:
         if getattr(mat, "use_nodes", False) and mat.node_tree:
             for node in mat.node_tree.nodes:
@@ -1096,7 +1067,7 @@ def sync_genshin_shader_properties(scene=None, context=None):
         "Soft Lit Colour": ["Soft Lit Colour", "Soft Lit Color"],
         "Sharp Shadow Colour": ["Sharp Shadow Colour", "Sharp Shadow Color"],
         "Soft Shadow Colour": ["Soft Shadow Colour", "Soft Shadow Color"],
-        "Shadow Position": ["Shadow Position", "Shadow Position Offset"],
+        "Shadow Position Offset": ["Shadow Position Offset"],
         "Toggle Catch Shadows": ["Toggle Catch Shadows", "Catch Shadows"],
         "Catch Shadows": ["Toggle Catch Shadows", "Catch Shadows"],
         "Day/Night": ["Warm / Cold Ramps", "Day/Night"],
@@ -1115,7 +1086,7 @@ def sync_genshin_shader_properties(scene=None, context=None):
                             "Ambient Colour", "Sharp Lit Colour", "Soft Lit Colour",
                             "Sharp Shadow Colour", "Soft Shadow Colour", "Rim Lit", "Rim Shadow",
                             "Rim Scale", "Toggle Fresnel", "Fresnel Color", "Fresnel Power",
-                            "Fresnel Scaler", "Shadow Position"
+                            "Fresnel Scaler", "Shadow Position Offset"
                         ]):
                             continue
                         aliases = prop_aliases.get(canonical_name, [canonical_name])
@@ -1190,6 +1161,8 @@ def pull_gi_panel_values(scene, context, force=False):
 
         if mats:
             ensure_character_node_trees_isolated(arm, mats)
+            from setup_wizard.character_rig_setup.lighting_panel_setup import patch_fresnel_toggle_links
+            patch_fresnel_toggle_links(mats)
 
         _is_updating_gi_props = True
         try:
@@ -1312,7 +1285,7 @@ def pull_gi_panel_values(scene, context, force=False):
                                 soft_shadow = inputs.get("Soft Shadow Colour") or inputs.get("Soft Shadow Color")
                                 if soft_shadow:
                                     scene.gi_soft_shadow_color = tuple(soft_shadow.default_value)[:3]
-                                shadow_pos_inp = inputs.get("Shadow Position Offset") or inputs.get("Shadow Position")
+                                shadow_pos_inp = inputs.get("Shadow Position Offset")
                                 if shadow_pos_inp:
                                     scene.gi_shadow_position = float(shadow_pos_inp.default_value)
                                 catch_shadow_inp = inputs.get("Toggle Catch Shadows") or inputs.get("Catch Shadows")
@@ -1361,8 +1334,8 @@ def pull_gi_panel_values(scene, context, force=False):
                             scene.gi_sharp_shadow_color = tuple(inputs["Sharp Shadow Colour"].default_value)[:3]
                         if "Soft Shadow Colour" in inputs:
                             scene.gi_soft_shadow_color = tuple(inputs["Soft Shadow Colour"].default_value)[:3]
-                        if "Shadow Position" in inputs:
-                            scene.gi_shadow_position = float(inputs["Shadow Position"].default_value)
+                        if "Shadow Position Offset" in inputs:
+                            scene.gi_shadow_position = float(inputs["Shadow Position Offset"].default_value)
                         catch_shadow_inp = inputs.get("Toggle Catch Shadows") or inputs.get("Catch Shadows")
                         if catch_shadow_inp:
                             try:
@@ -2070,6 +2043,9 @@ class GI_PT_Rig_Character_Settings(Panel):
     @classmethod
     def poll(cls, context):
         try:
+            from setup_wizard.utils.genshin_weapon_elements import settings_target
+            if settings_target(context):
+                return True
             from setup_wizard.ui.character_settings_utils import is_game_armature
             return is_game_armature(context, "GENSHIN_IMPACT")
         except Exception:
@@ -2088,6 +2064,14 @@ class GI_PT_Rig_Character_Settings(Panel):
 
         from setup_wizard.ui.character_settings_utils import resolve_settings_armature, has_active_character_changed
         arm = resolve_settings_armature(context)
+
+        from setup_wizard.utils.genshin_weapon_elements import settings_target
+        weapon = settings_target(context)
+        if weapon:
+            box_elements = layout.box()
+            box_elements.label(text="Weapon Elements", icon="MATERIAL")
+            box_elements.prop(weapon, "gi_weapon_element", text="Element")
+            return
 
         # Defer property pull to avoid illegal ID write in draw context
         if has_active_character_changed(context):
@@ -2167,6 +2151,8 @@ class GI_PT_Rig_Character_Settings(Panel):
                 col_colors.prop(scene, "gi_rim_lit_color", text="Rim Lit")
                 col_colors.prop(scene, "gi_rim_shadow_color", text="Rim Shadow")
                 col_colors.prop(scene, "gi_rim_scale", text="Rim Scale")
+
+        draw_lights_plus(layout, context)
 
         # 3. Fresnel (Toggle checkbox + Power slider + Scaler slider)
         # In Lighting Panel mode, Toggle Fresnel must NOT be visible
@@ -2255,6 +2241,8 @@ def _on_character_selection_change(scene, depsgraph=None):
 
 
 def register_gi_properties():
+    from setup_wizard.utils import genshin_weapon_elements
+    genshin_weapon_elements.register()
     if _on_character_selection_change not in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.append(_on_character_selection_change)
 
@@ -2376,10 +2364,10 @@ def register_gi_properties():
     )
     bpy.types.Scene.gi_shadow_position = bpy.props.FloatProperty(
         name="Shadow Position",
-        description="Shadow Position",
-        min=0.0,
+        description="Adjust Shadow Position Offset without changing material shadow positions",
+        min=-1.0,
         max=1.0,
-        default=0.55,
+        default=0.0,
         step=1,
         precision=3,
         update=update_gi_scene_settings,
@@ -2478,6 +2466,8 @@ def register_gi_properties():
 
 
 def unregister_gi_properties():
+    from setup_wizard.utils import genshin_weapon_elements
+    genshin_weapon_elements.unregister()
     if _on_character_selection_change in bpy.app.handlers.depsgraph_update_post:
         bpy.app.handlers.depsgraph_update_post.remove(_on_character_selection_change)
 

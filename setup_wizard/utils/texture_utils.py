@@ -125,10 +125,11 @@ def scan_directory_for_textures(directory):
     if not os.path.isdir(directory):
         return filename_map, stem_map
 
-    for root, _, files in os.walk(directory):
+    for root, folders, files in os.walk(directory):
+        folders.sort(key=str.casefold)
         if '__MACOSX' in root or '.git' in root:
             continue
-        for f in files:
+        for f in sorted(files, key=str.casefold):
             if f.startswith('.') or f.startswith('._'):
                 continue
             ext = os.path.splitext(f)[1].lower()
@@ -136,13 +137,13 @@ def scan_directory_for_textures(directory):
                 full_p = normalize_path(os.path.join(root, f))
                 f_low = _filename_key(f)
                 stem_low = _filename_key(os.path.splitext(f)[0])
-                filename_map[f_low] = full_p
+                filename_map.setdefault(f_low, full_p)
                 if stem_low not in stem_map:
                     stem_map[stem_low] = full_p
     return filename_map, stem_map
 
 
-def fix_missing_textures(directory=None):
+def fix_missing_textures(directory=None, images=None):
     """
     Finds and re-links missing textures across all bpy.data.images using directory.
     Crucial for *nix (macOS / Linux) systems where FBX or .blend files contain
@@ -169,11 +170,13 @@ def fix_missing_textures(directory=None):
     if not os.path.isdir(directory):
         return
 
-    # 1. Native Blender find_missing_files
-    try:
-        bpy.ops.file.find_missing_files(directory=directory)
-    except Exception as e:
-        print(f"[TEXTURE UTILS] Notice find_missing_files: {e}")
+    # The native operator searches every image in the project. During append,
+    # restrict repairs to the new character so existing characters keep theirs.
+    if images is None:
+        try:
+            bpy.ops.file.find_missing_files(directory=directory)
+        except Exception as e:
+            print(f"[TEXTURE UTILS] Notice find_missing_files: {e}")
 
     # 2. Build index of all image files in directory and parent if in subfolder
     filename_map, stem_map = scan_directory_for_textures(directory)
@@ -189,7 +192,7 @@ def fix_missing_textures(directory=None):
         return
 
     # 3. Resolve any broken/missing images in bpy.data.images
-    for image in list(bpy.data.images):
+    for image in list(bpy.data.images if images is None else images):
         if not is_image_missing_or_invalid(image):
             continue
 
@@ -213,7 +216,7 @@ def fix_missing_textures(directory=None):
         fp_basename = clean_fp.split('/')[-1] if clean_fp else ''
         clean_fp_basename = _filename_key(re.sub(r'\.\d{3}$', '', fp_basename))
 
-        candidates = [clean_name, clean_fp_basename]
+        candidates = [clean_fp_basename, clean_name]
         matched_path = None
         for c in candidates:
             if not c:
@@ -226,20 +229,8 @@ def fix_missing_textures(directory=None):
                 matched_path = stem_map[c_stem]
                 break
 
-        # 3c. Fuzzy matching (if candidate stem matches file stem substring)
-        if not matched_path:
-            for c in candidates:
-                if not c:
-                    continue
-                c_stem = os.path.splitext(c)[0]
-                if not c_stem or len(c_stem) < 3:
-                    continue
-                for s_key, s_path in stem_map.items():
-                    if c_stem in s_key or s_key in c_stem:
-                        matched_path = s_path
-                        break
-                if matched_path:
-                    break
+        # Never repair a missing color image using the first substring match:
+        # a same-prefix lightmap/mask is a different asset, not a moved image.
 
         if matched_path and os.path.exists(matched_path):
             image.filepath = matched_path
@@ -248,6 +239,51 @@ def fix_missing_textures(directory=None):
             except Exception as ex:
                 print(f"[TEXTURE UTILS] Notice reloading '{image.name}': {ex}")
             image.alpha_mode = 'CHANNEL_PACKED'
+
+
+def prepare_image_paths(directory=None, images=None, source_blend=None):
+    """Resolve external textures before saving/appending an isolated result.
+
+    Worker and UI processes have different working directories (and the UI may
+    not have a saved blend). Never leave their image paths relative to a
+    temporary blend or to an exporter's Windows filesystem.
+    """
+    images = list(bpy.data.images if images is None else images)
+    external = [img for img in images if img.source in ('FILE', 'SEQUENCE')
+                and not img.packed_file and img.library is None]
+    settings = {img: (img.alpha_mode, img.colorspace_settings.name) for img in external}
+    for img in external:
+        # This stamp survives Blender's path remapping during library append.
+        saved_path = img.get('_gacha_setup_texture_path', '')
+        if saved_path and os.path.isfile(saved_path):
+            img.filepath = saved_path
+        elif source_blend and img.filepath.startswith('//'):
+            current = absolute_texture_path(img.filepath)
+            candidate = bpy.path.abspath(normalize_path(img.filepath), start=os.path.dirname(source_blend))
+            if not os.path.isfile(current) and os.path.isfile(candidate):
+                img.filepath = candidate
+
+    missing_images = [img for img in external if is_image_missing_or_invalid(img)]
+    if directory and missing_images:
+        fix_missing_textures(directory, images=missing_images)
+    unresolved = []
+    for img in external:
+        # Repairs must not change a texture's color interpretation or alpha.
+        img.alpha_mode, colorspace = settings[img]
+        img.colorspace_settings.name = colorspace
+        path = absolute_texture_path(img.filepath)
+        if path and os.path.isfile(path):
+            changed = img.filepath != path
+            img.filepath = path
+            img['_gacha_setup_texture_path'] = path
+            if changed or not img.has_data:
+                try:
+                    img.reload()
+                except RuntimeError as exc:
+                    print(f"[TEXTURE UTILS] Failed to reload '{path}': {exc}")
+        else:
+            unresolved.append(img.name)
+    return unresolved
 
 
 def load_or_get_image(filepath, fname=None):
@@ -271,20 +307,18 @@ def load_or_get_image(filepath, fname=None):
         print(f"[TEXTURE UTILS] Texture file not found: {filepath}")
         return None
 
-    img = find_image_datablock(fname)
+    # Blender image names are display labels and may be truncated or acquire
+    # .001 suffixes. Identity is the resolved file path, not the label/order.
+    img = next((image for image in bpy.data.images
+                if image.filepath and os.path.normcase(absolute_texture_path(
+                    image.filepath, getattr(image, 'library', None))) == os.path.normcase(norm_fp)), None)
     if img and is_image_missing_or_invalid(img):
-        img.filepath = norm_fp
         try:
             img.reload()
         except Exception as ex:
             print(f"[TEXTURE UTILS] Failed to reload '{norm_fp}': {ex}")
         if is_image_missing_or_invalid(img):
             return None
-    elif img:
-        # A different character may have an image with the same filename.
-        existing_path = absolute_texture_path(img.filepath, getattr(img, 'library', None))
-        if os.path.normcase(existing_path) != os.path.normcase(norm_fp):
-            img = None
     if img is None:
         try:
             img = bpy.data.images.load(filepath=norm_fp, check_existing=True)

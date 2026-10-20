@@ -1,3 +1,4 @@
+from setup_wizard.utilites.new_lights import draw_lights_plus
 # Author: michael-gh1 (adapted for ZZZ)
 
 import bpy
@@ -65,11 +66,12 @@ class ZZZ_PT_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
         settings_header.label(text="Setup Settings", icon="PREFERENCES")
 
         settings_col = settings_box.column()
-        settings_col.prop(context.scene, "zzz_shader_type", text="Shader")
-        if getattr(context.scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
-            row_by = settings_col.row(align=True)
-            row_by.alignment = 'RIGHT'
-            row_by.label(text="Made by Kythera")
+        if bpy.app.version >= (5, 2, 0):
+            settings_col.prop(context.scene, "zzz_shader_type", text="Shader")
+            if getattr(context.scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
+                row_by = settings_col.row(align=True)
+                row_by.alignment = 'RIGHT'
+                row_by.label(text="Made by Kythera")
         props = context.scene.character_rigger_props
         enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
         settings_col.prop(props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")
@@ -1081,6 +1083,7 @@ class ZZZ_PT_Rig_Character_Settings(Panel):
                 col_light = layout.column(align=True)
                 col_light.label(text="Lighting Mode:")
                 col_light.prop(scene, "zzz_light_mode", text="")
+                draw_lights_plus(layout, context)
 
                 if getattr(scene, "zzz_light_mode", "0") == "6":
                     box_shading = layout.box()
@@ -1105,6 +1108,7 @@ class ZZZ_PT_Rig_Character_Settings(Panel):
                     if getattr(scene, "zzz_light_mode", "0") == "6":
                         col_rim.prop(scene, "zzz_rim_light_color", text="Color")
             else:
+                draw_lights_plus(layout, context)
                 if not is_legacy:
                     box_rim = layout.box()
                     box_rim.label(text="Rim Light", icon="LIGHT_SUN")
@@ -1113,6 +1117,7 @@ class ZZZ_PT_Rig_Character_Settings(Panel):
             col_light = layout.column(align=True)
             col_light.label(text="Lighting Mode:")
             col_light.prop(scene, "zzz_light_mode", text="")
+            draw_lights_plus(layout, context)
 
             if getattr(scene, "zzz_light_mode", "0") == "6":
                 box_shading = layout.box()

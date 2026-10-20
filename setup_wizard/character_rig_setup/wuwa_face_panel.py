@@ -1355,10 +1355,23 @@ def _collect_character_face_meshes(primary_mesh, panel_armature):
         if nl.startswith("wgt") or "lightpanel" in nl or "selectorwgt" in nl or "weapon" in nl:
             continue
         has_arm = any(mod.type == "ARMATURE" and mod.object == panel_armature for mod in obj.modifiers)
-        is_face_part = any(k in nl for k in ["face", "eyebrow", "brow", "eyeshape", "eye", "head", "mouth", "body"])
-        if has_arm or obj.parent == panel_armature or is_face_part:
+        if has_arm or obj.parent == panel_armature:
             meshes.append(obj)
     return meshes
+
+
+def _face_panel_aliases(candidates, keys):
+    """Choose one expression variant, keeping explicit left/right pairs together."""
+    for name in candidates:
+        if name not in keys:
+            continue
+        for left, right in (("_L", "_R"), ("_L_", "_R_")):
+            if left in name or right in name:
+                other = name.replace(left, right) if left in name else name.replace(right, left)
+                if other in candidates and other in keys:
+                    return [name, other]
+        return [name]
+    return []
 
 
 def setup_face_panel_blend_drivers(context, mesh, panel_armature):
@@ -1432,7 +1445,7 @@ def setup_face_panel_blend_drivers(context, mesh, panel_armature):
         # Mouth Vowels & 2D Mouth Pos
         (["Mouth_A01", "Mouth_A", "A01", "Mouth_OpenSmall", "Fac_Mth_Aa1"], "m.A", 25, "LOC_X"),
         (["Mouth_A01", "Mouth_A", "A01", "Fac_Mth_Aa1", "Fac_Mth_Down", "Mouth_Down"], "fp.m.pos.sel", -25, "LOC_Y"),
-        (["Mouth_Open01", "Mouth_Open", "Mouth_A02", "Mouth_Max", "Fac_Mth_Aa2", "Fac_Mth_AaShout"], "m.AA", 25, "LOC_X"),
+        (["Mouth_Open01", "Mouth_Open", "Mouth_A02", "Mouth_Laugh01", "Mouth_Max", "Fac_Mth_Aa2", "Fac_Mth_AaShout"], "m.AA", 25, "LOC_X"),
         (["Mouth_Open01", "Mouth_Open", "Mouth_Up", "Fac_Mth_Up"], "fp.m.pos.sel", 25, "LOC_Y"),
         (["Mouth_E01", "Mouth_E", "Mouth_Smile02", "Fac_Mth_Ee"], "m.E", 25, "LOC_X"),
         (["Mouth_I01", "Mouth_I", "Mouth_Smile01", "Fac_Mth_Ii"], "m.I", 25, "LOC_X"),
@@ -1452,7 +1465,7 @@ def setup_face_panel_blend_drivers(context, mesh, panel_armature):
         (["Mouth_Angry02", "Mouth_Shock01", "Mouth_Worry01", "Mouth_Angry03"], "x2", 25, "LOC_X"),
         (["Mouth_Doya01", "Mouth_Doya02", "Mouth_Proud01", "Mouth_Proud02", "Mouth_Smile03"], "x3", 25, "LOC_X"),
         (["Mouth_Angry01", "Mouth_Fury01", "Mouth_Pain01", "Fac_Mth_Triangle"], "x4", 25, "LOC_X"),
-        (["Mouth_Pero01", "Mouth_Pero02", "Mouth_BigTongue01"], "x5", 25, "LOC_X"),
+        (["Mouth_Pero01", "Mouth_Pero02", "Mouth_BigTongue01", "Tongue_Naughty01"], "x5", 25, "LOC_X"),
         (["Mouth_Neko01", "Mouth_Line01", "Mouth_Line02", "Mouth_Doya02", "Fac_Mth_UuOo"], "x6", 25, "LOC_X"),
         # Eyebrows
         (["Brow_Trouble_R", "Eyebrow_Trouble", "Brow_Trouble", "Eyebrow_Sad", "Fac_Ebr_Sad"], "doubt.1", 25, "LOC_X"),
@@ -1467,13 +1480,13 @@ def setup_face_panel_blend_drivers(context, mesh, panel_armature):
         # Eyes
         (["Eye_Jito", "Eye_Half01", "Eye_Half", "Eye_Tired", "Fac_Eye_HalfClose"], "e.ji", 25, "LOC_X"),
         (["Eye_Lowereyelid", "Eye_LowerEyelid", "Eye_WDown", "Eye_Tired", "Fac_Eye_LowlidUp"], "e.lowlid", 25, "LOC_X"),
-        (["Eye_Star", "EyeStar", "Eye_Shock", "Eye_Wail", "Eye_Hostility"], "e.focus", 25, "LOC_X"),
-        (["Eye_Ha", "Eye_WUp", "Eye_Wide", "00_Default_Eye", "Fac_Eye_L_Open", "Fac_Eye_R_Open"], "e.wide", 25, "LOC_X"),
-        (["Eye_WinkA_L", "Eye_WinkB_L", "Eye_WinkC_L", "Eye_WinkA", "Eye_WinkB", "Eye_WinkC", "Eye_Wink", "Fac_Eye_L_Wink"], "e.wink.up.l", 25, "LOC_X"),
-        (["Eye_WinkA_R", "Eye_WinkB_R", "Eye_WinkC_R", "Eye_WinkA", "Eye_WinkB", "Eye_WinkC", "Eye_Wink", "Fac_Eye_R_Wink"], "e.wink.up.r", 25, "LOC_X"),
-        (["Eye_Close", "Eye_Close01", "Eye_WinkA", "Eye_WinkA_L", "Eye_WinkA_R", "Eye_Half01", "Eye_Half", "Eye_Wink", "00_Close01_Eye", "Fac_Eye_Close"], "eye.pos", -25, "LOC_Y"),
-        (["Eye_WinkB", "Eye_WinkB_L", "Eye_WinkB_R", "Eye_WinkC", "Eye_WinkC_L", "Eye_WinkC_R", "Eye_Smile", "Eye_Smily", "Eye_Happy"], "eye.pos", 25, "LOC_Y"),
-        (["Eye_Hostility", "Eye_Angry", "Eye_Serious", "Fac_Eye_Angry"], "eye.pos", -25, "LOC_X"),
+        (["Eye_Contempt", "Eye_Star", "EyeStar", "Eye_Shock"], "e.focus", 25, "LOC_X"),
+        (["Eye_Surprised", "Eye_Ha", "Eye_WUp", "Eye_Wide", "00_Default_Eye", "Fac_Eye_L_Open", "Fac_Eye_R_Open"], "e.wide", 25, "LOC_X"),
+        (["Eye_Wink01_L", "Eye_WinkA_L", "Eye_WinkB_L", "Eye_WinkC_L", "Eye_WinkA", "Eye_WinkB", "Eye_WinkC", "Eye_Wink", "Fac_Eye_L_Wink"], "e.wink.up.l", 25, "LOC_X"),
+        (["Eye_Wink01_R", "Eye_WinkA_R", "Eye_WinkB_R", "Eye_WinkC_R", "Eye_WinkA", "Eye_WinkB", "Eye_WinkC", "Eye_Wink", "Fac_Eye_R_Wink"], "e.wink.up.r", 25, "LOC_X"),
+        (["Eye_Wink01_L", "Eye_Wink01_R", "Eye_Close", "Eye_Close01", "Eye_WinkA", "Eye_WinkA_L", "Eye_WinkA_R", "Eye_Half01", "Eye_Half", "Eye_Wink", "00_Close01_Eye", "Fac_Eye_Close"], "eye.pos", -25, "LOC_Y"),
+        (["Eye_Wink02_L", "Eye_Wink02_R", "Eye_WinkB", "Eye_WinkB_L", "Eye_WinkB_R", "Eye_WinkC", "Eye_WinkC_L", "Eye_WinkC_R", "Eye_Smile", "Eye_Smily", "Eye_Happy"], "eye.pos", 25, "LOC_Y"),
+        (["Eye_Hostility", "Eye_Hostitlity", "Eye_Angry", "Eye_Serious", "Fac_Eye_Angry"], "eye.pos", -25, "LOC_X"),
         (["Eye_Wail", "Eye_Sad", "Eye_Tired", "Fac_Eye_Sad"], "eye.pos", 25, "LOC_X"),
     ]
 
@@ -1494,35 +1507,23 @@ def setup_face_panel_blend_drivers(context, mesh, panel_armature):
         entries = []
         mapped_sks = set()
         for sk_candidates, bone_name, mult, tr_type in hoyo_panel_rules:
-            for cand in sk_candidates:
+            for cand in _face_panel_aliases(sk_candidates, kb):
                 if cand in kb:
                     entries.append((cand, bone_name, mult, tr_type))
                     mapped_sks.add(cand)
 
-        # Fallback: link any remaining unmapped shape keys on this mesh to appropriate sliders
-        mouth_fallback_bones = ["x1", "x2", "x3", "x4", "x5", "x6", "m.A", "m.AA", "m.E", "m.I", "m.O", "m.U"]
-        brow_fallback_bones = ["b.happy", "b.flat", "b.close", "doubt.1", "doubt.2"]
-        eye_fallback_bones = ["e.ji", "e.lowlid", "e.focus", "e.wide", "e.wink.up.l", "e.wink.up.r"]
-        m_idx = b_idx = e_idx = 0
-        for sk in kb:
-            sn = sk.name
-            sl = sn.lower()
-            if sn in mapped_sks or sn in [c[0] for c in wuwa_driver_configs]:
-                continue
-            if sl in ("basis", "default") or sl.endswith("_default") or "default_" in sl:
-                continue
-            if "brow" in sl or "eyebrow" in sl or "ebr" in sl:
-                fb_bone = brow_fallback_bones[b_idx % len(brow_fallback_bones)]
-                b_idx += 1
-                entries.append((sn, fb_bone, 25, "LOC_X"))
-            elif "eye" in sl or "wink" in sl or "blink" in sl:
-                fb_bone = eye_fallback_bones[e_idx % len(eye_fallback_bones)]
-                e_idx += 1
-                entries.append((sn, fb_bone, 25, "LOC_X"))
-            elif "mouth" in sl or "mth" in sl or "lip" in sl or "tongue" in sl:
-                fb_bone = mouth_fallback_bones[m_idx % len(mouth_fallback_bones)]
-                m_idx += 1
-                entries.append((sn, fb_bone, 25, "LOC_X"))
+        # Additional keys remain available in Blender's Shape Keys panel.
+        # Remove drivers from the extra viewport sliders created by older setups.
+        animation = m.data.shape_keys.animation_data
+        if animation:
+            for curve in list(animation.drivers):
+                if any(target.id == panel_armature and target.bone_target.startswith("fp.key.")
+                       for variable in curve.driver.variables for target in variable.targets):
+                    path = curve.data_path
+                    m.data.shape_keys.driver_remove(path)
+                    key = next((key for key in kb if key.path_from_id("value") == path), None)
+                    if key:
+                        key.value = 0.0
 
         if entries:
             _add_aggregated_shape_key_drivers(m, panel_armature, entries)
@@ -1720,7 +1721,7 @@ def _cleanup_face_panel_bones_from_armature(armature):
     panel_bone_names = set(WUWA_FACE_PANEL_BONE_NAMES)
     panel_bone_names.update(['CTRL-Eye_Highlight', 'CTRL-Highlight_Top', 'CTRL-Highlight_Bottom'])
 
-    bones_to_remove = [b.name for b in armature.data.bones if b.name in panel_bone_names]
+    bones_to_remove = [b.name for b in armature.data.bones if b.name in panel_bone_names or b.name.startswith(("fp.key.", "fp.label."))]
     if not bones_to_remove:
         return
 

@@ -167,16 +167,18 @@ class HOYOVERSE_OT_rig_character(Operator, ImportHelper, CustomOperatorPropertie
                 return {'FINISHED'}
 
         try:
-            rigify_character_service = RigifyCharacterService(self.game_type, self, context)
-            rigify_character_service.rig_character()
-        except Exception as ex:
-            if self.game_type == GameType.ZENLESS_ZONE_ZERO.name:
-                print(f"[ZZZ Rigging Notice] Rigging skipped or encountered non-fatal issue: {ex}")
-                self.report({'WARNING'}, f'ZZZ Rigging notice: {ex}')
-            else:
-                raise ex
-        finally:
+            try:
+                rigify_character_service = RigifyCharacterService(self.game_type, self, context)
+                rigify_character_service.rig_character()
+            except Exception as ex:
+                if self.game_type == GameType.ZENLESS_ZONE_ZERO.name:
+                    print(f"[ZZZ Rigging Notice] Rigging skipped or encountered non-fatal issue: {ex}")
+                    self.report({'WARNING'}, f'ZZZ Rigging notice: {ex}')
+                else:
+                    raise
+            # A failed rig must stop the chain; later steps cannot repair it.
             self.invoke_next_step()
+        finally:
             super().clear_custom_properties()
         return {'FINISHED'}
 

@@ -21,9 +21,29 @@ class GI_OT_JoinMeshesOnArmature(Operator, CustomOperatorProperties):
         join_meshes = self.game_type == GameType.GENSHIN_IMPACT.name
 
         if join_meshes:
-            self.__join_face_meshes()
-            self.__join_pupil_meshes()
-            self.__delete_brow_material_from_material_slot()
+            active = context.view_layer.objects.active
+            active_name = active.name if active else None
+            previous_mode = active.mode if active else 'OBJECT'
+            selected_names = [obj.name for obj in context.selected_objects]
+            try:
+                if active and active.mode != 'OBJECT':
+                    bpy.ops.object.mode_set(mode='OBJECT')
+                self.__join_face_meshes()
+                self.__join_pupil_meshes()
+                self.__delete_brow_material_from_material_slot()
+            finally:
+                # Join operators leave Face or Pupil active. Restore before
+                # invoking subsequent setup steps, including Pose Mode on a rig.
+                for obj in context.selected_objects:
+                    obj.select_set(False)
+                for name in selected_names:
+                    obj = context.view_layer.objects.get(name)
+                    if obj:
+                        obj.select_set(True)
+                active = context.view_layer.objects.get(active_name) if active_name else None
+                context.view_layer.objects.active = active
+                if active and active.select_get() and previous_mode != 'OBJECT':
+                    bpy.ops.object.mode_set(mode=previous_mode)
 
         if self.next_step_idx:
             NextStepInvoker().invoke(

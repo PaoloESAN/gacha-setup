@@ -190,6 +190,9 @@ def join_pupil_and_highlight_meshes(material_names=None):
                         any('highlight' in m for m in mat_names_low))
 
         if is_pupil or is_highlight:
+            from setup_wizard.utils.aether_gun_pupil import is_aether_gun
+            if is_aether_gun(obj):
+                continue
             candidate_meshes.append(obj)
 
     if not candidate_meshes:
@@ -229,26 +232,43 @@ def join_pupil_and_highlight_meshes(material_names=None):
     return primary
 
 
-def is_specific_character(character_name: str, mesh=None, material=None) -> bool:
-    """Detects if the character model, material, or context matches character_name."""
+def is_specific_character(character_name: str, mesh=None, material=None, *, allow_context=True) -> bool:
+    """Match a character by its objects/materials, optionally falling back to context.
+
+    Pass allow_context=False for changes that must stay scoped to one object
+    when several characters share the scene. Material names may also be strings
+    from source JSON files.
+    """
     if not character_name:
         return False
     target = character_name.strip().lower()
 
-    if material:
-        m_name = getattr(material, 'name', '') or ''
-        if target in m_name.lower():
-            return True
+    def matches_material(candidate):
+        if isinstance(candidate, str):
+            return target in candidate.lower()
+        if candidate:
+            original_name = candidate.get('_original_material_name', '') if hasattr(candidate, 'get') else ''
+            names = (getattr(candidate, 'name', ''), original_name)
+            return any(target in name.lower() for name in names)
+        return False
+
+    if matches_material(material):
+        return True
 
     if mesh:
         if target in mesh.name.lower():
             return True
         if mesh.parent and target in mesh.parent.name.lower():
             return True
+        armature = mesh.find_armature() if hasattr(mesh, 'find_armature') else None
+        if armature and (target in armature.name.lower() or target in armature.data.name.lower()):
+            return True
         for slot in getattr(mesh, "material_slots", []):
-            if slot.material and target in slot.material.name.lower():
+            if matches_material(slot.material):
                 return True
 
+    if not allow_context:
+        return False
     try:
         from setup_wizard.import_order import get_active_character_directory
         char_dir = get_active_character_directory() or bpy.context.scene.get("setup_wizard_imported_fbx_path", "")
@@ -620,10 +640,18 @@ def setup_new_pupil_highlight_layer(mesh, material_names=None):
     if not mesh or mesh.type != 'MESH':
         return
 
+    from setup_wizard.utils.aether_gun_pupil import is_aether_gun, setup_single_pupil
+    if is_aether_gun(mesh):
+        template = next((m for m in mesh.data.materials if m and 'new pupil' in m.name.lower()), None)
+        template = template or bpy.data.materials.get(getattr(material_names, 'NEW_PUPIL', 'HoYoverse - Genshin New Pupil'))
+        if template:
+            setup_single_pupil(mesh, template)
+        return
+
     # Check if there are other separate pupil/highlight mesh objects in the scene to join into this mesh
     other_pupil_meshes = [
         o for o in bpy.context.scene.objects
-        if o.type == 'MESH' and o != mesh and (
+        if o.type == 'MESH' and o != mesh and not is_aether_gun(o) and (
             'pupil' in o.name.lower() or 'pupila' in o.name.lower() or 'highlight' in o.name.lower() or
             any('pupil' in s.name.lower() or 'highlight' in s.name.lower() for s in o.material_slots if s.material)
         ) and not any(ex in o.name.lower() for ex in ['eyestar', 'star', 'brow', 'face_eye', 'body', 'hair', 'bang', 'dress', 'mic', 'tail', 'ribbon'])
@@ -780,7 +808,7 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 
                 if (material_name.startswith(('Equip_', 'EquipSkin_'))
                         or mesh.name.startswith(('Equip_', 'EquipSkin_'))):
-                    # Keep Unity materials distinct without adding shader nodes.
+                    # Keep each equipment slot distinct and use the weapons template.
                     source = material_name or mesh.name
                     folder = get_active_character_directory()
                     path = os.path.join(folder, 'Materials', source + '.json') if folder else ''
@@ -792,10 +820,14 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     name = self.material_names.MATERIAL_PREFIX + ('Eff_' if effect else '') + source
                     material = bpy.data.materials.get(name)
                     if material is None:
-                        template = bpy.data.materials.get(self.material_names.BODY)
+                        template = (bpy.data.materials.get(getattr(self.material_names, 'WEAPON', ''))
+                                    or bpy.data.materials.get(self.material_names.BODY))
                         if template is None:
-                            raise RuntimeError('Missing Genshin body shader for: ' + source)
+                            raise RuntimeError('Missing Genshin equipment shader for: ' + source)
                         material = template.copy()
+                        if material.get('_genshin_weapon_template'):
+                            from setup_wizard.utils.genshin_weapon_material_utils import localize_weapon_texture_groups
+                            localize_weapon_texture_groups(material)
                         material.name = name
                         material.use_fake_user = True
                     material['_original_material_name'] = source
@@ -892,6 +924,10 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 if mesh_body_part_name in ['Eye', 'EyeStar', 'Eyes', 'EyeShadow']:
                     mesh_body_part_name = 'Face'
                 elif is_pupil_part:
+                    from setup_wizard.utils.aether_gun_pupil import is_aether_gun, TAG as AETHER_GUN_PUPIL
+                    if is_aether_gun(mesh, material_name):
+                        mesh[AETHER_GUN_PUPIL] = True
+                        is_numbered_pupil = True
                     if is_numbered_pupil:
                         mesh_body_part_name = 'New Pupil'
                     else:
@@ -1121,6 +1157,14 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 
     def __clone_material_and_rename(self, material_slot, mesh_body_part_name_template, mesh_body_part_name):
         template_material = bpy.data.materials.get(mesh_body_part_name_template)
+        if not template_material and mesh_body_part_name_template in (
+                f'{self.material_names.MATERIAL_PREFIX}Body1',
+                f'{self.material_names.MATERIAL_PREFIX}Body2'):
+            # Newer Genshin templates use Body01/Body02, or share Body.
+            # Keep the cloned Dress material distinct and transfer its texture.
+            numbered_name = mesh_body_part_name_template.replace('Body', 'Body0')
+            template_material = (bpy.data.materials.get(numbered_name)
+                                 or bpy.data.materials.get(self.material_names.BODY))
         if not template_material:
             print(f'WARNING: Template material "{mesh_body_part_name_template}" not found, cannot clone for "{mesh_body_part_name}"')
             return None
@@ -1715,15 +1759,16 @@ class PunishingGrayRavenDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     continue
                 if material_name.startswith(JaredNytsPunishingGrayRavenShaderMaterialNames.MATERIAL_PREFIX):
                     continue
+                # Standalone equipment can use the full asset name without a
+                # body-part suffix (for example E3Kurumi_longgunMd010011).
+                # Preserve that name for texture/material-data matching.
+                mesh_body_part_name = mesh_body_part_name or material_name
                 if 'Face' in mesh_body_part_name:  # 6.Karenina_Ember (material w/ Face in it, but not called just Face)
                     mesh_body_part_name = 'Face'
                 elif 'Eye' in mesh_body_part_name:
                     mesh_body_part_name = 'Eye'
                 if 'OL' in mesh_body_part_name:  # 9S (Generic), Bianca_Veritas (Ink-lit Hermit)
                     mesh_body_part_name = mesh_body_part_name.replace('OL', '')
-
-                if not mesh_body_part_name:
-                    mesh_body_part_name = material_name
 
                 if 'Alpha' in mesh_body_part_name or 'alpha' in material_name.lower():
                     material_type = JaredNytsPunishingGrayRavenShaderMaterialNames.ALPHA
@@ -1832,6 +1877,8 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 
     def replace_default_materials(self):
         selected_shader = getattr(bpy.context.scene, 'zzz_shader_type', 'LEGACY') if hasattr(bpy, 'context') and hasattr(bpy.context, 'scene') else 'LEGACY'
+        if bpy.app.version < (5, 2, 0):
+            selected_shader = 'LEGACY'
         for arm in [o for o in bpy.context.scene.objects if o.type == 'ARMATURE']:
             try:
                 arm["zzz_shader_type"] = selected_shader
@@ -2126,6 +2173,11 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     if obj.name.startswith("Light Direction") or obj.name.startswith("Main Light Direction"):
                         obj.rotation_mode = 'XYZ'
                         obj.rotation_euler = (math.radians(90.0), 0.0, 0.0)
+
+        from setup_wizard.utils.zzz_eye_highlights import assign_zzz_eye_highlights
+        highlight_material = bpy.data.materials.get('ZZZ Shader EyeHighlights')
+        for mesh in meshes:
+            assign_zzz_eye_highlights(mesh, highlight_material)
 
         try:
             from setup_wizard.optimization.blender_rimlight_patch import patch_all_rimlight_groups_for_blender
@@ -2924,6 +2976,14 @@ class NevernessToEvernessDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     new_mat.name = slot.material.name
                     slot.material = new_mat
                     mat = new_mat
+
+                # The shadow template can be Dithered. eye_bantou needs alpha
+                # blending on the assigned copy, including repeated setup.
+                if template_to_use == "目影":
+                    if hasattr(mat, 'surface_render_method'):
+                        mat.surface_render_method = 'BLENDED'
+                    elif hasattr(mat, 'blend_method'):
+                        mat.blend_method = 'BLEND'
 
                 if mat and mat.use_nodes and mat.node_tree:
                     nodes = mat.node_tree.nodes

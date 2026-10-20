@@ -31,9 +31,11 @@ def _is_bad_texture_name(name: str) -> bool:
 
 
 def _find_diffuse_image(mat):
-    """Finds the true diffuse/base-color image of a shader material.
-    Guarantees that lightmaps (which look green), normalmaps, shadow ramps,
-    and masks are NEVER mistaken for the diffuse texture."""
+    """Follow Diffuse Color first, then try named color textures.
+
+    The shader connection takes priority over names and image creation order.
+    Fallback searches exclude lightmaps, normals, ramps and masks.
+    """
     if not getattr(mat, "use_nodes", False) or not mat.node_tree:
         return None
 
@@ -49,18 +51,57 @@ def _find_diffuse_image(mat):
         output = tree.nodes.get("Material Output")
 
     candidate_nodes = []
+    visited = set()
+
+    def shader_candidates(node):
+        if node is None or node.as_pointer() in visited:
+            return
+        visited.add(node.as_pointer())
+        candidate_nodes.append(node)
+        for inp in node.inputs:
+            if node.type == 'REROUTE' or inp.type == 'SHADER':
+                for link in inp.links:
+                    shader_candidates(link.from_node)
+
     if output and "Surface" in output.inputs and output.inputs["Surface"].is_linked:
         for link in output.inputs["Surface"].links:
-            fn = link.from_node
-            while fn and fn.type == 'REROUTE':
-                fn = fn.inputs[0].links[0].from_node if (fn.inputs and fn.inputs[0].is_linked) else None
-            if fn:
-                candidate_nodes.append(fn)
+            shader_candidates(link.from_node)
 
     # Fallback candidate nodes if not found directly through output
     for node in tree.nodes:
         if node.type in ('GROUP', 'BSDF_PRINCIPLED', 'EMISSION') and node not in candidate_nodes:
             candidate_nodes.append(node)
+
+    def connected_image(inp, seen=None):
+        seen = seen if seen is not None else set()
+        if inp.as_pointer() in seen:
+            return None
+        seen.add(inp.as_pointer())
+        for link in inp.links:
+            source = link.from_node
+            if source.type == 'TEX_IMAGE' and source.image:
+                return source.image
+            if source.type == 'REROUTE':
+                image = connected_image(source.inputs[0], seen)
+                if image:
+                    return image
+            elif source.type in ('MIX_RGB', 'MIX'):
+                # Factors can be masks/lightmaps; inspect the color inputs.
+                for color in source.inputs:
+                    if color.type == 'RGBA' and color.enabled:
+                        image = connected_image(color, seen)
+                        if image:
+                            return image
+        return None
+
+    # The original shader connection is authoritative, including unnamed or
+    # unusually named images. Check it before any filename or node-order guess.
+    for node in candidate_nodes:
+        diffuse = node.inputs.get('Diffuse Color')
+        if diffuse is not None:
+            image = connected_image(diffuse)
+            if image:
+                return image
 
     for node in candidate_nodes:
         target_inputs = []
@@ -120,11 +161,6 @@ def _find_diffuse_image(mat):
             node_low = node.name.lower()
             if not _is_bad_texture_name(img_low) and not _is_bad_texture_name(node_low):
                 return node.image
-
-    # 5. Last fallback: Only if nothing else matched, take whatever TEX_IMAGE exists with an image
-    for node in tree.nodes:
-        if node.type == 'TEX_IMAGE' and getattr(node, "image", None):
-            return node.image
 
     return None
 
@@ -252,16 +288,19 @@ def _ensure_low_material_setup(low_mat, src_mat):
         return
 
     diff_img = _find_diffuse_image(src_mat)
-    tex_node = None
-    for node in tree.nodes:
-        if node.type == 'TEX_IMAGE' and getattr(node, "image", None):
-            tex_node = node
-            break
-
-    if tex_node is None and diff_img:
+    # Existing _Low materials may have a lightmap wired to their output. Reuse
+    # only a node holding the source diffuse, never the first loaded image.
+    tex_node = next((node for node in tree.nodes
+                     if node.type == 'TEX_IMAGE' and diff_img is not None
+                     and node.image == diff_img), None)
+    if tex_node is None and diff_img is not None:
+        tex_node = tree.nodes.get('Low_Diffuse')
+        if tex_node is not None and tex_node.type != 'TEX_IMAGE':
+            tex_node = None
+    if tex_node is None and diff_img is not None:
         tex_node = tree.nodes.new("ShaderNodeTexImage")
-        tex_node.image = diff_img
-    elif tex_node is not None and diff_img:
+        tex_node.name = 'Low_Diffuse'
+    if tex_node is not None and diff_img is not None:
         tex_node.image = diff_img
 
     color_in = emission.inputs.get("Color")

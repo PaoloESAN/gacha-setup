@@ -107,6 +107,13 @@ def _get_character_armature(context):
 
 def _is_bangboo_character(context, armature):
     """Detect Bangboo names on the imported file or this character's objects."""
+    # Agents can carry Bangboo accessories (Nicole's Low/HighBangboo meshes).
+    # Those names must never override an agent's humanoid skeleton.
+    if ('DEF-spine.006' in armature.data.bones or any(
+        b.name.startswith('Bip') and b.name.endswith(' Pelvis')
+        for b in armature.data.bones
+    )):
+        return False
     names = [armature.name, armature.data.name]
     character_objects = [armature]
     for obj in context.scene.objects:
@@ -331,6 +338,9 @@ class GenshinImpactCharacterRigger(CharacterRigger):
             or next((o for o in bpy.data.objects if o.type == 'ARMATURE' and o.name.endswith("Rig")), None)
             or _get_character_armature(self.context)
         )
+        from setup_wizard.character_rig_setup.genshin_wrist_twist import setup_wrist_twist
+        setup_wrist_twist(target_rig)
+
         if target_rig and hasattr(target_rig.data, "collections"):
             colls = target_rig.data.collections
             root_coll = colls.get("Root") or colls.new("Root")
@@ -1572,7 +1582,7 @@ class NevernessToEvernessCharacterRigger(CharacterRigger):
                     character_rigger_props.use_head_tracker
                 )
             except Exception as ex:
-                self.blender_operator.report({'ERROR'}, f"Failed to rig NTE character: {ex}")
+                raise RuntimeError(f"Failed to rig NTE character: {ex}") from ex
 
         try:
             from setup_wizard.character_rig_setup.nte_face_rig import nte_face_rig_main

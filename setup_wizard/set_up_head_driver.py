@@ -24,9 +24,17 @@ class GI_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
         # needs this even though it has no head-driver constraint to set up.
         if self.game_type == 'GENSHIN_IMPACT':
             from setup_wizard.genshin_import_character_model import is_rigging_disabled
-            if is_rigging_disabled(context):
-                from setup_wizard.character_rig_setup.lighting_panel_setup import setup_unrigged_genshin_lighting
-                setup_unrigged_genshin_lighting(context)
+            from setup_wizard.character_rig_setup.lighting_panel_setup import setup_unrigged_genshin_lighting
+            # Fix Transformations can leave the imported armature active but
+            # deselected. Rig generation normally selects it again; skipping
+            # rigging must still finish this model's lighting setup.
+            active = context.view_layer.objects.active
+            target = active if (active and active.type in {'ARMATURE', 'MESH'}
+                                and active.get('_setup_wizard_model_id')
+                                and not context.selected_objects) else None
+            setup_unrigged_genshin_lighting(
+                context, only_if_panel_missing=not is_rigging_disabled(context),
+                target_object=target)
 
         # Check if weapon / equipment
         fbx_path = context.scene.get("setup_wizard_imported_fbx_path", "")

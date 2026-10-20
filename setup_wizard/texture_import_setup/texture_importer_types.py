@@ -18,6 +18,7 @@ from setup_wizard.import_order import get_actual_material_name_for_dress
 from setup_wizard.texture_import_setup.texture_node_names import JaredNytsPunishingGrayRavenTextureNodeNames, Nya222HonkaiStarRailTextureNodeNames, StellarToonTextureNodeNames, TextureNodeNames, V4_GenshinImpactTextureNodeNames
 from setup_wizard.texture_import_setup.original_texture_locator_utils import OriginalTextureLocatorUtils
 from setup_wizard.utils.texture_utils import fix_missing_textures, load_or_get_image
+from setup_wizard.texture_import_setup.genshin_texture_binding import find_genshin_texture_nodes, texture_role
 
 
 def get_or_create_white_texture(name="White_Shadow_Ramp"):
@@ -268,17 +269,24 @@ def sync_material_category_textures(material):
     if any(k in m_low for k in ['pupil', 'pupila', 'face', 'brow', 'eye', 'outlines', 'outline']):
         return
 
-    diffuse_nodes = find_all_image_nodes_by_category(material.node_tree, 'diffuse')
-    lightmap_nodes = find_all_image_nodes_by_category(material.node_tree, 'lightmap')
-    normal_nodes = find_all_image_nodes_by_category(material.node_tree, 'normal')
+    diffuse_nodes = find_genshin_texture_nodes(material.node_tree, 'diffuse')
+    lightmap_nodes = find_genshin_texture_nodes(material.node_tree, 'lightmap')
+    normal_nodes = find_genshin_texture_nodes(material.node_tree, 'normal')
 
-    diffuse_img = next((n.image for n in diffuse_nodes if n.image and 'lightmap' not in n.image.name.lower() and 'normal' not in n.image.name.lower()), None)
-    lightmap_img = next((n.image for n in lightmap_nodes if n.image), None)
-    normal_img = next((n.image for n in normal_nodes if n.image and 'diffuse' not in n.image.name.lower() and 'lightmap' not in n.image.name.lower()), None)
+    def unique_image(nodes, category):
+        images = {n.image for n in nodes if n.image and texture_role(n.image.name) in (None, category)}
+        # Distinct UV layers may intentionally use different textures. Node
+        # creation order must never decide which one overwrites all the others.
+        return next(iter(images)) if len(images) == 1 else None
+
+    diffuse_img = unique_image(diffuse_nodes, 'diffuse')
+    lightmap_img = unique_image(lightmap_nodes, 'lightmap')
+    normal_img = unique_image(normal_nodes, 'normal')
 
     if diffuse_img:
         for n in diffuse_nodes:
-            n.image = diffuse_img
+            if not n.image or texture_role(n.image.name) not in (None, 'diffuse'):
+                n.image = diffuse_img
 
     if lightmap_img:
         # If lightmap nodes share the diffuse datablock (ex. VeilShadow fallback),
@@ -293,12 +301,14 @@ def sync_material_category_textures(material):
             except Exception:
                 pass
         for n in lightmap_nodes:
-            n.image = lightmap_img
+            if not n.image or n.image == diffuse_img:
+                n.image = lightmap_img
 
     if normal_img:
         normal_img.colorspace_settings.name = 'Non-Color'
         for n in normal_nodes:
-            n.image = normal_img
+            if not n.image:
+                n.image = normal_img
 
 
 def find_texture_nodes(node_tree, possible_names):
@@ -637,30 +647,15 @@ class GenshinTextureImporter:
         if not self._is_genshin_shader_material(material):
             return
 
+        image_filename = os.path.basename(img.filepath.replace('\\', '/')) if img and img.filepath else (img.name if img else '')
+        if img and texture_role(image_filename) in ('lightmap', 'normal'):
+            print(f'[GENSHIN TEXTURES] Refusing data map as diffuse: {img.name} on {material.name}')
+            return
+
         if img:
             img.colorspace_settings.name = 'sRGB'
 
-        nodes = find_all_image_nodes_by_category(material.node_tree, 'diffuse')
-        if not nodes:
-            possible_texture_node_names = [
-                f'{texture_type.value}_Diffuse_UV0',
-                f'{texture_type.value}_Diffuse_UV1',
-                'Main_Diffuse',
-                'Diffuse (sRGB) (Channel Packed)',
-                'Diffuse UV1 (sRGB) (Channel Packed)',
-                'Diffuse (sRGB)',
-                'Diffuse UV1 (sRGB)',
-                'Diffuse_UV0',
-                'Diffuse_UV1',
-                'Diffuse',
-                'Diffuse UV1',
-                'VFX_Diffuse',
-                'Glass_Diffuse',
-                'Outline_Diffuse',
-                'Image Texture',
-                'Image Texture.001',
-            ]
-            nodes = find_texture_nodes(material.node_tree, possible_texture_node_names)
+        nodes = find_genshin_texture_nodes(material.node_tree, 'diffuse')
 
         for node in nodes:
             if override or not node.image:
@@ -670,6 +665,9 @@ class GenshinTextureImporter:
             setup_crystal_material_nodes(material)
 
     def set_lightmap_texture(self, texture_type: TextureType, material, img, override=True):
+        from setup_wizard.utils.aether_gun_pupil import disable_lightmap
+        if disable_lightmap(material):
+            return
         if not material or not material.use_nodes:
             return
 
@@ -681,7 +679,8 @@ class GenshinTextureImporter:
             # colorspace per image, so sharing forces diffuse and lightmap to
             # use the same colorspace. Use a dedicated Non-Color copy instead
             # (ex. Columbina VeilShadow only has a Veil Diffuse).
-            if 'diffuse' in img.name.lower():
+            if ('diffuse' in img.name.lower()
+                    or any(n.image == img for n in find_genshin_texture_nodes(material.node_tree, 'diffuse'))):
                 img = make_dedicated_lightmap_copy(img)
             else:
                 try:
@@ -692,25 +691,7 @@ class GenshinTextureImporter:
                     img.alpha_mode = 'CHANNEL_PACKED'
                 except Exception:
                     pass
-        nodes = find_all_image_nodes_by_category(material.node_tree, 'lightmap')
-        if not nodes:
-            possible_texture_node_names = [
-                f'{texture_type.value}_Lightmap_UV0',
-                f'{texture_type.value}_Lightmap_UV1',
-                'Main_Lightmap',
-                'Lightmap (Non-Color) (Channel Packed)',
-                'Lightmap UV1 (Non-Color) (Channel Packed)',
-                'Lightmap (Non-Color)',
-                'Lightmap UV1 (Non-Color)',
-                'Lightmap_UV0',
-                'Lightmap_UV1',
-                'Lightmap',
-                'Lightmap UV1',
-                'Outline_Lightmap',
-                'Image Texture.001',
-                'Image Texture.002',
-            ]
-            nodes = find_texture_nodes(material.node_tree, possible_texture_node_names)
+        nodes = find_genshin_texture_nodes(material.node_tree, 'lightmap')
 
         for node in nodes:
             if override or not node.image:
@@ -727,23 +708,7 @@ class GenshinTextureImporter:
             return
 
         img.colorspace_settings.name = 'Non-Color'
-        nodes = find_all_image_nodes_by_category(material.node_tree, 'normal')
-        if not nodes:
-            possible_texture_node_names = [
-                f'{type.value}_Normalmap_UV0',
-                f'{type.value}_Normalmap_UV1',
-                'Main_Normalmap',
-                'Normal Map (Non-Color) (Channel Packed)',
-                'Normal Map UV1 (Non-Color) (Channel Packed)',
-                'Normal Map (Non-Color)',
-                'Normal Map UV1 (Non-Color)',
-                'Normalmap_UV0',
-                'Normalmap_UV1',
-                'Normalmap',
-                'Normal Map',
-                'Normal Map UV1',
-            ]
-            nodes = find_texture_nodes(material.node_tree, possible_texture_node_names)
+        nodes = find_genshin_texture_nodes(material.node_tree, 'normal')
 
         for node in nodes:
             if override or not node.image:
@@ -843,7 +808,7 @@ class GenshinTextureImporter:
             bpy.data.node_groups[f'{type.value} Specular Ramp'].nodes[f'{type.value}_Specular_Ramp'].image = img
 
     def set_face_diffuse_texture(self, face_material, img):
-        face_material.node_tree.nodes['Face_Diffuse'].image = img
+        self.set_diffuse_texture(TextureType.FACE, face_material, img)
 
         # Set Built-In Face Lightmap Value for the V3 Shader
         face_shader_node = face_material.node_tree.nodes.get('Face Shader')
@@ -1140,7 +1105,7 @@ class GenshinTextureImporter:
     def import_textures_from_json(self, directory):
         """
         Reads material JSON files from 'Materials/' subfolder or directory if present,
-        and assigns textures with 100% precision based on the game's shader property mappings.
+        and resolves explicit shader references before scoped filename fallbacks.
         """
         candidates = [
             os.path.join(directory, "Materials"),
@@ -1171,12 +1136,15 @@ class GenshinTextureImporter:
             return f_low.startswith('avatar_tex_') or f_low.startswith('tex_')
 
         # Prioritize character-specific textures over generic ones
-        image_files.sort(key=lambda item: 1 if is_generic_tex(item[0]) else 0)
+        image_files.sort(key=lambda item: (is_generic_tex(item[0]), item[0].casefold(), item[1].casefold()))
 
-        def resolve_img(tex_name):
+        def resolve_img(tex_name, category=None):
             if not tex_name:
                 return None
-            t_low = tex_name.lower().strip()
+            t_low = os.path.splitext(tex_name.replace('\\', '/').rsplit('/', 1)[-1])[0].casefold().strip()
+            category = 'ramp' if category == 'shadow_ramp' else category
+            candidates = [(fname, fpath) for fname, fpath in image_files
+                          if category is None or texture_role(fname) in (None, category)]
 
             core_part = None
             if is_generic_tex(t_low):
@@ -1195,15 +1163,12 @@ class GenshinTextureImporter:
 
             # 2. Check if a character-specific texture matches the core part suffix (e.g. Crystal_Diffuse)
             if core_part:
-                for fname, fpath in image_files:
-                    if is_generic_tex(fname):
-                        continue
-                    stem = os.path.splitext(fname)[0].lower()
-                    if stem.endswith(core_part) or f'_{core_part}' in stem or core_part in stem:
-                        img = load_or_get_image(fpath, fname)
-                        if img:
-                            img.alpha_mode = 'CHANNEL_PACKED'
-                            return img
+                matches = [(fname, fpath) for fname, fpath in candidates
+                           if not is_generic_tex(fname)
+                           and os.path.splitext(fname)[0].casefold().endswith('_' + core_part)]
+                if len(matches) == 1:
+                    fname, fpath = matches[0]
+                    return load_or_get_image(fpath, fname)
 
             # 3. Exact stem match across all files
             for fname, fpath in image_files:
@@ -1214,49 +1179,56 @@ class GenshinTextureImporter:
                         img.alpha_mode = 'CHANNEL_PACKED'
                         return img
 
-            # 4. Prefix / suffix match across all files
-            for fname, fpath in image_files:
-                stem = os.path.splitext(fname)[0].lower()
-                if stem.startswith(t_low) or t_low.startswith(stem):
-                    img = load_or_get_image(fpath, fname)
-                    if img:
-                        img.alpha_mode = 'CHANNEL_PACKED'
-                        return img
-
-            # 5. Substring match across all files
-            for fname, fpath in image_files:
-                if t_low in fname.lower():
-                    img = load_or_get_image(fpath, fname)
-                    if img:
-                        img.alpha_mode = 'CHANNEL_PACKED'
-                        return img
+            # A missing diffuse must not resolve to a prefix-related mask or
+            # lightmap. Only accept a unique suffix variant of the same role.
+            matches = [(fname, fpath) for fname, fpath in candidates
+                       if os.path.splitext(fname)[0].casefold().startswith(t_low + '_')]
+            if len(matches) == 1:
+                fname, fpath = matches[0]
+                return load_or_get_image(fpath, fname)
 
             return None
 
         imported_any = False
 
-        def find_img_for_part(part_name, category):
+        def find_img_for_part(part_name, category, material_name):
             p_low = part_name.lower()
+            matches = []
             for fname, fpath in image_files:
                 f_low = fname.lower()
-                if category == 'diffuse':
-                    if 'diffuse' in f_low and p_low in f_low and not any(x in f_low for x in ['eff', 'effect', 'mask']):
-                        return resolve_img(os.path.splitext(fname)[0])
-                elif category == 'lightmap':
-                    if ('lightmap' in f_low or 'light_map' in f_low) and p_low in f_low and not any(x in f_low for x in ['eff', 'effect']):
-                        return resolve_img(os.path.splitext(fname)[0])
-                elif category == 'normal':
-                    if ('normal' in f_low or 'bump' in f_low) and p_low in f_low:
-                        return resolve_img(os.path.splitext(fname)[0])
-                elif category == 'shadow_ramp':
-                    if 'shadow_ramp' in f_low and p_low in f_low:
-                        return resolve_img(os.path.splitext(fname)[0])
+                if not re.search(r'(?:^|[ _-])' + re.escape(p_low) + r'(?:[ _.-]|$)', f_low):
+                    continue
+                role = 'ramp' if category == 'shadow_ramp' else category
+                if texture_role(fname) == role and not any(x in f_low for x in ('eff_', 'effect', 'mask')):
+                    matches.append((fname, fpath))
+            # Old exports omit texture names in JSON. Match their character
+            # prefix before considering generic textures from the same folder.
+            prefix = re.split(r'_mat(?:_|$)', material_name.casefold())[0]
+            specific = [(f, p) for f, p in matches if f.casefold().startswith(prefix + '_')]
+            matches = specific or matches
+            if len({os.path.splitext(f)[0].casefold() for f, _ in matches}) != 1:
+                return None
+            for fname, fpath in matches:
+                img = load_or_get_image(fpath, fname)
+                if img:
+                    return img
             return None
 
         # Pre-pass: read JSONs and map known primary parts' pathIDs to image files
         json_data_list = []
         path_id_to_img = {}
-        for jf in os.listdir(materials_dir):
+        def reference_key(ref, category):
+            return category, ref.get('m_FileID', 0), ref.get('m_PathID')
+
+        def reference_image(properties, category):
+            for prop in properties:
+                ref = tex_envs.get(prop, {}).get('m_Texture', {})
+                image = path_id_to_img.get(reference_key(ref, category))
+                if image:
+                    return image
+            return None
+
+        for jf in sorted(os.listdir(materials_dir), key=str.casefold):
             if jf.startswith("._") or jf.startswith(".") or not jf.lower().endswith('.json') or jf.startswith('Avatar_Default_Mat'):
                 continue
             jpath = os.path.join(materials_dir, jf)
@@ -1322,15 +1294,16 @@ class GenshinTextureImporter:
                     tex_obj = tex_envs.get(prop, {}).get('m_Texture', {})
                     pid = tex_obj.get('m_PathID')
                     pname = tex_obj.get('Name')
-                    if pid and pid != 0 and pid not in path_id_to_img:
+                    key = reference_key(tex_obj, cat)
+                    if pid and pid != 0 and key not in path_id_to_img:
                         if pname:
-                            img = resolve_img(pname)
+                            img = resolve_img(pname, cat)
                             if img:
-                                path_id_to_img[pid] = img
-                        if pid not in path_id_to_img:
-                            img = find_img_for_part(mat_part, cat)
+                                path_id_to_img[key] = img
+                        if key not in path_id_to_img:
+                            img = find_img_for_part(mat_part, cat, raw_name)
                             if img:
-                                path_id_to_img[pid] = img
+                                path_id_to_img[key] = img
 
         for jf, raw_name, mat_part, data in json_data_list:
             tex_envs = _get_normalized_tex_envs(data)
@@ -1404,20 +1377,16 @@ class GenshinTextureImporter:
                                tex_envs.get('_BaseTexV2', {}).get('m_Texture', {}).get('Name') or \
                                tex_envs.get('_BaseTex', {}).get('m_Texture', {}).get('Name')
             if diffuse_tex_name:
-                diffuse_img = resolve_img(diffuse_tex_name)
+                diffuse_img = resolve_img(diffuse_tex_name, 'diffuse')
             if not diffuse_img:
-                main_pid = tex_envs.get('_MainTex', {}).get('m_Texture', {}).get('m_PathID') or \
-                           tex_envs.get('_BaseTexV2', {}).get('m_Texture', {}).get('m_PathID') or \
-                           tex_envs.get('_BaseTex', {}).get('m_Texture', {}).get('m_PathID')
-                if main_pid and main_pid in path_id_to_img:
-                    diffuse_img = path_id_to_img[main_pid]
+                diffuse_img = reference_image(('_MainTex', '_BaseTexV2', '_BaseTex'), 'diffuse')
             if not diffuse_img:
-                diffuse_img = find_img_for_part(mat_part, 'diffuse')
+                diffuse_img = find_img_for_part(mat_part, 'diffuse', raw_name)
             if not diffuse_img and mat_part.lower() == 'dress':
                 if 'collei' in directory.lower() or 'collei' in raw_name.lower():
-                    diffuse_img = find_img_for_part('Hair', 'diffuse')
+                    diffuse_img = find_img_for_part('Hair', 'diffuse', raw_name)
                 else:
-                    diffuse_img = find_img_for_part('Body', 'diffuse')
+                    diffuse_img = find_img_for_part('Body', 'diffuse', raw_name)
 
             is_hair_mat = (
                 mat_part.lower() in ['hair', 'effecthair', 'helmet', 'helmetemo'] or
@@ -1506,18 +1475,16 @@ class GenshinTextureImporter:
                 lightmap_img = None
                 lightmap_tex_name = tex_envs.get('_LightMapTex', {}).get('m_Texture', {}).get('Name')
                 if lightmap_tex_name:
-                    lightmap_img = resolve_img(lightmap_tex_name)
+                    lightmap_img = resolve_img(lightmap_tex_name, 'lightmap')
                 if not lightmap_img:
-                    lm_pid = tex_envs.get('_LightMapTex', {}).get('m_Texture', {}).get('m_PathID')
-                    if lm_pid and lm_pid in path_id_to_img:
-                        lightmap_img = path_id_to_img[lm_pid]
+                    lightmap_img = reference_image(('_LightMapTex',), 'lightmap')
                 if not lightmap_img:
-                    lightmap_img = find_img_for_part(mat_part, 'lightmap')
+                    lightmap_img = find_img_for_part(mat_part, 'lightmap', raw_name)
                 if not lightmap_img and mat_part.lower() == 'dress':
                     if is_hair_mat:
-                        lightmap_img = find_img_for_part('Hair', 'lightmap')
+                        lightmap_img = find_img_for_part('Hair', 'lightmap', raw_name)
                     else:
-                        lightmap_img = find_img_for_part('Body', 'lightmap')
+                        lightmap_img = find_img_for_part('Body', 'lightmap', raw_name)
 
                 # If no lightmap exists, fallback to diffuse image
                 if not lightmap_img and diffuse_img:
@@ -1530,18 +1497,16 @@ class GenshinTextureImporter:
                 bump_img = None
                 bump_tex_name = tex_envs.get('_BumpMap', {}).get('m_Texture', {}).get('Name')
                 if bump_tex_name:
-                    bump_img = resolve_img(bump_tex_name)
+                    bump_img = resolve_img(bump_tex_name, 'normal')
                 if not bump_img:
-                    bump_pid = tex_envs.get('_BumpMap', {}).get('m_Texture', {}).get('m_PathID')
-                    if bump_pid and bump_pid in path_id_to_img:
-                        bump_img = path_id_to_img[bump_pid]
+                    bump_img = reference_image(('_BumpMap',), 'normal')
                 if not bump_img:
-                    bump_img = find_img_for_part(mat_part, 'normal')
+                    bump_img = find_img_for_part(mat_part, 'normal', raw_name)
                 if not bump_img and mat_part.lower() == 'dress':
                     if is_hair_mat:
-                        bump_img = find_img_for_part('Hair', 'normal')
+                        bump_img = find_img_for_part('Hair', 'normal', raw_name)
                     else:
-                        bump_img = find_img_for_part('Body', 'normal')
+                        bump_img = find_img_for_part('Body', 'normal', raw_name)
 
                 if bump_img:
                     self.set_normalmap_texture(tex_type, target_mat, bump_img)
@@ -1551,19 +1516,16 @@ class GenshinTextureImporter:
                 shadow_ramp_name = tex_envs.get('_PackedShadowRampTex', {}).get('m_Texture', {}).get('Name') or \
                                    tex_envs.get('_ShadowRampTex', {}).get('m_Texture', {}).get('Name')
                 if shadow_ramp_name:
-                    shadow_ramp_img = resolve_img(shadow_ramp_name)
+                    shadow_ramp_img = resolve_img(shadow_ramp_name, 'shadow_ramp')
                 if not shadow_ramp_img:
-                    sr_pid = tex_envs.get('_PackedShadowRampTex', {}).get('m_Texture', {}).get('m_PathID') or \
-                             tex_envs.get('_ShadowRampTex', {}).get('m_Texture', {}).get('m_PathID')
-                    if sr_pid and sr_pid in path_id_to_img:
-                        shadow_ramp_img = path_id_to_img[sr_pid]
+                    shadow_ramp_img = reference_image(('_PackedShadowRampTex', '_ShadowRampTex'), 'shadow_ramp')
                 if not shadow_ramp_img:
-                    shadow_ramp_img = find_img_for_part(mat_part, 'shadow_ramp')
+                    shadow_ramp_img = find_img_for_part(mat_part, 'shadow_ramp', raw_name)
                 if not shadow_ramp_img and mat_part.lower() == 'dress':
                     if is_hair_mat:
-                        shadow_ramp_img = find_img_for_part('Hair', 'shadow_ramp')
+                        shadow_ramp_img = find_img_for_part('Hair', 'shadow_ramp', raw_name)
                     else:
-                        shadow_ramp_img = find_img_for_part('Body', 'shadow_ramp')
+                        shadow_ramp_img = find_img_for_part('Body', 'shadow_ramp', raw_name)
 
                 if shadow_ramp_img:
                     s_name_low = ((shadow_ramp_name or "") + " " + shadow_ramp_img.name).lower()
@@ -1659,6 +1621,9 @@ class GenshinTextureImporter:
                                 break
 
                 target_mats = [target_mat] if target_mat else []
+                from setup_wizard.utils.aether_gun_pupil import is_aether_gun, TAG as AETHER_GUN_PUPIL
+                if is_aether_gun(material_name=raw_name):
+                    target_mats.extend(m for m in bpy.data.materials if m.get(AETHER_GUN_PUPIL) and m not in target_mats)
                 new_pupil_mat = bpy.data.materials.get('HoYoverse - Genshin New Pupil') or \
                                 bpy.data.materials.get(getattr(self.material_names, 'NEW_PUPIL', None))
                 if new_pupil_mat and new_pupil_mat not in target_mats:
@@ -2257,6 +2222,8 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
             return
 
         for name, folder, files in os.walk(directory):
+            folder.sort(key=str.casefold)
+            files = sorted(files, key=str.casefold)
             if "__MACOSX" in name:
                 continue
             files = [f for f in files if not f.startswith("._") and not f.startswith(".")]
@@ -2364,7 +2331,8 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                                     if m_low.endswith('.001') or 'two' in m_low:
                                         continue
                                     if ('pupil' in m_low or 'pupila' in m_low) and not any(x in m_low for x in ['face', 'eyestar', 'eyeshadow', 'brow', 'outlines', 'highlight']):
-                                        slot.material = primary_pupil_mat
+                                        if not slot.material.get("setup_wizard_aether_gun_pupil"):
+                                            slot.material = primary_pupil_mat
 
                 # Outer layer: Genshin Highlight material receives highlight texture
                 hl_mats = [
@@ -2739,6 +2707,8 @@ class GenshinNPCTextureImporter(GenshinTextureImporter):
 
         image_exts = ('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff', '.webp')
         for name, folder, files in os.walk(directory):
+            folder.sort(key=str.casefold)
+            files = sorted(files, key=str.casefold)
             if "__MACOSX" in name:
                 continue
             files = [f for f in files if not f.startswith("._") and not f.startswith(".")]

@@ -79,3 +79,23 @@ jobs:
           tag_name: ${{ github.ref_name }}
           body_path: changelog.md
           files: Gacha_Setup-${{ github.ref_name }}.zip
+
+      - name: Remove beta releases for this stable version
+        uses: actions/github-script@v9
+        env:
+          STABLE_RELEASE_TAG: ${{ github.ref_name }}
+        with:
+          script: |
+            const tag = process.env.STABLE_RELEASE_TAG;
+            if (!/^v[0-9]+\.[0-9]+\.[0-9]+$/.test(tag)) return;
+            const repo = context.repo;
+            const { data: stable } = await github.rest.repos.getReleaseByTag({ ...repo, tag });
+            if (stable.draft || stable.prerelease) return;
+            const betaPattern = new RegExp('^' + tag.replace(/\./g, '\\.') + '-beta\\.[0-9]+$');
+            const releases = await github.paginate(github.rest.repos.listReleases, { ...repo, per_page: 100 });
+            for (const release of releases) {
+              if (release.prerelease && !release.draft && betaPattern.test(release.tag_name)) {
+                await github.rest.repos.deleteRelease({ ...repo, release_id: release.id });
+                core.info('Deleted ' + release.tag_name + '; tag retained.');
+              }
+            }

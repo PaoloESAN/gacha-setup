@@ -95,6 +95,21 @@ def classify_zzz_eyeshadow_faces(face_object):
         return set()
     epsilon = eye_height * 0.001
 
+    # Remielle's shadow is exported as individual triangles sharing corner
+    # positions with the skin. The generic floating-island test cannot isolate
+    # it. Her face atlas has a dedicated shadow patch, separate from the lash
+    # border above it; use that patch only for this character.
+    remielle = any('remielle' in name.casefold() for name in
+                   [face_object.name, armature.name,
+                    *(material.name for material in mesh.materials if material)])
+    uv_layer = mesh.uv_layers.active
+    if remielle and uv_layer:
+        return {polygon.index for polygon in mesh.polygons
+                if not any(vertex in protected for vertex in polygon.vertices)
+                and all(0.638 <= uv_layer.data[loop].uv.x <= 0.751
+                        and 0.060 <= uv_layer.data[loop].uv.y <= 0.094
+                        for loop in polygon.loop_indices)}
+
     adjacent = [[] for _ in mesh.vertices]
     for polygon in mesh.polygons:
         for index in polygon.vertices:
@@ -119,6 +134,24 @@ def classify_zzz_eyeshadow_faces(face_object):
             islands.append(island)
     if not islands:
         return set()
+    # UV seams can split a head-skinned sclera into two coincident sheets.
+    # They share most of their contour, unlike the smaller upper-eye overlay.
+    # Protect both sheets even though neither carries an eye bone's weights.
+    tolerance = eye_height * 0.00001
+    island_positions = [
+        {tuple(round(component / tolerance) for component in coordinates[v])
+         for index in island for v in mesh.polygons[index].vertices}
+        for island in islands
+    ]
+    shells = set()
+    for i, positions in enumerate(island_positions):
+        for j in range(i):
+            other = island_positions[j]
+            shared = len(positions & other)
+            if shared >= max(len(positions), len(other)) * 0.6:
+                shells.update((i, j))
+    # Keep them in the occlusion surface: removing them would expose the
+    # eyelids behind them and make those become new false positives.
     candidate_polygons = [list(mesh.polygons[index].vertices) for island in islands for index in island]
     front_surface = BVHTree.FromPolygons(coordinates, candidate_polygons)
     polygon_islands = [number for number, island in enumerate(islands) for _ in island]
@@ -129,17 +162,34 @@ def classify_zzz_eyeshadow_faces(face_object):
         horizontal = [coordinates[i].dot(right) for i in weighted[side]]
         eye_width = max(horizontal) - min(horizontal)
         for x in (-0.2, 0.0, 0.2):
-            for z in (0.0, 0.1, 0.2):
+            # Follow the lower edge of the floating layer, independently in
+            # each column. Counting every hit farther up also admits stacked
+            # eyeliner/eyelash strips above the actual shadow (Jane, Cissia).
+            for z in (-0.04, 0.0, 0.04, 0.08, 0.12, 0.16, 0.2):
                 probe = center + right * (x * eye_width) + up * (z * eye_height)
                 origin = probe + forward * eye_height * 4
                 eye_hit, _, _, _ = eye_surface.ray_cast(origin, -forward, eye_height * 8)
                 hit, _, polygon_index, _ = front_surface.ray_cast(origin, -forward, eye_height * 8)
                 if hit is not None and eye_hit is not None and epsilon < (hit - eye_hit).dot(forward) < eye_height * 0.3:
                     number = polygon_islands[polygon_index]
+                    if number in shells:
+                        continue
                     supported_islands[number] = supported_islands.get(number, 0) + 1
+                    break
     selected = set()
     for number, island in enumerate(islands):
+        if number in shells:
+            continue
         if supported_islands.get(number, 0) < 2:
+            continue
+        vertices = {v for index in island for v in mesh.polygons[index].vertices}
+        center = sum((coordinates[v] for v in vertices), Vector()) / len(vertices)
+        side = min(centers, key=lambda s: (center - centers[s]).length)
+        eye_horizontal = [coordinates[v].dot(right) for v in weighted[side]]
+        horizontal = [coordinates[v].dot(right) for v in vertices]
+        # Small detached lash pieces can be the first surface in a column,
+        # but a shadow sheet must span most of the eye's central width.
+        if max(horizontal) - min(horizontal) < (max(eye_horizontal) - min(eye_horizontal)) * 0.65:
             continue
         qualifying = 0
         overlapping = 0

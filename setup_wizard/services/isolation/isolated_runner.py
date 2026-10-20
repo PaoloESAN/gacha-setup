@@ -235,6 +235,14 @@ def save_and_quit():
         top_level_collections = [c.name for c in scene.collection.children]
         loose_objects = [o.name for o in scene.collection.objects]
 
+        # Repair late-appended shader/rig images too, then freeze native absolute
+        # paths before changing the blend's directory to the worker temp folder.
+        from setup_wizard.utils.texture_utils import prepare_image_paths
+        from setup_wizard.import_order import get_active_character_directory
+        missing = prepare_image_paths(get_active_character_directory() or JOB.get('character_directory'))
+        if missing:
+            print(f"[GACHA SETUP WORKER] Unresolved texture files: {', '.join(missing)}", flush=True)
+
         # Only pack textures if the character model was imported from an archive (.zip/.7z)
         # Normal folders must keep their external file paths without packing.
         if JOB.get("is_archive", False):
@@ -266,7 +274,7 @@ def save_and_quit():
                 loose_objects=loose_objects,
             )
 
-        bpy.ops.wm.save_as_mainfile(filepath=str(RESULT_PATH))
+        bpy.ops.wm.save_as_mainfile(filepath=str(RESULT_PATH), relative_remap=False)
 
         write_status(
             "SUCCESS",

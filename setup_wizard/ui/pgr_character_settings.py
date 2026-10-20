@@ -1,3 +1,4 @@
+from setup_wizard.utilites.new_lights import draw_lights_plus
 """Character-local controls for PGR's WuWa-based shader."""
 import bpy
 from bpy.props import BoolProperty, EnumProperty, FloatProperty
@@ -180,6 +181,7 @@ class PGR_PT_CharacterSettings(Panel):
                     box.label(text='Custom Colors', icon='COLOR')
                     _draw_sockets(box.column(align=True), palette,
                                   ('Custom Ambient', 'Custom Light', 'Custom Shadow', 'Custom Rim Tint'))
+            draw_lights_plus(layout, context)
             _draw_sockets(layout.column(align=True), output, ('Shadow Position',))
             fresnel = layout.box()
             fresnel.label(text='Fresnel', icon='SHADING_RENDERED')

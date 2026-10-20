@@ -98,16 +98,8 @@ def setup_wuwa_compositor_nodes(context=None, scene=None):
     if not os.path.exists(target_blend):
         target_blend = os.path.join(addon_dir, "shaders", "wuwa", "Gustling Waters.blend")
 
-    # Load GranTurismoWrapper and its dependency node groups from blend if not already in data
-    if os.path.exists(target_blend):
-        try:
-            with bpy.data.libraries.load(target_blend, link=False) as (data_from, data_to):
-                data_to.node_groups = [
-                    g for g in data_from.node_groups
-                    if g not in bpy.data.node_groups and ('GranTurismo' in g or 'Compositing' in g or g in ('H_f', 'W_f', 'smoothstep'))
-                ]
-        except Exception as e_load:
-            print(f"[WUWA COMPOSITING] Notice loading node groups: {e_load}")
+    from setup_wizard.services.compositor_sources import load_group
+    gt_group = load_group(target_blend, "GranTurismoWrapper [APPEND]")
 
     # Access or create compositor tree
     tree = None
@@ -127,7 +119,6 @@ def setup_wuwa_compositor_nodes(context=None, scene=None):
     rl = tree.nodes.new(type="CompositorNodeRLayers")
     rl.location = (-300, 0)
 
-    gt_group = bpy.data.node_groups.get("GranTurismoWrapper [APPEND]")
     if gt_group:
         grp_node = tree.nodes.new(type="CompositorNodeGroup")
         grp_node.node_tree = gt_group
@@ -155,15 +146,6 @@ def setup_wuwa_compositor_nodes(context=None, scene=None):
         except Exception:
             pass
 
-    # Clean up any duplicate or leftover scenes so only the active scene remains
-    current_scene = scene
-    for sc in list(bpy.data.scenes):
-        if sc != current_scene and (sc.name.startswith("Scene.") or "Scene.001" in sc.name or sc.name in ["Scene.001", "Scene.002", "Preview"]):
-            try:
-                bpy.data.scenes.remove(sc, do_unlink=True)
-            except Exception:
-                pass
-
 
 class WW_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
     """Setup Wuthering Waves Compositor Post-Processing Nodes"""
@@ -176,7 +158,8 @@ class WW_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
             setup_wuwa_compositor_nodes(context)
             self.report({'INFO'}, "Wuthering Waves compositor nodes configured.")
         except Exception as ex:
-            self.report({'WARNING'}, f"Compositor setup notice: {ex}")
+            self.report({'ERROR'}, f"Compositor setup failed: {ex}")
+            return {'CANCELLED'}
         return {'FINISHED'}
 
 
@@ -188,64 +171,8 @@ def setup_ake_compositor_nodes(context=None, scene=None):
     if not os.path.exists(target_blend):
         target_blend = os.path.join(addon_dir, "shaders", "ake", "AKE.blend")
 
-    if os.path.exists(target_blend):
-        try:
-            with bpy.data.libraries.load(target_blend, link=False) as (data_from, data_to):
-                data_to.node_groups = [
-                    g for g in data_from.node_groups
-                    if g not in bpy.data.node_groups and 'Compositing' in g
-                ]
-        except Exception as e_load:
-            print(f"[AKE COMPOSITING] Notice loading node groups: {e_load}")
-
-    comp_ng = bpy.data.node_groups.get("Compositing Nodetree")
-
-    if hasattr(scene, "compositing_node_group") and comp_ng:
-        scene.compositing_node_group = comp_ng
-    else:
-        scene.use_nodes = True
-        tree = getattr(scene, "node_tree", None)
-        if tree and comp_ng:
-            tree.nodes.clear()
-            rl = tree.nodes.new(type="CompositorNodeRLayers")
-            rl.location = (-300, 0)
-            grp_node = tree.nodes.new(type="CompositorNodeGroup")
-            grp_node.node_tree = comp_ng
-            grp_node.location = (0, 0)
-            if "Image" in rl.outputs and "Image" in grp_node.inputs:
-                tree.links.new(rl.outputs["Image"], grp_node.inputs["Image"])
-            elif grp_node.inputs:
-                tree.links.new(rl.outputs[0], grp_node.inputs[0])
-
-            out_type = "NodeGroupOutput" if bpy.app.version >= (5, 0, 0) else "CompositorNodeComposite"
-            comp = tree.nodes.new(type=out_type)
-            comp.location = (300, 100)
-            out_socket = comp.inputs.get("Image") or (comp.inputs[0] if comp.inputs else None)
-            grp_out = grp_node.outputs.get("Image") or grp_node.outputs.get("Result") or (grp_node.outputs[0] if grp_node.outputs else None)
-            if out_socket and grp_out:
-                tree.links.new(grp_out, out_socket)
-
-    # Clean up any duplicate / imported scenes (e.g. Scene.001 from AKE.blend) so only the active scene remains
-    current_scene = scene
-    for sc in list(bpy.data.scenes):
-        if sc != current_scene and (sc.name.startswith("Scene.") or sc.name in ["Scene.001", "Scene.002", "Preview"]):
-            try:
-                bpy.data.scenes.remove(sc, do_unlink=True)
-            except Exception:
-                pass
-
-    # Ensure Render Layers node points to the active scene
-    try:
-        tree = scene.compositing_node_group if hasattr(scene, "compositing_node_group") and getattr(scene, "compositing_node_group", None) else getattr(scene, "node_tree", None)
-        if tree:
-            rl_node = next((n for n in tree.nodes if getattr(n, "type", "") in ("R_LAYERS", "RENDER_LAYERS") or "RLayers" in getattr(n, "bl_idname", "") or "RenderLayers" in getattr(n, "bl_idname", "")), None)
-            if rl_node:
-                try:
-                    rl_node.scene = current_scene
-                except Exception:
-                    pass
-    except Exception:
-        pass
+    from setup_wizard.services.compositor_sources import copy_scene_compositor
+    copy_scene_compositor(target_blend, scene)
 
 
 class AKE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
@@ -259,7 +186,8 @@ class AKE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
             setup_ake_compositor_nodes(context)
             self.report({'INFO'}, "Arknights Endfield compositor nodes configured.")
         except Exception as ex:
-            self.report({'WARNING'}, f"Compositor setup notice: {ex}")
+            self.report({'ERROR'}, f"Compositor setup failed: {ex}")
+            return {'CANCELLED'}
 
         if self.next_step_idx:
             NextStepInvoker().invoke(
@@ -334,16 +262,6 @@ class AKE_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorPropertie
             organize_ake_lighting_collections(context)
         except Exception as e_org:
             print(f"[AKE FINISH] Notice organizing Lighting and WGTS collections: {e_org}")
-
-        # Ensure all outline modifiers are disabled in viewport and render
-        try:
-            for obj in bpy.data.objects:
-                for mod in obj.modifiers:
-                    if 'outline' in mod.name.lower() or (mod.type == 'NODES' and mod.node_group and 'outline' in mod.node_group.name.lower()):
-                        mod.show_viewport = False
-                        mod.show_render = False
-        except Exception as e_mod:
-            print(f"[AKE FINISH] Notice disabling outline modifiers: {e_mod}")
 
         # Remove any extra scenes created during append or setup (e.g. Scene.001 from AKE.blend)
         try:
@@ -813,6 +731,16 @@ class NTE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
 
             # 3. IF SOURCE TREE FOUND IN BLEND FILE, CLONE ENTIRE NODE TREE
             if source_tree and source_tree.nodes:
+                # Blender 5 stores the scene compositor as a node group. Its
+                # output sockets must exist before cloning Group Output links.
+                if hasattr(source_tree, 'interface') and hasattr(node_tree, 'interface'):
+                    node_tree.interface.clear()
+                    for item in source_tree.interface.items_tree:
+                        if item.item_type == 'SOCKET':
+                            socket = node_tree.interface.new_socket(
+                                name=item.name, in_out=item.in_out, socket_type=item.socket_type)
+                            if hasattr(item, 'default_value') and hasattr(socket, 'default_value'):
+                                socket.default_value = item.default_value
                 node_map = {}
                 for src_node in source_tree.nodes:
                     # Skip static placeholder image nodes
@@ -866,8 +794,12 @@ class NTE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
                         from_node = node_map.get(link.from_node)
                         to_node = node_map.get(link.to_node)
                         if from_node and to_node:
-                            from_socket = from_node.outputs.get(link.from_socket.name) or (from_node.outputs[link.from_socket.index] if link.from_socket.index < len(from_node.outputs) else None)
-                            to_socket = to_node.inputs.get(link.to_socket.name) or (to_node.inputs[link.to_socket.index] if link.to_socket.index < len(to_node.inputs) else None)
+                            # Sockets have no .index in Blender 5. Match their
+                            # collection positions, preserving duplicate names.
+                            from_index = list(link.from_node.outputs).index(link.from_socket)
+                            to_index = list(link.to_node.inputs).index(link.to_socket)
+                            from_socket = from_node.outputs[from_index] if from_index < len(from_node.outputs) else from_node.outputs.get(link.from_socket.name)
+                            to_socket = to_node.inputs[to_index] if to_index < len(to_node.inputs) else to_node.inputs.get(link.to_socket.name)
                             if from_socket and to_socket:
                                 node_tree.links.new(from_socket, to_socket)
                     except Exception as ex_link:
@@ -955,20 +887,13 @@ class NTE_OT_SetupCompositorNodes(Operator, CustomOperatorProperties):
                     if rl_img and viewer_in:
                         node_tree.links.new(rl_img, viewer_in)
 
-            # 5. REMOVE TEMPORARY / DUPLICATE SCENES SO ONLY THE ACTIVE SCENE REMAINS
+            # Remove only scenes appended for this compositor, preserving user scenes.
             for sc in temp_scenes:
                 if sc and sc != scene and sc.name in bpy.data.scenes:
                     try:
                         bpy.data.scenes.remove(sc, do_unlink=True)
                     except Exception as ex_sc:
                         print(f"Notice removing temp scene {sc.name}: {ex_sc}")
-
-            for sc in list(bpy.data.scenes):
-                if sc != scene and ("Scene.001" in sc.name or sc.name.startswith("Scene.")):
-                    try:
-                        bpy.data.scenes.remove(sc, do_unlink=True)
-                    except Exception:
-                        pass
 
             # 6. ENSURE RENDER LAYERS POINTS TO ACTIVE SCENE
             rl_node = next((n for n in node_tree.nodes if getattr(n, "type", "") in ("R_LAYERS", "RENDER_LAYERS") or "RLayers" in n.bl_idname or "RenderLayers" in n.bl_idname), None)
@@ -1153,6 +1078,34 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
 
         return None
 
+    def _normalize_pgr_scale(self, armature, context):
+        """Remove a redundant FBX centimeter scale from meter-sized PGR assets.
+
+        Use the bound meshes rather than character height: standalone weapons
+        can have very small skeletons. This also recognizes previously applied
+        armature scale, which Blender transfers to its mesh children.
+        """
+        meshes = [obj for obj in context.scene.objects
+                  if obj.type == 'MESH' and obj.find_armature() == armature]
+        if not meshes:
+            return False
+
+        def local_extent(mesh):
+            return max(max(v[i] for v in mesh.bound_box)
+                       - min(v[i] for v in mesh.bound_box) for i in range(3))
+
+        # Use the largest mesh so small details on a centimeter-sized model
+        # cannot be mistaken for an entire model whose vertices are in meters.
+        mesh = max(meshes, key=local_extent)
+        world_scale = mesh.matrix_world.to_scale()
+        if (0.1 < local_extent(mesh) < 10.0
+                and all(abs(abs(value) - 0.01) < 0.0001 for value in world_scale)):
+            armature.scale *= 100.0
+            context.view_layer.update()
+            self.report({'INFO'}, 'Corrected redundant PGR FBX scale (100x).')
+            return True
+        return False
+
     def execute(self, context):
         from setup_wizard.genshin_import_character_model import is_rigging_disabled
         if self.game_type == GameType.HONKAI_NEXUS_ANIMA.name and is_rigging_disabled(context):
@@ -1165,6 +1118,10 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
                 pass
 
         armature = self._find_target_armature(context)
+
+        if armature and self.game_type == GameType.PUNISHING_GRAY_RAVEN.name:
+            context.view_layer.update()
+            self._normalize_pgr_scale(armature, context)
 
         # Check if weapon / equipment
         fbx_path = context.scene.get("setup_wizard_imported_fbx_path", "")

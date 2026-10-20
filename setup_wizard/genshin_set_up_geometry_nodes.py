@@ -18,11 +18,17 @@ class GI_OT_SetUpGeometryNodes(Operator, CustomOperatorProperties):
     report_message = []
 
     def execute(self, context):
+        active = context.view_layer.objects.active
+        target = active if active and active.type in {'ARMATURE', 'MESH'} else next(
+            (obj for obj in context.selected_objects if obj.type in {'ARMATURE', 'MESH'}), None)
         try:
             game_geometry_nodes_setup = GameGeometryNodesSetupFactory.create(self.game_type, self, context)
 
             geometry_nodes_service = GameGeometryNodesSetupService(game_geometry_nodes_setup)
             geometry_nodes_service.setup_geometry_nodes()
+
+            from setup_wizard.utils.unrigged_light_direction import setup_unrigged_light_direction
+            setup_unrigged_light_direction(context, self.game_type, target_object=target)
 
             NextStepInvoker().invoke(
                 self.next_step_idx, 

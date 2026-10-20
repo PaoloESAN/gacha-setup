@@ -20,7 +20,6 @@ from setup_wizard.material_import_setup.empty_names import LightDirectionEmptyNa
 from setup_wizard.outline_import_setup.outline_node_groups import OutlineNodeGroupNames
 from setup_wizard.texture_import_setup.texture_node_names import V4_GenshinImpactTextureNodeNames
 from setup_wizard.utils.modifier_utils import get_modifier_property, set_modifier_property, get_modifier_inputs, get_modifier_outputs, set_property_field
-from setup_wizard.import_order import NextStepInvoker
 
 
 
@@ -997,6 +996,10 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
         if not new_mesh_name_mesh:
             print(f'Renaming {new_separated_mesh.name} to {new_mesh_name}')
             new_separated_mesh.name = new_mesh_name
+            # The split inherits the temporary visibility used for Edit mode.
+            # Hidden effect parts must remain hidden after setup as well.
+            new_separated_mesh.hide_set(was_hidden)
+            new_separated_mesh.hide_viewport = was_hide_vp
             return new_separated_mesh
         else:
             # Join meshes
@@ -1017,7 +1020,9 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
 
 
     def __remove_material_slots(self, mesh, materials, exclude=False):
-        bpy.ops.object.mode_set(mode='OBJECT')
+        # Separation already returned to Object mode. Use the data API here:
+        # the active source may have had its hidden state restored, making
+        # mode_set/material_slot_remove fail even for another visible mesh.
         # Snapshot face -> material BEFORE removing slots: Blender shifts
         # polygon material_index down on slot removal without remapping faces
         # of the removed slot, so surviving faces would point at wrong
@@ -1034,12 +1039,11 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
         except Exception:
             face_materials = []
         # Reversing is IMPORTANT in order to avoid index errors while removing during runtime
-        for material_slot_material in reversed(mesh.material_slots):
+        for slot_index in reversed(range(len(mesh.material_slots))):
+            material_slot_material = mesh.material_slots[slot_index]
             if (not exclude and material_slot_material.material in materials) or (exclude and material_slot_material.material not in materials):
-                mesh.active_material_index = mesh.material_slots.get(material_slot_material.material.name).slot_index
-                print(f'Removing material: {material_slot_material.material.name} from {mesh.name}')
-                bpy.context.view_layer.objects.active = mesh
-                bpy.ops.object.material_slot_remove()
+                print(f'Removing material: {getattr(material_slot_material.material, "name", None)} from {mesh.name}')
+                mesh_data.materials.pop(index=slot_index)
         # Remap surviving faces back to their original materials
         if face_materials:
             try:
@@ -2073,12 +2077,8 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
 
         self.outlineshader_sync()
 
-        NextStepInvoker().invoke(
-            self.blender_operator.next_step_idx, 
-            self.blender_operator.invoker_type,
-            high_level_step_name=self.blender_operator.high_level_step_name,
-            game_type=self.blender_operator.game_type,
-        )
+        # GI_OT_SetUpGeometryNodes advances the workflow after this returns.
+        # Advancing here too reruns all later steps against an already built rig.
 
     def outlineshader_sync(self):
         def findimg(name):
@@ -2458,8 +2458,8 @@ class HonkaiImpact3rdGeometryNodesSetup(GameGeometryNodesSetup):
                             except Exception:
                                 pass
 
-            # 2. Outlines modifier (skip Eye, Eyebrow, EyeShape)
-            if obj_low in ('eye', 'eyebrow', 'eyeshape') or any(ign in obj_low for ign in ['eyebrow', 'eyeshape', 'eyestar']) or obj_low.endswith(('_eye', '.eye')):
+            # 2. Outlines modifier (skip Eye, Eyes, Eyes2, Eye_L, Eye_R, Eyebrow, EyeShape, Mouth)
+            if obj_low in ('eye', 'eyes', 'eyes2', 'eye_l', 'eye_r', 'eyebrow', 'eyeshape', 'mouth') or any(ign in obj_low for ign in ['eyebrow', 'eyeshape', 'eyestar', 'eye_l', 'eye_r']) or obj_low.endswith(('_eye', '.eye', '_eyes', '.eyes')):
                 continue
 
             if outline_ng:
@@ -2589,11 +2589,7 @@ class HonkaiImpact3rdGeometryNodesSetup(GameGeometryNodesSetup):
             HonkaiImpact3rdMaterialDataImporter.apply_all_hi3_material_data(self.context)
         except Exception as e:
             print(f"[HI3 GEOMETRY NODES] Notice applying material data: {e}")
-
-        NextStepInvoker().invoke(
-            self.blender_operator.next_step_idx, 
-            self.blender_operator.invoker_type, 
-            high_level_step_name=self.blender_operator.high_level_step_name,
-            game_type=self.blender_operator.game_type,
-        )
+        # GI_OT_SetUpGeometryNodes advances the workflow after this returns.
+        # Advancing here too runs all following steps twice, rebuilding an
+        # already generated rig and binding its widget meshes to the body.
 
