@@ -17,8 +17,10 @@
 * **Neverness to Everness (NTE)**
 * **Wuthering Waves (WuWa)**
 * **Arknights: Endfield (AKE)**
+* **Punishing: Gray Raven (PGR)**
+* **Honkai Impact 3rd (HI3)**
+* **Honkai: Nexus Anima (HNA)**
 * **Silver Palace** *(Soon)*
-* **Honkai Impact 3rd** *(Soon)*
 
 ---
 
@@ -145,4 +147,4 @@ In compliance with Section 5a of the GNU General Public License v3, the followin
   - Fixed broken outline rendering, eyeshadow, and outline line thickness across Genshin, ZZZ, and HSR models.
   - Enhanced post-processing execution and automated texture binding for both manual and standard imports.
 - **Codebase Refactoring & Streamlining**:
-  - Removed Punishing: Gray Raven (PGR) support and stopped bundling older third-party dependencies such as BetterFBX and the legacy auto-updater. BetterFBX must be installed separately when using Blender below 4.5.
+  - Removed Punishing: Gray Raven (PGR) support during an earlier cleanup; it has since been restored. Stopped bundling older third-party dependencies such as BetterFBX and the legacy auto-updater. BetterFBX must be installed separately when using Blender below 4.5.
