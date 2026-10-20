@@ -1,6 +1,6 @@
 ---
 title: Guía Rápida
-description: Empieza rápidamente con Gacha Setup para Blender 5.2+.
+description: Empieza rápidamente con Gacha Setup. Se recomienda Blender 5.2; también funciona con Blender/Goo Engine 4.1+.
 ---
 
 import { Image } from 'astro:assets';
@@ -16,14 +16,14 @@ import nteIcon from '../../../assets/icons/nte-icon.jpg';
 import wuwaIcon from '../../../assets/icons/wuwa-icon.webp';
 import akeIcon from '../../../assets/icons/ake-icon.jpg';
 
-:::note
-Gacha Setup está diseñado para **Blender 5.2+**. Versiones anteriores de Blender o Goo Blender no están soportadas.
+:::note[Compatibilidad de Blender]
+**Se recomienda Blender 5.2.** Gacha Setup también es compatible con **Blender/Goo Engine 4.1+**. Si usas Blender **anterior a 4.5**, instala **BetterFBX** para importar modelos.
 :::
 
 ## Instalación
 
 1. Descarga el `Gacha_Setup-<version>.zip` más reciente desde el [último release de GitHub](https://github.com/PaoloESAN/gacha-setup/releases/latest).
-2. Inicia **Blender 5.2+**.
+2. Inicia Blender 5.2 (recomendado), Blender/Goo Engine 4.1+. En Blender anterior a 4.5, instala BetterFBX primero.
 3. Arrastra y suelta el archivo `.zip` descargado dentro de la ventana de Blender.
 4. Activa la casilla **Enable Add-on** y haz clic en **OK** para confirmar.
 5. Si no se instala automáticamente, ve a **Editar > Preferencias > Add-ons**, haz clic en **Instalar desde disco...**, selecciona el `.zip` y activa la casilla del add-on.
@@ -37,7 +37,7 @@ Gacha Setup está diseñado para **Blender 5.2+**. Versiones anteriores de Blend
 2. Selecciona tu juego (Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Neverness to Everness, Wuthering Waves, Arknights: Endfield).
 3. *(Opcional)* En **Setup Settings**, activa la casilla **Hair & Clothes Physics** para añadir físicas dinámicas al cabello y ropa cuando el personaje se mueva. Activa **Disable Rigging** para omitir la generación del rig e importar el personaje solo con materiales y outlines.
 
-<video autoplay loop muted playsinline controls style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
   <source src={physicsVideo} type="video/mp4" />
 </video>
 

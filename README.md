@@ -5,7 +5,7 @@
 
 **Official Website & Documentation:** [https://gacha-setup.pages.dev/](https://gacha-setup.pages.dev/)
 
-**Gacha Setup** is a fork of the original [Setup Wizard](https://github.com/michael-gh1/Addons-And-Tools-For-Blender-miHoYo-Shaders) add-on, created to provide a simple, automated character setup process for Gacha models specifically in modern **official Blender versions (Blender 5.2+)**. Using older versions of Blender or Goo Blender is not recommended, as the primary focus and target of this project is standard official Blender 5.2+.
+**Gacha Setup** is a fork of the original [Setup Wizard](https://github.com/michael-gh1/Addons-And-Tools-For-Blender-miHoYo-Shaders) add-on, created to provide a simple, automated character setup process for Gacha models. **Blender 5.2 is recommended**, and the add-on is compatible with **Blender/Goo Engine 4.1+**. When using Blender versions **below 4.5**, install **BetterFBX** to import models.
 
 ---
 
@@ -25,7 +25,7 @@
 ## Installation
 
 1. Download the `Gacha_Setup-<version>.zip` file from the **Releases** page.
-2. In Blender 5.2+, go to **Edit > Preferences > Add-ons**.
+2. In Blender 5.2 (recommended) or Blender/Goo Engine 4.1+, go to **Edit > Preferences > Add-ons**. If using Blender below 4.5, install BetterFBX first.
 3. Click the drop-down menu in the top right corner and select **Install from Disk...**
 4. Select the downloaded `Gacha_Setup-<version>.zip` file.
 5. Press **N** in the 3D Viewport to access the `Character Setup Wizard` sidebar panel.
@@ -83,6 +83,10 @@ Thanks to all those who collaborated on the original project:
 * **crabnuts** — Rig reference
 * **[nomianims](https://x.com/nomianims)**
 * **[emy_purpl](https://x.com/emy_purpl)** — [YouTube](https://www.youtube.com/@emypurpl) · [X](https://x.com/emy_purpl)
+* **stalomeow**
+* **max**
+* **poke** — zzz setup
+* **cocopops**
 * **Genshin Impact**:
   * **Shader**: [Blender-miHoYo-Shaders](https://github.com/festivize/Blender-miHoYo-Shaders) by Festivity
   * **Genshin review**: VANS
@@ -141,4 +145,4 @@ In compliance with Section 5a of the GNU General Public License v3, the followin
   - Fixed broken outline rendering, eyeshadow, and outline line thickness across Genshin, ZZZ, and HSR models.
   - Enhanced post-processing execution and automated texture binding for both manual and standard imports.
 - **Codebase Refactoring & Streamlining**:
-  - Removed Punishing: Gray Raven (PGR) support and outdated third-party dependencies (e.g., BetterFBX, legacy auto-updater) for a clean, lightweight addon architecture.
+  - Removed Punishing: Gray Raven (PGR) support and stopped bundling older third-party dependencies such as BetterFBX and the legacy auto-updater. BetterFBX must be installed separately when using Blender below 4.5.

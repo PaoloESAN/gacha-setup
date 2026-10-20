@@ -11,11 +11,11 @@ export default defineConfig({
 			plugins: [
 				starlightLlmsTxt({
 					projectName: 'Gacha Setup for Blender',
-					description:
-						'Gacha Setup is an open-source Blender add-on (Blender 5.2+) that automates character model importing, anime toon shading (Festivity, StellarToon, ZZZ Shader, NTE Shader, Gustling Waters, Endfield PBRToon), outline setup, facial driver controls, hair & cloth physics, and rigging for Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Neverness to Everness, Wuthering Waves, and Arknights: Endfield.',
+						description:
+							'Gacha Setup is an open-source Blender add-on. Blender 5.2 is recommended; Blender/Goo Engine 4.1+ are supported. BetterFBX is required for model imports in Blender versions below 4.5. It automates character model importing, anime toon shading (Festivity, StellarToon, ZZZ Shader, NTE Shader, Gustling Waters, Endfield PBRToon), outline setup, facial driver controls, hair & cloth physics, and rigging for Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Neverness to Everness, Wuthering Waves, and Arknights: Endfield.',
 					details: `
 - **Supported Games:** Genshin Impact (GI), Honkai: Star Rail (HSR), Zenless Zone Zero (ZZZ), Neverness to Everness (NTE), Wuthering Waves (WuWa), Arknights: Endfield (AKE).
-- **Blender Compatibility:** Blender 5.2 and newer official releases.
+- **Blender Compatibility:** Blender 5.2 recommended; Blender/Goo Engine 4.1+ supported. BetterFBX is required for model imports below Blender 4.5.
 - **Key Features:** One-click setup wizard, bundled anime toon shaders, hair & cloth physics with Damped Track, 3D facial driver control boards, automated addon dependency installation (ExpyKit, UEFormat), and weapon support.
 `.trim(),
 					optionalLinks: [

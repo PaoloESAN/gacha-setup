@@ -1,6 +1,6 @@
 # Gacha Setup for Blender
 
-**Gacha Setup** is a fork of the original Setup Wizard add-on, created to provide a simple, automated character setup process for Gacha models specifically in modern **official Blender versions (Blender 5.2+)**. Using older versions of Blender or Goo Blender is not recommended, as the primary focus and target of this project is standard official Blender 5.2+.
+**Gacha Setup** is a fork of the original Setup Wizard add-on, created to provide a simple, automated character setup process for Gacha models. **Blender 5.2 is recommended**, and the add-on is compatible with **Blender/Goo Engine 4.1+**. When using Blender versions **below 4.5**, install **BetterFBX** to import models.
 
 **Important**: This tool is intended to be used with:
 * Festivity's Genshin Impact Shader: https://github.com/festivize/Blender-miHoYo-Shaders
@@ -9,7 +9,7 @@
 * Zenless Zone Zero (ZZZ) & Neverness to Everness (NTE) Shaders
 * JaredNyts's Gustling Waters Shader for Wuthering Waves (WuWa)
 
-**Compatibility**: Designed specifically for official **Blender 5.2+**. Using older versions of Blender or Goo Blender is **NOT recommended**.
+**Compatibility**: Blender 5.2 is recommended; Blender/Goo Engine 4.1+ are also supported. **BetterFBX is required when using Blender below 4.5.**
 
 ---
 
@@ -43,7 +43,7 @@ The following add-on dependencies are bundled in the `dependencies` directory an
   - Fixed broken outline rendering, eyeshadow, and outline line thickness across Genshin, ZZZ, HSR, and NTE models.
   - Enhanced post-processing execution and automated texture binding for both manual and standard imports.
 - **Codebase Refactoring & Streamlining**:
-  - Removed Punishing: Gray Raven (PGR) support and outdated third-party dependencies (e.g., BetterFBX, legacy auto-updater) for a clean, lightweight addon architecture.
+  - Removed Punishing: Gray Raven (PGR) support and stopped bundling older third-party dependencies such as BetterFBX and the legacy auto-updater. BetterFBX must be installed separately when using Blender below 4.5.
 
 ---
 

@@ -262,7 +262,7 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
         if should_show_better_fbx_warning(selected_game):
             warn_col = run_entire_setup_column.column()
             warn_col.alert = True
-            warn_col.label(text="BetterFBX is recommended", icon="ERROR")
+            warn_col.label(text="BetterFBX is required for Blender < 4.5", icon="ERROR")
 
         from setup_wizard.services.isolation import isolation_service
         isolation_service.draw_setup_status_box(main_box, context, run_entire_setup_column)

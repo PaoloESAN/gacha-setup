@@ -25,15 +25,27 @@ const isHomepage = Astro.props.slug === '' || Astro.props.slug === 'es' || Astro
 	import { pagefindUserConfig } from 'virtual:starlight/pagefind-config';
 
 	document.addEventListener('astro:page-load', () => {
-		// Initialize and load video elements after View Transitions DOM swap
-		document.querySelectorAll<HTMLVideoElement>('video').forEach((video) => {
+		const videos = document.querySelectorAll<HTMLVideoElement>('video:not([data-lazy-video-ready])');
+		const loadVideo = (video: HTMLVideoElement) => {
+			if (video.dataset.lazyVideoReady) return;
+			video.dataset.lazyVideoReady = 'true';
 			video.load();
-			if (video.hasAttribute('autoplay')) {
-				video.muted = true;
-				video.defaultMuted = true;
-				video.play().catch(() => {});
-			}
-		});
+		};
+
+		if ('IntersectionObserver' in window) {
+			const videoObserver = new IntersectionObserver((entries, observer) => {
+				for (const entry of entries) {
+					if (entry.isIntersecting) {
+						loadVideo(entry.target as HTMLVideoElement);
+						observer.unobserve(entry.target);
+					}
+				}
+			}, { rootMargin: '300px 0px' });
+
+			videos.forEach((video) => videoObserver.observe(video));
+		} else {
+			videos.forEach(loadVideo);
+		}
 
 		const siteSearch = document.querySelector('site-search');
 		if (!siteSearch) return;

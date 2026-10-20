@@ -23,7 +23,7 @@ import eyeThroughHair2 from '../../../assets/content/utilities/eye-through-hair2
 ### Video de referencia
 
 <div class="video-container">
-  <iframe
+  <iframe loading="lazy"
     src="https://www.youtube-nocookie.com/embed/uU-YNxzpVE8"
     title="Jideeh's Camera Reference"
     frameborder="0"
@@ -41,13 +41,13 @@ Permite que los ojos y cejas del personaje se vean a través de la geometría de
 
 ### Automático:
 
-<video loop muted playsinline controls preload="metadata" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
   <source src={eyeThroughHair1} type="video/mp4" />
 </video>
 
 ### Cómo controlar la opacidad:
 
-<video loop muted playsinline controls preload="metadata" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
   <source src={eyeThroughHair2} type="video/mp4" />
 </video>
 
@@ -56,7 +56,7 @@ Permite que los ojos y cejas del personaje se vean a través de la geometría de
 Para quienes deseen configurarlo de forma manual o aprender el flujo paso a paso con Shader to RGB y pases AOV:
 
 <div class="video-container">
-  <iframe
+  <iframe loading="lazy"
     src="https://www.youtube-nocookie.com/embed/ZEjIt1ubZKU"
     title="How to see the eyes through the hair [Blender 5.2] - Blender Tutorial"
     frameborder="0"
@@ -69,6 +69,10 @@ Para quienes deseen configurarlo de forma manual o aprender el flujo paso a paso
 ---
 
 ## Hair Shadows
+
+:::caution[Experimental]
+Esta función es experimental y puede producir resultados inesperados.
+:::
 
 Añade sombras del cabello sobre el rostro del personaje en Blender 5.2 o posterior.
 
@@ -87,7 +91,7 @@ La herramienta activa el compositor del visor automáticamente. Comprueba el res
 Gracias a este video pude implementar el sistema de físicas para este add-on.
 
 <div class="video-container">
-  <iframe
+  <iframe loading="lazy"
     src="https://www.youtube-nocookie.com/embed/tQV_wPQ8rBk"
     title="Movimiento de cabello/ropa - Damped Track"
     frameborder="0"

@@ -41,7 +41,11 @@ if (chibiName && CHIBI_MAP[chibiName]) {
     src={selectedImage}
     alt="Chibi Mascot"
     class="chibi-static-img"
-    loading="eager"
+    widths={[160, 300]}
+    sizes="(max-width: 768px) 40vw, 300px"
+    format="webp"
+    quality={65}
+    loading="lazy"
   />
 </div>
 

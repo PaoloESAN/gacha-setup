@@ -23,7 +23,7 @@ import eyeThroughHair2 from '../../assets/content/utilities/eye-through-hair2.mp
 ### Reference Video
 
 <div class="video-container">
-  <iframe
+  <iframe loading="lazy"
     src="https://www.youtube-nocookie.com/embed/uU-YNxzpVE8"
     title="Jideeh's Camera Reference"
     frameborder="0"
@@ -41,13 +41,13 @@ Makes the character's eyes and eyebrows visible through the hair geometry.
 
 ### Automatic:
 
-<video loop muted playsinline controls preload="metadata" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
   <source src={eyeThroughHair1} type="video/mp4" />
 </video>
 
 ### How to control opacity:
 
-<video loop muted playsinline controls preload="metadata" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
   <source src={eyeThroughHair2} type="video/mp4" />
 </video>
 
@@ -56,7 +56,7 @@ Makes the character's eyes and eyebrows visible through the hair geometry.
 For those who need to set it up manually or want to understand how the Shader to RGB and AOV passes work step by step:
 
 <div class="video-container">
-  <iframe
+  <iframe loading="lazy"
     src="https://www.youtube-nocookie.com/embed/ZEjIt1ubZKU"
     title="How to see the eyes through the hair [Blender 5.2] - Blender Tutorial"
     frameborder="0"
@@ -69,6 +69,10 @@ For those who need to set it up manually or want to understand how the Shader to
 ---
 
 ## Hair Shadows
+
+:::caution[Experimental]
+This feature is experimental and may produce unexpected results.
+:::
 
 Adds shadows from a character's hair onto their face in Blender 5.2 or newer.
 
@@ -87,7 +91,7 @@ The tool enables the viewport compositor automatically. Check the result in rend
 Thanks to this video, the hair & cloth physics system was implemented for this add-on.
 
 <div class="video-container">
-  <iframe
+  <iframe loading="lazy"
     src="https://www.youtube-nocookie.com/embed/tQV_wPQ8rBk"
     title="Movimiento de cabello/ropa - Damped Track"
     frameborder="0"

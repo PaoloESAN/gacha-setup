@@ -42,6 +42,12 @@ description: Acknowledgements, contributors, and assets credits.
 - **zmecyyyy** — Rig review
 - **crabnuts** — Rig reference
 - **[nomianims](https://x.com/nomianims)**
+- **Akatsuki** — WuWa Face Rig
+- **[emy_purpl](https://x.com/emy_purpl)** — [YouTube](https://www.youtube.com/@emypurpl) · [X](https://x.com/emy_purpl)
+- **stalomeow**
+- **max**
+- **poke** — zzz setup
+- **cocopops**
 - **Logo Icon** — <a href="https://www.flaticon.com/free-icons/star" title="star icons">Star icons created by Magnific - Flaticon</a>
 
 <div class="disclaimer-text">
