@@ -850,6 +850,14 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
             if 'n' not in resolved or not resolved['n']:
                 resolved['n'] = self._find_best_texture(matname, mesh_names, "n", image_files, main_prefix)
 
+        # Highlight geometry samples the face atlas. The eye JSON can resolve
+        # Eye_E (a uniform emission texture) through the shared face mesh;
+        # using it here erases Belle's shaped highlights.
+        if 'highlight' in matname:
+            face_atlas = self._find_best_face_diffuse(matname, mesh_names, image_files, main_prefix)
+            if face_atlas:
+                resolved['d'] = face_atlas
+
         return resolved
 
     def import_textures_from_folder(self, folder):
@@ -1005,7 +1013,8 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                         shader_group_node = node
                         break
 
-            if not shader_group_node:
+            # Kythera's highlight material uses plain nodes, with no shader group.
+            if not shader_group_node and not ('highlight' in matname and mat.node_tree.nodes.get('Face_D')):
                 continue
 
             # Combine material name and any mesh names using this material for complete context
@@ -1015,6 +1024,22 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
 
             # Resolve textures via FBX base -> JSON -> Heuristic
             res_textures = self._resolve_material_textures(mat, mesh_names, json_map, filtered_files, tex_folder, folder, main_prefix)
+
+            # The bundled highlight material has its own atlas image node in
+            # both shader variants; its utility groups are not a body shader.
+            highlight_node = mat.node_tree.nodes.get('Face_D') if 'highlight' in matname else None
+            if highlight_node and highlight_node.type == 'TEX_IMAGE' and res_textures.get('d'):
+                atlas = res_textures['d']
+                path = os.path.join(tex_folder, atlas)
+                if not os.path.isfile(path):
+                    path = os.path.join(folder, atlas)
+                if os.path.isfile(path):
+                    image = load_or_get_image(path, atlas)
+                    if image:
+                        image.colorspace_settings.name = 'sRGB'
+                        image.alpha_mode = 'CHANNEL_PACKED'
+                        highlight_node.image = image
+                        continue
 
             # Check if this is a Kythera shader material
             kythera_group_node = None

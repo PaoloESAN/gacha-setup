@@ -27,6 +27,9 @@ for folder, expected_count in [
     ('nicole-demara-lil-sassy', 42),
     ('Avatar_Female_Size03_Sunbringer_UI', 40), ('roxy-default', 46),
     ('norma-hollowell-immunity-to-fools', 46),
+    ('remielle-feathered-murmurs', 42),
+    ('remielle-dan-moonlight-whispers', 42),
+    ('remielle-dan-seashade-pas-seul', 42),
 ]:
     bpy.ops.wm.read_factory_settings(use_empty=True)
     model = next((ROOT/'chars/zzz'/folder).rglob('*.fbx'))
@@ -47,7 +50,16 @@ for folder, expected_count in [
         'roxy-default': {2531, 2843},
         'norma-hollowell-immunity-to-fools': {2624, 2867},
     }.get(folder, set())
+    if folder.startswith('remielle'):
+        upper_strip_anchors |= set(range(2547, 2571)) | set(range(2788, 2812))
     assert not classified.intersection(upper_strip_anchors), (folder, 'upper strips became transparent')
+    if folder.startswith('remielle'):
+        # The actual shadow triangles, excluding the previously misidentified
+        # upper lash border, detached
+        # dark fragments, and the head-skinned front/back sclera surfaces.
+        assert classified == set(range(3512, 3554))
+        assert not classified.intersection({2547, 2788, 2691, 2702, 2931, 2942, 2994, 3028, 3062, 3098})
+
     # Known front-sclera polygons in the real FBX fixtures are head-skinned,
     # so eye-weight protection alone cannot catch these previous false positives.
     sclera_anchors = {'nicole-demara-lil-sassy': {2270, 2714},
@@ -68,11 +80,13 @@ for folder, expected_count in [
                       for index in classified}
     assert detected_sides == {0, 1}, (folder, 'overlay missing on one eye')
 
-    # The classification does not depend on the atlas, nor FBX orientation/scale.
-    for uv in face.data.uv_layers:
-        for loop in uv.data:
-            loop.uv = (0.95, 0.95)
-    assert classify_zzz_eyeshadow_faces(face) == classified
+    # Generic models use geometry alone; Remielle uses her dedicated atlas
+    # patch because the shadow triangles touch skin at the export seams.
+    if not folder.startswith('remielle'):
+        for uv in face.data.uv_layers:
+            for loop in uv.data:
+                loop.uv = (0.95, 0.95)
+        assert classify_zzz_eyeshadow_faces(face) == classified
     transform = Matrix.Rotation(0.8, 4, 'X') @ Matrix.Scale(2.5, 4)
     arm = face.find_armature()
     arm.matrix_world = transform @ arm.matrix_world

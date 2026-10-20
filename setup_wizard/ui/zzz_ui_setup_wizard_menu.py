@@ -66,11 +66,12 @@ class ZZZ_PT_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
         settings_header.label(text="Setup Settings", icon="PREFERENCES")
 
         settings_col = settings_box.column()
-        settings_col.prop(context.scene, "zzz_shader_type", text="Shader")
-        if getattr(context.scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
-            row_by = settings_col.row(align=True)
-            row_by.alignment = 'RIGHT'
-            row_by.label(text="Made by Kythera")
+        if bpy.app.version >= (5, 2, 0):
+            settings_col.prop(context.scene, "zzz_shader_type", text="Shader")
+            if getattr(context.scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
+                row_by = settings_col.row(align=True)
+                row_by.alignment = 'RIGHT'
+                row_by.label(text="Made by Kythera")
         props = context.scene.character_rigger_props
         enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
         settings_col.prop(props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")

@@ -1845,6 +1845,8 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 
     def replace_default_materials(self):
         selected_shader = getattr(bpy.context.scene, 'zzz_shader_type', 'LEGACY') if hasattr(bpy, 'context') and hasattr(bpy.context, 'scene') else 'LEGACY'
+        if bpy.app.version < (5, 2, 0):
+            selected_shader = 'LEGACY'
         for arm in [o for o in bpy.context.scene.objects if o.type == 'ARMATURE']:
             try:
                 arm["zzz_shader_type"] = selected_shader

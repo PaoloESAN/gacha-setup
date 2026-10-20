@@ -95,6 +95,21 @@ def classify_zzz_eyeshadow_faces(face_object):
         return set()
     epsilon = eye_height * 0.001
 
+    # Remielle's shadow is exported as individual triangles sharing corner
+    # positions with the skin. The generic floating-island test cannot isolate
+    # it. Her face atlas has a dedicated shadow patch, separate from the lash
+    # border above it; use that patch only for this character.
+    remielle = any('remielle' in name.casefold() for name in
+                   [face_object.name, armature.name,
+                    *(material.name for material in mesh.materials if material)])
+    uv_layer = mesh.uv_layers.active
+    if remielle and uv_layer:
+        return {polygon.index for polygon in mesh.polygons
+                if not any(vertex in protected for vertex in polygon.vertices)
+                and all(0.638 <= uv_layer.data[loop].uv.x <= 0.751
+                        and 0.060 <= uv_layer.data[loop].uv.y <= 0.094
+                        for loop in polygon.loop_indices)}
+
     adjacent = [[] for _ in mesh.vertices]
     for polygon in mesh.polygons:
         for index in polygon.vertices:

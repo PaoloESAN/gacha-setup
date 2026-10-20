@@ -272,7 +272,8 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
         settings_header.label(text="Setup Settings", icon="PREFERENCES")
 
         settings_col = settings_box.column()
-        if selected_game == GameType.ZENLESS_ZONE_ZERO.name and hasattr(context.scene, "zzz_shader_type"):
+        if (selected_game == GameType.ZENLESS_ZONE_ZERO.name
+                and bpy.app.version >= (5, 2, 0) and hasattr(context.scene, "zzz_shader_type")):
             settings_col.prop(context.scene, "zzz_shader_type", text="Shader")
             if getattr(context.scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
                 row_by = settings_col.row(align=True)

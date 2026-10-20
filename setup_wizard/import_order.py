@@ -233,6 +233,8 @@ def get_shader_file_path(game_type: str, file_type: str = "main") -> str:
                 return p_outlines
         
         selected_shader = getattr(bpy.context.scene, 'zzz_shader_type', 'LEGACY') if hasattr(bpy, 'context') and hasattr(bpy.context, 'scene') else 'LEGACY'
+        if bpy.app.version < (5, 2, 0):
+            selected_shader = 'LEGACY'
 
         if selected_shader == 'LEGACY':
             p_legacy = os.path.join(shaders_dir, 'zzz', 'ZZZ Setup v7.blend')
