@@ -30,6 +30,19 @@ Aquí puedes encontrar los lugares donde descargar los assets de los personajes,
 
 - [Assets de Personajes](https://drive.google.com/drive/folders/1VdKZLOTSUDFXrsHaSKq_B_CF_nMeqxVU) de **hiragara**
 
+### PGR
+
+- [Assets de Personajes](https://drive.google.com/drive/folders/1fHHsj3Gc6w5h6EXCHIHPpi1gB7npHux3?usp=drive_link) de **hiragara**
+
+### HI3
+
+- [Assets de Personajes](https://assets.hoyotoon.com/?game=hi3&type=characters) de **HoyoToon** · [Discord](https://discord.com/invite/hoyotoon)
+- [Assets de Personajes](https://drive.google.com/drive/folders/1QjJMSQV2luuHkrh0E5rcdIlKnT4W8LiT?usp=drive_link) de **hiragara**
+
+### HNA
+
+- [Assets de Personajes](https://drive.google.com/drive/folders/1FTYWZK0SxfQ6Nsf7OkwENxqQX2p5Syb3) de **hiragara**
+
 ### AKE - Arknights: Endfield
 
-- [Assets de Personajes](https://drive.google.com/drive/folders/1bvR4iPoGw9v5Arcj2BQBHNnQX_eBDQ7y) de **hiragara**
+- [Assets de Personajes](https://drive.google.com/drive/folders/1HhYu3KYx01vCzc_O6Kd4TacP-XCQSLx7?usp=drive_link) de **hiragara**
