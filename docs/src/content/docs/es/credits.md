@@ -42,6 +42,7 @@ description: Agradecimientos, colaboradores y créditos de recursos.
 - **[nomianims](https://x.com/nomianims)**
 - **Akatsuki** — Face Rig de WuWa
 - **[emy_purpl](https://x.com/emy_purpl)** — [YouTube](https://www.youtube.com/@emypurpl) · [X](https://x.com/emy_purpl)
+- **ae_gm** — Revisor de armas de Genshin
 - **stalomeow**
 - **max**
 - **poke** — zzz setup

@@ -78,6 +78,8 @@ Thanks to all those who collaborated on the original project:
 ### Additional Credits & Acknowledgments (This Project)
 
 * **Mken** — Original creator of Character Setup Wizard
+* **Meliodas**
+* **Manashiku**
 * **Xiyang** — AKE setup
 * **starriia** — Model references
 * **VaSTuan** — Multi-character support
@@ -85,6 +87,7 @@ Thanks to all those who collaborated on the original project:
 * **crabnuts** — Rig reference
 * **[nomianims](https://x.com/nomianims)**
 * **[emy_purpl](https://x.com/emy_purpl)** — [YouTube](https://www.youtube.com/@emypurpl) · [X](https://x.com/emy_purpl)
+* **ae_gm** — Genshin weapon reviewer
 * **stalomeow**
 * **max**
 * **poke** — zzz setup
