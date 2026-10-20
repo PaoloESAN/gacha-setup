@@ -190,6 +190,9 @@ def join_pupil_and_highlight_meshes(material_names=None):
                         any('highlight' in m for m in mat_names_low))
 
         if is_pupil or is_highlight:
+            from setup_wizard.utils.aether_gun_pupil import is_aether_gun
+            if is_aether_gun(obj):
+                continue
             candidate_meshes.append(obj)
 
     if not candidate_meshes:
@@ -229,26 +232,43 @@ def join_pupil_and_highlight_meshes(material_names=None):
     return primary
 
 
-def is_specific_character(character_name: str, mesh=None, material=None) -> bool:
-    """Detects if the character model, material, or context matches character_name."""
+def is_specific_character(character_name: str, mesh=None, material=None, *, allow_context=True) -> bool:
+    """Match a character by its objects/materials, optionally falling back to context.
+
+    Pass allow_context=False for changes that must stay scoped to one object
+    when several characters share the scene. Material names may also be strings
+    from source JSON files.
+    """
     if not character_name:
         return False
     target = character_name.strip().lower()
 
-    if material:
-        m_name = getattr(material, 'name', '') or ''
-        if target in m_name.lower():
-            return True
+    def matches_material(candidate):
+        if isinstance(candidate, str):
+            return target in candidate.lower()
+        if candidate:
+            original_name = candidate.get('_original_material_name', '') if hasattr(candidate, 'get') else ''
+            names = (getattr(candidate, 'name', ''), original_name)
+            return any(target in name.lower() for name in names)
+        return False
+
+    if matches_material(material):
+        return True
 
     if mesh:
         if target in mesh.name.lower():
             return True
         if mesh.parent and target in mesh.parent.name.lower():
             return True
+        armature = mesh.find_armature() if hasattr(mesh, 'find_armature') else None
+        if armature and (target in armature.name.lower() or target in armature.data.name.lower()):
+            return True
         for slot in getattr(mesh, "material_slots", []):
-            if slot.material and target in slot.material.name.lower():
+            if matches_material(slot.material):
                 return True
 
+    if not allow_context:
+        return False
     try:
         from setup_wizard.import_order import get_active_character_directory
         char_dir = get_active_character_directory() or bpy.context.scene.get("setup_wizard_imported_fbx_path", "")
@@ -620,10 +640,18 @@ def setup_new_pupil_highlight_layer(mesh, material_names=None):
     if not mesh or mesh.type != 'MESH':
         return
 
+    from setup_wizard.utils.aether_gun_pupil import is_aether_gun, setup_single_pupil
+    if is_aether_gun(mesh):
+        template = next((m for m in mesh.data.materials if m and 'new pupil' in m.name.lower()), None)
+        template = template or bpy.data.materials.get(getattr(material_names, 'NEW_PUPIL', 'HoYoverse - Genshin New Pupil'))
+        if template:
+            setup_single_pupil(mesh, template)
+        return
+
     # Check if there are other separate pupil/highlight mesh objects in the scene to join into this mesh
     other_pupil_meshes = [
         o for o in bpy.context.scene.objects
-        if o.type == 'MESH' and o != mesh and (
+        if o.type == 'MESH' and o != mesh and not is_aether_gun(o) and (
             'pupil' in o.name.lower() or 'pupila' in o.name.lower() or 'highlight' in o.name.lower() or
             any('pupil' in s.name.lower() or 'highlight' in s.name.lower() for s in o.material_slots if s.material)
         ) and not any(ex in o.name.lower() for ex in ['eyestar', 'star', 'brow', 'face_eye', 'body', 'hair', 'bang', 'dress', 'mic', 'tail', 'ribbon'])
@@ -896,6 +924,10 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 if mesh_body_part_name in ['Eye', 'EyeStar', 'Eyes', 'EyeShadow']:
                     mesh_body_part_name = 'Face'
                 elif is_pupil_part:
+                    from setup_wizard.utils.aether_gun_pupil import is_aether_gun, TAG as AETHER_GUN_PUPIL
+                    if is_aether_gun(mesh, material_name):
+                        mesh[AETHER_GUN_PUPIL] = True
+                        is_numbered_pupil = True
                     if is_numbered_pupil:
                         mesh_body_part_name = 'New Pupil'
                     else:

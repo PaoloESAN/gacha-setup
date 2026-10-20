@@ -665,6 +665,9 @@ class GenshinTextureImporter:
             setup_crystal_material_nodes(material)
 
     def set_lightmap_texture(self, texture_type: TextureType, material, img, override=True):
+        from setup_wizard.utils.aether_gun_pupil import disable_lightmap
+        if disable_lightmap(material):
+            return
         if not material or not material.use_nodes:
             return
 
@@ -1618,6 +1621,9 @@ class GenshinTextureImporter:
                                 break
 
                 target_mats = [target_mat] if target_mat else []
+                from setup_wizard.utils.aether_gun_pupil import is_aether_gun, TAG as AETHER_GUN_PUPIL
+                if is_aether_gun(material_name=raw_name):
+                    target_mats.extend(m for m in bpy.data.materials if m.get(AETHER_GUN_PUPIL) and m not in target_mats)
                 new_pupil_mat = bpy.data.materials.get('HoYoverse - Genshin New Pupil') or \
                                 bpy.data.materials.get(getattr(self.material_names, 'NEW_PUPIL', None))
                 if new_pupil_mat and new_pupil_mat not in target_mats:
@@ -2325,7 +2331,8 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                                     if m_low.endswith('.001') or 'two' in m_low:
                                         continue
                                     if ('pupil' in m_low or 'pupila' in m_low) and not any(x in m_low for x in ['face', 'eyestar', 'eyeshadow', 'brow', 'outlines', 'highlight']):
-                                        slot.material = primary_pupil_mat
+                                        if not slot.material.get("setup_wizard_aether_gun_pupil"):
+                                            slot.material = primary_pupil_mat
 
                 # Outer layer: Genshin Highlight material receives highlight texture
                 hl_mats = [
