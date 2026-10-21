@@ -3540,6 +3540,12 @@ def rig_character(
         shape_key = obj.data.shape_keys.key_blocks[shape_key]
         driver = shape_key.driver_add("value").driver
 
+        # driver_add reuses an existing driver (Genshin and HSR mappings overlap).
+        # Duplicate variable names cannot be remapped reliably on library override
+        # resync: one can keep targeting the linked rig instead of its override.
+        for variable in list(driver.variables):
+            driver.variables.remove(variable)
+
         # Create variables for the driver
         var = driver.variables.new()
         var.name = "bone"
