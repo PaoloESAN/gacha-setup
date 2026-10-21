@@ -8,6 +8,11 @@ VALID_TEXTURE_EXTENSIONS = (
 )
 
 
+def _is_texture_file(path):
+    extension = os.path.splitext(path)[1].lower()
+    return extension in VALID_TEXTURE_EXTENSIONS or extension in bpy.path.extensions_image
+
+
 def normalize_path(path):
     if not path:
         return ""
@@ -97,7 +102,7 @@ def is_image_missing_or_invalid(img):
 
     clean_fp = raw_fp.replace('\\', '/') if os.name != 'nt' else raw_fp
     abs_fp = absolute_texture_path(clean_fp, getattr(img, 'library', None))
-    if not abs_fp or not os.path.exists(abs_fp):
+    if not abs_fp or not os.path.isfile(abs_fp) or not _is_texture_file(abs_fp):
         return True
 
     # If size is 0x0 for a FILE source, Blender failed to load the file
@@ -202,7 +207,7 @@ def fix_missing_textures(directory=None, images=None):
         # 3a. Direct slash normalization (e.g. relative path //textures\foo.png on macOS/Linux)
         if clean_fp:
             abs_candidate = absolute_texture_path(clean_fp, getattr(image, "library", None))
-            if abs_candidate and os.path.exists(abs_candidate):
+            if abs_candidate and os.path.isfile(abs_candidate) and _is_texture_file(abs_candidate):
                 image.filepath = clean_fp if clean_fp.startswith('//') else abs_candidate
                 try:
                     image.reload()
@@ -270,9 +275,12 @@ def prepare_image_paths(directory=None, images=None, source_blend=None):
     for img in external:
         # Repairs must not change a texture's color interpretation or alpha.
         img.alpha_mode, colorspace = settings[img]
-        img.colorspace_settings.name = colorspace
+        # An image with an unavailable OCIO colorspace can return an empty
+        # identifier. Blender rejects assigning that identifier back to the enum.
+        if colorspace and img.colorspace_settings.name != colorspace:
+            img.colorspace_settings.name = colorspace
         path = absolute_texture_path(img.filepath)
-        if path and os.path.isfile(path):
+        if path and os.path.isfile(path) and _is_texture_file(path):
             changed = img.filepath != path
             img.filepath = path
             img['_gacha_setup_texture_path'] = path
