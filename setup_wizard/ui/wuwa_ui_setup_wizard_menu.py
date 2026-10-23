@@ -313,7 +313,9 @@ class WW_PT_Rig_Character_Settings(Panel):
             pass
 
         # 1. Enable / Disable Animate Mode
-        is_anim = scene.get("ww_animate_mode", False)
+        from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+        arm = resolve_settings_armature(context)
+        is_anim = bool(arm and arm.get("ww_animate_mode", False))
         layout.operator(
             "wuthering_waves.toggle_animate_mode",
             text="Disable Animate Mode" if is_anim else "Enable Animate Mode",
