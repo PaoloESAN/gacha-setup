@@ -10,7 +10,7 @@ Here you can find the places where you can download the character assets, which 
 ### Genshin
 
 - [Character Assets](https://assets.hoyotoon.com/?game=gi&type=characters) by **HoyoToon** · [Discord](https://discord.com/invite/hoyotoon)
-- [Character Assets](https://drive.google.com/drive/folders/1fQeY8ECP8p1R_tGxgYvEt0UjjmRxlrc2) by **hiragara**
+- [Character Assets](https://drive.google.com/drive/folders/10Ib8DochTJrYPgygMxgdZXwp7TBiBlA2) by **hiragara**
 
 ### HSR
 
