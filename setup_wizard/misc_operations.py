@@ -331,7 +331,13 @@ class GI_OT_RenameShaderMaterials(Operator, CustomOperatorProperties):
                 monster_start_index = body_diffuse_filename_lowercased.index('monster')
                 character_name = body_diffuse_filename[monster_start_index:].split('_')[1]
             else:
-                character_name = body_diffuse_filename.split('_')[3]
+                parts = body_diffuse_filename.split('_')
+                if len(parts) > 3:
+                    character_name = parts[3]
+                else:
+                    from setup_wizard.character_rig_setup.rig_ui_utils import extract_clean_character_name
+                    directory = bpy.context.scene.get('setup_wizard_imported_model_dir', '')
+                    character_name = extract_clean_character_name(os.path.basename(directory))
         elif game_type == GameType.PUNISHING_GRAY_RAVEN.name:
             armature =  [object for object in bpy.data.objects if object.type == 'ARMATURE'][0]
             character_name = armature.name

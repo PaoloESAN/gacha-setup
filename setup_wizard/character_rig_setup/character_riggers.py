@@ -340,6 +340,8 @@ class GenshinImpactCharacterRigger(CharacterRigger):
         )
         from setup_wizard.character_rig_setup.genshin_wrist_twist import setup_wrist_twist
         setup_wrist_twist(target_rig)
+        from setup_wizard.utils.mmd_model_adapter import bind_pmx_face_morphs
+        bind_pmx_face_morphs(self.context, target_rig)
 
         if target_rig and hasattr(target_rig.data, "collections"):
             colls = target_rig.data.collections

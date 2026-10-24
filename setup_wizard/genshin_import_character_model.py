@@ -1452,6 +1452,8 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
             # bone orientations, tails, and rolls for animation compatibility).
             if not is_rigging_disabled(context):
                 armatures = [o for o in bpy.data.objects if o.type == "ARMATURE"]
+                from setup_wizard.character_rig_setup.mmd_rig import is_mmd_armature
+                armatures = [arm for arm in armatures if not is_mmd_armature(arm)]
                 for arm in armatures:
                     try:
                         from setup_wizard.character_rig_setup.armature_unification import unify_multi_branch_armature
@@ -1505,6 +1507,15 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
     def import_character_model(
         self, character_model_file_path_or_directory, is_character_model_file
     ):
+        from setup_wizard.character_rig_setup.mmd_rig import find_pmx, import_pmx
+        pmx = find_pmx(character_model_file_path_or_directory)
+        if pmx:
+            import_pmx(bpy.context, pmx)
+            from setup_wizard.utils.mmd_model_adapter import prepare_pmx_for_setup
+            prepare_pmx_for_setup(bpy.context, self.game_type)
+            return
+        if 'setup_wizard_imported_pmx_path' in bpy.context.scene:
+            del bpy.context.scene['setup_wizard_imported_pmx_path']
         if character_model_file_path_or_directory and os.path.isfile(character_model_file_path_or_directory):
             if os.path.basename(character_model_file_path_or_directory).startswith("._"):
                 real_f = os.path.join(
@@ -2083,6 +2094,8 @@ class GI_OT_DeleteEmpties(Operator, CustomOperatorProperties):
         ]
         for object in scene.objects:
             if object.type == "EMPTY":
+                if getattr(object, 'mmd_type', 'NONE') != 'NONE':
+                    continue
                 should_delete = True
                 for name_to_keep in empties_to_not_delete:
                     if object.name.startswith(name_to_keep):

@@ -92,6 +92,23 @@ tests/
 
 ## How to Run Tests
 
+PMX regression (requires MMD Tools) runs the actual Run Entire Setup chain for
+each PMX in the folder. It verifies that every normal FBX stage runs, that all
+character parts receive game shaders with their original PMX textures, and that
+Light Vectors, outlines, the standard controls, face plate and lighting panel
+are present. It exercises facial morph drivers and the rig's FK, IK and finger
+checks, then saves the resulting blends and `results.json`:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python tests/mmd_setup_blender.py -- chars/COLUMBINA
+```
+
+The version-specific dependency/conversion smoke test can run on Blender 4 or 5:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python tests/rig_conversion_blender.py
+```
+
 The isolated texture-path regression runs in fresh Blender processes and checks
 Windows exporter paths, Unicode filenames, saved/unsaved destinations, packed
 images, temporary-folder cleanup and isolation from other characters:

@@ -2427,7 +2427,7 @@ def patch_expykit_operators():
     try:
         import sys
         for mod_name, mod in list(sys.modules.items()):
-            if "expy" in mod_name.lower():
+            if "expy" in mod_name.lower() or "retarget" in mod_name.lower():
                 for attr_name in ("ExtractMetarig", "ConvertBoneNaming"):
                     cls = getattr(mod, attr_name, None)
                     if cls and hasattr(cls, "execute") and not getattr(cls.execute, "_gacha_patched", False):
@@ -2447,35 +2447,46 @@ def patch_expykit_operators():
         pass
 
 
+def rig_conversion_available():
+    key = 'retarget' if bpy.app.version >= (5, 0, 0) else 'expy'
+    return any(key in name.lower() for name in bpy.context.preferences.addons.keys())
+
+
+def rig_conversion_operator(operation):
+    prefix = 'retarget' if bpy.app.version >= (5, 0, 0) else 'expykit'
+    return getattr(bpy.ops.object, f'{prefix}_{operation}')
+
+
 def safe_expykit_extract_metarig(rig_preset="Rigify_Metarig.py", assign_metarig=True):
     """
-    Executes bpy.ops.object.expykit_extract_metarig with a 3D View context override
+    Executes the version-specific metarig extractor with a 3D View context override
     to prevent crashes in background/isolated mode where context.space_data is None.
     """
     patch_expykit_operators()
+    kwargs = dict(rig_preset=rig_preset, assign_metarig=assign_metarig)
+    if bpy.app.version >= (5, 0, 0):
+        # Game scripts preserve and rejoin accessory bones themselves, as
+        # ExpyKit did. Retarget's default would generate those bones twice.
+        kwargs['other_bone'] = False
     ov = get_view3d_override()
     if ov and hasattr(bpy.context, "temp_override"):
         with bpy.context.temp_override(**ov):
-            return bpy.ops.object.expykit_extract_metarig(
-                rig_preset=rig_preset, assign_metarig=assign_metarig
-            )
-    return bpy.ops.object.expykit_extract_metarig(
-        rig_preset=rig_preset, assign_metarig=assign_metarig
-    )
+            return rig_conversion_operator('extract_metarig')(**kwargs)
+    return rig_conversion_operator('extract_metarig')(**kwargs)
 
 
 def safe_expykit_convert_bone_names(src_preset="Rigify_Metarig.py", trg_preset="Rigify_Deform.py"):
     """
-    Executes bpy.ops.object.expykit_convert_bone_names with a 3D View context override.
+    Executes version-specific bone conversion with a 3D View context override.
     """
     patch_expykit_operators()
     ov = get_view3d_override()
     if ov and hasattr(bpy.context, "temp_override"):
         with bpy.context.temp_override(**ov):
-            return bpy.ops.object.expykit_convert_bone_names(
+            return rig_conversion_operator('convert_bone_names')(
                 src_preset=src_preset, trg_preset=trg_preset
             )
-    return bpy.ops.object.expykit_convert_bone_names(
+    return rig_conversion_operator('convert_bone_names')(
         src_preset=src_preset, trg_preset=trg_preset
     )
 

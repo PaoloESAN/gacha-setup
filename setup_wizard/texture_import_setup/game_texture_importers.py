@@ -103,6 +103,8 @@ class GenshinImpactTextureImporterFacade(GameTextureImporter):
 
         texture_importer: GenshinTextureImporter = TextureImporterFactory.create(texture_importer_type, GameType.GENSHIN_IMPACT)
         texture_importer.import_textures(directory)
+        from setup_wizard.utils.mmd_model_adapter import apply_pmx_textures
+        apply_pmx_textures(self.context)
         # Equipment exports keep their own material JSON and existing texture nodes.
         for material in bpy.data.materials:
             if not material.get('_genshin_equipment') or material.name.endswith('Outlines'):

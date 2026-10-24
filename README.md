@@ -11,6 +11,8 @@
 
 ## Supported Games
 
+**MMD / PMX:** Genshin's Run Entire Setup accepts a `.pmx` file or a folder containing PMX models when MMD Tools is installed. It adapts the embedded materials, humanoid bones and facial morphs to the normal game pipeline: the same shader templates, Rigify rig and custom controls, face plate, lighting panel, Light Vectors, outlines and compositing stages used by FBX. Embedded PMX texture assignments are preserved when replacing shaders. Missing game-specific packed lightmaps and ramps use neutral shader settings rather than treating diffuse textures as packed maps. Blender 5+ uses the bundled Retarget; Blender 4.x continues to use Expy-Kit.
+
 * **Genshin Impact**
 * **Honkai: Star Rail (HSR)**
 * **Zenless Zone Zero (ZZZ)**

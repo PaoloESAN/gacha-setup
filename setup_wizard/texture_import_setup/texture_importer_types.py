@@ -2296,6 +2296,10 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
 
             has_multiple_pupil_diffuse = len(pupil_diffuse_images) > 1
             has_new_pupil_setup = has_multiple_pupil_diffuse or is_sandrone or any('new pupil' in m.name.lower() or m.name in DURIN_EYE_MATERIAL_NAMES for m in bpy.data.materials)
+            if bpy.context.scene.get('setup_wizard_imported_pmx_path'):
+                # PMX assigns its eye atlas explicitly. Merely appending the
+                # unused New Pupil template must not replace that assignment.
+                has_new_pupil_setup = has_multiple_pupil_diffuse
 
             if has_new_pupil_setup:
                 # Durin's slot 0 ("Durin Dark Eye") receives pupil textures like

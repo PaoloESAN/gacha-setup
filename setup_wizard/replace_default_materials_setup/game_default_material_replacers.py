@@ -790,6 +790,8 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         self.shader_node_names = shader_node_names
 
     def replace_default_materials(self):
+        from setup_wizard.utils.mmd_model_adapter import replace_pmx_materials
+        replace_pmx_materials(self.context, self.material_names)
         try:
             join_pupil_and_highlight_meshes(self.material_names)
         except Exception as e:

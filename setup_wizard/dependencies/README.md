@@ -15,6 +15,7 @@ This directory contains third-party Blender add-on packages provided in `.zip` f
 * **Author**: [pKrime](https://github.com/pKrime)
 * **File**: `Expy-Kit-v052.zip`
 * **Description**: Toolset for extracting and converting armatures for Rigify in Blender.
+* **Blender versions**: Installed automatically on Blender 4.x.
 
 ### 2. UEFormat
 * **Repository**: [https://github.com/h4lfheart/UEFormat](https://github.com/h4lfheart/UEFormat)
@@ -22,11 +23,21 @@ This directory contains third-party Blender add-on packages provided in `.zip` f
 * **File**: `ueformat-blender.zip`
 * **Description**: Blender add-on for importing Unreal Engine format models (used for NTE model pipelines).
 
+### 3. Retarget
+* **Repository**: [KBSBAUDRICE/Retarget](https://github.com/KBSBAUDRICE/Retarget)
+* **Author**: KBS DEV / KBSBAUDRICE
+* **File**: `retarget.zip`
+* **License**: GPL-3.0 (included in the archive).
+* **Blender versions**: Installed automatically on Blender 5.0 and later, in place of Expy-Kit. Existing legacy or extension installations are enabled when available.
+* **Description**: Rig conversion and metarig extraction, including the MMD-to-Rigify workflow.
+
+MMD Tools is required to import PMX files. It is enabled automatically when already installed, and is not bundled here.
+
 ---
 
 ## Licensing Notice
 
 Blender add-ons that interface with the Blender Python API are generally distributed under the terms of the **GNU General Public License v3.0 (GPL-3.0)**.
 
-* No copyright ownership over these external add-ons is claimed by this project. All rights belong to their respective original creators ([pKrime](https://github.com/pKrime) and [h4lfheart](https://github.com/h4lfheart)).
+* No copyright ownership over these external add-ons is claimed by this project. All rights belong to their respective original creators ([pKrime](https://github.com/pKrime), [h4lfheart](https://github.com/h4lfheart), and [KBSBAUDRICE](https://github.com/KBSBAUDRICE)).
 * **Note / Clarification**: If for any reason these dependencies have been incorrectly understood to be under the GPL-3.0 license, or if there are any licensing concerns regarding their inclusion, please let me know or open an issue so it can be promptly resolved.

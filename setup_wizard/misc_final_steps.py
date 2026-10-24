@@ -1182,6 +1182,9 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
             GameType.HONKAI_NEXUS_ANIMA.name,
             GameType.PUNISHING_GRAY_RAVEN.name,
         ]
+        if armature.get('setup_wizard_pmx_normalized'):
+            # MMD Tools already converts PMX coordinates to Blender's Z-up.
+            should_force_upright_rotation = False
 
         try:
             if should_force_upright_rotation:

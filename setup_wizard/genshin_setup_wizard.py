@@ -228,10 +228,13 @@ def unregister():
 
 def on_register():
     try:
-        # Enable Rigify, ExpyKit and UEFormat. If they don't exist, install them from dependencies folder
+        # Blender 5+ uses Retarget; Blender 4 keeps the bundled ExpyKit.
         addons_to_check = {
             'rigify': ('rigify', ''),
-            'expy': ('Expy-Kit-main', 'Expy-Kit-v052.zip'),
+            ('retarget' if bpy.app.version >= (5, 0, 0) else 'expy'): (
+                ('retarget', 'retarget.zip') if bpy.app.version >= (5, 0, 0)
+                else ('Expy-Kit-main', 'Expy-Kit-v052.zip')
+            ),
             'ueformat': ('io_scene_ueformat', 'ueformat-blender.zip'),
         }
 

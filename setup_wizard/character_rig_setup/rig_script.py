@@ -1127,6 +1127,20 @@ def rig_character(
     # Generates rigify rig and renames it to 'rigify'
     bpy.ops.pose.rigify_generate()
 
+    if obj.get('setup_wizard_pmx_normalized'):
+        # The appended shoulder-follow controls depend on hand IK. Current
+        # Rigify includes the shoulder as a possible IK parent, so reference
+        # the chest before adding that follow chain to avoid a feedback loop.
+        generated = bpy.context.object
+        for side in ('L', 'R'):
+            parent = generated.pose.bones.get(f'MCH-hand_ik.parent.{side}')
+            if parent:
+                for constraint in parent.constraints:
+                    if constraint.type == 'ARMATURE':
+                        for target in constraint.targets:
+                            if target.subtarget == f'ORG-shoulder.{side}':
+                                target.subtarget = 'ORG-spine.003'
+
     gen_rig = None
     if metarig_obj and getattr(metarig_obj.data, "rigify_target_rig", None):
         gen_rig = metarig_obj.data.rigify_target_rig
