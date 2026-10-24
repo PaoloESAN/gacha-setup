@@ -36,6 +36,11 @@ from tests.rig.rig_assertions import assert_rig
 
 on_register()
 assert rig_conversion_available(), 'Automatic dependency installation failed'
+from setup_wizard.utils.optional_addons import find_addon
+optional_modules = [find_addon(key) for key in ('mmd_tools', 'retarget', 'ueformat')]
+for module in optional_modules:
+    if module:
+        addon_utils.disable(module, default_set=True)
 args = sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else []
 selected = Path(args[0]).resolve() if args else ROOT / 'chars/COLUMBINA'
 folder = selected.parent if selected.is_file() else selected
@@ -106,6 +111,7 @@ for model in models:
                     high_level_step_name='genshin.setup_wizard_ui', game_type='GENSHIN_IMPACT')
         assert result == {'FINISHED'}
         assert set(steps[2:]) <= completed, f'Skipped stages: {set(steps[2:])-completed}'
+        assert all(not addon_utils.check(module)[1] for module in optional_modules if module)
     finally:
         factory.create_component_function = descriptor
     rig = next(obj for obj in bpy.context.scene.objects

@@ -6,6 +6,14 @@ description: Useful tools, guides, tutorials, and community resources for workin
 import eyeThroughHair1 from '../../assets/content/utilities/eye-through-hair1.mp4';
 import eyeThroughHair2 from '../../assets/content/utilities/eye-through-hair2.mp4';
 
+## Apply VMD Motion
+
+Available on **Blender 5.0+**; disabled on earlier versions. Select your FBX character's armature, generated Rigify rig, or a mesh bound to it. Choose **Gacha Setup → Utilities → Apply VMD Motion** and select a `.vmd` file. **MMD Tools must be installed**, but may remain disabled. Gacha Setup activates it for the import and restores its previous state afterward.
+
+The importer creates a new action and keeps the previous action. Adjust translation scale (default `0.08`) and the starting frame in the file browser. It sets the scene to 30 FPS and updates the animation range.
+
+Mappings cover humanoid Rigify controls, Genshin `Bip001` bones, common humanoid names, and original MMD names. Unmapped bones are reported. **Matching Facial Morphs** animates compatible shape keys without drivers, preserving existing facial rig drivers. Clothing, hair, and custom skeletons may need additional mapping. VMD cameras, lights, and physics are not imported.
+
 ## Jideeh's Camera
 
 ### How to use

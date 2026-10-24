@@ -205,7 +205,21 @@ class GI_OT_GenshinSetupWizard(Operator):
         return {'FINISHED'}
 
 
+class CSW_OT_DependencyInstallNotice(Operator):
+    bl_idname = 'setup_wizard.dependency_install_notice'
+    bl_label = 'Dependencies Installed'
+    bl_options = {'INTERNAL'}
+
+    addons: StringProperty(options={'HIDDEN', 'SKIP_SAVE'})
+
+    def execute(self, context):
+        self.report({'INFO'}, f'Se instalaron los siguientes addons: {self.addons}. Quedan desactivados hasta que se necesiten.')
+        return {'FINISHED'}
+
+
 def register():
+    if not hasattr(bpy.types, 'CSW_OT_DependencyInstallNotice'):
+        bpy.utils.register_class(CSW_OT_DependencyInstallNotice)
     if not hasattr(bpy.types, "GI_OT_GenshinSetupWizard"):
         try:
             bpy.utils.register_class(GI_OT_GenshinSetupWizard)
@@ -219,6 +233,8 @@ def register():
 
 
 def unregister():
+    if hasattr(bpy.types, 'CSW_OT_DependencyInstallNotice'):
+        bpy.utils.unregister_class(bpy.types.CSW_OT_DependencyInstallNotice)
     if hasattr(bpy.types, "GI_OT_GenshinSetupWizard"):
         try:
             bpy.utils.unregister_class(GI_OT_GenshinSetupWizard)
@@ -227,6 +243,7 @@ def unregister():
 
 
 def on_register():
+    installed = []
     try:
         # Blender 5+ uses Retarget; Blender 4 keeps the bundled ExpyKit.
         addons_to_check = {
@@ -242,55 +259,46 @@ def on_register():
             # Bundled UEFormat supplies fallbacks for Blender 4.1's missing
             # file-drop helpers; their absence must not disable model import.
             if is_addon_enabled_or_installed(search_key):
+                if search_key == 'rigify':
+                    import addon_utils
+                    from setup_wizard.utils.optional_addons import find_addon
+                    addon_utils.enable(find_addon('rigify'), default_set=True)
                 continue
             if filename:
-                install_addon(default_module, filename, search_key)
+                name = install_addon(default_module, filename, search_key)
+                if name:
+                    installed.append(name)
     except Exception as err:
         print(f'Unexpected error when trying to enable/install addons: {err}')
+    finally:
+        if installed:
+            bpy.ops.setup_wizard.dependency_install_notice(addons=', '.join(installed))
 
 
 def is_addon_enabled_or_installed(search_key):
-    import addon_utils
-
-    search_key_lower = search_key.lower()
-
-    # Query all installed modules in Blender (including extension modules bl_ext... and legacy modules)
-    for mod in addon_utils.modules():
-        mod_name = getattr(mod, '__name__', '')
-        bl_info = addon_utils.module_bl_info(mod)
-        title = bl_info.get("name", "").lower()
-
-        if search_key_lower in mod_name.lower() or search_key_lower in title:
-            is_enabled, is_loaded = addon_utils.check(mod_name)
-            if is_enabled:
-                print(f"Addon '{mod_name}' ({title}) is already enabled.")
-                return True
-            else:
-                try:
-                    status = bpy.ops.preferences.addon_enable(module=mod_name)
-                    if status == {'FINISHED'}:
-                        print(f"Enabled existing addon: {mod_name}")
-                        return True
-                except Exception as e:
-                    print(f"Attempted enabling {mod_name}, failed: {e}")
-    return False
+    """Availability check only; optional dependencies may remain disabled."""
+    from setup_wizard.utils.optional_addons import addon_installed
+    return addon_installed(search_key)
 
 
 def install_addon(addon, filename, search_key=""):
     addon_path = os.path.join(os.path.dirname(__file__), 'dependencies', filename)
     if os.path.exists(addon_path):
         print(f'Installing addon: {addon_path}')
-        bpy.ops.preferences.addon_install(filepath=addon_path, overwrite=False)
-
-        if search_key and is_addon_enabled_or_installed(search_key):
-            print(f'Enabled addon for search key: {search_key}')
-            return
-
-        try:
-            bpy.ops.preferences.addon_enable(module=addon)
-            print(f'Enabled addon: {addon}')
-        except Exception:
-            print(f'Could not enable module {addon} after installing {addon_path}')
+        result = bpy.ops.preferences.addon_install(filepath=addon_path, overwrite=False)
+        import addon_utils
+        addon_utils.modules(refresh=True)
+        from setup_wizard.utils.optional_addons import find_addon
+        module = find_addon(search_key or addon)
+        if result != {'FINISHED'} or module is None:
+            raise RuntimeError(f'Could not install dependency: {addon}')
+        # A newly installed dependency must never stay enabled by default.
+        addon_utils.disable(module, default_set=True)
+        metadata = next((mod for mod in addon_utils.modules(refresh=False)
+                         if mod.__name__ == module), None)
+        name = addon_utils.module_bl_info(metadata).get('name', addon) if metadata else addon
+        print(f'Installed optional dependency: {name} (disabled by default)')
+        return name
     else:  #  is not standalone version of Setup Wizard
         print(f'Addon file does not exist at {addon_path}. Unable to install {addon}.')
 

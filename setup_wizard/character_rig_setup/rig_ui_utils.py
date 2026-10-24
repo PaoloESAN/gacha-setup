@@ -6,6 +6,7 @@ import re
 import bpy
 import mathutils
 import addon_utils
+from setup_wizard.utils.optional_addons import uses_addon
 
 
 def extract_clean_character_name(raw_name):
@@ -2448,8 +2449,9 @@ def patch_expykit_operators():
 
 
 def rig_conversion_available():
+    from setup_wizard.utils.optional_addons import addon_installed
     key = 'retarget' if bpy.app.version >= (5, 0, 0) else 'expy'
-    return any(key in name.lower() for name in bpy.context.preferences.addons.keys())
+    return addon_installed(key)
 
 
 def rig_conversion_operator(operation):
@@ -2457,6 +2459,7 @@ def rig_conversion_operator(operation):
     return getattr(bpy.ops.object, f'{prefix}_{operation}')
 
 
+@uses_addon('retarget' if bpy.app.version >= (5, 0, 0) else 'expy')
 def safe_expykit_extract_metarig(rig_preset="Rigify_Metarig.py", assign_metarig=True):
     """
     Executes the version-specific metarig extractor with a 3D View context override
@@ -2475,6 +2478,7 @@ def safe_expykit_extract_metarig(rig_preset="Rigify_Metarig.py", assign_metarig=
     return rig_conversion_operator('extract_metarig')(**kwargs)
 
 
+@uses_addon('retarget' if bpy.app.version >= (5, 0, 0) else 'expy')
 def safe_expykit_convert_bone_names(src_preset="Rigify_Metarig.py", trg_preset="Rigify_Deform.py"):
     """
     Executes version-specific bone conversion with a 3D View context override.

@@ -33,6 +33,7 @@ from setup_wizard.setup_wizard_operator_base_classes import (
     CustomOperatorProperties,
 )
 from setup_wizard.utils import material_utils
+from setup_wizard.utils.optional_addons import temporary_addon, uses_addon
 
 SHADER_COLOR_ATTRIBUTE_NAME = "Col"
 
@@ -40,13 +41,14 @@ SHADER_COLOR_ATTRIBUTE_NAME = "Col"
 IMPORTED_VIA_WIZARD = False
 
 
+@uses_addon('ueformat')
 def _import_nte_uemodel(context, filepath):
     """Require a registered importer and a real mesh before continuing setup."""
     operator = bpy.ops.uf.import_uemodel
     try:
         operator.get_rna_type()
     except (KeyError, AttributeError, RuntimeError) as exc:
-        raise RuntimeError("UEFormat is not enabled. Enable/install the bundled UEFormat add-on.") from exc
+        raise RuntimeError("UEFormat is required. Install the bundled UEFormat add-on.") from exc
 
     if hasattr(context.scene, 'uf_settings'):
         context.scene.uf_settings.reorient_bones = True
@@ -59,6 +61,28 @@ def _import_nte_uemodel(context, filepath):
         raise RuntimeError(f"UEFormat import failed: {result}")
     if not any(obj.type == 'MESH' for obj in set(context.scene.objects) - existing):
         raise RuntimeError(f"UEFormat imported no mesh objects from {filepath}")
+
+
+@uses_addon('ueformat')
+def _import_wuwa_uemodel(context, filepath):
+    if hasattr(context.scene, 'uf_settings'):
+        settings = context.scene.uf_settings
+        for name, value in (
+            ('import_collision', False), ('import_morph_targets', True),
+            ('import_sockets', True), ('import_virtual_bones', False),
+            ('reorient_bones', True), ('bone_length', 4.0),
+        ):
+            if hasattr(settings, name):
+                setattr(settings, name, value)
+    existing = set(context.scene.objects)
+    result = bpy.ops.uf.import_uemodel(
+        'EXEC_DEFAULT', filepath=filepath, directory=os.path.dirname(filepath),
+        files=[{'name': os.path.basename(filepath)}],
+    )
+    if result != {'FINISHED'} or not any(
+        obj.type == 'MESH' for obj in set(context.scene.objects)-existing
+    ):
+        raise RuntimeError(f'UEFormat imported no mesh objects from {filepath}')
 
 
 def is_rigging_disabled(context=None):
@@ -840,31 +864,12 @@ class WW_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
 
         existing_objects = set(context.scene.objects)
 
-        if uemodel_path and hasattr(bpy.ops, 'uf') and hasattr(bpy.ops.uf, 'import_uemodel'):
-            filename = os.path.basename(uemodel_path)
-            if hasattr(context.scene, 'uf_settings'):
-                try:
-                    context.scene.uf_settings.import_collision = False
-                    context.scene.uf_settings.import_morph_targets = True
-                    context.scene.uf_settings.import_sockets = True
-                    context.scene.uf_settings.import_virtual_bones = False
-                    context.scene.uf_settings.reorient_bones = True
-                    context.scene.uf_settings.bone_length = 4.0
-                except Exception as e_set:
-                    print(f"Notice setting uf_settings: {e_set}")
-
+        if uemodel_path:
             try:
-                bpy.ops.uf.import_uemodel(
-                    filepath=uemodel_path,
-                    directory=os.path.dirname(uemodel_path),
-                    files=[{"name": filename}]
-                )
-            except Exception:
-                try:
-                    bpy.ops.uf.import_uemodel(filepath=uemodel_path)
-                except Exception as e_uf:
-                    self.report({"ERROR"}, f"Error importing .uemodel: {e_uf}")
-                    return {"CANCELLED"}
+                _import_wuwa_uemodel(context, uemodel_path)
+            except Exception as exc:
+                self.report({'ERROR'}, f'Error importing .uemodel: {exc}')
+                return {'CANCELLED'}
         elif fbx_path and os.path.isfile(fbx_path):
             _execute_fbx_import(fbx_path)
         else:
@@ -1510,9 +1515,10 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
         from setup_wizard.character_rig_setup.mmd_rig import find_pmx, import_pmx
         pmx = find_pmx(character_model_file_path_or_directory)
         if pmx:
-            import_pmx(bpy.context, pmx)
-            from setup_wizard.utils.mmd_model_adapter import prepare_pmx_for_setup
-            prepare_pmx_for_setup(bpy.context, self.game_type)
+            with temporary_addon('mmd_tools'):
+                import_pmx(bpy.context, pmx)
+                from setup_wizard.utils.mmd_model_adapter import prepare_pmx_for_setup
+                prepare_pmx_for_setup(bpy.context, self.game_type)
             return
         if 'setup_wizard_imported_pmx_path' in bpy.context.scene:
             del bpy.context.scene['setup_wizard_imported_pmx_path']
@@ -1572,62 +1578,14 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                 bpy.context.scene["setup_wizard_imported_model_dir"] = folder
                 if uemodel_path:
                     bpy.context.scene["setup_wizard_imported_uemodel_path"] = uemodel_path
-                if fbx_path:
+                elif fbx_path:
                     bpy.context.scene["setup_wizard_imported_fbx_path"] = fbx_path
             except Exception:
                 pass
 
             existing_objects = set(bpy.context.scene.objects)
-
             if uemodel_path:
-                if hasattr(bpy.context.scene, 'uf_settings'):
-                    try:
-                        bpy.context.scene.uf_settings.import_collision = False
-                        bpy.context.scene.uf_settings.import_morph_targets = True
-                        bpy.context.scene.uf_settings.import_sockets = True
-                        bpy.context.scene.uf_settings.import_virtual_bones = False
-                        bpy.context.scene.uf_settings.reorient_bones = True
-                        bpy.context.scene.uf_settings.bone_length = 4.0
-                    except Exception:
-                        pass
-
-                if hasattr(bpy.ops, 'uf') and hasattr(bpy.ops.uf, 'import_uemodel'):
-                    filename = os.path.basename(uemodel_path)
-                    imported_ok = False
-                    try:
-                        bpy.ops.uf.import_uemodel(
-                            filepath=uemodel_path,
-                            directory=folder,
-                            files=[{"name": filename}]
-                        )
-                        imported_ok = True
-                    except Exception:
-                        pass
-
-                    if not imported_ok:
-                        try:
-                            bpy.ops.uf.import_uemodel('EXEC_DEFAULT', filepath=uemodel_path, directory=folder, files=[{"name": filename}])
-                            imported_ok = True
-                        except Exception:
-                            pass
-
-                    if not imported_ok:
-                        try:
-                            bpy.ops.uf.import_uemodel(filepath=uemodel_path)
-                            imported_ok = True
-                        except Exception:
-                            pass
-
-                    if not imported_ok:
-                        try:
-                            bpy.ops.uf.import_uemodel('EXEC_DEFAULT', filepath=uemodel_path)
-                            imported_ok = True
-                        except Exception as e:
-                            self.report({"ERROR"}, f"UEFormat import error: {e}")
-                            raise RuntimeError(f"UEFormat import error: {e}")
-                else:
-                    self.report({"ERROR"}, "UEFormat add-on is not enabled or available.")
-                    raise RuntimeError("UEFormat add-on is not enabled or available.")
+                _import_wuwa_uemodel(bpy.context, uemodel_path)
             elif fbx_path:
                 _execute_fbx_import(fbx_path)
 

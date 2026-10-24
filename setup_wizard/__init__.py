@@ -234,6 +234,7 @@ else:
         CSW_MT_GameSelectorMenu,
     )
     from setup_wizard.utilites.ui import CSW_PT_Utilities_UI_Layout, CSW_OT_JideehCamera
+    from setup_wizard.utilites.vmd_motion import CSW_OT_ApplyVMD
     from setup_wizard.utilites.jideeh_cam_rig import CSW_OT_CreateCameraPro, CSW_OT_CreateJideehCamrig
     from setup_wizard.utilites.eye_through_hair import CSW_OT_EyeThroughHair
     from setup_wizard.utilites.hair_shadows import CSW_OT_HairShadows
@@ -320,6 +321,7 @@ else:
         CSW_PT_Unified_Character_Setup_Wizard_UI_Layout,
         CSW_PT_Utilities_UI_Layout,
         CSW_OT_JideehCamera,
+        CSW_OT_ApplyVMD,
         CSW_OT_CreateCameraPro,
         CSW_OT_CreateJideehCamrig,
         CSW_OT_EyeThroughHair,

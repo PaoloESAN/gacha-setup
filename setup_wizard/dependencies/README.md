@@ -28,10 +28,12 @@ This directory contains third-party Blender add-on packages provided in `.zip` f
 * **Author**: KBS DEV / KBSBAUDRICE
 * **File**: `retarget.zip`
 * **License**: GPL-3.0 (included in the archive).
-* **Blender versions**: Installed automatically on Blender 5.0 and later, in place of Expy-Kit. Existing legacy or extension installations are enabled when available.
+* **Blender versions**: Installed automatically on Blender 5.0 and later, in place of Expy-Kit. Existing legacy or extension installations are reused.
 * **Description**: Rig conversion and metarig extraction, including the MMD-to-Rigify workflow.
 
-MMD Tools is required to import PMX files. It is enabled automatically when already installed, and is not bundled here.
+MMD Tools is required to import PMX files and VMD motion (VMD Motion requires Blender 5.0+). It must be installed separately and is not bundled here.
+
+Retarget, Expy-Kit, UEFormat, and MMD Tools can remain disabled. Gacha Setup temporarily activates the dependency for the operation that needs it and restores its prior state afterward, including when an operation fails. Dependencies already enabled by the user remain enabled.
 
 ---
 

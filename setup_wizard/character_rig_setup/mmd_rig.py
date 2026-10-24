@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 
 import bpy
+from setup_wizard.utils.optional_addons import uses_addon
 
 
 def is_mmd_armature(obj):
@@ -28,17 +29,12 @@ def find_pmx(path):
     return str(models[0]) if models else None
 
 
+@uses_addon('mmd_tools')
 def import_pmx(context, filepath):
-    from setup_wizard.genshin_setup_wizard import is_addon_enabled_or_installed
     from setup_wizard.import_order import (
         CHARACTER_MODEL_FOLDER_FILE_PATH, cache_using_cache_key,
         get_cache, set_active_character_directory,
     )
-    try:
-        bpy.ops.mmd_tools.import_model.get_rna_type()
-    except (KeyError, AttributeError, RuntimeError):
-        if not is_addon_enabled_or_installed('mmd_tools'):
-            raise RuntimeError('PMX import requires MMD Tools. Install/enable MMD Tools first.')
     before = set(context.scene.objects)
     result = bpy.ops.mmd_tools.import_model(
         'EXEC_DEFAULT', filepath=filepath, scale=0.08, rename_bones=True,

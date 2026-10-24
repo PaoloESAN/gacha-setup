@@ -109,6 +109,17 @@ The version-specific dependency/conversion smoke test can run on Blender 4 or 5:
 blender --background --factory-startup --python-exit-code 1 --python tests/rig_conversion_blender.py
 ```
 
+This also verifies temporary dependency activation, nested scopes, cleanup after
+failure, and preservation of dependencies already enabled by the user. The PMX
+regression starts with optional dependencies disabled. The VMD regression on
+Blender 5 checks the real root VMD on an FBX and Rigify controls, cleanup after
+failure, and rejection of Blender versions below 5.0:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python tests/vmd_motion_blender.py
+blender --background --factory-startup --python-exit-code 1 --python tests/optional_ueformat_blender.py
+```
+
 The isolated texture-path regression runs in fresh Blender processes and checks
 Windows exporter paths, Unicode filenames, saved/unsaved destinations, packed
 images, temporary-folder cleanup and isolation from other characters:
