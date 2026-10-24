@@ -1873,6 +1873,15 @@ class PunishingGrayRavenDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 
 
 class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
+    @staticmethod
+    def _set_toon_rim_default(material):
+        """New Toon materials start with rim lighting off in either control mode."""
+        if material.node_tree:
+            for node in material.node_tree.nodes:
+                socket = node.inputs.get('Enable Rim Light')
+                if socket is not None and not socket.is_linked:
+                    socket.default_value = False
+
     def __init__(self, blender_operator, context):
         self.blender_operator = blender_operator
         self.context = context
@@ -2121,6 +2130,7 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 
                         new_mat.name = f"ZZZ {name_base}"
                         new_mat.use_fake_user = True
+                        self._set_toon_rim_default(new_mat)
                         if "mask" in mesh.name.lower():
                             new_mat["_is_mask"] = True
                             if new_mat.node_tree:
@@ -2149,6 +2159,7 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         new_mat = fallback_template.copy()
                         new_mat.name = f"ZZZ {mesh.name}"
                         new_mat.use_fake_user = True
+                        self._set_toon_rim_default(new_mat)
                         if "mask" in mesh.name.lower():
                             new_mat["_is_mask"] = True
                             if new_mat.node_tree:

@@ -101,57 +101,29 @@ def is_rigging_disabled(context=None):
 
 
 def _execute_fbx_import(filepath):
-    """
-    Executes FBX import.
-    In Blender < 4.5, prioritizes BetterFBX if installed.
-    Falls back to experimental C++ wm.fbx_import or standard import_scene.fbx.
-    """
+    """Import FBX exclusively with Blender's new C++ importer."""
     if os.path.basename(filepath).startswith("._"):
         real_candidate = os.path.join(os.path.dirname(filepath), os.path.basename(filepath)[2:])
         if os.path.isfile(real_candidate):
             filepath = real_candidate
         else:
             raise RuntimeError(f"Cannot import invalid macOS metadata file: {filepath}")
-
-    from setup_wizard.utils.better_fbx_utils import (
-        is_blender_version_lower_than_4_5,
-        is_better_fbx_installed,
+    if not hasattr(bpy.ops.wm, "fbx_import"):
+        raise RuntimeError("Blender's new FBX importer (wm.fbx_import) is required.")
+    bpy.ops.wm.fbx_import(
+        filepath=filepath,
+        global_scale=1.0,
+        mtl_name_collision_mode='MAKE_UNIQUE',
+        import_colors='SRGB',
+        use_custom_normals=True,
+        use_custom_props=True,
+        use_custom_props_enum_as_string=True,
+        import_subdivision=False,
+        ignore_leaf_bones=False,
+        validate_meshes=True,
+        use_anim=True,
+        anim_offset=1.0,
     )
-
-    if is_blender_version_lower_than_4_5() and is_better_fbx_installed():
-        try:
-            print(f"[SETUP WIZARD] Importing FBX using BetterFBX: {filepath}")
-            bpy.ops.better_import.fbx(filepath=filepath)
-            return
-        except Exception as e:
-            print(f"[SETUP WIZARD] bpy.ops.better_import.fbx failed ({e}), falling back to standard importer")
-
-    if hasattr(bpy.ops.wm, "fbx_import"):
-        try:
-            bpy.ops.wm.fbx_import(
-                filepath=filepath,
-                global_scale=1.0,
-                mtl_name_collision_mode='MAKE_UNIQUE',
-                import_colors='SRGB',
-                use_custom_normals=True,
-                use_custom_props=True,
-                use_custom_props_enum_as_string=True,
-                import_subdivision=False,
-                ignore_leaf_bones=False,
-                validate_meshes=True,
-                use_anim=True,
-                anim_offset=1.0,
-            )
-            return
-        except Exception as e:
-            print(f"bpy.ops.wm.fbx_import failed ({e}), falling back to import_scene.fbx")
-
-    if hasattr(bpy.ops.import_scene, "fbx"):
-        bpy.ops.import_scene.fbx(
-            filepath=filepath,
-            force_connect_children=True,
-            automatic_bone_orientation=True,
-        )
 
 
 def connect_armature_bone_chains(armature):

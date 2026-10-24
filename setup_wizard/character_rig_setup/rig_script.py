@@ -19,6 +19,49 @@ from setup_wizard.character_rig_setup.rig_ui_utils import (
 )
 
 
+def configure_shoulder_widgets(rig):
+    """Keep shoulder crescents readable from the front without changing rest bones."""
+    from mathutils import Matrix
+
+    for side in ('L', 'R'):
+        bone = rig.pose.bones.get(f'shoulder.{side}')
+        if bone is None or bone.custom_shape is None:
+            continue
+        # Keep Rigify's native size and mirror signs; enlarging by 1.6 makes
+        # the frontal crescents oversized on characters with long clavicles.
+        transform = bone.custom_shape_transform or bone
+        rest = transform.bone.matrix_local.to_3x3()
+        # Some Genshin clavicles point strongly into depth (e.g. Zhongli's
+        # right side). Roll alignment alone cannot fix the front-view widget.
+        direction = rest.col[1].copy()
+        direction.y = 0
+        if direction.length < 1e-6:
+            continue
+        direction.normalize()
+        across = direction.cross(Vector((0, 0, 1)))
+        if across.length < 1e-6:
+            continue
+        across.normalize()
+        up = across.cross(direction).normalized()
+        frontal = Matrix((across, direction, up)).transposed()
+        bone.custom_shape_rotation_euler = (rest.inverted() @ frontal).to_euler()
+
+
+def remove_shoulder_ik_parent_cycle(rig):
+    """Hand IK must not depend on a shoulder that follows that same hand."""
+    if 'ORG-spine.003' not in rig.pose.bones:
+        return
+    for side in ('L', 'R'):
+        parent = rig.pose.bones.get(f'MCH-hand_ik.parent.{side}')
+        if parent is None:
+            continue
+        for constraint in parent.constraints:
+            if constraint.type == 'ARMATURE':
+                for target in constraint.targets:
+                    if target.target == rig and target.subtarget == f'ORG-shoulder.{side}':
+                        target.subtarget = 'ORG-spine.003'
+
+
 def attach_overcoat_to_arms(rig, context=None):
     """Attach only shoulder drape roots to the upper arms without changing rest."""
     context = context or bpy.context
@@ -158,6 +201,9 @@ def rig_character(
             )
 
     temp_armature = head_bone_arm_target.data
+
+    from setup_wizard.utils.genshin_arm_bind import align_genshin_arm_roots
+    align_genshin_arm_roots(head_bone_arm_target)
 
     bpy.ops.object.mode_set(mode="EDIT")
 
@@ -870,7 +916,7 @@ def rig_character(
 
     try:
         safe_expykit_extract_metarig(
-            rig_preset="Rigify_Metarig.py", assign_metarig=True
+            rig_preset="Rigify_Metarig.py", assign_metarig=True, offset_elbow=0.0
         )
     except Exception as ex:
         print(f"Notice: Expykit extract_metarig handled: {ex}")
@@ -1152,19 +1198,8 @@ def rig_character(
     # Generates rigify rig and renames it to 'rigify'
     bpy.ops.pose.rigify_generate()
 
-    if obj.get('setup_wizard_pmx_normalized'):
-        # The appended shoulder-follow controls depend on hand IK. Current
-        # Rigify includes the shoulder as a possible IK parent, so reference
-        # the chest before adding that follow chain to avoid a feedback loop.
-        generated = bpy.context.object
-        for side in ('L', 'R'):
-            parent = generated.pose.bones.get(f'MCH-hand_ik.parent.{side}')
-            if parent:
-                for constraint in parent.constraints:
-                    if constraint.type == 'ARMATURE':
-                        for target in constraint.targets:
-                            if target.subtarget == f'ORG-shoulder.{side}':
-                                target.subtarget = 'ORG-spine.003'
+    # FBX rigs need the same protection as PMX rigs with current Rigify.
+    remove_shoulder_ik_parent_cycle(bpy.context.object)
 
     gen_rig = None
     if metarig_obj and getattr(metarig_obj.data, "rigify_target_rig", None):
@@ -1913,8 +1948,7 @@ def rig_character(
     this_obj.pose.bones["chest"].custom_shape_rotation_euler[0] = 1.5708
     this_obj.pose.bones["chest"].use_custom_shape_bone_size = False
 
-    this_obj.pose.bones["shoulder.L"].custom_shape_scale_xyz = (1.6, 1.6, 1.6)
-    this_obj.pose.bones["shoulder.R"].custom_shape_scale_xyz = (1.6, 1.6, 1.6)
+    configure_shoulder_widgets(this_obj)
 
     # Ensure Eye-WinkA-Control is enabled (set to 1 / active) by default
     pb_wink_a = this_obj.pose.bones.get("Eye-WinkA-Control")
