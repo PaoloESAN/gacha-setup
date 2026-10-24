@@ -12,7 +12,15 @@ Disponible en **Blender 5.0+**; la opción está desactivada en versiones anteri
 
 El importador crea una acción nueva y conserva la anterior. Permite ajustar la escala de las traslaciones (por defecto `0.08`) y el fotograma inicial; configura la escena a 30 FPS y ajusta el rango a la animación.
 
-Incluye mapeo para controles humanoides de Rigify, huesos Genshin `Bip001`, nombres humanoides habituales y nombres originales MMD. Informa de los huesos sin equivalente. La opción **Matching Facial Morphs** anima las expresiones compatibles que no tengan drivers; conserva los drivers del rig facial. Los huesos de ropa, pelo y esqueletos personalizados pueden necesitar un mapeo adicional. No importa cámaras, luces ni físicas del VMD.
+Incluye mapeo para controles humanoides de Rigify, huesos Genshin `Bip001`, nombres humanoides habituales y nombres originales MMD. Informa de los huesos sin equivalente. **Matching Facial Morphs** transfiere expresiones por nombre exacto o mediante un mapa ampliado de equivalencias japonesas para boca, ojos y cejas. También admite VMD de solo expresiones.
+
+Las expresiones sin drivers se animan directamente. Para las expresiones con drivers compatibles, calibra y anima sus controles existentes sin eliminar los drivers. Si varias expresiones comparten un mismo canal, gana la de mayor peso en cada frame; los ejes distintos de un mismo hueso funcionan de forma independiente. Las claves faciales se hornean por frame con interpolación lineal y las acciones anteriores se conservan. `Mouth_O_manual` se usa si existe; no se crea automáticamente y, si falta, se buscan alternativas estándar.
+
+La calibración de fórmulas aritméticas simples usa una vía rápida comprobada contra Blender, incluidos límites de ubicación en espacio local. Los drivers complejos mantienen la calibración completa. Las claves se escriben en bloque para evitar actualizar la escena por cada clave facial.
+
+Para combinar archivos separados, importa primero el VMD corporal (desactiva **Matching Facial Morphs** si quieres usar solo su movimiento). Después importa el VMD facial con **Facial Only (Preserve Body)** y el mismo **Start Frame**. Esta opción excluye todas las pistas de huesos, incluso en archivos mixtos, y conserva las curvas del cuerpo, los ajustes FK/IK y los FPS. Solo reemplaza las expresiones coincidentes durante el intervalo importado. El rango de la escena no se acorta; se amplía si la cara termina después. Las pistas de mirada basadas en huesos también se excluyen en este modo.
+
+Los controles de transformación deben usar espacio local; las rotaciones requieren modo Euler. Los drivers sin respuesta o sin un control compatible se omiten y se detallan en las propiedades `setup_wizard_vmd_unmapped_morphs` y `setup_wizard_vmd_face_warnings` del armature. Los drivers con varios controles se calibran manteniendo los demás en la pose inicial; los rigs complejos pueden necesitar un mapeo específico. Los huesos de ropa, pelo y esqueletos personalizados también pueden necesitar un mapeo adicional. No importa cámaras, luces ni físicas del VMD.
 
 ## Jideeh's Camera
 

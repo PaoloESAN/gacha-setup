@@ -79,96 +79,91 @@ def mmd_modules():
             importlib.import_module(module+'.core.vmd.importer'))
 
 
-MORPH_ALIASES = {
-    'あ': 'Mouth_A01', 'お': 'Mouth_Open01', 'い': 'Mouth_Smile01',
-    'まばたき': 'Eye_Ha', '笑い': 'Eye_WinkB',
-    'ウィンク': 'Eye_WinkA_L', 'ウィンク右': 'Eye_WinkA_R',
-}
-
-
 def import_morphs(context, rig, motion, start, action_name):
-    """Import available undriven morphs; preserve existing facial rig drivers."""
-    imported = set()
-    seen = set()
-    for obj in context.scene.objects:
-        if obj.type != 'MESH' or obj.find_armature() != rig or not obj.data.shape_keys:
-            continue
-        keys = obj.data.shape_keys
-        if keys.name in seen:
-            continue
-        seen.add(keys.name)
-        matches = []
-        driven = {d.data_path for d in keys.animation_data.drivers} if keys.animation_data else set()
-        for name, frames in motion.items():
-            key = keys.key_blocks.get(name) or keys.key_blocks.get(MORPH_ALIASES.get(name, ''))
-            if key and key.path_from_id('value') not in driven and frames:
-                matches.append((name, key, frames))
-        if not matches:
-            continue
-        data = keys.animation_data_create()
-        if data.action:
-            data.action.use_fake_user = True
-        data.action = None
-        for name, key, frames in matches:
-            for frame in frames:
-                key.value = frame.weight
-                key.keyframe_insert('value', frame=start+frame.frame_number, group=key.name)
-            imported.add(name)
-        data.action.name = action_name+' - '+obj.name+' Face'
+    """Import mapped morphs through their existing facial controls when possible."""
+    from .facial_transfer import transfer_tracks
+
+    objects = [obj for obj in context.scene.objects
+               if obj.type == 'MESH' and obj.find_armature() == rig and obj.data.shape_keys]
+    imported, diagnostics = transfer_tracks(
+        context, objects, motion, start, action_name, owners=[rig, *objects])
+    rig['setup_wizard_vmd_unmapped_morphs'] = ', '.join(sorted(set(motion)-imported))
+    rig['setup_wizard_vmd_face_warnings'] = '\n'.join(diagnostics)
+    for message in diagnostics:
+        print('[VMD Face] ' + message)
     return imported
 
 
-def apply_vmd(context, rig, filepath, scale=.08, start=1, facial=True):
+def apply_vmd(context, rig, filepath, scale=.08, start=1, facial=True, face_only=False):
     if bpy.app.version < (5, 0, 0):
         raise RuntimeError('VMD Motion requires Blender 5.0 or newer.')
     with temporary_addon('mmd_tools'):
-        return _apply_vmd(context, rig, filepath, scale, start, facial)
+        return _apply_vmd(context, rig, filepath, scale, start, facial, face_only)
 
 
-def _apply_vmd(context, rig, filepath, scale, start, facial):
+def _apply_vmd(context, rig, filepath, scale, start, facial, face_only=False):
     vmd, importer_module = mmd_modules()
     motion = vmd.File()
     motion.load(filepath=filepath)
-    mapping = bone_map(rig, motion.boneAnimation)
-    if not mapping:
+    mapping = {} if face_only else bone_map(rig, motion.boneAnimation)
+    facial = facial or face_only
+    has_face = facial and bool(motion.shapeKeyAnimation)
+    if not mapping and not has_face:
         raise RuntimeError('No compatible VMD bones found. Select a humanoid FBX armature or its Rigify rig.')
     action_name = Path(filepath).stem+' - '+rig.name
     data = rig.animation_data_create()
     previous = data.action
-    if previous:
-        previous.use_fake_user = True
-    data.action = None
-    old_frame = context.scene.frame_current
+    previous_slot = data.action_slot
+    if mapping:
+        data.action = None
+    old_frame, old_subframe = context.scene.frame_current, context.scene.frame_subframe
     context.scene.frame_set(start)
     try:
-        importer = importer_module.VMDImporter(
-            filepath, scale=scale, bone_mapper=lambda _: mapping, frame_margin=0,
-            convert_mmd_camera=False, convert_mmd_light=False,
-        )
-        importer.assign(rig, action_name=action_name)
+        if mapping:
+            importer = importer_module.VMDImporter(
+                filepath, scale=scale, bone_mapper=lambda _: mapping, frame_margin=0,
+                convert_mmd_camera=False, convert_mmd_light=False,
+            )
+            importer.assign(rig, action_name=action_name)
+        else:
+            data.action = previous
+            if previous_slot:
+                data.action_slot = previous_slot
         # Rigify: arms use FK; legs use IK only if the VMD supplies foot targets.
         for side, jp in (('L', '左'), ('R', '右')):
             for limb in ('upper_arm', 'thigh'):
                 parent = rig.pose.bones.get(f'{limb}_parent.{side}')
-                if parent and 'IK_FK' in parent:
+                if mapping and parent and 'IK_FK' in parent:
                     ik = limb == 'thigh' and any(n in mapping for n in (jp+'足ＩＫ', jp+'足IK'))
                     parent['IK_FK'] = 0.0 if ik else 1.0
                     parent.keyframe_insert(data_path='["IK_FK"]', frame=start)
         imported_morphs = import_morphs(context, rig, motion.shapeKeyAnimation, start, action_name) if facial else set()
+        if not mapping and not imported_morphs:
+            raise RuntimeError('No compatible VMD bones or facial morphs found for this character.')
     except Exception:
         data.action = previous
+        if previous_slot:
+            data.action_slot = previous_slot
         raise
     finally:
-        context.scene.frame_set(old_frame)
-    frames = [f.frame_number for animation in (motion.boneAnimation, motion.shapeKeyAnimation)
+        context.scene.frame_set(old_frame, subframe=old_subframe)
+    if previous:
+        previous.use_fake_user = True
+    frames = [f.frame_number for animation in (motion.boneAnimation if mapping else {}, motion.shapeKeyAnimation if facial else {})
               for values in animation.values() for f in values]
-    context.scene.frame_start = start
-    context.scene.frame_end = start+max(frames, default=0)
-    context.scene.render.fps = 30
-    context.scene.render.fps_base = 1
+    end = start+max(frames, default=0)
+    if mapping:
+        context.scene.frame_start = start
+        context.scene.frame_end = end
+        context.scene.render.fps = 30
+        context.scene.render.fps_base = 1
+    else:
+        context.scene.frame_start = min(context.scene.frame_start, start)
+        context.scene.frame_end = max(context.scene.frame_end, end)
     context.scene.frame_set(start)
-    skipped = set(motion.boneAnimation)-set(mapping)
-    rig['setup_wizard_vmd_unmapped_bones'] = ', '.join(sorted(skipped))
+    skipped = set() if face_only else set(motion.boneAnimation)-set(mapping)
+    if mapping:
+        rig['setup_wizard_vmd_unmapped_bones'] = ', '.join(sorted(skipped))
     return len(mapping), len(imported_morphs), len(skipped)
 
 
@@ -184,7 +179,9 @@ class CSW_OT_ApplyVMD(bpy.types.Operator, ImportHelper):
                                   description='Translation scale from MMD units to character units')
     start_frame: bpy.props.IntProperty(name='Start Frame', default=1, min=0)
     facial: bpy.props.BoolProperty(name='Matching Facial Morphs', default=True,
-                                  description='Animate matching shape keys that are not controlled by drivers')
+                                  description='Transfer matching expressions to shape keys and supported facial rig controls')
+    face_only: bpy.props.BoolProperty(name='Facial Only (Preserve Body)', default=False,
+                                     description='Import only facial morphs; preserve body animation, FK/IK settings, frame rate and scene range')
 
     @classmethod
     def poll(cls, context):
@@ -194,9 +191,12 @@ class CSW_OT_ApplyVMD(bpy.types.Operator, ImportHelper):
         return selected_armature(context) is not None and context.mode in {'OBJECT', 'POSE'}
 
     def draw(self, context):
-        self.layout.prop(self, 'scale')
+        self.layout.prop(self, 'face_only')
+        options = self.layout.column()
+        options.enabled = not self.face_only
+        options.prop(self, 'scale')
+        options.prop(self, 'facial')
         self.layout.prop(self, 'start_frame')
-        self.layout.prop(self, 'facial')
 
     def invoke(self, context, event):
         self.target_name = selected_armature(context).name
@@ -215,10 +215,13 @@ class CSW_OT_ApplyVMD(bpy.types.Operator, ImportHelper):
             self.report({'ERROR'}, 'Choose an existing .vmd file.')
             return {'CANCELLED'}
         try:
-            bones, morphs, skipped = apply_vmd(context, rig, self.filepath, self.scale, self.start_frame, self.facial)
+            bones, morphs, skipped = apply_vmd(context, rig, self.filepath, self.scale, self.start_frame,
+                                             self.facial, self.face_only)
         except Exception as exc:
             self.report({'ERROR'}, f'VMD import failed: {exc}')
             return {'CANCELLED'}
-        self.report({'WARNING'} if skipped else {'INFO'},
-                    f'VMD applied: {bones} bones, {morphs} facial morphs; {skipped} unmapped bones.')
+        skipped_morphs = rig.get('setup_wizard_vmd_unmapped_morphs', '') if self.facial or self.face_only else ''
+        self.report({'WARNING'} if skipped or skipped_morphs else {'INFO'},
+                    f'VMD applied: {bones} bones, {morphs} facial morphs; {skipped} unmapped bones.'
+                    + (' Some facial morphs were skipped; see armature custom properties.' if skipped_morphs else ''))
         return {'FINISHED'}

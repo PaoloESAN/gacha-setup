@@ -117,8 +117,32 @@ failure, and rejection of Blender versions below 5.0:
 
 ```bash
 blender --background --factory-startup --python-exit-code 1 --python tests/vmd_motion_blender.py
+blender --background --factory-startup --python-exit-code 1 --python tests/facial_transfer_blender.py
 blender --background --factory-startup --python-exit-code 1 --python tests/optional_ueformat_blender.py
 ```
+
+The VMD test uses `chars/vmdmotion/Motion & Facials.vmd` (or the root copy),
+and generates a reproducible motion if neither file is present.
+It also checks driven expressions on an FBX and facial-only VMD import. The
+standalone facial regression needs no optional add-ons; it covers shared
+channels, independent bone axes, linear weights, rollback, source snapshots,
+custom properties and preservation of drivers and previous actions.
+
+To measure import time on an existing character without saving the `.blend`:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python tests/vmd_motion_performance_blender.py -- "Starriia - Kinich.blend"
+```
+
+This reports total import time and facial calibration time separately. Optional
+`--engine PATH --snapshot output.json` and `--compare output.json` compare an
+older facial engine against the current implementation, including evaluated
+shape-key weights across the entire motion and unchanged body channels.
+
+With `Starriia - Kinich.blend` and the two Hiasobi VMDs in `chars/vmdmotion`,
+`tests/vmd_face_overlay_blender.py` checks the real body-then-face workflow,
+including the operator's facial-only option, unchanged body curve coordinates,
+scene duration, FPS, drivers and FK/IK switches. It does not save the blend.
 
 The isolated texture-path regression runs in fresh Blender processes and checks
 Windows exporter paths, Unicode filenames, saved/unsaved destinations, packed
