@@ -528,11 +528,6 @@ else:
     @bpy.app.handlers.persistent
     def gacha_rig_ui_load_post_handler(dummy=None):
         try:
-            from setup_wizard.ui.character_settings_utils import ensure_all_rig_uis_registered
-            ensure_all_rig_uis_registered()
-        except Exception:
-            pass
-        try:
             bpy.app.timers.register(_gacha_prewarm, first_interval=0.5)
         except Exception:
             pass
@@ -584,11 +579,6 @@ else:
             bpy.app.handlers.load_post.append(gacha_rig_ui_load_post_handler)
         try:
             bpy.app.timers.register(_gacha_prewarm, first_interval=1.0)
-        except Exception:
-            pass
-        try:
-            from setup_wizard.ui.character_settings_utils import ensure_all_rig_uis_registered
-            ensure_all_rig_uis_registered()
         except Exception:
             pass
         addon_icon_manager.register_icons()

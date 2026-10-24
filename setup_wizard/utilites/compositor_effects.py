@@ -83,16 +83,19 @@ def render_layer(tree, scene, view_layer=None):
 
 
 def ensure_output(tree, scene):
-    out = next((n for n in tree.nodes if n.type in ('COMPOSITE', 'GROUP_OUTPUT')), None)
+    out = next((n for n in tree.nodes if n.type in ('COMPOSITE', 'GROUP_OUTPUT')
+                and getattr(n, 'is_active_output', True)), None)
     if out is None:
         if hasattr(scene, 'compositing_node_group'):
-            if not any(s.in_out == 'OUTPUT' and s.name == 'Image' for s in tree.interface.items_tree if s.item_type == 'SOCKET'):
+            if not any(s.in_out == 'OUTPUT' and s.socket_type == 'NodeSocketColor'
+                       for s in tree.interface.items_tree if s.item_type == 'SOCKET'):
                 socket(tree, 'Image', 'NodeSocketColor', output=True)
             out = tree.nodes.new('NodeGroupOutput')
         else:
             out = tree.nodes.new('CompositorNodeComposite')
         out.location = (600, 200)
-    return out.inputs.get('Image')
+    # Group interface names belong to the file and can be translated or renamed.
+    return out.inputs.get('Image') or next((s for s in out.inputs if s.type == 'RGBA'), None)
 
 
 def insert_effect(tree, scene, rl, node, old_output=None, old_input=None):
