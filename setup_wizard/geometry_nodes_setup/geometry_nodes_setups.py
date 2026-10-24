@@ -1839,13 +1839,6 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                         mod = obj.modifiers.new(name="Outlines", type='NODES')
                     mod.node_group = target_gn
 
-                    if is_face_obj:
-                        try:
-                            from setup_wizard.services.zzz_outline_mask_service import create_face_outline_mask
-                            create_face_outline_mask(obj, configure_modifier=True)
-                        except Exception as e_mask:
-                            print(f"[ZZZ] Notice setting up face outline mask: {e_mask}")
-
                     # Dynamic material resolution for actual character materials & outlines based on mesh slots
                     obj_mats = [slot.material for slot in obj.material_slots if slot.material]
 
@@ -1956,6 +1949,15 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                         if val is not None:
                             for key in keys:
                                 set_modifier_property(mod, key, val)
+
+                    # Bind the painted mask after generic socket defaults; in
+                    # Blender 5 assigning a socket value can reset its mode.
+                    if is_face_obj:
+                        try:
+                            from setup_wizard.services.zzz_outline_mask_service import create_face_outline_mask
+                            create_face_outline_mask(obj, configure_modifier=True)
+                        except Exception as e_mask:
+                            print(f"[ZZZ] Notice setting up face outline mask: {e_mask}")
 
                     # For non-face meshes: ensure Vertex Colors socket is VALUE mode with black color (0,0,0,1)
                     if not is_face_obj:
