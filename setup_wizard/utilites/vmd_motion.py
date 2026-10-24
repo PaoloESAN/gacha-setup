@@ -4,7 +4,7 @@ from pathlib import Path
 
 import bpy
 from bpy_extras.io_utils import ImportHelper
-from setup_wizard.utils.optional_addons import addon_installed, find_addon, temporary_addon
+from setup_wizard.utils.optional_addons import find_addon, temporary_addon
 
 
 def selected_armature(context):
@@ -175,7 +175,7 @@ def _apply_vmd(context, rig, filepath, scale, start, facial):
 class CSW_OT_ApplyVMD(bpy.types.Operator, ImportHelper):
     bl_idname = 'setup_wizard.apply_vmd'
     bl_label = 'Apply VMD Motion'
-    bl_description = 'Apply a VMD animation to the selected FBX armature or Rigify character (requires MMD Tools)'
+    bl_description = 'Apply a VMD animation to the selected FBX armature or Rigify character (requires MMD Tools installed)'
     bl_options = {'REGISTER', 'UNDO'}
     filename_ext = '.vmd'
     filter_glob: bpy.props.StringProperty(default='*.vmd', options={'HIDDEN'})
@@ -194,8 +194,6 @@ class CSW_OT_ApplyVMD(bpy.types.Operator, ImportHelper):
         return selected_armature(context) is not None and context.mode in {'OBJECT', 'POSE'}
 
     def draw(self, context):
-        if not addon_installed('mmd_tools'):
-            self.layout.label(text='Requires MMD Tools installed', icon='ERROR')
         self.layout.prop(self, 'scale')
         self.layout.prop(self, 'start_frame')
         self.layout.prop(self, 'facial')

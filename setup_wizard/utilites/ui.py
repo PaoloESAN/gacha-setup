@@ -1,6 +1,5 @@
 import bpy
 from bpy.types import Panel
-from setup_wizard.utils.optional_addons import addon_installed
 
 from setup_wizard.utilites.jideeh_cam_rig import (
     build as build_jideeh_camrig,
@@ -35,15 +34,6 @@ class CSW_PT_Utilities_UI_Layout(Panel):
         layout = self.layout
         col = layout.column(align=True)
 
-        vmd = col.column(align=True)
-        vmd.enabled = bpy.app.version >= (5, 0, 0)
-        vmd.operator('setup_wizard.apply_vmd', text='Apply VMD Motion', icon='ACTION')
-        if bpy.app.version >= (5, 0, 0):
-            if not addon_installed('mmd_tools'):
-                vmd.label(text='Requires MMD Tools installed', icon='ERROR')
-        else:
-            col.label(text='VMD Motion requires Blender 5.0+', icon='INFO')
-
         row_cam = col.row(align=True)
         row_cam.operator("setup_wizard.create_camera_pro", text="Jideeh's Camera", icon="CAMERA_DATA")
         doc_cam = row_cam.operator("wm.url_open", text="", icon="TEXT")
@@ -59,5 +49,9 @@ class CSW_PT_Utilities_UI_Layout(Panel):
             row_hair.operator("setup_wizard.hair_shadows", text="Hair Shadows", icon="SHADING_RENDERED")
             doc_hair = row_hair.operator("wm.url_open", text="", icon="TEXT")
             doc_hair.url = "https://gacha-setup.pages.dev/utilities/#hair-shadows"
+
+        vmd = col.row(align=True)
+        vmd.enabled = bpy.app.version >= (5, 0, 0)
+        vmd.operator('setup_wizard.apply_vmd', text='Apply VMD Motion', icon='ACTION')
 
 
