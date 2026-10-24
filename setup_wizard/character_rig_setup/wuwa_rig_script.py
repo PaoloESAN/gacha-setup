@@ -117,6 +117,28 @@ def _wuwa_resolve_head(rig_obj):
     return None
 
 
+def _connect_wuwa_torso_joints(armature):
+    """Use the exported joints, not UEFormat's display lengths, for Rigify.
+
+    Connecting a child to an approximate parent tail moves its joint. Match
+    each parent tail to the existing child head first, preserving skin joints.
+    The neck remains a separate super-copy rig above the connected spine.
+    """
+    bones = armature.data.edit_bones
+    chain = ('Bip001Pelvis', 'Bip001Spine', 'Bip001Spine1',
+             'Bip001Spine2', 'Bip001Neck', 'Bip001Head')
+    for parent_name, child_name in zip(chain, chain[1:]):
+        parent, child = bones.get(parent_name), bones.get(child_name)
+        if parent is None or child is None or child.parent != parent:
+            continue
+        joint = child.head.copy()
+        if (joint - parent.head).length < 1e-6:
+            continue
+        child.use_connect = False
+        parent.tail = joint
+        child.use_connect = child_name != 'Bip001Neck'
+
+
 def _wuwa_head_track_axis(rig_obj, head_name):
     """Eje local del head mas alineado al frente de la cara, para el Damped Track.
 
@@ -1300,26 +1322,12 @@ def rig_wuthering_waves_character(context=None):
     except Exception as e:
         print(f"[WUWA RIG] Notice applying scale: {e}")
 
-    rig_armature_object = context.view_layer.objects.active
-    if rig_armature_object and rig_armature_object.type == 'ARMATURE':
-        bpy.ops.object.mode_set(mode='EDIT')
-        spine_bone = rig_armature_object.data.edit_bones.get("Bip001Spine2")
-        if spine_bone:
-            bone_length = (spine_bone.tail - spine_bone.head).length
-            if bone_length < 0.06:
-                direction = spine_bone.tail - spine_bone.head
-                direction.normalize()
-                spine_bone.tail = spine_bone.head + direction * 0.15
-                spine_bone.tail.y = spine_bone.head.y
-                spine_bone.head.z += 0.03
-                spine_bone.tail.z += 0.03
-        bpy.ops.object.mode_set(mode='OBJECT')
-
     if context.object and context.object.type == 'ARMATURE':
         armature = context.object
         remove_bone_collections(armature)
 
         bpy.ops.object.mode_set(mode='EDIT')
+        _connect_wuwa_torso_joints(armature)
 
         bone_pairs = [
             ('Bip001Spine1', 'Bip001Spine2'),
@@ -1697,7 +1705,9 @@ def rig_wuthering_waves_character(context=None):
             edit_bone_head = RigArmatureObj.data.edit_bones.get("head")
             head_length = (edit_bone_head.tail - edit_bone_head.head).length if edit_bone_head else 0.1
             bpy.ops.object.mode_set(mode='POSE')
-            pose_bone_head.custom_shape_translation.y = head_length * 1.2
+            # Keep the ring at the head joint instead of lifting it above
+            # the skull by a multiple of the importer's display length.
+            pose_bone_head.custom_shape_translation.y = 0.0
             pose_bone_head.custom_shape_scale_xyz = (2, 2, 2)
 
         bpy.ops.object.mode_set(mode='OBJECT')
@@ -2489,7 +2499,7 @@ def create_breast_widget_for_bone(name, bone_matrix, world_center_offset, radius
 def create_wuwa_breast_controls(rig_obj):
     """
     Creates circular breast controllers ('breast.L', 'breast.R') on the Torso collection
-    parented to 'chest', with a front-facing circle custom widget (WGT-rig_breast.L / R),
+    following the original deformation parent, with a front-facing circle widget,
     and binds the deformation bones (ORG-Bone_Chest001_L / R) to follow them with zero rest shift.
     """
     if not rig_obj or rig_obj.type != 'ARMATURE':
@@ -2525,8 +2535,6 @@ def create_wuwa_breast_controls(rig_obj):
         bpy.ops.object.mode_set(mode='OBJECT')
         return
 
-    chest_parent = eb.get("chest") or eb.get("torso") or eb.get("Spine2_fk") or eb.get("ORG-Spine2")
-
     for ctrl_name, org_bone in [("breast.L", eb_org_l), ("breast.R", eb_org_r)]:
         b_ctrl = eb.get(ctrl_name) or eb.new(ctrl_name)
 
@@ -2534,9 +2542,13 @@ def create_wuwa_breast_controls(rig_obj):
         b_ctrl.head = org_bone.head.copy()
         b_ctrl.tail = org_bone.tail.copy()
         b_ctrl.roll = org_bone.roll
-        if chest_parent:
-            b_ctrl.parent = chest_parent
         b_ctrl.use_connect = False
+        # The Rigify chest controller and ORG-Spine2 do not have identical
+        # transforms: the spine distributes IK motion and adds FK offsets.
+        # Using 'chest' here makes breasts drift away from clothing attached
+        # to the original upper spine, even when these controls are untouched.
+        b_ctrl.parent = org_bone.parent
+        b_ctrl.use_deform = False
 
     mat_l = eb.get("breast.L").matrix.copy()
     mat_r = eb.get("breast.R").matrix.copy()
