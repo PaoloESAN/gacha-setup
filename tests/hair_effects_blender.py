@@ -21,7 +21,8 @@ def material(name, color):
     tree = m.node_tree
     emission = tree.nodes.new('ShaderNodeEmission')
     emission.inputs['Color'].default_value = color
-    tree.links.new(emission.outputs[0], tree.nodes.get('Material Output').inputs['Surface'])
+    output = next(n for n in tree.nodes if n.type == 'OUTPUT_MATERIAL' and n.is_active_output)
+    tree.links.new(emission.outputs[0], output.inputs['Surface'])
     return m
 
 
@@ -126,8 +127,8 @@ camera.data.type, camera.data.ortho_scale = 'ORTHO', 2.4
 scene.camera = camera
 hair.inputs['Shadow Tint'].default_value = (.1, .1, .1, 1)
 hair.inputs['Offset Y'].default_value = -math.pi / 2
-output_dir = ROOT / '.hair-effects-check'
-output_dir.mkdir(exist_ok=True)
+output_dir = ROOT / '.tmp' / 'hair-effects-check'
+output_dir.mkdir(parents=True, exist_ok=True)
 
 
 def render(opacity, direction):

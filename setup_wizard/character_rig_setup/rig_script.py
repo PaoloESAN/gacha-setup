@@ -74,6 +74,31 @@ def initialize_genshin_rim_x(rig):
             rim.location.x = -0.0075
 
 
+def bind_viewport_outlines(rig):
+    """Connect the settings plate to this character's outline modifiers."""
+    plate = rig.pose.bones.get('plate-settings') if rig and rig.pose else None
+    if plate is None:
+        return 0
+    modifiers = [modifier for obj in bpy.context.scene.objects
+                 if obj.type == 'MESH' and obj.find_armature() == rig
+                 for modifier in obj.modifiers if 'outline' in modifier.name.lower()]
+    if not modifiers:
+        return 0
+    plate['Viewport Outlines'] = any(modifier.show_viewport for modifier in modifiers)
+    for modifier in modifiers:
+        driver = modifier.driver_add('show_viewport').driver
+        for variable in list(driver.variables):
+            driver.variables.remove(variable)
+        variable = driver.variables.new()
+        variable.name = 'outlines'
+        variable.type = 'SINGLE_PROP'
+        variable.targets[0].id = rig
+        variable.targets[0].data_path = plate.path_from_id() + '["Viewport Outlines"]'
+        driver.type = 'SCRIPTED'
+        driver.expression = 'outlines >= 0.5'
+    return len(modifiers)
+
+
 def rig_character(
     file_path,
     lighting_panel_version,
@@ -3861,21 +3886,7 @@ def rig_character(
     bpy.data.objects["Head_Pole"].parent_type = "BONE"
     bpy.data.objects["Head_Pole"].parent_bone = "neck"
 
-    # Remove any drivers on viewport outlines so user has direct control
-    def setup_viewport_outlines(prop):
-        try:
-            prop.driver_remove("show_viewport")
-        except:
-            pass
-        try:
-            prop.driver_remove("show_render")
-        except:
-            pass
-
-    for mesh in [obj for obj in bpy.data.objects if obj.type == 'MESH']:
-        for modifier in mesh.modifiers:
-            if "Outline" in modifier.name or "outlines" in modifier.name.lower() or "Outlines" in modifier.name:
-                setup_viewport_outlines(modifier)
+    bind_viewport_outlines(bpy.data.objects[ourRig])
 
     # handled list of face SK
     handled_sks = [

@@ -10,7 +10,6 @@ from pathlib import Path
 import bpy
 
 from setup_wizard.services.isolation import face_widget_manager
-from setup_wizard.services.isolation import rig_ui_manager
 
 _ACTIVE_JOB = None
 _POLL_TIMER_REGISTERED = False
@@ -540,8 +539,8 @@ def append_result(
         all_imported_objects, canonical_widgets
     )
 
-    # 2. Register Rig UI in writable operator context (zero lag)
-    rig_stats = rig_ui_manager.initialize_rig_uis(all_imported_objects)
+    # Imported rig UI scripts are not automatically executed.
+    rig_stats = {"rig_ui_ready": 0, "rig_ui_initialized": 0, "rig_ui_errors": []}
 
     # 3. Synchronize scene-level settings (Color Management, EEVEE SSR, Compositor nodes)
     sync_scene_environment(target_scene=target, game_type=game_type)

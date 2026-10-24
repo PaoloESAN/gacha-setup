@@ -1186,15 +1186,33 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
             # MMD Tools already converts PMX coordinates to Blender's Z-up.
             should_force_upright_rotation = False
 
+        # Hidden FBX children retain stale parent transforms during apply.
+        # EyeStar then inherits a compensating 0.01 scale while visible face
+        # meshes stay at full size. Evaluate all character meshes together,
+        # restoring their visibility after the transform has been baked.
+        hidden_children = []
+        if should_force_upright_rotation:
+            for child in armature.children_recursive:
+                if child.type == 'MESH' and (child.hide_viewport or child.hide_get()):
+                    hidden_children.append((child, child.hide_viewport, child.hide_get()))
+                    child.hide_viewport = False
+                    child.hide_set(False)
+            context.view_layer.update()
         try:
             if should_force_upright_rotation:
                 bpy.ops.object.scale_clear()
                 bpy.ops.object.rotation_clear()
                 armature.rotation_euler[0] = 1.5708  # x-axis, 90 degrees
+                context.view_layer.update()
 
             bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
         except Exception as e:
             print(f"Warning in transform_apply: {e}")
+        finally:
+            context.view_layer.update()
+            for child, hidden_viewport, hidden in hidden_children:
+                child.hide_set(hidden)
+                child.hide_viewport = hidden_viewport
 
         for obj in context.selected_objects:
             try:
