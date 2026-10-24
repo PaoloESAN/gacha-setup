@@ -9,7 +9,7 @@ import traceback
 from pathlib import Path
 import bpy
 
-from setup_wizard.services.isolation import face_widget_manager
+from setup_wizard.services.isolation import face_widget_manager, rig_ui_manager
 
 _ACTIVE_JOB = None
 _POLL_TIMER_REGISTERED = False
@@ -348,7 +348,7 @@ def _poll_job():
             manifest_collections = status.get("collections", [])
             manifest_loose = status.get("loose_objects", [])
             effective_game_type = _ACTIVE_JOB.get("game_type") or status.get("game_type", "")
-            append_result(
+            rig_stats = append_result(
                 result_path,
                 manifest_collections=manifest_collections,
                 manifest_loose_objects=manifest_loose,
@@ -356,7 +356,10 @@ def _poll_job():
                 game_type=effective_game_type,
                 character_directory=_ACTIVE_JOB.get('character_directory', ''),
             )
-            scene.gacha_setup_status = "Setup completed successfully."
+            if rig_stats.get('rig_ui_errors'):
+                scene.gacha_setup_status = "Setup completed; some Rig UI panels could not be loaded. Check the log."
+            else:
+                scene.gacha_setup_status = "Setup completed successfully."
 
             # Only pack textures if character was imported from an archive (.zip/.7z)
             if _ACTIVE_JOB.get("is_archive", False):
@@ -410,11 +413,15 @@ def append_result(
 
     canonical_widgets = face_widget_manager.capture_existing_face_widgets()
     existing_images = set(bpy.data.images)
+    existing_texts = set(bpy.data.texts)
 
     # Detect if this is a Zenless Zone Zero character import
     is_zzz = ("ZENLESS" in str(game_type).upper() or str(game_type).upper() == "ZZZ")
 
     with bpy.data.libraries.load(result_path, link=False) as (data_from, data_to):
+        # Generated UI Texts may have no ID users, so collections alone do not
+        # bring them into the foreground process. Loading a Text does not run it.
+        data_to.texts = list(data_from.texts)
         available_colls = list(data_from.collections)
         if manifest_collections:
             chosen_colls = [c for c in manifest_collections if c in available_colls]
@@ -539,8 +546,10 @@ def append_result(
         all_imported_objects, canonical_widgets
     )
 
-    # Imported rig UI scripts are not automatically executed.
-    rig_stats = {"rig_ui_ready": 0, "rig_ui_initialized": 0, "rig_ui_errors": []}
+    # Register only UIs from this completed isolated job, never arbitrary Texts
+    # already present in the user's file. The manager matches each rig_id.
+    imported_texts = [text for text in bpy.data.texts if text not in existing_texts]
+    rig_stats = rig_ui_manager.initialize_rig_uis(all_imported_objects, texts=imported_texts)
 
     # 3. Synchronize scene-level settings (Color Management, EEVEE SSR, Compositor nodes)
     sync_scene_environment(target_scene=target, game_type=game_type)
@@ -601,6 +610,7 @@ def append_result(
         f"Face widgets remapped: {face_stats.get('face_widget_bones_remapped', 0)}, "
         f"Rigs ready: {rig_stats.get('rig_ui_ready', 0)}"
     )
+    return rig_stats
 
 
 def exclude_widget_collections(scene=None):

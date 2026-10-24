@@ -406,7 +406,7 @@ ZZZ_LIGHT_PRESETS = {
         "shadow_tint": (0.65, 0.65, 0.85),
         "shadow_intensity": 1.0,
         "fake_sss_intensity": 1.0,
-        "enable_rim": True,
+        "enable_rim": False,
         "rim_color": (1.0, 1.0, 1.0),
         "coverage": 1.0,
         "brightness": 1.0,
@@ -574,7 +574,7 @@ def update_zzz_kythera_props(self, context=None):
     shadow_tint = list(getattr(scene, "zzz_shadow_tint", (1.0, 1.0, 1.0)))
     if len(shadow_tint) == 3: shadow_tint.append(1.0)
     
-    enable_rim = getattr(scene, "zzz_enable_rim_light", True)
+    enable_rim = getattr(scene, "zzz_enable_rim_light", False)
     
     rim_color = list(getattr(scene, "zzz_rim_light_color", (1.0, 1.0, 1.0)))
     if len(rim_color) == 3: rim_color.append(1.0)
@@ -1271,7 +1271,7 @@ def register_zzz_properties():
     bpy.types.Scene.zzz_enable_rim_light = BoolProperty(
         name="Enable Rim Light",
         description="Enable or disable rim light on Kythera ZZZ shader",
-        default=True,
+        default=False,
         update=update_zzz_kythera_props,
     )
 

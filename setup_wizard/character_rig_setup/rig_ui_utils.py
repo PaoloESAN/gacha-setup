@@ -2460,7 +2460,7 @@ def rig_conversion_operator(operation):
 
 
 @uses_addon('retarget' if bpy.app.version >= (5, 0, 0) else 'expy')
-def safe_expykit_extract_metarig(rig_preset="Rigify_Metarig.py", assign_metarig=True, offset_elbow=None):
+def safe_expykit_extract_metarig(rig_preset="Rigify_Metarig.py", assign_metarig=True, offset_elbow=None, no_breast=None):
     """
     Executes the version-specific metarig extractor with a 3D View context override
     to prevent crashes in background/isolated mode where context.space_data is None.
@@ -2473,6 +2473,8 @@ def safe_expykit_extract_metarig(rig_preset="Rigify_Metarig.py", assign_metarig=
         kwargs['other_bone'] = False
         if offset_elbow is not None:
             kwargs['offset_elbow'] = offset_elbow
+        if no_breast is not None:
+            kwargs['no_breast'] = no_breast
     ov = get_view3d_override()
     if ov and hasattr(bpy.context, "temp_override"):
         with bpy.context.temp_override(**ov):
