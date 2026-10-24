@@ -2366,11 +2366,12 @@ def find_nte_body_texture_by_material_name(mat_name_lower, type_keys, image_file
 
 
 def ensure_hair_white_texture(folder=None, image_files=None):
+    from setup_wizard.utils.texture_utils import load_or_get_image, scan_directory_for_textures
     if not folder and not image_files:
         return
 
     if not image_files and folder and os.path.isdir(folder):
-        image_files = [f for f in os.listdir(folder) if not f.startswith("._") and not f.startswith(".") and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
+        image_files = [os.path.basename(path) for path in scan_directory_for_textures(folder)[0].values()]
 
     white_file = None
     if image_files:
@@ -2382,10 +2383,9 @@ def ensure_hair_white_texture(folder=None, image_files=None):
         return
 
     img_path = os.path.join(folder, white_file)
-    if not os.path.isfile(img_path):
+    img = load_or_get_image(img_path, white_file)
+    if not img:
         return
-
-    img = bpy.data.images.load(img_path, check_existing=True)
 
     # 1. Process all node groups matching 异环-头发
     for ng in bpy.data.node_groups:
@@ -2427,6 +2427,7 @@ def ensure_hair_white_texture(folder=None, image_files=None):
 
 
 def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="", json_database=None):
+    from setup_wizard.utils.texture_utils import load_or_get_image
     if not tex_node.image:
         is_inside_hair = any(k in slot_mat_name.lower() for k in ['异环-头发', 'hair', '前发', '后发', 'toufa'])
         is_combine_xyz = any(
@@ -2440,8 +2441,8 @@ def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="",
                 or next((f for f in image_files if 'white' in f.lower() and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))), None)
             if white_file and folder:
                 img_path = os.path.join(folder, white_file)
-                if os.path.isfile(img_path):
-                    img = bpy.data.images.load(img_path, check_existing=True)
+                img = load_or_get_image(img_path, white_file)
+                if img:
                     tex_node.image = img
         return
 
@@ -2460,8 +2461,8 @@ def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="",
             face_d_file = specific_candidates[0] if specific_candidates else (candidates[0] if candidates else None)
         if face_d_file and folder:
             img_path = os.path.join(folder, face_d_file)
-            if os.path.isfile(img_path):
-                img = bpy.data.images.load(img_path, check_existing=True)
+            img = load_or_get_image(img_path, face_d_file)
+            if img:
                 try:
                     img.alpha_mode = 'CHANNEL_PACKED'
                 except Exception:
@@ -2516,8 +2517,8 @@ def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="",
             if handled_slot:
                 if replacement_file:
                     img_path = os.path.join(folder, replacement_file)
-                    if os.path.isfile(img_path):
-                        img = bpy.data.images.load(img_path, check_existing=True)
+                    img = load_or_get_image(img_path, replacement_file)
+                    if img:
                         try:
                             img.alpha_mode = 'CHANNEL_PACKED'
                         except Exception:
@@ -2756,7 +2757,9 @@ def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="",
 
     if replacement_file:
         img_path = os.path.join(folder, replacement_file)
-        img = bpy.data.images.load(img_path, check_existing=True)
+        img = load_or_get_image(img_path, replacement_file)
+        if not img:
+            return
         try:
             img.alpha_mode = 'CHANNEL_PACKED'
         except Exception:
@@ -2781,6 +2784,7 @@ def process_node_tree(node_tree, image_files, folder, slot_mat_name="", visited=
 
 
 def setup_common_face_material(mat, folder=None, image_files=None):
+    from setup_wizard.utils.texture_utils import load_or_get_image, scan_directory_for_textures
     if not mat:
         return
     mat.use_nodes = True
@@ -2818,13 +2822,13 @@ def setup_common_face_material(mat, folder=None, image_files=None):
         if image_files:
             cands = [f for f in image_files if 'common_face' in f.lower()]
         elif os.path.isdir(folder):
-            cands = [f for f in os.listdir(folder) if not f.startswith("._") and not f.startswith(".") and 'common_face' in f.lower() and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
+            cands = [os.path.basename(path) for path in scan_directory_for_textures(folder)[0].values() if 'common_face' in os.path.basename(path).lower()]
         if cands:
             diff_cands = [f for f in cands if '_d.' in f.lower() or '_d_' in f.lower() or 'face_d' in f.lower()]
             picked = diff_cands[0] if diff_cands else cands[0]
             try:
                 img_path = os.path.join(folder, picked)
-                img = bpy.data.images.load(img_path, check_existing=True)
+                img = load_or_get_image(img_path, picked)
             except Exception as ex:
                 print(f"Notice: Loading common_face texture: {ex}")
 
@@ -3022,9 +3026,10 @@ class NevernessToEvernessDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             face_spec = [f for f in face_cands if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
             face_d_img_file = face_spec[0] if face_spec else (face_cands[0] if face_cands else None)
             if face_d_img_file:
+                from setup_wizard.utils.texture_utils import load_or_get_image
                 face_d_path = os.path.join(folder, face_d_img_file)
-                if os.path.isfile(face_d_path):
-                    face_d_img = bpy.data.images.load(face_d_path, check_existing=True)
+                face_d_img = load_or_get_image(face_d_path, face_d_img_file)
+                if face_d_img:
                     for mat in bpy.data.materials:
                         if mat.use_nodes and mat.node_tree and 'gaoguang' in mat.name.lower():
                             for node in mat.node_tree.nodes:

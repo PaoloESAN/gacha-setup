@@ -17,7 +17,7 @@ from setup_wizard.domain.shader_material_name_keywords import ShaderMaterialName
 from setup_wizard.import_order import CHARACTER_MODEL_FOLDER_FILE_PATH, cache_using_cache_key, get_actual_material_name_for_dress, get_cache
 import re
 from setup_wizard.utils.genshin_body_part_deducer import get_npc_mesh_body_part_name
-from setup_wizard.utils.texture_utils import fix_missing_textures, load_or_get_image
+from setup_wizard.utils.texture_utils import fix_missing_textures, load_or_get_image, scan_directory_for_textures
 
 
 def matches_material_part_name(filename, part_name):
@@ -292,7 +292,7 @@ class GenshinImpactOutlineTextureImporter(OutlineTextureImporter):
         if not character_model_folder_file_path:
             bpy.ops.genshin.import_outline_lightmaps(
                 'INVOKE_DEFAULT',
-                next_step_idx=self.blender_operator.next_step_idx, 
+                next_step_idx=self.blender_operator.next_step_idx,
                 file_directory=self.blender_operator.file_directory,
                 invoker_type=self.blender_operator.invoker_type,
                 high_level_step_name=self.blender_operator.high_level_step_name,
@@ -302,70 +302,68 @@ class GenshinImpactOutlineTextureImporter(OutlineTextureImporter):
 
         fix_missing_textures(character_model_folder_file_path)
 
-        for name, folder, files in os.walk(character_model_folder_file_path):
-            if "__MACOSX" in name:
-                continue
-            diffuse_files = [file for file in files if not file.startswith("._") and not file.startswith(".") and 'diffuse' in file.lower()]
-            lightmap_files = [file for file in files if not file.startswith("._") and not file.startswith(".") and ('lightmap' in file.lower() or 'ligntmap' in file.lower())]  # Important typo check for: Wrioth
-            prefix = getattr(self.material_names, 'MATERIAL_PREFIX', '')
-            prefix_renamed = getattr(self.material_names, 'MATERIAL_PREFIX_AFTER_RENAME', '')
-            outline_materials = [material for material in bpy.data.materials.values() if 
-                                 material.name != self.material_names.OUTLINES and 
-                                 material.name != self.material_names.NIGHT_SOUL_OUTLINES and
-                                 self.material_names.VFX not in material.name and
-                                 (('Outlines' in material.name and not self.material_names.NIGHT_SOUL_OUTLINES_SUFFIX in material.name) or 
-                                 ShaderMaterial(material, self.shader_node_names).is_outlines_material())
-            ]
+        files = [os.path.basename(path) for path in scan_directory_for_textures(character_model_folder_file_path)[0].values()]
+        diffuse_files = [file for file in files if not file.startswith("._") and not file.startswith(".") and 'diffuse' in file.lower()]
+        lightmap_files = [file for file in files if not file.startswith("._") and not file.startswith(".") and ('lightmap' in file.lower() or 'ligntmap' in file.lower())]  # Important typo check for: Wrioth
+        prefix = getattr(self.material_names, 'MATERIAL_PREFIX', '')
+        prefix_renamed = getattr(self.material_names, 'MATERIAL_PREFIX_AFTER_RENAME', '')
+        outline_materials = [material for material in bpy.data.materials.values() if
+                             material.name != self.material_names.OUTLINES and
+                             material.name != self.material_names.NIGHT_SOUL_OUTLINES and
+                             self.material_names.VFX not in material.name and
+                             (('Outlines' in material.name and not self.material_names.NIGHT_SOUL_OUTLINES_SUFFIX in material.name) or
+                             ShaderMaterial(material, self.shader_node_names).is_outlines_material())
+        ]
 
-            for outline_material in outline_materials:
-                is_skill_obj = False
-                if ShaderMaterialNameKeywords.SKILLOBJ in outline_material.name:
-                    body_part_material_name = ' '.join(outline_material.name.split(' ')[-3:-1])  # ex. 'HoYoverse - Genshin SkillObj Fugu Outlines'
-                    is_skill_obj = True
-                else:
-                    body_part_material_name = outline_material.name.split(' ')[-2]  # ex. 'miHoYo - Genshin Hair Outlines'
-                character_type = None
+        for outline_material in outline_materials:
+            is_skill_obj = False
+            if ShaderMaterialNameKeywords.SKILLOBJ in outline_material.name:
+                body_part_material_name = ' '.join(outline_material.name.split(' ')[-3:-1])  # ex. 'HoYoverse - Genshin SkillObj Fugu Outlines'
+                is_skill_obj = True
+            else:
+                body_part_material_name = outline_material.name.split(' ')[-2]  # ex. 'miHoYo - Genshin Hair Outlines'
+            character_type = None
 
-                if [material for material in bpy.data.materials if material.name.startswith('NPC')]:
-                    original_mesh_materials = [material for material in bpy.data.materials if material.name.startswith('NPC') and body_part_material_name in material.name]
+            if [material for material in bpy.data.materials if material.name.startswith('NPC')]:
+                original_mesh_materials = [material for material in bpy.data.materials if material.name.startswith('NPC') and body_part_material_name in material.name]
 
-                    if not original_mesh_materials:
-                        continue
+                if not original_mesh_materials:
+                    continue
 
-                    original_mesh_material = original_mesh_materials[0]
-                    character_type = TextureImporterType.NPC
-                elif [material for material in bpy.data.materials if material.name.startswith('Monster') and 
-                    [playable_character_identifier for playable_character_identifier in self.SET_UP_MONSTER_AS_PLAYABLE_CHARACTER if playable_character_identifier not in material.name]
-                    ]:
-                    # Assuming all body parts are Body for now
-                    # original_mesh_material = [material for material in bpy.data.materials if material.name.startswith('Monster') and 'Body' in material.name][0]
-                    character_type = TextureImporterType.MONSTER
-                else:
-                    original_mesh_materials = [material for material in bpy.data.materials if 
-                                               body_part_material_name in material.name and
-                                               not material.name.startswith(prefix) and
-                                               not (prefix_renamed and material.name.startswith(prefix_renamed))
-                                               ]
-                    character_type = TextureImporterType.AVATAR
-                    original_mesh_material = original_mesh_materials[0] if original_mesh_materials else None
+                original_mesh_material = original_mesh_materials[0]
+                character_type = TextureImporterType.NPC
+            elif [material for material in bpy.data.materials if material.name.startswith('Monster') and
+                [playable_character_identifier for playable_character_identifier in self.SET_UP_MONSTER_AS_PLAYABLE_CHARACTER if playable_character_identifier not in material.name]
+                ]:
+                # Assuming all body parts are Body for now
+                # original_mesh_material = [material for material in bpy.data.materials if material.name.startswith('Monster') and 'Body' in material.name][0]
+                character_type = TextureImporterType.MONSTER
+            else:
+                original_mesh_materials = [material for material in bpy.data.materials if
+                                           body_part_material_name in material.name and
+                                           not material.name.startswith(prefix) and
+                                           not (prefix_renamed and material.name.startswith(prefix_renamed))
+                                           ]
+                character_type = TextureImporterType.AVATAR
+                original_mesh_material = original_mesh_materials[0] if original_mesh_materials else None
 
-                if character_type == TextureImporterType.MONSTER:
-                    actual_material_part_name = 'Tex'
-                elif character_type == TextureImporterType.NPC and original_mesh_material:
-                    actual_material_part_name = get_npc_mesh_body_part_name(original_mesh_material.name)
-                else:
-                    if original_mesh_material:
-                        if is_skill_obj:
-                            actual_material_part_name = get_actual_material_name_for_dress(original_mesh_material.name, character_type.name, is_skill_obj)
-                        else:
-                            actual_material_part_name = get_actual_material_name_for_dress(original_mesh_material.name, character_type.name)
+            if character_type == TextureImporterType.MONSTER:
+                actual_material_part_name = 'Tex'
+            elif character_type == TextureImporterType.NPC and original_mesh_material:
+                actual_material_part_name = get_npc_mesh_body_part_name(original_mesh_material.name)
+            else:
+                if original_mesh_material:
+                    if is_skill_obj:
+                        actual_material_part_name = get_actual_material_name_for_dress(original_mesh_material.name, character_type.name, is_skill_obj)
                     else:
-                        actual_material_part_name = body_part_material_name
+                        actual_material_part_name = get_actual_material_name_for_dress(original_mesh_material.name, character_type.name)
+                else:
+                    actual_material_part_name = body_part_material_name
 
-                if 'Face' not in actual_material_part_name and 'Face' not in body_part_material_name:
-                    self.assign_lightmap_texture(character_model_folder_file_path, lightmap_files, body_part_material_name, actual_material_part_name, target_outline_material=outline_material)
-                    self.assign_diffuse_texture(character_model_folder_file_path, diffuse_files, body_part_material_name, actual_material_part_name, target_outline_material=outline_material)
-            break  # IMPORTANT: We os.walk which also traverses through folders...we just want the files
+            if 'Face' not in actual_material_part_name and 'Face' not in body_part_material_name:
+                self.assign_lightmap_texture(character_model_folder_file_path, lightmap_files, body_part_material_name, actual_material_part_name, target_outline_material=outline_material)
+                self.assign_diffuse_texture(character_model_folder_file_path, diffuse_files, body_part_material_name, actual_material_part_name, target_outline_material=outline_material)
+
 
         all_outlines = [m for m in bpy.data.materials if m.use_nodes and ('outlines' in m.name.lower() or m.name.endswith('Outlines')) and 'night_soul' not in m.name.lower() and m.name != 'HoYoverse - Genshin Outlines']
         for o_mat in all_outlines:
@@ -392,7 +390,7 @@ class HonkaiStarRailOutlineTextureImporter(OutlineTextureImporter):
         if not character_model_folder_file_path:
             bpy.ops.genshin.import_outline_lightmaps(
                 'INVOKE_DEFAULT',
-                next_step_idx=self.blender_operator.next_step_idx, 
+                next_step_idx=self.blender_operator.next_step_idx,
                 file_directory=self.blender_operator.file_directory,
                 invoker_type=self.blender_operator.invoker_type,
                 high_level_step_name=self.blender_operator.high_level_step_name,
@@ -402,33 +400,31 @@ class HonkaiStarRailOutlineTextureImporter(OutlineTextureImporter):
 
         fix_missing_textures(character_model_folder_file_path)
 
-        for name, folder, files in os.walk(character_model_folder_file_path):
-            if "__MACOSX" in name:
-                continue
-            color_files = [file for file in files if not file.startswith("._") and not file.startswith(".") and 'Color'.lower() in file.lower() and 'ramp' not in file.lower() and 'eff' not in file.lower()]
-            lightmap_files = [file for file in files if not file.startswith("._") and not file.startswith(".") and ('LightMap'.lower() in file.lower() or 'FaceMap' in file.lower() or 'LigthMap'.lower() in file.lower()) and 'eff' not in file.lower()]
-            outline_materials = [material for material in bpy.data.materials.values() if 'outlines' in material.name.lower() and material.name != self.shader_material_names.OUTLINES]
+        files = [os.path.basename(path) for path in scan_directory_for_textures(character_model_folder_file_path)[0].values()]
+        color_files = [file for file in files if not file.startswith("._") and not file.startswith(".") and 'Color'.lower() in file.lower() and 'ramp' not in file.lower() and 'eff' not in file.lower()]
+        lightmap_files = [file for file in files if not file.startswith("._") and not file.startswith(".") and ('LightMap'.lower() in file.lower() or 'FaceMap' in file.lower() or 'LigthMap'.lower() in file.lower()) and 'eff' not in file.lower()]
+        outline_materials = [material for material in bpy.data.materials.values() if 'outlines' in material.name.lower() and material.name != self.shader_material_names.OUTLINES]
 
-            for outline_material in outline_materials:
-                body_part_material_name = outline_material.name.split(' ')[-2]  # ex. 'miHoYo - Genshin Hair Outlines'
-                original_mesh_material = [material for material in bpy.data.materials if f'Mat_{body_part_material_name}' in material.name]
+        for outline_material in outline_materials:
+            body_part_material_name = outline_material.name.split(' ')[-2]  # ex. 'miHoYo - Genshin Hair Outlines'
+            original_mesh_material = [material for material in bpy.data.materials if f'Mat_{body_part_material_name}' in material.name]
 
-                if original_mesh_material and 'EyeShadow' not in original_mesh_material and 'EyeShadow' not in body_part_material_name:
-                    if 'Weapon' in body_part_material_name:
-                        actual_material_part_name = 'Weapon'
-                    elif 'Body' in body_part_material_name and 'Trans' in body_part_material_name:
-                        actual_material_part_name = 'Body'
-                    elif 'Body1' in body_part_material_name and [file for file in files if 'Body' in file and not 'Body1' in file and not 'Body2' in file]:
-                        actual_material_part_name = 'Body'
-                    else:
-                        actual_material_part_name = body_part_material_name
+            if original_mesh_material and 'EyeShadow' not in original_mesh_material and 'EyeShadow' not in body_part_material_name:
+                if 'Weapon' in body_part_material_name:
+                    actual_material_part_name = 'Weapon'
+                elif 'Body' in body_part_material_name and 'Trans' in body_part_material_name:
+                    actual_material_part_name = 'Body'
+                elif 'Body1' in body_part_material_name and [file for file in files if 'Body' in file and not 'Body1' in file and not 'Body2' in file]:
+                    actual_material_part_name = 'Body'
+                else:
+                    actual_material_part_name = body_part_material_name
 
-                    self.assign_diffuse_texture(character_model_folder_file_path, color_files, body_part_material_name, actual_material_part_name)
+                self.assign_diffuse_texture(character_model_folder_file_path, color_files, body_part_material_name, actual_material_part_name)
 
-                    # No Lightmap texture for Face (not sure if Face even needs Color diffuse either...)
-                    if 'Face' not in original_mesh_material and 'Face' not in body_part_material_name:
-                        self.assign_lightmap_texture(character_model_folder_file_path, lightmap_files, body_part_material_name, actual_material_part_name)
-            break  # IMPORTANT: We os.walk which also traverses through folders...we just want the files
+                # No Lightmap texture for Face (not sure if Face even needs Color diffuse either...)
+                if 'Face' not in original_mesh_material and 'Face' not in body_part_material_name:
+                    self.assign_lightmap_texture(character_model_folder_file_path, lightmap_files, body_part_material_name, actual_material_part_name)
+
 
         try:
             from setup_wizard.geometry_nodes_setup.geometry_nodes_setups import configure_hsr_hair_outlines_transparency

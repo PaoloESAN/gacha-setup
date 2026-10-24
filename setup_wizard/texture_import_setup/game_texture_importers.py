@@ -18,7 +18,7 @@ from setup_wizard.import_order import (
     set_active_character_directory,
 )
 from setup_wizard.texture_import_setup.texture_importer_types import GenshinTextureImporter, TextureImporterFactory, TextureImporterType
-from setup_wizard.utils.texture_utils import fix_missing_textures, load_or_get_image
+from setup_wizard.utils.texture_utils import fix_missing_textures, load_or_get_image, scan_directory_for_textures
 
 
 class GameTextureImporter(ABC):
@@ -124,11 +124,9 @@ class GenshinImpactTextureImporterFacade(GameTextureImporter):
                 node = material.node_tree.nodes.get(node_name)
                 if not texture or node is None:
                     continue
-                filename = next((f for f in os.listdir(directory) if os.path.splitext(f)[0].lower() == texture.lower()
-                                 and os.path.splitext(f)[1].lower() in {'.png', '.dds', '.tga', '.jpg'}), None)
-                if filename is None:
+                image = load_or_get_image(os.path.join(directory, texture), texture)
+                if image is None:
                     raise RuntimeError('Missing Genshin equipment texture: ' + texture)
-                image = bpy.data.images.load(os.path.join(directory, filename), check_existing=True)
                 image.colorspace_settings.name = colorspace
                 image.alpha_mode = 'CHANNEL_PACKED'
                 node.image = image
@@ -138,7 +136,7 @@ class GenshinImpactTextureImporterFacade(GameTextureImporter):
             If an asset does exist, leave it as the default value (1.0).
         '''
         if (texture_importer_type is TextureImporterType.NPC or texture_importer_type is TextureImporterType.MONSTER) and \
-            not [file for file in [file for name, folder, file in os.walk(directory) if '__MACOSX' not in name][0] if not file.startswith('._') and not file.startswith('.') and 'Shadow_Ramp' in file]:
+            not any('shadow_ramp' in filename for filename in scan_directory_for_textures(directory)[0]):
             ShaderConfigurator().update_shader_value(
                 materials = [
                     bpy.data.materials.get('miHoYo - Genshin Hair'),
@@ -589,7 +587,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         if not materials_dir or not os.path.isdir(tex_dir):
             return {}, tex_dir
 
-        image_files = [f for f in os.listdir(tex_dir) if f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff', '.webp')) and not f.startswith("._") and not f.startswith(".")]
+        image_files = [os.path.basename(path) for path in scan_directory_for_textures(folder)[0].values()]
         
         def resolve_file(tex_name):
             if not tex_name:
@@ -865,7 +863,11 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         if not tex_folder:
             tex_folder = folder
 
-        files = [f for f in os.listdir(tex_folder) if not f.startswith("._") and not f.startswith(".")]
+        texture_paths, _ = scan_directory_for_textures(folder)
+        files = [os.path.basename(path) for path in texture_paths.values()]
+
+        def texture_path(filename):
+            return texture_paths.get(filename.casefold(), os.path.join(tex_folder, filename))
         
         # Try to find a character name prefix to filter the files (prevents importing other characters' textures if in same folder)
         main_prefix = ""
@@ -900,7 +902,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         def connect_tex_to_socket(mat, group_node, socket_id, socket_names, file_name, is_color=False, y_offset=0):
             if not file_name:
                 return None
-            img_path = os.path.join(tex_folder, file_name)
+            img_path = texture_path(file_name)
             if not os.path.isfile(img_path):
                 img_path = os.path.join(folder, file_name)
             if not os.path.isfile(img_path):
@@ -1030,7 +1032,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
             highlight_node = mat.node_tree.nodes.get('Face_D') if 'highlight' in matname else None
             if highlight_node and highlight_node.type == 'TEX_IMAGE' and res_textures.get('d'):
                 atlas = res_textures['d']
-                path = os.path.join(tex_folder, atlas)
+                path = texture_path(atlas)
                 if not os.path.isfile(path):
                     path = os.path.join(folder, atlas)
                 if os.path.isfile(path):
@@ -1112,7 +1114,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                                     lm_node = node
                                     break
                         if lm_node:
-                            img_path = os.path.join(tex_folder, face_lm) if os.path.isfile(os.path.join(tex_folder, face_lm)) else os.path.join(folder, face_lm)
+                            img_path = texture_path(face_lm)
                             if os.path.isfile(img_path):
                                 img = load_or_get_image(img_path, face_lm)
                                 if img:
@@ -1201,7 +1203,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                         face_d = self._find_best_face_diffuse(combined_names, mesh_names, filtered_files, main_prefix)
 
                     if face_d:
-                        img_path = os.path.join(tex_folder, face_d) if os.path.isfile(os.path.join(tex_folder, face_d)) else os.path.join(folder, face_d)
+                        img_path = texture_path(face_d)
                         if os.path.isfile(img_path):
                             img = load_or_get_image(img_path, face_d)
                             if img:
@@ -1220,7 +1222,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                         face_lm = self._find_best_face_lightmap(combined_names, mesh_names, filtered_files, main_prefix)
 
                     if face_lm:
-                        img_path = os.path.join(tex_folder, face_lm) if os.path.isfile(os.path.join(tex_folder, face_lm)) else os.path.join(folder, face_lm)
+                        img_path = texture_path(face_lm)
                         if os.path.isfile(img_path):
                             img_lm = load_or_get_image(img_path, face_lm)
                             if img_lm:
@@ -1263,7 +1265,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                             best_tex = None
 
                         if best_tex:
-                            img_path = os.path.join(tex_folder, best_tex) if os.path.isfile(os.path.join(tex_folder, best_tex)) else os.path.join(folder, best_tex)
+                            img_path = texture_path(best_tex)
                             if os.path.isfile(img_path):
                                 img = load_or_get_image(img_path, best_tex)
                                 if img:
@@ -1277,7 +1279,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                                         and any(slot.material == mat for slot in obj.material_slots)]
                         self._set_face_lightmap_group(node.node_tree, face_objects=face_objects)
                         if face_lm:
-                            img_path = os.path.join(tex_folder, face_lm) if os.path.isfile(os.path.join(tex_folder, face_lm)) else os.path.join(folder, face_lm)
+                            img_path = texture_path(face_lm)
                             if os.path.isfile(img_path):
                                 img = load_or_get_image(img_path, face_lm)
                                 if img:
@@ -1344,7 +1346,7 @@ def sync_zzz_outline_textures(folder=None, filtered_files=None, main_prefix=None
 
     if folder and not filtered_files:
         try:
-            filtered_files = [f for f in os.listdir(folder) if not f.startswith("._") and not f.startswith(".")]
+            filtered_files = [os.path.basename(path) for path in scan_directory_for_textures(folder)[0].values()]
         except Exception:
             filtered_files = []
 
@@ -1696,7 +1698,7 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
         has_textures = False
         if folder and os.path.isdir(folder):
             try:
-                has_textures = any(not f.startswith("._") and not f.startswith(".") and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp')) for f in os.listdir(folder))
+                has_textures = bool(scan_directory_for_textures(folder)[0])
             except Exception:
                 has_textures = False
 
@@ -1718,7 +1720,9 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
         database = load_nte_character_data(folder)
         image_files = database.get("image_files_list", [])
         if not image_files and os.path.isdir(folder):
-            image_files = [f for f in os.listdir(folder) if not f.startswith("._") and not f.startswith(".") and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
+            image_files = [os.path.basename(path) for path in scan_directory_for_textures(folder)[0].values()]
+
+        texture_paths, _ = scan_directory_for_textures(folder)
 
         for mat in bpy.data.materials:
             if not mat.use_nodes or not mat.node_tree or mat.name == '材质球' or 'touming' in mat.name.lower():
@@ -1740,7 +1744,7 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
                     specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
                     best_diff = specific_candidates[0] if specific_candidates else (candidates[0] if candidates else None)
                 if best_diff:
-                    img_path = os.path.join(folder, best_diff)
+                    img_path = texture_paths.get(best_diff.casefold(), os.path.join(folder, best_diff))
                     if os.path.isfile(img_path):
                         img = load_or_get_image(img_path, best_diff)
                         if img:
@@ -1775,7 +1779,7 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
                             target_socket = node.inputs.get('Input') or node.inputs.get('Color') or node.inputs.get('基础色')
 
                         if best_diff and target_socket and not target_socket.is_linked:
-                            img_path = os.path.join(folder, best_diff)
+                            img_path = texture_paths.get(best_diff.casefold(), os.path.join(folder, best_diff))
                             if os.path.isfile(img_path):
                                 img = load_or_get_image(img_path, best_diff)
                                 if img:
@@ -1789,7 +1793,7 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
                         mask_socket = node.inputs.get('M') or node.inputs.get('MASK') or node.inputs.get('Mask')
                         if mask_socket and not mask_socket.is_linked:
                             if best_mask:
-                                img_path = os.path.join(folder, best_mask)
+                                img_path = texture_paths.get(best_mask.casefold(), os.path.join(folder, best_mask))
                                 if os.path.isfile(img_path):
                                     img = load_or_get_image(img_path, best_mask)
                                     if img:
@@ -1802,7 +1806,7 @@ class NevernessToEvernessTextureImporterFacade(GameTextureImporter):
                         id_socket = node.inputs.get('ID') or node.inputs.get('Id') or node.inputs.get('id')
                         if id_socket and not id_socket.is_linked:
                             if best_id:
-                                img_path = os.path.join(folder, best_id)
+                                img_path = texture_paths.get(best_id.casefold(), os.path.join(folder, best_id))
                                 if os.path.isfile(img_path):
                                     img = load_or_get_image(img_path, best_id)
                                     if img:

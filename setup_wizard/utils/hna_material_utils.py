@@ -185,10 +185,10 @@ def nodes_with_images(tree, seen=None):
             yield from nodes_with_images(node.node_tree, seen)
 
 def load_image(folder, name, colorspace):
-    path = next((p for p in folder.iterdir() if p.stem.lower() == name.lower() and p.suffix.lower() in {'.png', '.tga', '.dds', '.jpg'}), None)
-    if not path:
+    from setup_wizard.utils.texture_utils import load_or_get_image
+    img = load_or_get_image(str(folder / name), name)
+    if img is None:
         raise RuntimeError('Missing HNA texture: ' + name)
-    img = bpy.data.images.load(str(path), check_existing=True)
     img.colorspace_settings.name = colorspace
     return img
 
