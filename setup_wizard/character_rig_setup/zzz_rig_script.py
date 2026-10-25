@@ -685,6 +685,12 @@ def rig_character(
     ## Fixes the tiddy bones.  Expykit, why did you neglect them
     if metarig_obj:
         metarm = metarig_obj.data
+        # Expy-Kit edited only the metarig. Retarget also leaves the source
+        # selected, exposing its edit_bones here and changing the legacy
+        # breast placement from the template to the short source bones.
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.select_all(action='DESELECT')
+        metarig_obj.select_set(True)
         bpy.context.view_layer.objects.active = metarig_obj
         bpy.ops.object.mode_set(mode='EDIT')
         armature = bpy.data.objects[obj.name].data
