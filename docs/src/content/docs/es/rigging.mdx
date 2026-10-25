@@ -1,0 +1,128 @@
+---
+title: Rigging
+description: Visión general del sistema de rigging, colecciones de huesos, Rig Layers, paneles de expresión facial, engranajes IK/FK y controladores de cabeza.
+---
+
+import { Image } from 'astro:assets';
+import { Icon } from '@astrojs/starlight/components';
+import rigLayersImg from '../../../assets/content/overview/rig_layers.png';
+import headControllerImg from '../../../assets/content/overview/head_controller.png';
+import armCogImg from '../../../assets/content/overview/arm_cog.png';
+import legCogImg from '../../../assets/content/overview/leg_cog.png';
+import topCogImg from '../../../assets/content/overview/top_cog.png';
+import genshinRigpanel from '../../../assets/content/genshin/genshin-rigpanel.png';
+import hsrFacerig from '../../../assets/content/hsr/hsr-facerig.png';
+import zzzFacerig from '../../../assets/content/zzz/zzz-facerig.png';
+
+
+# Visión General de Rigging
+
+El módulo de rigging de **Gacha Setup** unifica la corrección de jerarquía de huesos, creación de drivers faciales, colecciones de huesos y generación de armaduras Rigify para modelos anime. Ofrece controles de animación avanzados, paneles de drivers faciales, fijación de extremidades (limb pinning), cambio de emparentado (parent switch) y capas de visibilidad.
+
+---
+
+## Paneles Faciales 3D (Face Panels)
+
+Dependiendo del modelo y tipo de personaje, el add-on configura paneles 3D especializados posicionados cerca de la cabeza del personaje. Permiten manipular fácilmente shape keys complejas, pestañeos, fonemas de boca y seguimiento de ojos directamente en la Vista 3D sin depender de la lista de shape keys. Los juegos y modelos cuentan con estos tipos de face rigs:
+
+### Tablero de Drivers 3D Personalizado
+Un panel colocado detrás de la cabeza del personaje para coordinar expresiones faciales, dirección de mirada y visemas bucales:
+
+<Image src={genshinRigpanel} alt="Tablero de drivers faciales 3D" loading="eager" />
+
+- **Cejas (Brows)**: Deslizadores y controles para enojo, tristeza, sorpresa e inclinación de cejas.
+- **Ojos (Eyes)**: Gizmos de seguimiento de pupilas, entrecerrado, parpadeos y apertura con límites dinámicos para evitar que la pupila sobresalga de la malla.
+- **Boca (Mouth)**: Controles para apertura bucal, sonrisa, descontento, vocalizaciones (forma de O) y fonemas.
+
+### Sistema Isaac Face Rig
+Un sistema dual de control facial que combina selectores directos en el rostro con controles laterales de presets:
+
+<Image src={hsrFacerig} alt="Tablero 3D Isaac Face Rig" loading="lazy" />
+
+- **Controles Manuales sobre el Rostro**: Widgets colocados directamente sobre ojos, cejas y boca para manipular microexpresiones con total libertad.
+- **Deslizadores Laterales de Presets**: Controles a los costados del tablero facial para disparar y mezclar expresiones predeterminadas del personaje.
+
+### Jideeh Face Rig
+Estructura facial avanzada integrada en la armadura para lograr expresiones bucales y oculares de estilo anime:
+
+<Image src={zzzFacerig} alt="Tablero 3D jideeh Face Rig y estructura de rig" loading="lazy" />
+
+- **Integración Facial jideeh**: Drivers especializados para cejas, párpados, seguimiento de mirada y shape keys de boca con alta expresividad.
+- **Widgets de Control en Rostro**: Permite posar intuitivamente las distintas facciones directamente en el viewport 3D.
+
+---
+
+## Rig Layers (Colecciones de Huesos)
+
+En Blender 5.2+ y 4.x, las armaduras están organizadas en colecciones de huesos. El panel **Rig Layers** en la barra lateral del 3D Viewport permite activar y desactivar partes del cuerpo mientras animas, o aislar capas individuales con los botones de estrella (<Icon name="star" class="inline-icon" />):
+
+<Image src={rigLayersImg} alt="Panel Rig Layers en Blender" loading="lazy" />
+
+### Categorías Estándar de Rig Layers
+
+1. **Rostro y Detalles (Face & Detail)**:
+   - `Face`, `Face (Detail)`: Huesos de expresión, comisuras de boca y cejas.
+   - `Face (Primary)`, `Face (Secondary)`: Controles faciales maestros y deformadores secundarios.
+2. **Torso y Columna**:
+   - `Torso (IK)`: Controles de cinemática inversa del tronco.
+   - `Torso (FK)`: Rotación secuencial de las vértebras y columna.
+3. **Dedos y Manos**:
+   - `Fingers`, `Fingers (Detail)`: Cierre, apertura y ajuste fino de cada falange.
+4. **Extremidades (Brazos y Piernas)**:
+   - `Arm.L (IK)` / `Arm.R (IK)` y `Arm.L (FK)` / `Arm.R (FK)`: Control dual para brazos.
+   - `Leg.L (IK)` / `Leg.R (IK)` y `Leg.L (FK)` / `Leg.R (FK)`: Control dual para piernas y pies.
+5. **Ajustes, Pivotes y Secundarios**:
+   - `Tweaks`: Controles elásticos y de microajuste en extremidades.
+   - `Pivots & Pins`: Pivotes de muñeca y tobillo, fijación de codos y rodillas.
+   - `Offsets`: Desplazamientos de accesorios o raíz.
+   - `Weapon`: Armas equipadas y accesorios dinámicos.
+   - `Root`: Hueso maestro de posicionamiento global del personaje.
+
+---
+
+## Head Controller y Seguimiento de Cabeza
+
+El rig incluye un sistema especializado de **Head Controller**. Al seleccionarlo, puedes definir el comportamiento de seguimiento y orientación de la cabeza:
+
+<Image src={headControllerImg} alt="Hueso Head Controller y sus propiedades" loading="lazy" />
+
+- **Use Head Tracker Controller**: Alterna entre rotación manual FK de la cabeza y seguimiento automático al hueso objetivo (look-at target).
+- **Head Follow**: Define cuánto sigue la orientación del torso frente a permanecer fijada en el espacio mundial.
+- **Neck Follow**: Modula la flexión del cuello con respecto a la columna.
+- **Parent Switch**: Cambia el emparentado del rastreador de cabeza entre `None`, `root`, `torso` o `chest`.
+
+---
+
+## Engranajes (Cog Gizmos) y Controles IK / FK
+
+Los rigs generados incluyen controles en forma de engranaje (cog) en brazos, piernas y cabeza para configurar fácilmente las propiedades de cinemática y conmutación de espacios:
+
+### Ajustes Globales (Top Cog / Plate Settings)
+El engranaje maestro de opciones proporciona deslizadores generales del personaje:
+
+<Image src={topCogImg} alt="Engranaje Top Cog / Plate Settings" loading="lazy" />
+
+- **Use Head Tracker Controller**: Controla cuánto sigue la cabeza al head tracker en lugar de la rotación manual.
+- **Head Follow**: Ajusta cuánto sigue la cabeza la rotación del torso.
+- **Neck Follow**: Ajusta cuánto sigue el cuello la rotación del torso.
+- **Skirt Auto**: Controla la influencia del movimiento automático de la falda con las piernas.
+- **Skirt Follow**: Ajusta cuánto sigue la falda al torso.
+- **Adjust Pupil Wink Distance**: Ajusta la corrección de las pupilas durante guiños y parpadeos para reducir el clipping.
+
+### Controles de Brazo y Fijación de Codo (Arm Cog & Elbow Pin)
+Al seleccionar el engranaje del brazo se despliegan sus propiedades:
+
+<Image src={armCogImg} alt="Arm Cog y controles IK/FK" loading="lazy" />
+
+- **IK / FK Switch**: Transición continua entre Cinemática Inversa (controlador IK en mano) y Cinemática Directa (rotaciones angulares FK).
+- **Elbow Pin (Tweak Pin)**: Fija la posición del codo en el espacio sin importar el ángulo del antebrazo.
+- **Parent Switch**: Permite que el objetivo IK siga a `root`, `torso` o `chest`, con soporte para bakeo de animación.
+
+### Controles de Pierna y Fijación de Rodilla (Leg Cog & Knee Pin)
+Al seleccionar el engranaje del pie o rodilla se configuran las piernas:
+
+<Image src={legCogImg} alt="Leg Cog y controles de rodilla" loading="lazy" />
+
+- **IK / FK Switch**: Alterna entre pies plantados en el suelo (IK) o balanceo de piernas en el aire (FK).
+- **Knee Pin**: Fija o libera la dirección de flexión de la rodilla.
+- **Foot Roll y Hinge**: Controla la inclinación talón-punta y la articulación de los dedos al caminar.

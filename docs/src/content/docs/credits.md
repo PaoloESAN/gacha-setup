@@ -49,6 +49,8 @@ description: Acknowledgements, contributors, and assets credits.
 - **max**
 - **poke** — zzz setup
 - **cocopops**
+- **aeo** — Apply VMD Motion
+- **kori** — Apply VMD Motion
 - **Logo Icon** — <a href="https://www.flaticon.com/free-icons/star" title="star icons">Star icons created by Magnific - Flaticon</a>
 
 <div class="disclaimer-text">

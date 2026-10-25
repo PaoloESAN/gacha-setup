@@ -47,8 +47,10 @@ description: Agradecimientos, colaboradores y créditos de recursos.
 - **max**
 - **poke** — zzz setup
 - **cocopops**
+- **aeo** — Apply VMD Motion
+- **kori** — Apply VMD Motion
 - **Icono del Logo** — <a href="https://www.flaticon.com/free-icons/star" title="star icons">Star icons created by Magnific - Flaticon</a>
 
 <div class="disclaimer-text">
-  <strong>Disclaimer:</strong> This tool is an independent, open-source project and is not affiliated with, endorsed, or sponsored by HoYoverse, Kuro Games, Hotta Studio, Perfect World Games, or Hypergryph. All game assets, trademarks, and character names belong to their respective owners. No copyrighted assets or models are included with this addon.
+  <strong>Aviso:</strong> Esta herramienta es un proyecto independiente y de código abierto. No está afiliada a HoYoverse, Kuro Games, Hotta Studio, Perfect World Games ni Hypergryph, ni cuenta con su respaldo o patrocinio. Todos los recursos de los juegos, las marcas y los nombres de personajes pertenecen a sus respectivos propietarios. Este complemento no incluye recursos ni modelos protegidos por derechos de autor.
 </div>

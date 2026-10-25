@@ -11,8 +11,8 @@ export default defineConfig({
 			plugins: [
 				starlightLlmsTxt({
 					projectName: 'Gacha Setup for Blender',
-						description:
-							'Gacha Setup is an open-source Blender add-on. Blender 5.2 is recommended; Blender/Goo Engine 4.1+ are supported. BetterFBX is required for model imports in Blender versions below 4.5. It automates character model importing, anime toon shading (Festivity, StellarToon, ZZZ Shader, NTE Shader, Gustling Waters, Endfield PBRToon), outline setup, facial driver controls, hair & cloth physics, and rigging for Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Neverness to Everness, Wuthering Waves, and Arknights: Endfield.',
+					description:
+						'Gacha Setup is an open-source Blender add-on. Blender 5.2 is recommended; Blender/Goo Engine 4.1+ are supported. BetterFBX is required for model imports in Blender versions below 4.5. It automates character model importing, anime toon shading (Festivity, StellarToon, ZZZ Shader, NTE Shader, Gustling Waters, Endfield PBRToon), outline setup, facial driver controls, hair & cloth physics, and rigging for Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Neverness to Everness, Wuthering Waves, and Arknights: Endfield.',
 					details: `
 - **Supported Games:** Genshin Impact (GI), Honkai: Star Rail (HSR), Zenless Zone Zero (ZZZ), Neverness to Everness (NTE), Wuthering Waves (WuWa), Arknights: Endfield (AKE), Punishing: Gray Raven (PGR), Honkai Impact 3rd (HI3), and Honkai: Nexus Anima (HNA).
 - **Blender Compatibility:** Blender 5.2 recommended; Blender/Goo Engine 4.1+ supported. BetterFBX is required for model imports below Blender 4.5.
@@ -72,7 +72,7 @@ export default defineConfig({
 							paths: ['ake/**', 'es/ake/**'],
 						},
 					],
-					promote: ['index*', 'quickstart*', 'general-info*', 'es/index*', 'es/quickstart*', 'es/general-info*'],
+					promote: ['index*', 'quickstart*', 'character-settings*', 'rigging*', 'es/index*', 'es/quickstart*', 'es/character-settings*', 'es/rigging*'],
 					demote: ['credits*', 'es/credits*'],
 				}),
 			],
@@ -129,70 +129,20 @@ export default defineConfig({
 					translations: { es: 'Visión General' },
 					items: [
 						{ label: 'Quickstart', slug: 'quickstart', translations: { es: 'Guía Rápida' } },
-						{ label: 'General Info', slug: 'general-info', translations: { es: 'Información General' } },
 						{ label: 'Character Assets', slug: 'character-models', translations: { es: 'Assets de Personajes' } },
+						{ label: 'Character Settings', slug: 'character-settings', translations: { es: 'Ajustes del Personaje' } },
+						{ label: 'Rigging', slug: 'rigging', translations: { es: 'Rigging' } },
 						{ label: 'Utilities', slug: 'utilities', translations: { es: 'Utilidades' } },
 						{ label: 'Credits', slug: 'credits', translations: { es: 'Créditos' } },
 					],
 				},
 				{
-					label: 'Genshin Impact',
-					collapsed: true,
+					label: 'Bugs & Solutions',
+					translations: { es: 'Bugs y Soluciones' },
 					items: [
-						{ label: 'Setup Character', slug: 'genshin/setup-character', translations: { es: 'Setup Character' } },
-						{ label: 'Lights & Coloramp', slug: 'genshin/lights-coloramp', translations: { es: 'Luces y Coloramp' } },
-						{ label: 'Rigging', slug: 'genshin/rigging', translations: { es: 'Rigging' } },
-						{ label: 'Bugs & Solutions', slug: 'genshin/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
-					],
-				},
-				{
-					label: 'Honkai: Star Rail',
-					collapsed: true,
-					items: [
-						{ label: 'Setup Character', slug: 'hsr/setup-character', translations: { es: 'Setup Character' } },
-						{ label: 'Lights & Coloramp', slug: 'hsr/lights-coloramp', translations: { es: 'Luces y Coloramp' } },
-						{ label: 'Rigging', slug: 'hsr/rigging', translations: { es: 'Rigging' } },
-						{ label: 'Bugs & Solutions', slug: 'hsr/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
-					],
-				},
-				{
-					label: 'Zenless Zone Zero',
-					collapsed: true,
-					items: [
-						{ label: 'Setup Character', slug: 'zzz/setup-character', translations: { es: 'Setup Character' } },
-						{ label: 'Lights & Coloramp', slug: 'zzz/lights-coloramp', translations: { es: 'Luces y Coloramp' } },
-						{ label: 'Rigging', slug: 'zzz/rigging', translations: { es: 'Rigging' } },
-						{ label: 'Bugs & Solutions', slug: 'zzz/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
-					],
-				},
-				{
-					label: 'Neverness to Everness',
-					collapsed: true,
-					items: [
-						{ label: 'Setup Character', slug: 'nte/setup-character', translations: { es: 'Setup Character' } },
-						{ label: 'Lights & Coloramp', slug: 'nte/lights-coloramp', translations: { es: 'Luces y Coloramp' } },
-						{ label: 'Rigging', slug: 'nte/rigging', translations: { es: 'Rigging' } },
-						{ label: 'Bugs & Solutions', slug: 'nte/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
-					],
-				},
-				{
-					label: 'Wuthering Waves',
-					collapsed: true,
-					items: [
-						{ label: 'Setup Character', slug: 'wuwa/setup-character', translations: { es: 'Setup Character' } },
-						{ label: 'Lights & Coloramp', slug: 'wuwa/lights-coloramp', translations: { es: 'Luces y Coloramp' } },
-						{ label: 'Rigging', slug: 'wuwa/rigging', translations: { es: 'Rigging' } },
-						{ label: 'Bugs & Solutions', slug: 'wuwa/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
-					],
-				},
-				{
-					label: 'Arknights: Endfield',
-					collapsed: true,
-					items: [
-						{ label: 'Setup Character', slug: 'ake/setup-character', translations: { es: 'Setup Character' } },
-						{ label: 'Lights & Coloramp', slug: 'ake/lights-coloramp', translations: { es: 'Luces y Coloramp' } },
-						{ label: 'Rigging', slug: 'ake/rigging', translations: { es: 'Rigging' } },
-						{ label: 'Bugs & Solutions', slug: 'ake/bugs-solutions', translations: { es: 'Bugs y Soluciones' } },
+						{ label: 'Genshin Impact', slug: 'genshin/bugs-solutions' },
+						{ label: 'Honkai: Star Rail', slug: 'hsr/bugs-solutions' },
+						{ label: 'Zenless Zone Zero', slug: 'zzz/bugs-solutions' },
 					],
 				},
 			],

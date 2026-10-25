@@ -1,0 +1,56 @@
+<div class="quickstart-cards">
+  <slot />
+</div>
+
+<style>
+  .quickstart-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
+    gap: 1rem;
+    margin-block: 1.5rem 2rem;
+  }
+
+  .quickstart-cards :global(a.quickstart-card) {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    margin: 0;
+    padding: 1.25rem 1.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 1.15rem;
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--sl-color-gray-2);
+    text-decoration: none;
+    overflow-wrap: anywhere;
+    transition: background 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
+  }
+
+  .quickstart-cards :global(a.quickstart-card:hover) {
+    border-color: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.06);
+    transform: translateY(-2px);
+  }
+
+  .quickstart-cards :global(.link-title) {
+    margin: 0;
+    color: var(--sl-color-accent);
+    font-size: var(--sl-text-lg);
+    font-weight: 700;
+    line-height: var(--sl-line-height-headings);
+  }
+
+  .quickstart-cards :global(.link-desc) {
+    margin: 0;
+    font-size: var(--sl-text-sm);
+  }
+
+  :global([data-theme='light']) .quickstart-cards :global(a.quickstart-card) {
+    background: rgba(255, 255, 255, 0.85);
+    border-color: rgba(234, 88, 12, 0.15);
+  }
+
+  :global([data-theme='light']) .quickstart-cards :global(a.quickstart-card:hover) {
+    background: #ffffff;
+    border-color: rgba(234, 88, 12, 0.3);
+  }
+</style>

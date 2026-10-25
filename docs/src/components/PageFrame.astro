@@ -71,6 +71,12 @@ const { hasSidebar } = Astro.locals.starlightRoute;
 <AnchorCopy />
 
 <style>
+	@media (max-width: 50em) {
+		.mobile-header :global(mobile-starlight-toc .display-current) {
+			display: none;
+		}
+	}
+
 	@layer starlight.core {
 		.page {
 			flex-direction: column;

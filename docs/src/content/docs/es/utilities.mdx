@@ -1,31 +1,33 @@
 ---
 title: Utilidades
-description: Guías útiles, tutoriales y recursos de la comunidad para trabajar con personajes y shaders en Blender.
+description: Herramientas útiles, guías, tutoriales y recursos de la comunidad para trabajar con personajes, cámaras y shaders en Blender.
 ---
 
+import { Image } from 'astro:assets';
 import eyeThroughHair1 from '../../../assets/content/utilities/eye-through-hair1.mp4';
 import eyeThroughHair2 from '../../../assets/content/utilities/eye-through-hair2.mp4';
+import hairShadowImg from '../../../assets/content/utilities/hair-shadow.png';
 
 ## Jideeh's Camera
 
-### Cómo usar (How to use)
+### Cómo usar
 
-- **Yellow L corners / AIM (Esquinas amarillas en L)**: Es escalable. La cámara sigue este widget para apuntar. Si se escala, el FOV se ajustará.
-- **Orange Circle / FOCUS (Círculo naranja)**: Controla la profundidad de campo (Depth of Field) — hacia dónde o qué tan cerca/lejos debe enfocar la cámara.
-- **Purple Circle / PIVOT (Círculo morado)**: Controla alrededor de dónde debe orbitar la cámara.
-- **Curved Yellow Line / FREQ (Línea curva amarilla)**: Controla la frecuencia del temblor (shake).
-- **Vertical Yellow Slider / SHAKE_Y (Deslizador vertical amarillo)**: Controla la intensidad del temblor en el eje Y.
-- **Horizontal Yellow Slider / SHAKE_X (Deslizador horizontal amarillo)**: Controla la intensidad del temblor en el eje X.
-- **The one with the F widget / DOF (Widget con la F)**: Un interruptor (toggle) para la profundidad de campo.
-- **ROOT**: Controlador maestro (Master Controller) de la cámara.
-- **CAM (detrás de la cámara)**: Actúa como un estabilizador de cámara. Puedes mover la cámara sin cambiar hacia dónde está apuntando.
+- **Esquinas L Amarillas / AIM**: Es escalable. La cámara sigue este widget para apuntar. Si se escala, se ajustará el FOV.
+- **Círculo Naranja / FOCUS**: Controla la profundidad de campo: dónde o qué tan cerca/lejos debe enfocar la cámara.
+- **Círculo Púrpura / PIVOT**: Controla dónde debe orbitar la cámara.
+- **Línea Curva Amarilla / FREQ**: Controla la frecuencia de la vibración (shake).
+- **Control Deslizante Vertical Amarillo / SHAKE_Y**: Controla la intensidad de la vibración en el eje Y.
+- **Control Deslizante Horizontal Amarillo / SHAKE_X**: Controla la intensidad de la vibración en el eje X.
+- **El que tiene el widget F / DOF**: Un interruptor para activar/desactivar la profundidad de campo.
+- **ROOT**: Controlador Maestro de la cámara.
+- **CAM (detrás de la cámara)**: Actúa como estabilizador de cámara. Puedes mover la cámara sin cambiar hacia dónde está apuntando.
 
-### Video de referencia
+### Video de Referencia
 
 <div class="video-container">
   <iframe loading="lazy"
     src="https://www.youtube-nocookie.com/embed/uU-YNxzpVE8"
-    title="Jideeh's Camera Reference"
+    title="Referencia de la Cámara de Jideeh"
     frameborder="0"
     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
     referrerpolicy="strict-origin-when-cross-origin"
@@ -35,9 +37,9 @@ import eyeThroughHair2 from '../../../assets/content/utilities/eye-through-hair2
 
 ---
 
-## Eye Through Hair (Ojos a Través del Cabello)
+## Ojos a Través del Cabello
 
-Permite que los ojos y cejas del personaje se vean a través de la geometría del cabello.
+Hace que los ojos y las cejas del personaje sean visibles a través de la geometría del cabello.
 
 ### Automático:
 
@@ -53,7 +55,7 @@ Permite que los ojos y cejas del personaje se vean a través de la geometría de
 
 ### Manual
 
-Para quienes deseen configurarlo de forma manual o aprender el flujo paso a paso con Shader to RGB y pases AOV:
+Para quienes necesitan configurarlo manualmente o desean comprender paso a paso cómo funcionan los pases Shader to RGB y AOV:
 
 <div class="video-container">
   <iframe loading="lazy"
@@ -72,6 +74,8 @@ Para quienes deseen configurarlo de forma manual o aprender el flujo paso a paso
 
 :::caution[Experimental]
 Esta función es experimental y puede producir resultados inesperados.
+
+**Hair Shadows no se puede usar al mismo tiempo que See Eye Through.**
 :::
 
 Añade sombras del cabello sobre el rostro del personaje en Blender 5.2 o posterior.
@@ -79,6 +83,8 @@ Añade sombras del cabello sobre el rostro del personaje en Blender 5.2 o poster
 1. En **Modo Objeto**, selecciona una malla del personaje o su armadura. El personaje necesita materiales llamados Face y Hair o Bangs para identificar el rostro y el cabello.
 2. En **Gacha Setup → Utilities**, pulsa **Hair Shadows**.
 3. Abre el **Compositor** y selecciona el grupo **Hair Shadows** del personaje. Ajusta **Offset X** y **Offset Y** para colocar la sombra, **Shadow Tint** para su color y **Strength** para su intensidad.
+
+<Image src={hairShadowImg} alt="Grupo de Hair Shadows en el compositor y efecto en el rostro" loading="lazy" />
 
 La herramienta activa el compositor del visor automáticamente. Comprueba el resultado en el sombreado renderizado o en un render. Si ejecutas la herramienta otra vez sobre el mismo personaje, se actualiza su efecto existente.
 

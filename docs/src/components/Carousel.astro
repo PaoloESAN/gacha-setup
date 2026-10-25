@@ -1,0 +1,198 @@
+---
+interface Props {
+  id?: string;
+  lang?: string;
+}
+
+const { id, lang = 'en' } = Astro.props;
+const isSpanish = lang.startsWith('es');
+---
+
+<div class="custom-carousel" id={id}>
+  <div class="carousel-image-container">
+    <div class="carousel-track">
+      <slot />
+    </div>
+
+    <!-- Navigation Arrows overlaid on the image -->
+    <button type="button" class="carousel-arrow prev" aria-label={isSpanish ? 'Diapositiva anterior' : 'Previous slide'}>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+    </button>
+    <button type="button" class="carousel-arrow next" aria-label={isSpanish ? 'Diapositiva siguiente' : 'Next slide'}>
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="9 18 15 12 9 6"></polyline>
+      </svg>
+    </button>
+
+    <!-- Slide counter pill -->
+    <div class="carousel-counter"></div>
+  </div>
+
+  <!-- Bottom description area -->
+  <div class="carousel-caption">
+    <p class="caption-title"></p>
+    <p class="caption-desc"></p>
+  </div>
+</div>
+
+<script>
+  function initCarousels() {
+    const carousels = document.querySelectorAll('.custom-carousel');
+    carousels.forEach((carousel) => {
+      if (carousel.hasAttribute('data-initialized')) return;
+      carousel.setAttribute('data-initialized', 'true');
+
+      const track = carousel.querySelector('.carousel-track') as HTMLElement;
+      const slides = track ? Array.from(track.querySelectorAll('.carousel-slide')) as HTMLElement[] : [];
+      const prevBtn = carousel.querySelector('.carousel-arrow.prev') as HTMLButtonElement;
+      const nextBtn = carousel.querySelector('.carousel-arrow.next') as HTMLButtonElement;
+      const counter = carousel.querySelector('.carousel-counter') as HTMLElement;
+      const captionTitle = carousel.querySelector('.caption-title') as HTMLElement;
+      const captionDesc = carousel.querySelector('.caption-desc') as HTMLElement;
+
+      if (!track || slides.length === 0) return;
+
+      let currentIndex = 0;
+
+      function updateSlide() {
+        if (!track) return;
+        track.style.transform = `translateX(-${currentIndex * 100}%)`;
+
+        const activeSlide = slides[currentIndex];
+        const title = activeSlide?.getAttribute('data-title') || '';
+        const desc = activeSlide?.getAttribute('data-desc') || '';
+
+        if (captionTitle) captionTitle.textContent = title;
+        if (captionDesc) captionDesc.textContent = desc;
+        if (counter) counter.textContent = `${currentIndex + 1} / ${slides.length}`;
+      }
+
+      function goToSlide(index: number) {
+        currentIndex = (index + slides.length) % slides.length;
+        updateSlide();
+      }
+
+      prevBtn?.addEventListener('click', (e) => {
+        e.preventDefault();
+        goToSlide(currentIndex - 1);
+      });
+
+      nextBtn?.addEventListener('click', (e) => {
+        e.preventDefault();
+        goToSlide(currentIndex + 1);
+      });
+
+      updateSlide();
+    });
+  }
+
+  initCarousels();
+  document.addEventListener('astro:page-load', initCarousels);
+  document.addEventListener('DOMContentLoaded', initCarousels);
+</script>
+
+<style>
+  .custom-carousel {
+    position: relative;
+    width: 100%;
+    margin: 1.5rem 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+
+  .carousel-image-container {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 8px;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .carousel-track {
+    display: flex;
+    align-items: center;
+    transition: transform 0.3s ease-in-out;
+    width: 100%;
+  }
+
+  .carousel-track :global(.carousel-slide),
+  .custom-carousel .carousel-arrow,
+  .custom-carousel .carousel-counter {
+    margin: 0;
+  }
+
+  .carousel-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(0, 0, 0, 0.55);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 10;
+    transition: background 0.2s, transform 0.15s, opacity 0.2s;
+    backdrop-filter: blur(4px);
+    opacity: 0.85;
+  }
+
+  .carousel-arrow:hover {
+    background: rgba(0, 0, 0, 0.85);
+    transform: translateY(-50%) scale(1.1);
+    opacity: 1;
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+
+  .carousel-arrow.prev {
+    left: 12px;
+  }
+
+  .carousel-arrow.next {
+    right: 12px;
+  }
+
+  .carousel-counter {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    background: rgba(0, 0, 0, 0.6);
+    color: #ffffff;
+    font-size: 0.8rem;
+    padding: 3px 10px;
+    border-radius: 12px;
+    backdrop-filter: blur(4px);
+    letter-spacing: 0.5px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    pointer-events: none;
+  }
+
+  .carousel-caption {
+    margin-top: 0.85rem;
+    text-align: center;
+    padding: 0 0.5rem;
+  }
+
+  .caption-title {
+    margin: 0 0 0.3rem 0 !important;
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--sl-color-white, #fff);
+  }
+
+  .caption-desc {
+    margin: 0 !important;
+    font-size: 0.95rem;
+    color: var(--sl-color-gray-2, #aaa);
+  }
+</style>

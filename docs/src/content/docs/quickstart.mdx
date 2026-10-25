@@ -1,24 +1,14 @@
 ---
 title: Quickstart
-description: Get started with Gacha Setup. Blender 5.2 is recommended; Blender/Goo Engine 4.1+ are supported.
+description: Get started with Gacha Setup in minutes. Download, install, and configure your first character in Blender.
 ---
 
+import QuickstartCards from '../../components/QuickstartCards.astro';
 import { Image } from 'astro:assets';
-import { CardGrid } from '@astrojs/starlight/components';
-import mainPanel from '../../assets/content/overview/main-panel.png';
+import entireSetupImg from '../../assets/content/overview/entire_setup.png';
+import selectGameImg from '../../assets/content/overview/select_game.png';
 import selectCharacter from '../../assets/content/overview/select-character.png';
 import characterEscene from '../../assets/content/overview/character-escene.png';
-import physicsVideo from '../../assets/content/overview/physics.mp4';
-import genshinIcon from '../../assets/icons/genshin-icon.webp';
-import hsrIcon from '../../assets/icons/hsr-icon.webp';
-import zzzIcon from '../../assets/icons/zzz-icon.jpg';
-import nteIcon from '../../assets/icons/nte-icon.jpg';
-import wuwaIcon from '../../assets/icons/wuwa-icon.webp';
-import akeIcon from '../../assets/icons/ake-icon.jpg';
-
-:::note[Blender Compatibility]
-**Blender 5.2 is recommended.** Gacha Setup is also compatible with **Blender/Goo Engine 4.1+**. If you use Blender **below 4.5**, install **BetterFBX** to import models.
-:::
 
 ## Installation Steps
 
@@ -32,76 +22,33 @@ import akeIcon from '../../assets/icons/ake-icon.jpg';
 
 1. Press `N` in the 3D Viewport to open the **Character Setup Wizard** sidebar panel.
 
-<Image src={mainPanel} alt="Character Setup Wizard main panel (v3.7.1)" loading="eager" />
+<Image src={entireSetupImg} alt="Character Setup Wizard main panel" loading="eager" />
 
-2. Select your game (Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Neverness to Everness, Wuthering Waves, Arknights: Endfield, Punishing: Gray Raven, Honkai Impact 3rd, or Honkai: Nexus Anima).
-3. *(Optional)* Under **Setup Settings**, enable **Hair & Clothes Physics** to add dynamic physics to the hair and clothing when the character moves. Enable **Disable Rigging** to skip rig generation and import the character with materials and outlines only.
+2. Select your game.
 
-<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
-  <source src={physicsVideo} type="video/mp4" />
-</video>
+<Image src={selectGameImg} alt="Select Game dropdown" loading="lazy" />
 
-4. Click **Run Entire Setup** (or run the steps one by one under **Old Setup**).
-5. Select your [character folder](/character-models/) and click **Select Character Folder**.
+3. Click **Run Entire Setup**.
+
+4. Select your [character folder](/character-models/) and click **Select Character Folder** (or select its `.zip` / `.7z` file).
 
 <Image src={selectCharacter} alt="Select Character Folder" loading="lazy" />
 
-6. Wait a few seconds and your character will be ready in the scene.
+5. Wait a few seconds and your character will be ready in the scene.
 
 <Image src={characterEscene} alt="Character ready in the scene (Setup completed successfully)" loading="lazy" />
 
+---
 
-## Set Up Each Game's Characters
+## Additional Information
 
-If you want info on how to set up each game's characters, check here:
-
-<CardGrid>
-	<a href="/genshin/setup-character/" class="game-card-link">
-		<div class="card">
-			<div class="title">
-				<Image src={genshinIcon} alt="Genshin Impact" class="game-icon-img" loading="lazy" />
-				<span>Genshin Impact</span>
-			</div>
-		</div>
-	</a>
-	<a href="/hsr/setup-character/" class="game-card-link">
-		<div class="card">
-			<div class="title">
-				<Image src={hsrIcon} alt="Honkai: Star Rail" class="game-icon-img" loading="lazy" />
-				<span>Honkai: Star Rail</span>
-			</div>
-		</div>
-	</a>
-	<a href="/zzz/setup-character/" class="game-card-link">
-		<div class="card">
-			<div class="title">
-				<Image src={zzzIcon} alt="Zenless Zone Zero" class="game-icon-img" loading="lazy" />
-				<span>Zenless Zone Zero</span>
-			</div>
-		</div>
-	</a>
-	<a href="/nte/setup-character/" class="game-card-link">
-		<div class="card">
-			<div class="title">
-				<Image src={nteIcon} alt="Neverness to Everness" class="game-icon-img" loading="lazy" />
-				<span>Neverness to Everness</span>
-			</div>
-		</div>
-	</a>
-	<a href="/wuwa/setup-character/" class="game-card-link">
-		<div class="card">
-			<div class="title">
-				<Image src={wuwaIcon} alt="Wuthering Waves" class="game-icon-img" loading="lazy" />
-				<span>Wuthering Waves</span>
-			</div>
-		</div>
-	</a>
-	<a href="/ake/setup-character/" class="game-card-link">
-		<div class="card">
-			<div class="title">
-				<Image src={akeIcon} alt="Arknights: Endfield" class="game-icon-img" loading="lazy" />
-				<span>Arknights: Endfield</span>
-			</div>
-		</div>
-	</a>
-</CardGrid>
+<QuickstartCards>
+  <a href="/character-settings/" class="quickstart-card">
+    <p class="link-title">Character Settings</p>
+    <p class="link-desc">Lighting presets, light direction objects, fresnel, outlines, and physics toggles.</p>
+  </a>
+  <a href="/rigging/" class="quickstart-card">
+    <p class="link-title">Rigging</p>
+    <p class="link-desc">3D face control boards, facial rigs, rig layer toggles, and master motion cogs.</p>
+  </a>
+</QuickstartCards>

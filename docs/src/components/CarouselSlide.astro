@@ -1,0 +1,40 @@
+---
+import { Image } from 'astro:assets';
+import type { ImageMetadata } from 'astro';
+
+interface Props {
+  img?: ImageMetadata;
+  alt?: string;
+  title?: string;
+  description?: string;
+}
+
+const { img, alt = '', title = '', description = '' } = Astro.props;
+---
+
+<div class="carousel-slide" data-title={title} data-desc={description}>
+  {img ? <Image src={img} alt={alt} loading="lazy" /> : <slot />}
+</div>
+
+<style>
+  .carousel-slide {
+    min-width: 100%;
+    max-width: 100%;
+    flex: 0 0 100%;
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .carousel-slide :global(img) {
+    width: 100%;
+    max-height: 520px;
+    object-fit: contain;
+    border-radius: 8px;
+    display: block;
+    margin: 0 auto;
+  }
+</style>

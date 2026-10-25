@@ -1,107 +1,54 @@
 ---
 title: Guía Rápida
-description: Empieza rápidamente con Gacha Setup. Se recomienda Blender 5.2; también funciona con Blender/Goo Engine 4.1+.
+description: Comienza con Gacha Setup en minutos. Descarga, instala y configura tu primer personaje en Blender.
 ---
 
+import QuickstartCards from '../../../components/QuickstartCards.astro';
 import { Image } from 'astro:assets';
-import { CardGrid } from '@astrojs/starlight/components';
-import mainPanel from '../../../assets/content/overview/main-panel.png';
+import entireSetupImg from '../../../assets/content/overview/entire_setup.png';
+import selectGameImg from '../../../assets/content/overview/select_game.png';
 import selectCharacter from '../../../assets/content/overview/select-character.png';
 import characterEscene from '../../../assets/content/overview/character-escene.png';
-import physicsVideo from '../../../assets/content/overview/physics.mp4';
-import genshinIcon from '../../../assets/icons/genshin-icon.webp';
-import hsrIcon from '../../../assets/icons/hsr-icon.webp';
-import zzzIcon from '../../../assets/icons/zzz-icon.jpg';
-import nteIcon from '../../../assets/icons/nte-icon.jpg';
-import wuwaIcon from '../../../assets/icons/wuwa-icon.webp';
-import akeIcon from '../../../assets/icons/ake-icon.jpg';
 
-:::note[Compatibilidad de Blender]
-**Se recomienda Blender 5.2.** Gacha Setup también es compatible con **Blender/Goo Engine 4.1+**. Si usas Blender **anterior a 4.5**, instala **BetterFBX** para importar modelos.
-:::
+## Pasos de Instalación
 
-## Instalación
-
-1. Descarga el `Gacha_Setup-<version>.zip` más reciente desde el [último release de GitHub](https://github.com/PaoloESAN/gacha-setup/releases/latest).
-2. Inicia Blender 5.2 (recomendado), Blender/Goo Engine 4.1+. En Blender anterior a 4.5, instala BetterFBX primero.
+1. Descarga la versión más reciente `Gacha_Setup-<versión>.zip` desde el [último lanzamiento de GitHub](https://github.com/PaoloESAN/gacha-setup/releases/latest).
+2. Abre Blender 5.2 (recomendado) o Blender/Goo Engine 4.1+. En versiones anteriores a 4.5, instala primero BetterFBX.
 3. Arrastra y suelta el archivo `.zip` descargado dentro de la ventana de Blender.
-4. Activa la casilla **Enable Add-on** y haz clic en **OK** para confirmar.
-5. Si no se instala automáticamente, ve a **Editar > Preferencias > Add-ons**, haz clic en **Instalar desde disco...**, selecciona el `.zip` y activa la casilla del add-on.
+4. Marca la casilla **Enable Add-on** y presiona **OK** para confirmar.
+5. Si no se instala automáticamente, abre **Edit > Preferences > Add-ons**, presiona **Install from Disk...**, selecciona el archivo `.zip` y activa la casilla del add-on.
 
 ## Configurar Personaje
 
 1. Presiona `N` en la Vista 3D para abrir el panel lateral **Character Setup Wizard**.
 
-<Image src={mainPanel} alt="Panel principal del Character Setup Wizard (v3.7.1)" loading="eager" />
+<Image src={entireSetupImg} alt="Panel principal del Character Setup Wizard" loading="eager" />
 
-2. Selecciona tu juego (Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Neverness to Everness, Wuthering Waves, Arknights: Endfield, Punishing: Gray Raven, Honkai Impact 3rd o Honkai: Nexus Anima).
-3. *(Opcional)* En **Setup Settings**, activa la casilla **Hair & Clothes Physics** para añadir físicas dinámicas al cabello y ropa cuando el personaje se mueva. Activa **Disable Rigging** para omitir la generación del rig e importar el personaje solo con materiales y outlines.
+2. Selecciona tu juego.
 
-<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
-  <source src={physicsVideo} type="video/mp4" />
-</video>
+<Image src={selectGameImg} alt="Menú desplegable para seleccionar juego" loading="lazy" />
 
-4. Haz clic en **Run entire setup** (o ejecuta los pasos uno a uno en **Old Setup**).
-5. Selecciona la [carpeta de personaje](/es/character-models/) y haz clic en **Select Character Folder**.
+3. Haz clic en **Run Entire Setup**.
+
+4. Selecciona la [carpeta del personaje](/es/character-models/) y haz clic en **Select Character Folder** (o selecciona su archivo `.zip` / `.7z`).
 
 <Image src={selectCharacter} alt="Select Character Folder" loading="lazy" />
 
-6. Espera unos segundos y tendrás a tu personaje listo en la escena.
+5. Espera unos segundos y tendrás a tu personaje listo en la escena.
 
 <Image src={characterEscene} alt="Personaje listo en la escena (Setup completed successfully)" loading="lazy" />
 
+---
 
-## Configurar los Personajes de Cada Juego
+## Información Adicional
 
-Si quieres información sobre cómo poner los personajes de cada juego, mírala aquí:
-
-<CardGrid>
-	<a href="/es/genshin/setup-character/" class="game-card-link">
-		<div class="card">
-			<div class="title">
-				<Image src={genshinIcon} alt="Genshin Impact" class="game-icon-img" loading="lazy" />
-				<span>Genshin Impact</span>
-			</div>
-		</div>
-	</a>
-	<a href="/es/hsr/setup-character/" class="game-card-link">
-		<div class="card">
-			<div class="title">
-				<Image src={hsrIcon} alt="Honkai: Star Rail" class="game-icon-img" loading="lazy" />
-				<span>Honkai: Star Rail</span>
-			</div>
-		</div>
-	</a>
-	<a href="/es/zzz/setup-character/" class="game-card-link">
-		<div class="card">
-			<div class="title">
-				<Image src={zzzIcon} alt="Zenless Zone Zero" class="game-icon-img" loading="lazy" />
-				<span>Zenless Zone Zero</span>
-			</div>
-		</div>
-	</a>
-	<a href="/es/nte/setup-character/" class="game-card-link">
-		<div class="card">
-			<div class="title">
-				<Image src={nteIcon} alt="Neverness to Everness" class="game-icon-img" loading="lazy" />
-				<span>Neverness to Everness</span>
-			</div>
-		</div>
-	</a>
-	<a href="/es/wuwa/setup-character/" class="game-card-link">
-		<div class="card">
-			<div class="title">
-				<Image src={wuwaIcon} alt="Wuthering Waves" class="game-icon-img" loading="lazy" />
-				<span>Wuthering Waves</span>
-			</div>
-		</div>
-	</a>
-	<a href="/es/ake/setup-character/" class="game-card-link">
-		<div class="card">
-			<div class="title">
-				<Image src={akeIcon} alt="Arknights: Endfield" class="game-icon-img" loading="lazy" />
-				<span>Arknights: Endfield</span>
-			</div>
-		</div>
-	</a>
-</CardGrid>
+<QuickstartCards>
+  <a href="/es/character-settings/" class="quickstart-card">
+    <p class="link-title">Character Settings</p>
+    <p class="link-desc">Presets de iluminación, objeto direct-light, fresnel, contornos y físicas.</p>
+  </a>
+  <a href="/es/rigging/" class="quickstart-card">
+    <p class="link-title">Rigging</p>
+    <p class="link-desc">Paneles de control facial 3D, face rigs, capas del rig y cogs maestros de movimiento.</p>
+  </a>
+</QuickstartCards>

@@ -1,0 +1,140 @@
+---
+title: Character Settings
+description: Overview of the Character Settings panel in Blender, lighting presets, light direction, Fresnel, outlines, and physics.
+---
+
+import { Image } from 'astro:assets';
+import Carousel from '../../components/Carousel.astro';
+import CarouselSlide from '../../components/CarouselSlide.astro';
+import characterSettingsImg from '../../assets/content/overview/character_settings.png';
+import animatedModeImg from '../../assets/content/overview/animated_mode.png';
+import lightPanelImg from '../../assets/content/overview/light_panel.png';
+import lightDefaultImg from '../../assets/content/overview/light_default.png';
+import lightSunriseImg from '../../assets/content/overview/light_sunrise.png';
+import lightDayImg from '../../assets/content/overview/light_day.png';
+import lightSunsetImg from '../../assets/content/overview/light_sunset.png';
+import lightNightImg from '../../assets/content/overview/light_night.png';
+import lightRainyImg from '../../assets/content/overview/light_rainy.png';
+import lightCustomImg from '../../assets/content/overview/light_custom.png';
+import fresnelImg from '../../assets/content/overview/fresnel.png';
+import physicsVideo from '../../assets/content/overview/physics.mp4';
+import genshinLightdir from '../../assets/content/genshin/genshin-lightdir.png';
+
+
+# Character Settings
+
+The **Character Settings** panel is located in the **Item** tab of the 3D Viewport sidebar (`N` panel) when a character armature or mesh is selected. It provides real-time control over shader lighting, anime outlines, Fresnel rim effects, shadow behavior, and physics directly without opening shader node graphs.
+
+<Image src={characterSettingsImg} alt="Character Settings Panel in Item Tab" loading="eager" />
+
+---
+
+## Animate Mode
+
+**Animate Mode** enables smooth, lightweight viewport playback by temporarily swapping heavy multi-layer toon materials with lightweight alternatives and hiding outline modifiers.
+
+- Click **Enable Animate Mode** when working on animation keyframes and pacing.
+- Click **Disable Animate Mode** prior to rendering or staging final lighting.
+
+<Image src={animatedModeImg} alt="Animate Mode viewport preview" loading="lazy" />
+
+---
+
+## Lighting Type & Lighting Mode
+
+You can control character lighting either via the **3D Lighting Panel** gizmo in the scene or through the **Character Settings** UI presets.
+
+### 3D Lighting Panel
+When **Lighting Type** is set to **Lighting Panel**, three-dimensional color wheels and directional controllers in the 3D Viewport drive the character's key light, ambient light, and shadow colors interactively.
+
+<Image src={lightPanelImg} alt="3D Lighting Panel in the viewport" loading="lazy" />
+
+To adjust the values, enter **Pose Mode**, select a panel control, and press `G` to move it.
+
+### Lighting Presets (This Panel)
+When set to **This Panel**, you can choose between built-in lighting presets tailored for different environmental moods. Use the carousel below to explore the available lighting presets:
+
+<Carousel>
+  <CarouselSlide title="Default" description="The neutral, balanced studio anime lighting.">
+    <Image src={lightDefaultImg} alt="Default Lighting Preset" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Sunrise" description="Warm, golden morning hues with soft contrast.">
+    <Image src={lightSunriseImg} alt="Sunrise Lighting Preset" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Day" description="Crisp daylight illumination with clean shadow tones.">
+    <Image src={lightDayImg} alt="Day Lighting Preset" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Sunset" description="Rich dusk colors with warm highlights and vibrant ambient tones.">
+    <Image src={lightSunsetImg} alt="Sunset Lighting Preset" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Night" description="Moody nocturnal tones with cool ambient moonlight and deep shadows.">
+    <Image src={lightNightImg} alt="Night Lighting Preset" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Rainy" description="Overcast and diffused rainy atmosphere with softened highlights.">
+    <Image src={lightRainyImg} alt="Rainy Lighting Preset" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Custom Colors" description="Fine-tune Ambient, Sharp/Soft Lit, Sharp/Soft Shadow, and Rim color channels individually.">
+    <Image src={lightCustomImg} alt="Custom Colors lighting setup" loading="lazy" />
+  </CarouselSlide>
+</Carousel>
+
+---
+
+## Light & Shadow Direction (Light Direction Object)
+
+During setup, a dedicated empty object named `Light Direction_<Character>` (e.g., `Light Direction_Charlotte`) is generated in the scene collection to control where the sun and shadows strike the model.
+
+<Image src={genshinLightdir} alt="Genshin Impact Light Direction object in Outliner and Item Transform" loading="lazy" />
+
+1. Select `Light Direction_<Character>` from the 3D Viewport or **Outliner**.
+2. Open the **Item Transform** panel in the sidebar (`N` key).
+3. Adjust the **Rotation** values (XYZ Euler):
+   - **Rotation Z**: Rotates the sun angle azimuth horizontally around the character.
+   - **Rotation Y**: Adjusts the lateral tilt of the light vector across the character.
+   - **Rotation X**: Adjusts the vertical pitch and elevation angle of the shadow terminator.
+
+---
+
+## Fresnel & Outlines
+
+### Fresnel
+Fresnel adds an edge rim/specular glow characteristic of high-end cel-shading:
+- **Toggle Fresnel**: Enable or disable the effect.
+- **Fresnel Color**: Tint of the outer rim.
+- **Fresnel Power**: Falloff sharpness across curved surfaces.
+- **Fresnel Scaler**: Overall intensity multiplier.
+
+<Image src={fresnelImg} alt="Fresnel rim effect controls and preview" loading="lazy" />
+
+### Outlines
+- **Enable Outlines**: Quickly toggle inverted-hull outline modifiers across all character meshes.
+- **Enable Night Soul**: (Natlan Characters in Genshin Impact) Toggles special glowing energy outlines.
+
+---
+
+## Shadow & Scene Settings
+
+- **Shadow Position**: Slides the light termination threshold on curved surfaces.
+- **Catch Shadows**: Allows or ignores external scene shadows cast onto the character.
+- **Day / Night**: Blends between daytime and nighttime texture ramp calibrations.
+- **Blush Strength**: Modulates facial blush intensity where supported.
+
+---
+
+## Hair & Clothes Physics
+
+You can interactively apply or fine-tune dynamic physics without re-running the setup wizard:
+
+- **Hair Physics Slider**: Adjusts Damped Track springiness and physics influence on hair strands.
+- **Clothes Physics Slider**: Adjusts dynamic movement on clothing and skirt accessories.
+- **Apply Physics / Remove Physics**: Add or remove the constraint system at any time.
+
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={physicsVideo} type="video/mp4" />
+</video>

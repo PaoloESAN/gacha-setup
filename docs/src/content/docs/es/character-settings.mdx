@@ -1,0 +1,140 @@
+---
+title: Ajustes del Personaje
+description: Visión general del panel de Ajustes del Personaje (Character Settings) en Blender, presets de iluminación en carrusel, dirección de luz, Fresnel, contornos y físicas.
+---
+
+import { Image } from 'astro:assets';
+import Carousel from '../../../components/Carousel.astro';
+import CarouselSlide from '../../../components/CarouselSlide.astro';
+import characterSettingsImg from '../../../assets/content/overview/character_settings.png';
+import animatedModeImg from '../../../assets/content/overview/animated_mode.png';
+import lightPanelImg from '../../../assets/content/overview/light_panel.png';
+import lightDefaultImg from '../../../assets/content/overview/light_default.png';
+import lightSunriseImg from '../../../assets/content/overview/light_sunrise.png';
+import lightDayImg from '../../../assets/content/overview/light_day.png';
+import lightSunsetImg from '../../../assets/content/overview/light_sunset.png';
+import lightNightImg from '../../../assets/content/overview/light_night.png';
+import lightRainyImg from '../../../assets/content/overview/light_rainy.png';
+import lightCustomImg from '../../../assets/content/overview/light_custom.png';
+import fresnelImg from '../../../assets/content/overview/fresnel.png';
+import physicsVideo from '../../../assets/content/overview/physics.mp4';
+import genshinLightdir from '../../../assets/content/genshin/genshin-lightdir.png';
+
+
+# Ajustes del Personaje (Character Settings)
+
+El panel **Character Settings** se encuentra en la pestaña **Item** de la barra lateral del 3D Viewport (panel `N`) cuando seleccionas la armadura o una malla del personaje. Te permite ajustar en tiempo real la iluminación del shader, los contornos anime, efectos de Fresnel, sombras y físicas sin tener que abrir árboles de nodos.
+
+<Image src={characterSettingsImg} alt="Panel Character Settings en la pestaña Item" loading="eager" />
+
+---
+
+## Modo Animación (Animate Mode)
+
+El **Animate Mode** permite una reproducción fluida y ligera en el viewport al sustituir temporalmente los shaders complejos por materiales ligeros y desactivar los modificadores de contorno.
+
+- Haz clic en **Enable Animate Mode** para trabajar en las poses y el ritmo de la animación con una reproducción más fluida.
+- Haz clic en **Disable Animate Mode** antes de renderizar o componer la iluminación final.
+
+<Image src={animatedModeImg} alt="Vista previa del modo animación en viewport" loading="lazy" />
+
+---
+
+## Lighting Type y Lighting Mode
+
+Puedes controlar la iluminación del personaje mediante el gizmo del **3D Lighting Panel** en la escena o a través de los presets en la interfaz de **Character Settings**.
+
+### 3D Lighting Panel
+Al configurar **Lighting Type** en **Lighting Panel**, las ruedas de color y los deslizadores del panel 3D permiten ajustar los colores de iluminación, Fresnel y sombras del personaje.
+
+<Image src={lightPanelImg} alt="Panel de iluminación 3D en el viewport" loading="lazy" />
+
+Para modificar los valores, entra en **Pose Mode**, selecciona un control del panel y pulsa `G` para moverlo.
+
+### Presets de Iluminación (This Panel)
+Al elegir **This Panel**, puedes cambiar entre presets integrados adaptados a diferentes atmósferas. Navega por el carrusel interactivo para ver el resultado de cada preset:
+
+<Carousel lang="es">
+  <CarouselSlide title="Default" description="Iluminación estándar y balanceada de estudio anime.">
+    <Image src={lightDefaultImg} alt="Preset de iluminación Default" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Sunrise (Amanecer)" description="Tonos cálidos y dorados matutinos con contraste suave.">
+    <Image src={lightSunriseImg} alt="Preset de iluminación Sunrise" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Day (Día)" description="Iluminación clara y limpia de luz de día.">
+    <Image src={lightDayImg} alt="Preset de iluminación Day" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Sunset (Atardecer)" description="Tonos crepusculares vibrantes con reflejos anaranjados y sombras marcadas.">
+    <Image src={lightSunsetImg} alt="Preset de iluminación Sunset" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Night (Noche)" description="Atmósfera nocturna con luz lunar azulada y sombras profundas.">
+    <Image src={lightNightImg} alt="Preset de iluminación Night" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Rainy (Lluvia / Nublado)" description="Ambiente nublado y difuso con tonos atenuados.">
+    <Image src={lightRainyImg} alt="Preset de iluminación Rainy" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Custom Colors (Personalizado)" description="Selectores independientes para Ambient, Sharp/Soft Lit, Sharp/Soft Shadow y Rim.">
+    <Image src={lightCustomImg} alt="Configuración de colores personalizados" loading="lazy" />
+  </CarouselSlide>
+</Carousel>
+
+---
+
+## Control de Dirección de Luz (Light Direction Object)
+
+Durante el setup se genera automáticamente en la escena un objeto vacío llamado `Light Direction_<Personaje>` (por ejemplo, `Light Direction_Charlotte`), el cual define el vector de luz y sombras sobre el modelo.
+
+<Image src={genshinLightdir} alt="Objeto Light Direction en el Outliner y pestaña Item Transform" loading="lazy" />
+
+1. Selecciona el objeto `Light Direction_<Personaje>` en la escena o desde el **Outliner**.
+2. Abre la pestaña **Item Transform** en el panel lateral (`N`).
+3. Modifica los valores de **Rotation** (XYZ Euler):
+   - **Rotation Z**: Rota el ángulo del sol horizontalmente alrededor del personaje.
+   - **Rotation Y**: Modifica la inclinación lateral del vector de luz sobre el modelo.
+   - **Rotation X**: Ajusta la elevación o altura vertical de la terminación de sombra.
+
+---
+
+## Fresnel y Contornos (Outlines)
+
+### Fresnel
+El Fresnel añade un resplandor en los bordes característico del render anime moderno:
+- **Toggle Fresnel**: Activa o desactiva el efecto.
+- **Fresnel Color**: Tono del resplandor exterior.
+- **Fresnel Power**: Nitidez o caída del efecto sobre superficies curvas.
+- **Fresnel Scaler**: Multiplicador de intensidad general.
+
+<Image src={fresnelImg} alt="Opciones y previsualización de Fresnel" loading="lazy" />
+
+### Contornos (Outlines)
+- **Enable Outlines**: Conmuta rápidamente los modificadores de contorno invertido en todas las piezas del personaje.
+- **Enable Night Soul**: (Personajes de Natlan en Genshin Impact) Activa el contorno de energía elemental especial de Natlan.
+
+---
+
+## Ajustes de Sombra y Escena
+
+- **Shadow Position**: Ajusta el umbral de terminación de la sombra sobre el modelo.
+- **Catch Shadows**: Permite o ignora las sombras proyectadas por otros objetos de la escena.
+- **Day / Night**: Mezcla la transición entre las rampas de textura diurnas y nocturnas.
+- **Blush Strength**: Modifica la intensidad del sonrojo facial (cuando el personaje lo soporta).
+
+---
+
+## Físicas de Cabello y Ropa (Hair & Clothes Physics)
+
+Puedes aplicar o ajustar las físicas dinámicas en cualquier momento sin tener que volver a ejecutar el asistente completo:
+
+- **Hair Physics Slider**: Ajusta la influencia y rebote Damped Track en los mechones de pelo.
+- **Clothes Physics Slider**: Ajusta el movimiento dinámico en vestidos, faldas y accesorios de tela.
+- **Apply Physics / Remove Physics**: Aplica o retira todo el sistema de restricciones con un solo clic.
+
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={physicsVideo} type="video/mp4" />
+</video>

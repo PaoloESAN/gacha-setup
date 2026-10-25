@@ -3,8 +3,10 @@ title: Utilities
 description: Useful tools, guides, tutorials, and community resources for working with characters, cameras, and shaders in Blender.
 ---
 
+import { Image } from 'astro:assets';
 import eyeThroughHair1 from '../../assets/content/utilities/eye-through-hair1.mp4';
 import eyeThroughHair2 from '../../assets/content/utilities/eye-through-hair2.mp4';
+import hairShadowImg from '../../assets/content/utilities/hair-shadow.png';
 
 ## Jideeh's Camera
 
@@ -72,6 +74,8 @@ For those who need to set it up manually or want to understand how the Shader to
 
 :::caution[Experimental]
 This feature is experimental and may produce unexpected results.
+
+**Hair Shadows cannot be used at the same time as See Eye Through.**
 :::
 
 Adds shadows from a character's hair onto their face in Blender 5.2 or newer.
@@ -79,6 +83,8 @@ Adds shadows from a character's hair onto their face in Blender 5.2 or newer.
 1. In **Object Mode**, select a character mesh or its armature. The character needs materials named Face and Hair or Bangs so the tool can identify the face and hair.
 2. In **Gacha Setup → Utilities**, click **Hair Shadows**.
 3. Open the **Compositor** and select the character's **Hair Shadows** group. Adjust **Offset X** and **Offset Y** to position the shadow, **Shadow Tint** for its color, and **Strength** for its intensity.
+
+<Image src={hairShadowImg} alt="Hair Shadows compositor group and effect on character face" loading="lazy" />
 
 The tool enables the viewport compositor automatically. Check the result in rendered shading or in a render. Run the tool again on the same character to update its existing effect.
 
