@@ -1787,6 +1787,11 @@ class PunishingGrayRavenDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 punishing_gray_raven_material = self.create_main_material(mesh, material_type, target_mat_name)
 
                 if punishing_gray_raven_material:
+                    # Keep the exporter identity: several outfits can share a
+                    # directory while referencing different color atlases.
+                    source = punishing_gray_raven_material.get('pgr_source_material', '')
+                    if not source or material_name.endswith(mesh_body_part_name):
+                        punishing_gray_raven_material['pgr_source_material'] = material_name
                     material_slot.material = punishing_gray_raven_material
                 else:
                     self.blender_operator.report({'WARNING'}, f'Ignoring unknown mesh body part in character model: {mesh_body_part_name} / Material: {material_name}')

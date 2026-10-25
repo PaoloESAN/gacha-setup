@@ -1854,6 +1854,15 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
             self.report({"ERROR"}, error_message)
             raise RuntimeError(error_message)
 
+        if self.game_type == GameType.PUNISHING_GRAY_RAVEN.name and not is_rigging_disabled(bpy.context):
+            from setup_wizard.utils.pgr_bind_pose import (
+                restore_pgr_bind_pose, bind_unskinned_pgr_faces, bind_unskinned_bianca_bands,
+            )
+            imported = [obj for obj in bpy.data.objects if obj.name not in existing_objects]
+            restore_pgr_bind_pose(character_model_file_path, imported)
+            bind_unskinned_pgr_faces(imported)
+            bind_unskinned_bianca_bands(imported)
+
         if self.game_type == GameType.GENSHIN_IMPACT.name:
             import uuid
             model_id = uuid.uuid4().hex

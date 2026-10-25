@@ -92,6 +92,23 @@ tests/
 
 ## How to Run Tests
 
+PGR regression runs the complete setup for all three Bianca outfits, Nirvatia,
+the three Laiya Animator outfits, and Kurumi in fresh Blender processes, plus
+material setup for the nine accessories/chibi models in `chars/pgr`. It
+checks material JSON texture references (including eye color atlases), restored
+Nirvatia skin bindings, neutral geometry, and arm/finger controls. Bianca's
+unskinned face/eye layers must be attached and follow head rotation. Its two
+bracelets must follow their own hands in FK and IK without stretching or moving
+the opposite bracelet. All 31 mapped facial controls must deform the face,
+keep FaceEX synchronized, and return to neutral:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python tests/pgr_setup_blender.py
+```
+
+Pass `-- path/to/model.fbx --save-blend` to check and save one model. Reports
+and logs are written to `tests/.runtime/pgr`.
+
 PMX regression (requires MMD Tools) runs the actual Run Entire Setup chain for
 each PMX in the folder. It verifies that every normal FBX stage runs, that all
 character parts receive game shaders with their original PMX textures, and that

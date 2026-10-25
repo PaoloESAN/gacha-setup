@@ -3748,8 +3748,9 @@ def rig_character(
 
 
 
-    from setup_wizard.character_rig_setup.pgr_visual_widgets import align_hand_ik_widgets
+    from setup_wizard.character_rig_setup.pgr_visual_widgets import align_hand_ik_widgets, hide_unused_prop_controls
     align_hand_ik_widgets(this_obj)
+    hide_unused_prop_controls(this_obj)
 
     # Clean up any leftover RIG_LOG text block
     log_text = bpy.data.texts.get("RIG_LOG")
