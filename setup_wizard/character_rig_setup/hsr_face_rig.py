@@ -977,6 +977,11 @@ def hsr_face_rig_main():
         print("HSR Face Rig: Face mesh has no shape keys.")
         return
 
+    from setup_wizard.utils.hsr_expression_reference import rebase_baked_expressions
+    rebased = rebase_baked_expressions(faceobj)
+    if rebased:
+        print(f'HSR Face Rig: restored neutral references for {rebased} baked expressions.')
+
     keyblock = faceobj.data.shape_keys.key_blocks
     armature, head_name = find_armature_and_head(faceobj)
     fwd, right, up, face_size = face_frame(faceobj)

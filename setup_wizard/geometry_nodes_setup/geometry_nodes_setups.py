@@ -178,6 +178,32 @@ def get_mesh_world_scale(mesh):
         return 1.0
 
 
+def refresh_hsr_outline_scale(context):
+    """Reconcile compensated offsets after rigging applies the FBX scale.
+
+    Preserve the live settings, including custom widths, and only touch meshes
+    whose compensation was recorded by the HSR geometry setup.
+    """
+    context.view_layer.update()
+    for mesh in context.scene.objects:
+        previous_scale = mesh.get('gacha_hsr_outline_scale') if mesh.type == 'MESH' else None
+        if previous_scale is None:
+            continue
+        scale = get_mesh_world_scale(mesh)
+        if abs(scale - previous_scale) < 1e-6:
+            continue
+        for modifier in mesh.modifiers:
+            if (modifier.type != 'NODES' or not modifier.node_group
+                    or modifier.node_group.name.split('.')[0] not in
+                    OutlineNodeGroupNames.STELLARTOON_HSR_OUTLINES + OutlineNodeGroupNames.NYA222_HSR_OUTLINES):
+                continue
+            for key in (OUTLINE_THICKNESS_INPUT, HSR_OUTLINE_DEPTH_OFFSET_INPUT):
+                value = get_modifier_property(modifier, key)
+                if isinstance(value, (int, float)):
+                    set_modifier_property(modifier, key, value * previous_scale / scale)
+        mesh['gacha_hsr_outline_scale'] = scale
+
+
 meshes_to_create_outlines_on = \
     gi_meshes_to_create_outlines_on + \
     hsr_meshes_to_create_outlines_on + \
@@ -1217,10 +1243,10 @@ class HonkaiStarRailGeometryNodesSetup(GameGeometryNodesSetup):
         outline. Dividing by the mesh's effective world scale restores the
         intended world-space width. Meter-scale characters divide by 1.0
         (no-op). Assignment (not *=) keeps re-running the setup idempotent,
-        and the world scale is preserved by Fix Transformations, so the
-        compensation stays valid through the rest of the pipeline.
+        and compensation is refreshed after rigging if it applies that scale.
         """
         scale = get_mesh_world_scale(mesh)
+        mesh['gacha_hsr_outline_scale'] = scale
         if abs(scale - 1.0) < 1e-3:
             return
         # Always derive from the class defaults (not the live value) so that

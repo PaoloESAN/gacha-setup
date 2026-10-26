@@ -1014,6 +1014,9 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
         if cache_enabled and filepath:
             cache_using_cache_key(get_cache(cache_enabled), self.rigify_bone_shapes_file_path, filepath)
 
+        from setup_wizard.geometry_nodes_setup.geometry_nodes_setups import refresh_hsr_outline_scale
+        refresh_hsr_outline_scale(self.context)
+
         self.blender_operator.report({'INFO'}, 'Successfully rigged HSR character')
 
 

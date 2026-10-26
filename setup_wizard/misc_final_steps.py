@@ -410,6 +410,8 @@ class HSR_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorPropertie
     bl_label = "Honkai Star Rail: Finish Setup (UI)"
 
     def execute(self, context):
+        from setup_wizard.geometry_nodes_setup.geometry_nodes_setups import refresh_hsr_outline_scale
+        refresh_hsr_outline_scale(context)
         result = BasicSetupUIOperator.execute(self, context)
         try:
             self._rename_hsr_character_collection_and_rig(context)

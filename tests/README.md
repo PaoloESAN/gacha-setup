@@ -251,3 +251,8 @@ The test runs the complete isolated setup on a real character, checks all ten fi
 ## Kythera ZZZ V2
 
 Run Blender 5.2+ with `--background --factory-startup --python-exit-code 1 --python tests/zzz_kythera_v2_blender.py`. This runs the complete isolated Alice setup, checks that both extra eye materials survive, then evaluates `SUN`, `RIGHT`, and `FRONT` on the final face geometry (realizing the outline instances for inspection). It verifies Sun rotation, head following, idempotence, and independent lighting for a duplicated character. Output: `tests/.runtime/zzz-kythera-v2/`.
+
+
+## HSR The Herta baked expressions and outlines
+
+Run Blender 5.2+ with `--background --factory-startup --python-exit-code 1 --python tests/hsr_outline_scale_blender.py`. Imports `chars/hsr/Art_TheHerta_00`, runs the full setup, checks world-space outline thickness/depth after rigging, and sweeps all expression controls in both directions to catch a whole-face lateral shift. Checks that rebasing to authored family defaults is idempotent. Results: `tests/.runtime/hsr-herta-art/`.
