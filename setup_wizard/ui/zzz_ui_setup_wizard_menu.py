@@ -598,37 +598,17 @@ def update_zzz_kythera_props(self, context=None):
     # 1. Resolve character materials to keep settings strictly per-character
     try:
         from setup_wizard.ui.character_settings_utils import (
-            get_character_materials,
-            ensure_character_node_trees_isolated,
+            get_character_settings_materials,
         )
-        arm, target_materials = get_character_materials(context)
-        if arm and target_materials:
-            ensure_character_node_trees_isolated(arm, target_materials)
+        arm, target_materials = get_character_settings_materials(context, 'ZENLESS_ZONE_ZERO')
     except Exception:
         target_materials = []
 
-    # 2. Update in node groups definitions ONLY if no character is selected
     if not target_materials:
-        for ng in bpy.data.node_groups:
-            ng_low = ng.name.lower()
-            if "kythera" in ng_low or "rim light" in ng_low or "lit/shadow" in ng_low or "face shader" in ng_low:
-                if hasattr(ng, "interface"):
-                    for item in ng.interface.items_tree:
-                        if item.item_type == 'SOCKET' and item.in_out == 'INPUT' and item.name in prop_map:
-                            try:
-                                item.default_value = prop_map[item.name]
-                            except Exception:
-                                pass
-                elif hasattr(ng, "inputs"):
-                    for inp in ng.inputs:
-                        if inp.name in prop_map:
-                            try:
-                                inp.default_value = prop_map[inp.name]
-                            except Exception:
-                                pass
+        return
 
     # 3. Update targeted materials (scoped to this character only!)
-    mats_to_update = target_materials if target_materials else bpy.data.materials
+    mats_to_update = target_materials
     for m in mats_to_update:
         if getattr(m, "node_tree", None):
             is_mask = "mask" in m.name.lower() or m.get("_is_mask", False)
@@ -678,7 +658,8 @@ def update_zzz_kythera_props(self, context=None):
             pass
 
     # 4. Also update Legacy shader node groups if present (when in THIS_PANEL mode)
-    for ng in bpy.data.node_groups:
+    from setup_wizard.character_rig_setup.lighting_panel_setup import _zzz_property_trees
+    for ng in _zzz_property_trees(target_materials):
         ng_low = ng.name.lower()
         if "global material properties" in ng_low:
             if "face" in ng_low:
@@ -734,6 +715,10 @@ def update_zzz_kythera_props(self, context=None):
 def update_zzz_lighting_control_type(self, context=None):
     global _is_updating_zzz_props
     if _is_updating_zzz_props:
+        return
+    from setup_wizard.ui.character_settings_utils import get_character_settings_materials
+    arm, mats = get_character_settings_materials(context, 'ZENLESS_ZONE_ZERO')
+    if not arm or not mats:
         return
     ctrl_type = getattr(self, "zzz_lighting_control_type", "PANEL")
     arm = None

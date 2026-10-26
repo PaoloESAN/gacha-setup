@@ -571,12 +571,14 @@ else:
         register_pgr_properties()
         register_hna_properties()
         setup_wizard.services.isolation.register()
-        if wuwa_frame_change_handler not in bpy.app.handlers.render_init:
-            bpy.app.handlers.render_init.append(wuwa_frame_change_handler)
-        if gi_frame_change_handler not in bpy.app.handlers.render_init:
-            bpy.app.handlers.render_init.append(gi_frame_change_handler)
-        if ake_frame_change_handler not in bpy.app.handlers.render_init:
-            bpy.app.handlers.render_init.append(ake_frame_change_handler)
+        if wuwa_frame_change_handler in bpy.app.handlers.render_init:
+            bpy.app.handlers.render_init.remove(wuwa_frame_change_handler)
+        # Genshin's scene panel is a selection cache, not render-time state.
+        # Also detach the legacy callback when re-registering in an open file.
+        if gi_frame_change_handler in bpy.app.handlers.render_init:
+            bpy.app.handlers.render_init.remove(gi_frame_change_handler)
+        if ake_frame_change_handler in bpy.app.handlers.render_init:
+            bpy.app.handlers.render_init.remove(ake_frame_change_handler)
         if gacha_rig_ui_load_post_handler not in bpy.app.handlers.load_post:
             bpy.app.handlers.load_post.append(gacha_rig_ui_load_post_handler)
         try:

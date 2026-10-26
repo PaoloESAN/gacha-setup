@@ -366,25 +366,10 @@ def _resolve_ake_target_rig(context):
             context = bpy.context
         except Exception:
             return None
-    candidates = []
-    try:
-        obj = getattr(context, "active_object", None)
-    except Exception:
-        obj = None
-    if obj is not None:
-        candidates.append(obj)
-    try:
-        candidates.extend(list(getattr(context, "selected_objects", []) or []))
-    except Exception:
-        pass
-    for cand in candidates:
-        if cand is None:
-            continue
-        if getattr(cand, "type", None) == 'ARMATURE':
-            return cand
-        parent = getattr(cand, "parent", None)
-        if parent is not None and getattr(parent, "type", None) == 'ARMATURE':
-            return parent
+    from setup_wizard.ui.character_settings_utils import resolve_settings_armature, detect_armature_game
+    rig = resolve_settings_armature(context)
+    if rig is not None and detect_armature_game(rig) == 'ARKNIGHTS_ENDFIELD':
+        return rig
     return None
 
 
@@ -402,48 +387,16 @@ def get_ake_character_materials(context=None):
     """AKE shader materials of the selected character.
 
     Returns (rig, [materials]). If no character can be resolved,
-    returns (None, []) so the caller decides (global or do nothing).
+    returns (None, []) so no materials are changed.
     This keeps Shading Settings independent per character.
     """
     rig = _resolve_ake_target_rig(context)
     if rig is None:
         return None, []
-    mats = []
-    seen = set()
-
-    def _add(mat):
-        if mat is not None and mat.name not in seen:
-            seen.add(mat.name)
-            mats.append(mat)
-
-    try:
-        for child in rig.children_recursive:
-            if getattr(child, "type", None) == 'MESH':
-                for slot in child.material_slots:
-                    _add(slot.material)
-    except Exception:
-        pass
-    if not mats:
-        # Fallback: meshes with an Armature modifier pointing at the rig
-        try:
-            for obj in bpy.data.objects:
-                if getattr(obj, "type", None) != 'MESH':
-                    continue
-                for mod in obj.modifiers:
-                    if mod.type == 'ARMATURE' and getattr(mod, "object", None) == rig:
-                        for slot in obj.material_slots:
-                            _add(slot.material)
-                        break
-        except Exception:
-            pass
-    ake_mats = []
-    for mat in mats:
-        try:
-            if mat.node_tree and any(_is_ake_shader_node(n) for n in mat.node_tree.nodes):
-                ake_mats.append(mat)
-        except Exception:
-            continue
-    return rig, ake_mats
+    from setup_wizard.ui.character_settings_utils import get_character_materials
+    _, materials = get_character_materials(arm=rig)
+    return rig, [mat for mat in materials if mat.node_tree and
+                 any(_is_ake_shader_node(n) for n in mat.node_tree.nodes)]
 
 
 def _read_ake_input(mats, input_names):
@@ -620,7 +573,7 @@ def sync_ake_shader_properties(scene=None, context=None, strict_character=False)
         )
 
     # 1. Target materials: only the selected character (independent
-    # per character). No character in context: global unless strict_character.
+    # per character). No character in context: do nothing.
     if context is None:
         try:
             context = bpy.context
@@ -635,10 +588,8 @@ def sync_ake_shader_properties(scene=None, context=None, strict_character=False)
         scoped_mats = []
     if scoped_mats:
         target_materials = scoped_mats
-    elif strict_character:
-        return
     else:
-        target_materials = [m for m in bpy.data.materials if m and m.node_tree]
+        return
 
     # 1b. Update material group nodes (fast O(1) RNA lookups, only if value differs)
     applied_colors = set()
@@ -689,7 +640,7 @@ def sync_ake_shader_properties(scene=None, context=None, strict_character=False)
                             # the snapshot, preserving per-material values.
                             sc = tuple(v[:3])
                             try:
-                                prev = _ake_applied_colors.get(k)
+                                prev = _ake_applied_colors.get((rig.as_pointer(), k))
                             except Exception:
                                 prev = None
                             if prev is not None and len(prev) == 3 and all(
@@ -750,46 +701,12 @@ def sync_ake_shader_properties(scene=None, context=None, strict_character=False)
                             except Exception:
                                 pass
 
-    # 2. Update the main AKE node group interface defaults so newly added nodes inherit them
-    for ng_name in ("Arknights: Endfield_PBRToonBase", "Arknights: Endfield_PBRToonBaseFace", "Arknights: Endfield_PBRToonBaseHair"):
-        ng = bpy.data.node_groups.get(ng_name)
-        if ng and hasattr(ng, "interface"):
-            is_hair_ng = 'hair' in ng_name.lower()
-            active_float_props = hair_float_props if is_hair_ng else float_props
-            for item in ng.interface.items_tree:
-                if item.name in color_props:
-                    if is_default_mode:
-                        # Default = .blend authored: do not overwrite defaults
-                        continue
-                    if item.name not in applied_colors:
-                        continue
-                    v = color_props[item.name]
-                    try:
-                        if tuple(item.default_value)[:len(v)] != v:
-                            item.default_value = v
-                    except Exception:
-                        pass
-                elif item.name in active_float_props:
-                    v = active_float_props[item.name]
-                    try:
-                        if abs(float(item.default_value) - v) > 1e-4:
-                            item.default_value = v
-                    except Exception:
-                        pass
-                elif item.name in bool_props:
-                    v = bool_props[item.name]
-                    try:
-                        if bool(item.default_value) != v:
-                            item.default_value = v
-                    except Exception:
-                        pass
-
     # Snapshot colors applied this run (after the whole loop, so every
     # material gets them before the snapshot updates).
     if not is_default_mode:
         for k in applied_colors:
             try:
-                _ake_applied_colors[k] = tuple(color_props[k][:3])
+                _ake_applied_colors[(rig.as_pointer(), k)] = tuple(color_props[k][:3])
             except Exception:
                 pass
 
@@ -937,7 +854,7 @@ def update_ake_light_mode(self, context=None):
             sc = scene or self
             for _iname, _prop in _AKE_COLOR_SCENE_PROPS.items():
                 try:
-                    _ake_applied_colors[_iname] = tuple(getattr(sc, _prop))[:3]
+                    _ake_applied_colors[(arm.as_pointer(), _iname)] = tuple(getattr(sc, _prop))[:3]
                 except Exception:
                     pass
         except Exception:
@@ -1235,13 +1152,5 @@ def unregister_ake_properties():
 
 @bpy.app.handlers.persistent
 def ake_frame_change_handler(scene, depsgraph=None):
-    try:
-        ctx = bpy.context
-    except Exception:
-        ctx = None
-    try:
-        # strict: at render time never overwrite all materials, only the
-        # in-context character (or nothing if there is none).
-        sync_ake_shader_properties(scene, context=ctx, strict_character=True)
-    except Exception:
-        pass
+    """Legacy hook: preserve authored/animated materials during rendering."""
+    return

@@ -17,40 +17,71 @@ from bpy.props import (
 )
 
 
-def get_global_material_properties_group():
-    return bpy.data.node_groups.get("Global Material Properties Main")
+def _settings_target(context):
+    if _is_updating_ww_light_props:
+        return None, []
+    from setup_wizard.ui.character_settings_utils import get_character_settings_materials
+    return get_character_settings_materials(context, 'WUTHERING_WAVES')
 
 
-def update_material_property(node_group_name, input_name, value):
-    group = bpy.data.node_groups.get(node_group_name)
-    if group:
-        if hasattr(group, "inputs") and input_name in group.inputs:
-            group.inputs[input_name].default_value = value
-        elif hasattr(group, "interface"):
-            # Blender 4.0+ / 5.2 interface check
-            for item in group.interface.items_tree:
-                if item.item_type == 'SOCKET' and item.in_out == 'INPUT' and item.name == input_name:
-                    if hasattr(group, "nodes"):
-                        for node in group.nodes:
-                            if node.type == 'GROUP_INPUT' and input_name in node.outputs:
-                                node.outputs[input_name].default_value = value
-                                return
-        # Fallback search in all nodes
-        for node in getattr(group, "nodes", []):
-            if node.type == 'GROUP_INPUT' and input_name in node.outputs:
-                try:
-                    node.outputs[input_name].default_value = value
-                except Exception:
-                    pass
+def _property_nodes(materials):
+    for mat in materials:
+        if mat.node_tree:
+            for node in mat.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree and 'global material properties' in node.node_tree.name.lower():
+                    yield node
+
+
+def get_global_material_properties_group(context=None):
+    _, mats = _settings_target(context)
+    return next((n.node_tree for n in _property_nodes(mats)), None)
+
+
+def update_material_property(node_group_name, input_name, value, context=None):
+    _, mats = _settings_target(context)
+    for node in _property_nodes(mats):
+        if node_group_name.lower() not in node.node_tree.name.lower():
+            continue
+        def assign(socket):
+            socket.default_value = bool(value) if socket.type == 'BOOLEAN' else value
+        if input_name in node.inputs:
+            assign(node.inputs[input_name])
+        group = node.node_tree
+        for n in group.nodes:
+            sockets = n.inputs if n.type == 'GROUP_OUTPUT' else n.outputs if n.type == 'GROUP_INPUT' else ()
+            if input_name in sockets:
+                assign(sockets[input_name])
+        for item in group.interface.items_tree:
+            if item.item_type == 'SOCKET' and item.name == input_name and hasattr(item, 'default_value'):
+                item.default_value = bool(value) if item.socket_type == 'NodeSocketBool' else value
+    # Current shaders expose some controls directly instead of through GMP.
+    aliases = {'Face Shadow Softness': ('Face Shadow Softness', 'Face Shadows Softness')}
+    for mat in mats:
+        if not mat.node_tree:
+            continue
+        for node in mat.node_tree.nodes:
+            if node.type != 'GROUP':
+                continue
+            for name in aliases.get(input_name, (input_name,)):
+                if name in node.inputs:
+                    socket = node.inputs[name]
+                    socket.default_value = bool(value) if socket.type == 'BOOLEAN' else value
+
+
+def _set_global_property(context, name, value):
+    update_material_property('Global Material Properties', name, value, context=context)
 
 
 def update_alpha_transparency(self, context=None):
+    arm, target_materials = _settings_target(context)
+    if not arm or not target_materials:
+        return
     try:
         enabled = bool(getattr(self, "ww_alpha_transparency", True))
     except Exception:
         enabled = True
 
-    for mat in bpy.data.materials:
+    for mat in target_materials:
         orig_m = mat.get("ww_original_name", "")
         base_m = mat.get("ww_base_part", "")
         is_alpha = any(
@@ -97,6 +128,9 @@ def update_alpha_transparency(self, context=None):
 
 # Appearance Property Update Callbacks
 def update_blush(self, context=None):
+    arm, target_materials = _settings_target(context)
+    if not arm or not target_materials:
+        return
     try:
         val = float(getattr(self, "ww_blush_value", 0.0))
     except Exception:
@@ -140,77 +174,31 @@ def update_blush(self, context=None):
                         except Exception:
                             pass
 
-    try:
-        from setup_wizard.ui.character_settings_utils import get_character_materials
-        arm, target_materials = get_character_materials(context)
-    except Exception:
-        target_materials = []
-
-    if not target_materials:
-        target_groups = [ng for ng in bpy.data.node_groups if any(k in ng.name.lower() for k in ["blush", "face", "head"])]
-        for ng in target_groups:
-            apply_blush_to_container(ng)
-            if hasattr(ng, "interface"):
-                try:
-                    for item in ng.interface.items_tree:
-                        if getattr(item, "item_type", None) == 'SOCKET':
-                            name_low = item.name.lower().strip()
-                            if name_low == "blush":
-                                try:
-                                    item.default_value = True
-                                except Exception:
-                                    try:
-                                        item.default_value = 1.0
-                                    except Exception:
-                                        pass
-                            elif "blush" in name_low and any(k in name_low for k in ["intensity", "multiplier", "value", "amount"]):
-                                try:
-                                    item.default_value = val
-                                except Exception:
-                                    pass
-                except Exception:
-                    pass
-
-    mats_to_update = target_materials if target_materials else bpy.data.materials
+    mats_to_update = target_materials
     for mat in mats_to_update:
         if getattr(mat, "use_nodes", False) and mat.node_tree and any(k in mat.name.lower() for k in ["face", "head", "skin", "body"]):
             apply_blush_to_container(mat.node_tree)
 
 
 def update_disgust(self, context=None):
-    group = get_global_material_properties_group()
-    if group and hasattr(group, "nodes"):
-        inp = group.nodes.get("Group Input")
-        if inp and "Disgust Multiplier" in inp.outputs:
-            try:
-                inp.outputs["Disgust Multiplier"].default_value = getattr(self, "ww_disgust_value", 0.0)
-            except Exception:
-                pass
+    _set_global_property(context, "Disgust Multiplier", getattr(self, "ww_disgust_value", 0.0))
+
 
 
 def update_metallic(self, context=None):
-    group = get_global_material_properties_group()
-    if group and hasattr(group, "nodes"):
-        inp = group.nodes.get("Group Input")
-        if inp and "Metallic Multiplier" in inp.outputs:
-            try:
-                inp.outputs["Metallic Multiplier"].default_value = getattr(self, "ww_metallic_value", 1.0)
-            except Exception:
-                pass
+    _set_global_property(context, "Metallic Multiplier", getattr(self, "ww_metallic_value", 1.0))
+
 
 
 def update_specular(self, context=None):
-    group = get_global_material_properties_group()
-    if group and hasattr(group, "nodes"):
-        inp = group.nodes.get("Group Input")
-        if inp and "Specular Multiplier" in inp.outputs:
-            try:
-                inp.outputs["Specular Multiplier"].default_value = getattr(self, "ww_specular_value", 1.0)
-            except Exception:
-                pass
+    _set_global_property(context, "Specular Multiplier", getattr(self, "ww_specular_value", 1.0))
+
 
 
 def update_custom_colors(self, context=None):
+    arm, target_materials = _settings_target(context)
+    if not arm or not target_materials:
+        return
     amb = (*getattr(self, "ww_amb_color", (0.5, 0.5, 0.5)), 1.0)
     light = (*getattr(self, "ww_light_color", (1.0, 1.0, 1.0)), 1.0)
     shadow = (*getattr(self, "ww_shadow_color", (0.3, 0.3, 0.4)), 1.0)
@@ -224,22 +212,11 @@ def update_custom_colors(self, context=None):
         ("Custom Rim Tint", rim), ("Custom Rim", rim), ("Rim Color", rim), ("Rim Tint", rim),
     ]
 
-    try:
-        from setup_wizard.ui.character_settings_utils import (
-            get_character_materials,
-            ensure_character_node_trees_isolated,
-        )
-        arm, target_materials = get_character_materials(context)
-        if arm and target_materials:
-            ensure_character_node_trees_isolated(arm, target_materials)
-    except Exception:
-        target_materials = []
-
     gmp_trees = set()
     palette_nodes = []
     palette_trees = set()
 
-    mats_to_update = target_materials if target_materials else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
+    mats_to_update = target_materials
     for mat in mats_to_update:
         if getattr(mat, "use_nodes", False) and mat.node_tree:
             for node in mat.node_tree.nodes:
@@ -250,14 +227,6 @@ def update_custom_colors(self, context=None):
                         palette_trees.add(node.node_tree)
                     elif "global material properties" in nt_name:
                         gmp_trees.add(node.node_tree)
-
-    if not target_materials:
-        gmp = bpy.data.node_groups.get("Global Material Properties Main")
-        if gmp:
-            gmp_trees.add(gmp)
-        cp = bpy.data.node_groups.get("Color Palette")
-        if cp:
-            palette_trees.add(cp)
 
     for gmp in gmp_trees:
         if hasattr(gmp, "nodes"):
@@ -297,36 +266,18 @@ def update_custom_colors(self, context=None):
 
 
 def update_shadow_range(self, context=None):
-    group = get_global_material_properties_group()
-    if group and hasattr(group, "nodes"):
-        inp = group.nodes.get("Group Input")
-        if inp and "Shadow Transition Range" in inp.outputs:
-            try:
-                inp.outputs["Shadow Transition Range"].default_value = getattr(self, "ww_shadow_transition_range_value", 0.05)
-            except Exception:
-                pass
+    _set_global_property(context, "Shadow Transition Range", getattr(self, "ww_shadow_transition_range_value", 0.05))
+
 
 
 def update_face_shadow_softness(self, context=None):
-    group = get_global_material_properties_group()
-    if group and hasattr(group, "nodes"):
-        inp = group.nodes.get("Group Input")
-        if inp and "Face Shadow Softness" in inp.outputs:
-            try:
-                inp.outputs["Face Shadow Softness"].default_value = getattr(self, "ww_face_shadow_softness_value", 0.05)
-            except Exception:
-                pass
+    _set_global_property(context, "Face Shadow Softness", getattr(self, "ww_face_shadow_softness_value", 0.05))
+
 
 
 def update_catch_shadows(self, context=None):
-    group = get_global_material_properties_group()
-    if group and hasattr(group, "nodes"):
-        inp = group.nodes.get("Group Input")
-        if inp and "Catch Shadows" in inp.outputs:
-            try:
-                inp.outputs["Catch Shadows"].default_value = 1.0 if getattr(self, "ww_catch_shadows", True) else 0.0
-            except Exception:
-                pass
+    _set_global_property(context, "Catch Shadows", 1.0 if getattr(self, "ww_catch_shadows", True) else 0.0)
+
 
 
 WW_LIGHT_PRESETS = {
@@ -371,6 +322,9 @@ WW_LIGHT_PRESETS = {
 _is_updating_ww_light_props = False
 
 def update_light_mode(self, context=None):
+    arm, target_materials = _settings_target(context)
+    if not arm or not target_materials:
+        return
     global _is_updating_ww_light_props
     if _is_updating_ww_light_props:
         return
@@ -402,25 +356,15 @@ def update_light_mode(self, context=None):
         mode_val = 0.0
 
     try:
-        from setup_wizard.ui.character_settings_utils import (
-            resolve_settings_armature,
-            get_character_materials,
-            ensure_character_node_trees_isolated,
-        )
-        arm = resolve_settings_armature(context)
-        if arm:
-            arm["ww_light_mode"] = str(mode)
-        arm, target_materials = get_character_materials(context)
-        if arm and target_materials:
-            ensure_character_node_trees_isolated(arm, target_materials)
+        arm["ww_light_mode"] = str(mode)
     except Exception:
-        target_materials = []
+        pass
 
     gmp_trees = set()
     palette_nodes = []
     palette_trees = set()
 
-    mats_to_update = target_materials if target_materials else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
+    mats_to_update = target_materials
     for mat in mats_to_update:
         if getattr(mat, "use_nodes", False) and mat.node_tree:
             for node in mat.node_tree.nodes:
@@ -431,14 +375,6 @@ def update_light_mode(self, context=None):
                         palette_trees.add(node.node_tree)
                     elif "global material properties" in nt_name:
                         gmp_trees.add(node.node_tree)
-
-    if not target_materials:
-        gmp = bpy.data.node_groups.get("Global Material Properties Main")
-        if gmp:
-            gmp_trees.add(gmp)
-        cp = bpy.data.node_groups.get("Color Palette")
-        if cp:
-            palette_trees.add(cp)
 
     for gmp in gmp_trees:
         if hasattr(gmp, "nodes"):
@@ -487,6 +423,9 @@ def update_light_mode(self, context=None):
 
 
 def update_fresnel(self, context=None):
+    arm, target_materials = _settings_target(context)
+    if not arm or not target_materials:
+        return
     scene = getattr(bpy.context, "scene", None) if not isinstance(self, bpy.types.Scene) else self
     if not scene:
         return
@@ -496,17 +435,6 @@ def update_fresnel(self, context=None):
     scale = float(getattr(scene, "ww_fresnel_scale", 2.0))
     strength = float(getattr(scene, "ww_fresnel_strength", 2.0))
 
-    try:
-        from setup_wizard.ui.character_settings_utils import (
-            get_character_materials,
-            ensure_character_node_trees_isolated,
-        )
-        arm, target_materials = get_character_materials(context)
-        if arm and target_materials:
-            ensure_character_node_trees_isolated(arm, target_materials)
-    except Exception:
-        target_materials = []
-
     fresnel_map = {
         "Use Fresnel": use_fresnel,
         "Fresnel Color": col_rgba,
@@ -515,18 +443,13 @@ def update_fresnel(self, context=None):
     }
 
     target_trees = set()
-    mats_to_update = target_materials if target_materials else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
+    mats_to_update = target_materials
     for mat in mats_to_update:
         if getattr(mat, "use_nodes", False) and mat.node_tree:
             for node in mat.node_tree.nodes:
                 if node.type == 'GROUP' and node.node_tree:
                     if "global material properties" in node.node_tree.name.lower():
                         target_trees.add(node.node_tree)
-
-    if not target_trees:
-        for ng in bpy.data.node_groups:
-            if "global material properties" in ng.name.lower():
-                target_trees.add(ng)
 
     for tree in target_trees:
         out_node = tree.nodes.get("Global Properties") or tree.nodes.get("Group Output")
@@ -649,6 +572,16 @@ def pull_wuwa_panel_values(scene, context, force=False):
                     scene.ww_fresnel_scale = float(inputs["Fresnel Scale"].default_value)
                 if "Fresnel Strength" in inputs:
                     scene.ww_fresnel_strength = float(inputs["Fresnel Strength"].default_value)
+                for name, prop in [
+                    ('Catch Shadows', 'ww_catch_shadows'),
+                    ('Metallic Multiplier', 'ww_metallic_value'),
+                    ('Specular Multiplier', 'ww_specular_value'),
+                    ('Disgust Multiplier', 'ww_disgust_value'),
+                    ('Shadow Transition Range', 'ww_shadow_transition_range_value'),
+                    ('Face Shadow Softness', 'ww_face_shadow_softness_value'),
+                ]:
+                    if name in inputs:
+                        setattr(scene, prop, inputs[name].default_value)
 
         # Pull Palette colors
         cur_mode = getattr(scene, "ww_light_mode", "0")
@@ -678,11 +611,30 @@ def pull_wuwa_panel_values(scene, context, force=False):
                 scene.ww_rim_color = tuple(inputs["Rim Color"].default_value)[:3]
 
         if target_blush:
+            softness = target_blush.inputs.get('Face Shadows Softness')
+            if softness is not None:
+                scene.ww_face_shadow_softness_value = softness.default_value
             for inp in target_blush.inputs:
                 inp_low = inp.name.lower().strip()
                 if "blush" in inp_low and any(k in inp_low for k in ["intensity", "multiplier", "value", "amount"]):
                     scene.ww_blush_value = float(inp.default_value)
                     break
+        from setup_wizard.ui.character_settings_utils import _iter_rig_meshes
+        from setup_wizard.utils.modifier_utils import get_modifier_property
+        for mesh in _iter_rig_meshes(arm):
+            found_width = False
+            for mod in mesh.modifiers:
+                if mod.type != 'NODES' or not mod.node_group or 'outline' not in mod.node_group.name.lower():
+                    continue
+                for item in mod.node_group.interface.items_tree:
+                    if item.item_type == 'SOCKET' and item.in_out == 'INPUT' and item.name == 'Outline Thickness':
+                        scene.ww_outline_thickness = float(get_modifier_property(mod, item.identifier))
+                        found_width = True
+                        break
+                if found_width:
+                    break
+            if found_width:
+                break
     except Exception:
         pass
     finally:
@@ -690,6 +642,9 @@ def pull_wuwa_panel_values(scene, context, force=False):
 
 
 def update_outline_settings(self, context=None):
+    arm, target_materials = _settings_target(context)
+    if not arm or not target_materials:
+        return
     scene = getattr(bpy.context, "scene", None) if not isinstance(self, bpy.types.Scene) else self
     if not scene:
         return
@@ -702,7 +657,7 @@ def update_outline_settings(self, context=None):
     col2_rgba = (*col2[:3], 1.0) if len(col2) == 3 else col2
     factor_val = 1.0 if ol_mode == "CUSTOM" else 0.0
 
-    for mat in bpy.data.materials:
+    for mat in target_materials:
         if not mat.use_nodes or not mat.node_tree:
             continue
         if mat.name != "WW - Outlines" and not mat.name.startswith("WW - Outlines"):
@@ -752,52 +707,27 @@ def update_outline_settings(self, context=None):
 
 
 def update_outline_thickness(self, context=None):
+    arm, target_materials = _settings_target(context)
+    if not arm or not target_materials:
+        return
     scene = getattr(bpy.context, "scene", None) if not isinstance(self, bpy.types.Scene) else self
     if not scene:
         return
     val = float(getattr(scene, "ww_outline_thickness", 0.2))
 
-    outlines_group = bpy.data.node_groups.get("WW - Outlines")
+    from setup_wizard.ui.character_settings_utils import _iter_rig_meshes
+    from setup_wizard.utils.modifier_utils import set_modifier_property
     updated_any = False
-
-    for obj in bpy.data.objects:
-        if obj.type != 'MESH':
-            continue
-        obj_mod_updated = False
+    for obj in _iter_rig_meshes(arm):
         for mod in obj.modifiers:
-            if mod.type == 'NODES' and (mod.node_group == outlines_group or "outline" in mod.name.lower()):
-                if outlines_group and hasattr(outlines_group, "interface") and hasattr(outlines_group.interface, "items_tree"):
-                    for item in outlines_group.interface.items_tree:
-                        if getattr(item, 'item_type', '') == 'SOCKET' and getattr(item, 'in_out', '') == 'INPUT':
-                            if item.name.strip() == "Outline Thickness":
-                                ident = item.identifier
-                                if hasattr(mod, 'properties') and hasattr(mod.properties, 'inputs'):
-                                    sock = getattr(mod.properties.inputs, ident, None)
-                                    if sock and hasattr(sock, 'value'):
-                                        try:
-                                            sock.value = val
-                                        except Exception:
-                                            pass
-                                try:
-                                    mod[ident] = val
-                                except Exception:
-                                    pass
-
-                                # Force modifier to re-evaluate in viewport so thickness change is immediately visible
-                                try:
-                                    orig_vp = mod.show_viewport
-                                    mod.show_viewport = not orig_vp
-                                    mod.show_viewport = orig_vp
-                                except Exception:
-                                    pass
-                                obj_mod_updated = True
-                                updated_any = True
-                                break
-        if obj_mod_updated:
-            try:
-                obj.update_tag(refresh={'DATA'})
-            except Exception:
-                pass
+            if mod.type != 'NODES' or not mod.node_group or 'outline' not in mod.node_group.name.lower():
+                continue
+            for item in mod.node_group.interface.items_tree:
+                if item.item_type == 'SOCKET' and item.in_out == 'INPUT' and item.name.strip() == 'Outline Thickness':
+                    set_modifier_property(mod, item.identifier, val)
+                    obj.update_tag(refresh={'DATA'})
+                    updated_any = True
+                    break
 
     if updated_any and hasattr(bpy.context, 'window_manager') and bpy.context.window_manager:
         for win in getattr(bpy.context.window_manager, 'windows', []):
@@ -808,24 +738,24 @@ def update_outline_thickness(self, context=None):
                         area.tag_redraw()
 
 
-def sync_wuwa_shader_properties(scene=None):
-    """Synchronizes all Wuthering Waves scene UI properties to shader node groups and materials."""
+def sync_wuwa_shader_properties(scene=None, context=None):
+    """Applies scene panel values only to an explicit character target."""
     scene = scene or getattr(bpy.context, "scene", None)
     if not scene:
         return
-    update_blush(scene, None)
-    update_light_mode(scene, None)
-    update_custom_colors(scene, None)
-    update_shadow_range(scene, None)
-    update_face_shadow_softness(scene, None)
-    update_catch_shadows(scene, None)
-    update_metallic(scene, None)
-    update_specular(scene, None)
-    update_disgust(scene, None)
-    update_alpha_transparency(scene, None)
-    update_fresnel(scene, None)
-    update_outline_settings(scene, None)
-    update_outline_thickness(scene, None)
+    update_blush(scene, context)
+    update_light_mode(scene, context)
+    update_custom_colors(scene, context)
+    update_shadow_range(scene, context)
+    update_face_shadow_softness(scene, context)
+    update_catch_shadows(scene, context)
+    update_metallic(scene, context)
+    update_specular(scene, context)
+    update_disgust(scene, context)
+    update_alpha_transparency(scene, context)
+    update_fresnel(scene, context)
+    update_outline_settings(scene, context)
+    update_outline_thickness(scene, context)
 
 
 # Animate Mode: Swapping materials for low-poly/simplified fast viewport playback
@@ -1098,15 +1028,19 @@ class WW_OT_ToggleHairTrans(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
+        arm, materials = _settings_target(context)
+        if not arm or not materials:
+            return {'CANCELLED'}
+        from setup_wizard.ui.character_settings_utils import _iter_rig_meshes
         toggled = False
-        for mat in bpy.data.materials:
+        for mat in materials:
             if mat.use_nodes and mat.node_tree:
                 for node in mat.node_tree.nodes:
                     if node.type == 'GROUP' and node.node_tree and "see through" in node.node_tree.name.lower():
                         node.mute = not node.mute
                         toggled = True
 
-        for obj in bpy.data.objects:
+        for obj in _iter_rig_meshes(arm):
             if "_seethru" in obj.name.lower():
                 obj.hide_viewport = not obj.hide_viewport
                 toggled = True
@@ -1125,6 +1059,10 @@ class WW_OT_ToggleStarMotion(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
+        arm, materials = _settings_target(context)
+        if not arm or not materials:
+            return {'CANCELLED'}
+        from setup_wizard.ui.character_settings_utils import _iter_rig_meshes
         toggled = 0
 
         # 1. Determine current state
@@ -1141,13 +1079,9 @@ class WW_OT_ToggleStarMotion(Operator):
                             return inp.default_value
                         if inp_low == "moving":
                             return inp.default_value
-                if node.type == 'GROUP' and getattr(node, "node_tree", None):
-                    sub_val = find_ult_val(node.node_tree)
-                    if sub_val is not None:
-                        return sub_val
             return None
 
-        for mat in bpy.data.materials:
+        for mat in materials:
             if mat.use_nodes and mat.node_tree:
                 val = find_ult_val(mat.node_tree)
                 if val is not None:
@@ -1155,14 +1089,7 @@ class WW_OT_ToggleStarMotion(Operator):
                     break
 
         if current_val is None:
-            for ng in bpy.data.node_groups:
-                val = find_ult_val(ng)
-                if val is not None:
-                    current_val = val
-                    break
-
-        if current_val is None:
-            current_val = 1.0 if context.scene.get("ww_star_ult_state", False) else 0.0
+            current_val = 1.0 if arm.get("ww_star_ult_state", False) else 0.0
 
         try:
             is_active = bool(float(current_val) > 0.5)
@@ -1171,9 +1098,9 @@ class WW_OT_ToggleStarMotion(Operator):
 
         new_bool = not is_active
         new_val = 1.0 if new_bool else 0.0
-        context.scene["ww_star_ult_state"] = new_bool
+        arm["ww_star_ult_state"] = new_bool
 
-        # 2. Apply to ALL materials, node groups, and sub-node trees
+        # 2. Apply to the selected character's material instances.
         def apply_ult_val(container):
             nonlocal toggled
             if not container or not hasattr(container, "nodes"):
@@ -1193,46 +1120,12 @@ class WW_OT_ToggleStarMotion(Operator):
                                 except Exception:
                                     pass
 
-                if node.type == 'GROUP_INPUT' and hasattr(node, "outputs"):
-                    for out in node.outputs:
-                        out_low = out.name.lower().strip()
-                        if ("switch" in out_low and "ult" in out_low) or out_low == "moving":
-                            try:
-                                out.default_value = new_bool
-                                toggled += 1
-                            except Exception:
-                                try:
-                                    out.default_value = new_val
-                                    toggled += 1
-                                except Exception:
-                                    pass
-
-        for mat in bpy.data.materials:
+        for mat in materials:
             if mat.use_nodes and mat.node_tree:
                 apply_ult_val(mat.node_tree)
 
-        for ng in bpy.data.node_groups:
-            apply_ult_val(ng)
-            if hasattr(ng, "interface"):
-                try:
-                    for item in ng.interface.items_tree:
-                        if getattr(item, "item_type", None) == 'SOCKET':
-                            name_low = item.name.lower().strip()
-                            if ("switch" in name_low and "ult" in name_low) or name_low == "moving":
-                                try:
-                                    item.default_value = new_bool
-                                    toggled += 1
-                                except Exception:
-                                    try:
-                                        item.default_value = new_val
-                                        toggled += 1
-                                    except Exception:
-                                        pass
-                except Exception:
-                    pass
-
         # 3. Also toggle any star modifiers or objects
-        for obj in bpy.data.objects:
+        for obj in _iter_rig_meshes(arm):
             if obj.type == 'MESH':
                 for mod in obj.modifiers:
                     mod_low = mod.name.lower()
@@ -1255,8 +1148,12 @@ class WW_OT_FixEyeUV(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
+        arm, materials = _settings_target(context)
+        if not arm or not materials:
+            return {'CANCELLED'}
+        from setup_wizard.ui.character_settings_utils import _iter_rig_meshes
         count = 0
-        for mat in bpy.data.materials:
+        for mat in materials:
             if not mat.use_nodes or not mat.node_tree:
                 continue
             if "eye" in mat.name.lower() or "ww - eye" in mat.name.lower():
@@ -1265,6 +1162,7 @@ class WW_OT_FixEyeUV(Operator):
                         node.uv_map = "UV2"
                         count += 1
                     elif node.type == 'GROUP' and node.node_tree and "eye depth" in node.node_tree.name.lower():
+                        node.node_tree = node.node_tree.copy()
                         for subnode in node.node_tree.nodes:
                             if subnode.type == 'UVMAP':
                                 subnode.uv_map = "UV2"
@@ -1649,18 +1547,16 @@ classes = (
 
 @bpy.app.handlers.persistent
 def wuwa_frame_change_handler(scene, depsgraph=None):
-    try:
-        sync_wuwa_shader_properties(scene)
-    except Exception:
-        pass
+    """Legacy hook: material values/animation are authoritative during render."""
+    return
 
 
 def register():
     register_wuwa_properties()
     for cls in classes:
         bpy.utils.register_class(cls)
-    if wuwa_frame_change_handler not in bpy.app.handlers.render_init:
-        bpy.app.handlers.render_init.append(wuwa_frame_change_handler)
+    if wuwa_frame_change_handler in bpy.app.handlers.render_init:
+        bpy.app.handlers.render_init.remove(wuwa_frame_change_handler)
 
 
 def unregister():
