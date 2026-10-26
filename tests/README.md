@@ -241,3 +241,9 @@ python tests/run_tests.py --suite rig --game zzz --characters roxy-default --sav
 
 Run `blender --background --factory-startup --python-exit-code 1 --python tests/genshin_legacy_lighting_blender.py`.
 The test imports Old through the production material/outline/compositor path, creates the native Set Depth node when available, checks exact optional connections and idempotence, and verifies portable/native reversibility on Goo. It installs the real lighting panel and evaluates mesh attributes while moving Ambient, Fresnel, ShadowOffset, FresnelSize, and FresnelToggle controls. Reports are written under `tests/.runtime/genshin-legacy-lighting/`.
+
+## Finger IK
+
+Run `blender --background --factory-startup --python-exit-code 1 --python tests/finger_ik_blender.py -- hsr`, replacing `hsr` with `hi3`, `hna`, `pgr`, `nte`, or `wuwa` as needed. For Blender below 4.5, set `GACHA_TEST_BETTER_FBX_DIR` to a workspace copy of BetterFBX.
+
+The test runs the complete isolated setup on a real character, checks all ten fingertip IK controls, widgets and collection assignments, enables each control's `FK_IK`, and verifies fingertip movement, reset, and independence from the opposite hand. Results and generated rigs are saved under `tests/.runtime/finger-ik/<version>/<game>/`.

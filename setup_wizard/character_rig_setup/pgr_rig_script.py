@@ -759,6 +759,8 @@ def rig_character(
         bpy.ops.object.mode_set(mode='POSE')
 
     before_rig_objs = {o.name for o in bpy.data.objects if o.type == 'ARMATURE'}
+    from setup_wizard.character_rig_setup.finger_ik import enable_finger_ik_controls
+    enable_finger_ik_controls(metarig_obj)
     bpy.ops.pose.rigify_generate()
     after_rig_objs = [o for o in bpy.data.objects if o.type == 'ARMATURE' and o.name not in before_rig_objs]
 

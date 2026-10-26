@@ -1568,6 +1568,8 @@ def rig_wuthering_waves_character(context=None):
                     bone[key] = final_renames[val]
 
         # 5. Generate Rigify Rig
+        from setup_wizard.character_rig_setup.finger_ik import enable_finger_ik_controls
+        enable_finger_ik_controls(armature)
         orig_obj_names = set(bpy.data.objects.keys())
         generation_success = False
         try:
