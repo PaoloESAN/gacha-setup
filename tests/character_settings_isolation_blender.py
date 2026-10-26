@@ -101,6 +101,16 @@ def character(name, game, mat, collection=None, data=None):
     if data is None:
         data = bpy.data.meshes.new(name + '_MeshData')
         data.from_pydata([(-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0)], [], [(0, 1, 2, 3)])
+        for uv_name, coordinates in [
+            ('UV0', [(0, 0), (1, 0), (1, 1), (0, 1)]),
+            ('UV1', [(1, 0), (0, 0), (0, 1), (1, 1)]),
+        ]:
+            uv = data.uv_layers.new(name=uv_name)
+            for corner, coordinate in zip(uv.data, coordinates):
+                corner.uv = coordinate
+        data.uv_layers.active_index = 1
+        data.uv_layers['UV0'].active_render = True
+        data.normals_split_custom_set([(0.1, 0.0, 0.9949874)] * len(data.loops))
         data.materials.append(mat)
     mesh = bpy.data.objects.new(name + '_Face', data)
     mesh.parent = arm
@@ -109,6 +119,16 @@ def character(name, game, mat, collection=None, data=None):
 
 def close(a, b):
     assert abs(a - b) < 1e-4, (a, b)
+
+def surface_snapshot(mesh):
+    data = mesh.data
+    return (
+        tuple(tuple(v.co) for v in data.vertices),
+        tuple((uv.name, uv.active_render, tuple(tuple(c.uv) for c in uv.data))
+              for uv in data.uv_layers),
+        data.uv_layers.active_index,
+        tuple(tuple(n.vector) for n in data.corner_normals),
+    )
 
 def shared_outline_fixture(pairs, mat):
     tree = bpy.data.node_groups.new('Outlines Settings Fixture', 'GeometryNodeTree')
@@ -126,7 +146,14 @@ def shared_outline_fixture(pairs, mat):
     nested.links.new(ni.outputs['Geometry'], material.inputs['Geometry'])
     nested.links.new(material.outputs['Geometry'], no.inputs['Geometry'])
     node = tree.nodes.new('GeometryNodeGroup'); node.node_tree = nested
-    tree.links.new(inp.outputs['Geometry'], node.inputs['Geometry'])
+    selection = tree.nodes.new('GeometryNodeMaterialSelection')
+    tree.links.new(inp.outputs['Face Mask'], selection.inputs['Material'])
+    capture = tree.nodes.new('GeometryNodeStoreNamedAttribute')
+    capture.data_type = 'BOOLEAN'; capture.domain = 'FACE'
+    capture.inputs['Name'].default_value = 'settings_material_mask_matches'
+    tree.links.new(selection.outputs['Selection'], capture.inputs['Value'])
+    tree.links.new(inp.outputs['Geometry'], capture.inputs['Geometry'])
+    tree.links.new(capture.outputs['Geometry'], node.inputs['Geometry'])
     tree.links.new(node.outputs['Geometry'], out.inputs['Geometry'])
     for arm, mesh in pairs:
         mod = mesh.modifiers.new('Outlines Fixture', 'NODES'); mod.node_group = tree
@@ -138,6 +165,18 @@ def nested_material(mesh):
     tree = mesh.modifiers['Outlines Fixture'].node_group
     nested = next(n.node_tree for n in tree.nodes if n.type == 'GROUP')
     return next(n.inputs['Material'].default_value for n in nested.nodes if n.type == 'SET_MATERIAL')
+
+def assert_evaluated_material_mask(mesh):
+    mesh.update_tag(); bpy.context.view_layer.update()
+    evaluated = mesh.evaluated_get(bpy.context.evaluated_depsgraph_get())
+    data = evaluated.to_mesh()
+    try:
+        values = data.attributes.get('settings_material_mask_matches')
+        assert values is not None and len(values.data), mesh.name
+        assert all(v.value for v in values.data), (
+            mesh.name, 'Geometry Nodes did not match the isolated material')
+    finally:
+        evaluated.to_mesh_clear()
 
 def palette(mesh):
     tree = property_tree(mesh)
@@ -332,6 +371,7 @@ for case in CASES:
     # Deliberately share material AND mesh datablock between two characters.
     a = character(key + 'A', game, template)
     b = character(key + 'B', game, template, data=a[1].data)
+    original_surface = surface_snapshot(a[1])
     mask, width = shared_outline_fixture([a, b], template)
     set_value(case, *a, .2)
     set_value(case, *b, .8)
@@ -339,8 +379,22 @@ for case in CASES:
     close(get(case, *b), .8)
     assert a[1].material_slots[0].material != b[1].material_slots[0].material
     for arm, mesh in [a, b]:
+        assert surface_snapshot(mesh) == original_surface, (key, 'UVs or custom normals changed')
         assert get_modifier_property(mesh.modifiers['Outlines Fixture'], mask) == mesh.material_slots[0].material
         assert nested_material(mesh) == mesh.material_slots[0].material
+        assert_evaluated_material_mask(mesh)
+        assert mesh.data.materials[0] == mesh.material_slots[0].material
+    # Re-opened files may already contain the invalid OBJECT overrides from
+    # the previous implementation, even though their materials are unique.
+    isolated_material = a[1].material_slots[0].material
+    a[1].data = b[1].data
+    a[1].material_slots[0].link = 'OBJECT'
+    a[1].material_slots[0].material = isolated_material
+    assert a[1].data.materials[0] != isolated_material
+    cu.ensure_character_node_trees_isolated(a[0], materials(a[1]))
+    assert a[1].data.materials[0] == isolated_material
+    assert b[1].data.materials[0] != isolated_material
+    assert_evaluated_material_mask(a[1])
     set_value(case, *a, .4)
     close(get(case, *a), .4)
     close(get(case, *b), .8)

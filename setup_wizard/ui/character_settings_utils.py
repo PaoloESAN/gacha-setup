@@ -719,6 +719,26 @@ def _isolate_shared_character_materials(arm, mats):
     from setup_wizard.utils.modifier_utils import get_modifier_property, set_modifier_property
     meshes = list(_iter_rig_meshes(arm))
     mesh_set = set(meshes)
+    # Repair OBJECT overrides left by earlier isolation runs. Their outline
+    # masks already reference the override, while GN still sees the old mesh
+    # material. Only normalize overrides referenced by an outline modifier.
+    for mesh in meshes:
+        outline_materials = set()
+        for mod in mesh.modifiers:
+            if mod.type != 'NODES' or not mod.node_group or 'outline' not in mod.node_group.name.lower():
+                continue
+            outline_materials.update(get_modifier_property(mod, s.identifier)
+                                     for s in mod.node_group.interface.items_tree
+                                     if s.item_type == 'SOCKET' and s.in_out == 'INPUT'
+                                     and s.socket_type == 'NodeSocketMaterial')
+        overrides = {index: slot.material for index, slot in enumerate(mesh.material_slots)
+                     if slot.link == 'OBJECT' and slot.material in outline_materials
+                     and slot.material != mesh.data.materials[index]}
+        if overrides and mesh.data.users > 1:
+            mesh.data = mesh.data.copy()
+        for index, material in overrides.items():
+            mesh.material_slots[index].link = 'DATA'
+            mesh.material_slots[index].material = material
     external = set()
     for obj in bpy.data.objects:
         if obj.type == 'MESH' and obj not in mesh_set:
@@ -769,12 +789,16 @@ def _isolate_shared_character_materials(arm, mats):
         return result
 
     for mesh in meshes:
-        for slot in mesh.material_slots:
-            if slot.material in remap:
-                replacement = remap[slot.material]
-                # Object slots also isolate instances sharing the same mesh.
-                slot.link = 'OBJECT'
-                slot.material = replacement
+        replacements = {index: remap[slot.material]
+                        for index, slot in enumerate(mesh.material_slots) if slot.material in remap}
+        if replacements and mesh.data.users > 1:
+            # Geometry Nodes reads the mesh's material table, not OBJECT slot
+            # overrides. Localize shared geometry before changing that table.
+            mesh.data = mesh.data.copy()
+        for index, slot in enumerate(mesh.material_slots):
+            if index in replacements:
+                slot.link = 'DATA'
+                slot.material = replacements[index]
         for mod in mesh.modifiers:
             if mod.type != 'NODES' or not mod.node_group:
                 continue
