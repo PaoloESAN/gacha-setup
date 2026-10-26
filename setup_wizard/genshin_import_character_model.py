@@ -101,29 +101,28 @@ def is_rigging_disabled(context=None):
 
 
 def _execute_fbx_import(filepath):
-    """Import FBX exclusively with Blender's new C++ importer."""
+    """Use BetterFBX below 4.5; prefer the native importer from 4.5 onward."""
     if os.path.basename(filepath).startswith("._"):
         real_candidate = os.path.join(os.path.dirname(filepath), os.path.basename(filepath)[2:])
         if os.path.isfile(real_candidate):
             filepath = real_candidate
         else:
             raise RuntimeError(f"Cannot import invalid macOS metadata file: {filepath}")
-    if not hasattr(bpy.ops.wm, "fbx_import"):
-        raise RuntimeError("Blender's new FBX importer (wm.fbx_import) is required.")
-    bpy.ops.wm.fbx_import(
-        filepath=filepath,
-        global_scale=1.0,
-        mtl_name_collision_mode='MAKE_UNIQUE',
-        import_colors='SRGB',
-        use_custom_normals=True,
-        use_custom_props=True,
-        use_custom_props_enum_as_string=True,
-        import_subdivision=False,
-        ignore_leaf_bones=False,
-        validate_meshes=True,
-        use_anim=True,
-        anim_offset=1.0,
+    from setup_wizard.utils.better_fbx_utils import operator_is_registered, import_with_better_fbx
+    if bpy.app.version < (4, 5, 0) or not operator_is_registered(bpy.ops.wm.fbx_import):
+        return import_with_better_fbx(filepath)
+    options = dict(
+        filepath=filepath, global_scale=1.0,
+        mtl_name_collision_mode='MAKE_UNIQUE', import_colors='SRGB',
+        use_custom_normals=True, use_custom_props=True,
+        use_custom_props_enum_as_string=True, import_subdivision=False,
+        ignore_leaf_bones=False, validate_meshes=True, use_anim=True, anim_offset=1.0,
     )
+    supported = bpy.ops.wm.fbx_import.get_rna_type().properties
+    result = bpy.ops.wm.fbx_import(**{name: value for name, value in options.items() if name in supported})
+    if result != {'FINISHED'}:
+        raise RuntimeError(f'Native FBX import failed: {result}')
+    return result
 
 
 def connect_armature_bone_chains(armature):
@@ -1670,9 +1669,9 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                     except Exception:
                         pass
 
-                error_message = "Please reopen Blender and import the FBX manually."
+                error_message = f"FBX import failed: {e}"
                 self.report({"ERROR"}, error_message)
-                raise RuntimeError(error_message)
+                raise RuntimeError(error_message) from e
 
             obj = None
             new_objects = [
@@ -1850,9 +1849,9 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                 except Exception:
                     pass
 
-            error_message = "Please reopen Blender and import the FBX manually."
+            error_message = f"FBX import failed: {e}"
             self.report({"ERROR"}, error_message)
-            raise RuntimeError(error_message)
+            raise RuntimeError(error_message) from e
 
         if self.game_type == GameType.PUNISHING_GRAY_RAVEN.name and not is_rigging_disabled(bpy.context):
             from setup_wizard.utils.pgr_bind_pose import (

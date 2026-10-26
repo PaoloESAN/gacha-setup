@@ -110,6 +110,7 @@ class GI_PT_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
         settings_header.label(text="Setup Settings", icon="PREFERENCES")
 
         settings_col = settings_box.column()
+        settings_col.prop(context.scene, "gi_shader_type", text="Shader")
         props = context.scene.character_rigger_props
         enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
         settings_col.prop(props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")
@@ -1056,6 +1057,9 @@ def sync_genshin_shader_properties(scene=None, context=None):
                         item.default_value = _coerce_value(item, prop_map[item.name])
                     except Exception:
                         pass
+
+        from setup_wizard.character_rig_setup.lighting_panel_setup import sync_legacy_shadow_position
+        sync_legacy_shadow_position(tree)
 
     # 4. Also update direct group node inputs on character materials if any exist (e.g. PrimoToon v4.0)
     prop_aliases = {
@@ -2242,6 +2246,16 @@ def _on_character_selection_change(scene, depsgraph=None):
 
 
 def register_gi_properties():
+    from setup_wizard.utils.genshin_shader_selection import default_genshin_shader
+    bpy.types.Scene.gi_shader_type = bpy.props.EnumProperty(
+        name="Shader",
+        description="Genshin shader used when setting up a character",
+        items=[
+            ('NEW', 'Quality', 'PrimoToon v4.0'),
+            ('OLD', 'Performance', 'Starriia v3.4 with separate outlines and post-processing'),
+        ],
+        default=default_genshin_shader(),
+    )
     from setup_wizard.utils import genshin_weapon_elements
     genshin_weapon_elements.register()
     if _on_character_selection_change not in bpy.app.handlers.depsgraph_update_post:
@@ -2479,7 +2493,7 @@ def unregister_gi_properties():
         "gi_catch_shadows", "gi_day_night", "gi_blush_strength",
         "gi_rim_lit_color", "gi_rim_shadow_color", "gi_rim_scale",
         "gi_hair_physics_influence", "gi_clothes_physics_influence",
-        "gi_enable_outlines", "gi_enable_night_soul", "gi_dark_eyes"
+        "gi_enable_outlines", "gi_enable_night_soul", "gi_dark_eyes", "gi_shader_type"
     ]:
         if hasattr(bpy.types.Scene, prop):
             delattr(bpy.types.Scene, prop)

@@ -160,6 +160,10 @@ def apply_settings():
         except Exception:
             pass
 
+    if JOB["game_type"] == "GENSHIN_IMPACT" and hasattr(scene, "gi_shader_type"):
+        from setup_wizard.utils.genshin_shader_selection import default_genshin_shader
+        scene.gi_shader_type = JOB.get("gi_shader_type", default_genshin_shader())
+
     props = getattr(scene, "character_rigger_props", None)
     if props is None:
         return

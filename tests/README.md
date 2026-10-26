@@ -92,6 +92,28 @@ tests/
 
 ## How to Run Tests
 
+FBX dispatch regression uses the real Columbina FBX. Blender below 4.5 must
+always use installed BetterFBX; Blender 4.5+ prefers the registered native
+importer. To test an older Blender without enabling the add-on permanently,
+set `GACHA_TEST_BETTER_FBX_DIR` to the installed BetterFBX package directory:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python tests/fbx_import_blender.py
+blender --background --factory-startup --python-exit-code 1 --python tests/fbx_import_blender.py -- --full
+```
+
+The full variant executes the production isolated worker through rig generation
+and saving, then verifies the result. Reports/blends go to `tests/.runtime/fbx-import`.
+
+The Genshin shader selector regression checks the version-based default, both
+UI choices, isolated-worker settings, and actual material/outline/compositor
+imports. Run each choice in a fresh process; it supports Blender 4.1+ and 5+:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python tests/genshin_shader_selection_blender.py -- NEW
+blender --background --factory-startup --python-exit-code 1 --python tests/genshin_shader_selection_blender.py -- OLD
+```
+
 PGR regression runs the complete setup for all three Bianca outfits, Nirvatia,
 the three Laiya Animator outfits, and Kurumi in fresh Blender processes, plus
 material setup for the nine accessories/chibi models in `chars/pgr`. It
@@ -214,3 +236,8 @@ python tests/run_tests.py --suite rig --blender "C:\Program Files\Blender Founda
 # Run a specific suite on a character and save the blend file:
 python tests/run_tests.py --suite rig --game zzz --characters roxy-default --save-blend
 ```
+
+## Legacy Genshin lighting and Goo nodes
+
+Run `blender --background --factory-startup --python-exit-code 1 --python tests/genshin_legacy_lighting_blender.py`.
+The test imports Old through the production material/outline/compositor path, creates the native Set Depth node when available, checks exact optional connections and idempotence, and verifies portable/native reversibility on Goo. It installs the real lighting panel and evaluates mesh attributes while moving Ambient, Fresnel, ShadowOffset, FresnelSize, and FresnelToggle controls. Reports are written under `tests/.runtime/genshin-legacy-lighting/`.

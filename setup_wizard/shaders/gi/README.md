@@ -9,7 +9,16 @@ This folder contains the shader files for setting up **Genshin Impact** characte
 
 ## Included Shader File
 
-* `HoYoverse - PrimoToon v4.0.blend` — Unified Genshin Impact shader file containing character shaders (Body, Face, Outlines, VFX), geometry nodes outlines, and compositing post-processing node groups.
+* **Quality**: `HoYoverse - PrimoToon v4.0.blend` — Unified Genshin Impact shader file containing character shaders (Body, Face, Outlines, VFX), geometry nodes outlines, and compositing post-processing node groups. Selected by default in Blender 5.0 and newer.
+* **Performance**: `HoYoverse - Genshin Impact v3.4 starriia.blend` — Legacy Starriia shader with Body, Hair, Face, Pupil, New Pupil, Highlight, Weapons, and Outlines materials. Selected by default in Blender versions below 5.0.
+* `HoYoverse - Genshin Impact Outlines v3.blend` — Geometry-node outlines used by Performance.
+* `HoYoverse - Genshin Impact Post-Processing.blend` — Compositing groups used by Performance.
+
+Choose the shader in **Gacha Setup → Setup Settings → Shader** before running character setup. Both choices are available regardless of the version-based default, and the selection is passed to isolated imports.
+
+Old uses the same packed lighting-panel attributes and Global Properties controls as Quality, including Fresnel toggle/size, shadow offset, and rim controls. Its geometry nodes also retain the original full direction vectors for legacy face/body shading. The panel's relative shadow offset is added to the original 0.55 threshold.
+
+The optional Starriia Set Depth and Screenspace Shadows nodes stay disconnected in the bundled file. Setup and file-load handlers restore their original connections when `bpy.types.ShaderNodeSetDepth` exists; standard Blender keeps the portable connections. The identifier was verified by creating the native node in Goo Engine 4.1.1, 4.2.13, 4.3.2, and 4.4.3.
 
 
 ---

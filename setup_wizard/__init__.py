@@ -557,6 +557,8 @@ else:
                         pass
         from setup_wizard.character_rig_setup.lighting_panel_setup import register_fresnel_repair
         register_fresnel_repair()
+        from setup_wizard.utils.genshin_engine_nodes import register as register_genshin_engine_nodes
+        register_genshin_engine_nodes()
         from setup_wizard.utilites.new_lights import register as register_new_lights
         register_new_lights()
         register_wuwa_properties()
@@ -590,6 +592,8 @@ else:
         unregister_new_lights()
         from setup_wizard.character_rig_setup.lighting_panel_setup import unregister_fresnel_repair
         unregister_fresnel_repair()
+        from setup_wizard.utils.genshin_engine_nodes import unregister as unregister_genshin_engine_nodes
+        unregister_genshin_engine_nodes()
         from setup_wizard.ui.pgr_character_settings import unregister_pgr_properties
         unregister_pgr_properties()
         unregister_hna_properties()

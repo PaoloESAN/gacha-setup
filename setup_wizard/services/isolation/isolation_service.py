@@ -87,8 +87,10 @@ def snapshot_settings(scene, game_type=""):
         disable_rigging = bool(getattr(props, "disable_rigging", False))
 
     current_game = game_type or getattr(scene, "game_type_dropdown", "ZENLESS_ZONE_ZERO")
+    from setup_wizard.utils.genshin_shader_selection import get_genshin_shader_selection
     values = {
         "game_type": current_game,
+        "gi_shader_type": get_genshin_shader_selection(scene),
         "zzz_shader_type": getattr(scene, "zzz_shader_type", "LEGACY"),
         "enable_hair_clothes_physics": physics,
         "hair_physics_influence": hair,
