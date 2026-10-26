@@ -247,3 +247,7 @@ The test imports Old through the production material/outline/compositor path, cr
 Run `blender --background --factory-startup --python-exit-code 1 --python tests/finger_ik_blender.py -- hsr`, replacing `hsr` with `hi3`, `hna`, `pgr`, `nte`, or `wuwa` as needed. For Blender below 4.5, set `GACHA_TEST_BETTER_FBX_DIR` to a workspace copy of BetterFBX.
 
 The test runs the complete isolated setup on a real character, checks all ten fingertip IK controls, widgets and collection assignments, enables each control's `FK_IK`, and verifies fingertip movement, reset, and independence from the opposite hand. Results and generated rigs are saved under `tests/.runtime/finger-ik/<version>/<game>/`.
+
+## Kythera ZZZ V2
+
+Run Blender 5.2+ with `--background --factory-startup --python-exit-code 1 --python tests/zzz_kythera_v2_blender.py`. This runs the complete isolated Alice setup, checks that both extra eye materials survive, then evaluates `SUN`, `RIGHT`, and `FRONT` on the final face geometry (realizing the outline instances for inspection). It verifies Sun rotation, head following, idempotence, and independent lighting for a duplicated character. Output: `tests/.runtime/zzz-kythera-v2/`.

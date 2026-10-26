@@ -2045,6 +2045,7 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 
         else:
             # --- KYTHERA SHADER REPLACEMENT ---
+            highlight_template = bpy.data.materials.get("Kythera's ZZZ Eye Highlights")
             # Find Kythera face and main shader template materials dynamically
             face_template = None
             for mat in bpy.data.materials:
@@ -2072,13 +2073,14 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 m_low = mat.name.lower()
                 if ("kythera" in m_low or "kyteraz" in m_low) and \
                    ("face" not in m_low and "cara" not in m_low and "head" not in m_low) and \
+                   'highlight' not in m_low and \
                    not mat.name.startswith("ZZZ MAT_") and not mat.name.startswith("ZZZ Shader") and not mat.name.endswith("Outlines"):
                     shader_template = mat
                     break
 
             if not shader_template:
                 for mat in bpy.data.materials:
-                    if not mat.node_tree or mat.name.startswith("ZZZ MAT_") or mat.name.endswith("Outlines"):
+                    if not mat.node_tree or 'highlight' in mat.name.lower() or mat.name.startswith("ZZZ MAT_") or mat.name.endswith("Outlines"):
                         continue
                     if any(n.type == 'GROUP' and n.node_tree and "face" not in n.node_tree.name.lower() and ("kythera" in n.node_tree.name.lower() or "kyteraz" in n.node_tree.name.lower() or "zzz" in n.node_tree.name.lower()) for n in mat.node_tree.nodes):
                         shader_template = mat
@@ -2108,7 +2110,8 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         continue
 
                     is_face = any(k in matname for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight"])
-                    template_mat = face_template if is_face else shader_template
+                    template_mat = (highlight_template if 'highlight' in matname and highlight_template
+                                    else face_template if is_face else shader_template)
 
                     if template_mat:
                         orig_tex_name = None
@@ -2184,16 +2187,10 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         slot.material = new_mat
 
             self.blender_operator.report({'INFO'}, "Replaced default materials with Kythera's ZZZ Shader materials...")
-            scene = bpy.context.scene
-            if getattr(scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
-                import math
-                for obj in bpy.data.objects:
-                    if obj.name.startswith("Light Direction") or obj.name.startswith("Main Light Direction"):
-                        obj.rotation_mode = 'XYZ'
-                        obj.rotation_euler = (math.radians(90.0), 0.0, 0.0)
 
         from setup_wizard.utils.zzz_eye_highlights import assign_zzz_eye_highlights
-        highlight_material = bpy.data.materials.get('ZZZ Shader EyeHighlights')
+        highlight_material = bpy.data.materials.get(
+            "Kythera's ZZZ Eye Highlights" if selected_shader == 'KYTHERA' else 'ZZZ Shader EyeHighlights')
         for mesh in meshes:
             assign_zzz_eye_highlights(mesh, highlight_material)
 

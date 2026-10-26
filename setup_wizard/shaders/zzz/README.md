@@ -10,6 +10,9 @@ This folder contains the shader and rig setup files for **Zenless Zone Zero (ZZZ
 ## Included Files
 
 * `ZZZ Setup v7.blend` — Shader setup file for ZZZ character materials, rig drivers, and node configurations.
+* `Kythera's ZZZ Shader V2.blend` — Toon Shader for Blender 5.2+, replacing V1.5.1. Includes the original V2 body, face and highlight materials, plus the complete `ZZZ Shader Eye` and `ZZZ Shader EyeHighlights` materials from the previous bundle.
+
+The V2 face uses the bundled Sun light and `SUN`, `RIGHT`, and `FRONT` attributes. Setup copies the face-vector group per character, binds its Sun and head basis, and updates the head target after rig generation. Each Sun has independent light data and receiver links, so a second character's light does not alter the first. Legacy setups retain their existing Light Direction system.
 
 ---
 

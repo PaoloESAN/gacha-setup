@@ -1190,12 +1190,6 @@ def rig_character(
     if new_name: move_into_collection(new_name,char_name)
 
     scene = bpy.context.scene
-    if getattr(scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
-        import math
-        for obj in bpy.data.objects:
-            if obj.name.startswith("Light Direction") or obj.name.startswith("Main Light Direction"):
-                obj.rotation_mode = 'XYZ'
-                obj.rotation_euler = (math.radians(90.0), 0.0, 0.0)
 
     bpy.data.collections["wgt"].hide_select = True
     bpy.data.collections["wgt"].hide_viewport = True

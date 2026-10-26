@@ -628,19 +628,14 @@ class ZZZ_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorPropertie
         for rig in list(context.scene.objects):
             if rig.type == 'ARMATURE' and rig.data.get('bangboo_widget_unit'):
                 organize_bangboo_collections(rig, context)
+        from setup_wizard.utils.zzz_kythera_lighting import setup_kythera_lighting
+        setup_kythera_lighting(context, final=True)
         result = BasicSetupUIOperator.execute(self, context)
         try:
             from setup_wizard.ui.character_settings_utils import stamp_rig_game
             for obj in context.scene.objects:
                 if obj.type == 'ARMATURE' and not any(ign in obj.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig", "wgt"]):
                     stamp_rig_game(obj, GameType.ZENLESS_ZONE_ZERO.name)
-
-            if getattr(context.scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
-                import math
-                for obj in bpy.data.objects:
-                    if obj.name.startswith("Light Direction") or obj.name.startswith("Main Light Direction"):
-                        obj.rotation_mode = 'XYZ'
-                        obj.rotation_euler = (math.radians(90.0), 0.0, 0.0)
 
             from setup_wizard.services.zzz_bloom_service import setup_zzz_bloom
             setup_zzz_bloom(context.scene)

@@ -1582,6 +1582,13 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
         super().__init__(blender_operator, context)
 
     def setup_geometry_nodes(self):
+        use_kythera_sun = (getattr(self.context.scene, 'zzz_shader_type', 'LEGACY') == 'KYTHERA'
+                           and any(group.get('zzz_kythera_vectors') for group in bpy.data.node_groups))
+        if use_kythera_sun:
+            from setup_wizard.utils.zzz_kythera_lighting import setup_kythera_lighting
+            setup_kythera_lighting(self.context)
+        suns_by_owner = {group.get('zzz_kythera_owner'): group.nodes['Object Info'].inputs['Object'].default_value
+                         for group in bpy.data.node_groups if group.get('zzz_kythera_owner')}
         light_vectors_gn = bpy.data.node_groups.get("Light Vectors")
         extra_fx_gn = bpy.data.node_groups.get("Extra FX Geonode")
         zzz_outlines_gn = bpy.data.node_groups.get("ZZZ Outlines")
@@ -1649,6 +1656,8 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                     continue
 
                 # Light Vectors
+                # The lighting panel still needs its color attributes in V2.
+                # Its direction input uses the real Sun, not the legacy empty.
                 if light_vectors_gn:
                     mod = next((m for m in obj.modifiers if m.type == 'NODES' and (m.name.startswith("Light Vectors") or (m.node_group and ("Light Vectors" in m.node_group.name or "灯光矢量" in m.node_group.name)))), None)
                     if not mod:
@@ -1700,8 +1709,10 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                     }
                     for socket_name, target_name in socket_mapping.items():
                         target_obj = None
+                        if use_kythera_sun and target_name == 'Light Direction':
+                            target_obj = suns_by_owner.get(obj.find_armature() or obj.parent)
                         if char_name:
-                            target_obj = bpy.data.objects.get(f"{target_name}_{char_name}")
+                            target_obj = target_obj or bpy.data.objects.get(f"{target_name}_{char_name}")
                         if not target_obj:
                             target_obj = bpy.data.objects.get(target_name)
                         if target_obj:
@@ -1737,7 +1748,7 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                     if not mod:
                         mod = obj.modifiers.new(name="Extra FX", type='NODES')
                         mod.node_group = extra_fx_gn
-                    obj.modifiers.move(len(obj.modifiers) - 1, 1)
+                    obj.modifiers.move(len(obj.modifiers) - 1, min(1, len(obj.modifiers) - 1))
 
                     is_face_obj = "face" in obj.name.lower()
 
@@ -2077,6 +2088,9 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                                     except Exception as e:
                                         print(f"Error adding extra fx driver for {sock_name} on {ob.name}:", e)
 
+        if use_kythera_sun:
+            from setup_wizard.utils.zzz_kythera_lighting import setup_kythera_lighting
+            setup_kythera_lighting(self.context)
         self.outlineshader_sync()
 
         # GI_OT_SetUpGeometryNodes advances the workflow after this returns.
