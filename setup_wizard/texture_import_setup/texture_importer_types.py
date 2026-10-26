@@ -3899,7 +3899,8 @@ class PunishingGrayRavenAvatarTextureImporter(PunishingGrayRavenTextureImporter)
             if not definition or not material.node_tree:
                 continue
             with open(definition, encoding='utf-8-sig') as stream:
-                tex_envs = json.load(stream).get('m_SavedProperties', {}).get('m_TexEnvs', {})
+                definition_data = json.load(stream)
+                tex_envs = definition_data.get('m_SavedProperties', {}).get('m_TexEnvs', {})
             is_eye = material.name == self.material_names.EYE
             is_face = material.node_tree.nodes.get(self.texture_node_names.FACE_DIFFUSE) is not None
             mappings = {
@@ -3924,6 +3925,11 @@ class PunishingGrayRavenAvatarTextureImporter(PunishingGrayRavenTextureImporter)
                     image.alpha_mode = 'CHANNEL_PACKED'
                     image.colorspace_settings.name = 'sRGB' if key == '_MainTex' else 'Non-Color'
                     node.image = image
+
+            from setup_wizard.utils.pgr_chibi_face import configure_chibi_face
+            diffuse = material.node_tree.nodes.get(mappings['_MainTex'])
+            if diffuse is not None:
+                configure_chibi_face(material, definition_data, images, diffuse)
 
     # Fix characters with blank textures in their original material texture
     # We do this by deleting the original texture and loading the new texture
