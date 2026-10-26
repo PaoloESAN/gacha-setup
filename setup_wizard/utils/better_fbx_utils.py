@@ -1,4 +1,5 @@
 import bpy
+import os
 from contextlib import nullcontext
 
 from setup_wizard.utils.optional_addons import find_addon, temporary_addon
@@ -48,6 +49,10 @@ def import_with_better_fbx(filepath):
         supported = operator.get_rna_type().properties
         options = {
             'filepath': filepath,
+            # BetterFBX 6.x only executes its import loop when this collection
+            # is populated. filepath alone falls through execute() with None.
+            'files': [{'name': os.path.basename(filepath)}],
+            'directory': os.path.dirname(filepath),
             'my_scale': 1.0,
             'use_auto_bone_orientation': False,
             'use_fix_bone_poses': False,
