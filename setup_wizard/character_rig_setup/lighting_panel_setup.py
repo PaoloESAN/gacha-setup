@@ -782,24 +782,16 @@ class GlobalPropertiesNames:
     }
 
 
-def _zzz_property_trees(materials):
-    return {node.node_tree for mat in materials if mat and mat.node_tree
-            for node in mat.node_tree.nodes if node.type == 'GROUP' and node.node_tree
-            and 'global material properties' in node.node_tree.name.lower()}
-
-
 def connect_zzz_lighting_panel(target_materials=None):
     """
     Connects ZZZ lighting panel attributes to materials for both Kythera and Legacy shaders.
     """
-    mats = target_materials if target_materials is not None else [
+    mats = target_materials if target_materials else [
         m for m in bpy.data.materials
         if getattr(m, "use_nodes", False) and m.node_tree
         and not m.name.startswith("Kythera's ZZZ")
         and getattr(m, "users", 1) > 0
     ]
-    if not mats:
-        return
     
     # 1. Check for Kythera shader materials
     lp_attr_group = bpy.data.node_groups.get("ZZZLightPanelAttr")
@@ -821,7 +813,7 @@ def connect_zzz_lighting_panel(target_materials=None):
     for mat in mats:
         if not getattr(mat, "use_nodes", False) or not mat.node_tree:
             continue
-        if target_materials is None and (mat.name.startswith("Kythera's ZZZ") or getattr(mat, "users", 1) == 0):
+        if mat.name.startswith("Kythera's ZZZ") or getattr(mat, "users", 1) == 0:
             continue
         
         for node in mat.node_tree.nodes:
@@ -894,7 +886,7 @@ def connect_zzz_lighting_panel(target_materials=None):
                                 mat.node_tree.links.new(map_y.outputs["Result"], node.inputs["Up/Down"])
 
     # 2. Check for Legacy shader node groups (Global Material Properties & Global Material Properties FACE)
-    for ng in (_zzz_property_trees(mats) if target_materials is not None else bpy.data.node_groups):
+    for ng in bpy.data.node_groups:
         ng_low = ng.name.lower()
         if "global material properties" in ng_low:
             lp_node = next((n for n in ng.nodes if n.type == 'GROUP' and n.node_tree and "zzzlightpanelattr" in n.node_tree.name.lower()), None)
@@ -947,8 +939,20 @@ def disconnect_zzz_lighting_panel(target_materials=None):
     """
     Disconnects ZZZ lighting panel attributes from materials for both Kythera and Legacy shaders.
     """
-    mats_set = set(target_materials) if target_materials is not None else {
-        m for m in bpy.data.materials if getattr(m, 'use_nodes', False) and m.node_tree}
+    mats_set = set(target_materials) if target_materials else set()
+    for m in bpy.data.materials:
+        if getattr(m, "use_nodes", False) and m.node_tree:
+            if not target_materials or m in mats_set or getattr(m, "users", 1) == 0 or m.name.startswith("Kythera's ZZZ"):
+                mats_set.add(m)
+            else:
+                has_lp = any(
+                    l.from_node and getattr(l.from_node, "node_tree", None) and "zzzlightpanelattr" in l.from_node.node_tree.name.lower()
+                    for n in m.node_tree.nodes if n.type == 'GROUP'
+                    for inp in n.inputs
+                    for l in inp.links
+                )
+                if has_lp:
+                    mats_set.add(m)
     
     # 1. Kythera materials
     for mat in mats_set:
@@ -972,7 +976,7 @@ def disconnect_zzz_lighting_panel(target_materials=None):
                             mat.node_tree.nodes.remove(extra_node)
 
     # 2. Legacy shader node groups
-    for ng in (_zzz_property_trees(mats_set) if target_materials is not None else bpy.data.node_groups):
+    for ng in bpy.data.node_groups:
         ng_low = ng.name.lower()
         if "global material properties" in ng_low:
             lp_node = next((n for n in ng.nodes if n.type == 'GROUP' and n.node_tree and "zzzlightpanelattr" in n.node_tree.name.lower()), None)
@@ -986,7 +990,7 @@ def is_zzz_lighting_panel_connected(target_materials=None) -> bool:
     """
     Checks if ZZZ lighting panel attributes are connected to materials/node groups.
     """
-    if target_materials is not None:
+    if target_materials:
         mats = target_materials
     else:
         mats = [
@@ -999,7 +1003,7 @@ def is_zzz_lighting_panel_connected(target_materials=None) -> bool:
     # Check Kythera materials
     for mat in mats:
         if getattr(mat, "use_nodes", False) and mat.node_tree:
-            if target_materials is None and (mat.name.startswith("Kythera's ZZZ") or getattr(mat, "users", 1) == 0):
+            if mat.name.startswith("Kythera's ZZZ") or getattr(mat, "users", 1) == 0:
                 continue
             for node in mat.node_tree.nodes:
                 if node.type == 'GROUP' and node.node_tree:
@@ -1012,7 +1016,7 @@ def is_zzz_lighting_panel_connected(target_materials=None) -> bool:
                                         return True
 
     # Check Legacy groups
-    for ng in (_zzz_property_trees(mats) if target_materials is not None else bpy.data.node_groups):
+    for ng in bpy.data.node_groups:
         ng_low = ng.name.lower()
         if "global material properties" in ng_low:
             lp_node = next((n for n in ng.nodes if n.type == 'GROUP' and n.node_tree and "zzzlightpanelattr" in n.node_tree.name.lower()), None)

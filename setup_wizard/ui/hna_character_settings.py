@@ -5,8 +5,9 @@ from bpy.props import FloatProperty
 from bpy.types import Panel
 from setup_wizard.domain.game_types import GameType
 from setup_wizard.ui.character_settings_utils import (
-    get_character_materials, is_game_armature,
+    get_character_materials, is_game_armature, _iter_rig_meshes,
 )
+from setup_wizard.utils.modifier_utils import get_modifier_property, set_modifier_property
 
 
 def rim_sockets(material):
@@ -23,9 +24,24 @@ def get_rim_intensity(arm):
 
 
 def set_rim_intensity(arm, value):
-    from setup_wizard.ui.character_settings_utils import ensure_character_node_trees_isolated
     _, materials = get_character_materials(arm=arm)
-    ensure_character_node_trees_isolated(arm, materials)
+    others = {mat for obj in bpy.data.objects if obj.type == 'ARMATURE' and obj != arm
+              for mat in get_character_materials(arm=obj)[1]}
+    remap = {mat: mat.copy() for mat in materials if mat in others and rim_sockets(mat)}
+    for mesh in _iter_rig_meshes(arm):
+        for slot in mesh.material_slots:
+            if slot.material in remap:
+                slot.material = remap[slot.material]
+        # Outline mask inputs must follow a copied material, too.
+        for mod in mesh.modifiers:
+            if mod.type != 'NODES' or not mod.node_group:
+                continue
+            for item in mod.node_group.interface.items_tree:
+                if item.item_type == 'SOCKET' and item.in_out == 'INPUT' and item.socket_type == 'NodeSocketMaterial':
+                    original = get_modifier_property(mod, item.identifier)
+                    if original in remap:
+                        set_modifier_property(mod, item.identifier, remap[original])
+    _, materials = get_character_materials(arm=arm)
     arm['_hna_rim_intensity'] = value
     for mat in materials:
         for socket in rim_sockets(mat):

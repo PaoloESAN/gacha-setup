@@ -349,7 +349,7 @@ def resolve_settings_armature(context):
 
 
 def _resolve_settings_armature_uncached(context):
-    """Return the active object's rig or the mesh itself for an unrigged model."""
+    """Returns the armature targeted by selection (None if none). Falls back to active mesh or scene armature."""
     if context is None:
         return None
     try:
@@ -363,6 +363,10 @@ def _resolve_settings_armature_uncached(context):
     candidates = []
     if obj is not None:
         candidates.append(obj)
+    try:
+        candidates.extend(list(getattr(context, "selected_objects", []) or []))
+    except Exception:
+        pass
     target_arm = None
     for cand in candidates:
         if cand is None:
@@ -387,22 +391,32 @@ def _resolve_settings_armature_uncached(context):
         if target_arm is not None:
             break
         parent = getattr(cand, "parent", None)
-        while parent:
-            if getattr(parent, "type", None) == 'ARMATURE':
-                target_arm = parent
-                break
-            parent = getattr(parent, 'parent', None)
-        if target_arm is not None:
+        if parent is not None and getattr(parent, "type", None) == 'ARMATURE':
+            target_arm = parent
             break
 
-    # Mesh-only imports are their own target. Never borrow an unrelated rig
-    # from the scene merely because the active object has no armature.
+    # If no armature found directly from selection, check if selected object is a character mesh
+    # and find any character armature in the scene / active collection
     if target_arm is None:
+        import bpy
         for cand in candidates:
             if getattr(cand, "type", None) == 'MESH':
-                if cand.get(GACHA_GAME_KEY) or any(slot.material for slot in getattr(cand, "material_slots", [])):
-                    target_arm = cand
+                scn_objs = getattr(getattr(context, "scene", None) or getattr(bpy.context, "scene", None), "objects", bpy.data.objects)
+                for o in scn_objs:
+                    if o.type == 'ARMATURE' and not any(ign in o.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig", "wgt"]):
+                        target_arm = o
+                        break
+                if target_arm is None:
+                    # Mesh-only model without armature: return the mesh object as the settings target
+                    if cand.get(GACHA_GAME_KEY) or any(slot.material for slot in getattr(cand, "material_slots", [])):
+                        target_arm = cand
                 break
+        if target_arm is None:
+            scn_objs = getattr(getattr(context, "scene", None) or getattr(bpy.context, "scene", None), "objects", bpy.data.objects)
+            for o in scn_objs:
+                if o.type == 'ARMATURE' and not any(ign in o.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig", "wgt"]):
+                    target_arm = o
+                    break
 
     return target_arm
 
@@ -531,7 +545,7 @@ def get_character_materials(context=None, arm=None):
                 mats.append(mat)
             if mat and mat.name.endswith("_Low"):
                 orig_name = mat.name[:-4]
-                orig_mat = mat.get('_ww_animate_source') or bpy.data.materials.get(orig_name)
+                orig_mat = bpy.data.materials.get(orig_name)
                 if orig_mat and orig_mat.name not in seen:
                     seen.add(orig_mat.name)
                     mats.append(orig_mat)
@@ -607,9 +621,6 @@ def _detect_armature_game_uncached(arm):
                 mat = getattr(slot, "material", None)
                 if mat is not None:
                     mat_names.append(mat.name.lower())
-                    if mat.node_tree:
-                        mat_names.extend(node.node_tree.name.lower() for node in mat.node_tree.nodes
-                                         if node.type == 'GROUP' and node.node_tree)
         blob = " ".join(mat_names)
         if blob:
             if any(k in blob for k in ["impacttoon", "hi3", "honkai 3rd", "honkai3rd", "betterhi3rd"]):
@@ -622,7 +633,7 @@ def _detect_armature_game_uncached(arm):
                 return "ZENLESS_ZONE_ZERO"
             if any(k in blob for k in ["pbrtoon", "endfield", "arknights", "ake"]):
                 return "ARKNIGHTS_ENDFIELD"
-            if any(k in blob for k in ["wuwa", "wuthering", "gustling", "ww - "]):
+            if any(k in blob for k in ["wuwa", "wuthering", "gustling"]):
                 return "WUTHERING_WAVES"
             if any(k in blob for k in ["nte", "neverness"]):
                 return "NEVERNESS_TO_EVERNESS"
@@ -698,121 +709,6 @@ def reset_last_settings_arm():
     invalidate_caches()
 
 
-def get_character_settings_materials(context, game_name=None):
-    """Resolve an explicit UI write target; never fall back to all materials."""
-    arm, mats = get_character_materials(context)
-    if arm is None or (game_name and detect_armature_game(arm) != game_name):
-        return None, []
-    ensure_character_node_trees_isolated(arm, mats)
-    return arm, mats
-
-
-def _copy_settings_animation(block):
-    animation = block.animation_data if block else None
-    if animation and animation.action:
-        animation.action = animation.action.copy()
-
-
-def _isolate_shared_character_materials(arm, mats):
-    """Copy materials used outside this character and remap its outline masks."""
-    import bpy
-    from setup_wizard.utils.modifier_utils import get_modifier_property, set_modifier_property
-    meshes = list(_iter_rig_meshes(arm))
-    mesh_set = set(meshes)
-    # Repair OBJECT overrides left by earlier isolation runs. Their outline
-    # masks already reference the override, while GN still sees the old mesh
-    # material. Only normalize overrides referenced by an outline modifier.
-    for mesh in meshes:
-        outline_materials = set()
-        for mod in mesh.modifiers:
-            if mod.type != 'NODES' or not mod.node_group or 'outline' not in mod.node_group.name.lower():
-                continue
-            outline_materials.update(get_modifier_property(mod, s.identifier)
-                                     for s in mod.node_group.interface.items_tree
-                                     if s.item_type == 'SOCKET' and s.in_out == 'INPUT'
-                                     and s.socket_type == 'NodeSocketMaterial')
-        overrides = {index: slot.material for index, slot in enumerate(mesh.material_slots)
-                     if slot.link == 'OBJECT' and slot.material in outline_materials
-                     and slot.material != mesh.data.materials[index]}
-        if overrides and mesh.data.users > 1:
-            mesh.data = mesh.data.copy()
-        for index, material in overrides.items():
-            mesh.material_slots[index].link = 'DATA'
-            mesh.material_slots[index].material = material
-    external = set()
-    for obj in bpy.data.objects:
-        if obj.type == 'MESH' and obj not in mesh_set:
-            external.update(s.material for s in obj.material_slots if s.material)
-    for other in bpy.data.objects:
-        if other != arm and other.type == 'ARMATURE':
-            external.update(get_character_materials(arm=other)[1])
-    remap = {mat: mat.copy() for mat in mats if mat in external}
-    if not remap:
-        return
-    for copied in remap.values():
-        _copy_settings_animation(copied.node_tree)
-    for original in mats:
-        copied = remap.get(original, original)
-        source = original.get('_ww_animate_source')
-        if source in remap:
-            copied['_ww_animate_source'] = remap[source]
-        elif original.name.endswith('_Low'):
-            source = bpy.data.materials.get(original.name[:-4])
-            if source in remap:
-                # Genshin restores full materials by this naming convention.
-                copied.name = remap[source].name + '_Low'
-
-    # Copy only geometry-node paths containing remapped material constants.
-    # Shared outline node groups must not change the other character's masks.
-    copies = {}
-    def remap_tree(tree):
-        if tree in copies:
-            return copies[tree]
-        copies[tree] = tree
-        children = {n: remap_tree(n.node_tree) for n in tree.nodes
-                    if n.type == 'GROUP' and n.node_tree}
-        needs_copy = any(children[n] != n.node_tree for n in children) or any(
-            isinstance(getattr(s, 'default_value', None), bpy.types.Material)
-            and s.default_value in remap for n in tree.nodes for s in n.inputs
-            if not s.is_linked)
-        if not needs_copy:
-            return tree
-        result = tree.copy()
-        copies[tree] = result
-        for node in result.nodes:
-            if node.type == 'GROUP' and node.node_tree in copies:
-                node.node_tree = copies[node.node_tree]
-            for socket in node.inputs:
-                value = getattr(socket, 'default_value', None)
-                if not socket.is_linked and isinstance(value, bpy.types.Material) and value in remap:
-                    socket.default_value = remap[value]
-        return result
-
-    for mesh in meshes:
-        replacements = {index: remap[slot.material]
-                        for index, slot in enumerate(mesh.material_slots) if slot.material in remap}
-        if replacements and mesh.data.users > 1:
-            # Geometry Nodes reads the mesh's material table, not OBJECT slot
-            # overrides. Localize shared geometry before changing that table.
-            mesh.data = mesh.data.copy()
-        for index, slot in enumerate(mesh.material_slots):
-            if index in replacements:
-                slot.link = 'DATA'
-                slot.material = replacements[index]
-        for mod in mesh.modifiers:
-            if mod.type != 'NODES' or not mod.node_group:
-                continue
-            values = [(s.identifier, get_modifier_property(mod, s.identifier))
-                      for s in mod.node_group.interface.items_tree
-                      if s.item_type == 'SOCKET' and s.in_out == 'INPUT'
-                      and s.socket_type == 'NodeSocketMaterial']
-            mod.node_group = remap_tree(mod.node_group)
-            for key, value in values:
-                if value in remap:
-                    set_modifier_property(mod, key, remap[value])
-    mats[:] = [remap.get(mat, mat) for mat in mats]
-
-
 def ensure_character_node_trees_isolated(arm, mats, force=False):
     """Share one compatible properties tree per character, including outlines.
 
@@ -822,7 +718,6 @@ def ensure_character_node_trees_isolated(arm, mats, force=False):
     """
     if not arm or not mats or not getattr(arm, 'name', ''):
         return
-    _isolate_shared_character_materials(arm, mats)
     import bpy
     import re
     from collections import defaultdict, Counter
@@ -867,7 +762,6 @@ def ensure_character_node_trees_isolated(arm, mats, force=False):
         if ((real_users > counts[canonical] or canonical.get('_owner_armature') != arm.name or force)
                 and canonical in external_trees()):
             canonical = canonical.copy()
-            _copy_settings_animation(canonical)
         canonical['_owner_armature'] = arm.name
         canonical_trees.add(canonical)
         for node, tree, _ in references:
@@ -902,23 +796,3 @@ def ensure_character_node_trees_isolated(arm, mats, force=False):
         base = re.sub(r'\.\d{3}$', '', tree.name)
         if base not in bpy.data.node_groups:
             tree.name = base
-
-    # WuWa edits the palette inside its properties tree. A copied parent still
-    # references the same nested tree until that palette is isolated as well.
-    palette_copies = {}
-    for mat in mats:
-        if not mat.node_tree:
-            continue
-        parents = [mat.node_tree] + [n.node_tree for n in mat.node_tree.nodes
-                   if n.type == 'GROUP' and n.node_tree in canonical_trees]
-        for parent in parents:
-            for node in parent.nodes:
-                tree = getattr(node, 'node_tree', None)
-                if node.type != 'GROUP' or not tree or 'color palette' not in tree.name.lower():
-                    continue
-                if tree.get('_settings_owner') != arm.name:
-                    if tree not in palette_copies:
-                        palette_copies[tree] = tree.copy()
-                        _copy_settings_animation(palette_copies[tree])
-                        palette_copies[tree]['_settings_owner'] = arm.name
-                    node.node_tree = palette_copies[tree]

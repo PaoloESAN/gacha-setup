@@ -6,6 +6,7 @@ import bpy
 from bpy.types import Panel, UILayout, Operator
 
 from setup_wizard.domain.game_types import GameType
+from setup_wizard.domain.shader_material_names import DURIN_NORMAL_EYE_MATERIAL_NAME
 from setup_wizard.ui.ui_render_checker import GenshinImpactUIRenderChecker
 
 class UI_Properties:
@@ -726,10 +727,6 @@ def update_gi_lighting_control_type(self, context=None):
     global _is_updating_gi_props
     if _is_updating_gi_props:
         return
-    from setup_wizard.ui.character_settings_utils import get_character_settings_materials
-    arm, mats = get_character_settings_materials(context, 'GENSHIN_IMPACT')
-    if not arm or not mats:
-        return
     ctrl_type = getattr(self, "gi_lighting_control_type", "PANEL")
     arm = None
     try:
@@ -812,10 +809,6 @@ def update_gi_light_mode(self, context=None):
     global _is_updating_gi_props
     if _is_updating_gi_props:
         return
-    from setup_wizard.ui.character_settings_utils import get_character_settings_materials
-    arm, mats = get_character_settings_materials(context, 'GENSHIN_IMPACT')
-    if not arm or not mats:
-        return
     mode = getattr(self, "gi_light_mode", "0")
     arm = None
     try:
@@ -897,6 +890,25 @@ def update_gi_scene_settings(self, context=None):
     sync_genshin_shader_properties(getattr(context, "scene", getattr(bpy.context, "scene", None)), context=context)
 
 
+def update_gi_blush(self, context=None):
+    if _is_updating_gi_props:
+        return
+    from setup_wizard.ui.character_settings_utils import get_character_materials
+    arm, materials = get_character_materials(context)
+    if not arm:
+        return
+    value = max(0.0, min(1.0, float(self.gi_blush_strength)))
+    for material in materials:
+        if not material.is_editable or not material.use_nodes or not material.node_tree:
+            continue
+        for node in material.node_tree.nodes:
+            if node.type != 'GROUP' or not node.node_tree:
+                continue
+            socket = node.inputs.get('Blush Strength') or node.inputs.get('Face Blush Strength')
+            if socket is not None:
+                socket.default_value = value
+
+
 def sync_genshin_shader_properties(scene=None, context=None):
     scene = scene or getattr(bpy.context, "scene", None)
     if not scene:
@@ -944,10 +956,6 @@ def sync_genshin_shader_properties(scene=None, context=None):
     catch_shadows_on = bool(getattr(scene, "gi_catch_shadows", False))
     catch_shadows = 1.0 if catch_shadows_on else 0.0
     day_night = float(getattr(scene, "gi_day_night", 0.0))
-    try:
-        blush_strength = max(0.0, min(1.0, float(getattr(scene, "gi_blush_strength", 0.0))))
-    except Exception:
-        blush_strength = 0.0
 
     rim_lit_col = list(getattr(scene, "gi_rim_lit_color", (1.0, 1.0, 1.0)))
     if len(rim_lit_col) == 3:
@@ -982,23 +990,20 @@ def sync_genshin_shader_properties(scene=None, context=None):
     }
 
     # 1. Resolve character materials to keep settings strictly per-character
-    arm = None
     try:
         from setup_wizard.ui.character_settings_utils import (
-            get_character_settings_materials,
+            get_character_materials,
+            ensure_character_node_trees_isolated,
         )
-        arm, target_materials = get_character_settings_materials(context, 'GENSHIN_IMPACT')
+        arm, target_materials = get_character_materials(context)
+        if arm and target_materials:
+            ensure_character_node_trees_isolated(arm, target_materials)
     except Exception:
         target_materials = []
 
-    # Scene properties are the selected character's panel cache. Without a
-    # character target they must never be broadcast to the scene's materials.
-    if not arm or not target_materials:
-        return
-
     # 2. Find target Global Material Properties node group(s)
     target_trees = set()
-    mats_to_update = target_materials
+    mats_to_update = target_materials if target_materials else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
     from setup_wizard.character_rig_setup.lighting_panel_setup import repair_genshin_shadow_offset_links
     repair_genshin_shadow_offset_links(mats_to_update)
     for mat in mats_to_update:
@@ -1007,6 +1012,11 @@ def sync_genshin_shader_properties(scene=None, context=None):
                 if node.type == 'GROUP' and node.node_tree:
                     if "global material properties" in node.node_tree.name.lower():
                         target_trees.add(node.node_tree)
+
+    if not target_trees and not target_materials:
+        for ng in bpy.data.node_groups:
+            if "global material properties" in ng.name.lower():
+                target_trees.add(ng)
 
     def _coerce_value(sock_or_item, value):
         # Bool sockets/items (ex. "Toggle Fresnel") reject float with
@@ -1111,20 +1121,8 @@ def sync_genshin_shader_properties(scene=None, context=None):
                                 except Exception:
                                     pass
 
-    # 4b. Blush Strength lives on the face material's shader node
-    # (e.g. HoYoToon/PrimoToon "Blush Strength", 0..1), not in Global Properties.
-    # Only face shader node groups expose this input, so setting it wherever
-    # the socket exists is inherently face-scoped.
-    for mat in mats_to_update:
-        if getattr(mat, "use_nodes", False) and mat.node_tree:
-            for node in mat.node_tree.nodes:
-                if node.type == 'GROUP' and node.node_tree:
-                    blush_inp = node.inputs.get("Blush Strength") or node.inputs.get("Face Blush Strength")
-                    if blush_inp is not None:
-                        try:
-                            blush_inp.default_value = float(blush_strength)
-                        except Exception:
-                            pass
+    # Blush is updated only by its own control. Render/frame synchronization
+    # must preserve the value authored on each face material.
 
     # 4c. Character-specific shader overrides (e.g. Danica face Cold/Warm Shadow Color 2 & 3 pure white)
     try:
@@ -1403,6 +1401,16 @@ def pull_gi_panel_values(scene, context, force=False):
                     if not target_mat or not getattr(target_mat, 'node_tree', None):
                         if d_mesh and len(d_mesh.material_slots) > 1 and d_mesh.material_slots[1].material:
                             target_mat = d_mesh.material_slots[1].material
+                        else:
+                            target_mat = bpy.data.materials.get(DURIN_NORMAL_EYE_MATERIAL_NAME)
+                            if target_mat is not None and not getattr(target_mat, 'node_tree', None):
+                                target_mat = None
+                            if target_mat is None:
+                                for m in bpy.data.materials:
+                                    m_low = m.name.lower()
+                                    if ('pupil' in m_low or 'pupila' in m_low) and (m.name.endswith('.001') or 'two' in m_low) and getattr(m, 'node_tree', None):
+                                        target_mat = m
+                                        break
                     if target_mat and getattr(target_mat, 'node_tree', None):
                         mix_n = target_mat.node_tree.nodes.get('Mix Shader')
                         if not mix_n:
@@ -1638,8 +1646,22 @@ def is_durin(context):
                     if slot.material and "durin" in slot.material.name.lower():
                         arm["gacha_is_durin"] = True
                         return True
+            for mesh in _iter_rig_meshes(arm):
+                for slot in getattr(mesh, "material_slots", []):
+                    if slot.material and "pupil" in slot.material.name.lower():
+                        import bpy
+                        if any("durin" in m.name.lower() for m in bpy.data.materials) or any("durin" in o.name.lower() for o in bpy.data.objects) or any("durin" in img.name.lower() for img in bpy.data.images):
+                            arm["gacha_is_durin"] = True
+                            return True
             arm["gacha_is_durin"] = False
             return False
+        import bpy
+        obj = getattr(context, "active_object", None) or getattr(context, "object", None)
+        if obj and "durin" in obj.name.lower():
+            return True
+        for m in bpy.data.materials:
+            if "durin" in m.name.lower():
+                return True
     except Exception:
         pass
     return False
@@ -1651,8 +1673,13 @@ def get_durin_pupil_materials(context=None, arm=None):
     if arm is None:
         arm = resolve_settings_armature(context)
     if not arm:
-        return None, None, None
-    meshes = list(_iter_rig_meshes(arm))
+        obj = getattr(bpy.context, "active_object", None) or getattr(bpy.context, "object", None)
+        if obj and obj.type == 'MESH':
+            meshes = [obj]
+        else:
+            meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+    else:
+        meshes = list(_iter_rig_meshes(arm))
 
     pupil_mesh = None
     for mesh in meshes:
@@ -1679,11 +1706,9 @@ def get_durin_pupil_materials(context=None, arm=None):
 
 
 def apply_durin_dark_eyes(context=None, enabled=False):
-    from setup_wizard.ui.character_settings_utils import get_character_settings_materials
+    from setup_wizard.ui.character_settings_utils import resolve_settings_armature
     import bpy
-    arm, mats = get_character_settings_materials(context, 'GENSHIN_IMPACT')
-    if not arm or not mats:
-        return
+    arm = resolve_settings_armature(context)
     mesh, mat1, mat2 = get_durin_pupil_materials(context, arm)
 
     target_val = 1.0 if enabled else 0.0
@@ -1708,6 +1733,16 @@ def apply_durin_dark_eyes(context=None, enabled=False):
     if not target_mat or not getattr(target_mat, 'node_tree', None):
         if mesh and len(mesh.material_slots) > 1 and mesh.material_slots[1].material:
             target_mat = mesh.material_slots[1].material
+        else:
+            target_mat = bpy.data.materials.get(DURIN_NORMAL_EYE_MATERIAL_NAME)
+            if target_mat is not None and not getattr(target_mat, 'node_tree', None):
+                target_mat = None
+            if target_mat is None:
+                for m in bpy.data.materials:
+                    m_low = m.name.lower()
+                    if ('pupil' in m_low or 'pupila' in m_low) and (m.name.endswith('.001') or 'two' in m_low) and getattr(m, 'node_tree', None):
+                        target_mat = m
+                        break
 
     if target_mat and getattr(target_mat, 'node_tree', None):
         nt = target_mat.node_tree
@@ -1723,8 +1758,7 @@ def apply_durin_dark_eyes(context=None, enabled=False):
             except Exception:
                 pass
             mix_node.inputs[0].default_value = target_val
-            if hasattr(target_mat, 'blend_method'):
-                target_mat.blend_method = 'HASHED'
+            target_mat.blend_method = 'HASHED'
             if hasattr(target_mat, 'surface_render_method'):
                 target_mat.surface_render_method = 'DITHERED'
 
@@ -2380,7 +2414,7 @@ def register_gi_properties():
         default=0.0,
         step=10,
         precision=2,
-        update=update_gi_scene_settings,
+        update=update_gi_blush,
     )
     bpy.types.Scene.gi_rim_lit_color = bpy.props.FloatVectorProperty(
         name="Rim Lit",
@@ -2470,10 +2504,7 @@ def unregister_gi_properties():
 
 @bpy.app.handlers.persistent
 def gi_frame_change_handler(scene, depsgraph=None):
-    """Legacy hook: rendering must preserve each material's authored values.
-
-    The scene panel holds only the last selected character's settings. Replaying
-    it at render/frame changes overwrites independent and linked characters.
-    Blender already evaluates shader socket animation without this callback.
-    """
-    return
+    try:
+        sync_genshin_shader_properties(scene)
+    except Exception:
+        pass

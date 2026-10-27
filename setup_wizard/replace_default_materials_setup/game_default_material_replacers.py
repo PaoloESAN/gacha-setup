@@ -3327,7 +3327,7 @@ class WutheringWavesDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 
         try:
             from setup_wizard.wuwa_operations import sync_wuwa_shader_properties
-            sync_wuwa_shader_properties(self.context.scene, context=self.context)
+            sync_wuwa_shader_properties(self.context.scene)
         except Exception as e:
             print(f"[WUWA] Notice syncing shader properties: {e}")
 

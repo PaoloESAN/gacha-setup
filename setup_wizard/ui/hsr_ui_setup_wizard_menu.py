@@ -575,24 +575,29 @@ def update_hsr_stellartoon_props(self, context=None):
     # 1. Update inside GlobalProperties node group (both its internal nodes and interface)
     try:
         from setup_wizard.ui.character_settings_utils import (
-            get_character_settings_materials,
+            get_character_materials,
+            ensure_character_node_trees_isolated,
         )
-        arm, target_materials = get_character_settings_materials(context, 'HONKAI_STAR_RAIL')
+        arm, target_materials = get_character_materials(context)
+        if arm and target_materials:
+            ensure_character_node_trees_isolated(arm, target_materials)
     except Exception:
         target_materials = []
 
-    if not target_materials:
-        return
-
     # 2. Find target GlobalProperties node group(s)
     target_trees = set()
-    mats_to_update = target_materials
+    mats_to_update = target_materials if target_materials else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
     for mat in mats_to_update:
         if getattr(mat, "use_nodes", False) and mat.node_tree:
             for node in mat.node_tree.nodes:
                 if node.type == 'GROUP' and node.node_tree:
                     if "globalproperties" in node.node_tree.name.lower():
                         target_trees.add(node.node_tree)
+
+    if not target_trees:
+        for ng in bpy.data.node_groups:
+            if "globalproperties" in ng.name.lower():
+                target_trees.add(ng)
 
     # 3. Update inside each target GlobalProperties node group
     for tree in target_trees:
