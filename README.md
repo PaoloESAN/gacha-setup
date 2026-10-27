@@ -98,6 +98,7 @@ Thanks to all those who collaborated on the original project:
 * **poke** — ZZZ setup
 * **cocopops** — Lights+
 * **[aeo](https://www.youtube.com/@aeo_346)**
+* **JARP3X** — Apply VMD Motion
 * **Genshin Impact**:
   * **Shader**: [Blender-miHoYo-Shaders](https://github.com/festivize/Blender-miHoYo-Shaders) by Festivity
   * **Genshin review**: VANS

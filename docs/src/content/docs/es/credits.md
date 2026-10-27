@@ -49,6 +49,7 @@ description: Agradecimientos, colaboradores y créditos de recursos.
 - **cocopops**
 - **aeo** — Apply VMD Motion
 - **kori** — Apply VMD Motion
+- **JARP3X** — Apply VMD Motion
 - **Icono del Logo** — <a href="https://www.flaticon.com/free-icons/star" title="star icons">Star icons created by Magnific - Flaticon</a>
 
 <div class="disclaimer-text">
