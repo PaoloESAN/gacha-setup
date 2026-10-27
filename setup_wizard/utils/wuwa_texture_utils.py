@@ -267,17 +267,9 @@ def make_texture_patterns(base_part: str, version: str, suffix: str, original_na
 
 
 def load_image_safely(file_path: str, suffix: str) -> Optional[bpy.types.Image]:
-    if not os.path.exists(file_path):
-        base, _ = os.path.splitext(file_path)
-        found = None
-        for ext in ['.png', '.tga', '.dds', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp']:
-            if os.path.exists(base + ext):
-                found = base + ext
-                break
-        if found:
-            file_path = found
-        else:
-            return None
+    # The shared loader resolves nested Textures/ directories and alternate
+    # extensions. A root-level existence check would reject those files before
+    # it can resolve the filenames discovered by the recursive WuWa scan.
     from setup_wizard.utils.texture_utils import load_or_get_image
     file_name = os.path.basename(file_path)
     img = load_or_get_image(file_path, file_name)

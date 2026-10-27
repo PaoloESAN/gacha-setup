@@ -410,6 +410,8 @@ class HSR_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorPropertie
     bl_label = "Honkai Star Rail: Finish Setup (UI)"
 
     def execute(self, context):
+        from setup_wizard.geometry_nodes_setup.geometry_nodes_setups import refresh_hsr_outline_scale
+        refresh_hsr_outline_scale(context)
         result = BasicSetupUIOperator.execute(self, context)
         try:
             self._rename_hsr_character_collection_and_rig(context)
@@ -628,19 +630,14 @@ class ZZZ_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorPropertie
         for rig in list(context.scene.objects):
             if rig.type == 'ARMATURE' and rig.data.get('bangboo_widget_unit'):
                 organize_bangboo_collections(rig, context)
+        from setup_wizard.utils.zzz_kythera_lighting import setup_kythera_lighting
+        setup_kythera_lighting(context, final=True)
         result = BasicSetupUIOperator.execute(self, context)
         try:
             from setup_wizard.ui.character_settings_utils import stamp_rig_game
             for obj in context.scene.objects:
                 if obj.type == 'ARMATURE' and not any(ign in obj.name.lower() for ign in ["eyerig", "facerig", "lighting", "metarig", "wgt"]):
                     stamp_rig_game(obj, GameType.ZENLESS_ZONE_ZERO.name)
-
-            if getattr(context.scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
-                import math
-                for obj in bpy.data.objects:
-                    if obj.name.startswith("Light Direction") or obj.name.startswith("Main Light Direction"):
-                        obj.rotation_mode = 'XYZ'
-                        obj.rotation_euler = (math.radians(90.0), 0.0, 0.0)
 
             from setup_wizard.services.zzz_bloom_service import setup_zzz_bloom
             setup_zzz_bloom(context.scene)
@@ -1182,16 +1179,37 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
             GameType.HONKAI_NEXUS_ANIMA.name,
             GameType.PUNISHING_GRAY_RAVEN.name,
         ]
+        if armature.get('setup_wizard_pmx_normalized'):
+            # MMD Tools already converts PMX coordinates to Blender's Z-up.
+            should_force_upright_rotation = False
 
+        # Hidden FBX children retain stale parent transforms during apply.
+        # EyeStar then inherits a compensating 0.01 scale while visible face
+        # meshes stay at full size. Evaluate all character meshes together,
+        # restoring their visibility after the transform has been baked.
+        hidden_children = []
+        if should_force_upright_rotation:
+            for child in armature.children_recursive:
+                if child.type == 'MESH' and (child.hide_viewport or child.hide_get()):
+                    hidden_children.append((child, child.hide_viewport, child.hide_get()))
+                    child.hide_viewport = False
+                    child.hide_set(False)
+            context.view_layer.update()
         try:
             if should_force_upright_rotation:
                 bpy.ops.object.scale_clear()
                 bpy.ops.object.rotation_clear()
                 armature.rotation_euler[0] = 1.5708  # x-axis, 90 degrees
+                context.view_layer.update()
 
             bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
         except Exception as e:
             print(f"Warning in transform_apply: {e}")
+        finally:
+            context.view_layer.update()
+            for child, hidden_viewport, hidden in hidden_children:
+                child.hide_set(hidden)
+                child.hide_viewport = hidden_viewport
 
         for obj in context.selected_objects:
             try:

@@ -68,6 +68,11 @@ def ensure_aov_passes(view_layer: bpy.types.ViewLayer) -> Tuple[bool, bool]:
         if hasattr(aov, "type"):
             aov.type = 'COLOR'
 
+    # Repair passes created manually or by older setups with the wrong type.
+    for aov in view_layer.aovs:
+        if aov.name in ('Eye color', 'Eye mask'):
+            aov.type = 'COLOR'
+
     from .compositor_effects import order_aov_passes
     order_aov_passes(bpy.context.scene, view_layer)
     return True, True
@@ -366,6 +371,7 @@ def get_or_create_compositor_tree(scene: bpy.types.Scene) -> bpy.types.NodeTree:
     Retrieves or creates the compositor node tree across Blender 4.x / Goo Engine
     and Blender 5.x.
     """
+    scene.render.use_compositing = True
     if hasattr(scene, "compositing_node_group"):
         if not scene.compositing_node_group:
             scene.compositing_node_group = bpy.data.node_groups.new("Compositing Nodetree", "CompositorNodeTree")

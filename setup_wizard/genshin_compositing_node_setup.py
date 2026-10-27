@@ -43,6 +43,12 @@ def get_output_node_type():
     return 'CompositorNodeComposite'
 
 
+def find_builtin_node(tree, node_type):
+    """Built-in node names are translated when Blender creates them."""
+    return next((n for n in tree.nodes if n.bl_idname == node_type
+                 and getattr(n, 'is_active_output', True)), None)
+
+
 def get_node_tree(scene):
     if hasattr(scene, "compositing_node_group"):
         if not scene.compositing_node_group:
@@ -195,7 +201,7 @@ class HYV_OT_CustomCompositeNodeSetup(Operator, ImportHelper, CustomOperatorProp
             composite_node.node_tree = composite_node_group
             self.logs += f'{composite_node_group.name} node already created, skipping and not creating new node.\n'
 
-        viewer_node = get_node_tree(scene).nodes.get(NAME_OF_VIEWER_NODE)
+        viewer_node = find_builtin_node(get_node_tree(scene), NAME_OF_VIEWER_NODE_TYPE)
         if not viewer_node:
             self.create_compositor_node(NAME_OF_VIEWER_NODE_TYPE)
         else:
@@ -258,7 +264,7 @@ class HYV_OT_CustomCompositeNodeSetup(Operator, ImportHelper, CustomOperatorProp
         self.logs += f'Created {node_type} node tree\n'
 
     def connect_starting_nodes(self, scene):
-        render_layers_node = get_node_tree(scene).nodes.get(NAME_OF_COMPOSITOR_INPUT_NODE)
+        render_layers_node = find_builtin_node(get_node_tree(scene), 'CompositorNodeRLayers')
         render_layers_output = render_layers_node.outputs.get(NAME_OF_IMAGE_IO)
 
         composite_wrapper_node = get_node_tree(scene).nodes.get(NAME_OF_COMPOSITE_NODE)
@@ -270,10 +276,11 @@ class HYV_OT_CustomCompositeNodeSetup(Operator, ImportHelper, CustomOperatorProp
             if composite_wrapper_node_output:
                 break
 
-        composite_node = get_node_tree(scene).nodes.get(get_output_node_name())
-        composite_node_input = composite_node.inputs.get(NAME_OF_IMAGE_IO)
+        composite_node = find_builtin_node(get_node_tree(scene), get_output_node_type())
+        composite_node_input = composite_node.inputs.get(NAME_OF_IMAGE_IO) or next(
+            (s for s in composite_node.inputs if s.type == 'RGBA'), None)
 
-        viewer_node = get_node_tree(scene).nodes.get(NAME_OF_VIEWER_NODE)
+        viewer_node = find_builtin_node(get_node_tree(scene), NAME_OF_VIEWER_NODE_TYPE)
         viewer_node_input = viewer_node.inputs.get(NAME_OF_IMAGE_IO)
 
         self.connect_nodes_in_scene(scene, render_layers_output, composite_wrapper_node_input)
@@ -297,10 +304,10 @@ class HYV_OT_CustomCompositeNodeSetup(Operator, ImportHelper, CustomOperatorProp
         self.logs += f"Connected '{input_node_name}' ({input.name}) to '{output_node_name}' ({output.name}) in scene: {scene.name}\n"
 
     def set_node_locations(self, scene):
-        render_layers_node = get_node_tree(scene).nodes.get(NAME_OF_COMPOSITOR_INPUT_NODE)
+        render_layers_node = find_builtin_node(get_node_tree(scene), 'CompositorNodeRLayers')
         composite_wrapper_node = get_node_tree(scene).nodes.get(NAME_OF_COMPOSITE_NODE)
-        composite_node = get_node_tree(scene).nodes.get(get_output_node_name())
-        viewer_node = get_node_tree(scene).nodes.get(NAME_OF_VIEWER_NODE)
+        composite_node = find_builtin_node(get_node_tree(scene), get_output_node_type())
+        viewer_node = find_builtin_node(get_node_tree(scene), NAME_OF_VIEWER_NODE_TYPE)
 
         render_layers_node.location = (-200, 400)
         composite_wrapper_node.location = (250, 400)

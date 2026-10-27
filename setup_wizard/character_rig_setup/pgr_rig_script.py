@@ -759,6 +759,8 @@ def rig_character(
         bpy.ops.object.mode_set(mode='POSE')
 
     before_rig_objs = {o.name for o in bpy.data.objects if o.type == 'ARMATURE'}
+    from setup_wizard.character_rig_setup.finger_ik import enable_finger_ik_controls
+    enable_finger_ik_controls(metarig_obj)
     bpy.ops.pose.rigify_generate()
     after_rig_objs = [o for o in bpy.data.objects if o.type == 'ARMATURE' and o.name not in before_rig_objs]
 
@@ -3748,8 +3750,9 @@ def rig_character(
 
 
 
-    from setup_wizard.character_rig_setup.pgr_visual_widgets import align_hand_ik_widgets
+    from setup_wizard.character_rig_setup.pgr_visual_widgets import align_hand_ik_widgets, hide_unused_prop_controls
     align_hand_ik_widgets(this_obj)
+    hide_unused_prop_controls(this_obj)
 
     # Clean up any leftover RIG_LOG text block
     log_text = bpy.data.texts.get("RIG_LOG")

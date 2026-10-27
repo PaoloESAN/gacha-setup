@@ -401,6 +401,9 @@ class ZZZ_OT_SetUpHeadDriver(Operator, CustomOperatorProperties):
 
         move_lighting_and_head_driver_to_lights(head_driver_object)
 
+        from setup_wizard.utils.zzz_kythera_lighting import setup_kythera_lighting
+        setup_kythera_lighting(context, armature)
+
         if self.next_step_idx:
             NextStepInvoker().invoke(
                 self.next_step_idx,

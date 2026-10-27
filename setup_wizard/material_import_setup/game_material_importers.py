@@ -176,10 +176,22 @@ class GenshinImpactMaterialImporterFacade(GameMaterialImporter):
         )
 
     def import_materials(self):
+        # The legacy bundle intentionally has no VFX material. Append only
+        # templates present in the selected shader rather than requesting both
+        # generations' material lists from either file.
+        target = get_shader_file_path(self.blender_operator.game_type, 'main')
+        if target and os.path.isfile(target):
+            with bpy.data.libraries.load(target, link=False) as (available, _):
+                names = set(available.materials)
+            self.names_of_game_materials = [entry for entry in self.NAMES_OF_GENSHIN_MATERIALS
+                                           if entry['name'] in names]
         status = super().import_materials()  # Genshin Impact Material Importer
 
         if status == {'FINISHED'}:
             return status
+
+        from setup_wizard.utils.genshin_engine_nodes import configure_genshin_engine_nodes
+        configure_genshin_engine_nodes()
 
         self.move_required_scene_objects()
         self.update_vfx_shader_scene_dependency()

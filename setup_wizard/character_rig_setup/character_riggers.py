@@ -340,6 +340,8 @@ class GenshinImpactCharacterRigger(CharacterRigger):
         )
         from setup_wizard.character_rig_setup.genshin_wrist_twist import setup_wrist_twist
         setup_wrist_twist(target_rig)
+        from setup_wizard.utils.mmd_model_adapter import bind_pmx_face_morphs
+        bind_pmx_face_morphs(self.context, target_rig)
 
         if target_rig and hasattr(target_rig.data, "collections"):
             colls = target_rig.data.collections
@@ -1011,6 +1013,9 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
         cache_enabled = self.context.window_manager.cache_enabled
         if cache_enabled and filepath:
             cache_using_cache_key(get_cache(cache_enabled), self.rigify_bone_shapes_file_path, filepath)
+
+        from setup_wizard.geometry_nodes_setup.geometry_nodes_setups import refresh_hsr_outline_scale
+        refresh_hsr_outline_scale(self.context)
 
         self.blender_operator.report({'INFO'}, 'Successfully rigged HSR character')
 

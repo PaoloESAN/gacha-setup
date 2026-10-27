@@ -558,6 +558,8 @@ def rig_character(
         metarig_obj.select_set(True)
         context.view_layer.objects.active = metarig_obj
         bpy.ops.object.mode_set(mode='POSE')
+        from setup_wizard.character_rig_setup.finger_ik import enable_finger_ik_controls
+        enable_finger_ik_controls(metarig_obj)
         bpy.ops.pose.rigify_generate()
 
     # Find generated Rigify rig

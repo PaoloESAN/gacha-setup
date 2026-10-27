@@ -204,20 +204,16 @@ def get_shader_file_path(game_type: str, file_type: str = "main") -> str:
     shaders_dir = os.path.join(addon_dir, 'shaders')
 
     if game_type == GameType.GENSHIN_IMPACT.name:
-        p_v4 = os.path.join(shaders_dir, 'gi', 'HoYoverse - PrimoToon v4.0.blend')
-        if os.path.isfile(p_v4):
-            return p_v4
-        if file_type == 'outlines':
-            p = os.path.join(shaders_dir, 'gi', 'HoYoverse - Genshin Impact Outlines v3.blend')
-            if os.path.isfile(p):
-                return p
-        elif file_type == 'compositing':
-            p = os.path.join(shaders_dir, 'gi', 'HoYoverse - Genshin Impact Post-Processing.blend')
-            if os.path.isfile(p):
-                return p
-        p_main = os.path.join(shaders_dir, 'gi', 'HoYoverse - Genshin Impact v3.4.blend')
-        if os.path.isfile(p_main):
-            return p_main
+        from setup_wizard.utils.genshin_shader_selection import get_genshin_shader_selection
+        if get_genshin_shader_selection() == 'NEW':
+            filename = 'HoYoverse - PrimoToon v4.0.blend'
+        else:
+            filename = {
+                'outlines': 'HoYoverse - Genshin Impact Outlines v3.blend',
+                'compositing': 'HoYoverse - Genshin Impact Post-Processing.blend',
+            }.get(file_type, 'HoYoverse - Genshin Impact v3.4 starriia.blend')
+        path = os.path.join(shaders_dir, 'gi', filename)
+        return path if os.path.isfile(path) else None
 
     elif game_type == GameType.HONKAI_STAR_RAIL.name:
         p = os.path.join(shaders_dir, 'hsr', 'StellarToonV1.1.blend')

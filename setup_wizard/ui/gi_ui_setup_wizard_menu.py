@@ -1,3 +1,4 @@
+from setup_wizard.character_rig_setup.rig_ui_utils import rig_conversion_available
 from setup_wizard.utilites.new_lights import draw_lights_plus
 # Author: michael-gh1
 
@@ -109,6 +110,7 @@ class GI_PT_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
         settings_header.label(text="Setup Settings", icon="PREFERENCES")
 
         settings_col = settings_box.column()
+        settings_col.prop(context.scene, "gi_shader_type", text="Shader")
         props = context.scene.character_rigger_props
         enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
         settings_col.prop(props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")
@@ -461,7 +463,7 @@ class OperatorFactory:
         ui_object: UILayout,
         game_type: str = GameType.GENSHIN_IMPACT.name,
     ):
-        expy_kit_installed = any('expy' in k.lower() for k in bpy.context.preferences.addons.keys())
+        expy_kit_installed = rig_conversion_available()
         rigify_installed = any('rigify' in k.lower() for k in bpy.context.preferences.addons.keys())
 
         column = ui_object.column()
@@ -476,7 +478,7 @@ class OperatorFactory:
         if not column.enabled:
             column = ui_object.column()
             if not expy_kit_installed:
-                column.label(text='ExpyKit required', icon='ERROR')
+                column.label(text='Rig conversion add-on required', icon='ERROR')
             if not rigify_installed:
                 column.label(text='Rigify required', icon='ERROR')
 
@@ -888,6 +890,25 @@ def update_gi_scene_settings(self, context=None):
     sync_genshin_shader_properties(getattr(context, "scene", getattr(bpy.context, "scene", None)), context=context)
 
 
+def update_gi_blush(self, context=None):
+    if _is_updating_gi_props:
+        return
+    from setup_wizard.ui.character_settings_utils import get_character_materials
+    arm, materials = get_character_materials(context)
+    if not arm:
+        return
+    value = max(0.0, min(1.0, float(self.gi_blush_strength)))
+    for material in materials:
+        if not material.is_editable or not material.use_nodes or not material.node_tree:
+            continue
+        for node in material.node_tree.nodes:
+            if node.type != 'GROUP' or not node.node_tree:
+                continue
+            socket = node.inputs.get('Blush Strength') or node.inputs.get('Face Blush Strength')
+            if socket is not None:
+                socket.default_value = value
+
+
 def sync_genshin_shader_properties(scene=None, context=None):
     scene = scene or getattr(bpy.context, "scene", None)
     if not scene:
@@ -935,10 +956,6 @@ def sync_genshin_shader_properties(scene=None, context=None):
     catch_shadows_on = bool(getattr(scene, "gi_catch_shadows", False))
     catch_shadows = 1.0 if catch_shadows_on else 0.0
     day_night = float(getattr(scene, "gi_day_night", 0.0))
-    try:
-        blush_strength = max(0.0, min(1.0, float(getattr(scene, "gi_blush_strength", 0.0))))
-    except Exception:
-        blush_strength = 0.0
 
     rim_lit_col = list(getattr(scene, "gi_rim_lit_color", (1.0, 1.0, 1.0)))
     if len(rim_lit_col) == 3:
@@ -1056,6 +1073,9 @@ def sync_genshin_shader_properties(scene=None, context=None):
                     except Exception:
                         pass
 
+        from setup_wizard.character_rig_setup.lighting_panel_setup import sync_legacy_shadow_position
+        sync_legacy_shadow_position(tree)
+
     # 4. Also update direct group node inputs on character materials if any exist (e.g. PrimoToon v4.0)
     prop_aliases = {
         "Toggle Fresnel": ["Toggle Fresnel", "Use Fresnel"],
@@ -1101,20 +1121,8 @@ def sync_genshin_shader_properties(scene=None, context=None):
                                 except Exception:
                                     pass
 
-    # 4b. Blush Strength lives on the face material's shader node
-    # (e.g. HoYoToon/PrimoToon "Blush Strength", 0..1), not in Global Properties.
-    # Only face shader node groups expose this input, so setting it wherever
-    # the socket exists is inherently face-scoped.
-    for mat in mats_to_update:
-        if getattr(mat, "use_nodes", False) and mat.node_tree:
-            for node in mat.node_tree.nodes:
-                if node.type == 'GROUP' and node.node_tree:
-                    blush_inp = node.inputs.get("Blush Strength") or node.inputs.get("Face Blush Strength")
-                    if blush_inp is not None:
-                        try:
-                            blush_inp.default_value = float(blush_strength)
-                        except Exception:
-                            pass
+    # Blush is updated only by its own control. Render/frame synchronization
+    # must preserve the value authored on each face material.
 
     # 4c. Character-specific shader overrides (e.g. Danica face Cold/Warm Shadow Color 2 & 3 pure white)
     try:
@@ -2241,6 +2249,16 @@ def _on_character_selection_change(scene, depsgraph=None):
 
 
 def register_gi_properties():
+    from setup_wizard.utils.genshin_shader_selection import default_genshin_shader
+    bpy.types.Scene.gi_shader_type = bpy.props.EnumProperty(
+        name="Shader",
+        description="Genshin shader used when setting up a character",
+        items=[
+            ('NEW', 'Quality', 'PrimoToon v4.0'),
+            ('OLD', 'Performance', 'Starriia v3.4 with separate outlines and post-processing'),
+        ],
+        default=default_genshin_shader(),
+    )
     from setup_wizard.utils import genshin_weapon_elements
     genshin_weapon_elements.register()
     if _on_character_selection_change not in bpy.app.handlers.depsgraph_update_post:
@@ -2396,7 +2414,7 @@ def register_gi_properties():
         default=0.0,
         step=10,
         precision=2,
-        update=update_gi_scene_settings,
+        update=update_gi_blush,
     )
     bpy.types.Scene.gi_rim_lit_color = bpy.props.FloatVectorProperty(
         name="Rim Lit",
@@ -2478,7 +2496,7 @@ def unregister_gi_properties():
         "gi_catch_shadows", "gi_day_night", "gi_blush_strength",
         "gi_rim_lit_color", "gi_rim_shadow_color", "gi_rim_scale",
         "gi_hair_physics_influence", "gi_clothes_physics_influence",
-        "gi_enable_outlines", "gi_enable_night_soul", "gi_dark_eyes"
+        "gi_enable_outlines", "gi_enable_night_soul", "gi_dark_eyes", "gi_shader_type"
     ]:
         if hasattr(bpy.types.Scene, prop):
             delattr(bpy.types.Scene, prop)

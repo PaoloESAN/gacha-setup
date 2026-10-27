@@ -643,9 +643,25 @@ def face_frame(mesh_obj, armature=None):
 
 def mouth_boundary_landmarks(mesh_obj, estimate, fwd, right, up, face_size):
     """Find the neutral lip opening, excluding eyes, neck and inner mouth parts."""
+    mw = mesh_obj.matrix_world
+    basis = mesh_obj.data.shape_keys.reference_key if mesh_obj.data.shape_keys else None
+    vertices = basis.data if basis else mesh_obj.data.vertices
+    # FBX faces can be split at the center seam (Roxy). Count coincident
+    # vertices together for boundary detection, otherwise each half of the
+    # mouth is a separate loop and the selected center shifts to one side.
+    tolerance = max(face_size * 1e-5, 1e-8)
+    representatives = {}
+    welded = []
+    for index, vertex in enumerate(vertices):
+        position = mw @ vertex.co
+        key = tuple(round(value / tolerance) for value in position)
+        welded.append(representatives.setdefault(key, index))
     counts = {}
     for polygon in mesh_obj.data.polygons:
-        for edge in polygon.edge_keys:
+        for a, b in polygon.edge_keys:
+            if welded[a] == welded[b]:
+                continue
+            edge = tuple(sorted((welded[a], welded[b])))
             counts[edge] = counts.get(edge, 0) + 1
     adjacency = {}
     for (a, b), count in counts.items():
@@ -654,9 +670,6 @@ def mouth_boundary_landmarks(mesh_obj, estimate, fwd, right, up, face_size):
             adjacency.setdefault(b, set()).add(a)
     remaining = set(adjacency)
     candidates = []
-    mw = mesh_obj.matrix_world
-    basis = mesh_obj.data.shape_keys.reference_key if mesh_obj.data.shape_keys else None
-    vertices = basis.data if basis else mesh_obj.data.vertices
     while remaining:
         pending = [remaining.pop()]
         indices = []
@@ -679,9 +692,25 @@ def mouth_boundary_landmarks(mesh_obj, estimate, fwd, right, up, face_size):
         if (abs((center - estimate).dot(right)) > face_size * 0.15
                 or abs((center - estimate).dot(up)) > face_size * 0.15):
             continue
+        # Closed lips need not form a boundary at all. Teeth and inner-mouth
+        # loops sit behind the expression's facial surface; reject those.
+        if (estimate - center).dot(fwd) > face_size * 0.03:
+            continue
         # Choose the front lip loop rather than teeth/tongue boundaries.
         candidates.append((center.dot(fwd), points, r, u))
     if not candidates:
+        corners = []
+        for side in ('L', 'R'):
+            positions = [feature_centroid(mesh_obj, [f'Fac_Mth_{side}_{direction}'])
+                         for direction in ('Up', 'Down')]
+            positions = [point for point in positions if point is not None]
+            if not positions:
+                return None
+            corners.append(sum(positions, Vector()) / len(positions))
+        width = abs((corners[0] - corners[1]).dot(right))
+        if face_size * 0.03 < width < face_size * 0.6:
+            center = (corners[0] + corners[1]) * 0.5
+            return center, tuple(corners), (width, width * 0.15)
         return None
     _, points, r, u = max(candidates, key=lambda item: item[0])
     center = sum(points, Vector()) / len(points)
@@ -773,7 +802,11 @@ def plan_controls(mesh_obj, fwd, right, up, face_size):
     if ud[0] in keyblock: drv.append({'key': ud[0], 'axis': 'Z', 'dir': +1})
     if ud[1] in keyblock: drv.append({'key': ud[1], 'axis': 'Z', 'dir': -1})
     if drv:
-        lip_scale = Vector((face_size * 0.09,) * 3)
+        # Fit the outline to the neutral lip opening. Eye separation (face_size)
+        # is only a fallback: it made small mouths use oversized controls.
+        lip_width = max(v[0] for v in LIPS_MASTER_VERTS) - min(v[0] for v in LIPS_MASTER_VERTS)
+        lip_size = landmarks[2][0] * 1.15 / lip_width if landmarks else face_size * 0.09
+        lip_scale = Vector((lip_size,) * 3)
         lip_center = Vector(tuple((min(v[i] for v in LIPS_MASTER_VERTS)
                                    + max(v[i] for v in LIPS_MASTER_VERTS)) * 0.5
                                   for i in range(3)))
@@ -782,7 +815,7 @@ def plan_controls(mesh_obj, fwd, right, up, face_size):
                          'color': COL_VISEME, 'group': 'Face Mouth',
                          'head': place(mouth), 'widget': 'lipsmaster', 'lim': LIM,
                          'free': ('X', 'Z'), 'range': 'both', 'shape_scale': lip_scale,
-                         'shape_translation': lip_translation if landmarks else Vector(),
+                         'shape_translation': lip_translation,
                          'drivers': drv})
 
     vud = vkey("Fac_Mth_Ii", "Fac_Mth_Aa1")

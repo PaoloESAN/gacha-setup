@@ -1,3 +1,4 @@
+from setup_wizard.character_rig_setup.rig_ui_utils import rig_conversion_available
 # Author: michael-gh1
 
 import os
@@ -137,7 +138,7 @@ class HOYOVERSE_OT_rig_character(Operator, ImportHelper, CustomOperatorPropertie
             (getattr(bpy.context.window_manager, "setup_wizard_full_run_rigging_enabled", True) and self.game_type in self.GAME_TYPES_FULL_SETUP_RIGGING_ENABLED)
 
         rigify_installed = any('rigify' in k.lower() for k in bpy.context.preferences.addons.keys())
-        expy_kit_installed = any('expy' in k.lower() for k in bpy.context.preferences.addons.keys())
+        expy_kit_installed = rig_conversion_available()
 
         if not rigging_enabled:
             self.report(
@@ -159,8 +160,8 @@ class HOYOVERSE_OT_rig_character(Operator, ImportHelper, CustomOperatorPropertie
             if not expy_kit_installed or not rigify_installed:
                 self.report(
                     {'WARNING'},
-                    'Rigging skipped. ExpyKit and Rigify are required.\n'
-                    f'ExpyKit: {"Installed" if expy_kit_installed else "Missing"}\n'
+                    'Rigging skipped. Retarget (Blender 5+) / ExpyKit (Blender 4) and Rigify are required.\n'
+                    f'Rig conversion: {"Installed" if expy_kit_installed else "Missing"}\n'
                     f'Rigify: {"Installed" if rigify_installed else "Missing"}'
                 )
                 self.invoke_next_step()

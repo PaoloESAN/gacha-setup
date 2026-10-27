@@ -831,28 +831,43 @@ def sync_wuwa_shader_properties(scene=None):
 # Animate Mode: Swapping materials for low-poly/simplified fast viewport playback
 ANIMATE_MODE_SUFFIX = "_Low"
 
-def set_animate_mode(enable: bool):
-    for obj in bpy.data.objects:
-        if obj.type != 'MESH':
-            continue
-        for slot in obj.material_slots:
+def get_animate_mode_meshes(arm):
+    from setup_wizard.ui.character_settings_utils import _iter_rig_meshes
+    return [obj for obj in _iter_rig_meshes(arm)
+            if not obj.name.startswith('WGT-') and not any(
+                coll.name.startswith('WGTS') for coll in obj.users_collection)]
+
+
+def set_animate_mode(enable: bool, context=None, arm=None):
+    from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+    context = context or bpy.context
+    arm = arm or resolve_settings_armature(context)
+    if not arm:
+        return
+    meshes = get_animate_mode_meshes(arm)
+    set_animate_mode_outlines(enable, meshes)
+    for obj in meshes:
+        for slot_index, slot in enumerate(obj.material_slots):
             mat = slot.material
             if not mat:
                 continue
 
             if enable:
-                if mat.name.endswith(ANIMATE_MODE_SUFFIX):
+                if mat.get('_ww_animate_source'):
+                    mat['_ww_animate_source'].use_fake_user = True
                     continue
-                try:
-                    mat.use_fake_user = True
-                except Exception:
-                    pass
-                low_name = mat.name + ANIMATE_MODE_SUFFIX
-                low_mat = bpy.data.materials.get(low_name)
+                mat.use_fake_user = True
+                low_name = mat.name[:24] + '_' + arm.name[:24] + ANIMATE_MODE_SUFFIX
+                low_mat = next((candidate for candidate in bpy.data.materials
+                                if candidate.get('_ww_animate_source') == mat
+                                and candidate.get('_ww_animate_rig') == arm), None)
                 if not low_mat:
                     low_mat = bpy.data.materials.new(name=low_name)
                     low_mat.use_nodes = True
-                    bsdf = low_mat.node_tree.nodes.get("Principled BSDF")
+                    low_mat['_ww_animate_source'] = mat
+                    low_mat['_ww_animate_rig'] = arm
+                    low_mat.node_tree.nodes.clear()
+                    material_output = low_mat.node_tree.nodes.new('ShaderNodeOutputMaterial')
 
                     # Find diffuse image from original material
                     diff_img = None
@@ -933,46 +948,110 @@ def set_animate_mode(enable: bool):
                                     diff_img = node.image
                                     break
 
-                    if bsdf and diff_img:
+                    if diff_img:
                         tex_node = low_mat.node_tree.nodes.new("ShaderNodeTexImage")
                         tex_node.image = diff_img
-                        low_mat.node_tree.links.new(tex_node.outputs["Color"], bsdf.inputs["Base Color"])
-                        if "Roughness" in bsdf.inputs:
-                            bsdf.inputs["Roughness"].default_value = 1.0
+                        low_mat.node_tree.links.new(tex_node.outputs["Color"], material_output.inputs["Surface"])
 
+                # Object slots keep linked mesh duplicates on other characters intact.
+                links_key = '_ww_animate_slot_links'
+                links = dict(obj.get(links_key, {}))
+                index = str(slot_index)
+                links.setdefault(index, slot.link)
+                obj[links_key] = links
+                slot.link = 'OBJECT'
                 slot.material = low_mat
             else:
-                if mat.name.endswith(ANIMATE_MODE_SUFFIX):
-                    try:
-                        mat.use_fake_user = False
-                    except Exception:
-                        pass
-                    orig_name = mat.name[:-len(ANIMATE_MODE_SUFFIX)]
-                    orig_mat = bpy.data.materials.get(orig_name)
-                    if not orig_mat:
-                        for m in bpy.data.materials:
-                            if m.name == orig_name or m.name.startswith(orig_name + "."):
-                                orig_mat = m
-                                break
+                if mat.get('_ww_animate_source'):
+                    orig_mat = mat['_ww_animate_source']
                     if orig_mat:
                         slot.material = orig_mat
+                        links = dict(obj.get('_ww_animate_slot_links', {}))
+                        slot.link = links.pop(str(slot_index), slot.link)
+                        if links:
+                            obj['_ww_animate_slot_links'] = links
+                        elif '_ww_animate_slot_links' in obj:
+                            del obj['_ww_animate_slot_links']
+    arm['ww_animate_mode'] = bool(enable)
+    context.view_layer.update()
+
+
+def set_animate_mode_outlines(enable, meshes):
+    """Hide WuWa viewport outlines and restore their state on leaving Animate Mode."""
+    key = '_ww_animate_outline_states'
+    for obj in meshes:
+        states = {name: dict(state) for name, state in obj.get(key, {}).items()}
+        for mod in obj.modifiers:
+            group = getattr(mod, 'node_group', None)
+            if enable:
+                if 'ww - outlines' not in mod.name.lower() and not (
+                    group and 'ww - outlines' in group.name.lower()
+                ):
+                    continue
+            elif mod.name not in states:
+                continue
+            path = mod.path_from_id('show_viewport')
+            drivers = obj.animation_data.drivers if obj.animation_data else []
+            driver = next((d for d in drivers if d.data_path == path), None)
+            if enable:
+                states.setdefault(mod.name, {
+                    'visible': mod.show_viewport,
+                    'driver_muted': driver.mute if driver else False,
+                })
+                if driver:
+                    driver.mute = True
+                mod.show_viewport = False
+            else:
+                state = states.pop(mod.name)
+                if driver:
+                    driver.mute = bool(state['driver_muted'])
+                mod.show_viewport = bool(state['visible'])
+            obj.update_tag()
+        if states:
+            obj[key] = states
+        elif key in obj:
+            del obj[key]
 
 
 # Operators
 class WW_OT_ToggleAnimateMode(Operator):
     bl_idname = "wuthering_waves.toggle_animate_mode"
     bl_label = "Toggle Animate Mode"
-    bl_description = "Switch between full shaders and lightweight materials for smooth animation playback"
+    bl_description = "Use lightweight materials and disable viewport outlines for smooth animation playback"
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        current = context.scene.get("ww_animate_mode", False)
+        from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+        arm = resolve_settings_armature(context)
+        if not arm:
+            return {'CANCELLED'}
+        current = arm.get("ww_animate_mode", False)
         new_val = not current
-        context.scene["ww_animate_mode"] = new_val
-        set_animate_mode(new_val)
+        set_animate_mode(new_val, context=context, arm=arm)
         status = "Enabled (Fast Playback)" if new_val else "Disabled (Full Shaders)"
         self.report({'INFO'}, f"Animate Mode {status}")
         return {'FINISHED'}
+
+
+def get_viewport_outline_modifiers(context):
+    """Return outline modifiers belonging to the selected character only."""
+    from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+    arm = resolve_settings_armature(context)
+    if not arm:
+        return []
+    result = []
+    for obj in context.scene.objects:
+        if obj.type != 'MESH':
+            continue
+        if obj.parent != arm and not any(
+            mod.type == 'ARMATURE' and mod.object == arm for mod in obj.modifiers
+        ):
+            continue
+        for mod in obj.modifiers:
+            group = getattr(mod, 'node_group', None)
+            if 'outline' in mod.name.lower() or (group and 'outline' in group.name.lower()):
+                result.append((obj, mod))
+    return result
 
 
 class WW_OT_ToggleOutlines(Operator):
@@ -982,38 +1061,33 @@ class WW_OT_ToggleOutlines(Operator):
     bl_options = {'REGISTER', 'UNDO'}
 
     def execute(self, context):
-        hidden_any = False
-        found_any = False
-        helper_names = ['wgt', 'rootshape', 'isaacfacerig', 'lightingpanel', 'head origin', 'head forward', 'head up', 'light direction', 'eye highlight', 'sun', 'cube']
-
-        for obj in bpy.data.objects:
-            if obj.type == 'MESH':
-                name_low = obj.name.lower()
-                # Skip Rigify bone custom shapes and helper widgets
-                if name_low.startswith('wgt-') or any(h in name_low for h in helper_names):
-                    continue
-                if any(c.name.startswith("WGTS") or c.name.lower() == "wgt" for c in obj.users_collection):
-                    continue
-
-                for mod in obj.modifiers:
-                    if "outline" in mod.name.lower() or "ww - outlines" in mod.name.lower():
-                        found_any = True
-                        mod.show_viewport = not mod.show_viewport
-                        hidden_any = not mod.show_viewport
-
-        # Ensure all rigs maintain in-front display so controls are never occluded
-        for obj in context.scene.objects:
-            if obj.type == 'ARMATURE' and (obj.name.startswith("RIG-") or "rig" in obj.name.lower()):
-                obj.show_in_front = True
-                if hasattr(obj, "data") and obj.data:
-                    obj.data.show_bone_custom_shapes = True
-
-        if not found_any:
-            self.report({'WARNING'}, "No Outline modifiers found on scene meshes.")
-            return {'FINISHED'}
-
-        state = "Hidden" if hidden_any else "Visible"
-        self.report({'INFO'}, f"Outlines are now {state}.")
+        modifiers = get_viewport_outline_modifiers(context)
+        if not modifiers:
+            self.report({'WARNING'}, "No outline modifiers found on the selected character.")
+            return {'CANCELLED'}
+        enable = not any(mod.show_viewport for _, mod in modifiers)
+        for obj, mod in modifiers:
+            # The face panel drives visibility every frame. Pause only the
+            # viewport driver while hidden, preserving its previous mute state.
+            path = mod.path_from_id('show_viewport')
+            drivers = obj.animation_data.drivers if obj.animation_data else []
+            driver = next((d for d in drivers if d.data_path == path), None)
+            key = '_ww_viewport_outline_driver_states'
+            if driver:
+                states = dict(obj.get(key, {}))
+                if not enable:
+                    states.setdefault(mod.name, driver.mute)
+                    driver.mute = True
+                elif mod.name in states:
+                    driver.mute = bool(states.pop(mod.name))
+                if states:
+                    obj[key] = states
+                elif key in obj:
+                    del obj[key]
+            mod.show_viewport = enable
+            obj.update_tag()
+        context.view_layer.update()
+        self.report({'INFO'}, f"Outlines in Viewport: {'ON' if enable else 'OFF'}")
         return {'FINISHED'}
 
 

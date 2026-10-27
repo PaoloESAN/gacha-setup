@@ -11,6 +11,8 @@
 
 ## Supported Games
 
+**MMD / PMX:** Genshin's Run Entire Setup accepts a `.pmx` file or a folder containing PMX models when MMD Tools is installed. It adapts the embedded materials, humanoid bones and facial morphs to the normal game pipeline: the same shader templates, Rigify rig and custom controls, face plate, lighting panel, Light Vectors, outlines and compositing stages used by FBX. Embedded PMX texture assignments are preserved when replacing shaders. Missing game-specific packed lightmaps and ramps use neutral shader settings rather than treating diffuse textures as packed maps. Blender 5+ uses the bundled Retarget; Blender 4.x continues to use Expy-Kit.
+
 * **Genshin Impact**
 * **Honkai: Star Rail (HSR)**
 * **Zenless Zone Zero (ZZZ)**
@@ -36,10 +38,13 @@
 
 ## Additional Add-ons
 
-The following add-on dependencies are bundled in the `dependencies` directory and will be **automatically installed and enabled** if they are not already present in your Blender:
+The following add-on dependencies are bundled in the `dependencies` directory and are **automatically installed** when missing. They may remain disabled: Gacha Setup activates them for the operation that needs them and restores their previous state afterward.
 
-* **ExpyKit**: [pKrime/Expy-Kit](https://github.com/pKrime/Expy-Kit) — Installed for automating Rigify character rigging setups.
+* **Retarget**: [KBSBAUDRICE/Retarget](https://github.com/KBSBAUDRICE/Retarget) — Rig conversion on Blender 5.0+.
+* **ExpyKit**: [pKrime/Expy-Kit](https://github.com/pKrime/Expy-Kit) — Rig conversion on Blender 4.x.
 * **UEFormat**: [h4lfheart/UEFormat](https://github.com/h4lfheart/UEFormat) — Installed for importing Neverness to Everness (NTE) character models.
+
+**MMD Tools** must be installed separately for PMX import and **Utilities → Apply VMD Motion** (Blender 5.0+). It may also remain disabled. Dependencies already enabled by the user remain enabled. Rigify remains enabled for character rig controls.
 
 ---
 

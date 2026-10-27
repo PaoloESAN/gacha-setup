@@ -8,6 +8,22 @@ import eyeThroughHair1 from '../../assets/content/utilities/eye-through-hair1.mp
 import eyeThroughHair2 from '../../assets/content/utilities/eye-through-hair2.mp4';
 import hairShadowImg from '../../assets/content/utilities/hair-shadow.png';
 
+## Apply VMD Motion
+
+Available on **Blender 5.0+**; disabled on earlier versions. Select your FBX character's armature, generated Rigify rig, or a mesh bound to it. Choose **Gacha Setup → Utilities → Apply VMD Motion** and select a `.vmd` file. **MMD Tools must be installed**, but may remain disabled. Gacha Setup activates it for the import and restores its previous state afterward.
+
+The importer creates a new action and keeps the previous action. Adjust translation scale (default `0.08`) and the starting frame in the file browser. It sets the scene to 30 FPS and updates the animation range.
+
+Mappings cover humanoid Rigify controls, Genshin `Bip001` bones, common humanoid names, and original MMD names. Unmapped bones are reported. **Matching Facial Morphs** transfers exact shape-key names or an expanded Japanese mapping for mouths, eyes, and brows. Facial-only VMD files are also supported.
+
+Undriven expressions are animated directly. Compatible driven expressions are transferred through their existing controls without removing drivers. Expressions sharing a control channel use the strongest weight per frame; different axes of the same bone remain independent. Facial keys are baked per frame with linear interpolation, and previous actions are preserved. An existing `Mouth_O_manual` is preferred; it is not created automatically, and standard alternatives are tried when absent.
+
+Simple arithmetic drivers use fast calibration verified against Blender, including local-space location limits. Complex drivers retain full calibration. Keyframes are written in batches to avoid updating the scene for each facial key.
+
+To combine separate files, import the body VMD first (disable **Matching Facial Morphs** to use only its motion). Then import the facial VMD with **Facial Only (Preserve Body)** and the same **Start Frame**. This excludes all bone tracks, even from combined files, and preserves body curves, FK/IK switches and FPS. Only matching facial expressions within the imported interval are replaced. The scene range is never shortened; it expands if the face ends later. Bone-based gaze tracks are also excluded in this mode.
+
+Transform controls must use local space; rotation controls require Euler mode. Unresponsive or unsupported drivers are skipped and recorded in the armature properties `setup_wizard_vmd_unmapped_morphs` and `setup_wizard_vmd_face_warnings`. Drivers with multiple controls are calibrated with the others held at their initial pose; complex rigs may need custom mapping. Clothing, hair, and custom skeletons may also need additional mapping. VMD cameras, lights, and physics are not imported.
+
 ## Jideeh's Camera
 
 ### How to use

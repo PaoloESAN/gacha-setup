@@ -1,3 +1,4 @@
+from setup_wizard.character_rig_setup.rig_ui_utils import rig_conversion_available
 # Author: Gacha Setup (HNA Integration)
 # Honkai: Nexus Anima Setup Wizard Menu for Old Setup & Sub-panels
 
@@ -317,7 +318,7 @@ class OperatorFactory:
 
     @staticmethod
     def create_rig_character_ui(ui_object: UILayout):
-        expy_kit_installed = any("expy" in k.lower() for k in bpy.context.preferences.addons.keys())
+        expy_kit_installed = rig_conversion_available()
         rigify_installed = any("rigify" in k.lower() for k in bpy.context.preferences.addons.keys())
 
         column = ui_object.column()
@@ -332,7 +333,7 @@ class OperatorFactory:
         if not column.enabled:
             column = ui_object.column()
             if not expy_kit_installed:
-                column.label(text="ExpyKit required", icon="ERROR")
+                column.label(text="Rig conversion add-on required", icon="ERROR")
             if not rigify_installed:
                 column.label(text="Rigify required", icon="ERROR")
 

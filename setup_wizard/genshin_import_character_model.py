@@ -33,6 +33,7 @@ from setup_wizard.setup_wizard_operator_base_classes import (
     CustomOperatorProperties,
 )
 from setup_wizard.utils import material_utils
+from setup_wizard.utils.optional_addons import temporary_addon, uses_addon
 
 SHADER_COLOR_ATTRIBUTE_NAME = "Col"
 
@@ -40,13 +41,14 @@ SHADER_COLOR_ATTRIBUTE_NAME = "Col"
 IMPORTED_VIA_WIZARD = False
 
 
+@uses_addon('ueformat')
 def _import_nte_uemodel(context, filepath):
     """Require a registered importer and a real mesh before continuing setup."""
     operator = bpy.ops.uf.import_uemodel
     try:
         operator.get_rna_type()
     except (KeyError, AttributeError, RuntimeError) as exc:
-        raise RuntimeError("UEFormat is not enabled. Enable/install the bundled UEFormat add-on.") from exc
+        raise RuntimeError("UEFormat is required. Install the bundled UEFormat add-on.") from exc
 
     if hasattr(context.scene, 'uf_settings'):
         context.scene.uf_settings.reorient_bones = True
@@ -59,6 +61,28 @@ def _import_nte_uemodel(context, filepath):
         raise RuntimeError(f"UEFormat import failed: {result}")
     if not any(obj.type == 'MESH' for obj in set(context.scene.objects) - existing):
         raise RuntimeError(f"UEFormat imported no mesh objects from {filepath}")
+
+
+@uses_addon('ueformat')
+def _import_wuwa_uemodel(context, filepath):
+    if hasattr(context.scene, 'uf_settings'):
+        settings = context.scene.uf_settings
+        for name, value in (
+            ('import_collision', False), ('import_morph_targets', True),
+            ('import_sockets', True), ('import_virtual_bones', False),
+            ('reorient_bones', True), ('bone_length', 4.0),
+        ):
+            if hasattr(settings, name):
+                setattr(settings, name, value)
+    existing = set(context.scene.objects)
+    result = bpy.ops.uf.import_uemodel(
+        'EXEC_DEFAULT', filepath=filepath, directory=os.path.dirname(filepath),
+        files=[{'name': os.path.basename(filepath)}],
+    )
+    if result != {'FINISHED'} or not any(
+        obj.type == 'MESH' for obj in set(context.scene.objects)-existing
+    ):
+        raise RuntimeError(f'UEFormat imported no mesh objects from {filepath}')
 
 
 def is_rigging_disabled(context=None):
@@ -77,57 +101,28 @@ def is_rigging_disabled(context=None):
 
 
 def _execute_fbx_import(filepath):
-    """
-    Executes FBX import.
-    In Blender < 4.5, prioritizes BetterFBX if installed.
-    Falls back to experimental C++ wm.fbx_import or standard import_scene.fbx.
-    """
+    """Use BetterFBX below 4.5; prefer the native importer from 4.5 onward."""
     if os.path.basename(filepath).startswith("._"):
         real_candidate = os.path.join(os.path.dirname(filepath), os.path.basename(filepath)[2:])
         if os.path.isfile(real_candidate):
             filepath = real_candidate
         else:
             raise RuntimeError(f"Cannot import invalid macOS metadata file: {filepath}")
-
-    from setup_wizard.utils.better_fbx_utils import (
-        is_blender_version_lower_than_4_5,
-        is_better_fbx_installed,
+    from setup_wizard.utils.better_fbx_utils import operator_is_registered, import_with_better_fbx
+    if bpy.app.version < (4, 5, 0) or not operator_is_registered(bpy.ops.wm.fbx_import):
+        return import_with_better_fbx(filepath)
+    options = dict(
+        filepath=filepath, global_scale=1.0,
+        mtl_name_collision_mode='MAKE_UNIQUE', import_colors='SRGB',
+        use_custom_normals=True, use_custom_props=True,
+        use_custom_props_enum_as_string=True, import_subdivision=False,
+        ignore_leaf_bones=False, validate_meshes=True, use_anim=True, anim_offset=1.0,
     )
-
-    if is_blender_version_lower_than_4_5() and is_better_fbx_installed():
-        try:
-            print(f"[SETUP WIZARD] Importing FBX using BetterFBX: {filepath}")
-            bpy.ops.better_import.fbx(filepath=filepath)
-            return
-        except Exception as e:
-            print(f"[SETUP WIZARD] bpy.ops.better_import.fbx failed ({e}), falling back to standard importer")
-
-    if hasattr(bpy.ops.wm, "fbx_import"):
-        try:
-            bpy.ops.wm.fbx_import(
-                filepath=filepath,
-                global_scale=1.0,
-                mtl_name_collision_mode='MAKE_UNIQUE',
-                import_colors='SRGB',
-                use_custom_normals=True,
-                use_custom_props=True,
-                use_custom_props_enum_as_string=True,
-                import_subdivision=False,
-                ignore_leaf_bones=False,
-                validate_meshes=True,
-                use_anim=True,
-                anim_offset=1.0,
-            )
-            return
-        except Exception as e:
-            print(f"bpy.ops.wm.fbx_import failed ({e}), falling back to import_scene.fbx")
-
-    if hasattr(bpy.ops.import_scene, "fbx"):
-        bpy.ops.import_scene.fbx(
-            filepath=filepath,
-            force_connect_children=True,
-            automatic_bone_orientation=True,
-        )
+    supported = bpy.ops.wm.fbx_import.get_rna_type().properties
+    result = bpy.ops.wm.fbx_import(**{name: value for name, value in options.items() if name in supported})
+    if result != {'FINISHED'}:
+        raise RuntimeError(f'Native FBX import failed: {result}')
+    return result
 
 
 def connect_armature_bone_chains(armature):
@@ -840,31 +835,12 @@ class WW_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
 
         existing_objects = set(context.scene.objects)
 
-        if uemodel_path and hasattr(bpy.ops, 'uf') and hasattr(bpy.ops.uf, 'import_uemodel'):
-            filename = os.path.basename(uemodel_path)
-            if hasattr(context.scene, 'uf_settings'):
-                try:
-                    context.scene.uf_settings.import_collision = False
-                    context.scene.uf_settings.import_morph_targets = True
-                    context.scene.uf_settings.import_sockets = True
-                    context.scene.uf_settings.import_virtual_bones = False
-                    context.scene.uf_settings.reorient_bones = True
-                    context.scene.uf_settings.bone_length = 4.0
-                except Exception as e_set:
-                    print(f"Notice setting uf_settings: {e_set}")
-
+        if uemodel_path:
             try:
-                bpy.ops.uf.import_uemodel(
-                    filepath=uemodel_path,
-                    directory=os.path.dirname(uemodel_path),
-                    files=[{"name": filename}]
-                )
-            except Exception:
-                try:
-                    bpy.ops.uf.import_uemodel(filepath=uemodel_path)
-                except Exception as e_uf:
-                    self.report({"ERROR"}, f"Error importing .uemodel: {e_uf}")
-                    return {"CANCELLED"}
+                _import_wuwa_uemodel(context, uemodel_path)
+            except Exception as exc:
+                self.report({'ERROR'}, f'Error importing .uemodel: {exc}')
+                return {'CANCELLED'}
         elif fbx_path and os.path.isfile(fbx_path):
             _execute_fbx_import(fbx_path)
         else:
@@ -1452,6 +1428,8 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
             # bone orientations, tails, and rolls for animation compatibility).
             if not is_rigging_disabled(context):
                 armatures = [o for o in bpy.data.objects if o.type == "ARMATURE"]
+                from setup_wizard.character_rig_setup.mmd_rig import is_mmd_armature
+                armatures = [arm for arm in armatures if not is_mmd_armature(arm)]
                 for arm in armatures:
                     try:
                         from setup_wizard.character_rig_setup.armature_unification import unify_multi_branch_armature
@@ -1505,6 +1483,16 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
     def import_character_model(
         self, character_model_file_path_or_directory, is_character_model_file
     ):
+        from setup_wizard.character_rig_setup.mmd_rig import find_pmx, import_pmx
+        pmx = find_pmx(character_model_file_path_or_directory)
+        if pmx:
+            with temporary_addon('mmd_tools'):
+                import_pmx(bpy.context, pmx)
+                from setup_wizard.utils.mmd_model_adapter import prepare_pmx_for_setup
+                prepare_pmx_for_setup(bpy.context, self.game_type)
+            return
+        if 'setup_wizard_imported_pmx_path' in bpy.context.scene:
+            del bpy.context.scene['setup_wizard_imported_pmx_path']
         if character_model_file_path_or_directory and os.path.isfile(character_model_file_path_or_directory):
             if os.path.basename(character_model_file_path_or_directory).startswith("._"):
                 real_f = os.path.join(
@@ -1561,62 +1549,14 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                 bpy.context.scene["setup_wizard_imported_model_dir"] = folder
                 if uemodel_path:
                     bpy.context.scene["setup_wizard_imported_uemodel_path"] = uemodel_path
-                if fbx_path:
+                elif fbx_path:
                     bpy.context.scene["setup_wizard_imported_fbx_path"] = fbx_path
             except Exception:
                 pass
 
             existing_objects = set(bpy.context.scene.objects)
-
             if uemodel_path:
-                if hasattr(bpy.context.scene, 'uf_settings'):
-                    try:
-                        bpy.context.scene.uf_settings.import_collision = False
-                        bpy.context.scene.uf_settings.import_morph_targets = True
-                        bpy.context.scene.uf_settings.import_sockets = True
-                        bpy.context.scene.uf_settings.import_virtual_bones = False
-                        bpy.context.scene.uf_settings.reorient_bones = True
-                        bpy.context.scene.uf_settings.bone_length = 4.0
-                    except Exception:
-                        pass
-
-                if hasattr(bpy.ops, 'uf') and hasattr(bpy.ops.uf, 'import_uemodel'):
-                    filename = os.path.basename(uemodel_path)
-                    imported_ok = False
-                    try:
-                        bpy.ops.uf.import_uemodel(
-                            filepath=uemodel_path,
-                            directory=folder,
-                            files=[{"name": filename}]
-                        )
-                        imported_ok = True
-                    except Exception:
-                        pass
-
-                    if not imported_ok:
-                        try:
-                            bpy.ops.uf.import_uemodel('EXEC_DEFAULT', filepath=uemodel_path, directory=folder, files=[{"name": filename}])
-                            imported_ok = True
-                        except Exception:
-                            pass
-
-                    if not imported_ok:
-                        try:
-                            bpy.ops.uf.import_uemodel(filepath=uemodel_path)
-                            imported_ok = True
-                        except Exception:
-                            pass
-
-                    if not imported_ok:
-                        try:
-                            bpy.ops.uf.import_uemodel('EXEC_DEFAULT', filepath=uemodel_path)
-                            imported_ok = True
-                        except Exception as e:
-                            self.report({"ERROR"}, f"UEFormat import error: {e}")
-                            raise RuntimeError(f"UEFormat import error: {e}")
-                else:
-                    self.report({"ERROR"}, "UEFormat add-on is not enabled or available.")
-                    raise RuntimeError("UEFormat add-on is not enabled or available.")
+                _import_wuwa_uemodel(bpy.context, uemodel_path)
             elif fbx_path:
                 _execute_fbx_import(fbx_path)
 
@@ -1729,9 +1669,9 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                     except Exception:
                         pass
 
-                error_message = "Please reopen Blender and import the FBX manually."
+                error_message = f"FBX import failed: {e}"
                 self.report({"ERROR"}, error_message)
-                raise RuntimeError(error_message)
+                raise RuntimeError(error_message) from e
 
             obj = None
             new_objects = [
@@ -1909,9 +1849,18 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                 except Exception:
                     pass
 
-            error_message = "Please reopen Blender and import the FBX manually."
+            error_message = f"FBX import failed: {e}"
             self.report({"ERROR"}, error_message)
-            raise RuntimeError(error_message)
+            raise RuntimeError(error_message) from e
+
+        if self.game_type == GameType.PUNISHING_GRAY_RAVEN.name and not is_rigging_disabled(bpy.context):
+            from setup_wizard.utils.pgr_bind_pose import (
+                restore_pgr_bind_pose, bind_unskinned_pgr_faces, bind_unskinned_bianca_bands,
+            )
+            imported = [obj for obj in bpy.data.objects if obj.name not in existing_objects]
+            restore_pgr_bind_pose(character_model_file_path, imported)
+            bind_unskinned_pgr_faces(imported)
+            bind_unskinned_bianca_bands(imported)
 
         if self.game_type == GameType.GENSHIN_IMPACT.name:
             import uuid
@@ -2083,6 +2032,8 @@ class GI_OT_DeleteEmpties(Operator, CustomOperatorProperties):
         ]
         for object in scene.objects:
             if object.type == "EMPTY":
+                if getattr(object, 'mmd_type', 'NONE') != 'NONE':
+                    continue
                 should_delete = True
                 for name_to_keep in empties_to_not_delete:
                     if object.name.startswith(name_to_keep):

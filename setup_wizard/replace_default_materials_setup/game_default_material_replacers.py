@@ -790,6 +790,8 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         self.shader_node_names = shader_node_names
 
     def replace_default_materials(self):
+        from setup_wizard.utils.mmd_model_adapter import replace_pmx_materials
+        replace_pmx_materials(self.context, self.material_names)
         try:
             join_pupil_and_highlight_meshes(self.material_names)
         except Exception as e:
@@ -1785,6 +1787,11 @@ class PunishingGrayRavenDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 punishing_gray_raven_material = self.create_main_material(mesh, material_type, target_mat_name)
 
                 if punishing_gray_raven_material:
+                    # Keep the exporter identity: several outfits can share a
+                    # directory while referencing different color atlases.
+                    source = punishing_gray_raven_material.get('pgr_source_material', '')
+                    if not source or material_name.endswith(mesh_body_part_name):
+                        punishing_gray_raven_material['pgr_source_material'] = material_name
                     material_slot.material = punishing_gray_raven_material
                 else:
                     self.blender_operator.report({'WARNING'}, f'Ignoring unknown mesh body part in character model: {mesh_body_part_name} / Material: {material_name}')
@@ -1871,6 +1878,15 @@ class PunishingGrayRavenDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 
 
 class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
+    @staticmethod
+    def _set_toon_rim_default(material):
+        """New Toon materials start with rim lighting off in either control mode."""
+        if material.node_tree:
+            for node in material.node_tree.nodes:
+                socket = node.inputs.get('Enable Rim Light')
+                if socket is not None and not socket.is_linked:
+                    socket.default_value = False
+
     def __init__(self, blender_operator, context):
         self.blender_operator = blender_operator
         self.context = context
@@ -2029,6 +2045,7 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 
         else:
             # --- KYTHERA SHADER REPLACEMENT ---
+            highlight_template = bpy.data.materials.get("Kythera's ZZZ Eye Highlights")
             # Find Kythera face and main shader template materials dynamically
             face_template = None
             for mat in bpy.data.materials:
@@ -2056,13 +2073,14 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 m_low = mat.name.lower()
                 if ("kythera" in m_low or "kyteraz" in m_low) and \
                    ("face" not in m_low and "cara" not in m_low and "head" not in m_low) and \
+                   'highlight' not in m_low and \
                    not mat.name.startswith("ZZZ MAT_") and not mat.name.startswith("ZZZ Shader") and not mat.name.endswith("Outlines"):
                     shader_template = mat
                     break
 
             if not shader_template:
                 for mat in bpy.data.materials:
-                    if not mat.node_tree or mat.name.startswith("ZZZ MAT_") or mat.name.endswith("Outlines"):
+                    if not mat.node_tree or 'highlight' in mat.name.lower() or mat.name.startswith("ZZZ MAT_") or mat.name.endswith("Outlines"):
                         continue
                     if any(n.type == 'GROUP' and n.node_tree and "face" not in n.node_tree.name.lower() and ("kythera" in n.node_tree.name.lower() or "kyteraz" in n.node_tree.name.lower() or "zzz" in n.node_tree.name.lower()) for n in mat.node_tree.nodes):
                         shader_template = mat
@@ -2092,7 +2110,8 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         continue
 
                     is_face = any(k in matname for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight"])
-                    template_mat = face_template if is_face else shader_template
+                    template_mat = (highlight_template if 'highlight' in matname and highlight_template
+                                    else face_template if is_face else shader_template)
 
                     if template_mat:
                         orig_tex_name = None
@@ -2119,6 +2138,7 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 
                         new_mat.name = f"ZZZ {name_base}"
                         new_mat.use_fake_user = True
+                        self._set_toon_rim_default(new_mat)
                         if "mask" in mesh.name.lower():
                             new_mat["_is_mask"] = True
                             if new_mat.node_tree:
@@ -2147,6 +2167,7 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         new_mat = fallback_template.copy()
                         new_mat.name = f"ZZZ {mesh.name}"
                         new_mat.use_fake_user = True
+                        self._set_toon_rim_default(new_mat)
                         if "mask" in mesh.name.lower():
                             new_mat["_is_mask"] = True
                             if new_mat.node_tree:
@@ -2166,16 +2187,10 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         slot.material = new_mat
 
             self.blender_operator.report({'INFO'}, "Replaced default materials with Kythera's ZZZ Shader materials...")
-            scene = bpy.context.scene
-            if getattr(scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
-                import math
-                for obj in bpy.data.objects:
-                    if obj.name.startswith("Light Direction") or obj.name.startswith("Main Light Direction"):
-                        obj.rotation_mode = 'XYZ'
-                        obj.rotation_euler = (math.radians(90.0), 0.0, 0.0)
 
         from setup_wizard.utils.zzz_eye_highlights import assign_zzz_eye_highlights
-        highlight_material = bpy.data.materials.get('ZZZ Shader EyeHighlights')
+        highlight_material = bpy.data.materials.get(
+            "Kythera's ZZZ Eye Highlights" if selected_shader == 'KYTHERA' else 'ZZZ Shader EyeHighlights')
         for mesh in meshes:
             assign_zzz_eye_highlights(mesh, highlight_material)
 
@@ -2366,11 +2381,12 @@ def find_nte_body_texture_by_material_name(mat_name_lower, type_keys, image_file
 
 
 def ensure_hair_white_texture(folder=None, image_files=None):
+    from setup_wizard.utils.texture_utils import load_or_get_image, scan_directory_for_textures
     if not folder and not image_files:
         return
 
     if not image_files and folder and os.path.isdir(folder):
-        image_files = [f for f in os.listdir(folder) if not f.startswith("._") and not f.startswith(".") and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
+        image_files = [os.path.basename(path) for path in scan_directory_for_textures(folder)[0].values()]
 
     white_file = None
     if image_files:
@@ -2382,10 +2398,9 @@ def ensure_hair_white_texture(folder=None, image_files=None):
         return
 
     img_path = os.path.join(folder, white_file)
-    if not os.path.isfile(img_path):
+    img = load_or_get_image(img_path, white_file)
+    if not img:
         return
-
-    img = bpy.data.images.load(img_path, check_existing=True)
 
     # 1. Process all node groups matching 异环-头发
     for ng in bpy.data.node_groups:
@@ -2427,6 +2442,7 @@ def ensure_hair_white_texture(folder=None, image_files=None):
 
 
 def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="", json_database=None):
+    from setup_wizard.utils.texture_utils import load_or_get_image
     if not tex_node.image:
         is_inside_hair = any(k in slot_mat_name.lower() for k in ['异环-头发', 'hair', '前发', '后发', 'toufa'])
         is_combine_xyz = any(
@@ -2440,8 +2456,8 @@ def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="",
                 or next((f for f in image_files if 'white' in f.lower() and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))), None)
             if white_file and folder:
                 img_path = os.path.join(folder, white_file)
-                if os.path.isfile(img_path):
-                    img = bpy.data.images.load(img_path, check_existing=True)
+                img = load_or_get_image(img_path, white_file)
+                if img:
                     tex_node.image = img
         return
 
@@ -2460,8 +2476,8 @@ def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="",
             face_d_file = specific_candidates[0] if specific_candidates else (candidates[0] if candidates else None)
         if face_d_file and folder:
             img_path = os.path.join(folder, face_d_file)
-            if os.path.isfile(img_path):
-                img = bpy.data.images.load(img_path, check_existing=True)
+            img = load_or_get_image(img_path, face_d_file)
+            if img:
                 try:
                     img.alpha_mode = 'CHANNEL_PACKED'
                 except Exception:
@@ -2516,8 +2532,8 @@ def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="",
             if handled_slot:
                 if replacement_file:
                     img_path = os.path.join(folder, replacement_file)
-                    if os.path.isfile(img_path):
-                        img = bpy.data.images.load(img_path, check_existing=True)
+                    img = load_or_get_image(img_path, replacement_file)
+                    if img:
                         try:
                             img.alpha_mode = 'CHANNEL_PACKED'
                         except Exception:
@@ -2756,7 +2772,9 @@ def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="",
 
     if replacement_file:
         img_path = os.path.join(folder, replacement_file)
-        img = bpy.data.images.load(img_path, check_existing=True)
+        img = load_or_get_image(img_path, replacement_file)
+        if not img:
+            return
         try:
             img.alpha_mode = 'CHANNEL_PACKED'
         except Exception:
@@ -2781,6 +2799,7 @@ def process_node_tree(node_tree, image_files, folder, slot_mat_name="", visited=
 
 
 def setup_common_face_material(mat, folder=None, image_files=None):
+    from setup_wizard.utils.texture_utils import load_or_get_image, scan_directory_for_textures
     if not mat:
         return
     mat.use_nodes = True
@@ -2818,13 +2837,13 @@ def setup_common_face_material(mat, folder=None, image_files=None):
         if image_files:
             cands = [f for f in image_files if 'common_face' in f.lower()]
         elif os.path.isdir(folder):
-            cands = [f for f in os.listdir(folder) if not f.startswith("._") and not f.startswith(".") and 'common_face' in f.lower() and f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg', '.webp'))]
+            cands = [os.path.basename(path) for path in scan_directory_for_textures(folder)[0].values() if 'common_face' in os.path.basename(path).lower()]
         if cands:
             diff_cands = [f for f in cands if '_d.' in f.lower() or '_d_' in f.lower() or 'face_d' in f.lower()]
             picked = diff_cands[0] if diff_cands else cands[0]
             try:
                 img_path = os.path.join(folder, picked)
-                img = bpy.data.images.load(img_path, check_existing=True)
+                img = load_or_get_image(img_path, picked)
             except Exception as ex:
                 print(f"Notice: Loading common_face texture: {ex}")
 
@@ -3022,9 +3041,10 @@ class NevernessToEvernessDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             face_spec = [f for f in face_cands if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
             face_d_img_file = face_spec[0] if face_spec else (face_cands[0] if face_cands else None)
             if face_d_img_file:
+                from setup_wizard.utils.texture_utils import load_or_get_image
                 face_d_path = os.path.join(folder, face_d_img_file)
-                if os.path.isfile(face_d_path):
-                    face_d_img = bpy.data.images.load(face_d_path, check_existing=True)
+                face_d_img = load_or_get_image(face_d_path, face_d_img_file)
+                if face_d_img:
                     for mat in bpy.data.materials:
                         if mat.use_nodes and mat.node_tree and 'gaoguang' in mat.name.lower():
                             for node in mat.node_tree.nodes:

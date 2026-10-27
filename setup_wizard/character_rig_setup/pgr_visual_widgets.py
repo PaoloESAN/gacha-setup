@@ -4,6 +4,31 @@ from mathutils import Matrix
 HAND_WIDGET_LIFT = .02
 
 
+def hide_unused_prop_controls(rig):
+    """Hide prop widgets with no mesh influenced by their bone chain."""
+    import bpy
+
+    props = [rig.data.bones.get(f'prop.{side}') for side in ('L', 'R')]
+    chains = {bone.name: {bone.name, *(child.name for child in bone.children_recursive)}
+              for bone in props if bone}
+    candidates = set().union(*chains.values()) if chains else set()
+    used = set()
+    for mesh in bpy.context.scene.objects:
+        if mesh.type != 'MESH':
+            continue
+        if mesh.parent == rig and mesh.parent_type == 'BONE':
+            used.add(mesh.parent_bone)
+        if not any(m.type == 'ARMATURE' and m.object == rig for m in mesh.modifiers):
+            continue
+        groups = {g.index: g.name for g in mesh.vertex_groups if g.name in candidates}
+        if groups:
+            used.update(groups[g.group] for vertex in mesh.data.vertices for g in vertex.groups
+                        if g.group in groups and g.weight > 0)
+    for bone in props:
+        if bone:
+            bone.hide = not bool(chains[bone.name] & used)
+
+
 def align_hand_ik_widgets(rig):
     for side in ('L', 'R'):
         control = rig.pose.bones.get(f'hand_ik.{side}')

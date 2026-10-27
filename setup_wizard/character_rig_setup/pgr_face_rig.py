@@ -738,7 +738,32 @@ def setup_pgr_panel_movements(face_meshes, armature):
         'eye06': ('eye.pos', -25, 'LOC_X'),
         'eye07': ('eye.pos', 25, 'LOC_X'),
     }
-    movement_bones = {rule[0] for rule in rules.values()}
+    # Native PGR exports use numbered morphs rather than WuWa's vowel and
+    # expression names. Connect the visible sliders as well as the 2D pads.
+    slider_rules = [
+        ('mouth01', 'm.A'), ('mouth05', 'm.AA'), ('mouth03', 'm.E'),
+        ('mouth07', 'm.I'), ('mouth02', 'm.O'), ('mouth04', 'm.U'),
+        ('mouth07', 'x1'), ('mouth08', 'x2'), ('mouth06', 'x3'),
+        ('mouth21', 'x4'), ('mouth22', 'x5'), ('mouth04', 'x6'),
+        ('eyebrow03', 'doubt.1'), ('eyebrow04', 'doubt.2'),
+        ('eyebrow05', 'b.happy'), ('eyebrow06', 'b.happy'),
+        ('eyebrow09', 'b.flat'), ('eyebrow10', 'b.flat'),
+        ('eyebrow01', 'b.close'), ('eyebrow02', 'b.close'),
+        ('eye08', 'e.ji'), ('eye09', 'e.lowlid'), ('eye10', 'e.focus'),
+        ('eye04', 'e.wide'), ('eye05', 'e.wide'),
+        ('eye02', 'e.wink.up.l'), ('eye03', 'e.wink.up.r'),
+    ]
+    corner_rules = {
+        'mouth09': ('lip.cor.pos.sel.r', -25, 'LOC_Y'),
+        'mouth10': ('lip.cor.pos.sel.l', -25, 'LOC_Y'),
+        'mouth11': ('lip.cor.pos.sel.r', 25, 'LOC_Y'),
+        'mouth12': ('lip.cor.pos.sel.l', 25, 'LOC_Y'),
+        'mouth13': ('lip.cor.pos.sel.r', 25, 'LOC_X'),
+        'mouth14': ('lip.cor.pos.sel.l', 25, 'LOC_X'),
+        'mouth15': ('lip.cor.pos.sel.r', -25, 'LOC_X'),
+        'mouth16': ('lip.cor.pos.sel.l', -25, 'LOC_X'),
+    }
+    movement_bones = {rule[0] for rule in rules.values()} | {bone for _, bone in slider_rules} | {r[0] for r in corner_rules.values()}
     for mesh in face_meshes:
         keys = mesh.data.shape_keys
         if not keys:
@@ -748,8 +773,24 @@ def setup_pgr_panel_movements(face_meshes, armature):
             name = key.name.lower()
             # Shade follows the matching eyelid expression, keeping its overlay
             # aligned even when the user changes its transparency later.
-            rule = rules.get('eye' + name[5:] if name.startswith('shade') else name)
-            if not rule:
+            native_name = 'eye' + name[5:] if name.startswith('shade') else name
+            matched = []
+            if native_name in rules:
+                matched.append(rules[native_name])
+            matched.extend((bone, 25, 'LOC_X') for morph, bone in slider_rules if morph == native_name)
+            if native_name in corner_rules:
+                matched.append(corner_rules[native_name])
+            # Bianca has 22 mouth morphs; newer models also have 24..27.
+            if 'mouth24' not in keys.key_blocks:
+                fallback = {
+                    'mouth01': ('fp.m.pos.sel', -25, 'LOC_Y'),
+                    'mouth17': ('fp.m.pos.sel', 25, 'LOC_Y'),
+                    'mouth19': ('fp.m.pos.sel', 25, 'LOC_X'),
+                    'mouth20': ('fp.m.pos.sel', -25, 'LOC_X'),
+                }
+                if native_name in fallback:
+                    matched.append(fallback[native_name])
+            if not matched:
                 continue
             path = key.path_from_id('value')
             old = next((f for f in keys.animation_data.drivers if f.data_path == path), None) if keys.animation_data else None
@@ -760,8 +801,7 @@ def setup_pgr_panel_movements(face_meshes, armature):
                     if (variable.type == 'TRANSFORMS' and target.id == armature
                             and target.bone_target not in movement_bones and match):
                         entries.append((key.name, target.bone_target, float(match.group(1)), target.transform_type))
-            bone, multiplier, axis = rule
-            entries.append((key.name, bone, multiplier, axis))
+            entries.extend((key.name, bone, multiplier, axis) for bone, multiplier, axis in matched)
         _add_aggregated_shape_key_drivers(mesh, armature, entries)
         if keys.animation_data:
             affected = {entry[0] for entry in entries}

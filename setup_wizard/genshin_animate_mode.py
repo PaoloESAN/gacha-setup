@@ -48,7 +48,7 @@ def _find_diffuse_image(mat):
             output = n
             break
     if not output:
-        output = tree.nodes.get("Material Output")
+        output = next((n for n in tree.nodes if n.type == 'OUTPUT_MATERIAL'), None)
 
     candidate_nodes = []
     visited = set()
@@ -201,7 +201,8 @@ def _ensure_low_material_setup(low_mat, src_mat):
     tree = getattr(low_mat, "node_tree", None)
     if not tree:
         return
-    output = tree.nodes.get("Material Output")
+    output = next((n for n in tree.nodes if n.type == 'OUTPUT_MATERIAL'
+                   and n.is_active_output), None)
     if not output:
         output = tree.nodes.new("ShaderNodeOutputMaterial")
     if "Surface" not in output.inputs:
@@ -317,7 +318,7 @@ def _ensure_low_material_setup(low_mat, src_mat):
             # No texture: remove invalid links so Emission never evaluates pitch black
             for l in list(color_in.links):
                 tree.links.remove(l)
-            src_bsdf = src_mat.node_tree.nodes.get("Principled BSDF") if (src_mat and src_mat.node_tree) else None
+            src_bsdf = next((n for n in src_mat.node_tree.nodes if n.type == 'BSDF_PRINCIPLED'), None) if (src_mat and src_mat.node_tree) else None
             if src_bsdf and "Base Color" in src_bsdf.inputs and not src_bsdf.inputs["Base Color"].is_linked:
                 try:
                     color_in.default_value = src_bsdf.inputs["Base Color"].default_value

@@ -65,19 +65,24 @@ def run_tests():
     ww_mesh_data = bpy.data.meshes.new("WW_MeshData")
     ww_mesh = bpy.data.objects.new("WW_Body", ww_mesh_data)
     bpy.context.scene.collection.objects.link(ww_mesh)
+    ww_arm = bpy.data.objects.new("WW_Rig", bpy.data.armatures.new("WW_ArmData"))
+    bpy.context.scene.collection.objects.link(ww_arm)
+    ww_arm[GACHA_GAME_KEY] = "WUTHERING_WAVES"
+    ww_mesh.parent = ww_arm
 
     ww_orig_mat = bpy.data.materials.new("WW_Body_Mat")
     ww_orig_mat.use_fake_user = False
     ww_mesh.data.materials.append(ww_orig_mat)
 
-    set_wuwa_animate_mode(True)
+    set_wuwa_animate_mode(True, arm=ww_arm)
     ww_low_mat = ww_mesh.material_slots[0].material
-    assert ww_low_mat.name == "WW_Body_Mat_Low"
+    assert ww_low_mat['_ww_animate_source'] == ww_orig_mat
+    assert ww_low_mat['_ww_animate_rig'] == ww_arm
     assert ww_orig_mat.use_fake_user is True, "Original WuWa material MUST have fake user while in Animate Mode!"
     assert ww_low_mat.use_fake_user is False, "Low material should NOT have fake user!"
     print("PASS: WuWa original material has use_fake_user=True upon entering Animate Mode")
 
-    set_wuwa_animate_mode(False)
+    set_wuwa_animate_mode(False, arm=ww_arm)
     assert ww_mesh.material_slots[0].material == ww_orig_mat
     assert ww_low_mat.use_fake_user is False, "WuWa low material must not have fake user after disabling"
     print("PASS: Disabling WuWa Animate Mode restored original material and cleared fake user on low material")

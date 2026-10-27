@@ -92,6 +92,109 @@ tests/
 
 ## How to Run Tests
 
+FBX dispatch regression uses the real Columbina FBX. Blender below 4.5 must
+always use installed BetterFBX; Blender 4.5+ prefers the registered native
+importer. To test an older Blender without enabling the add-on permanently,
+set `GACHA_TEST_BETTER_FBX_DIR` to the installed BetterFBX package directory:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python tests/fbx_import_blender.py
+blender --background --factory-startup --python-exit-code 1 --python tests/fbx_import_blender.py -- --full
+```
+
+The full variant executes the production isolated worker through rig generation
+and saving, then verifies the result. Reports/blends go to `tests/.runtime/fbx-import`.
+
+The Genshin shader selector regression checks the version-based default, both
+UI choices, isolated-worker settings, and actual material/outline/compositor
+imports. Run each choice in a fresh process; it supports Blender 4.1+ and 5+:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python tests/genshin_shader_selection_blender.py -- NEW
+blender --background --factory-startup --python-exit-code 1 --python tests/genshin_shader_selection_blender.py -- OLD
+```
+
+PGR regression runs the complete setup for all three Bianca outfits, Nirvatia,
+the three Laiya Animator outfits, and Kurumi in fresh Blender processes, plus
+material setup for the nine accessories/chibi models in `chars/pgr`. It
+checks material JSON texture references (including eye color atlases), restored
+Nirvatia skin bindings, neutral geometry, and arm/finger controls. Bianca's
+unskinned face/eye layers must be attached and follow head rotation. Its two
+bracelets must follow their own hands in FK and IK without stretching or moving
+the opposite bracelet. All 31 mapped facial controls must deform the face,
+keep FaceEX synchronized, and return to neutral:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python tests/pgr_setup_blender.py
+```
+
+Pass `-- path/to/model.fbx --save-blend` to check and save one model. Reports
+and logs are written to `tests/.runtime/pgr`.
+
+PMX regression (requires MMD Tools) runs the actual Run Entire Setup chain for
+each PMX in the folder. It verifies that every normal FBX stage runs, that all
+character parts receive game shaders with their original PMX textures, and that
+Light Vectors, outlines, the standard controls, face plate and lighting panel
+are present. It exercises facial morph drivers and the rig's FK, IK and finger
+checks, then saves the resulting blends and `results.json`:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python tests/mmd_setup_blender.py -- chars/COLUMBINA
+```
+
+The ExpyKit dependency/conversion smoke test can run on Blender 4 or 5.
+Character setup uses ExpyKit on both; Retarget remains available separately:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python tests/rig_conversion_blender.py
+```
+
+The Genshin metarig regression checks missing operators, cancelled conversion,
+cancelled extraction and extraction without a metarig. It then runs the complete
+isolated Amber setup and verifies generated hand/foot IK controls:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python tests/genshin_metarig_failure_blender.py
+```
+
+It uses `chars/genshin/Amber/Default` and writes results under
+`tests/.runtime/genshin-metarig/`.
+
+This also verifies temporary dependency activation, nested scopes, cleanup after
+failure, and preservation of dependencies already enabled by the user. The PMX
+regression starts with optional dependencies disabled. The VMD regression on
+Blender 5 checks the real root VMD on an FBX and Rigify controls, cleanup after
+failure, and rejection of Blender versions below 5.0:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python tests/vmd_motion_blender.py
+blender --background --factory-startup --python-exit-code 1 --python tests/facial_transfer_blender.py
+blender --background --factory-startup --python-exit-code 1 --python tests/optional_ueformat_blender.py
+```
+
+The VMD test uses `chars/vmdmotion/Motion & Facials.vmd` (or the root copy),
+and generates a reproducible motion if neither file is present.
+It also checks driven expressions on an FBX and facial-only VMD import. The
+standalone facial regression needs no optional add-ons; it covers shared
+channels, independent bone axes, linear weights, rollback, source snapshots,
+custom properties and preservation of drivers and previous actions.
+
+To measure import time on an existing character without saving the `.blend`:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python tests/vmd_motion_performance_blender.py -- "Starriia - Kinich.blend"
+```
+
+This reports total import time and facial calibration time separately. Optional
+`--engine PATH --snapshot output.json` and `--compare output.json` compare an
+older facial engine against the current implementation, including evaluated
+shape-key weights across the entire motion and unchanged body channels.
+
+With `Starriia - Kinich.blend` and the two Hiasobi VMDs in `chars/vmdmotion`,
+`tests/vmd_face_overlay_blender.py` checks the real body-then-face workflow,
+including the operator's facial-only option, unchanged body curve coordinates,
+scene duration, FPS, drivers and FK/IK switches. It does not save the blend.
+
 The isolated texture-path regression runs in fresh Blender processes and checks
 Windows exporter paths, Unicode filenames, saved/unsaved destinations, packed
 images, temporary-folder cleanup and isolation from other characters:
@@ -145,3 +248,23 @@ python tests/run_tests.py --suite rig --blender "C:\Program Files\Blender Founda
 # Run a specific suite on a character and save the blend file:
 python tests/run_tests.py --suite rig --game zzz --characters roxy-default --save-blend
 ```
+
+## Legacy Genshin lighting and Goo nodes
+
+Run `blender --background --factory-startup --python-exit-code 1 --python tests/genshin_legacy_lighting_blender.py`.
+The test imports Old through the production material/outline/compositor path, creates the native Set Depth node when available, checks exact optional connections and idempotence, and verifies portable/native reversibility on Goo. It installs the real lighting panel and evaluates mesh attributes while moving Ambient, Fresnel, ShadowOffset, FresnelSize, and FresnelToggle controls. Reports are written under `tests/.runtime/genshin-legacy-lighting/`.
+
+## Finger IK
+
+Run `blender --background --factory-startup --python-exit-code 1 --python tests/finger_ik_blender.py -- hsr`, replacing `hsr` with `hi3`, `hna`, `pgr`, `nte`, or `wuwa` as needed. For Blender below 4.5, set `GACHA_TEST_BETTER_FBX_DIR` to a workspace copy of BetterFBX.
+
+The test runs the complete isolated setup on a real character, checks all ten fingertip IK controls, widgets and collection assignments, enables each control's `FK_IK`, and verifies fingertip movement, reset, and independence from the opposite hand. Results and generated rigs are saved under `tests/.runtime/finger-ik/<version>/<game>/`.
+
+## Kythera ZZZ V2
+
+Run Blender 5.2+ with `--background --factory-startup --python-exit-code 1 --python tests/zzz_kythera_v2_blender.py`. This runs the complete isolated Alice setup, checks that both extra eye materials survive, then evaluates `SUN`, `RIGHT`, and `FRONT` on the final face geometry (realizing the outline instances for inspection). It verifies Sun rotation, head following, idempotence, and independent lighting for a duplicated character. Output: `tests/.runtime/zzz-kythera-v2/`.
+
+
+## HSR The Herta baked expressions and outlines
+
+Run Blender 5.2+ with `--background --factory-startup --python-exit-code 1 --python tests/hsr_outline_scale_blender.py`. Imports `chars/hsr/Art_TheHerta_00`, runs the full setup, checks world-space outline thickness/depth after rigging, and sweeps all expression controls in both directions to catch a whole-face lateral shift. Checks that rebasing to authored family defaults is idempotent. Results: `tests/.runtime/hsr-herta-art/`.

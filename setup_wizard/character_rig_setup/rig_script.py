@@ -19,6 +19,49 @@ from setup_wizard.character_rig_setup.rig_ui_utils import (
 )
 
 
+def configure_shoulder_widgets(rig):
+    """Keep shoulder crescents readable from the front without changing rest bones."""
+    from mathutils import Matrix
+
+    for side in ('L', 'R'):
+        bone = rig.pose.bones.get(f'shoulder.{side}')
+        if bone is None or bone.custom_shape is None:
+            continue
+        # Keep Rigify's native size and mirror signs; enlarging by 1.6 makes
+        # the frontal crescents oversized on characters with long clavicles.
+        transform = bone.custom_shape_transform or bone
+        rest = transform.bone.matrix_local.to_3x3()
+        # Some Genshin clavicles point strongly into depth (e.g. Zhongli's
+        # right side). Roll alignment alone cannot fix the front-view widget.
+        direction = rest.col[1].copy()
+        direction.y = 0
+        if direction.length < 1e-6:
+            continue
+        direction.normalize()
+        across = direction.cross(Vector((0, 0, 1)))
+        if across.length < 1e-6:
+            continue
+        across.normalize()
+        up = across.cross(direction).normalized()
+        frontal = Matrix((across, direction, up)).transposed()
+        bone.custom_shape_rotation_euler = (rest.inverted() @ frontal).to_euler()
+
+
+def remove_shoulder_ik_parent_cycle(rig):
+    """Hand IK must not depend on a shoulder that follows that same hand."""
+    if 'ORG-spine.003' not in rig.pose.bones:
+        return
+    for side in ('L', 'R'):
+        parent = rig.pose.bones.get(f'MCH-hand_ik.parent.{side}')
+        if parent is None:
+            continue
+        for constraint in parent.constraints:
+            if constraint.type == 'ARMATURE':
+                for target in constraint.targets:
+                    if target.target == rig and target.subtarget == f'ORG-shoulder.{side}':
+                        target.subtarget = 'ORG-spine.003'
+
+
 def attach_overcoat_to_arms(rig, context=None):
     """Attach only shoulder drape roots to the upper arms without changing rest."""
     context = context or bpy.context
@@ -72,6 +115,31 @@ def initialize_genshin_rim_x(rig):
         rim = rig.pose.bones.get('RimX')
         if rim:
             rim.location.x = -0.0075
+
+
+def bind_viewport_outlines(rig):
+    """Connect the settings plate to this character's outline modifiers."""
+    plate = rig.pose.bones.get('plate-settings') if rig and rig.pose else None
+    if plate is None:
+        return 0
+    modifiers = [modifier for obj in bpy.context.scene.objects
+                 if obj.type == 'MESH' and obj.find_armature() == rig
+                 for modifier in obj.modifiers if 'outline' in modifier.name.lower()]
+    if not modifiers:
+        return 0
+    plate['Viewport Outlines'] = any(modifier.show_viewport for modifier in modifiers)
+    for modifier in modifiers:
+        driver = modifier.driver_add('show_viewport').driver
+        for variable in list(driver.variables):
+            driver.variables.remove(variable)
+        variable = driver.variables.new()
+        variable.name = 'outlines'
+        variable.type = 'SINGLE_PROP'
+        variable.targets[0].id = rig
+        variable.targets[0].data_path = plate.path_from_id() + '["Viewport Outlines"]'
+        driver.type = 'SCRIPTED'
+        driver.expression = 'outlines >= 0.5'
+    return len(modifiers)
 
 
 def rig_character(
@@ -133,6 +201,9 @@ def rig_character(
             )
 
     temp_armature = head_bone_arm_target.data
+
+    from setup_wizard.utils.genshin_arm_bind import align_genshin_arm_roots
+    align_genshin_arm_roots(head_bone_arm_target)
 
     bpy.ops.object.mode_set(mode="EDIT")
 
@@ -836,21 +907,26 @@ def rig_character(
         except Exception:
             pass
 
-    try:
-        safe_expykit_convert_bone_names(
-            src_preset="Rigify_Metarig.py", trg_preset="Rigify_Deform.py"
-        )
-    except Exception as ex:
-        print(f"Notice: Expykit convert_bone_names handled: {ex}")
+    # Both steps are required. Continuing after a missing/cancelled converter
+    # hides the original error and leaves metarm undefined below.
+    result = safe_expykit_convert_bone_names(
+        src_preset="Rigify_Metarig.py", trg_preset="Rigify_Deform.py"
+    )
+    if result != {'FINISHED'}:
+        raise RuntimeError(f"Bone name conversion did not finish: {result!r}")
 
-    try:
-        safe_expykit_extract_metarig(
-            rig_preset="Rigify_Metarig.py", assign_metarig=True
-        )
-    except Exception as ex:
-        print(f"Notice: Expykit extract_metarig handled: {ex}")
+    result = safe_expykit_extract_metarig(
+        rig_preset="Rigify_Metarig.py", assign_metarig=True, offset_elbow=0.0
+    )
+    if result != {'FINISHED'}:
+        raise RuntimeError(f"Metarig extraction did not finish: {result!r}")
 
-    metarig_obj = bpy.data.objects.get("metarig")
+    # The extractor makes the new metarig active; its name may have a suffix
+    # when another character already owns 'metarig'.
+    metarig_obj = bpy.context.object
+    if metarig_obj is None or metarig_obj == obj or metarig_obj.type != 'ARMATURE':
+        raise RuntimeError("Metarig extraction did not create an active armature.")
+    metarm = metarig_obj.data
 
     # Poke's code to turn on the finger's IK.
     target_pose_obj = metarig_obj if (metarig_obj and getattr(metarig_obj, "pose", None)) else (
@@ -866,7 +942,6 @@ def rig_character(
 
     ## Fixes the tiddy bones.  Expykit, why did you neglect them
     if metarig_obj:
-        metarm = metarig_obj.data
         bpy.context.view_layer.objects.active = metarig_obj
         bpy.ops.object.mode_set(mode="EDIT")
         armature = bpy.data.objects[obj.name].data
@@ -931,7 +1006,7 @@ def rig_character(
 
     for o in bpy.data.objects:
         # Check for given object names
-        if o.name in ("metarig", armature.name):
+        if o in (metarig_obj, obj):
             o.select_set(True)
 
     bpy.ops.object.mode_set(mode="EDIT")
@@ -1116,7 +1191,6 @@ def rig_character(
 
     bpy.ops.armature.separate()
 
-    metarig_obj = bpy.data.objects.get("metarig")
     if metarig_obj:
         bpy.ops.object.mode_set(mode="OBJECT")
         bpy.ops.object.select_all(action="DESELECT")
@@ -1126,6 +1200,9 @@ def rig_character(
 
     # Generates rigify rig and renames it to 'rigify'
     bpy.ops.pose.rigify_generate()
+
+    # FBX rigs need the same protection as PMX rigs with current Rigify.
+    remove_shoulder_ik_parent_cycle(bpy.context.object)
 
     gen_rig = None
     if metarig_obj and getattr(metarig_obj.data, "rigify_target_rig", None):
@@ -1874,8 +1951,7 @@ def rig_character(
     this_obj.pose.bones["chest"].custom_shape_rotation_euler[0] = 1.5708
     this_obj.pose.bones["chest"].use_custom_shape_bone_size = False
 
-    this_obj.pose.bones["shoulder.L"].custom_shape_scale_xyz = (1.6, 1.6, 1.6)
-    this_obj.pose.bones["shoulder.R"].custom_shape_scale_xyz = (1.6, 1.6, 1.6)
+    configure_shoulder_widgets(this_obj)
 
     # Ensure Eye-WinkA-Control is enabled (set to 1 / active) by default
     pb_wink_a = this_obj.pose.bones.get("Eye-WinkA-Control")
@@ -3847,21 +3923,7 @@ def rig_character(
     bpy.data.objects["Head_Pole"].parent_type = "BONE"
     bpy.data.objects["Head_Pole"].parent_bone = "neck"
 
-    # Remove any drivers on viewport outlines so user has direct control
-    def setup_viewport_outlines(prop):
-        try:
-            prop.driver_remove("show_viewport")
-        except:
-            pass
-        try:
-            prop.driver_remove("show_render")
-        except:
-            pass
-
-    for mesh in [obj for obj in bpy.data.objects if obj.type == 'MESH']:
-        for modifier in mesh.modifiers:
-            if "Outline" in modifier.name or "outlines" in modifier.name.lower() or "Outlines" in modifier.name:
-                setup_viewport_outlines(modifier)
+    bind_viewport_outlines(bpy.data.objects[ourRig])
 
     # handled list of face SK
     handled_sks = [

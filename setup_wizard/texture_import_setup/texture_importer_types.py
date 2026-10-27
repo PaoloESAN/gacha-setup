@@ -2296,6 +2296,10 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
 
             has_multiple_pupil_diffuse = len(pupil_diffuse_images) > 1
             has_new_pupil_setup = has_multiple_pupil_diffuse or is_sandrone or any('new pupil' in m.name.lower() or m.name in DURIN_EYE_MATERIAL_NAMES for m in bpy.data.materials)
+            if bpy.context.scene.get('setup_wizard_imported_pmx_path'):
+                # PMX assigns its eye atlas explicitly. Merely appending the
+                # unused New Pupil template must not replace that assignment.
+                has_new_pupil_setup = has_multiple_pupil_diffuse
 
             if has_new_pupil_setup:
                 # Durin's slot 0 ("Durin Dark Eye") receives pupil textures like
@@ -3723,9 +3727,12 @@ class PunishingGrayRavenTextureImporter(GenshinTextureImporter):
             .inputs.get(JaredNyts_PunishingGrayRavenNodeNames.USE_LUT).default_value = lut_value
 
     def set_eye_diffuse_texture(self, material, img):
+        if not material or not material.node_tree:
+            return
         eye_node = material.node_tree.nodes.get(self.texture_node_names.EYE)
 
         if eye_node:
+            img.colorspace_settings.name = 'sRGB'
             eye_node.image = img
 
     def set_face_heao_texture(self, img):
@@ -3775,9 +3782,12 @@ class PunishingGrayRavenAvatarTextureImporter(PunishingGrayRavenTextureImporter)
                 print(f'Importing texture {file} using {self.__class__.__name__}')
 
                 # Eyes
-                if self.is_texture_identifiers_in_texture_name(['Eye'], file) and \
-                    not self.is_one_texture_identifier_in_texture_name(['HET'], file):
-                    self.set_eye_diffuse_texture(eye_material, img)
+                if self.is_texture_identifiers_in_texture_name(['Eye'], file):
+                    # Animator exports include EyeNM, EyeSpec and EyeHEAO.
+                    # Only the color atlas belongs in the eye diffuse socket;
+                    # otherwise the last auxiliary map overwrites the iris.
+                    if re.search(r'eyes?\d*$', os.path.splitext(file)[0], re.IGNORECASE):
+                        self.set_eye_diffuse_texture(eye_material, img)
 
                 else:
                     material_identifer_service = PunishingGrayRavenMaterialIdentifierService()
@@ -3863,6 +3873,63 @@ class PunishingGrayRavenAvatarTextureImporter(PunishingGrayRavenTextureImporter)
                                         self.set_diffuse_texture(TextureType.BODY, material, img)
                                 except:
                                     pass  # Unexpected or unused textures hit here!
+
+        self.import_material_texture_references(directory)
+
+    def import_material_texture_references(self, directory):
+        """Prefer the exported material's texture references over part guesses."""
+        images, definitions = {}, {}
+        for folder, _, files in os.walk(directory):
+            if '__MACOSX' in folder:
+                continue
+            for filename in sorted(files):
+                if filename.startswith('.'):
+                    continue
+                stem, extension = os.path.splitext(filename)
+                path = os.path.join(folder, filename)
+                if extension.lower() == '.json':
+                    definitions[stem.lower()] = path
+                elif extension.lower() in {'.png', '.tga', '.dds', '.jpg', '.jpeg', '.bmp', '.tif', '.tiff', '.webp'}:
+                    images[stem.lower()] = path
+        materials = {slot.material for obj in bpy.context.scene.objects if obj.type == 'MESH'
+                     for slot in obj.material_slots if slot.material}
+        for material in materials:
+            source = re.sub(r'\.\d{3}$', '', material.get('pgr_source_material', ''))
+            definition = definitions.get(source.lower())
+            if not definition or not material.node_tree:
+                continue
+            with open(definition, encoding='utf-8-sig') as stream:
+                definition_data = json.load(stream)
+                tex_envs = definition_data.get('m_SavedProperties', {}).get('m_TexEnvs', {})
+            is_eye = material.name == self.material_names.EYE
+            is_face = material.node_tree.nodes.get(self.texture_node_names.FACE_DIFFUSE) is not None
+            mappings = {
+                '_MainTex': self.texture_node_names.EYE if is_eye else
+                            self.texture_node_names.FACE_DIFFUSE if is_face else self.texture_node_names.DIFFUSE,
+                '_BumpMap': self.texture_node_names.NORMALMAP,
+                '_MaskTex': self.texture_node_names.LIGHTMAP,
+                '_PBRMask': self.texture_node_names.PBR,
+                '_SkinRamp': self.texture_node_names.FACE_LUT if is_face else self.texture_node_names.LUT,
+            }
+            for key, node_name in mappings.items():
+                # The eye shader's Image Texture is exclusively the color atlas.
+                if is_eye and key != '_MainTex':
+                    continue
+                texture = tex_envs.get(key, {}).get('m_Texture', {})
+                path = images.get(texture.get('Name', '').lower())
+                node = material.node_tree.nodes.get(node_name)
+                if not path or node is None:
+                    continue
+                image = load_or_get_image(path)
+                if image:
+                    image.alpha_mode = 'CHANNEL_PACKED'
+                    image.colorspace_settings.name = 'sRGB' if key == '_MainTex' else 'Non-Color'
+                    node.image = image
+
+            from setup_wizard.utils.pgr_chibi_face import configure_chibi_face
+            diffuse = material.node_tree.nodes.get(mappings['_MainTex'])
+            if diffuse is not None:
+                configure_chibi_face(material, definition_data, images, diffuse)
 
     # Fix characters with blank textures in their original material texture
     # We do this by deleting the original texture and loading the new texture

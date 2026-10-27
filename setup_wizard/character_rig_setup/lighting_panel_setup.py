@@ -302,6 +302,26 @@ def get_lighting_panel_source_socket(tree, socket_name):
     return None
 
 
+def sync_legacy_shadow_position(tree):
+    """Keep the legacy threshold adapter inside Global Properties in both modes."""
+    add = tree.nodes.get('Legacy Shadow Position')
+    output = tree.nodes.get('Global Properties')
+    if add is None or output is None or add.type != 'MATH':
+        return
+    offset = output.inputs.get('Shadow Position Offset')
+    if offset is None:
+        return
+    target = add.inputs[0]
+    source = offset.links[0].from_socket if offset.is_linked else None
+    if source is not None:
+        if not any(link.from_socket == source for link in target.links):
+            tree.links.new(source, target)
+    else:
+        for link in list(target.links):
+            tree.links.remove(link)
+        target.default_value = offset.default_value
+
+
 def repair_genshin_shadow_offset_links(materials):
     """Route the global offset to every shader, preserving material thresholds.
 
@@ -418,6 +438,7 @@ class LightingPanel:
                     for l in list(inp.links):
                         tree.links.remove(l)
                     tree.links.new(source_sock, inp)
+            sync_legacy_shadow_position(tree)
 
 
 def disconnect_lighting_panel_nodes_from_global_material_properties(target_materials=None):
@@ -458,6 +479,7 @@ def disconnect_lighting_panel_nodes_from_global_material_properties(target_mater
                 for l in list(inp.links):
                     if l.from_socket in panel_sources:
                         tree.links.remove(l)
+        sync_legacy_shadow_position(tree)
 
 
 def setup_unrigged_genshin_lighting(context, only_if_panel_missing=False, target_object=None):

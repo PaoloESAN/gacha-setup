@@ -6,6 +6,7 @@ import re
 import bpy
 import mathutils
 import addon_utils
+from setup_wizard.utils.optional_addons import uses_addon
 
 
 def extract_clean_character_name(raw_name):
@@ -2427,7 +2428,7 @@ def patch_expykit_operators():
     try:
         import sys
         for mod_name, mod in list(sys.modules.items()):
-            if "expy" in mod_name.lower():
+            if "expy" in mod_name.lower() or "retarget" in mod_name.lower():
                 for attr_name in ("ExtractMetarig", "ConvertBoneNaming"):
                     cls = getattr(mod, attr_name, None)
                     if cls and hasattr(cls, "execute") and not getattr(cls.execute, "_gacha_patched", False):
@@ -2447,35 +2448,46 @@ def patch_expykit_operators():
         pass
 
 
-def safe_expykit_extract_metarig(rig_preset="Rigify_Metarig.py", assign_metarig=True):
+def rig_conversion_available():
+    from setup_wizard.utils.optional_addons import addon_installed
+    return addon_installed('expy')
+
+
+def rig_conversion_operator(operation):
+    return getattr(bpy.ops.object, f'expykit_{operation}')
+
+
+@uses_addon('expy')
+def safe_expykit_extract_metarig(rig_preset="Rigify_Metarig.py", assign_metarig=True, offset_elbow=None, no_breast=None):
     """
-    Executes bpy.ops.object.expykit_extract_metarig with a 3D View context override
+    Executes ExpyKit's metarig extractor with a 3D View context override
     to prevent crashes in background/isolated mode where context.space_data is None.
     """
     patch_expykit_operators()
+    kwargs = dict(rig_preset=rig_preset, assign_metarig=assign_metarig)
+    if offset_elbow is not None:
+        kwargs['offset_elbow'] = offset_elbow
+    # no_breast is retained for existing callers; ExpyKit has no such option.
     ov = get_view3d_override()
     if ov and hasattr(bpy.context, "temp_override"):
         with bpy.context.temp_override(**ov):
-            return bpy.ops.object.expykit_extract_metarig(
-                rig_preset=rig_preset, assign_metarig=assign_metarig
-            )
-    return bpy.ops.object.expykit_extract_metarig(
-        rig_preset=rig_preset, assign_metarig=assign_metarig
-    )
+            return rig_conversion_operator('extract_metarig')(**kwargs)
+    return rig_conversion_operator('extract_metarig')(**kwargs)
 
 
+@uses_addon('expy')
 def safe_expykit_convert_bone_names(src_preset="Rigify_Metarig.py", trg_preset="Rigify_Deform.py"):
     """
-    Executes bpy.ops.object.expykit_convert_bone_names with a 3D View context override.
+    Executes ExpyKit bone conversion with a 3D View context override.
     """
     patch_expykit_operators()
     ov = get_view3d_override()
     if ov and hasattr(bpy.context, "temp_override"):
         with bpy.context.temp_override(**ov):
-            return bpy.ops.object.expykit_convert_bone_names(
+            return rig_conversion_operator('convert_bone_names')(
                 src_preset=src_preset, trg_preset=trg_preset
             )
-    return bpy.ops.object.expykit_convert_bone_names(
+    return rig_conversion_operator('convert_bone_names')(
         src_preset=src_preset, trg_preset=trg_preset
     )
 

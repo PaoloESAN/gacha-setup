@@ -178,6 +178,32 @@ def get_mesh_world_scale(mesh):
         return 1.0
 
 
+def refresh_hsr_outline_scale(context):
+    """Reconcile compensated offsets after rigging applies the FBX scale.
+
+    Preserve the live settings, including custom widths, and only touch meshes
+    whose compensation was recorded by the HSR geometry setup.
+    """
+    context.view_layer.update()
+    for mesh in context.scene.objects:
+        previous_scale = mesh.get('gacha_hsr_outline_scale') if mesh.type == 'MESH' else None
+        if previous_scale is None:
+            continue
+        scale = get_mesh_world_scale(mesh)
+        if abs(scale - previous_scale) < 1e-6:
+            continue
+        for modifier in mesh.modifiers:
+            if (modifier.type != 'NODES' or not modifier.node_group
+                    or modifier.node_group.name.split('.')[0] not in
+                    OutlineNodeGroupNames.STELLARTOON_HSR_OUTLINES + OutlineNodeGroupNames.NYA222_HSR_OUTLINES):
+                continue
+            for key in (OUTLINE_THICKNESS_INPUT, HSR_OUTLINE_DEPTH_OFFSET_INPUT):
+                value = get_modifier_property(modifier, key)
+                if isinstance(value, (int, float)):
+                    set_modifier_property(modifier, key, value * previous_scale / scale)
+        mesh['gacha_hsr_outline_scale'] = scale
+
+
 meshes_to_create_outlines_on = \
     gi_meshes_to_create_outlines_on + \
     hsr_meshes_to_create_outlines_on + \
@@ -1217,10 +1243,10 @@ class HonkaiStarRailGeometryNodesSetup(GameGeometryNodesSetup):
         outline. Dividing by the mesh's effective world scale restores the
         intended world-space width. Meter-scale characters divide by 1.0
         (no-op). Assignment (not *=) keeps re-running the setup idempotent,
-        and the world scale is preserved by Fix Transformations, so the
-        compensation stays valid through the rest of the pipeline.
+        and compensation is refreshed after rigging if it applies that scale.
         """
         scale = get_mesh_world_scale(mesh)
+        mesh['gacha_hsr_outline_scale'] = scale
         if abs(scale - 1.0) < 1e-3:
             return
         # Always derive from the class defaults (not the live value) so that
@@ -1582,6 +1608,13 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
         super().__init__(blender_operator, context)
 
     def setup_geometry_nodes(self):
+        use_kythera_sun = (getattr(self.context.scene, 'zzz_shader_type', 'LEGACY') == 'KYTHERA'
+                           and any(group.get('zzz_kythera_vectors') for group in bpy.data.node_groups))
+        if use_kythera_sun:
+            from setup_wizard.utils.zzz_kythera_lighting import setup_kythera_lighting
+            setup_kythera_lighting(self.context)
+        suns_by_owner = {group.get('zzz_kythera_owner'): group.nodes['Object Info'].inputs['Object'].default_value
+                         for group in bpy.data.node_groups if group.get('zzz_kythera_owner')}
         light_vectors_gn = bpy.data.node_groups.get("Light Vectors")
         extra_fx_gn = bpy.data.node_groups.get("Extra FX Geonode")
         zzz_outlines_gn = bpy.data.node_groups.get("ZZZ Outlines")
@@ -1649,6 +1682,8 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                     continue
 
                 # Light Vectors
+                # The lighting panel still needs its color attributes in V2.
+                # Its direction input uses the real Sun, not the legacy empty.
                 if light_vectors_gn:
                     mod = next((m for m in obj.modifiers if m.type == 'NODES' and (m.name.startswith("Light Vectors") or (m.node_group and ("Light Vectors" in m.node_group.name or "灯光矢量" in m.node_group.name)))), None)
                     if not mod:
@@ -1700,8 +1735,10 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                     }
                     for socket_name, target_name in socket_mapping.items():
                         target_obj = None
+                        if use_kythera_sun and target_name == 'Light Direction':
+                            target_obj = suns_by_owner.get(obj.find_armature() or obj.parent)
                         if char_name:
-                            target_obj = bpy.data.objects.get(f"{target_name}_{char_name}")
+                            target_obj = target_obj or bpy.data.objects.get(f"{target_name}_{char_name}")
                         if not target_obj:
                             target_obj = bpy.data.objects.get(target_name)
                         if target_obj:
@@ -1737,7 +1774,7 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                     if not mod:
                         mod = obj.modifiers.new(name="Extra FX", type='NODES')
                         mod.node_group = extra_fx_gn
-                    obj.modifiers.move(len(obj.modifiers) - 1, 1)
+                    obj.modifiers.move(len(obj.modifiers) - 1, min(1, len(obj.modifiers) - 1))
 
                     is_face_obj = "face" in obj.name.lower()
 
@@ -1838,13 +1875,6 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                     if not mod:
                         mod = obj.modifiers.new(name="Outlines", type='NODES')
                     mod.node_group = target_gn
-
-                    if is_face_obj:
-                        try:
-                            from setup_wizard.services.zzz_outline_mask_service import create_face_outline_mask
-                            create_face_outline_mask(obj, configure_modifier=True)
-                        except Exception as e_mask:
-                            print(f"[ZZZ] Notice setting up face outline mask: {e_mask}")
 
                     # Dynamic material resolution for actual character materials & outlines based on mesh slots
                     obj_mats = [slot.material for slot in obj.material_slots if slot.material]
@@ -1956,6 +1986,15 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                         if val is not None:
                             for key in keys:
                                 set_modifier_property(mod, key, val)
+
+                    # Bind the painted mask after generic socket defaults; in
+                    # Blender 5 assigning a socket value can reset its mode.
+                    if is_face_obj:
+                        try:
+                            from setup_wizard.services.zzz_outline_mask_service import create_face_outline_mask
+                            create_face_outline_mask(obj, configure_modifier=True)
+                        except Exception as e_mask:
+                            print(f"[ZZZ] Notice setting up face outline mask: {e_mask}")
 
                     # For non-face meshes: ensure Vertex Colors socket is VALUE mode with black color (0,0,0,1)
                     if not is_face_obj:
@@ -2075,6 +2114,9 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                                     except Exception as e:
                                         print(f"Error adding extra fx driver for {sock_name} on {ob.name}:", e)
 
+        if use_kythera_sun:
+            from setup_wizard.utils.zzz_kythera_lighting import setup_kythera_lighting
+            setup_kythera_lighting(self.context)
         self.outlineshader_sync()
 
         # GI_OT_SetUpGeometryNodes advances the workflow after this returns.

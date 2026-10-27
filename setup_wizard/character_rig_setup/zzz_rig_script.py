@@ -653,8 +653,18 @@ def rig_character(
     except Exception as ex:
         print(f"Notice: Expykit convert_bone_names handled: {ex}")
 
+    # Retarget's Rigify presets do not include breast bones. Name the source
+    # roots as deformers so they are replaced, rather than rejoined as plain
+    # physics bones that collide with the generated breast controls.
+    for side in ('L', 'R'):
+        source_breast = obj.pose.bones.get(f'breast.{side}')
+        if source_breast and f'DEF-breast.{side}' not in obj.pose.bones:
+            source_breast.name = f'DEF-breast.{side}'
+    has_breasts = any(f'DEF-breast.{side}' in obj.data.bones for side in ('L', 'R'))
+
     try:
-        safe_expykit_extract_metarig(rig_preset='Rigify_Metarig.py', assign_metarig=True)
+        safe_expykit_extract_metarig(rig_preset='Rigify_Metarig.py', assign_metarig=True,
+                                    no_breast=not has_breasts)
     except Exception as ex:
         print(f"Notice: Expykit extract_metarig handled: {ex}")
 
@@ -675,6 +685,12 @@ def rig_character(
     ## Fixes the tiddy bones.  Expykit, why did you neglect them
     if metarig_obj:
         metarm = metarig_obj.data
+        # Expy-Kit edited only the metarig. Retarget also leaves the source
+        # selected, exposing its edit_bones here and changing the legacy
+        # breast placement from the template to the short source bones.
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.select_all(action='DESELECT')
+        metarig_obj.select_set(True)
         bpy.context.view_layer.objects.active = metarig_obj
         bpy.ops.object.mode_set(mode='EDIT')
         armature = bpy.data.objects[obj.name].data
@@ -760,6 +776,13 @@ def rig_character(
     # Fixes the finger rolls
     bpy.ops.object.mode_set(mode='OBJECT')
     metapose = bpy.data.objects['metarig'].pose
+    for side in ('L', 'R'):
+        breast = metapose.bones.get(f'breast.{side}')
+        if breast:
+            breast.rigify_type = 'basic.super_copy'
+            params = breast.rigify_parameters
+            params.make_control = params.make_deform = params.make_widget = True
+            params.super_copy_widget_type = 'circle'
     if kachina:
         for bone_name in ['f_index', 'f_middle', 'f_ring', 'f_pinky']:
             metapose.bones[f"{bone_name}.01.L"].rigify_parameters.primary_rotation_axis = '-X'
@@ -1167,12 +1190,6 @@ def rig_character(
     if new_name: move_into_collection(new_name,char_name)
 
     scene = bpy.context.scene
-    if getattr(scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
-        import math
-        for obj in bpy.data.objects:
-            if obj.name.startswith("Light Direction") or obj.name.startswith("Main Light Direction"):
-                obj.rotation_mode = 'XYZ'
-                obj.rotation_euler = (math.radians(90.0), 0.0, 0.0)
 
     bpy.data.collections["wgt"].hide_select = True
     bpy.data.collections["wgt"].hide_viewport = True
@@ -4337,6 +4354,9 @@ def rig_character(
             b_low = b_name.lower()
 
             if b_name.startswith("DEF-") or b_name.startswith("ORG-") or b_name.startswith("MCH-"):
+                continue
+
+            if b_name in main_breast_controls:
                 continue
 
             if _is_remielle_char and is_remielle_wing_bone_name(b_name):

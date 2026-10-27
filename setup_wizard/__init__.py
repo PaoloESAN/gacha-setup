@@ -3,7 +3,7 @@ import os
 bl_info = {
     "name": "Gacha Setup",
     "author": "Mken, OctavoPE, Enthralpy, PaoloESAN",
-    "version": (3, 8, 2),
+    "version": (3, 8, 3),
     "blender": (4, 1, 0),
     "location": "3D View > Sidebar > Gacha Setup",
     "description": "An addon to streamline the character model setup process for Gacha games in Blender 4.1+",
@@ -234,6 +234,7 @@ else:
         CSW_MT_GameSelectorMenu,
     )
     from setup_wizard.utilites.ui import CSW_PT_Utilities_UI_Layout, CSW_OT_JideehCamera
+    from setup_wizard.utilites.vmd_motion import CSW_OT_ApplyVMD
     from setup_wizard.utilites.jideeh_cam_rig import CSW_OT_CreateCameraPro, CSW_OT_CreateJideehCamrig
     from setup_wizard.utilites.eye_through_hair import CSW_OT_EyeThroughHair
     from setup_wizard.utilites.hair_shadows import CSW_OT_HairShadows
@@ -320,6 +321,7 @@ else:
         CSW_PT_Unified_Character_Setup_Wizard_UI_Layout,
         CSW_PT_Utilities_UI_Layout,
         CSW_OT_JideehCamera,
+        CSW_OT_ApplyVMD,
         CSW_OT_CreateCameraPro,
         CSW_OT_CreateJideehCamrig,
         CSW_OT_EyeThroughHair,
@@ -526,11 +528,6 @@ else:
     @bpy.app.handlers.persistent
     def gacha_rig_ui_load_post_handler(dummy=None):
         try:
-            from setup_wizard.ui.character_settings_utils import ensure_all_rig_uis_registered
-            ensure_all_rig_uis_registered()
-        except Exception:
-            pass
-        try:
             bpy.app.timers.register(_gacha_prewarm, first_interval=0.5)
         except Exception:
             pass
@@ -560,6 +557,8 @@ else:
                         pass
         from setup_wizard.character_rig_setup.lighting_panel_setup import register_fresnel_repair
         register_fresnel_repair()
+        from setup_wizard.utils.genshin_engine_nodes import register as register_genshin_engine_nodes
+        register_genshin_engine_nodes()
         from setup_wizard.utilites.new_lights import register as register_new_lights
         register_new_lights()
         register_wuwa_properties()
@@ -584,11 +583,6 @@ else:
             bpy.app.timers.register(_gacha_prewarm, first_interval=1.0)
         except Exception:
             pass
-        try:
-            from setup_wizard.ui.character_settings_utils import ensure_all_rig_uis_registered
-            ensure_all_rig_uis_registered()
-        except Exception:
-            pass
         addon_icon_manager.register_icons()
         addon_updater_ops.register(bl_info)
 
@@ -598,6 +592,8 @@ else:
         unregister_new_lights()
         from setup_wizard.character_rig_setup.lighting_panel_setup import unregister_fresnel_repair
         unregister_fresnel_repair()
+        from setup_wizard.utils.genshin_engine_nodes import unregister as unregister_genshin_engine_nodes
+        unregister_genshin_engine_nodes()
         from setup_wizard.ui.pgr_character_settings import unregister_pgr_properties
         unregister_pgr_properties()
         unregister_hna_properties()

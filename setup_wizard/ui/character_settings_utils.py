@@ -418,15 +418,6 @@ def _resolve_settings_armature_uncached(context):
                     target_arm = o
                     break
 
-    if target_arm is not None:
-        try:
-            r_id = getattr(getattr(target_arm, "data", None), "get", lambda k: None)("rig_id")
-            if r_id and r_id not in _registered_rig_ids:
-                _registered_rig_ids.add(r_id)
-                ensure_all_rig_uis_registered(target_arm)
-        except Exception:
-            pass
-
     return target_arm
 
 

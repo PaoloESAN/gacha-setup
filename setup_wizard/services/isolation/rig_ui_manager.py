@@ -1,5 +1,4 @@
 import ast
-import os
 import re
 import traceback
 import bpy
@@ -76,14 +75,14 @@ def _registered_ui_class(class_id):
     return bpy.types.Panel.bl_rna_get_subclass_py(class_id, None)
 
 
-def _find_rig_ui_text(rig, rig_id):
-    text = rig.get("rig_ui")
-    if isinstance(text, bpy.types.Text):
-        return text
+def _find_rig_ui_text(rig, rig_id, texts):
     marker = re.compile(
         r"^rig_id\s*=\s*(['\"])" + re.escape(rig_id) + r"\1\s*$", re.MULTILINE
     )
-    for text in bpy.data.texts:
+    text = rig.get("rig_ui")
+    if isinstance(text, bpy.types.Text) and text in texts and marker.search(text.as_string()):
+        return text
+    for text in texts:
         try:
             if marker.search(text.as_string()):
                 return text
@@ -92,14 +91,15 @@ def _find_rig_ui_text(rig, rig_id):
     return None
 
 
-def initialize_rig_uis(objects):
+def initialize_rig_uis(objects, *, texts=()):
     """
     Execute ONLY from an operator or timer context (with write permissions).
-    Registers Rigify UI for imported armatures, preventing the polling loop
-    and viewport freeze.
+    Registers Rigify UI only from the supplied isolated result's Texts.
+    Opening files and selecting armatures must not call this automatically.
     """
     stats = {"rig_ui_ready": 0, "rig_ui_initialized": 0, "rig_ui_errors": []}
     seen = set()
+    texts = tuple(texts)
 
     for rig in objects:
         if rig.type != "ARMATURE":
@@ -108,17 +108,18 @@ def initialize_rig_uis(objects):
         if not rig_id or rig_id in seen:
             continue
         seen.add(rig_id)
+        registration_started = False
+        previous_classes = []
 
         try:
-            text = _find_rig_ui_text(rig, rig_id)
+            text = _find_rig_ui_text(rig, rig_id, texts)
             if not text:
-                continue
+                raise RuntimeError('No matching Rig UI Text in the isolated result')
 
             source = text.as_string()
-            try:
-                expected = _rig_ui_manifest(source, rig_id)
-            except Exception:
-                expected = []
+            expected = _rig_ui_manifest(source, rig_id)
+            if not expected:
+                raise RuntimeError('Rig UI Text has no verifiable class registrations')
 
             # If all expected classes are already registered, avoid re-executing
             if expected and all(_registered_ui_class(name) is not None for name in expected):

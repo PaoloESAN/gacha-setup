@@ -204,6 +204,7 @@ class ZenlessZoneZeroOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
         self.outlines_node_group_names = OutlineNodeGroupNames.ZENLESS_ZONE_ZERO_OUTLINES
 
     def import_outline_node_group(self):
+        use_kythera_sun = getattr(self.context.scene, 'zzz_shader_type', 'LEGACY') == 'KYTHERA'
         # Outlines and Lighting Panel come specifically from the setup file (ZZZ Setup v7.blend)
         filepath = get_shader_file_path(GameType.ZENLESS_ZONE_ZERO.name, 'outlines')
         if not filepath or not os.path.isfile(filepath):
@@ -236,10 +237,13 @@ class ZenlessZoneZeroOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
                 except Exception as e:
                     print(f"Failed to append ZZZLightPanelAttr from {filepath}: {e}")
 
+            objects_before_panel = set(bpy.data.objects)
             # Import direction objects and Lighting Panel UI from ZZZ Setup File V2.0.blend
             try:
                 with bpy.data.libraries.load(filepath, link=False) as (data_from, data_to):
-                    direction_keywords = ["light direction", "head direction", "head forward", "head up"]
+                    direction_keywords = ["head direction", "head forward", "head up"]
+                    if not use_kythera_sun:
+                        direction_keywords.append("light direction")
                     lighting_panel_keywords = [
                         "colorwheel", "colorpicker", "slider-rim", "origin-rim",
                         "lightpanelwgtplane", "lightpanelselectorwgt", "lighting panel", "light panel"
@@ -337,20 +341,17 @@ class ZenlessZoneZeroOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
             except Exception as e:
                 print(f"Failed to append objects/collections from {filepath}: {e}")
 
-            # Ensure Light Direction empty exists as fallback if not in blend
-            if not bpy.data.objects.get("Light Direction"):
+            if use_kythera_sun:
+                # Collections can pull in legacy direction empties indirectly.
+                # Remove only objects introduced by this panel import, never
+                # another character's lighting controls.
+                for obj in set(bpy.data.objects) - objects_before_panel:
+                    if obj.type == 'EMPTY' and 'light direction' in obj.name.lower():
+                        bpy.data.objects.remove(obj, do_unlink=True)
+            elif not bpy.data.objects.get("Light Direction"):
                 light_dir_empty = bpy.data.objects.new("Light Direction", None)
                 light_dir_empty.empty_display_type = 'SINGLE_ARROW'
                 bpy.context.scene.collection.objects.link(light_dir_empty)
-
-            scene = bpy.context.scene
-            shader_type = getattr(scene, "zzz_shader_type", "LEGACY")
-            if shader_type == "KYTHERA":
-                import math
-                for obj in bpy.data.objects:
-                    if obj.name.startswith("Light Direction") or obj.name.startswith("Main Light Direction"):
-                        obj.rotation_mode = 'XYZ'
-                        obj.rotation_euler = (math.radians(90.0), 0.0, 0.0)
 
         NextStepInvoker().invoke(
             self.blender_operator.next_step_idx, 
