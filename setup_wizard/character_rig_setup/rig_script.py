@@ -907,21 +907,26 @@ def rig_character(
         except Exception:
             pass
 
-    try:
-        safe_expykit_convert_bone_names(
-            src_preset="Rigify_Metarig.py", trg_preset="Rigify_Deform.py"
-        )
-    except Exception as ex:
-        print(f"Notice: Expykit convert_bone_names handled: {ex}")
+    # Both steps are required. Continuing after a missing/cancelled converter
+    # hides the original error and leaves metarm undefined below.
+    result = safe_expykit_convert_bone_names(
+        src_preset="Rigify_Metarig.py", trg_preset="Rigify_Deform.py"
+    )
+    if result != {'FINISHED'}:
+        raise RuntimeError(f"Bone name conversion did not finish: {result!r}")
 
-    try:
-        safe_expykit_extract_metarig(
-            rig_preset="Rigify_Metarig.py", assign_metarig=True, offset_elbow=0.0
-        )
-    except Exception as ex:
-        print(f"Notice: Expykit extract_metarig handled: {ex}")
+    result = safe_expykit_extract_metarig(
+        rig_preset="Rigify_Metarig.py", assign_metarig=True, offset_elbow=0.0
+    )
+    if result != {'FINISHED'}:
+        raise RuntimeError(f"Metarig extraction did not finish: {result!r}")
 
-    metarig_obj = bpy.data.objects.get("metarig")
+    # The extractor makes the new metarig active; its name may have a suffix
+    # when another character already owns 'metarig'.
+    metarig_obj = bpy.context.object
+    if metarig_obj is None or metarig_obj == obj or metarig_obj.type != 'ARMATURE':
+        raise RuntimeError("Metarig extraction did not create an active armature.")
+    metarm = metarig_obj.data
 
     # Poke's code to turn on the finger's IK.
     target_pose_obj = metarig_obj if (metarig_obj and getattr(metarig_obj, "pose", None)) else (
@@ -937,7 +942,6 @@ def rig_character(
 
     ## Fixes the tiddy bones.  Expykit, why did you neglect them
     if metarig_obj:
-        metarm = metarig_obj.data
         bpy.context.view_layer.objects.active = metarig_obj
         bpy.ops.object.mode_set(mode="EDIT")
         armature = bpy.data.objects[obj.name].data
@@ -1002,7 +1006,7 @@ def rig_character(
 
     for o in bpy.data.objects:
         # Check for given object names
-        if o.name in ("metarig", armature.name):
+        if o in (metarig_obj, obj):
             o.select_set(True)
 
     bpy.ops.object.mode_set(mode="EDIT")
@@ -1187,7 +1191,6 @@ def rig_character(
 
     bpy.ops.armature.separate()
 
-    metarig_obj = bpy.data.objects.get("metarig")
     if metarig_obj:
         bpy.ops.object.mode_set(mode="OBJECT")
         bpy.ops.object.select_all(action="DESELECT")

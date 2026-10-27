@@ -15,7 +15,7 @@ This directory contains third-party Blender add-on packages provided in `.zip` f
 * **Author**: [pKrime](https://github.com/pKrime)
 * **File**: `Expy-Kit-v052.zip`
 * **Description**: Toolset for extracting and converting armatures for Rigify in Blender.
-* **Blender versions**: Installed automatically on Blender 4.x.
+* **Blender versions**: Installed automatically for character setup on Blender 4.x and 5.x.
 
 ### 2. UEFormat
 * **Repository**: [https://github.com/h4lfheart/UEFormat](https://github.com/h4lfheart/UEFormat)
@@ -28,7 +28,7 @@ This directory contains third-party Blender add-on packages provided in `.zip` f
 * **Author**: KBS DEV / KBSBAUDRICE
 * **File**: `retarget.zip`
 * **License**: GPL-3.0 (included in the archive).
-* **Blender versions**: Installed automatically on Blender 5.0 and later, in place of Expy-Kit. Existing legacy or extension installations are reused.
+* **Blender versions**: Kept available on Blender 5.0 and later for MMD utilities. Character setup uses Expy-Kit. Existing legacy or extension installations are reused.
 * **Description**: Rig conversion and metarig extraction, including the MMD-to-Rigify workflow.
 
 MMD Tools is required to import PMX files and VMD motion (VMD Motion requires Blender 5.0+). It must be installed separately and is not bundled here.

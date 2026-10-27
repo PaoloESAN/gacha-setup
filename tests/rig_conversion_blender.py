@@ -1,4 +1,4 @@
-"""Smoke-test bundled dependencies and the version-specific conversion API."""
+"""Smoke-test bundled dependencies and ExpyKit conversion on Blender 4 and 5."""
 from pathlib import Path
 import sys
 import addon_utils
@@ -14,10 +14,13 @@ from setup_wizard.character_rig_setup.rig_ui_utils import (
 
 on_register()
 assert rig_conversion_available()
-expected = 'retarget' if bpy.app.version >= (5, 0, 0) else 'expy'
+expected = 'expy'
 from setup_wizard.utils.optional_addons import find_addon, temporary_addon
 module = find_addon(expected)
-for key in (expected, 'ueformat'):
+optional_keys = [expected, 'ueformat']
+if bpy.app.version >= (5, 0, 0):
+    optional_keys.append('retarget')
+for key in optional_keys:
     dependency = find_addon(key)
     assert dependency
     assert not addon_utils.check(dependency)[1]
@@ -38,6 +41,8 @@ assert not addon_utils.check(module)[1]
 assert 'DEF-spine' in source.data.bones
 assert safe_expykit_extract_metarig(assign_metarig=True) == {'FINISHED'}
 assert not addon_utils.check(module)[1]
+if bpy.app.version >= (5, 0, 0):
+    assert not addon_utils.check(find_addon('retarget'))[1]
 metarig = bpy.context.object
 assert metarig != source
 assert metarig.data.rigify_target_rig == source

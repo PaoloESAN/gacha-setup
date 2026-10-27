@@ -142,11 +142,23 @@ checks, then saves the resulting blends and `results.json`:
 blender --background --factory-startup --python-exit-code 1 --python tests/mmd_setup_blender.py -- chars/COLUMBINA
 ```
 
-The version-specific dependency/conversion smoke test can run on Blender 4 or 5:
+The ExpyKit dependency/conversion smoke test can run on Blender 4 or 5.
+Character setup uses ExpyKit on both; Retarget remains available separately:
 
 ```bash
 blender --background --factory-startup --python-exit-code 1 --python tests/rig_conversion_blender.py
 ```
+
+The Genshin metarig regression checks missing operators, cancelled conversion,
+cancelled extraction and extraction without a metarig. It then runs the complete
+isolated Amber setup and verifies generated hand/foot IK controls:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python tests/genshin_metarig_failure_blender.py
+```
+
+It uses `chars/genshin/Amber/Default` and writes results under
+`tests/.runtime/genshin-metarig/`.
 
 This also verifies temporary dependency activation, nested scopes, cleanup after
 failure, and preservation of dependencies already enabled by the user. The PMX

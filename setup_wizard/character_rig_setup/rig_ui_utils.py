@@ -2450,31 +2450,24 @@ def patch_expykit_operators():
 
 def rig_conversion_available():
     from setup_wizard.utils.optional_addons import addon_installed
-    key = 'retarget' if bpy.app.version >= (5, 0, 0) else 'expy'
-    return addon_installed(key)
+    return addon_installed('expy')
 
 
 def rig_conversion_operator(operation):
-    prefix = 'retarget' if bpy.app.version >= (5, 0, 0) else 'expykit'
-    return getattr(bpy.ops.object, f'{prefix}_{operation}')
+    return getattr(bpy.ops.object, f'expykit_{operation}')
 
 
-@uses_addon('retarget' if bpy.app.version >= (5, 0, 0) else 'expy')
+@uses_addon('expy')
 def safe_expykit_extract_metarig(rig_preset="Rigify_Metarig.py", assign_metarig=True, offset_elbow=None, no_breast=None):
     """
-    Executes the version-specific metarig extractor with a 3D View context override
+    Executes ExpyKit's metarig extractor with a 3D View context override
     to prevent crashes in background/isolated mode where context.space_data is None.
     """
     patch_expykit_operators()
     kwargs = dict(rig_preset=rig_preset, assign_metarig=assign_metarig)
-    if bpy.app.version >= (5, 0, 0):
-        # Game scripts preserve and rejoin accessory bones themselves, as
-        # ExpyKit did. Retarget's default would generate those bones twice.
-        kwargs['other_bone'] = False
-        if offset_elbow is not None:
-            kwargs['offset_elbow'] = offset_elbow
-        if no_breast is not None:
-            kwargs['no_breast'] = no_breast
+    if offset_elbow is not None:
+        kwargs['offset_elbow'] = offset_elbow
+    # no_breast is retained for existing callers; ExpyKit has no such option.
     ov = get_view3d_override()
     if ov and hasattr(bpy.context, "temp_override"):
         with bpy.context.temp_override(**ov):
@@ -2482,10 +2475,10 @@ def safe_expykit_extract_metarig(rig_preset="Rigify_Metarig.py", assign_metarig=
     return rig_conversion_operator('extract_metarig')(**kwargs)
 
 
-@uses_addon('retarget' if bpy.app.version >= (5, 0, 0) else 'expy')
+@uses_addon('expy')
 def safe_expykit_convert_bone_names(src_preset="Rigify_Metarig.py", trg_preset="Rigify_Deform.py"):
     """
-    Executes version-specific bone conversion with a 3D View context override.
+    Executes ExpyKit bone conversion with a 3D View context override.
     """
     patch_expykit_operators()
     ov = get_view3d_override()
