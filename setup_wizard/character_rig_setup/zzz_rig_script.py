@@ -79,6 +79,11 @@ def rig_character(
                     if bip_pattern.match(vg.name) and not vg.name.startswith("Bip001"):
                         vg.name = re.sub(r'^Bip\d{3}', 'Bip001', vg.name)
 
+    # Some exports (SPBilly) leave part of the hair without any skin weights.
+    # Repair before bone renaming so Blender carries the group into Rigify.
+    from setup_wizard.utils.zzz_hair_weights import bind_unweighted_hair
+    bind_unweighted_hair(head_bone_arm_target, bpy.data.objects)
+
     temp_armature = head_bone_arm_target.data
 
     bpy.ops.object.mode_set(mode='EDIT')
