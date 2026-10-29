@@ -51,13 +51,24 @@ def update_alpha_transparency(self, context=None):
         enabled = True
 
     for mat in bpy.data.materials:
+        if not mat.node_tree:
+            continue
         orig_m = mat.get("ww_original_name", "")
         base_m = mat.get("ww_base_part", "")
+        alpha_nodes = [
+            node for node in mat.node_tree.nodes
+            if node.type == 'GROUP' and node.node_tree
+            and "alpha transparency" in node.node_tree.name.lower()
+        ]
+        # Names alone are not evidence of a WuWa material: "Furina" also
+        # contains "fur". Render-init runs this callback for every game.
+        if not (orig_m or base_m or alpha_nodes):
+            continue
         is_alpha = any(
             k in orig_m.lower() or k in base_m.lower() or k in mat.name.lower()
             for k in ["alpha", "touming", "transparency", "fur", "flur"]
         )
-        if is_alpha and mat.node_tree:
+        if is_alpha:
             for node in mat.node_tree.nodes:
                 if (node.type == 'GROUP' and node.node_tree and "alpha transparency" in node.node_tree.name.lower()) or "alpha transparency" in node.name.lower():
                     node.mute = not enabled
