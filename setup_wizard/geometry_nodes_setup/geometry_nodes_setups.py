@@ -867,6 +867,7 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
         night_soul_outlines_material_using_mesh_material_name = [
             material for material in bpy.data.materials.values() if [
                 material_slot.material for material_slot in mesh.material_slots if 
+                material_slot.material and
                 material_slot.material.name.split(' ')[-1] in material.name and 
                 material.name.endswith(self.material_names.NIGHT_SOUL_OUTLINES_SUFFIX)
             ]
