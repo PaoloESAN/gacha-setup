@@ -2,9 +2,8 @@
 # Mirrors WuWa's `wuthering_waves.toggle_animate_mode` (see wuwa_operations.py):
 # swaps full shader materials for lightweight unlit materials (diffuse wired
 # straight into Material Output) for smooth animation playback. On top of
-# that, Genshin's Geometry Nodes modifiers (Outlines + Light Vectors) are
-# hidden while animate mode is on, since they are the main viewport cost
-# and useless with flat materials.
+# that, outline Geometry Nodes modifiers are disabled during Animate Mode.
+# Light Vectors stay enabled to preserve lighting attributes on restoration.
 
 import bpy
 from bpy.types import Operator
@@ -12,6 +11,7 @@ from bpy.types import Operator
 
 ANIMATE_MODE_SUFFIX = "_Low"
 ANIMATE_MODE_SCENE_KEY = "gi_animate_mode"
+OUTLINE_DRIVER_STATES_KEY = "_gi_animate_outline_driver_states"
 
 
 def _is_bad_texture_name(name: str) -> bool:
@@ -506,16 +506,36 @@ def _set_gn_modifiers_visible(visible, meshes=None):
     else:
         target_objs = [obj for obj in meshes if getattr(obj, "type", None) == 'MESH' and not _is_helper_object(obj)]
     for obj in target_objs:
+        states = {name: dict(value) for name, value in obj.get(OUTLINE_DRIVER_STATES_KEY, {}).items()}
+        drivers = obj.animation_data.drivers if obj.animation_data else []
         for mod in getattr(obj, "modifiers", []) or []:
             if mod.type != 'NODES' or not mod.node_group:
                 continue
             ng_low = mod.node_group.name.lower()
             mod_low = getattr(mod, "name", "").lower()
             if "outline" in ng_low or "outline" in mod_low:
+                # A rig/animation driver overrides direct visibility writes
+                # on the next depsgraph update. Pause only these visibility
+                # drivers and persist their previous mute states with the mesh
+                # so save/reload and repeated enables remain reversible.
+                for prop in ('show_viewport', 'show_render'):
+                    path = mod.path_from_id(prop)
+                    curve = next((d for d in drivers if d.data_path == path), None)
+                    if not visible:
+                        if curve:
+                            states.setdefault(mod.name, {}).setdefault(prop, bool(curve.mute))
+                            curve.mute = True
+                    elif prop in states.get(mod.name, {}):
+                        muted = states[mod.name].pop(prop)
+                        if curve:
+                            curve.mute = bool(muted)
+                        if not states[mod.name]:
+                            del states[mod.name]
                 try:
                     mod.show_viewport = visible
                 except Exception:
                     pass
+
                 try:
                     mod.show_render = visible
                 except Exception:
@@ -533,6 +553,11 @@ def _set_gn_modifiers_visible(visible, meshes=None):
                     mod.show_render = True
                 except Exception:
                     pass
+
+        if states:
+            obj[OUTLINE_DRIVER_STATES_KEY] = states
+        elif OUTLINE_DRIVER_STATES_KEY in obj:
+            del obj[OUTLINE_DRIVER_STATES_KEY]
 
 
 def is_genshin_animate_mode(arm=None, context=None) -> bool:
@@ -598,6 +623,10 @@ def set_genshin_animate_mode(enable: bool, arm=None, context=None):
     if not target_meshes:
         return False
 
+    # Property callbacks and depsgraph updates during the material swap must
+    # already see the new mode, especially when restoring outline settings.
+    arm[ANIMATE_MODE_SCENE_KEY] = bool(enable)
+
     for obj in target_meshes:
         for slot in getattr(obj, "material_slots", []) or []:
             mat = slot.material
@@ -651,8 +680,7 @@ def set_genshin_animate_mode(enable: bool, arm=None, context=None):
                     if orig_mat:
                         slot.material = orig_mat
 
-    # Outlines (+ Light Vectors, useless with flat materials) are the main
-    # viewport cost: hide them in animate mode, restore them afterwards.
+    # Disable outline evaluation, including driven modifiers, while animating.
     # Restoring re-applies the current Character Settings checkbox state so a
     # toggle changed mid-animate-mode is honoured on exit.
     if enable:
@@ -709,10 +737,6 @@ def set_genshin_animate_mode(enable: bool, arm=None, context=None):
                         except Exception:
                             pass
 
-    try:
-        arm[ANIMATE_MODE_SCENE_KEY] = bool(enable)
-    except Exception:
-        pass
     try:
         scene = getattr(context, "scene", None) if context else getattr(bpy.context, "scene", None)
         if scene:
