@@ -790,15 +790,6 @@ class WutheringWavesMaterialImporterFacade(GameMaterialImporter):
             except Exception as e_obj:
                 print(f"Notice appending WuWa control objects: {e_obj}")
 
-            # Delete helper / placeholder Cube objects from blend template
-            for obj in list(bpy.data.objects):
-                if obj.name.lower().startswith("cube") and obj.type == 'MESH':
-                    if not any(k in obj.name.lower() for k in ["body", "cloth", "face", "hair", "eye", "head"]):
-                        try:
-                            bpy.data.objects.remove(obj, do_unlink=True)
-                        except Exception:
-                            pass
-
             # Find character collection created by uemodel/import
             char_coll = None
             for c in bpy.data.collections:
@@ -840,19 +831,11 @@ class WutheringWavesMaterialImporterFacade(GameMaterialImporter):
                         hl_child.parent = eye_highlight
                         hl_child.matrix_parent_inverse = eye_highlight.matrix_world.inverted()
 
-        # Clean duplicate empties (.001, .002) and delete any rogue Cube objects
+        # Clean duplicate empties (.001, .002)
         for base_name in ['Head Origin', 'Head Forward', 'Head Up', 'Light Direction', 'Sun', 'Eye Highlight', 'Highlight Top', 'Highlight Bottom']:
             orig_obj = bpy.data.objects.get(base_name)
             for obj in list(bpy.data.objects):
                 if obj != orig_obj and (obj.name.startswith(f"{base_name}.") or (base_name.lower() in obj.name.lower() and ('.00' in obj.name or '.01' in obj.name))):
-                    try:
-                        bpy.data.objects.remove(obj, do_unlink=True)
-                    except Exception:
-                        pass
-
-        for obj in list(bpy.data.objects):
-            if obj.name.lower().startswith("cube") and obj.type == 'MESH':
-                if not any(k in obj.name.lower() for k in ["body", "cloth", "face", "hair", "eye", "head"]):
                     try:
                         bpy.data.objects.remove(obj, do_unlink=True)
                     except Exception:

@@ -373,15 +373,7 @@ class WW_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties
                 except Exception:
                     pass
 
-        # Delete rogue Cube objects and duplicate .001 control objects
-        for obj in list(bpy.data.objects):
-            if obj.name.lower().startswith("cube") and obj.type == 'MESH':
-                if not any(k in obj.name.lower() for k in ["body", "cloth", "face", "hair", "eye", "head"]):
-                    try:
-                        bpy.data.objects.remove(obj, do_unlink=True)
-                    except Exception:
-                        pass
-
+        # Delete duplicate .001 control objects
         for base_name in ['Head Origin', 'Head Forward', 'Head Up', 'Light Direction', 'Sun', 'Eye Highlight', 'Highlight Top', 'Highlight Bottom']:
             orig_obj = bpy.data.objects.get(base_name)
             for obj in list(bpy.data.objects):

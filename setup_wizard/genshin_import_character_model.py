@@ -1382,17 +1382,7 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
         maxlen=255,  # Max internal buffer length, longer would be clamped.
     )
 
-    def clean_up_scene(self):
-        OBJECTS_TO_CLEAN_UP = [
-            'Cube',
-            'Light',
-        ]
-        for obj in bpy.data.objects:
-            if obj.name in OBJECTS_TO_CLEAN_UP:
-                bpy.data.objects.remove(obj)
-
     def execute(self, context):
-        self.clean_up_scene()
         from setup_wizard.utils.archive_extractor import is_archive_file, extract_character_archive
 
         is_archive = is_archive_file(self.filepath)
