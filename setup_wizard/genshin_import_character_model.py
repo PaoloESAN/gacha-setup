@@ -346,6 +346,11 @@ def align_eye_bones(armature):
             # Point A01 tail directly to A02 head (pupil center)
             eye_l1.tail = eye_l2.head.copy()
             eye_r1.tail = eye_r2.head.copy()
+
+        from setup_wizard.utils.genshin_eye_pivots import calibrate_eye_pivots
+        corrected = calibrate_eye_pivots(armature)
+        if corrected:
+            print(f'[ALIGN EYE BONES] Calibrated sclera pivots: {corrected}')
     except Exception as e:
         print(f"[ALIGN EYE BONES] Notice: {e}")
     finally:
