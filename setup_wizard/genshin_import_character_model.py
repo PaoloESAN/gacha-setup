@@ -1889,6 +1889,12 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
         if self.game_type == GameType.GENSHIN_IMPACT.name:
             import uuid
             model_id = uuid.uuid4().hex
+            imported_objects = [o for o in bpy.data.objects if o.name not in existing_objects]
+            if not is_rigging_disabled(bpy.context):
+                from setup_wizard.utils.genshin_scene_coordinates import normalize_cutscene_coordinates
+                for imported in imported_objects:
+                    if imported.type == 'ARMATURE':
+                        normalize_cutscene_coordinates(imported, imported_objects)
             for imported in bpy.data.objects:
                 if imported.name not in existing_objects:
                     imported['_setup_wizard_model_id'] = model_id

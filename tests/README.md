@@ -92,6 +92,33 @@ tests/
 
 ## How to Run Tests
 
+Legacy Genshin eye calibration can be checked against the supplied scene with
+`blender --background --factory-startup --python-exit-code 1 --python tests/genshin_eye_pivots_blender.py -- pruebaDiluc.blend`.
+It preserves the authored gaze and neutral skinning, checks four gaze
+directions, and verifies repeated calibration makes no further changes.
+
+After running both Paimon setups into `output/Paimon.blend` and
+`output/Paimon - Default.blend`, run
+`blender --background --factory-startup --python-exit-code 1 --python tests/genshin_paimon_blender.py`.
+It checks identification, visible controls near the character, the standard rig
+tests, root follow, and the real cutscene source's coordinate normalization.
+
+After running the full HSR setup on `chars/hsr/Kafka`, verify that the clothing
+and accessories follow the root and the right leg in FK and IK. This also
+checks that source limb helpers remain distinct from Rigify's bend segments:
+
+```bash
+blender --background "output/Kafka.blend" --python-exit-code 1 --python tests/hsr_kafka_clothing_blender.py
+```
+
+Genshin render preservation checks that shader values and links edited directly
+in Global Properties survive rendering with a character or camera selected,
+while explicit Character Settings edits still work:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python tests/genshin_render_preserves_properties_blender.py
+```
+
 After running the full Genshin setup on `chars/genshin/Neuvillette - Melusent Gift`,
 verify the resulting blend with the real material JSONs. This checks 15 texture
 bindings and keeps the three wing materials separate from the avatar:
