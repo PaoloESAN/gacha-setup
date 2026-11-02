@@ -2500,11 +2500,3 @@ def unregister_gi_properties():
     ]:
         if hasattr(bpy.types.Scene, prop):
             delattr(bpy.types.Scene, prop)
-
-
-@bpy.app.handlers.persistent
-def gi_frame_change_handler(scene, depsgraph=None):
-    try:
-        sync_genshin_shader_properties(scene)
-    except Exception:
-        pass
