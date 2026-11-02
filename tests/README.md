@@ -92,6 +92,14 @@ tests/
 
 ## How to Run Tests
 
+After running the full Genshin setup on `chars/genshin/Neuvillette - Melusent Gift`,
+verify the resulting blend with the real material JSONs. This checks 15 texture
+bindings and keeps the three wing materials separate from the avatar:
+
+```bash
+blender --background "output/Neuvillette - Melusent Gift.blend" --python-exit-code 1 --python tests/neuvillette_textures_blender.py
+```
+
 The Python FBX fallback regression uses both FBX files in
 `chars/ake/Zhuang Fangyi`. It checks recovery when the native importer rejects
 them, native import for a compatible model, failure cleanup, and preservation

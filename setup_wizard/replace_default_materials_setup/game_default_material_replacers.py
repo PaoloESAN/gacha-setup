@@ -880,8 +880,9 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 elif material_name.startswith(ShaderMaterialNameKeywords.SKILLOBJ) and material_name.endswith('Glass_Eff_Mat'):
                     mesh_body_part_name = 'Glass_Eff'
                 elif material_name.startswith(ShaderMaterialNameKeywords.SKILLOBJ):
-                    skillobj_identifier = material_name.split('_')[2]
-                    mesh_body_part_name = f'{ShaderMaterialNameKeywords.SKILLOBJ} {skillobj_identifier}'
+                    # A skill can have separate Hair, Dress and Eff materials.
+                    # Keep their full identity instead of merging all Wing slots.
+                    mesh_body_part_name = material_name.removesuffix('_Mat')
                 elif material_name.endswith('Hand_Eff_Mat'):  # Asmoday
                     mesh_body_part_name = 'StarCloak'
 
@@ -1110,9 +1111,9 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     pass
                 material_name = glass_material.name
         elif mesh_body_part_name and mesh_body_part_name.startswith(ShaderMaterialNameKeywords.SKILLOBJ):
-            skillobj_material = self.create_body_material(self.material_names, self.material_names.SKILLOBJ)
+            skillobj_material = self.create_body_material(
+                self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
             if skillobj_material:
-                skillobj_material.name = skillobj_material.name.replace(ShaderMaterialNameKeywords.SKILLOBJ, mesh_body_part_name)
                 material_name = skillobj_material.name
         elif mesh_body_part_name == 'Skirt':
             skirt_material = self.create_body_material(self.material_names, self.material_names.SKIRT)

@@ -1259,6 +1259,10 @@ class GenshinTextureImporter:
                 # keep the full object name so each maps to its own dedicated
                 # shader material instead of collapsing to a bare index ('01').
                 mat_part = clean_name
+            elif c_low.startswith('skillobj'):
+                # Skill Hair/Dress JSONs belong to their own materials, never
+                # to the avatar's Hair/Dress shaders.
+                mat_part = clean_name
             elif c_low.startswith('eff_'):
                 # Effect object materials (ex. Eff_Fresnel_048_NO_00): keep the
                 # full name so each effect maps to its own dedicated shader
