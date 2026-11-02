@@ -92,6 +92,15 @@ tests/
 
 ## How to Run Tests
 
+The Python FBX fallback regression uses both FBX files in
+`chars/ake/Zhuang Fangyi`. It checks recovery when the native importer rejects
+them, native import for a compatible model, failure cleanup, and preservation
+of the Python importer's enabled state:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python tests/fbx_python_fallback_blender.py
+```
+
 FBX dispatch regression uses the real Columbina FBX. Blender below 4.5 must
 always use installed BetterFBX; Blender 4.5+ prefers the registered native
 importer. To test an older Blender without enabling the add-on permanently,

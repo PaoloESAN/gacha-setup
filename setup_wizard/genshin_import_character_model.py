@@ -101,7 +101,7 @@ def is_rigging_disabled(context=None):
 
 
 def _execute_fbx_import(filepath):
-    """Use BetterFBX below 4.5; prefer the native importer from 4.5 onward."""
+    """Prefer native FBX on 4.5+, with Python fallback for rejected files."""
     if os.path.basename(filepath).startswith("._"):
         real_candidate = os.path.join(os.path.dirname(filepath), os.path.basename(filepath)[2:])
         if os.path.isfile(real_candidate):
@@ -119,10 +119,39 @@ def _execute_fbx_import(filepath):
         ignore_leaf_bones=False, validate_meshes=True, use_anim=True, anim_offset=1.0,
     )
     supported = bpy.ops.wm.fbx_import.get_rna_type().properties
-    result = bpy.ops.wm.fbx_import(**{name: value for name, value in options.items() if name in supported})
-    if result != {'FINISHED'}:
-        raise RuntimeError(f'Native FBX import failed: {result}')
-    return result
+    before = set(bpy.data.objects)
+    try:
+        result = bpy.ops.wm.fbx_import(**{name: value for name, value in options.items() if name in supported})
+        if result != {'FINISHED'}:
+            raise RuntimeError(f'Native FBX import failed: {result}')
+        return result
+    except RuntimeError as native_error:
+        # A failed importer may already have created objects. Do not leave a
+        # duplicate partial character behind when retrying with Python FBX.
+        for obj in set(bpy.data.objects) - before:
+            bpy.data.objects.remove(obj, do_unlink=True)
+        print(f'[FBX IMPORT] Native importer failed; retrying Python FBX: {native_error}')
+        try:
+            with temporary_addon('io_scene_fbx'):
+                result = bpy.ops.import_scene.fbx(
+                    'EXEC_DEFAULT', filepath=filepath, global_scale=1.0,
+                    use_custom_normals=True, use_custom_props=True,
+                    use_custom_props_enum_as_string=True, use_subsurf=False,
+                    ignore_leaf_bones=False, use_anim=True, anim_offset=1.0,
+                )
+            if result != {'FINISHED'} or not any(
+                obj.type == 'MESH' for obj in set(bpy.data.objects) - before
+            ):
+                raise RuntimeError(f'Python FBX import did not create meshes: {result}')
+        except Exception as fallback_error:
+            for obj in set(bpy.data.objects) - before:
+                bpy.data.objects.remove(obj, do_unlink=True)
+            raise RuntimeError(
+                f'Native FBX import failed: {native_error}\n'
+                f'Python FBX fallback failed: {fallback_error}'
+            ) from fallback_error
+        print('[FBX IMPORT] Imported with Python FBX fallback (import_scene.fbx)')
+        return result
 
 
 def connect_armature_bone_chains(armature):
