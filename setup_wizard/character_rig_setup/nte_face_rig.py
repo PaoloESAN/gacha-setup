@@ -132,11 +132,8 @@ def get_face_metrics(mesh_obj, armature, head_name):
     fwd = Vector((0.0, -1.0, 0.0))
     world_up = Vector((0.0, 0.0, 1.0))
 
-    if head_bone and head_pos and head_tail:
-        bone_vec = (head_tail - head_pos).normalized() if (head_tail - head_pos).length > 1e-4 else world_up
-        if abs(bone_vec.dot(world_up)) > 0.5:
-            world_up = bone_vec
-
+    # The expression grid must stay upright in the normalized character frame.
+    # A slanted imported head bone may locate the panel, but must not roll it.
     right = world_up.cross(fwd).normalized()
     up = fwd.cross(right).normalized()
 
