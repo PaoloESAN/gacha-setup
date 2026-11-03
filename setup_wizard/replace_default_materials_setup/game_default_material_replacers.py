@@ -2047,6 +2047,8 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         else:
             # --- KYTHERA SHADER REPLACEMENT ---
             highlight_template = bpy.data.materials.get("Kythera's ZZZ Eye Highlights")
+            if highlight_template:
+                highlight_template.surface_render_method = 'BLENDED'
             # Find Kythera face and main shader template materials dynamically
             face_template = None
             for mat in bpy.data.materials:

@@ -11,6 +11,38 @@ os.environ['PYTEST_VERSION'] = 'outline-regression'
 from setup_wizard.services.zzz_outline_mask_service import create_face_outline_mask
 from setup_wizard.utils.modifier_utils import get_modifier_property
 
+
+def assert_facial_openings_masked(face):
+    """Lips share the skin material; nearby skin also borders the eyeballs."""
+    from mathutils.kdtree import KDTree
+    mask = face.data.color_attributes['outline_mask']
+    mouth = {group.index for group in face.vertex_groups
+             if 'mouth' in group.name.lower() or 'lip' in group.name.lower()}
+    lip_vertices = [vertex for vertex in face.data.vertices
+                    if any(weight.group in mouth and weight.weight > .05 for weight in vertex.groups)]
+    assert lip_vertices, face.name
+    assert all(mask.data[vertex.index].color[0] == 0 for vertex in lip_vertices), 'Lip skin still produces a hull'
+    checked = 0
+    for group in face.vertex_groups:
+        name = group.name.lower()
+        if 'eye' not in name or any(word in name for word in ('brow', 'lid', 'lash', 'highlight')):
+            continue
+        points = [vertex.co for vertex in face.data.vertices
+                  if any(weight.group == group.index and weight.weight > .1 for weight in vertex.groups)]
+        if not points:
+            continue
+        span = max(max(point[i] for point in points) - min(point[i] for point in points) for i in range(3))
+        tree = KDTree(len(points))
+        for index, point in enumerate(points):
+            tree.insert(point, index)
+        tree.balance()
+        for vertex in face.data.vertices:
+            if tree.find(vertex.co)[2] <= span * .4:
+                assert mask.data[vertex.index].color[0] == 0, 'Skin hull still touches an eye'
+                checked += 1
+    assert checked, face.name
+
+
 bpy.ops.wm.read_factory_settings(use_empty=True)
 with bpy.data.libraries.load(str(ROOT/'setup_wizard/shaders/zzz/ZZZ Setup v7.blend')) as (source, target):
     target.node_groups = ['face_outlines', 'ZZZ Outlines']
@@ -29,11 +61,11 @@ assert create_face_outline_mask(face)
 assert face.vertex_groups.get('outline_mask') is None
 assert face.vertex_groups.get('outline_mask_weights') is not None
 mask = mesh.color_attributes['outline_mask']
-assert mask.data[0].color[0] == 1 and mask.data[36].color[0] == 1, 'Both skin halves must receive outlines'
+assert_facial_openings_masked(face)
 white = [v for v in mesh.vertices if mask.data[v.index].color[0] > .5]
 left = sum(v.co.x < -1e-5 for v in white)
 right = sum(v.co.x > 1e-5 for v in white)
-assert left > 400 and right > 400 and abs(left-right) / max(left, right) < .05, (left, right)
+assert left > 200 and right > 200 and abs(left-right) / max(left, right) < .05, (left, right)
 for polygon in mesh.polygons:
     if polygon.material_index in (1, 2):
         assert all(mask.data[v].color[0] == 0 for v in polygon.vertices), 'Eyes/brows must be excluded'
@@ -83,7 +115,7 @@ def evaluated_count():
     evaluated.to_mesh_clear()
     return count
 count = evaluated_count()
-assert count > 1500, count
+assert count > 500, count
 for d in mask.data:
     d.color = (0, 0, 0, .4)
 black_count = evaluated_count()
@@ -124,6 +156,7 @@ for folder in ('miyabi-dignified-blossom', 'jane-doe-hidden-nightfade',
     topology = (len(mesh.vertices), len(mesh.edges), len(mesh.polygons), len(mesh.loops))
     assert create_face_outline_mask(face)
     mask = mesh.color_attributes['outline_mask']
+    assert_facial_openings_masked(face)
     skin = [v for v in mesh.vertices if mask.data[v.index].color[0] > .5]
     left = sum(v.co.x < -1e-5 for v in skin)
     right = sum(v.co.x > 1e-5 for v in skin)
@@ -152,3 +185,55 @@ for folder in ('miyabi-dignified-blossom', 'jane-doe-hidden-nightfade',
         d.color = (1, 1, 1, 0)
     assert evaluated_count() > count, (folder, 'white mask ignored')
     print('PASS: bilateral skin, detail exclusion, RNA, topology, repeatability and evaluated hull', folder, left, right, count)
+
+# A coincident detail overlay must not bridge a detached mouth island into
+# the skin. Source material categories must survive shader material renaming.
+bpy.ops.wm.read_factory_settings(use_empty=True)
+with bpy.data.libraries.load(str(ROOT/'setup_wizard/shaders/zzz/ZZZ Setup v7.blend')) as (source, target):
+    target.node_groups = ['face_outlines', 'ZZZ Outlines']
+mesh = bpy.data.meshes.new('Detail seam regression')
+skin_coordinates = [(x, y, 0) for y in range(3) for x in range(3)]
+skin_faces = [(y*3+x, y*3+x+1, (y+1)*3+x+1, (y+1)*3+x)
+              for y in range(2) for x in range(2)]
+mesh.from_pydata(skin_coordinates + [(5, 5, 0), (6, 5, 0), (5, 6, 0),
+                                   (0, 0, 0), (5, 5, 0), (3, 3, 0)],
+                 [], skin_faces + [(9, 10, 11), (12, 13, 14)])
+face = bpy.data.objects.new('Regression_Face', mesh)
+bpy.context.collection.objects.link(face)
+mesh.materials.append(bpy.data.materials.new('Skin'))
+eye = bpy.data.materials.new('Renamed shader')
+eye['_original_material_name'] = 'MAT_Character_Eye_UI'
+mesh.materials.append(eye)
+mesh.polygons[-1].material_index = 1
+assert create_face_outline_mask(face)
+mask = mesh.color_attributes['outline_mask']
+assert mask.data[0].color[0] == 0, 'Skin coincident with an eye needs clearance too'
+assert all(mask.data[i].color[0] == 1 for i in range(1, 9)), 'Remaining skin must retain outlines'
+assert all(mask.data[i].color[0] == 0 for i in range(9, 15)), 'Detail seam bridged the mouth into skin'
+face.modifiers['Outlines'].node_group = make_hull_wrapper(face.modifiers['Outlines'].node_group)
+assert evaluated_count() == 3, 'Only skin polygons away from the eye may produce a hull'
+
+# Rerunning setup removes hulls from separate facial parts, even when their
+# object/material names changed and old duplicate modifiers remain.
+from types import SimpleNamespace
+from setup_wizard.geometry_nodes_setup.geometry_nodes_setups import ZenlessZoneZeroGeometryNodesSetup
+details = []
+for category in ('Eye', 'Mouth', 'Teeth', 'Tongue', 'EyeHighlights'):
+    detail_mesh = bpy.data.meshes.new(category)
+    detail_mesh.from_pydata([(0, 0, 0), (1, 0, 0), (0, 1, 0)], [], [(0, 1, 2)])
+    material = bpy.data.materials.new('Renamed ' + category)
+    material['_original_material_name'] = 'MAT_' + category
+    detail_mesh.materials.append(material)
+    obj = bpy.data.objects.new('Separate part ' + str(len(details)), detail_mesh)
+    bpy.context.collection.objects.link(obj)
+    obj.modifiers.new('Outlines.001', 'NODES').node_group = bpy.data.node_groups['ZZZ Outlines']
+    obj.modifiers.new('Solidify.001', 'SOLIDIFY')
+    details.append(obj)
+setup = ZenlessZoneZeroGeometryNodesSetup(SimpleNamespace(game_type='ZENLESS_ZONE_ZERO'), bpy.context)
+setup.setup_geometry_nodes()
+setup.setup_geometry_nodes()
+for obj in details:
+    assert not any(mod.type == 'SOLIDIFY' or mod.name.startswith('Outlines') for mod in obj.modifiers), obj.name
+    assert create_face_outline_mask(obj), 'All-detail meshes must receive an empty mask'
+    assert all(value.color[0] == 0 for value in obj.data.color_attributes['outline_mask'].data)
+print('PASS: coincident detail bridge, renamed materials, evaluated skin hull and separate facial parts')

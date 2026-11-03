@@ -1835,15 +1835,18 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                     for slot in obj.material_slots
                 )
 
-                if is_zzz_game and is_brow and not is_face:
-                    # Eyebrows in ZZZ should NOT have outlines
-                    for mod_name in ["Outlines", "Solidify"]:
-                        mod_to_rem = obj.modifiers.get(mod_name)
-                        if mod_to_rem:
-                            try:
-                                obj.modifiers.remove(mod_to_rem)
-                            except Exception:
-                                pass
+                from setup_wizard.services.zzz_outline_mask_service import is_face_detail_object
+                if is_zzz_game and (is_brow and not is_face or is_face_detail_object(obj)):
+                    # Separate eyes, mouth interiors and brows bypass the body
+                    # hull as well as the face mask path. Include rerun copies.
+                    for detail_mod in list(obj.modifiers):
+                        if detail_mod.type == 'SOLIDIFY' or (
+                            detail_mod.type == 'NODES' and (
+                                detail_mod.name.startswith("Outlines") or
+                                detail_mod.node_group and detail_mod.node_group.name.startswith(("ZZZ Outlines", "face_outlines"))
+                            )
+                        ):
+                            obj.modifiers.remove(detail_mod)
                     continue
 
                 # fix_zzz_eye_shadow disabled

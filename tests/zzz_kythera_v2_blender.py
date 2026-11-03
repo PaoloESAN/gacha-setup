@@ -59,6 +59,7 @@ face = next(obj for obj in bpy.context.scene.objects if obj.type == 'MESH'
 modifier = next(mod for mod in face.modifiers if mod.type == 'NODES' and mod.node_group
                 and mod.node_group.get('zzz_kythera_vectors'))
 highlight = bpy.data.materials["Kythera's ZZZ Eye Highlights"]
+assert highlight.surface_render_method == 'BLENDED'
 assert any(face.data.materials[polygon.material_index] == highlight for polygon in face.data.polygons), 'Toon must assign Kythera highlights'
 assert not any(face.data.materials[polygon.material_index]
                and face.data.materials[polygon.material_index].name.startswith('ZZZ Shader EyeHighlights')
