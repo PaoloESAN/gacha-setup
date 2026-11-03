@@ -3079,6 +3079,9 @@ class HonkaiStarRailTextureImporter(GenshinTextureImporter):
             lightmap_node.image = img
 
     def set_warm_shadow_ramp_texture(self, type: TextureType, img):
+        if type is TextureType.WEAPON:
+            self.set_weapon_ramp_texture(img, override=True)
+            return
         ramp_node_name = \
             self.texture_node_names.BODY_WARM_RAMP if type is TextureType.BODY else \
             self.texture_node_names.HAIR_WARM_RAMP
@@ -3088,6 +3091,8 @@ class HonkaiStarRailTextureImporter(GenshinTextureImporter):
         ramp_texture_node.image = img
 
     def set_cool_shadow_ramp_texture(self, type: TextureType, img):
+        if type is TextureType.WEAPON:
+            return  # HSR weapon shaders expose a single warm-ramp group.
         if not bpy.data.node_groups.get(self.texture_node_names.BODY_COOL_RAMP_NODE_GROUP) or \
             not bpy.data.node_groups.get(self.texture_node_names.HAIR_COOL_RAMP_NODE_GROUP):
             return
@@ -3267,6 +3272,8 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
             os.path.join(directory, "Materials"),
             directory,
         ]
+        if os.path.basename(os.path.normpath(directory)).casefold() == 'textures':
+            candidates.append(os.path.join(os.path.dirname(os.path.normpath(directory)), 'Materials'))
         materials_dirs = []
         for d in candidates:
             if d and os.path.isdir(d) and d not in materials_dirs:
@@ -3320,11 +3327,11 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
                 extracted = {
                     'diffuse': extract_tex_name(['_MainTex', '_BaseTex', '_BaseTexV2', '_ColorTex', '_Diffuse', '_Tex', '_EyeColorMap']),
                     'lightmap': extract_tex_name(['_LightMapTex', '_LightMap', '_Lightmap', '_LightmapTex', '_MainLightmap', '_LightTex']),
-                    'warm_ramp': extract_tex_name(['_WarmRampTex', '_WarmRamp', '_ShadowRampTex', '_PackedShadowRampTex', '_Body_Warm_Ramp', '_Hair_Warm_Ramp', '_RampTex']),
-                    'cool_ramp': extract_tex_name(['_CoolRampTex', '_CoolRamp', '_Body_Cool_Ramp', '_Hair_Cool_Ramp']),
+                    'warm_ramp': extract_tex_name(['_DiffuseRampMultiTex', '_WarmRampTex', '_WarmRamp', '_ShadowRampTex', '_PackedShadowRampTex', '_Body_Warm_Ramp', '_Hair_Warm_Ramp', '_RampTex']),
+                    'cool_ramp': extract_tex_name(['_DiffuseCoolRampMultiTex', '_CoolRampTex', '_CoolRamp', '_Body_Cool_Ramp', '_Hair_Cool_Ramp']),
                     'stockings': extract_tex_name(['_StockingsTex', '_StockingTex', '_Stockings', '_Body_Stockings', '_StockRangeTex', '_StockRange', '_StockingRangeTex']),
                     'facemap': extract_tex_name(['_FaceMapTex', '_FaceMap', '_FaceLightMap', '_Face_LightMap', '_FaceShadow']),
-                    'expression': extract_tex_name(['_ExpressionMap', '_Face_ExpressionMap', '_FaceExpressionMap', '_Expression']),
+                    'expression': extract_tex_name(['_FaceExpression', '_ExpressionMap', '_Face_ExpressionMap', '_FaceExpressionMap', '_Expression']),
                     'normal': extract_tex_name(['_BumpMap', '_NormalMap', '_NormalTex']),
                 }
 
@@ -3501,7 +3508,7 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
                 img = self._resolve_image(fname, image_files)
                 if img: self.set_cool_shadow_ramp_texture(TextureType.BODY, img)
             # Weapon Ramp
-            elif 'weapon' in f_low and 'ramp' in f_low and not any(k in f_low for k in ['body', 'hair']):
+            elif 'weapon' in f_low and 'ramp' in f_low and not any(k in f_low for k in ['body', 'hair', 'cool']):
                 img = self._resolve_image(fname, image_files)
                 if img: self.set_weapon_ramp_texture(img, override=True)
             # Face Map

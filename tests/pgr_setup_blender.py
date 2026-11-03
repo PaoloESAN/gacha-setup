@@ -4,6 +4,7 @@ blender --background --factory-startup --python-exit-code 1 --python tests/pgr_s
 Optional: -- path/to/model.fbx [--save-blend]
 """
 import json
+import importlib
 import os
 from pathlib import Path
 import subprocess
@@ -48,11 +49,11 @@ def resource(kind, path='', create=False):
 
 bpy.utils.user_resource = resource
 dependencies = OUTPUT / 'dependencies'
-with zipfile.ZipFile(ROOT / 'setup_wizard/dependencies/retarget.zip') as archive:
+with zipfile.ZipFile(ROOT / 'setup_wizard/dependencies/Expy-Kit-v052.zip') as archive:
     archive.extractall(dependencies)
 sys.path.insert(0, str(dependencies))
 sys.path.insert(0, str(OUTPUT / 'resources/SCRIPTS/addons'))
-import retarget  # Make the isolated dependency discoverable to optional_addons.
+importlib.import_module('Expy-Kit-main')
 addon_utils.enable('setup_wizard', default_set=False)
 from setup_wizard.genshin_setup_wizard import on_register
 from setup_wizard.character_rig_setup.rig_ui_utils import get_view3d_override

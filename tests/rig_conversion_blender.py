@@ -18,8 +18,6 @@ expected = 'expy'
 from setup_wizard.utils.optional_addons import find_addon, temporary_addon
 module = find_addon(expected)
 optional_keys = [expected, 'ueformat']
-if bpy.app.version >= (5, 0, 0):
-    optional_keys.append('retarget')
 for key in optional_keys:
     dependency = find_addon(key)
     assert dependency
@@ -41,8 +39,6 @@ assert not addon_utils.check(module)[1]
 assert 'DEF-spine' in source.data.bones
 assert safe_expykit_extract_metarig(assign_metarig=True) == {'FINISHED'}
 assert not addon_utils.check(module)[1]
-if bpy.app.version >= (5, 0, 0):
-    assert not addon_utils.check(find_addon('retarget'))[1]
 metarig = bpy.context.object
 assert metarig != source
 assert metarig.data.rigify_target_rig == source

@@ -23,9 +23,9 @@ def resource(kind, path='', create=False):
 bpy.utils.user_resource = resource
 sys.path.insert(0, str(ROOT))
 dependencies = runtime / 'dependencies'
-with zipfile.ZipFile(ROOT / 'setup_wizard/dependencies/retarget.zip') as archive:
+with zipfile.ZipFile(ROOT / 'setup_wizard/dependencies/Expy-Kit-v052.zip') as archive:
     archive.extractall(dependencies)
-package = min(dependencies.rglob('__init__.py'), key=lambda p: len(p.parts)).parent
+package = dependencies / 'Expy-Kit-main'
 sys.path.insert(0, str(package.parent))
 importlib.import_module(package.name)
 model = ROOT / 'chars/hsr/Art_TheHerta_00/Art_TheHerta_00.fbx'

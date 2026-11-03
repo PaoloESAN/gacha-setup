@@ -1577,6 +1577,13 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         if material_name.startswith('Eff_') or 'Eff_' in material_name or material_name.startswith('Effect_'):
             return material_name
 
+        # Trident's HSR names put the part before numeric IDs and the material
+        # suffix, e.g. Avatar_PlayerGirl_Body_034_000_000_Mat_D.
+        exported_part = re.search(r'_(Body|Hair|Face|Weapon\d*)_\d+(?:_\d+)*_Mat(?:_(.+))?$', material_name)
+        if exported_part:
+            part, suffix = exported_part.groups()
+            return f'{part}_{suffix}' if suffix else part
+
         if '_Mat_' in material_name:
             suffix = material_name.split('_Mat_')[1]
             return suffix

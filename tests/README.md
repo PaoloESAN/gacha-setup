@@ -187,7 +187,7 @@ blender --background --factory-startup --python-exit-code 1 --python tests/mmd_s
 ```
 
 The ExpyKit dependency/conversion smoke test can run on Blender 4 or 5.
-Character setup uses ExpyKit on both; Retarget remains available separately:
+Character setup uses ExpyKit on both:
 
 ```bash
 blender --background --factory-startup --python-exit-code 1 --python tests/rig_conversion_blender.py
@@ -207,8 +207,8 @@ It uses `chars/genshin/Amber/Default` and writes results under
 This also verifies temporary dependency activation, nested scopes, cleanup after
 failure, and preservation of dependencies already enabled by the user. The PMX
 regression starts with optional dependencies disabled. The VMD regression on
-Blender 5 checks the real root VMD on an FBX and Rigify controls, cleanup after
-failure, and rejection of Blender versions below 5.0:
+Blender 4.2+ checks the real root VMD on an FBX and Rigify controls, cleanup after
+failure, and rejection of Blender versions below 4.2:
 
 ```bash
 blender --background --factory-startup --python-exit-code 1 --python tests/vmd_motion_blender.py

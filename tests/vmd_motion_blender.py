@@ -58,6 +58,8 @@ MOTION = motion_fixture()
 
 
 def fcurves(action):
+    if not getattr(action, 'is_action_layered', False):
+        return list(action.fcurves)
     return [curve for layer in action.layers for strip in layer.strips
             for bag in strip.channelbags for curve in bag.fcurves]
 
@@ -177,14 +179,14 @@ assert rig.pose.bones['upper_arm_parent.L']['IK_FK'] == 1
 assert any('upper_arm_fk.L' in f.data_path for f in fcurves(rig.animation_data.action))
 print('VMD_RIGIFY_PASS', counts)
 assert not addon_utils.check(mmd_module)[1]
-# Pre-5.0 access must fail both through poll and the Python entry point.
+# Pre-4.2 access must fail both through poll and the Python entry point.
 from unittest.mock import patch
 from types import SimpleNamespace
 from setup_wizard.utilites.vmd_motion import CSW_OT_ApplyVMD
-with patch('setup_wizard.utilites.vmd_motion.bpy', SimpleNamespace(app=SimpleNamespace(version=(4, 5, 0)))):
+with patch('setup_wizard.utilites.vmd_motion.bpy', SimpleNamespace(app=SimpleNamespace(version=(4, 1, 0)))):
     assert not CSW_OT_ApplyVMD.poll(bpy.context)
     try:
         apply_vmd(bpy.context, rig, str(MOTION))
-        raise AssertionError('Blender 4 must be rejected')
+        raise AssertionError('Blender below 4.2 must be rejected')
     except RuntimeError as exc:
-        assert '5.0' in str(exc)
+        assert '4.2' in str(exc)
