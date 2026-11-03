@@ -61,6 +61,9 @@ class GI_OT_GenshinImportMaterialData(Operator, ImportHelper, CustomOperatorProp
 
             self.report({'INFO'}, 'Imported material data')
             if status == {'FINISHED'}:
+                if self.game_type == 'GENSHIN_IMPACT':
+                    from setup_wizard.utils.neuvillette_wings import configure_neuvillette_wings
+                    configure_neuvillette_wings()
                 NextStepInvoker().invoke(
                     self.next_step_idx, 
                     self.invoker_type, 

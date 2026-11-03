@@ -571,6 +571,11 @@ class V3_GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
         if not mesh:
             return None
 
+        from setup_wizard.utils.neuvillette_wings import is_neuvillette_wing, configure_neuvillette_wings
+        if is_neuvillette_wing(mesh):
+            configure_neuvillette_wings([mesh])
+            return None
+
         for outlines_node_group_name in self.outlines_node_group_names:
             outlines_node_group = bpy.data.node_groups.get(outlines_node_group_name)
             geometry_nodes_modifier = mesh.modifiers.get(f'{NAME_OF_GEOMETRY_NODES_MODIFIER} {mesh_name}')
@@ -889,6 +894,9 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
             set_modifier_property(modifier, self.FACE_LIGHTMAP_SOCKET, face_lightmap_node_group.nodes[self.texture_node_names.FACE_LIGHTMAP].image)
 
     def __separate_materials_into_unique_meshes(self, mesh):
+        from setup_wizard.utils.neuvillette_wings import is_neuvillette_wing
+        if is_neuvillette_wing(mesh):
+            return
         # Keep toggleable part meshes (e.g. Durin Wing01/Wing02) intact:
         # they are named after the body part, not after a material, so
         # separating them by material would dissolve them into the generic
