@@ -1,5 +1,27 @@
 # Automated Test Suite
 
+The V3 widget regression also compares geometry, edges, physical dimensions
+and palettes for 35 controls against `tests/.runtime/wuwa-original/widgets.json`
+when present. This reference was extracted after running the unchanged
+`WuWaRigifyV3.0a.py` (SHA-256
+`76759904481ca88ba1b5283b0ad85ed7d2e520b7f6a98dd6d88619b08d7fc761`)
+on a raw Phoebe import in Goo Engine 4.2.13, with only UEFormat and Rigify.
+
+WuWa's on-face V3 regression runs against a completed character:
+`blender --background --factory-startup --python-exit-code 1 --python tests/wuwa_face_on_model_blender.py -- "output/Phoebe - WuWa V3.blend"`.
+It checks expression deformation and reset, independent eyelids and pupils,
+gaze, eye-highlight helpers, outline toggling and a repeatable rebuild that
+preserves the body rig.
+
+Run `tests/hsr_shader_asset_blender.py` with Blender 4.5 to inspect the baked
+face modifier and preview inside `StellarToonV1.1.blend`.
+
+HSR dynamic face outlines can be compared with the supplied Bronya reference:
+`blender --background --factory-startup --python-exit-code 1 --python tests/hsr_face_outlines_blender.py -- output/Blade.blend Bronya.blend`.
+This compares the realized outline geometry at 18 camera/head orientations,
+checks that the dynamic masks actually suppress outlines, and verifies zero
+face depth offset, unchanged body/hair groups and repeatable configuration.
+
 Automated testing framework for the Gacha Setup Wizard addon, designed to validate each pipeline phase across supported games and character models in a modular, headless fashion.
 
 ## Credits

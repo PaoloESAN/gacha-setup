@@ -193,8 +193,10 @@ def refresh_hsr_outline_scale(context):
         if abs(scale - previous_scale) < 1e-6:
             continue
         for modifier in mesh.modifiers:
-            if (modifier.type != 'NODES' or not modifier.node_group
-                    or modifier.node_group.name.split('.')[0] not in
+            if modifier.type != 'NODES' or not modifier.node_group:
+                continue
+            is_face_outline = modifier.node_group.get('gacha_hsr_face_outlines')
+            if (not is_face_outline and modifier.node_group.name.split('.')[0] not in
                     OutlineNodeGroupNames.STELLARTOON_HSR_OUTLINES + OutlineNodeGroupNames.NYA222_HSR_OUTLINES):
                 continue
             for key in (OUTLINE_THICKNESS_INPUT, HSR_OUTLINE_DEPTH_OFFSET_INPUT):
@@ -1458,6 +1460,13 @@ class StellarToonGeometryNodesSetup(HonkaiStarRailGeometryNodesSetup):
         set_modifier_property(light_vectors_modifier, self.LIGHTDIR_OUTPUT_ATTRIBUTE, 'lightDir')
         set_modifier_property(light_vectors_modifier, self.HEADFORWARD_OUTPUT_ATTRIBUTE, 'headForward')
         set_modifier_property(light_vectors_modifier, self.HEADUP_OUTPUT_ATTRIBUTE, 'headUp')
+
+    def create_geometry_nodes_modifier(self, mesh_name):
+        modifier = super().create_geometry_nodes_modifier(mesh_name)
+        if modifier:
+            from setup_wizard.utils.hsr_face_outlines import configure_face_outlines
+            configure_face_outlines(self.context, bpy.data.objects[mesh_name], modifier)
+        return modifier
 
 
 class PunishingGrayRavenGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
