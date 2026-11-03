@@ -218,7 +218,25 @@ blender --background --factory-startup --python-exit-code 1 --python tests/optio
 
 The VMD test uses `chars/vmdmotion/Motion & Facials.vmd` (or the root copy),
 and generates a reproducible motion if neither file is present.
-It also checks driven expressions on an FBX and facial-only VMD import. The
+
+`tests/vmd_motion_games_blender.py` checks one prepared character for each of
+the nine supported games with `chars/vmdmotion/Motion & Facials.vmd`. It checks
+mapped pelvis/spine controls, animated deformation bones, finite transforms,
+the starting frame, and a `FACIAL_Hiasobi.vmd` overlay that preserves body curves
+and FPS. Characters without shape keys are checked for body motion only.
+Prepared scene paths are listed in `CHARACTERS` in the script. Reports are
+written to `tests/.runtime/vmd-games/<game>.json`.
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python tests/vmd_motion_games_blender.py
+blender --background --factory-startup --python-exit-code 1 --python tests/vmd_motion_games_blender.py -- wuwa --save-blend
+```
+
+Use `--body-only` to check only dancing. Set `GACHA_TEST_MMD_DIR` to the
+installed `mmd_tools` package directory if it is outside Blender's script paths.
+Set `GACHA_TEST_VMD` to another real dance, such as `chars/vmdmotion/Hiasobi.vmd`.
+
+The original FBX test also checks driven expressions and facial-only VMD import. The
 standalone facial regression needs no optional add-ons; it covers shared
 channels, independent bone axes, linear weights, rollback, source snapshots,
 custom properties and preservation of drivers and previous actions.
