@@ -160,7 +160,7 @@ class HOYOVERSE_OT_rig_character(Operator, ImportHelper, CustomOperatorPropertie
             if not expy_kit_installed or not rigify_installed:
                 self.report(
                     {'WARNING'},
-                    'Rigging skipped. Retarget (Blender 5+) / ExpyKit (Blender 4) and Rigify are required.\n'
+                    'Rigging skipped. Expy-Kit and Rigify are required.\n'
                     f'Rig conversion: {"Installed" if expy_kit_installed else "Missing"}\n'
                     f'Rigify: {"Installed" if rigify_installed else "Missing"}'
                 )

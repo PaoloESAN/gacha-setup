@@ -9,19 +9,6 @@ import eyeThroughHair1 from '../../../assets/content/utilities/eye-through-hair1
 import eyeThroughHair2 from '../../../assets/content/utilities/eye-through-hair2.mp4';
 import hairShadowImg from '../../../assets/content/utilities/hair-shadow.png';
 
-## Apply VMD Motion
-
-1. Selecciona la armadura del personaje.
-2. Pulsa **Gacha Setup → Utilities → Apply VMD Motion** y selecciona tu archivo `.vmd`.
-
-   <Image src={vmdMotionImg} alt="Selección del VMD motion y opciones de importación" loading="lazy" />
-
-3. Ajusta las opciones de arriba a la derecha si es necesario y confirma con **Apply VMD Motion**.
-
-:::caution
-El proceso puede tardar un poco, especialmente al importar expresiones faciales. Espera a que termine.
-:::
-
 ## Jideeh's Camera
 
 ### Cómo usar
@@ -101,6 +88,25 @@ Añade sombras del cabello sobre el rostro del personaje en Blender 5.2 o poster
 <Image src={hairShadowImg} alt="Grupo de Hair Shadows en el compositor y efecto en el rostro" loading="lazy" />
 
 La herramienta activa el compositor del visor automáticamente. Comprueba el resultado en el sombreado renderizado o en un render. Si ejecutas la herramienta otra vez sobre el mismo personaje, se actualiza su efecto existente.
+
+---
+
+## Apply VMD Motion
+
+:::caution[MMD Tools requerido]
+Necesitas tener instalado el addon **MMD Tools** en Blender para importar VMD Motion.
+:::
+
+1. Selecciona la armadura del personaje.
+2. Pulsa **Gacha Setup → Utilities → Apply VMD Motion** y selecciona tu archivo `.vmd`.
+
+   <Image src={vmdMotionImg} alt="Selección del VMD motion y opciones de importación" loading="lazy" />
+
+3. Ajusta las opciones de arriba a la derecha si es necesario y confirma con **Apply VMD Motion**.
+
+:::caution
+El proceso puede tardar un poco, especialmente al importar expresiones faciales. Espera a que termine.
+:::
 
 ---
 

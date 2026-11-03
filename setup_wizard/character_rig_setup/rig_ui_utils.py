@@ -2428,7 +2428,7 @@ def patch_expykit_operators():
     try:
         import sys
         for mod_name, mod in list(sys.modules.items()):
-            if "expy" in mod_name.lower() or "retarget" in mod_name.lower():
+            if "expy" in mod_name.lower():
                 for attr_name in ("ExtractMetarig", "ConvertBoneNaming"):
                     cls = getattr(mod, attr_name, None)
                     if cls and hasattr(cls, "execute") and not getattr(cls.execute, "_gacha_patched", False):

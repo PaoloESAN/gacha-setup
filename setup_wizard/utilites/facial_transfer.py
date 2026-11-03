@@ -255,7 +255,7 @@ def action_curves(data):
     action = data.action
     if not action:
         return []
-    if hasattr(action, 'layers'):
+    if getattr(action, 'is_action_layered', False):
         slot = data.action_slot
         return [curve for layer in action.layers for strip in layer.strips
                 for bag in strip.channelbags if slot and bag.slot_handle == slot.handle
@@ -346,7 +346,7 @@ def transfer_tracks(context, objects, motion, start, action_name, mapping=None, 
             values[control] = control.read()
             if owner not in actions:
                 data = owner.animation_data_create()
-                previous, slot = data.action, data.action_slot
+                previous, slot = data.action, getattr(data, 'action_slot', None)
                 new = previous.copy() if previous else bpy.data.actions.new(action_name+' Face')
                 actions[owner] = previous, slot, new
                 data.action = new

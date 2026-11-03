@@ -150,8 +150,8 @@ def import_morphs(context, rig, motion, start, action_name):
 
 
 def apply_vmd(context, rig, filepath, scale=.08, start=1, facial=True, face_only=False):
-    if bpy.app.version < (5, 0, 0):
-        raise RuntimeError('VMD Motion requires Blender 5.0 or newer.')
+    if bpy.app.version < (4, 2, 0):
+        raise RuntimeError('VMD Motion requires Blender 4.2 or newer.')
     with temporary_addon('mmd_tools'):
         return _apply_vmd(context, rig, filepath, scale, start, facial, face_only)
 
@@ -166,7 +166,7 @@ def merge_groove(rig, importer, torso, start, frames):
     from .facial_transfer import action_curves
 
     data = rig.animation_data
-    body, slot = data.action, data.action_slot
+    body, slot = data.action, getattr(data, 'action_slot', None)
     body_curves = {(c.data_path, c.array_index): c for c in action_curves(data)}
     temporary = None
     try:
@@ -219,7 +219,8 @@ def merge_groove(rig, importer, torso, start, frames):
             curve.update()
     finally:
         data.action = body
-        data.action_slot = slot
+        if slot:
+            data.action_slot = slot
         if temporary and not temporary.users:
             bpy.data.actions.remove(temporary)
 
@@ -236,7 +237,7 @@ def _apply_vmd(context, rig, filepath, scale, start, facial, face_only=False):
     action_name = Path(filepath).stem+' - '+rig.name
     data = rig.animation_data_create()
     previous = data.action
-    previous_slot = data.action_slot
+    previous_slot = getattr(data, 'action_slot', None)
     if mapping:
         data.action = None
     old_frame, old_subframe = context.scene.frame_current, context.scene.frame_subframe
@@ -325,8 +326,8 @@ class CSW_OT_ApplyVMD(bpy.types.Operator, ImportHelper):
 
     @classmethod
     def poll(cls, context):
-        if bpy.app.version < (5, 0, 0):
-            cls.poll_message_set('VMD Motion requires Blender 5.0 or newer')
+        if bpy.app.version < (4, 2, 0):
+            cls.poll_message_set('VMD Motion requires Blender 4.2 or newer')
             return False
         return selected_armature(context) is not None and context.mode in {'OBJECT', 'POSE'}
 
@@ -344,8 +345,8 @@ class CSW_OT_ApplyVMD(bpy.types.Operator, ImportHelper):
         return {'RUNNING_MODAL'}
 
     def execute(self, context):
-        if bpy.app.version < (5, 0, 0):
-            self.report({'ERROR'}, 'VMD Motion requires Blender 5.0 or newer.')
+        if bpy.app.version < (4, 2, 0):
+            self.report({'ERROR'}, 'VMD Motion requires Blender 4.2 or newer.')
             return {'CANCELLED'}
         rig = bpy.data.objects.get(self.target_name) if self.target_name else selected_armature(context)
         if not rig or rig.type != 'ARMATURE':

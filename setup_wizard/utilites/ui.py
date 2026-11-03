@@ -50,11 +50,10 @@ class CSW_PT_Utilities_UI_Layout(Panel):
             doc_hair = row_hair.operator("wm.url_open", text="", icon="TEXT")
             doc_hair.url = "https://gacha-setup.pages.dev/utilities/#hair-shadows"
 
-        vmd = col.row(align=True)
-        motion = vmd.row(align=True)
-        motion.enabled = bpy.app.version >= (5, 0, 0)
-        motion.operator('setup_wizard.apply_vmd', text='Apply VMD Motion', icon='ACTION')
-        doc_vmd = vmd.operator('wm.url_open', text='', icon='TEXT')
-        doc_vmd.url = 'https://gacha-setup.pages.dev/utilities/#apply-vmd-motion'
+        if bpy.app.version >= (4, 2, 0):
+            vmd = col.row(align=True)
+            vmd.operator('setup_wizard.apply_vmd', text='Apply VMD Motion', icon='ACTION')
+            doc_vmd = vmd.operator('wm.url_open', text='', icon='TEXT')
+            doc_vmd.url = 'https://gacha-setup.pages.dev/utilities/#apply-vmd-motion'
 
 

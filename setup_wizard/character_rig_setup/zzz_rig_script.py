@@ -658,8 +658,8 @@ def rig_character(
     except Exception as ex:
         print(f"Notice: Expykit convert_bone_names handled: {ex}")
 
-    # Retarget's Rigify presets do not include breast bones. Name the source
-    # roots as deformers so they are replaced, rather than rejoined as plain
+    # Name the source breast roots as deformers so they are replaced, rather
+    # than rejoined as plain
     # physics bones that collide with the generated breast controls.
     for side in ('L', 'R'):
         source_breast = obj.pose.bones.get(f'breast.{side}')
@@ -690,9 +690,8 @@ def rig_character(
     ## Fixes the tiddy bones.  Expykit, why did you neglect them
     if metarig_obj:
         metarm = metarig_obj.data
-        # Expy-Kit edited only the metarig. Retarget also leaves the source
-        # selected, exposing its edit_bones here and changing the legacy
-        # breast placement from the template to the short source bones.
+        # Select only the metarig before editing, so source edit_bones cannot
+        # replace the template's breast placement with short source bones.
         bpy.ops.object.mode_set(mode='OBJECT')
         bpy.ops.object.select_all(action='DESELECT')
         metarig_obj.select_set(True)

@@ -245,15 +245,12 @@ def unregister():
 def on_register():
     installed = []
     try:
-        # Character setup uses ExpyKit on every Blender version. Keep Retarget
-        # available on Blender 5+ for the separate MMD workflow.
+        # Character setup uses ExpyKit on every supported Blender version.
         addons_to_check = {
             'rigify': ('rigify', ''),
             'expy': ('Expy-Kit-main', 'Expy-Kit-v052.zip'),
             'ueformat': ('io_scene_ueformat', 'ueformat-blender.zip'),
         }
-        if bpy.app.version >= (5, 0, 0):
-            addons_to_check['retarget'] = ('retarget', 'retarget.zip')
 
         for search_key, (default_module, filename) in addons_to_check.items():
             # Bundled UEFormat supplies fallbacks for Blender 4.1's missing

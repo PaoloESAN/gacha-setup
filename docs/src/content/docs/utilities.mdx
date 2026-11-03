@@ -9,19 +9,6 @@ import eyeThroughHair1 from '../../assets/content/utilities/eye-through-hair1.mp
 import eyeThroughHair2 from '../../assets/content/utilities/eye-through-hair2.mp4';
 import hairShadowImg from '../../assets/content/utilities/hair-shadow.png';
 
-## Apply VMD Motion
-
-1. Select the character's armature.
-2. Click **Gacha Setup → Utilities → Apply VMD Motion** and select your `.vmd` file.
-
-   <Image src={vmdMotionImg} alt="VMD motion selection and import options" loading="lazy" />
-
-3. Adjust the options in the top right if needed, then confirm with **Apply VMD Motion**.
-
-:::caution
-The process may take a little while, especially when importing facial expressions. Wait for it to finish.
-:::
-
 ## Jideeh's Camera
 
 ### How to use
@@ -101,6 +88,25 @@ Adds shadows from a character's hair onto their face in Blender 5.2 or newer.
 <Image src={hairShadowImg} alt="Hair Shadows compositor group and effect on character face" loading="lazy" />
 
 The tool enables the viewport compositor automatically. Check the result in rendered shading or in a render. Run the tool again on the same character to update its existing effect.
+
+---
+
+## Apply VMD Motion
+
+:::caution[MMD Tools required]
+You need to have the **MMD Tools** add-on installed in Blender to import VMD Motion.
+:::
+
+1. Select the character's armature.
+2. Click **Gacha Setup → Utilities → Apply VMD Motion** and select your `.vmd` file.
+
+   <Image src={vmdMotionImg} alt="VMD motion selection and import options" loading="lazy" />
+
+3. Adjust the options in the top right if needed, then confirm with **Apply VMD Motion**.
+
+:::caution
+The process may take a little while, especially when importing facial expressions. Wait for it to finish.
+:::
 
 ---
 
