@@ -35,6 +35,42 @@ def ground_ake_foot_widgets(rig):
         foot.custom_shape_translation = rest.to_3x3().inverted() @ down
 
 
+def _place_ake_widget(rig, bone_name, target):
+    """Center a widget in armature space without changing the control pivot."""
+    control = rig.pose.bones.get(bone_name)
+    if control is None or control.custom_shape is None:
+        return False
+    shape = control.custom_shape
+    if shape.type != 'MESH' or not shape.data.vertices:
+        return False
+    reference = control.custom_shape_transform or control
+    center = Vector(tuple((min(vertex.co[i] for vertex in shape.data.vertices)
+                           + max(vertex.co[i] for vertex in shape.data.vertices)) * 0.5
+                          for i in range(3)))
+    center = Vector(tuple(center[i] * control.custom_shape_scale_xyz[i] for i in range(3)))
+    center = control.custom_shape_rotation_euler.to_matrix() @ center
+    control.use_custom_shape_bone_size = False
+    control.custom_shape_translation = (reference.bone.matrix_local.inverted() @ target) - center
+    return True
+
+
+def align_ake_torso_widget(rig):
+    """Place the torso widget on the abdomen without moving its control pivot."""
+    lower = rig.data.bones.get('ORG-spine.001')
+    upper = rig.data.bones.get('ORG-spine.003')
+    if lower is None or upper is None:
+        return False
+    return _place_ake_widget(rig, 'torso', (lower.head_local + upper.head_local) * 0.5)
+
+
+def align_ake_chest_widget(rig):
+    """Place the chest widget over the rib cage, using the upper spine."""
+    upper = rig.data.bones.get('ORG-spine.003')
+    if upper is None:
+        return False
+    return _place_ake_widget(rig, 'chest', (upper.head_local + upper.tail_local) * 0.5)
+
+
 def rig_character(
     file_path,
     disallow_arm_ik_stretch,
@@ -806,8 +842,10 @@ def rig_character(
     safe_set_custom_shape("foot_ik.R", "foot1", scale=(-1.0, 1.0, 1.0))
     ground_ake_foot_widgets(rigifyr)
     safe_set_custom_shape("torso", "pelvis2")
+    align_ake_torso_widget(rigifyr)
     safe_set_custom_shape("hips", "hips", scale=(1, 1, 1), translation=(0.0, -0.04, 0.044), rotation_euler=(1.309, 0, 0))
     safe_set_custom_shape("chest", "chest", scale=(0.45, 0.45, 0.45), translation=(0.0, -0.04, 0.0), rotation_euler=(1.5708, 0, 0))
+    align_ake_chest_widget(rigifyr)
     safe_set_custom_shape("breast.L", rotation_euler=(0, 0, 0), scale=(0.07, 0.07, 0.07), disable_bone_size=True)
     safe_set_custom_shape("breast.R", rotation_euler=(0, 0, 0), scale=(0.07, 0.07, 0.07), disable_bone_size=True)
     safe_set_custom_shape("hand_ik.L", "hand", scale=(1.0, 1.0, 1.0), disable_bone_size=True)
