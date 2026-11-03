@@ -1,5 +1,17 @@
 # Automated Test Suite
 
+Kinich's gaze regression runs after his full setup:
+`blender --background --factory-startup --python-exit-code 1 --python tests/genshin_kinich_eyes_blender.py -- output/Kinich.blend`.
+It compares pupil pivots and deformed iris vertices against `Starriia - Kinich.blend`
+in eight gaze poses, including wide movements. It checks independent eyes, neutral
+reset, head following and the absence of artificial rotation limits. Native FBX
+and BetterFBX skeletons have small differences, so the motion comparison allows
+4 mm; the neutral geometry and pupil pivots must match within 0.03 mm.
+Sclera fitting is restricted to validated Neuvillette and Alhaitham exports;
+unknown characters keep their existing eye pivots.
+Run `blender --background --factory-startup --python-exit-code 1 --python tests/genshin_eye_pivot_scope_blender.py`
+to check Kinich, Alhaitham, Neuvillette and Diluc imports and repeat alignment.
+
 The V3 widget regression also compares geometry, edges, physical dimensions
 and palettes for 35 controls against `tests/.runtime/wuwa-original/widgets.json`
 when present. This reference was extracted after running the unchanged

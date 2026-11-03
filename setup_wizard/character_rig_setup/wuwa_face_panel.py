@@ -2319,7 +2319,15 @@ class WW_OT_ImportFacePanel(Operator):
 
 
 def wuwa_face_rig_main(armature_obj=None):
-    faceobj = find_face_mesh()
+    active = bpy.context.object
+    if armature_obj is None and active:
+        if active.type == 'ARMATURE':
+            armature_obj = active
+        elif active.type == 'MESH':
+            armature_obj = next((m.object for m in active.modifiers if m.type == 'ARMATURE' and m.object), None)
+    candidates = _collect_character_face_meshes(None, armature_obj) if armature_obj else []
+    faceobj = max(candidates, key=lambda m: sum(k in m.data.shape_keys.key_blocks for k in
+                  ('E_Close', 'Pupil_Up', 'B_Anger', 'M_OpenSmall', 'Aa'))) if candidates else find_face_mesh()
     if faceobj is None:
         print("[WUWA FACE RIG] Notice: No mesh with shapekeys found.")
         return False
@@ -2340,28 +2348,10 @@ def wuwa_face_rig_main(armature_obj=None):
         print("[WUWA FACE RIG] Notice: No armature found.")
         return False
 
-    # 1. Try importing high-fidelity face_panel_wuwa.blend if available
-    import os
-    cur_dir = os.path.dirname(os.path.abspath(__file__))
-    blend_path = os.path.join(cur_dir, "face_panel_wuwa.blend")
-
-    if os.path.exists(blend_path):
-        try:
-            import_wuwa_face_panel_blend(bpy.context, faceobj, armature, head_name)
-            print("[WUWA FACE RIG] Successfully created face rig using face_panel_wuwa.blend!")
-            return True
-        except Exception as ex:
-            print(f"[WUWA FACE RIG] Notice importing blend face panel: {ex}. Falling back to procedural sliders.")
-
-    # 2. Fallback procedural face rig
-    fwd, right, up, face_size, fcx = get_face_metrics(faceobj, armature, head_name)
-    keyblock = faceobj.data.shape_keys.key_blocks
-
-    if CLEAN_REBUILD:
-        purge_previous(armature)
-
-    controls = plan_wuwa_controls(faceobj, armature, head_name, keyblock)
-    return setup_wuwa_face_rig(faceobj, controls, armature, head_name, fwd, up, face_size, keyblock)
+    # Default: V3 controls on the character's face. The separate Blend panel
+    # remains available through the explicit Import 3D Face Panel operator.
+    from .wuwa_face_on_model import build_wuwa_face_on_model
+    return build_wuwa_face_on_model(bpy.context, armature, faceobj, head_name)
 
 
 class WW_OT_CreateFacePanel(Operator):
