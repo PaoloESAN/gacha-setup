@@ -3,7 +3,7 @@ import os
 bl_info = {
     "name": "Gacha Setup",
     "author": "Mken, OctavoPE, Enthralpy, PaoloESAN",
-    "version": (3, 8, 4),
+    "version": (3, 8, 5),
     "blender": (4, 1, 0),
     "location": "3D View > Sidebar > Gacha Setup",
     "description": "An addon to streamline the character model setup process for Gacha games in Blender 4.1+",
@@ -509,17 +509,15 @@ else:
 
 
     def _gacha_prewarm():
-        """One-time heavy work moved out of the selection path."""
+        """Warm lookup caches without changing the saved scene's shaders.
+
+        Compatibility patches run during material setup. Rebuilding shader
+        groups here also runs after load_post and can overwrite authored rim
+        lighting inside Global Material Properties when reopening a file.
+        """
         try:
             from setup_wizard.ui.character_settings_utils import invalidate_caches
             invalidate_caches()
-        except Exception:
-            pass
-        try:
-            from setup_wizard.optimization.blender_rimlight_patch import patch_all_rimlight_groups_for_blender
-            patch_all_rimlight_groups_for_blender()
-            from setup_wizard.character_rig_setup.lighting_panel_setup import patch_fresnel_toggle_links
-            patch_fresnel_toggle_links()
         except Exception:
             pass
         return None
