@@ -43,7 +43,6 @@ description: Acknowledgements, contributors, and assets credits.
 - **crabnuts** — Rig reference
 - **[nomianims](https://x.com/nomianims)**
 - **Akatsuki** — WuWa Face Rig
-- **scheinze** — WuWa Rig
 - **[emy_purpl](https://x.com/emy_purpl)** — [YouTube](https://www.youtube.com/@emypurpl) · [X](https://x.com/emy_purpl)
 - **ae_gm** — Genshin weapon reviewer
 - **stalomeow**
@@ -54,6 +53,7 @@ description: Acknowledgements, contributors, and assets credits.
 - **kori** — Apply VMD Motion
 - **JARP3X** — Apply VMD Motion
 - **Logo Icon** — <a href="https://www.flaticon.com/free-icons/star" title="star icons">Star icons created by Magnific - Flaticon</a>
+- **scheinze** — WuWa Rig
 
 <div class="disclaimer-text">
   <strong>Disclaimer:</strong> This tool is an independent, open-source project and is not affiliated with, endorsed, or sponsored by HoYoverse, Kuro Games, Hotta Studio, Perfect World Games, or Hypergryph. All game assets, trademarks, and character names belong to their respective owners. No copyrighted assets or models are included with this addon.

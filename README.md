@@ -79,7 +79,6 @@ Thanks to all those who collaborated on the original project:
 
 ### Additional Credits & Acknowledgments (This Project)
 
-* **scheinze** — WuWa Rig
 * **Mken** — Original creator of Character Setup Wizard
 * **Meliodas**
 * **Manashiku**
@@ -97,6 +96,7 @@ Thanks to all those who collaborated on the original project:
 * **cocopops** — Lights+
 * **[aeo](https://www.youtube.com/@aeo_346)**
 * **JARP3X** — Apply VMD Motion
+* **scheinze** — WuWa Rig
 * **Genshin Impact**:
   * **Shader**: [Blender-miHoYo-Shaders](https://github.com/festivize/Blender-miHoYo-Shaders) by Festivity
   * **Genshin review**: VANS

@@ -52,10 +52,10 @@ Check out [Starlight’s docs](https://starlight.astro.build/), read [the Astro 
 
 ## Disclaimer & Credits
 
-- **scheinze** — WuWa Rig
-
 This project is an unofficial community tool built for Blender. 
 
 - **No Game Assets Included:** This repository does NOT contain, host, or distribute any 3D models, textures, or proprietary files from any game. Users are responsible for importing their own legally acquired assets.
 - **Trademarks:** All game titles (*Genshin Impact*, *Honkai: Star Rail*, *Zenless Zone Zero*, *Wuthering Waves*, *Neverness to Everness*), logos, and character names are registered trademarks of their respective owners (miHoYo / HoYoverse, Kuro Games, Hotta Studio, Perfect World Games).
 - **Affiliation:** This project is an independent community tool and is not affiliated with, sponsored by, or endorsed by the game publishers or studios mentioned above.
+
+- **scheinze** — WuWa Rig
