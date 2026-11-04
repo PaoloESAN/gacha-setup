@@ -22,17 +22,25 @@ bpy.ops.wm.open_mainfile(filepath=str(shader))
 assert bpy.app.version[:2] == (4,5), bpy.app.version
 assert bpy.data.version[:2] == (4,5), bpy.data.version
 group=bpy.data.node_groups['StellarToon - Outlines FACE']
-assert group.use_fake_user and group.get('gacha_hsr_face_outlines') == 1
+assert group.use_fake_user and group.get('gacha_hsr_face_outlines') == 3
+assert group.get('camera_free') == 1
 preview=bpy.data.objects['Face Preview']
 modifier=next(m for m in preview.modifiers if m.type=='NODES' and m.node_group==group)
 assert modifier['Input_8'] == 0
 assert modifier[group['dynamic_socket']] == 1
-assert modifier[group['head_socket']] == bpy.data.objects['Head Origin']
-assert modifier['Input_4'] == bpy.context.scene.camera
+assert not any(s.item_type == 'SOCKET' and s.socket_type == 'NodeSocketObject' for s in group.interface.items_tree)
+assert not any(o.type == 'CAMERA' for o in bpy.context.scene.objects)
+mask = bpy.data.node_groups['StellarToon - Face View Mask']
+assert mask.get('gacha_hsr_face_view_mask') == 2
+assert group.get('interior_mask_socket')
+assert any(n.bl_idname == 'GeometryNodeDeleteGeometry' for n in group.nodes)
+assert any(n.bl_idname == 'ShaderNodeNewGeometry' for n in mask.nodes)
+assert any(n.type == 'GROUP' and n.node_tree == mask for n in bpy.data.materials['StellarToon - Face Outlines'].node_tree.nodes)
 assert any(m.type=='NODES' and m.node_group.name=='StellarToon - Outlines GN'
            for m in bpy.data.objects['Sphere'].modifiers)
-assert len(group.nodes) > len(bpy.data.node_groups['StellarToon - Outlines GN'].nodes)
+assert len(group.nodes) < len(bpy.data.node_groups['StellarToon - Outlines GN'].nodes)
 if original:
     for name,snapshot in original.items():
+        if name in ('StellarToon - Outlines FACE', 'StellarToon - Face View Mask'): continue
         assert name in bpy.data.node_groups and signature(bpy.data.node_groups[name])==snapshot, name
 print('HSR_SHADER_ASSET_PASS',bpy.app.version,bpy.data.version,len(group.nodes),flush=True)

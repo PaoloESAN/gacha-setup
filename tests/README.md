@@ -1,5 +1,10 @@
 # Automated Test Suite
 
+`blender --background --factory-startup --python-exit-code 1 --python tests/genshin_fresnel_render_blender.py`
+renders two different Genshin Fresnel colors with the WuWa render/frame handlers enabled.
+It checks pixel colors, preserved panel links, editing after render, and isolation
+from WuWa controls and unused properties groups. Compatible with Blender 5.2/5.3 and Goo 4.2.
+
 Kinich's gaze regression runs after his full setup:
 `blender --background --factory-startup --python-exit-code 1 --python tests/genshin_kinich_eyes_blender.py -- output/Kinich.blend`.
 It compares pupil pivots and deformed iris vertices against `Starriia - Kinich.blend`
@@ -30,11 +35,18 @@ preserves the body rig.
 Run `tests/hsr_shader_asset_blender.py` with Blender 4.5 to inspect the baked
 face modifier and preview inside `StellarToonV1.1.blend`.
 
-HSR dynamic face outlines can be compared with the supplied Bronya reference:
-`blender --background --factory-startup --python-exit-code 1 --python tests/hsr_face_outlines_blender.py -- output/Blade.blend Bronya.blend`.
-This compares the realized outline geometry at 18 camera/head orientations,
-checks that the dynamic masks actually suppress outlines, and verifies zero
-face depth offset, unchanged body/hair groups and repeatable configuration.
+HSR face outlines use the current shader view direction without a camera object:
+`blender --background --factory-startup --python-exit-code 1 --python tests/hsr_face_outlines_blender.py -- "output/Stelle - Elation.blend"`.
+This renders six visibility cases (front, profile, above, below, head turn and
+disabled mask), checks animated head attributes, zero depth offset, face-only
+material changes and repeatable configuration. It also realizes the outline-only
+shell and checks that blue-marked interior folds are excluded while the original
+face stays intact (including Evernight on Blender 5.2). Half-intensity color markers
+are tested in linear space to catch the sRGB threshold regression.
+`hsr_face_outline_camera_blender.py`
+also checks that adding or removing a scene camera never changes the setup.
+The shader asset is baked with Blender 4.5 using
+`setup_wizard/utilites/build_hsr_face_outlines.py`.
 
 Automated testing framework for the Gacha Setup Wizard addon, designed to validate each pipeline phase across supported games and character models in a modular, headless fashion.
 

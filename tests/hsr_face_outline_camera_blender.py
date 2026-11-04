@@ -1,4 +1,4 @@
-"""Verify optional HSR outline cameras on a completed character.
+"""Verify camera-independent HSR outlines on a completed character.
 
 blender -b --factory-startup --python-exit-code 1 --python
 tests/hsr_face_outline_camera_blender.py -- character.blend [--save]
@@ -46,8 +46,8 @@ def check_without_camera():
     assert configure_face_outlines(bpy.context, face, modifier)
     assert counts == (len(bpy.data.objects), len(bpy.data.cameras))
     assert bpy.context.scene.camera is None
-    assert get_modifier_property(modifier, 'Input_4') is None
-    assert get_modifier_property(modifier, modifier.node_group['dynamic_socket']) == 0
+    assert not any(s.item_type == 'SOCKET' and s.name == 'Camera' for s in modifier.node_group.interface.items_tree)
+    assert get_modifier_property(modifier, modifier.node_group['dynamic_socket']) == 1
     assert get_modifier_property(modifier, 'Input_8') == 0
 
 
@@ -61,7 +61,8 @@ for active in (False, True):
     configure_face_outlines(bpy.context, face, modifier)
     assert counts == (len(bpy.data.objects), len(bpy.data.cameras))
     assert bpy.context.scene.camera == (camera if active else None)
-    assert get_modifier_property(modifier, 'Input_4') == camera
+    assert not any(s.item_type == 'SOCKET' and s.socket_type == 'NodeSocketObject'
+                   for s in modifier.node_group.interface.items_tree)
     assert get_modifier_property(modifier, modifier.node_group['dynamic_socket']) == 1
 data = camera.data
 bpy.data.objects.remove(camera, do_unlink=True)
@@ -69,4 +70,4 @@ bpy.data.cameras.remove(data)
 check_without_camera()
 if '--save' in args:
     bpy.ops.wm.save_as_mainfile(filepath=str(path), relative_remap=False)
-print('HSR_OPTIONAL_OUTLINE_CAMERA_PASS', bpy.app.version_string, flush=True)
+print('HSR_CAMERA_INDEPENDENT_OUTLINES_PASS', bpy.app.version_string, flush=True)
