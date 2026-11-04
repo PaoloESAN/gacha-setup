@@ -776,12 +776,16 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                     return f
             for f in image_files:
                 f_stem = os.path.splitext(f)[0].lower()
-                if f_stem in [f"{s_low}_d", f"{s_low}_m", f"{s_low}_n", f"{s_low}_a"]:
+                if f_stem == f"{s_low}_{target_type}":
                     if target_type == 'd' and any(k in f.lower() for k in ['lightmap', 'ligthmap']):
                         continue
                     return f
             for f in image_files:
                 f_stem = os.path.splitext(f)[0].lower()
+                # A prefix match must not bind the diffuse to the normal,
+                # mask or attribute input (e.g. an FBX *_D_rgb export).
+                if not re.search(rf'_{re.escape(target_type)}(?:_rgb)?$', f_stem):
+                    continue
                 if target_type == 'd' and any(k in f.lower() for k in ['lightmap', 'ligthmap', '_m.', '_m_', '_n.', '_n_', '_a.', '_a_']):
                     continue
                 if f_stem.startswith(s_low) or s_low.startswith(f_stem):
@@ -803,8 +807,8 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                                 break
 
         if base_tex_name and not any(ign in base_tex_name.lower() for ign in ["female_face_lightmap", "lightmap", "ramp", "white_", "mask"]):
-            clean_base = os.path.splitext(base_tex_name)[0]
-            stem = re.sub(r'(_d|_diffuse|_basecolor|_color|_albedo)$', '', clean_base, flags=re.IGNORECASE)
+            clean_base = os.path.splitext(re.sub(r'\.\d{3}$', '', base_tex_name))[0]
+            stem = re.sub(r'(_d(?:_rgb)?|_diffuse|_basecolor|_color|_albedo)$', '', clean_base, flags=re.IGNORECASE)
             for t in ['d', 'm', 'n', 'a']:
                 f_match = find_file_by_stem(f"{stem}_{t}", target_type=t)
                 if f_match and not (t == 'd' and any(k in f_match.lower() for k in ['lightmap', 'ligthmap'])):
