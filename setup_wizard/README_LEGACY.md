@@ -192,6 +192,8 @@ The models below should not throw errors when running the Setup Wizard.
 
 ## Credits
 
+- **scheinze** — WuWa Rig
+
 Thanks to all those who helped answer the questions I had while building out this tool and learning about Blender.
 <br>
 Shoutout to @Festivity, @TheyCallMeSpy, @Sultana, @M4urlcl0 and @Modder4869!

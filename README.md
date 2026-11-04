@@ -79,6 +79,7 @@ Thanks to all those who collaborated on the original project:
 
 ### Additional Credits & Acknowledgments (This Project)
 
+* **scheinze** — WuWa Rig
 * **Mken** — Original creator of Character Setup Wizard
 * **Meliodas**
 * **Manashiku**

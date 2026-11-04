@@ -43,6 +43,7 @@ description: Acknowledgements, contributors, and assets credits.
 - **crabnuts** — Rig reference
 - **[nomianims](https://x.com/nomianims)**
 - **Akatsuki** — WuWa Face Rig
+- **scheinze** — WuWa Rig
 - **[emy_purpl](https://x.com/emy_purpl)** — [YouTube](https://www.youtube.com/@emypurpl) · [X](https://x.com/emy_purpl)
 - **ae_gm** — Genshin weapon reviewer
 - **stalomeow**

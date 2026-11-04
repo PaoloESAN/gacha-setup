@@ -81,6 +81,7 @@ Thanks to all those who collaborated on the original project:
 
 ### Additional Credits & Acknowledgments (This Project)
 
+* **scheinze** — WuWa Rig
 * **Genshin Impact**:
   * **Shader**: [Blender-miHoYo-Shaders](https://github.com/festivize/Blender-miHoYo-Shaders) by Festivity
   * **Sandrone Pupil**: VANS

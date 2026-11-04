@@ -52,6 +52,8 @@ Check out [Starlight’s docs](https://starlight.astro.build/), read [the Astro 
 
 ## Disclaimer & Credits
 
+- **scheinze** — WuWa Rig
+
 This project is an unofficial community tool built for Blender. 
 
 - **No Game Assets Included:** This repository does NOT contain, host, or distribute any 3D models, textures, or proprietary files from any game. Users are responsible for importing their own legally acquired assets.
