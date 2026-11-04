@@ -1376,9 +1376,11 @@ class HonkaiStarRailGeometryNodesSetup(GameGeometryNodesSetup):
                                 pos_key = (round(v_co.x, 3), round(v_co.y, 3), round(v_co.z, 3))
                                 
                                 if v_z >= cutoff_z and pos_key in original_colors_by_pos:
-                                    el.color = original_colors_by_pos[pos_key]
+                                    el.color = (*original_colors_by_pos[pos_key][:3], el.color[3])
                                 else:
-                                    el.color = (1.0, 1.0, 1.0, 1.0)
+                                    # StellarToon reads alpha as the outline width mask.
+                                    # Cleaning the shading RGB must preserve authored width.
+                                    el.color = (1.0, 1.0, 1.0, el.color[3])
                     elif col_layer.domain == 'CORNER':
                         for i, el in enumerate(col_layer.data):
                             if i < len(mesh.loops):
@@ -1388,9 +1390,9 @@ class HonkaiStarRailGeometryNodesSetup(GameGeometryNodesSetup):
                                 pos_key = (round(v_co.x, 3), round(v_co.y, 3), round(v_co.z, 3))
                                 
                                 if v_z >= cutoff_z and pos_key in original_colors_by_pos:
-                                    el.color = original_colors_by_pos[pos_key]
+                                    el.color = (*original_colors_by_pos[pos_key][:3], el.color[3])
                                 else:
-                                    el.color = (1.0, 1.0, 1.0, 1.0)
+                                    el.color = (1.0, 1.0, 1.0, el.color[3])
 
             mesh.update()
 

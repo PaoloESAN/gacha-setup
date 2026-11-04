@@ -11,6 +11,8 @@ Sclera fitting is restricted to validated Neuvillette and Alhaitham exports;
 unknown characters keep their existing eye pivots.
 Run `blender --background --factory-startup --python-exit-code 1 --python tests/genshin_eye_pivot_scope_blender.py`
 to check Kinich, Alhaitham, Neuvillette and Diluc imports and repeat alignment.
+This also checks that fitted centers stay at iris height and that Alhaitham
+is recognized from its bound materials when BetterFBX names its armature `Collider`.
 
 The V3 widget regression also compares geometry, edges, physical dimensions
 and palettes for 35 controls against `tests/.runtime/wuwa-original/widgets.json`
