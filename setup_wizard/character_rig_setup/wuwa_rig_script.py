@@ -1568,7 +1568,8 @@ def rig_wuthering_waves_character(context=None):
                     bone[key] = final_renames[val]
 
         # 5. Generate Rigify Rig
-        from setup_wizard.character_rig_setup.finger_ik import enable_finger_ik_controls
+        from setup_wizard.character_rig_setup.finger_ik import enable_finger_ik_controls, fit_wuwa_fingertips
+        fit_wuwa_fingertips(armature, get_character_meshes(armature))
         enable_finger_ik_controls(armature)
         orig_obj_names = set(bpy.data.objects.keys())
         generation_success = False
@@ -1660,15 +1661,7 @@ def rig_wuthering_waves_character(context=None):
                 except Exception:
                     pass
 
-        # Delete rogue Cube objects and duplicate .001 control objects
-        for obj in list(bpy.data.objects):
-            if obj.name.lower().startswith("cube") and obj.type == 'MESH':
-                if not any(k in obj.name.lower() for k in ["body", "cloth", "face", "hair", "eye", "head"]):
-                    try:
-                        bpy.data.objects.remove(obj, do_unlink=True)
-                    except Exception:
-                        pass
-
+        # Delete duplicate .001 control objects
         for base_name in ['Head Origin', 'Head Forward', 'Head Up', 'Light Direction', 'Sun', 'Eye Highlight', 'Highlight Top', 'Highlight Bottom']:
             orig_obj = bpy.data.objects.get(base_name)
             for obj in list(bpy.data.objects):
@@ -1703,14 +1696,8 @@ def rig_wuthering_waves_character(context=None):
 
         pose_bone_head = RigArmatureObj.pose.bones.get("head")
         if pose_bone_head:
-            bpy.ops.object.mode_set(mode='EDIT')
-            edit_bone_head = RigArmatureObj.data.edit_bones.get("head")
-            head_length = (edit_bone_head.tail - edit_bone_head.head).length if edit_bone_head else 0.1
-            bpy.ops.object.mode_set(mode='POSE')
-            # Keep the ring at the head joint instead of lifting it above
-            # the skull by a multiple of the importer's display length.
-            pose_bone_head.custom_shape_translation.y = 0.0
-            pose_bone_head.custom_shape_scale_xyz = (2, 2, 2)
+            from .wuwa_visual_controls import setup_wuwa_head_widget
+            setup_wuwa_head_widget(RigArmatureObj)
 
         bpy.ops.object.mode_set(mode='OBJECT')
 
@@ -2457,6 +2444,8 @@ def rig_wuthering_waves_character(context=None):
 
     from setup_wizard.character_rig_setup.pole_targets import setup_pole_targets
     setup_pole_targets(RigArmatureObj)
+    from .wuwa_visual_controls import arrange_wuwa_visual_controls
+    arrange_wuwa_visual_controls(RigArmatureObj)
     return True
 
 
@@ -2688,6 +2677,8 @@ def organize_rigify_bone_collections(rig_obj, orig_arm_name=None, char_name=None
     if not rig_obj or rig_obj.type != 'ARMATURE':
         return
 
+    from .wuwa_face_on_model import CONTROLS, HELPERS, HIDDEN_HELPERS, GAZE, HIGHLIGHTS
+    on_face_bones = CONTROLS | HELPERS | GAZE | HIGHLIGHTS
     is_version_4 = hasattr(rig_obj.data, "collections")
     clean_char_name = char_name or extract_clean_character_name(rig_obj.name)
 
@@ -2724,6 +2715,7 @@ def organize_rigify_bone_collections(rig_obj, orig_arm_name=None, char_name=None
             "B_Anger", "B_Happy", "B_Cheerful", "B_Sad", "B_Flat", "B_Inside_Add",
             "Aa", "M_A", "M_O", "M_Open", "M_Laugh", "M_Scared", "M_Trapezoid", "M_Nutcracker"
         }
+        face_control_names.update(on_face_bones)
 
         for bone in armature_obj.data.bones:
             b_name = bone.name
@@ -2810,15 +2802,17 @@ def organize_rigify_bone_collections(rig_obj, orig_arm_name=None, char_name=None
         bone_to_layer_or_collection(rig_obj, b_name, layer_num, coll_name, sec_coll, is_version_4)
 
     face_bones = [
-        "EyeTracker", "Eye.L", "Eye.R", "EyeScale", "FacePanelRoot", "FacePanel",
+        "EyeTracker", "Eye.L", "Eye.R", "EyeScale",
         "CTRL-Eye_Highlight", "CTRL-Highlight_Top", "CTRL-Highlight_Bottom",
         "Smile.L", "Smile.R", "Anger.L", "Anger.R", "Sad.L", "Sad.R",
         "Focus.L", "Focus.R", "Insipid.L", "Insipid.R", "Mouth.L", "Mouth.R",
         "B_Anger", "B_Happy", "B_Cheerful", "B_Sad", "B_Flat", "B_Inside_Add",
         "Aa", "M_A", "M_O", "M_Open", "M_Laugh", "M_Scared", "M_Trapezoid", "M_Nutcracker"
     ]
-    for b in face_bones:
+    for b in set(face_bones) | on_face_bones:
         b2c(b, 0, "Face")
+        if b in on_face_bones and b in rig_obj.data.bones:
+            rig_obj.data.bones[b].hide = b in HIDDEN_HELPERS
 
     face_panel_blend_bones = {
         'panel.root', 'root 2', 'fp.boarder', 'fp.brow.board', 'fp.brow.txt', 'fp.mouth',
@@ -2901,6 +2895,8 @@ def organize_rigify_bone_collections(rig_obj, orig_arm_name=None, char_name=None
 
     # 7. Apply standard visibility
     apply_wuwa_bone_collection_visibilities(rig_obj)
+    from .wuwa_visual_controls import arrange_wuwa_visual_controls
+    arrange_wuwa_visual_controls(rig_obj)
 
     # 7. Modify and execute the Rig UI script to render the standard Gacha Setup N-panel Rig Layers with stars (★)
     modify_and_run_rig_ui_script(

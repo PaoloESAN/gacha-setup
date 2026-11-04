@@ -193,12 +193,30 @@ class HYV_OT_CustomCompositeNodeSetup(Operator, ImportHelper, CustomOperatorProp
         elif not composite_node_group:
             self.logs += 'No composite node group blend file found.\n'
 
+        from setup_wizard.services.compositor_alpha_over import ensure_hoyoverse_alpha_over
+        ensure_hoyoverse_alpha_over(composite_node_group)
+
         scene = context.scene
         composite_node = get_node_tree(scene).nodes.get(NAME_OF_COMPOSITE_NODE)
         if not composite_node or composite_node.bl_idname != 'CompositorNodeGroup':
             self.create_compositor_node_group(composite_node_group.name)
         else:
-            composite_node.node_tree = composite_node_group
+            if composite_node.node_tree != composite_node_group:
+                # Shader selection can replace the group's socket identifiers.
+                # Keep upstream utilities, downstream grading and viewer links.
+                image_input = composite_node.inputs.get(NAME_OF_IMAGE_IO)
+                source = image_input.links[0].from_socket if image_input and image_input.is_linked else None
+                image_output = next((composite_node.outputs.get(name) for name in self.names_of_composite_node_outputs
+                                     if composite_node.outputs.get(name) is not None), None)
+                consumers = [link.to_socket for link in image_output.links] if image_output else []
+                composite_node.node_tree = composite_node_group
+                tree = get_node_tree(scene)
+                if source is not None:
+                    tree.links.new(source, composite_node.inputs[NAME_OF_IMAGE_IO])
+                image_output = next((composite_node.outputs.get(name) for name in self.names_of_composite_node_outputs
+                                     if composite_node.outputs.get(name) is not None), None)
+                for consumer in consumers:
+                    tree.links.new(image_output, consumer)
             self.logs += f'{composite_node_group.name} node already created, skipping and not creating new node.\n'
 
         viewer_node = find_builtin_node(get_node_tree(scene), NAME_OF_VIEWER_NODE_TYPE)
@@ -283,9 +301,28 @@ class HYV_OT_CustomCompositeNodeSetup(Operator, ImportHelper, CustomOperatorProp
         viewer_node = find_builtin_node(get_node_tree(scene), NAME_OF_VIEWER_NODE_TYPE)
         viewer_node_input = viewer_node.inputs.get(NAME_OF_IMAGE_IO)
 
-        self.connect_nodes_in_scene(scene, render_layers_output, composite_wrapper_node_input)
-        self.connect_nodes_in_scene(scene, composite_wrapper_node_output, composite_node_input)
-        self.connect_nodes_in_scene(scene, composite_wrapper_node_output, viewer_node_input)
+        def depends_on_wrapper(node, visited=None):
+            if node == composite_wrapper_node:
+                return True
+            visited = visited if visited is not None else set()
+            if node in visited:
+                return False
+            visited.add(node)
+            return any(depends_on_wrapper(link.from_node, visited)
+                       for socket in node.inputs for link in socket.links)
+
+        if not composite_wrapper_node_input.is_linked:
+            source = composite_node_input.links[0].from_socket if composite_node_input.is_linked else render_layers_output
+            if depends_on_wrapper(source.node):
+                source = render_layers_output
+            self.connect_nodes_in_scene(scene, source, composite_wrapper_node_input)
+        source = composite_wrapper_node_input.links[0].from_socket
+        # Only replace an unprocessed output. An existing chain through this
+        # wrapper (or a separate user branch) must retain its connections.
+        if not composite_node_input.is_linked or composite_node_input.links[0].from_socket == source:
+            self.connect_nodes_in_scene(scene, composite_wrapper_node_output, composite_node_input)
+        if not viewer_node_input.is_linked or viewer_node_input.links[0].from_socket == source:
+            self.connect_nodes_in_scene(scene, composite_node_input.links[0].from_socket, viewer_node_input)
 
     def connect_nodes_in_scene(self, scene, input, output):
         # This is very important! The links are at the scene.node_tree level

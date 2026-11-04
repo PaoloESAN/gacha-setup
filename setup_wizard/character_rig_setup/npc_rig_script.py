@@ -10,6 +10,7 @@ import addon_utils
 from setup_wizard.geometry_nodes_setup.lighting_panel_names import LightingPanelNames
 from setup_wizard.character_rig_setup.rig_ui_utils import (
     extract_clean_character_name,
+    resolve_rig_character_name,
     setup_standard_bone_collections,
     modify_and_run_rig_ui_script,
     safe_expykit_extract_metarig,
@@ -891,7 +892,7 @@ def rig_character(
         for bone in listofbones:
             bpy.context.active_object.pose.bones[bone].bone.layers[1] = True
         
-    char_name = extract_clean_character_name(original_name)
+    char_name = resolve_rig_character_name(original_name)
     try:
         if "rigify" in bpy.data.objects and bpy.data.objects["rigify"].users_collection:
             bpy.data.objects["rigify"].users_collection[0].name = char_name

@@ -23,9 +23,9 @@ def resource(kind, path='', create=False):
 bpy.utils.user_resource = resource
 sys.path.insert(0, str(ROOT))
 dependencies = runtime / 'dependencies'
-with zipfile.ZipFile(ROOT / 'setup_wizard/dependencies/retarget.zip') as archive:
+with zipfile.ZipFile(ROOT / 'setup_wizard/dependencies/Expy-Kit-v052.zip') as archive:
     archive.extractall(dependencies)
-package = min(dependencies.rglob('__init__.py'), key=lambda p: len(p.parts)).parent
+package = dependencies / 'Expy-Kit-main'
 sys.path.insert(0, str(package.parent))
 importlib.import_module(package.name)
 model = ROOT / 'chars/hsr/Art_TheHerta_00/Art_TheHerta_00.fbx'
@@ -50,12 +50,14 @@ checked = 0
 for obj in bpy.context.scene.objects:
  if obj.type != 'MESH': continue
  for mod in obj.modifiers:
-  if mod.type != 'NODES' or not mod.node_group or mod.node_group.name != 'StellarToon - Outlines GN': continue
+  if mod.type != 'NODES' or not mod.node_group: continue
+  is_face = bool(mod.node_group.get('gacha_hsr_face_outlines'))
+  if mod.node_group.name != 'StellarToon - Outlines GN' and not is_face: continue
   scale = get_mesh_world_scale(obj)
   width = get_modifier_property(mod, 'Input_7')
   depth = get_modifier_property(mod, 'Input_8')
   assert abs(width * scale - .25) < 1e-5, (obj.name, width, scale)
-  assert abs(depth * scale - .0075) < 1e-5, (obj.name, depth, scale)
+  assert abs(depth * scale - (0 if is_face else .0075)) < 1e-5, (obj.name, depth, scale)
   refresh_hsr_outline_scale(bpy.context)
   assert get_modifier_property(mod, 'Input_7') == width
   checked += 1

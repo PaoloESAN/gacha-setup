@@ -3,7 +3,7 @@ import os
 bl_info = {
     "name": "Gacha Setup",
     "author": "Mken, OctavoPE, Enthralpy, PaoloESAN",
-    "version": (3, 8, 3),
+    "version": (3, 8, 4),
     "blender": (4, 1, 0),
     "location": "3D View > Sidebar > Gacha Setup",
     "description": "An addon to streamline the character model setup process for Gacha games in Blender 4.1+",
@@ -189,7 +189,6 @@ else:
         GI_OT_ToggleLightingPanelVisibility,
         register_gi_properties,
         unregister_gi_properties,
-        gi_frame_change_handler,
         UI_Properties,
     )
     from setup_wizard.ui.hsr_ui_setup_wizard_menu import (
@@ -573,8 +572,8 @@ else:
         setup_wizard.services.isolation.register()
         if wuwa_frame_change_handler not in bpy.app.handlers.render_init:
             bpy.app.handlers.render_init.append(wuwa_frame_change_handler)
-        if gi_frame_change_handler not in bpy.app.handlers.render_init:
-            bpy.app.handlers.render_init.append(gi_frame_change_handler)
+        # Genshin controls write through their property update callbacks.
+        # Rendering must preserve values and links authored in shader nodes.
         if ake_frame_change_handler not in bpy.app.handlers.render_init:
             bpy.app.handlers.render_init.append(ake_frame_change_handler)
         if gacha_rig_ui_load_post_handler not in bpy.app.handlers.load_post:
@@ -601,10 +600,6 @@ else:
         addon_icon_manager.unregister_icons()
         if gacha_rig_ui_load_post_handler in bpy.app.handlers.load_post:
             bpy.app.handlers.load_post.remove(gacha_rig_ui_load_post_handler)
-        if gi_frame_change_handler in bpy.app.handlers.frame_change_post:
-            bpy.app.handlers.frame_change_post.remove(gi_frame_change_handler)
-        if gi_frame_change_handler in bpy.app.handlers.render_init:
-            bpy.app.handlers.render_init.remove(gi_frame_change_handler)
         if wuwa_frame_change_handler in bpy.app.handlers.frame_change_post:
             bpy.app.handlers.frame_change_post.remove(wuwa_frame_change_handler)
         if wuwa_frame_change_handler in bpy.app.handlers.render_init:

@@ -41,8 +41,8 @@ def temporary_addon(search_key):
     was_enabled = module in bpy.context.preferences.addons
     try:
         if not was_loaded:
-            # Retarget's register() reads its preferences entry. Add it for the
-            # operation, then remove only the entry this scope created.
+            # Some dependencies read their preferences entry during register().
+            # Remove only the entry this scope created after the operation.
             addon_utils.enable(module, default_set=True, persistent=False)
             if not addon_utils.check(module)[1]:
                 raise RuntimeError(f'Could not activate installed dependency: {module}')

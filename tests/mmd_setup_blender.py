@@ -37,7 +37,7 @@ from tests.rig.rig_assertions import assert_rig
 on_register()
 assert rig_conversion_available(), 'Automatic dependency installation failed'
 from setup_wizard.utils.optional_addons import find_addon
-optional_modules = [find_addon(key) for key in ('mmd_tools', 'retarget', 'ueformat')]
+optional_modules = [find_addon(key) for key in ('mmd_tools', 'expy', 'ueformat')]
 for module in optional_modules:
     if module:
         addon_utils.disable(module, default_set=True)

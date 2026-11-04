@@ -1,5 +1,6 @@
 """PGR chibi atlas and rig regression on QR3LaiyaMd010011. Run in Blender 5.2."""
 import json, os, sys, zipfile
+import importlib
 from pathlib import Path
 import bpy, addon_utils
 from mathutils import Matrix, Vector
@@ -24,11 +25,11 @@ def resource(kind, path='', create=False):
 
 bpy.utils.user_resource = resource
 dependencies = OUTPUT / 'dependencies'
-with zipfile.ZipFile(ROOT / 'setup_wizard/dependencies/retarget.zip') as archive:
+with zipfile.ZipFile(ROOT / 'setup_wizard/dependencies/Expy-Kit-v052.zip') as archive:
     archive.extractall(dependencies)
 sys.path.insert(0, str(dependencies))
 sys.path.insert(0, str(OUTPUT / 'resources/SCRIPTS/addons'))
-import retarget  # Make the isolated dependency discoverable to optional_addons.
+importlib.import_module('Expy-Kit-main')
 addon_utils.enable('setup_wizard', default_set=False)
 from setup_wizard.genshin_setup_wizard import on_register
 from setup_wizard.character_rig_setup.rig_ui_utils import get_view3d_override

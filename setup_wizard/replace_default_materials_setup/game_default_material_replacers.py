@@ -25,6 +25,7 @@ from setup_wizard.texture_import_setup.texture_importer_types import TextureImpo
 from setup_wizard.domain.shader_material_name_keywords import ShaderMaterialNameKeywords
 from setup_wizard.utils.genshin_body_part_deducer import get_monster_body_part_name, \
     get_npc_mesh_body_part_name
+from setup_wizard.utils.shader_output_utils import surface_shader_output
 
 
 def _is_vodyanitsa_for_crystal(material_name=None, mesh=None):
@@ -880,8 +881,9 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 elif material_name.startswith(ShaderMaterialNameKeywords.SKILLOBJ) and material_name.endswith('Glass_Eff_Mat'):
                     mesh_body_part_name = 'Glass_Eff'
                 elif material_name.startswith(ShaderMaterialNameKeywords.SKILLOBJ):
-                    skillobj_identifier = material_name.split('_')[2]
-                    mesh_body_part_name = f'{ShaderMaterialNameKeywords.SKILLOBJ} {skillobj_identifier}'
+                    # A skill can have separate Hair, Dress and Eff materials.
+                    # Keep their full identity instead of merging all Wing slots.
+                    mesh_body_part_name = material_name.removesuffix('_Mat')
                 elif material_name.endswith('Hand_Eff_Mat'):  # Asmoday
                     mesh_body_part_name = 'StarCloak'
 
@@ -1110,9 +1112,9 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     pass
                 material_name = glass_material.name
         elif mesh_body_part_name and mesh_body_part_name.startswith(ShaderMaterialNameKeywords.SKILLOBJ):
-            skillobj_material = self.create_body_material(self.material_names, self.material_names.SKILLOBJ)
+            skillobj_material = self.create_body_material(
+                self.material_names, f'{self.material_names.MATERIAL_PREFIX}{mesh_body_part_name}')
             if skillobj_material:
-                skillobj_material.name = skillobj_material.name.replace(ShaderMaterialNameKeywords.SKILLOBJ, mesh_body_part_name)
                 material_name = skillobj_material.name
         elif mesh_body_part_name == 'Skirt':
             skirt_material = self.create_body_material(self.material_names, self.material_names.SKIRT)
@@ -1399,8 +1401,10 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         if not mix_node.inputs[1].links:
             tree.links.new(trans_node.outputs[0], mix_node.inputs[1])
 
-        if body_shader and 'PrimoToon' in body_shader.outputs and not mix_node.inputs[2].links:
-            tree.links.new(body_shader.outputs['PrimoToon'], mix_node.inputs[2])
+        shader_output = surface_shader_output(body_shader)
+        if shader_output is not None and (not mix_node.inputs[2].links
+                or mix_node.inputs[2].links[0].from_socket != shader_output):
+            tree.links.new(shader_output, mix_node.inputs[2])
 
         if not output_node.inputs['Surface'].links or output_node.inputs['Surface'].links[0].from_node != mix_node:
             tree.links.new(mix_node.outputs[0], output_node.inputs['Surface'])
@@ -1575,6 +1579,13 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
     def find_body_part_name(self, material_name):
         if material_name.startswith('Eff_') or 'Eff_' in material_name or material_name.startswith('Effect_'):
             return material_name
+
+        # Trident's HSR names put the part before numeric IDs and the material
+        # suffix, e.g. Avatar_PlayerGirl_Body_034_000_000_Mat_D.
+        exported_part = re.search(r'_(Body|Hair|Face|Weapon\d*)_\d+(?:_\d+)*_Mat(?:_(.+))?$', material_name)
+        if exported_part:
+            part, suffix = exported_part.groups()
+            return f'{part}_{suffix}' if suffix else part
 
         if '_Mat_' in material_name:
             suffix = material_name.split('_Mat_')[1]
@@ -2046,6 +2057,8 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         else:
             # --- KYTHERA SHADER REPLACEMENT ---
             highlight_template = bpy.data.materials.get("Kythera's ZZZ Eye Highlights")
+            if highlight_template:
+                highlight_template.surface_render_method = 'BLENDED'
             # Find Kythera face and main shader template materials dynamically
             face_template = None
             for mat in bpy.data.materials:

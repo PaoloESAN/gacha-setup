@@ -274,7 +274,14 @@ class GenshinImpactCharacterRigger(CharacterRigger):
         armature.select_set(True)
 
         meshes_joined = not (bpy.data.objects.get('Body') and bpy.data.objects.get('Face'))
-        if [material for material in bpy.data.materials.values() if 'Paimon' in material.name]:
+        from setup_wizard.import_order import get_active_character_directory
+        # Shader replacement may remove every original material name. Resolve
+        # Paimon from the imported character, not other characters' materials.
+        is_paimon = any('paimon' in str(value).casefold() for value in (
+            fbx_path, armature.name, get_active_character_directory(),
+            self.__get_body_diffuse_texture_name(),
+        ))
+        if is_paimon:
             rig_npc(
                 filepath,
                 not character_rigger_props.allow_arm_ik_stretch,

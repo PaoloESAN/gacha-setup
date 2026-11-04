@@ -320,8 +320,7 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
                 body_part = 'Glass_Eff'
                 character_type = CharacterType.UNKNOWN
             elif file.name.startswith(ShaderMaterialNameKeywords.SKILLOBJ):
-                skillobj_identifier = file.name.split('_')[2]  # WARNING: This is a brittle way to get the identifier
-                body_part = f'{ShaderMaterialNameKeywords.SKILLOBJ} {skillobj_identifier}'
+                body_part = PurePosixPath(file.name).stem.removesuffix('_Mat')
                 character_type = CharacterType.UNKNOWN
             elif file.name.startswith('AvatarObj') and PurePosixPath(file.name).stem.endswith('_Mat'):
                 # Quest object materials (ex. AvatarObj_Ani_Quest_IkhorShackles_01_Mat.json):

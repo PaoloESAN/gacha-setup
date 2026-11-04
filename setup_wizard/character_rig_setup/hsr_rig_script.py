@@ -261,12 +261,10 @@ def rig_character(
         'breastM_L': 'DEF-breast.L',
         'breastM_R': 'DEF-breast.R',
 
-        'HipPart1_R': 'DEF-thigh.R.001',
-        'HipPart1_L': 'DEF-thigh.L.001',
-        'ElbowPart1_L': 'DEF-forearm.L.001',
-        'ElbowPart1_R': 'DEF-forearm.R.001',
-        'ShoulderPart1_R': 'DEF-upperarm.R.001',
-        'ShoulderPart1_L': 'DEF-upperarm.L.001',
+        # Keep limb helper names (HipPart1, ElbowPart1, ShoulderPart1).
+        # Rigify creates its own DEF-*.001 segments. Reusing those names
+        # makes joining rename the source helpers and leaves their children
+        # detached, while vertex groups bind to the wrong generated segment.
         'head_m': 'DEF-spine.006',
 
         # Biped fallback for converted MMD / custom models

@@ -93,7 +93,9 @@ class HonkaiStarRailOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
         self.blender_operator = blender_operator
         self.context = context
         self.outlines_file_path = HONKAI_STAR_RAIL_OUTLINES_FILE_PATH  # Keep same filepath for all HSR
-        self.outlines_node_group_names = outlines_node_group_names
+        self.outlines_node_group_names = list(outlines_node_group_names)
+        if 'StellarToon - Outlines GN' in self.outlines_node_group_names:
+            self.outlines_node_group_names.append('StellarToon - Outlines FACE')
 
     def import_outline_node_group(self):
         filepath = get_shader_file_path(self.blender_operator.game_type or GameType.HONKAI_STAR_RAIL.name, 'main')

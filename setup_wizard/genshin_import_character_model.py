@@ -101,7 +101,7 @@ def is_rigging_disabled(context=None):
 
 
 def _execute_fbx_import(filepath):
-    """Use BetterFBX below 4.5; prefer the native importer from 4.5 onward."""
+    """Prefer native FBX on 4.5+, with Python fallback for rejected files."""
     if os.path.basename(filepath).startswith("._"):
         real_candidate = os.path.join(os.path.dirname(filepath), os.path.basename(filepath)[2:])
         if os.path.isfile(real_candidate):
@@ -119,10 +119,39 @@ def _execute_fbx_import(filepath):
         ignore_leaf_bones=False, validate_meshes=True, use_anim=True, anim_offset=1.0,
     )
     supported = bpy.ops.wm.fbx_import.get_rna_type().properties
-    result = bpy.ops.wm.fbx_import(**{name: value for name, value in options.items() if name in supported})
-    if result != {'FINISHED'}:
-        raise RuntimeError(f'Native FBX import failed: {result}')
-    return result
+    before = set(bpy.data.objects)
+    try:
+        result = bpy.ops.wm.fbx_import(**{name: value for name, value in options.items() if name in supported})
+        if result != {'FINISHED'}:
+            raise RuntimeError(f'Native FBX import failed: {result}')
+        return result
+    except RuntimeError as native_error:
+        # A failed importer may already have created objects. Do not leave a
+        # duplicate partial character behind when retrying with Python FBX.
+        for obj in set(bpy.data.objects) - before:
+            bpy.data.objects.remove(obj, do_unlink=True)
+        print(f'[FBX IMPORT] Native importer failed; retrying Python FBX: {native_error}')
+        try:
+            with temporary_addon('io_scene_fbx'):
+                result = bpy.ops.import_scene.fbx(
+                    'EXEC_DEFAULT', filepath=filepath, global_scale=1.0,
+                    use_custom_normals=True, use_custom_props=True,
+                    use_custom_props_enum_as_string=True, use_subsurf=False,
+                    ignore_leaf_bones=False, use_anim=True, anim_offset=1.0,
+                )
+            if result != {'FINISHED'} or not any(
+                obj.type == 'MESH' for obj in set(bpy.data.objects) - before
+            ):
+                raise RuntimeError(f'Python FBX import did not create meshes: {result}')
+        except Exception as fallback_error:
+            for obj in set(bpy.data.objects) - before:
+                bpy.data.objects.remove(obj, do_unlink=True)
+            raise RuntimeError(
+                f'Native FBX import failed: {native_error}\n'
+                f'Python FBX fallback failed: {fallback_error}'
+            ) from fallback_error
+        print('[FBX IMPORT] Imported with Python FBX fallback (import_scene.fbx)')
+        return result
 
 
 def connect_armature_bone_chains(armature):
@@ -214,9 +243,9 @@ def align_eye_bones(armature):
     """
     Fixes asymmetric or skewed eye pivot bones (e.g. from experimental wm.fbx_import)
     where +EyeBone L/R A01 midpoints do not match the pupil bones +EyeBone L/R A02.
-    Snaps A02 heads to the pupil mesh centers (pupil resizer drivers scale these
-    bones, and bone scale pivots on the head), then centers A01 pivots along X to
-    match A02, aligns height, and points A01 tail to A02.
+    Repairs A02 heads outside the bound pupil geometry, preserving authored
+    pivots inside it. Centers A01 along X, repairs substantial height errors,
+    and points A01 tails to A02. Sclera fitting is limited to validated exports.
     Detects coordinate orientation (whether Y or Z is vertical height).
     """
     if not armature or armature.type != 'ARMATURE':
@@ -261,8 +290,11 @@ def align_eye_bones(armature):
                     try:
                         acc = Vector((0.0, 0.0, 0.0))
                         wsum = 0.0
+                        pupil_points = []
                         for obj in bpy.data.objects:
                             if obj.type != 'MESH' or not getattr(obj, "data", None):
+                                continue
+                            if obj.find_armature() != armature or 'star' in obj.name.casefold():
                                 continue
                             vg = obj.vertex_groups.get(a02.name)
                             if vg is None:
@@ -283,10 +315,16 @@ def align_eye_bones(armature):
                                     co = to_arm @ v.co
                                     acc += co * w
                                     wsum += w
+                                    pupil_points.append(co)
                         if wsum > 1e-6:
                             center = acc / wsum
                             delta = center - a02.head
-                            if delta.length > 0.003:
+                            # Authored pupil pivots need not equal a vertex
+                            # average (Kinich's are intentionally off-center).
+                            # Repair only pivots outside the pupil's bounds.
+                            inside = all(min(p[i] for p in pupil_points) - .003 <= a02.head[i]
+                                         <= max(p[i] for p in pupil_points) + .003 for i in range(3))
+                            if delta.length > 0.003 and not inside:
                                 print(f"[ALIGN EYE BONES] Snapping {a02.name} head to pupil center (offset: {delta.length:.6f})")
                                 a02.head = center.copy()
                                 a02.tail = a02.tail + delta
@@ -306,17 +344,24 @@ def align_eye_bones(armature):
             if abs(eye_l1.head.y) > 0.5:
                 # Y is height, Z is depth (raw FBX orientation)
                 avg_h = (eye_l2.head.y + eye_r2.head.y) / 2.0
-                eye_l1.head.y = avg_h
-                eye_r1.head.y = avg_h
+                if max(abs(b.head.y - avg_h) for b in (eye_l1, eye_r1)) > .003:
+                    eye_l1.head.y = avg_h
+                    eye_r1.head.y = avg_h
             elif abs(eye_l1.head.z) > 0.5:
                 # Z is height, Y is depth (after standing-up rotation)
                 avg_h = (eye_l2.head.z + eye_r2.head.z) / 2.0
-                eye_l1.head.z = avg_h
-                eye_r1.head.z = avg_h
+                if max(abs(b.head.z - avg_h) for b in (eye_l1, eye_r1)) > .003:
+                    eye_l1.head.z = avg_h
+                    eye_r1.head.z = avg_h
 
             # Point A01 tail directly to A02 head (pupil center)
             eye_l1.tail = eye_l2.head.copy()
             eye_r1.tail = eye_r2.head.copy()
+
+        from setup_wizard.utils.genshin_eye_pivots import calibrate_eye_pivots
+        corrected = calibrate_eye_pivots(armature)
+        if corrected:
+            print(f'[ALIGN EYE BONES] Calibrated sclera pivots: {corrected}')
     except Exception as e:
         print(f"[ALIGN EYE BONES] Notice: {e}")
     finally:
@@ -1348,17 +1393,7 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
         maxlen=255,  # Max internal buffer length, longer would be clamped.
     )
 
-    def clean_up_scene(self):
-        OBJECTS_TO_CLEAN_UP = [
-            'Cube',
-            'Light',
-        ]
-        for obj in bpy.data.objects:
-            if obj.name in OBJECTS_TO_CLEAN_UP:
-                bpy.data.objects.remove(obj)
-
     def execute(self, context):
-        self.clean_up_scene()
         from setup_wizard.utils.archive_extractor import is_archive_file, extract_character_archive
 
         is_archive = is_archive_file(self.filepath)
@@ -1865,6 +1900,12 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
         if self.game_type == GameType.GENSHIN_IMPACT.name:
             import uuid
             model_id = uuid.uuid4().hex
+            imported_objects = [o for o in bpy.data.objects if o.name not in existing_objects]
+            if not is_rigging_disabled(bpy.context):
+                from setup_wizard.utils.genshin_scene_coordinates import normalize_cutscene_coordinates
+                for imported in imported_objects:
+                    if imported.type == 'ARMATURE':
+                        normalize_cutscene_coordinates(imported, imported_objects)
             for imported in bpy.data.objects:
                 if imported.name not in existing_objects:
                     imported['_setup_wizard_model_id'] = model_id

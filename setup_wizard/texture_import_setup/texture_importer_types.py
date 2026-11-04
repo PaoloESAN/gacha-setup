@@ -18,6 +18,7 @@ from setup_wizard.import_order import get_actual_material_name_for_dress
 from setup_wizard.texture_import_setup.texture_node_names import JaredNytsPunishingGrayRavenTextureNodeNames, Nya222HonkaiStarRailTextureNodeNames, StellarToonTextureNodeNames, TextureNodeNames, V4_GenshinImpactTextureNodeNames
 from setup_wizard.texture_import_setup.original_texture_locator_utils import OriginalTextureLocatorUtils
 from setup_wizard.utils.texture_utils import fix_missing_textures, load_or_get_image
+from setup_wizard.utils.shader_output_utils import surface_shader_output
 from setup_wizard.texture_import_setup.genshin_texture_binding import find_genshin_texture_nodes, texture_role
 
 
@@ -451,8 +452,10 @@ def setup_crystal_material_nodes(crystal_material):
     if not mix_node.inputs[1].links:
         tree.links.new(trans_node.outputs[0], mix_node.inputs[1])
 
-    if body_shader and 'PrimoToon' in body_shader.outputs and not mix_node.inputs[2].links:
-        tree.links.new(body_shader.outputs['PrimoToon'], mix_node.inputs[2])
+    shader_output = surface_shader_output(body_shader)
+    if shader_output is not None and (not mix_node.inputs[2].links
+            or mix_node.inputs[2].links[0].from_socket != shader_output):
+        tree.links.new(shader_output, mix_node.inputs[2])
 
     if not output_node.inputs['Surface'].links or output_node.inputs['Surface'].links[0].from_node != mix_node:
         tree.links.new(mix_node.outputs[0], output_node.inputs['Surface'])
@@ -1258,6 +1261,10 @@ class GenshinTextureImporter:
                 # Quest object materials (ex. AvatarObj_Ani_Quest_IkhorLight_01_Mat):
                 # keep the full object name so each maps to its own dedicated
                 # shader material instead of collapsing to a bare index ('01').
+                mat_part = clean_name
+            elif c_low.startswith('skillobj'):
+                # Skill Hair/Dress JSONs belong to their own materials, never
+                # to the avatar's Hair/Dress shaders.
                 mat_part = clean_name
             elif c_low.startswith('eff_'):
                 # Effect object materials (ex. Eff_Fresnel_048_NO_00): keep the
@@ -3075,6 +3082,9 @@ class HonkaiStarRailTextureImporter(GenshinTextureImporter):
             lightmap_node.image = img
 
     def set_warm_shadow_ramp_texture(self, type: TextureType, img):
+        if type is TextureType.WEAPON:
+            self.set_weapon_ramp_texture(img, override=True)
+            return
         ramp_node_name = \
             self.texture_node_names.BODY_WARM_RAMP if type is TextureType.BODY else \
             self.texture_node_names.HAIR_WARM_RAMP
@@ -3084,6 +3094,8 @@ class HonkaiStarRailTextureImporter(GenshinTextureImporter):
         ramp_texture_node.image = img
 
     def set_cool_shadow_ramp_texture(self, type: TextureType, img):
+        if type is TextureType.WEAPON:
+            return  # HSR weapon shaders expose a single warm-ramp group.
         if not bpy.data.node_groups.get(self.texture_node_names.BODY_COOL_RAMP_NODE_GROUP) or \
             not bpy.data.node_groups.get(self.texture_node_names.HAIR_COOL_RAMP_NODE_GROUP):
             return
@@ -3263,6 +3275,8 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
             os.path.join(directory, "Materials"),
             directory,
         ]
+        if os.path.basename(os.path.normpath(directory)).casefold() == 'textures':
+            candidates.append(os.path.join(os.path.dirname(os.path.normpath(directory)), 'Materials'))
         materials_dirs = []
         for d in candidates:
             if d and os.path.isdir(d) and d not in materials_dirs:
@@ -3316,11 +3330,11 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
                 extracted = {
                     'diffuse': extract_tex_name(['_MainTex', '_BaseTex', '_BaseTexV2', '_ColorTex', '_Diffuse', '_Tex', '_EyeColorMap']),
                     'lightmap': extract_tex_name(['_LightMapTex', '_LightMap', '_Lightmap', '_LightmapTex', '_MainLightmap', '_LightTex']),
-                    'warm_ramp': extract_tex_name(['_WarmRampTex', '_WarmRamp', '_ShadowRampTex', '_PackedShadowRampTex', '_Body_Warm_Ramp', '_Hair_Warm_Ramp', '_RampTex']),
-                    'cool_ramp': extract_tex_name(['_CoolRampTex', '_CoolRamp', '_Body_Cool_Ramp', '_Hair_Cool_Ramp']),
+                    'warm_ramp': extract_tex_name(['_DiffuseRampMultiTex', '_WarmRampTex', '_WarmRamp', '_ShadowRampTex', '_PackedShadowRampTex', '_Body_Warm_Ramp', '_Hair_Warm_Ramp', '_RampTex']),
+                    'cool_ramp': extract_tex_name(['_DiffuseCoolRampMultiTex', '_CoolRampTex', '_CoolRamp', '_Body_Cool_Ramp', '_Hair_Cool_Ramp']),
                     'stockings': extract_tex_name(['_StockingsTex', '_StockingTex', '_Stockings', '_Body_Stockings', '_StockRangeTex', '_StockRange', '_StockingRangeTex']),
                     'facemap': extract_tex_name(['_FaceMapTex', '_FaceMap', '_FaceLightMap', '_Face_LightMap', '_FaceShadow']),
-                    'expression': extract_tex_name(['_ExpressionMap', '_Face_ExpressionMap', '_FaceExpressionMap', '_Expression']),
+                    'expression': extract_tex_name(['_FaceExpression', '_ExpressionMap', '_Face_ExpressionMap', '_FaceExpressionMap', '_Expression']),
                     'normal': extract_tex_name(['_BumpMap', '_NormalMap', '_NormalTex']),
                 }
 
@@ -3497,7 +3511,7 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
                 img = self._resolve_image(fname, image_files)
                 if img: self.set_cool_shadow_ramp_texture(TextureType.BODY, img)
             # Weapon Ramp
-            elif 'weapon' in f_low and 'ramp' in f_low and not any(k in f_low for k in ['body', 'hair']):
+            elif 'weapon' in f_low and 'ramp' in f_low and not any(k in f_low for k in ['body', 'hair', 'cool']):
                 img = self._resolve_image(fname, image_files)
                 if img: self.set_weapon_ramp_texture(img, override=True)
             # Face Map

@@ -76,19 +76,13 @@ def find_armature_and_head(mesh_obj):
 
 
 def face_frame(mesh_obj):
-    me = mesh_obj.data
     mw = mesh_obj.matrix_world
-    fwd = Vector((0.0, 0.0, 0.0))
-    for v in me.vertices:
-        fwd += v.normal
-    fwd = mw.to_3x3() @ fwd
-    if fwd.length < 1e-6:
-        fwd = Vector((0.0, -1.0, 0.0))
-    fwd.normalize()
-
+    # Setup normalizes characters to face -Y, with Z upright. Averaging face
+    # normals pitches the entire panel according to the character's topology
+    # (Blade's controls tilted about 19 degrees). Keep sliders and labels in
+    # the normalized frontal plane, like the other expression panels.
+    fwd = Vector((0.0, -1.0, 0.0))
     world_up = Vector((0.0, 0.0, 1.0))
-    if abs(fwd.dot(world_up)) > 0.95:
-        world_up = Vector((0.0, 1.0, 0.0))
     right = world_up.cross(fwd).normalized()
     up = fwd.cross(right).normalized()
 

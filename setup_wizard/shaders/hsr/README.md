@@ -11,6 +11,12 @@ This folder contains the **StellarToon** shader files for setting up **Honkai: S
 
 * `StellarToonV1.1.blend` — Main StellarToon shader nodes and materials setup for Honkai: Star Rail models.
 
+The Blender 4.5 asset includes `StellarToon - Outlines FACE` and a `Face Preview`
+sample with the modifier assigned. Its dynamic camera/head masks reproduce the
+supplied Bronya face outlines, with face depth offset set to zero. The wizard
+imports this authored group and binds the character's head and camera; it does
+not generate the node graph. Edit the asset with Blender 4.5 LTS.
+
 ---
 
 ## Credits & Special Thanks

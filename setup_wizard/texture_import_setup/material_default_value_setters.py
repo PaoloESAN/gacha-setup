@@ -193,6 +193,9 @@ class GenshinImpactMaterialDefaultValueSetter(MaterialDefaultValueSetter):
         except Exception:
             pass
 
+        from setup_wizard.utils.neuvillette_wings import configure_neuvillette_wings
+        configure_neuvillette_wings()
+
     def set_up_body2_material(self, material):
         material.name = self.material_names.BODY2
 

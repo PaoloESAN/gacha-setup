@@ -1,5 +1,53 @@
 # Automated Test Suite
 
+`blender --background --factory-startup --python-exit-code 1 --python tests/genshin_fresnel_render_blender.py`
+renders two different Genshin Fresnel colors with the WuWa render/frame handlers enabled.
+It checks pixel colors, preserved panel links, editing after render, and isolation
+from WuWa controls and unused properties groups. Compatible with Blender 5.2/5.3 and Goo 4.2.
+
+Kinich's gaze regression runs after his full setup:
+`blender --background --factory-startup --python-exit-code 1 --python tests/genshin_kinich_eyes_blender.py -- output/Kinich.blend`.
+It compares pupil pivots and deformed iris vertices against `Starriia - Kinich.blend`
+in eight gaze poses, including wide movements. It checks independent eyes, neutral
+reset, head following and the absence of artificial rotation limits. Native FBX
+and BetterFBX skeletons have small differences, so the motion comparison allows
+4 mm; the neutral geometry and pupil pivots must match within 0.03 mm.
+Sclera fitting is restricted to validated Neuvillette and Alhaitham exports;
+unknown characters keep their existing eye pivots.
+Run `blender --background --factory-startup --python-exit-code 1 --python tests/genshin_eye_pivot_scope_blender.py`
+to check Kinich, Alhaitham, Neuvillette and Diluc imports and repeat alignment.
+This also checks that fitted centers stay at iris height and that Alhaitham
+is recognized from its bound materials when BetterFBX names its armature `Collider`.
+
+The V3 widget regression also compares geometry, edges, physical dimensions
+and palettes for 35 controls against `tests/.runtime/wuwa-original/widgets.json`
+when present. This reference was extracted after running the unchanged
+`WuWaRigifyV3.0a.py` (SHA-256
+`76759904481ca88ba1b5283b0ad85ed7d2e520b7f6a98dd6d88619b08d7fc761`)
+on a raw Phoebe import in Goo Engine 4.2.13, with only UEFormat and Rigify.
+
+WuWa's on-face V3 regression runs against a completed character:
+`blender --background --factory-startup --python-exit-code 1 --python tests/wuwa_face_on_model_blender.py -- "output/Phoebe - WuWa V3.blend"`.
+It checks expression deformation and reset, independent eyelids and pupils,
+gaze, eye-highlight helpers, outline toggling and a repeatable rebuild that
+preserves the body rig.
+
+Run `tests/hsr_shader_asset_blender.py` with Blender 4.5 to inspect the baked
+face modifier and preview inside `StellarToonV1.1.blend`.
+
+HSR face outlines use the current shader view direction without a camera object:
+`blender --background --factory-startup --python-exit-code 1 --python tests/hsr_face_outlines_blender.py -- "output/Stelle - Elation.blend"`.
+This renders six visibility cases (front, profile, above, below, head turn and
+disabled mask), checks animated head attributes, zero depth offset, face-only
+material changes and repeatable configuration. It also realizes the outline-only
+shell and checks that blue-marked interior folds are excluded while the original
+face stays intact (including Evernight on Blender 5.2). Half-intensity color markers
+are tested in linear space to catch the sRGB threshold regression.
+`hsr_face_outline_camera_blender.py`
+also checks that adding or removing a scene camera never changes the setup.
+The shader asset is baked with Blender 4.5 using
+`setup_wizard/utilites/build_hsr_face_outlines.py`.
+
 Automated testing framework for the Gacha Setup Wizard addon, designed to validate each pipeline phase across supported games and character models in a modular, headless fashion.
 
 ## Credits
@@ -92,6 +140,50 @@ tests/
 
 ## How to Run Tests
 
+Legacy Genshin eye calibration can be checked against the supplied scene with
+`blender --background --factory-startup --python-exit-code 1 --python tests/genshin_eye_pivots_blender.py -- pruebaDiluc.blend`.
+It preserves the authored gaze and neutral skinning, checks four gaze
+directions, and verifies repeated calibration makes no further changes.
+
+After running both Paimon setups into `output/Paimon.blend` and
+`output/Paimon - Default.blend`, run
+`blender --background --factory-startup --python-exit-code 1 --python tests/genshin_paimon_blender.py`.
+It checks identification, visible controls near the character, the standard rig
+tests, root follow, and the real cutscene source's coordinate normalization.
+
+After running the full HSR setup on `chars/hsr/Kafka`, verify that the clothing
+and accessories follow the root and the right leg in FK and IK. This also
+checks that source limb helpers remain distinct from Rigify's bend segments:
+
+```bash
+blender --background "output/Kafka.blend" --python-exit-code 1 --python tests/hsr_kafka_clothing_blender.py
+```
+
+Genshin render preservation checks that shader values and links edited directly
+in Global Properties survive rendering with a character or camera selected,
+while explicit Character Settings edits still work:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python tests/genshin_render_preserves_properties_blender.py
+```
+
+After running the full Genshin setup on `chars/genshin/Neuvillette - Melusent Gift`,
+verify the resulting blend with the real material JSONs. This checks 15 texture
+bindings and keeps the three wing materials separate from the avatar:
+
+```bash
+blender --background "output/Neuvillette - Melusent Gift.blend" --python-exit-code 1 --python tests/neuvillette_textures_blender.py
+```
+
+The Python FBX fallback regression uses both FBX files in
+`chars/ake/Zhuang Fangyi`. It checks recovery when the native importer rejects
+them, native import for a compatible model, failure cleanup, and preservation
+of the Python importer's enabled state:
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python tests/fbx_python_fallback_blender.py
+```
+
 FBX dispatch regression uses the real Columbina FBX. Blender below 4.5 must
 always use installed BetterFBX; Blender 4.5+ prefers the registered native
 importer. To test an older Blender without enabling the add-on permanently,
@@ -143,7 +235,7 @@ blender --background --factory-startup --python-exit-code 1 --python tests/mmd_s
 ```
 
 The ExpyKit dependency/conversion smoke test can run on Blender 4 or 5.
-Character setup uses ExpyKit on both; Retarget remains available separately:
+Character setup uses ExpyKit on both:
 
 ```bash
 blender --background --factory-startup --python-exit-code 1 --python tests/rig_conversion_blender.py
@@ -163,8 +255,8 @@ It uses `chars/genshin/Amber/Default` and writes results under
 This also verifies temporary dependency activation, nested scopes, cleanup after
 failure, and preservation of dependencies already enabled by the user. The PMX
 regression starts with optional dependencies disabled. The VMD regression on
-Blender 5 checks the real root VMD on an FBX and Rigify controls, cleanup after
-failure, and rejection of Blender versions below 5.0:
+Blender 4.2+ checks the real root VMD on an FBX and Rigify controls, cleanup after
+failure, and rejection of Blender versions below 4.2:
 
 ```bash
 blender --background --factory-startup --python-exit-code 1 --python tests/vmd_motion_blender.py
@@ -174,7 +266,25 @@ blender --background --factory-startup --python-exit-code 1 --python tests/optio
 
 The VMD test uses `chars/vmdmotion/Motion & Facials.vmd` (or the root copy),
 and generates a reproducible motion if neither file is present.
-It also checks driven expressions on an FBX and facial-only VMD import. The
+
+`tests/vmd_motion_games_blender.py` checks one prepared character for each of
+the nine supported games with `chars/vmdmotion/Motion & Facials.vmd`. It checks
+mapped pelvis/spine controls, animated deformation bones, finite transforms,
+the starting frame, and a `FACIAL_Hiasobi.vmd` overlay that preserves body curves
+and FPS. Characters without shape keys are checked for body motion only.
+Prepared scene paths are listed in `CHARACTERS` in the script. Reports are
+written to `tests/.runtime/vmd-games/<game>.json`.
+
+```bash
+blender --background --factory-startup --python-exit-code 1 --python tests/vmd_motion_games_blender.py
+blender --background --factory-startup --python-exit-code 1 --python tests/vmd_motion_games_blender.py -- wuwa --save-blend
+```
+
+Use `--body-only` to check only dancing. Set `GACHA_TEST_MMD_DIR` to the
+installed `mmd_tools` package directory if it is outside Blender's script paths.
+Set `GACHA_TEST_VMD` to another real dance, such as `chars/vmdmotion/Hiasobi.vmd`.
+
+The original FBX test also checks driven expressions and facial-only VMD import. The
 standalone facial regression needs no optional add-ons; it covers shared
 channels, independent bone axes, linear weights, rollback, source snapshots,
 custom properties and preservation of drivers and previous actions.

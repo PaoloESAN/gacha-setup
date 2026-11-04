@@ -23,9 +23,9 @@ def resource(kind, path='', create=False):
 bpy.utils.user_resource = resource
 sys.path.insert(0, str(ROOT))
 dependencies = runtime / 'dependencies'
-with zipfile.ZipFile(ROOT / 'setup_wizard/dependencies/retarget.zip') as archive:
+with zipfile.ZipFile(ROOT / 'setup_wizard/dependencies/Expy-Kit-v052.zip') as archive:
     archive.extractall(dependencies)
-package = min(dependencies.rglob('__init__.py'), key=lambda p: len(p.parts)).parent
+package = dependencies / 'Expy-Kit-main'
 sys.path.insert(0, str(package.parent))
 importlib.import_module(package.name)
 model = ROOT / 'chars/zzz/alice-celestian-etiquette/Avatar_Female_Size02_Alice_UI.fbx'
@@ -59,6 +59,7 @@ face = next(obj for obj in bpy.context.scene.objects if obj.type == 'MESH'
 modifier = next(mod for mod in face.modifiers if mod.type == 'NODES' and mod.node_group
                 and mod.node_group.get('zzz_kythera_vectors'))
 highlight = bpy.data.materials["Kythera's ZZZ Eye Highlights"]
+assert highlight.surface_render_method == 'BLENDED'
 assert any(face.data.materials[polygon.material_index] == highlight for polygon in face.data.polygons), 'Toon must assign Kythera highlights'
 assert not any(face.data.materials[polygon.material_index]
                and face.data.materials[polygon.material_index].name.startswith('ZZZ Shader EyeHighlights')

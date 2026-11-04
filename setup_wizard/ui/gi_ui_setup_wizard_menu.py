@@ -1447,6 +1447,8 @@ def _apply_outlines_and_night_soul(context, outlines_on, ns_on, arm=None):
             arm = resolve_settings_armature(context)
         meshes = list(_iter_rig_meshes(arm)) if arm else [obj for obj in bpy.data.objects if obj.type == 'MESH']
         should_show = bool(outlines_on or ns_on)
+        if arm and arm.get('gi_animate_mode', False):
+            should_show = False
         dirty_meshes = []
 
         for mesh in meshes:
@@ -2500,11 +2502,3 @@ def unregister_gi_properties():
     ]:
         if hasattr(bpy.types.Scene, prop):
             delattr(bpy.types.Scene, prop)
-
-
-@bpy.app.handlers.persistent
-def gi_frame_change_handler(scene, depsgraph=None):
-    try:
-        sync_genshin_shader_properties(scene)
-    except Exception:
-        pass

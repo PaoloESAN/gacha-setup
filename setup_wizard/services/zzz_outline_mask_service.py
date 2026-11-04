@@ -6,6 +6,85 @@ import bpy
 import bmesh
 
 
+NON_SKIN_KEYWORDS = (
+    "eye", "pupil", "iris", "shadow", "brow", "teeth", "tooth",
+    "mouth", "tongue", "transparent", "transp", "blush", "highlight",
+)
+
+
+def is_face_detail_material(material):
+    """Keep exclusions after shader replacement or user material renaming."""
+    if material is None:
+        return False
+    names = (material.name, material.get('_original_material_name', ''))
+    return any(keyword in name.lower() for name in names for keyword in NON_SKIN_KEYWORDS)
+
+
+def is_face_detail_object(obj):
+    """Separate eye/mouth meshes must not receive the general body hull."""
+    name = obj.name.lower()
+    if 'face' not in name and any(keyword in name for keyword in NON_SKIN_KEYWORDS):
+        return True
+    materials = [slot.material for slot in obj.material_slots if slot.material]
+    if materials:
+        return all(is_face_detail_material(material) for material in materials)
+    return False
+
+
+def _exclude_facial_openings(face_obj, bm, skin):
+    """Keep the inverted hull away from eyelids and deforming lips too.
+
+    These surfaces often share the skin material and head weights. Excluding
+    only the eyeball/teeth leaves their surrounding skin hull visible through
+    the openings. Measure eye clearance in mesh space so scale and rotation
+    do not change the mask.
+    """
+    from mathutils.kdtree import KDTree
+
+    deform = bm.verts.layers.deform.active
+    mouth_groups = {group.index for group in face_obj.vertex_groups
+                    if any(word in group.name.lower() for word in ('mouth', 'lip'))}
+    eye_groups = {group.index for group in face_obj.vertex_groups
+                  if any(word in group.name.lower() for word in ('eye', 'pupil', 'iris'))
+                  and not any(word in group.name.lower() for word in
+                              ('brow', 'lid', 'lash', 'shadow', 'track', 'ctrl', 'mch', 'org'))}
+    eye_surfaces = []
+    if deform:
+        for vertex in bm.verts:
+            if any(index in mouth_groups and weight > 0.05
+                   for index, weight in vertex[deform].items()):
+                skin.discard(vertex.index)
+        for index in eye_groups:
+            points = [vertex.co.copy() for vertex in bm.verts if vertex[deform].get(index, 0) > 0.1]
+            if points:
+                # Some exports skin only the iris to the eye bone; the white
+                # corners and eyelid rim still belong to the head/face mesh.
+                eye_surfaces.append((points, 0.4))
+
+    if not eye_surfaces:
+        eye_slots = {i for i, slot in enumerate(face_obj.material_slots)
+                     if slot.material and any(word in (
+                         slot.material.name + ' ' + slot.material.get('_original_material_name', '')
+                     ).lower() for word in ('eye', 'pupil', 'iris'))
+                     and not any(word in slot.material.name.lower() for word in ('brow', 'shadow'))}
+        points = {vertex for face in bm.faces if face.material_index in eye_slots for vertex in face.verts}
+        if points:
+            # The material can cover both eyes, unlike a single eye bone.
+            eye_surfaces.append(([vertex.co.copy() for vertex in points], 0.06))
+
+    for points, clearance in eye_surfaces:
+        span = max(max(point[i] for point in points) - min(point[i] for point in points) for i in range(3))
+        if span <= 0:
+            continue
+        tree = KDTree(len(points))
+        for index, point in enumerate(points):
+            tree.insert(point, index)
+        tree.balance()
+        for index in list(skin):
+            if tree.find(bm.verts[index].co)[2] <= span * clearance:
+                skin.discard(index)
+
+
 def find_face_objects(context=None):
     """Finds all mesh objects that represent character faces."""
     if context is None:
@@ -163,6 +242,27 @@ def create_face_outline_mask(face_obj, configure_modifier=True, attribute_name="
     bm.verts.ensure_lookup_table()
     bm.faces.ensure_lookup_table()
 
+    # Exclude details BEFORE finding/welding skin islands. Otherwise an eye
+    # overlay at a skin seam can bridge disconnected mouth/eye geometry into
+    # the largest island, even though the overlay itself is masked later.
+    excluded = set()
+    detail_slots = {idx for idx, slot in enumerate(face_obj.material_slots)
+                    if is_face_detail_material(slot.material)}
+    for face in bm.faces:
+        if face.material_index in detail_slots:
+            excluded.update(vertex.index for vertex in face.verts)
+    dvert_layer = bm.verts.layers.deform.active
+    if dvert_layer:
+        detail_groups = {group.index for group in face_obj.vertex_groups
+                         if any(word in group.name.lower() for word in
+                                ('eye', 'pupil', 'iris', 'teeth', 'tooth', 'tongue', 'highlight'))
+                         and not any(word in group.name.lower() for word in
+                                     ('spine', 'head', 'neck', 'brow', 'lid', 'lash'))}
+        for vertex in bm.verts:
+            if any(index in detail_groups and weight > 0.5
+                   for index, weight in vertex[dvert_layer].items()):
+                excluded.add(vertex.index)
+
     # 1. Virtual seam welding, for classification only. Roxy's skin is split
     # into equal left/right islands; selecting just one erases half the hull.
     from mathutils.kdtree import KDTree
@@ -173,7 +273,7 @@ def create_face_outline_mask(face_obj, configure_modifier=True, attribute_name="
     extent = max(max(v.co[i] for v in bm.verts) - min(v.co[i] for v in bm.verts)
                  for i in range(3))
     tolerance = max(extent * 1e-6, 1e-10)
-    visited = set()
+    visited = set(excluded)
     islands = []
     for vertex in bm.verts:
         if vertex.index in visited:
@@ -195,41 +295,9 @@ def create_face_outline_mask(face_obj, configure_modifier=True, attribute_name="
     # Sort virtual islands by vertex count descending.
     # In Hoyoverse / ZZZ characters, the main face skin is the largest connected manifold mesh.
     islands.sort(key=lambda x: len(x), reverse=True)
-    if not islands:
-        bm.free()
-        return False
-
-    main_island = islands[0]
+    main_island = islands[0] if islands else set()
     face_skin_vert_indices = main_island
-
-    # 2. Material inspection: exclude any faces assigned to eye, shadow, brow, teeth, mouth, or transparent slots
-    non_skin_mats = [
-        "eye", "pupil", "iris", "shadow", "eyeshadow", "brow", "eyebrow",
-        "teeth", "tooth", "mouth", "tongue", "transparent", "transp", "blush"
-    ]
-    for idx, slot in enumerate(face_obj.material_slots):
-        if slot.material and any(kw in slot.material.name.lower() for kw in non_skin_mats):
-            for f in bm.faces:
-                if f.material_index == idx:
-                    for v in f.verts:
-                        face_skin_vert_indices.discard(v.index)
-
-    # 3. Exclude eyeballs and teeth, preserving deforming skin on brows/lids.
-    dvert_layer = bm.verts.layers.deform.active
-    if dvert_layer and face_obj.vertex_groups:
-        vg_names = [vg.name.lower() for vg in face_obj.vertex_groups]
-        bone_bad_keywords = ["eye", "pupil", "iris", "eyebrow", "brow", "teeth", "tooth", "tongue", "highlight"]
-        for v in bm.verts:
-            if v.index in face_skin_vert_indices:
-                dvert = v[dvert_layer]
-                for g_idx in dvert.keys():
-                    if g_idx < len(vg_names):
-                        gname = vg_names[g_idx]
-                        if any(kw in gname for kw in bone_bad_keywords) and not any(ok in gname for ok in ["spine", "head", "neck", "brow", "lid", "lash"]):
-                            # Exclude if strongly influenced by eye/teeth bone
-                            if dvert[g_idx] > 0.5:
-                                face_skin_vert_indices.discard(v.index)
-                                break
+    _exclude_facial_openings(face_obj, bm, face_skin_vert_indices)
 
     bm.free()
 

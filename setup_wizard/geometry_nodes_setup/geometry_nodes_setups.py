@@ -193,8 +193,10 @@ def refresh_hsr_outline_scale(context):
         if abs(scale - previous_scale) < 1e-6:
             continue
         for modifier in mesh.modifiers:
-            if (modifier.type != 'NODES' or not modifier.node_group
-                    or modifier.node_group.name.split('.')[0] not in
+            if modifier.type != 'NODES' or not modifier.node_group:
+                continue
+            is_face_outline = modifier.node_group.get('gacha_hsr_face_outlines')
+            if (not is_face_outline and modifier.node_group.name.split('.')[0] not in
                     OutlineNodeGroupNames.STELLARTOON_HSR_OUTLINES + OutlineNodeGroupNames.NYA222_HSR_OUTLINES):
                 continue
             for key in (OUTLINE_THICKNESS_INPUT, HSR_OUTLINE_DEPTH_OFFSET_INPUT):
@@ -571,6 +573,11 @@ class V3_GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
         if not mesh:
             return None
 
+        from setup_wizard.utils.neuvillette_wings import is_neuvillette_wing, configure_neuvillette_wings
+        if is_neuvillette_wing(mesh):
+            configure_neuvillette_wings([mesh])
+            return None
+
         for outlines_node_group_name in self.outlines_node_group_names:
             outlines_node_group = bpy.data.node_groups.get(outlines_node_group_name)
             geometry_nodes_modifier = mesh.modifiers.get(f'{NAME_OF_GEOMETRY_NODES_MODIFIER} {mesh_name}')
@@ -867,6 +874,7 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
         night_soul_outlines_material_using_mesh_material_name = [
             material for material in bpy.data.materials.values() if [
                 material_slot.material for material_slot in mesh.material_slots if 
+                material_slot.material and
                 material_slot.material.name.split(' ')[-1] in material.name and 
                 material.name.endswith(self.material_names.NIGHT_SOUL_OUTLINES_SUFFIX)
             ]
@@ -888,6 +896,9 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
             set_modifier_property(modifier, self.FACE_LIGHTMAP_SOCKET, face_lightmap_node_group.nodes[self.texture_node_names.FACE_LIGHTMAP].image)
 
     def __separate_materials_into_unique_meshes(self, mesh):
+        from setup_wizard.utils.neuvillette_wings import is_neuvillette_wing
+        if is_neuvillette_wing(mesh):
+            return
         # Keep toggleable part meshes (e.g. Durin Wing01/Wing02) intact:
         # they are named after the body part, not after a material, so
         # separating them by material would dissolve them into the generic
@@ -1365,9 +1376,11 @@ class HonkaiStarRailGeometryNodesSetup(GameGeometryNodesSetup):
                                 pos_key = (round(v_co.x, 3), round(v_co.y, 3), round(v_co.z, 3))
                                 
                                 if v_z >= cutoff_z and pos_key in original_colors_by_pos:
-                                    el.color = original_colors_by_pos[pos_key]
+                                    el.color = (*original_colors_by_pos[pos_key][:3], el.color[3])
                                 else:
-                                    el.color = (1.0, 1.0, 1.0, 1.0)
+                                    # StellarToon reads alpha as the outline width mask.
+                                    # Cleaning the shading RGB must preserve authored width.
+                                    el.color = (1.0, 1.0, 1.0, el.color[3])
                     elif col_layer.domain == 'CORNER':
                         for i, el in enumerate(col_layer.data):
                             if i < len(mesh.loops):
@@ -1377,9 +1390,9 @@ class HonkaiStarRailGeometryNodesSetup(GameGeometryNodesSetup):
                                 pos_key = (round(v_co.x, 3), round(v_co.y, 3), round(v_co.z, 3))
                                 
                                 if v_z >= cutoff_z and pos_key in original_colors_by_pos:
-                                    el.color = original_colors_by_pos[pos_key]
+                                    el.color = (*original_colors_by_pos[pos_key][:3], el.color[3])
                                 else:
-                                    el.color = (1.0, 1.0, 1.0, 1.0)
+                                    el.color = (1.0, 1.0, 1.0, el.color[3])
 
             mesh.update()
 
@@ -1449,6 +1462,13 @@ class StellarToonGeometryNodesSetup(HonkaiStarRailGeometryNodesSetup):
         set_modifier_property(light_vectors_modifier, self.LIGHTDIR_OUTPUT_ATTRIBUTE, 'lightDir')
         set_modifier_property(light_vectors_modifier, self.HEADFORWARD_OUTPUT_ATTRIBUTE, 'headForward')
         set_modifier_property(light_vectors_modifier, self.HEADUP_OUTPUT_ATTRIBUTE, 'headUp')
+
+    def create_geometry_nodes_modifier(self, mesh_name):
+        modifier = super().create_geometry_nodes_modifier(mesh_name)
+        if modifier:
+            from setup_wizard.utils.hsr_face_outlines import configure_face_outlines
+            configure_face_outlines(self.context, bpy.data.objects[mesh_name], modifier)
+        return modifier
 
 
 class PunishingGrayRavenGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
@@ -1834,15 +1854,18 @@ class ZenlessZoneZeroGeometryNodesSetup(GameGeometryNodesSetup):
                     for slot in obj.material_slots
                 )
 
-                if is_zzz_game and is_brow and not is_face:
-                    # Eyebrows in ZZZ should NOT have outlines
-                    for mod_name in ["Outlines", "Solidify"]:
-                        mod_to_rem = obj.modifiers.get(mod_name)
-                        if mod_to_rem:
-                            try:
-                                obj.modifiers.remove(mod_to_rem)
-                            except Exception:
-                                pass
+                from setup_wizard.services.zzz_outline_mask_service import is_face_detail_object
+                if is_zzz_game and (is_brow and not is_face or is_face_detail_object(obj)):
+                    # Separate eyes, mouth interiors and brows bypass the body
+                    # hull as well as the face mask path. Include rerun copies.
+                    for detail_mod in list(obj.modifiers):
+                        if detail_mod.type == 'SOLIDIFY' or (
+                            detail_mod.type == 'NODES' and (
+                                detail_mod.name.startswith("Outlines") or
+                                detail_mod.node_group and detail_mod.node_group.name.startswith(("ZZZ Outlines", "face_outlines"))
+                            )
+                        ):
+                            obj.modifiers.remove(detail_mod)
                     continue
 
                 # fix_zzz_eye_shadow disabled
