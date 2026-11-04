@@ -498,6 +498,10 @@ def update_light_mode(self, context=None):
 
 
 def update_fresnel(self, context=None):
+    context = context or bpy.context
+    from setup_wizard.ui.character_settings_utils import is_game_armature
+    if not is_game_armature(context, 'WUTHERING_WAVES'):
+        return
     scene = getattr(bpy.context, "scene", None) if not isinstance(self, bpy.types.Scene) else self
     if not scene:
         return
@@ -526,18 +530,13 @@ def update_fresnel(self, context=None):
     }
 
     target_trees = set()
-    mats_to_update = target_materials if target_materials else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
+    mats_to_update = target_materials
     for mat in mats_to_update:
         if getattr(mat, "use_nodes", False) and mat.node_tree:
             for node in mat.node_tree.nodes:
                 if node.type == 'GROUP' and node.node_tree:
                     if "global material properties" in node.node_tree.name.lower():
                         target_trees.add(node.node_tree)
-
-    if not target_trees:
-        for ng in bpy.data.node_groups:
-            if "global material properties" in ng.name.lower():
-                target_trees.add(ng)
 
     for tree in target_trees:
         out_node = tree.nodes.get("Global Properties") or tree.nodes.get("Group Output")
@@ -821,6 +820,9 @@ def update_outline_thickness(self, context=None):
 
 def sync_wuwa_shader_properties(scene=None):
     """Synchronizes all Wuthering Waves scene UI properties to shader node groups and materials."""
+    from setup_wizard.ui.character_settings_utils import is_game_armature
+    if not is_game_armature(bpy.context, 'WUTHERING_WAVES'):
+        return
     scene = scene or getattr(bpy.context, "scene", None)
     if not scene:
         return
