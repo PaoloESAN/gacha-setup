@@ -25,6 +25,7 @@ from setup_wizard.texture_import_setup.texture_importer_types import TextureImpo
 from setup_wizard.domain.shader_material_name_keywords import ShaderMaterialNameKeywords
 from setup_wizard.utils.genshin_body_part_deducer import get_monster_body_part_name, \
     get_npc_mesh_body_part_name
+from setup_wizard.utils.shader_output_utils import surface_shader_output
 
 
 def _is_vodyanitsa_for_crystal(material_name=None, mesh=None):
@@ -1400,8 +1401,10 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         if not mix_node.inputs[1].links:
             tree.links.new(trans_node.outputs[0], mix_node.inputs[1])
 
-        if body_shader and 'PrimoToon' in body_shader.outputs and not mix_node.inputs[2].links:
-            tree.links.new(body_shader.outputs['PrimoToon'], mix_node.inputs[2])
+        shader_output = surface_shader_output(body_shader)
+        if shader_output is not None and (not mix_node.inputs[2].links
+                or mix_node.inputs[2].links[0].from_socket != shader_output):
+            tree.links.new(shader_output, mix_node.inputs[2])
 
         if not output_node.inputs['Surface'].links or output_node.inputs['Surface'].links[0].from_node != mix_node:
             tree.links.new(mix_node.outputs[0], output_node.inputs['Surface'])

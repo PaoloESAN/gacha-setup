@@ -243,9 +243,9 @@ def align_eye_bones(armature):
     """
     Fixes asymmetric or skewed eye pivot bones (e.g. from experimental wm.fbx_import)
     where +EyeBone L/R A01 midpoints do not match the pupil bones +EyeBone L/R A02.
-    Snaps A02 heads to the pupil mesh centers (pupil resizer drivers scale these
-    bones, and bone scale pivots on the head), then centers A01 pivots along X to
-    match A02, aligns height, and points A01 tail to A02.
+    Repairs A02 heads outside the bound pupil geometry, preserving authored
+    pivots inside it. Centers A01 along X, repairs substantial height errors,
+    and points A01 tails to A02. Sclera fitting is limited to validated exports.
     Detects coordinate orientation (whether Y or Z is vertical height).
     """
     if not armature or armature.type != 'ARMATURE':
@@ -290,8 +290,11 @@ def align_eye_bones(armature):
                     try:
                         acc = Vector((0.0, 0.0, 0.0))
                         wsum = 0.0
+                        pupil_points = []
                         for obj in bpy.data.objects:
                             if obj.type != 'MESH' or not getattr(obj, "data", None):
+                                continue
+                            if obj.find_armature() != armature or 'star' in obj.name.casefold():
                                 continue
                             vg = obj.vertex_groups.get(a02.name)
                             if vg is None:
@@ -312,10 +315,16 @@ def align_eye_bones(armature):
                                     co = to_arm @ v.co
                                     acc += co * w
                                     wsum += w
+                                    pupil_points.append(co)
                         if wsum > 1e-6:
                             center = acc / wsum
                             delta = center - a02.head
-                            if delta.length > 0.003:
+                            # Authored pupil pivots need not equal a vertex
+                            # average (Kinich's are intentionally off-center).
+                            # Repair only pivots outside the pupil's bounds.
+                            inside = all(min(p[i] for p in pupil_points) - .003 <= a02.head[i]
+                                         <= max(p[i] for p in pupil_points) + .003 for i in range(3))
+                            if delta.length > 0.003 and not inside:
                                 print(f"[ALIGN EYE BONES] Snapping {a02.name} head to pupil center (offset: {delta.length:.6f})")
                                 a02.head = center.copy()
                                 a02.tail = a02.tail + delta
@@ -335,13 +344,15 @@ def align_eye_bones(armature):
             if abs(eye_l1.head.y) > 0.5:
                 # Y is height, Z is depth (raw FBX orientation)
                 avg_h = (eye_l2.head.y + eye_r2.head.y) / 2.0
-                eye_l1.head.y = avg_h
-                eye_r1.head.y = avg_h
+                if max(abs(b.head.y - avg_h) for b in (eye_l1, eye_r1)) > .003:
+                    eye_l1.head.y = avg_h
+                    eye_r1.head.y = avg_h
             elif abs(eye_l1.head.z) > 0.5:
                 # Z is height, Y is depth (after standing-up rotation)
                 avg_h = (eye_l2.head.z + eye_r2.head.z) / 2.0
-                eye_l1.head.z = avg_h
-                eye_r1.head.z = avg_h
+                if max(abs(b.head.z - avg_h) for b in (eye_l1, eye_r1)) > .003:
+                    eye_l1.head.z = avg_h
+                    eye_r1.head.z = avg_h
 
             # Point A01 tail directly to A02 head (pupil center)
             eye_l1.tail = eye_l2.head.copy()

@@ -4,6 +4,26 @@ import numpy as np
 from mathutils import Vector
 
 
+def needs_eye_pivot_calibration(armature):
+    """Only the validated legacy exports opt into sclera fitting.
+
+    A nearby face island is not necessarily an eyeball. In particular Kinich's
+    authored pivots must survive: the same fit also accepts his eyelid patches.
+    Keep unknown characters unchanged until their eye layout is validated.
+    """
+    identity = ' '.join((armature.name, armature.data.name,
+                         str(armature.get('gacha_character', '')))).casefold()
+    names = ('neuvillette', 'alhaitham', 'alhatham')
+    if any(name in identity for name in names):
+        return True
+    # BetterFBX can name Alhaitham's main armature Collider. Identify that
+    # export through its own bound materials, never another scene character.
+    return any(any(name in material.name.casefold() for name in names)
+               for obj in bpy.context.scene.objects
+               if obj.type == 'MESH' and obj.find_armature() == armature
+               for material in obj.data.materials if material)
+
+
 def calibrate_eye_pivots(armature):
     """Run in Edit mode; preserve the skin and pupil rest positions.
 
@@ -12,6 +32,8 @@ def calibrate_eye_pivots(armature):
     reject flat/ambiguous surfaces rather than guessing a character-specific
     offset. The same routine can repair an already generated rig.
     """
+    if not needs_eye_pivot_calibration(armature):
+        return {}
     bones = armature.data.edit_bones
     inverse = armature.matrix_world.inverted()
     meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH'
@@ -19,7 +41,9 @@ def calibrate_eye_pivots(armature):
     head = next((bones.get(n) for n in ('Bip001 Head', 'head', 'Head_M') if bones.get(n)), None)
     if head is None:
         return {}
-    vertical = np.array(head.vector.normalized())
+    # Exported head bones can point forward rather than up. In raw FBX space
+    # this confused depth with height and selected an eyelid as the eyeball.
+    vertical = np.array((inverse.to_3x3() @ Vector((0, 0, 1))).normalized())
     pupils = {}
     for side in ('L', 'R'):
         names = (f'+EyeBone {side} A02', f'+EyeBoneA02.{side}')
@@ -38,6 +62,7 @@ def calibrate_eye_pivots(armature):
     if len(pupils) != 2:
         return {}
     lateral = pupils['L'].mean(axis=0) - pupils['R'].mean(axis=0)
+    lateral -= vertical * np.dot(lateral, vertical)
     lateral /= np.linalg.norm(lateral)
     # Unmerged exports retain the sclera as Face_Eye. Prefer that explicit
     # surface over eyelashes and eyelids from the main face mesh.
@@ -68,7 +93,7 @@ def calibrate_eye_pivots(armature):
                         stack.append(neighbor)
             if len(indices) >= 12:
                 islands.append(np.array([tuple(transform @ obj.data.vertices[i].co) for i in indices]))
-    changed = {}
+    fitted = {}
     for side, pupil in pupils.items():
         a01 = bones.get(f'+EyeBone {side} A01') or bones.get(f'+EyeBoneA01.{side}')
         a02 = bones.get(f'+EyeBone {side} A02') or bones.get(f'+EyeBoneA02.{side}')
@@ -95,12 +120,29 @@ def calibrate_eye_pivots(armature):
             if not width * .5 < radius < width * 2:
                 continue
             error = np.std(np.linalg.norm(points - center, axis=1))
+            # A curved eyelid can fit a sphere better than the sclera. Its
+            # center can lie well below the iris, producing a tilted orbit
+            # and burying the pupil when viewed or tracked from the side.
+            if abs(np.dot(center - pupil_center, vertical)) > height * .25:
+                continue
             if error > radius * .18 or np.dot(center - pupil_center, np.array(a01.head) - pupil_center) <= 0:
                 continue
-            candidates.append((distance, center, radius))
+            candidates.append((error / radius, distance, center, radius))
         if not candidates:
             continue
-        _, center, radius = min(candidates, key=lambda item: item[0])
+        _, _, center, radius = min(candidates, key=lambda item: item[:2])
+        fitted[side] = (center, radius, a01, a02)
+    # Do not repair just one eye or accept two different facial surfaces.
+    if len(fitted) != 2:
+        return {}
+    left, right = fitted['L'], fitted['R']
+    height = max(np.ptp(pupils[s] @ vertical) for s in pupils)
+    if (abs(np.dot(left[0] - right[0], vertical)) > height * .25
+            or max(left[1], right[1]) > min(left[1], right[1]) * 1.25):
+        return {}
+    changed = {}
+    for side, (center, radius, a01, a02) in fitted.items():
+        pupil_center = pupils[side].mean(axis=0)
         if (Vector(center) - a01.head).length < 1e-6:
             continue
         pivot = Vector(center)

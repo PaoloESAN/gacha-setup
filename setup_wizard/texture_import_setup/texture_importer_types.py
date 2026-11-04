@@ -18,6 +18,7 @@ from setup_wizard.import_order import get_actual_material_name_for_dress
 from setup_wizard.texture_import_setup.texture_node_names import JaredNytsPunishingGrayRavenTextureNodeNames, Nya222HonkaiStarRailTextureNodeNames, StellarToonTextureNodeNames, TextureNodeNames, V4_GenshinImpactTextureNodeNames
 from setup_wizard.texture_import_setup.original_texture_locator_utils import OriginalTextureLocatorUtils
 from setup_wizard.utils.texture_utils import fix_missing_textures, load_or_get_image
+from setup_wizard.utils.shader_output_utils import surface_shader_output
 from setup_wizard.texture_import_setup.genshin_texture_binding import find_genshin_texture_nodes, texture_role
 
 
@@ -451,8 +452,10 @@ def setup_crystal_material_nodes(crystal_material):
     if not mix_node.inputs[1].links:
         tree.links.new(trans_node.outputs[0], mix_node.inputs[1])
 
-    if body_shader and 'PrimoToon' in body_shader.outputs and not mix_node.inputs[2].links:
-        tree.links.new(body_shader.outputs['PrimoToon'], mix_node.inputs[2])
+    shader_output = surface_shader_output(body_shader)
+    if shader_output is not None and (not mix_node.inputs[2].links
+            or mix_node.inputs[2].links[0].from_socket != shader_output):
+        tree.links.new(shader_output, mix_node.inputs[2])
 
     if not output_node.inputs['Surface'].links or output_node.inputs['Surface'].links[0].from_node != mix_node:
         tree.links.new(mix_node.outputs[0], output_node.inputs['Surface'])
