@@ -26,6 +26,7 @@ from setup_wizard.domain.shader_material_name_keywords import ShaderMaterialName
 from setup_wizard.utils.genshin_body_part_deducer import get_monster_body_part_name, \
     get_npc_mesh_body_part_name
 from setup_wizard.utils.shader_output_utils import surface_shader_output
+from setup_wizard.utils.zzz_material_json import is_untextured
 
 
 def _is_vodyanitsa_for_crystal(material_name=None, mesh=None):
@@ -1948,13 +1949,7 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     try:
                         with open(os.path.join(mat_dir, jf), 'r', encoding='utf-8') as f:
                             data = json.load(f)
-                        tex_envs = data.get("m_SavedProperties", {}).get("m_TexEnvs", {})
-                        for slot, val in tex_envs.items():
-                            if isinstance(val, dict):
-                                tex_info = val.get("m_Texture", {})
-                                if isinstance(tex_info, dict) and not tex_info.get("IsNull", True):
-                                    return False  # has at least one valid texture
-                        return True  # JSON exists and all textures are null
+                        return is_untextured(data)
                     except Exception:
                         pass
             return False

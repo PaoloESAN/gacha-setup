@@ -75,6 +75,14 @@ ver = _blender_ver
 
 
 def shapekeyrename(keyblock):
+    # Some FBX exporters append the full-weight frame to facial blendshapes.
+    # Strip only the known facial suffix, preserving other progressive keys
+    # and any existing canonical expression rather than creating .001 aliases.
+    for sk in list(keyblock):
+        if sk.name.startswith(('Fac_Mth_', 'Fac_Eye_', 'Fac_Ebr_')) and sk.name.endswith('_100'):
+            canonical = sk.name[:-4]
+            if canonical not in keyblock:
+                sk.name = canonical
     # Nicole's source asset names the two upward corners opposite to its
     # inward/outward/downward keys. Normalize them before removing the suffix.
     nicole_corner_up = {
@@ -860,7 +868,7 @@ def plan_controls(mesh_obj, fwd, right, up, face_size):
     visemes = [k for k in ["Fac_Mth_Aa1", "Fac_Mth_Aa2", "Fac_Mth_Aa3Shout",
                "Fac_Mth_AaTalk", "Fac_Mth_Ee", "Fac_Mth_Ii", "Fac_Mth_Oo",
                "Fac_Mth_Uu", "Fac_Mth_UuOo", "Fac_Mth_Laugh", "Fac_Mth_Laugh2",
-               "Fac_Mth_Triangle"] if k in keyblock]
+               "Fac_Mth_Triangle", "Fac_Mth_BPM"] if k in keyblock]
     if visemes:
         n = len(visemes)
         for i, k in enumerate(visemes):
@@ -875,17 +883,24 @@ def plan_controls(mesh_obj, fwd, right, up, face_size):
     for side, pos in (('L', eyeL), ('R', eyeR)):
         openk = "Fac_Eye_%s_Open" % side
         winkk = "Fac_Eye_%s_Wink" % side
+        closek = "Fac_Eye_%s_Close" % side
         if openk in keyblock:
+            open_drivers = [{'key': openk, 'axis': 'Z', 'dir': +1}]
+            if closek in keyblock:
+                open_drivers.append({'key': closek, 'axis': 'Z', 'dir': -1})
             controls.append({'name': 'CTRL-Eye_Open.%s' % side,
                              'collection': 'Face Main', 'color': COL_EYELID,
                              'group': 'Face Eyelid',
                              'head': place(pos, v=face_size * 0.055),
                              'widget': 'isaac_blink_top', 'lim': LIM, 'free': ('Z',),
-                             'range': 'pos', 'shape_scale': tri_scale,
-                             'drivers': [{'key': openk, 'axis': 'Z', 'dir': +1}]})
+                             'range': 'both' if closek in keyblock else 'pos', 'shape_scale': tri_scale,
+                             'drivers': open_drivers})
         if winkk in keyblock:
             wdrv = [{'key': winkk, 'axis': 'Z', 'dir': -1}]
-            if "Fac_Eye_Angry" in keyblock:
+            angryk = "Fac_Eye_%s_Angry" % side
+            if angryk in keyblock:
+                wdrv.append({'key': angryk, 'axis': 'Z', 'dir': +1})
+            elif "Fac_Eye_Angry" in keyblock:
                 wdrv.append({'key': "Fac_Eye_Angry", 'axis': 'Z', 'dir': +1})
             controls.append({'name': 'CTRL-Eye_Wink.%s' % side,
                              'collection': 'Face Main', 'color': COL_EYELID,
@@ -894,6 +909,18 @@ def plan_controls(mesh_obj, fwd, right, up, face_size):
                              'widget': 'isaac_blink_bot', 'lim': LIM, 'free': ('Z',),
                              'range': 'both', 'shape_scale': tri_scale,
                              'drivers': wdrv})
+        # Cecilia exports these separately for each eye instead of the
+        # combined Eye_Sad / Eye_HalfClose expressions used by older models.
+        for index, expression in enumerate(('Sad', 'HalfClose')):
+            key = 'Fac_Eye_%s_%s' % (side, expression)
+            if key in keyblock:
+                controls.append({'name': 'CTRL-Eye_%s.%s' % (expression, side),
+                                 'collection': 'Face Eyes', 'color': COL_EYEMOTE,
+                                 'group': 'Face Eye-Emote',
+                                 'head': place(pos, v=-face_size * (0.11 + index * 0.05)),
+                                 'widget': 'eyeblink', 'lim': face_size * EMOTE_LIM_F,
+                                 'free': ('Z',), 'range': 'pos', 'shape_scale': emote_scale,
+                                 'drivers': [{'key': key, 'axis': 'Z', 'dir': +1}]})
 
     lr = hkey("Eye_Left", "Eye_Right")
     ud = vkey("Eye_Up", "Eye_Down")

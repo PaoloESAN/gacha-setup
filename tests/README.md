@@ -1,5 +1,15 @@
 # Automated Test Suite
 
+`blender --background --factory-startup --python-exit-code 1 --python tests/zzz_cecilia_facerig_blender.py -- "Cecilia.blend"`
+tests a completed Cecilia setup: all 33 expressions must respond through both
+panel and face controls, deform the face and reset cleanly. It also checks eye
+independence, repeated rebuilds, saved drivers and safe `_100` name normalization.
+
+`blender --background --factory-startup --python-exit-code 1 --python tests/zzz_cecilia_materials_blender.py`
+imports Cecilia with both ZZZ shaders and checks replacement of her exported
+materials and texture maps from compact JSON. Legacy null-texture declarations
+still preserve untextured materials, while unknown JSON cannot suppress setup.
+
 `blender --background --factory-startup --python-exit-code 1 --python tests/genshin_fresnel_render_blender.py`
 renders two different Genshin Fresnel colors with the WuWa render/frame handlers enabled.
 It checks pixel colors, preserved panel links, editing after render, and isolation

@@ -19,6 +19,7 @@ from setup_wizard.import_order import (
 )
 from setup_wizard.texture_import_setup.texture_importer_types import GenshinTextureImporter, TextureImporterFactory, TextureImporterType
 from setup_wizard.utils.texture_utils import fix_missing_textures, load_or_get_image, scan_directory_for_textures
+from setup_wizard.utils.zzz_material_json import texture_environments
 
 
 class GameTextureImporter(ABC):
@@ -619,7 +620,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
             except Exception:
                 continue
                 
-            tex_envs = data.get("m_SavedProperties", {}).get("m_TexEnvs", {})
+            tex_envs = texture_environments(data) or {}
             mat_key = os.path.splitext(jf)[0].lower()
             
             extracted = {}
