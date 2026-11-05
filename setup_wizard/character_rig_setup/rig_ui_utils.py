@@ -502,10 +502,13 @@ def ensure_character_collection(context, rig_obj, char_name):
             pass
         return False
 
+    gathered = set()
+
     def _link_no_dup(coll, obj):
         try:
             if obj.name not in coll.objects:
                 coll.objects.link(obj)
+            gathered.add(obj)
         except Exception:
             pass
 
@@ -581,8 +584,9 @@ def ensure_character_collection(context, rig_obj, char_name):
         except Exception:
             continue
 
-    # 5. Unlink rig + gathered meshes from default-named collections and own_colls.
-    for obj in [rig_obj] + list(bound):
+    # 5. Move every adopted object, including unbound effects and masks. Merely
+    # linking those into char_coll leaves a second Outliner entry in Collection.
+    for obj in gathered:
         try:
             user_colls = list(getattr(obj, "users_collection", []) or [])
         except Exception:
