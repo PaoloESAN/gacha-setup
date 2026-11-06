@@ -19,7 +19,7 @@ const isHomepage = Astro.props.slug === '' || Astro.props.slug === 'es' || Astro
 	})} />
 )}
 
-<ClientRouter />
+<ClientRouter fallback="swap" />
 
 <script>
 	import { pagefindUserConfig } from 'virtual:starlight/pagefind-config';

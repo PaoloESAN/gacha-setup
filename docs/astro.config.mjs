@@ -6,6 +6,10 @@ import starlightLlmsTxt from 'starlight-llms-txt';
 // https://astro.build/config
 export default defineConfig({
 	site: 'https://gacha-setup.pages.dev',
+	prefetch: {
+		prefetchAll: true,
+		defaultStrategy: 'hover',
+	},
 	integrations: [
 		starlight({
 			plugins: [

@@ -2,4 +2,6 @@ allowBuilds:
   esbuild: true
   sharp: true
 minimumReleaseAgeExclude:
-  - astro@7.2.0
+  - astro@7.2.0 || 7.4.7
+  - '@astrojs/internal-helpers@0.13.1'
+  - '@astrojs/markdown-satteri@0.4.7'
