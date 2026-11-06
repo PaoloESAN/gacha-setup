@@ -52,6 +52,8 @@ description: Agradecimientos, colaboradores y créditos de recursos.
 - **JARP3X** — Apply VMD Motion
 - **Icono del Logo** — <a href="https://www.flaticon.com/free-icons/star" title="star icons">Star icons created by Magnific - Flaticon</a>
 - **scheinze** — WuWa Rig
+- **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)** — HJT Studios · [X](https://x.com/Gladius_Tyrfing)
+- **vei** — SkillObjects
 
 <div class="disclaimer-text">
   <strong>Aviso:</strong> Esta herramienta es un proyecto independiente y de código abierto. No está afiliada a HoYoverse, Kuro Games, Hotta Studio, Perfect World Games ni Hypergryph, ni cuenta con su respaldo o patrocinio. Todos los recursos de los juegos, las marcas y los nombres de personajes pertenecen a sus respectivos propietarios. Este complemento no incluye recursos ni modelos protegidos por derechos de autor.

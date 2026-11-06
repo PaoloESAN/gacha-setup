@@ -54,6 +54,8 @@ description: Acknowledgements, contributors, and assets credits.
 - **JARP3X** — Apply VMD Motion
 - **Logo Icon** — <a href="https://www.flaticon.com/free-icons/star" title="star icons">Star icons created by Magnific - Flaticon</a>
 - **scheinze** — WuWa Rig
+- **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)** — HJT Studios · [X](https://x.com/Gladius_Tyrfing)
+- **vei** — SkillObjects
 
 <div class="disclaimer-text">
   <strong>Disclaimer:</strong> This tool is an independent, open-source project and is not affiliated with, endorsed, or sponsored by HoYoverse, Kuro Games, Hotta Studio, Perfect World Games, or Hypergryph. All game assets, trademarks, and character names belong to their respective owners. No copyrighted assets or models are included with this addon.

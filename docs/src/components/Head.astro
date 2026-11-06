@@ -24,6 +24,65 @@ const isHomepage = Astro.props.slug === '' || Astro.props.slug === 'es' || Astro
 <script>
 	import { pagefindUserConfig } from 'virtual:starlight/pagefind-config';
 
+	const gladiusProfiles = new Set([
+		'https://www.patreon.com/cw/GladiusTyrfing',
+		'https://x.com/Gladius_Tyrfing',
+	]);
+
+	function confirmGladiusProfile(event: MouseEvent) {
+		if (event.type === 'auxclick' && event.button !== 1) return;
+		const link = event.target instanceof Element ? event.target.closest('a[href]') : null;
+		if (!(link instanceof HTMLAnchorElement) || !gladiusProfiles.has(link.href)) return;
+		event.preventDefault();
+		event.stopImmediatePropagation();
+		if (document.querySelector('.profile-notice')) return;
+
+		const spanish = document.documentElement.lang.startsWith('es');
+		const dialog = document.createElement('dialog');
+		dialog.className = 'profile-notice';
+		dialog.setAttribute('aria-labelledby', 'profile-notice-title');
+		dialog.setAttribute('aria-describedby', 'profile-notice-description');
+		dialog.innerHTML = `
+			<div class="profile-notice-badge" aria-hidden="true">18+</div>
+			<h2 id="profile-notice-title"></h2>
+			<p id="profile-notice-description"></p>
+			<div class="profile-notice-actions">
+				<button type="button" data-cancel autofocus></button>
+				<button type="button" data-continue></button>
+			</div>`;
+		dialog.querySelector('h2')!.textContent = spanish ? 'Contenido para adultos' : 'Adult content';
+		dialog.querySelector('p')!.textContent = spanish
+			? 'El siguiente perfil contiene contenido +18. ¿Deseas continuar?'
+			: 'The following profile contains 18+ content. Do you wish to continue?';
+		const cancel = dialog.querySelector<HTMLButtonElement>('[data-cancel]')!;
+		const proceed = dialog.querySelector<HTMLButtonElement>('[data-continue]')!;
+		cancel.textContent = spanish ? 'Cancelar' : 'Cancel';
+		proceed.textContent = spanish ? 'Continuar' : 'Continue';
+		cancel.addEventListener('click', () => dialog.close());
+		const openNewTab = link.target === '_blank' || event.ctrlKey || event.metaKey || event.shiftKey || event.button === 1;
+		proceed.addEventListener('click', () => {
+			dialog.close();
+			if (openNewTab) window.open(link.href, '_blank', 'noopener,noreferrer');
+			else window.location.assign(link.href);
+		});
+		dialog.addEventListener('click', (click) => {
+			const bounds = dialog.getBoundingClientRect();
+			if (click.target === dialog && (click.clientX < bounds.left || click.clientX > bounds.right || click.clientY < bounds.top || click.clientY > bounds.bottom)) dialog.close();
+		});
+		const closeOnNavigation = () => dialog.close();
+		document.addEventListener('astro:before-swap', closeOnNavigation, { once: true });
+		dialog.addEventListener('close', () => {
+			document.removeEventListener('astro:before-swap', closeOnNavigation);
+			dialog.remove();
+			if (link.isConnected) link.focus();
+		}, { once: true });
+		document.body.append(dialog);
+		dialog.showModal();
+	}
+
+	document.addEventListener('click', confirmGladiusProfile, true);
+	document.addEventListener('auxclick', confirmGladiusProfile, true);
+
 	document.addEventListener('astro:page-load', () => {
 		const videos = document.querySelectorAll<HTMLVideoElement>('video:not([data-lazy-video-ready])');
 		const loadVideo = (video: HTMLVideoElement) => {
@@ -179,3 +238,48 @@ const isHomepage = Astro.props.slug === '' || Astro.props.slug === 'es' || Astro
 		});
 	});
 </script>
+
+<style is:global>
+	.profile-notice {
+		box-sizing: border-box;
+		width: min(28rem, calc(100vw - 2rem));
+		margin: auto;
+		padding: 2rem;
+		border: 1px solid var(--sl-color-gray-5);
+		border-radius: 1.25rem;
+		background: var(--sl-color-bg);
+		color: var(--sl-color-white);
+		box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+	}
+	.profile-notice::backdrop {
+		background: rgba(0, 0, 0, 0.65);
+		backdrop-filter: blur(5px);
+	}
+	.profile-notice-badge {
+		display: grid;
+		place-items: center;
+		width: 3rem;
+		height: 3rem;
+		border-radius: 0.85rem;
+		background: rgba(255, 112, 36, 0.14);
+		color: #ff7024;
+		font-size: 1.1rem;
+		font-weight: 800;
+	}
+	.profile-notice h2 { margin: 1.25rem 0 0.75rem; font-size: 1.4rem; line-height: 1.3; }
+	.profile-notice p { margin: 0; color: var(--sl-color-gray-2); line-height: 1.65; }
+	.profile-notice-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.75rem; margin-top: 1.75rem; }
+	.profile-notice button {
+		padding: 0.65rem 1.1rem;
+		border: 1px solid var(--sl-color-gray-5);
+		border-radius: 0.65rem;
+		background: var(--sl-color-gray-6);
+		color: var(--sl-color-white);
+		font: inherit;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.profile-notice [data-continue] { background: #ff7024; border-color: #ff7024; color: #17100b; }
+	.profile-notice button:hover { filter: brightness(1.1); }
+	.profile-notice button:focus-visible { outline: 2px solid var(--sl-color-text-accent); outline-offset: 3px; }
+</style>

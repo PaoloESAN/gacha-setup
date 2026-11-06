@@ -128,6 +128,8 @@ Thanks to all those who collaborated on the original project:
   * **Hiragara**: Character assets & beta tester
   * **HoyoToon**: Assets · [Discord](https://discord.com/invite/hoyotoon)
 * **Logo Icon**: <a href="https://www.flaticon.com/free-icons/star" title="star icons">Star icons created by Magnific - Flaticon</a>
+* **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)** — HJT Studios · [X](https://x.com/Gladius_Tyrfing)
+* **vei** — SkillObjects
 
 ---
 
