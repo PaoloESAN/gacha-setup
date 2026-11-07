@@ -3544,6 +3544,37 @@ def rig_character(
 
 
 
+    # Keep breast widgets in front of the weighted surface. Some exports
+    # (Firefly) have short breast bones whose tips are still inside the torso.
+    breast_meshes = [mesh for mesh in bpy.context.scene.objects
+                     if mesh.type == 'MESH' and any(
+                         mod.type == 'ARMATURE' and mod.object == this_obj
+                         for mod in mesh.modifiers)]
+    rig_inverse = this_obj.matrix_world.inverted()
+    for side in ('L', 'R'):
+        control = this_obj.pose.bones.get('breast.' + side)
+        if not control or not control.custom_shape:
+            continue
+        transform = control.custom_shape_transform or control
+        if control.use_custom_shape_bone_size:
+            control.custom_shape_scale_xyz *= control.length
+            control.use_custom_shape_bone_size = False
+        previous_factor = control.get('_setup_breast_widget_size', 1.0)
+        control.custom_shape_scale_xyz *= 1.875 / previous_factor
+        control['_setup_breast_widget_size'] = 1.875
+        target = control.bone.tail_local.copy()
+        clearance = max(.005, control.length * .15)
+        for mesh in breast_meshes:
+            group = mesh.vertex_groups.get('DEF-breast.' + side)
+            if group is None:
+                continue
+            to_rig = rig_inverse @ mesh.matrix_world
+            for vertex in mesh.data.vertices:
+                if any(g.group == group.index and g.weight > .1 for g in vertex.groups):
+                    target.y = min(target.y, (to_rig @ vertex.co).y - clearance)
+        inverse = transform.bone.matrix_local.to_3x3().normalized().inverted()
+        control.custom_shape_translation = inverse @ (target - transform.bone.head_local)
+
     # Clean up any leftover RIG_LOG text block
     log_text = bpy.data.texts.get("RIG_LOG")
     if log_text:
