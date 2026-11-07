@@ -6,6 +6,7 @@ from bpy.types import Operator, Panel
 
 from setup_wizard.ui.character_settings_utils import (
     ensure_character_node_trees_isolated, get_character_materials, is_game_armature,
+    _iter_rig_meshes,
 )
 
 PRESETS = ('Default', 'Sunrise', 'Day', 'Sunset', 'Night', 'Rainy', 'Custom')
@@ -36,6 +37,9 @@ def prepare_character_settings(arm, materials):
         if not tree.get('_pgr_fresnel_power_default_v1'):
             _set_power(tree, 5.0)
             tree['_pgr_fresnel_power_default_v1'] = True
+        if not tree.get('_pgr_rim_scale_default_v1'):
+            _set_rim_scale(tree, 0.0)
+            tree['_pgr_rim_scale_default_v1'] = True
     return nodes[0].node_tree if nodes else None
 
 
@@ -46,6 +50,8 @@ def _prepare_selected():
         arm, materials = get_character_materials(bpy.context)
         if arm and materials:
             prepare_character_settings(arm, materials)
+            from setup_wizard.character_rig_setup.pgr_visual_widgets import hide_unused_prop_controls
+            hide_unused_prop_controls(arm)
     for screen in bpy.data.screens:
         for area in screen.areas:
             if area.type == 'VIEW_3D':
@@ -99,7 +105,42 @@ def _set_scaler(tree, value):
         socket.default_value = value
 
 
+def _set_rim_scale(tree, value):
+    socket = _fresnel_socket(tree, 'Rim Scale')
+    if socket:
+        socket.default_value = (value, value, value)
+
+
+def _outline_inputs(arm):
+    for mesh in _iter_rig_meshes(arm):
+        for modifier in mesh.modifiers:
+            if modifier.type != 'NODES' or not modifier.node_group:
+                continue
+            for socket in modifier.node_group.interface.items_tree:
+                if (socket.item_type == 'SOCKET' and socket.in_out == 'INPUT'
+                        and socket.name == 'Outline Thickness'):
+                    yield mesh, modifier, socket
+
+
+def _get_outline_thickness(arm):
+    from setup_wizard.utils.modifier_utils import get_modifier_property
+    for _, modifier, socket in _outline_inputs(arm):
+        value = get_modifier_property(modifier, socket.identifier)
+        return float(value) if value is not None else socket.default_value
+    return 0.1
+
+
+def _set_outline_thickness(arm, value):
+    from setup_wizard.utils.modifier_utils import set_modifier_property
+    for mesh, modifier, socket in _outline_inputs(arm):
+        set_modifier_property(modifier, socket.identifier, value)
+        mesh.update_tag()
+
+
 def register_pgr_properties():
+    bpy.types.Object.pgr_outline_thickness = FloatProperty(
+        name='Outline Thickness', min=0.0, soft_max=1.0, precision=3,
+        get=_get_outline_thickness, set=_set_outline_thickness)
     bpy.types.ShaderNodeTree.pgr_use_fresnel = BoolProperty(
         name='Use Fresnel', get=_get_fresnel, set=_set_fresnel)
     bpy.types.ShaderNodeTree.pgr_fresnel_power = FloatProperty(
@@ -110,6 +151,8 @@ def register_pgr_properties():
 
 def unregister_pgr_properties():
     unregister_pending()
+    if hasattr(bpy.types.Object, 'pgr_outline_thickness'):
+        del bpy.types.Object.pgr_outline_thickness
     for name in ('pgr_use_fresnel', 'pgr_fresnel_power', 'pgr_fresnel_scaler'):
         if hasattr(bpy.types.ShaderNodeTree, name):
             delattr(bpy.types.ShaderNodeTree, name)
@@ -162,7 +205,8 @@ class PGR_PT_CharacterSettings(Panel):
         arm, materials = get_character_materials(context)
         nodes = _global_nodes(materials)
         layout = self.layout
-        if nodes and any(n.node_tree.get('_pgr_settings_owner') != arm.name for n in nodes):
+        if nodes and any(n.node_tree.get('_pgr_settings_owner') != arm.name
+                         or not n.node_tree.get('_pgr_rim_scale_default_v1') for n in nodes):
             if not _pending:
                 _pending = True
                 bpy.app.timers.register(_prepare_selected, first_interval=0.0)
@@ -195,6 +239,8 @@ class PGR_PT_CharacterSettings(Panel):
             outlines.label(text='Outlines', icon='STROKE')
             _draw_sockets(outlines.column(align=True), output,
                           ('Outline Tint', 'Outline Saturation', 'Outline Intensity'))
+            if next(_outline_inputs(arm), None) is not None:
+                outlines.prop(arm, 'pgr_outline_thickness', text='Outline Thickness', slider=True)
         else:
             layout.label(text='Set up PGR materials first', icon='INFO')
         # Reuse the same physics controls as WuWa and HI3.

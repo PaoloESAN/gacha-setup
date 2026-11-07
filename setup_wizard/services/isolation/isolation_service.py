@@ -742,11 +742,14 @@ def _setup_scene_compositor(scene, game_type):
     if not scene:
         return
 
+    gt = (game_type or "").upper()
+    if gt == "PUNISHING_GRAY_RAVEN":
+        return
+
     # Enable compositing nodes on scene
     if hasattr(scene, "use_nodes"):
         scene.use_nodes = True
 
-    gt = (game_type or "").upper()
     if gt == "WUTHERING_WAVES":
         try:
             from setup_wizard.misc_final_steps import setup_wuwa_compositor_nodes
@@ -791,12 +794,6 @@ def _setup_scene_compositor(scene, game_type):
                 print("[GACHA SETUP] Configured Neverness to Everness Compositor nodes in main scene.")
         except Exception as exc:
             print(f"[GACHA SETUP] NTE Compositor setup notice: {exc}")
-
-    elif gt == "PUNISHING_GRAY_RAVEN":
-        # Collection append does not transfer scene compositor trees.
-        with bpy.context.temp_override(scene=scene):
-            bpy.ops.punishing_gray_raven.setup_compositor('EXEC_DEFAULT', game_type=gt)
-        print("[GACHA SETUP] Configured PGR compositor output in main scene.")
 
     elif gt == "HONKAI_NEXUS_ANIMA":
         # Scene compositor trees are not imported by collection append. Reuse

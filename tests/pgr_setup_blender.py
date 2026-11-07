@@ -180,6 +180,27 @@ for obj in meshes:
     assert len(evaluated.vertices) == len(points), (obj.name, len(evaluated.vertices), len(points), len(obj.data.vertices), obj.visible_get(), [(m.name, m.type, m.show_viewport) for m in obj.modifiers])
     delta = max(((obj.matrix_world @ v.co - points[v.index]).length for v in evaluated.vertices), default=0)
     assert delta < 1e-4, (obj.name, 'neutral rig changed geometry', delta)
+    if model.stem == 'Shimmering Tide' and obj.name.endswith(('Body', 'Upper', 'Upper02')):
+        for side in ('L', 'R'):
+            group = obj.vertex_groups.get('DEF-breast.' + side)
+            assert group, (obj.name, side, 'breast weights were not mapped to Rigify')
+            weighted = [v.index for v in obj.data.vertices
+                        if any(g.group == group.index and g.weight > .5 for g in v.groups)]
+            assert weighted, (obj.name, side, 'breast control has no weighted vertices')
+            control = rig.pose.bones['breast.' + side]
+            original_basis = control.matrix_basis.copy()
+            control.location.y += .05
+            rig.update_tag()
+            bpy.context.view_layer.update()
+            moved = obj.evaluated_get(bpy.context.evaluated_depsgraph_get()).data
+            movement = max((obj.matrix_world @ moved.vertices[i].co - points[i]).length for i in weighted)
+            assert movement > .005, (obj.name, side, 'breast control does not deform mesh', movement)
+            control.matrix_basis = original_basis
+            rig.update_tag()
+            bpy.context.view_layer.update()
+            reset = obj.evaluated_get(bpy.context.evaluated_depsgraph_get()).data
+            error = max((obj.matrix_world @ reset.vertices[i].co - points[i]).length for i in weighted)
+            assert error < 1e-4, (obj.name, side, 'breast does not return to neutral', error)
     if obj.get('setup_wizard_pgr_rigid_face'):
         head_rest = (rig.matrix_world @ rig.pose.bones['DEF-spine.006'].matrix).copy()
         head.rotation_euler.y += .6
