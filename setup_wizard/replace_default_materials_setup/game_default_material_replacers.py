@@ -616,6 +616,8 @@ def remove_set_depth_nodes_from_highlight_material(material=None):
     for mat in mats_to_check:
         if not mat or not getattr(mat, "use_nodes", False) or not mat.node_tree:
             continue
+        variants = json.loads(mat.node_tree.get('gacha_goo_links', '{}'))
+        native_nodes = {name for link in variants.get('native', []) for name in (link[0], link[2])}
         nodes_to_remove = []
         for n in mat.node_tree.nodes:
             is_set_depth = False
@@ -624,7 +626,8 @@ def remove_set_depth_nodes_from_highlight_material(material=None):
             elif n.type == 'GROUP' and n.node_tree and 'set depth' in n.node_tree.name.lower():
                 is_set_depth = True
 
-            if is_set_depth:
+            if (is_set_depth and n.name not in native_nodes
+                    and not any(socket.is_linked for socket in n.outputs)):
                 nodes_to_remove.append(n)
         for n in nodes_to_remove:
             try:
@@ -731,6 +734,8 @@ def setup_new_pupil_highlight_layer(mesh, material_names=None):
             elif poly.index in inner_faces:
                 poly.material_index = 0
 
+    from setup_wizard.utils.genshin_engine_nodes import configure_genshin_engine_nodes
+    configure_genshin_engine_nodes([new_pupil_mat, highlight_material])
 
 class GameDefaultMaterialReplacer(ABC):
     @abstractmethod

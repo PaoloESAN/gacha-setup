@@ -31,6 +31,8 @@ class GI_OT_JoinMeshesOnArmature(Operator, CustomOperatorProperties):
                 self.__join_face_meshes()
                 self.__join_pupil_meshes()
                 self.__delete_brow_material_from_material_slot()
+                from setup_wizard.utils.genshin_engine_nodes import configure_genshin_engine_nodes
+                configure_genshin_engine_nodes()
             finally:
                 # Join operators leave Face or Pupil active. Restore before
                 # invoking subsequent setup steps, including Pose Mode on a rig.
