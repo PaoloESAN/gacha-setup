@@ -146,11 +146,16 @@ def should_show_better_fbx_warning(game_type: str = None) -> bool:
     Determines if the BetterFBX recommendation warning should be displayed below 'Run Entire Setup'.
     Conditions:
     - Blender version must be < 4.5.
-    - For game_type: applies when None or 'GENSHIN_IMPACT'.
+    - The game uses the FBX setup workflow (excluding WuWa's UEMODEL workflow).
     - BetterFBX is NOT installed/available.
     """
     if not is_blender_version_lower_than_4_5():
         return False
-    if game_type and game_type != "GENSHIN_IMPACT":
+    fbx_games = {
+        'GENSHIN_IMPACT', 'HONKAI_STAR_RAIL', 'PUNISHING_GRAY_RAVEN',
+        'ZENLESS_ZONE_ZERO', 'ARKNIGHTS_ENDFIELD', 'HONKAI_IMPACT_3RD',
+        'HONKAI_NEXUS_ANIMA',
+    }
+    if game_type and game_type not in fbx_games:
         return False
     return not is_better_fbx_installed()
