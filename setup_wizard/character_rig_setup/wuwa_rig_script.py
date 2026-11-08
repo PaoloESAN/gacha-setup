@@ -650,6 +650,9 @@ def _apply_zzz_parity_wuwa(rig_obj, context, orig_arm_name):
             "text": "\n        if is_selected({'head-controller'}):\n            group1 = layout.row(align=True)\n            group2 = group1.split(factor=0.55, align=True)\n            props = group2.operator('pose.rigify_switch_parent_" + _rid + "', text='Parent Switch', icon='DOWNARROW_HLT')\n            props.bone = 'head-controller'\n            props.prop_bone = 'head-controller'\n            props.prop_id='parent_switch'\n            props.parent_names = '" + _pnames + "'\n            props.locks = (False, False, False)\n            group2.prop(pose_bones['head-controller'], '[\"parent_switch\"]', text='')\n            props = group1.operator('pose.rigify_switch_parent_bake_" + _rid + "', text='', icon='ACTION_TWEAK')\n            props.bone = 'head-controller'\n            props.prop_bone='head-controller'\n            props.prop_id='parent_switch'\n            props.parent_names='" + _pnames + "'\n            props.locks = (False, False, False)"})
     except Exception as ex_ps:
         print(f"[WUWA RIG] parent-switch splice notice: {ex_ps}")
+    from setup_wizard.utils.auto_shoulders import setup_auto_shoulders, auto_shoulders_ui_splice
+    if setup_auto_shoulders(rig_obj):
+        _splices.append(auto_shoulders_ui_splice())
     modify_and_run_rig_ui_script(rig_obj, orig_arm_name, char_name=char_name, extra_splices=_splices)
 
 # Supported model prefixes — order matters for matching

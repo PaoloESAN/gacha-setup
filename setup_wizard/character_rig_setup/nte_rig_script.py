@@ -1381,6 +1381,9 @@ def rig_character(
                 print(f"[NTE RIG] parent-switch splice notice: {ex_ps}")
     except Exception:
         pass
+    from setup_wizard.utils.auto_shoulders import setup_auto_shoulders, auto_shoulders_ui_splice
+    if setup_auto_shoulders(rigifyr):
+        _splices.append(auto_shoulders_ui_splice())
     modify_and_run_rig_ui_script(rigifyr, original_name, char_name=char_name, extra_splices=_splices)
 
     # Re-afirma el empaquetado final: tras WGTS isolation y UI script no deben

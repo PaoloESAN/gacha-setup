@@ -1,23 +1,60 @@
-"""Genshin-style automatic shoulder tracking for the generated ZZZ rig."""
+"""Genshin-style automatic shoulder tracking for humanoid Rigify rigs."""
 import bpy
 from mathutils import Vector
 
 
-def setup_zzz_auto_shoulders(rig):
+def has_auto_shoulders(rig):
+    if rig is None or rig.type != 'ARMATURE' or rig.pose is None:
+        return False
+    plate = rig.pose.bones.get('plate-settings')
+    if plate is None or 'Toggle Shoulder Constraints' not in plate:
+        return False
+    for side in ('L', 'R'):
+        shoulder = rig.pose.bones.get('shoulder.' + side)
+        follow = rig.pose.bones.get('MCH-shoulder_follow.' + side)
+        driver = rig.pose.bones.get('shoulder_driver.' + side)
+        if not shoulder or not follow or not driver or shoulder.parent != follow:
+            return False
+        if not any(c.type == 'DAMPED_TRACK' and c.target == rig and c.subtarget == driver.name
+                   for c in follow.constraints):
+            return False
+        if not any(c.type == 'COPY_LOCATION' and c.target == rig and c.subtarget in {
+                'hand-ik-' + side, 'hand_ik.' + side, 'MCH-shoulder_hand.' + side}
+                   for c in driver.constraints):
+            return False
+    return True
+
+
+def auto_shoulders_ui_splice():
+    return {
+        'divider': 'num_rig_separators[0] += 1',
+        'text': '\n        if is_selected({"plate-settings"}):\n            layout.prop(pose_bones["plate-settings"], \'["Toggle Shoulder Constraints"]\', text="Auto Shoulder Constraints", slider=True)',
+    }
+
+
+def setup_auto_shoulders(rig):
+    if rig is None or rig.type != 'ARMATURE' or rig.pose is None:
+        return False
+    # Keep working Genshin/NPC and previously generated rigs intact.
+    if has_auto_shoulders(rig):
+        return True
     plate = rig.pose.bones.get('plate-settings')
     if plate is None:
         return False
     required = ['shoulder.' + side for side in ('L', 'R')]
     hands = {side: next((name for name in ('hand-ik-' + side, 'hand_ik.' + side)
                          if name in rig.data.bones), None) for side in ('L', 'R')}
-    chest = next((name for name in ('ORG-spine.003', 'chest', 'spine_fk.003')
+    chest = next((name for name in ('ORG-spine.003', 'chest', 'spine_fk.003', 'ORG-Spine2', 'DEF-spine.003')
                   if name in rig.data.bones), None)
     if chest is None or not all(hands.values()) or not all(name in rig.data.bones for name in required):
         return False
     previous_active = bpy.context.view_layer.objects.active
     previous_mode = bpy.context.object.mode if bpy.context.object else 'OBJECT'
+    previous_selected = list(bpy.context.selected_objects)
+    previous_hidden = rig.hide_get()
     if bpy.context.object and bpy.context.object.mode != 'OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
+    bpy.ops.object.select_all(action='DESELECT')
     rig.hide_set(False)
     rig.select_set(True)
     bpy.context.view_layer.objects.active = rig
@@ -26,6 +63,11 @@ def setup_zzz_auto_shoulders(rig):
     for side in ('L', 'R'):
         shoulder = bones['shoulder.' + side]
         hand = bones[hands[side]]
+        # Preserve each game's rest hierarchy (WuWa uses ORG-Spine2).
+        parent = shoulder.parent
+        if parent and parent.name == 'MCH-shoulder_follow.' + side:
+            parent = parent.parent
+        parent = parent or bones[chest]
         direction = shoulder.tail - shoulder.head
         if abs(direction.x) > 1e-6:
             position = shoulder.head + direction * ((hand.head.x - shoulder.head.x) / direction.x)
@@ -34,16 +76,16 @@ def setup_zzz_auto_shoulders(rig):
         driver_name, follow_name = 'shoulder_driver.' + side, 'MCH-shoulder_follow.' + side
         driver = bones.get(driver_name) or bones.new(driver_name)
         driver.head, driver.tail = position, position + Vector((0, .1, 0))
-        driver.parent = bones[chest]
+        driver.parent = parent
         driver.use_connect = driver.use_deform = False
         motion_name = 'MCH-shoulder_hand.' + side
         motion = bones.get(motion_name) or bones.new(motion_name)
         motion.head, motion.tail, motion.roll = driver.head.copy(), driver.tail.copy(), driver.roll
-        motion.parent = bones[chest]
+        motion.parent = parent
         motion.use_connect = motion.use_deform = False
         follow = bones.get(follow_name) or bones.new(follow_name)
         follow.head, follow.tail, follow.roll = shoulder.head.copy(), shoulder.tail.copy(), shoulder.roll
-        follow.parent = bones[chest]
+        follow.parent = parent
         follow.use_connect = follow.use_deform = False
         shoulder.use_connect = False
         shoulder.parent = follow
@@ -94,10 +136,11 @@ def setup_zzz_auto_shoulders(rig):
         follow.bone.hide = driver.bone.hide = motion.bone.hide = True
     rig.update_tag()
     bpy.context.view_layer.update()
-    if previous_active == rig and previous_mode in {'POSE', 'EDIT'}:
+    bpy.ops.object.select_all(action='DESELECT')
+    for obj in previous_selected:
+        obj.select_set(True)
+    rig.hide_set(previous_hidden)
+    bpy.context.view_layer.objects.active = previous_active
+    if previous_active and previous_mode in {'POSE', 'EDIT'}:
         bpy.ops.object.mode_set(mode=previous_mode)
-    elif previous_active and previous_active != rig:
-        bpy.context.view_layer.objects.active = previous_active
-        if previous_mode in {'POSE', 'EDIT'}:
-            bpy.ops.object.mode_set(mode=previous_mode)
     return True

@@ -2891,6 +2891,9 @@ def rig_character(
         {"divider": "num_rig_separators[0] += 1", "text": generate_string_for_parent_switch("head-controller")},
     ]
 
+    from setup_wizard.utils.auto_shoulders import setup_auto_shoulders, auto_shoulders_ui_splice
+    if setup_auto_shoulders(this_obj):
+        splices.append(auto_shoulders_ui_splice())
     modify_and_run_rig_ui_script(this_obj, original_name, char_name=char_name, extra_splices=splices)
     
     # Ensure all breast sub-bones (breast.L.001 - breast.L.005, breast.R.001 - breast.R.005, etc.) are parented to DEF-breast.L / DEF-breast.R

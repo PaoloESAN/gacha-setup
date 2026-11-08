@@ -3463,8 +3463,8 @@ def rig_character(
 
     # Build drivers with the final control names. Goo 4.3 does not reliably
     # rewrite SINGLE_PROP driver paths when the source bones are renamed.
-    from setup_wizard.utils.zzz_auto_shoulders import setup_zzz_auto_shoulders
-    setup_zzz_auto_shoulders(this_obj)
+    from setup_wizard.utils.auto_shoulders import setup_auto_shoulders
+    setup_auto_shoulders(this_obj)
 
     # Ensure prop.L, prop.R, and weapon bones are parented to root.002 so moving root.002 moves all weapons
     try:
