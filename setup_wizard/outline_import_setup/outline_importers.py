@@ -340,6 +340,8 @@ class ZenlessZoneZeroOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
                                     pb_rim.location.x = 0.0425
                                 elif pb_name == "Rim.R":
                                     pb_rim.location.x = 0.050
+                    from setup_wizard.utils.zzz_lighting_panel import bake_zzz_rim_slider_defaults
+                    bake_zzz_rim_slider_defaults(lp_arm, force=True)
             except Exception as e:
                 print(f"Failed to append objects/collections from {filepath}: {e}")
 
