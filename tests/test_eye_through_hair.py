@@ -52,23 +52,29 @@ if hasattr(hsr_hair_ol_mat, "use_transparency_overlap"):
 from setup_wizard.geometry_nodes_setup.geometry_nodes_setups import configure_hsr_hair_transparency
 configure_hsr_hair_transparency()
 
-# Verify HSR Hair Mesh: BLENDED and use_transparency_overlap = False
+# Verify HSR import defaults; blending is enabled only by the eye effect.
 if hasattr(hsr_hair_mat, "surface_render_method"):
-    assert hsr_hair_mat.surface_render_method == 'BLENDED'
+    assert hsr_hair_mat.surface_render_method == 'DITHERED'
 if hasattr(hsr_hair_mat, "blend_method"):
-    assert hsr_hair_mat.blend_method == 'BLEND'
+    assert hsr_hair_mat.blend_method == 'HASHED'
+assert hsr_hair_mat.use_backface_culling is False
 if hasattr(hsr_hair_mat, "use_transparency_overlap"):
     assert hsr_hair_mat.use_transparency_overlap is False, f"HSR Hair mesh overlap was {hsr_hair_mat.use_transparency_overlap}"
-print("✔ HSR Hair Mesh setup step verified (BLENDED and use_transparency_overlap = False)!")
+print("✔ HSR Hair Mesh import defaults verified (DITHERED, no camera culling)!")
 
-# Verify HSR Hair Outlines: BLENDED and use_transparency_overlap = True
+# Inverted-hull outlines cull camera backfaces and also start Dithered.
 if hasattr(hsr_hair_ol_mat, "surface_render_method"):
-    assert hsr_hair_ol_mat.surface_render_method == 'BLENDED'
+    assert hsr_hair_ol_mat.surface_render_method == 'DITHERED'
 if hasattr(hsr_hair_ol_mat, "blend_method"):
-    assert hsr_hair_ol_mat.blend_method == 'BLEND'
+    assert hsr_hair_ol_mat.blend_method == 'HASHED'
+assert hsr_hair_ol_mat.use_backface_culling is True
 if hasattr(hsr_hair_ol_mat, "use_transparency_overlap"):
-    assert hsr_hair_ol_mat.use_transparency_overlap is True, f"HSR Hair outlines overlap was {hsr_hair_ol_mat.use_transparency_overlap}"
-print("✔ HSR Hair Outlines setup step verified (BLENDED and use_transparency_overlap = True)!")
+    assert hsr_hair_ol_mat.use_transparency_overlap is False, f"HSR Hair outlines overlap was {hsr_hair_ol_mat.use_transparency_overlap}"
+print("✔ HSR Hair Outlines import defaults verified (DITHERED, camera culling)!")
+
+# Simulate an older setup with overlap enabled before adding Eye Through Hair.
+if hasattr(hsr_hair_ol_mat, "use_transparency_overlap"):
+    hsr_hair_ol_mat.use_transparency_overlap = True
 
 # Ensure hair_mat has use_transparency_overlap = True before operator to verify it gets set to False
 if hasattr(hair_mat, "use_transparency_overlap"):
@@ -166,14 +172,14 @@ if hasattr(mrim_mat, "use_transparency_overlap"):
     assert mrim_mat.use_transparency_overlap is True, f"mrim use_transparency_overlap should remain True, was {mrim_mat.use_transparency_overlap}"
 print("✔ NTE mrim material settings verified (BLENDED and use_transparency_overlap untouched as True)!")
 
-# Verify HSR Hair Outlines material settings (BLENDED, and use_transparency_overlap left untouched as True)
+# Verify HSR outlines disable overlap when enabling Blended, even on older setups.
 if hasattr(hsr_hair_ol_mat, "surface_render_method"):
     assert hsr_hair_ol_mat.surface_render_method == 'BLENDED', f"HSR Hair outlines render method was {hsr_hair_ol_mat.surface_render_method}"
 if hasattr(hsr_hair_ol_mat, "blend_method"):
     assert hsr_hair_ol_mat.blend_method == 'BLEND', f"HSR Hair outlines blend method was {hsr_hair_ol_mat.blend_method}"
 if hasattr(hsr_hair_ol_mat, "use_transparency_overlap"):
-    assert hsr_hair_ol_mat.use_transparency_overlap is True, f"HSR Hair outlines use_transparency_overlap should remain True, was {hsr_hair_ol_mat.use_transparency_overlap}"
-print("✔ HSR Hair Outlines settings verified (BLENDED and use_transparency_overlap untouched as True)!")
+    assert hsr_hair_ol_mat.use_transparency_overlap is False, f"HSR Hair outlines use_transparency_overlap should be False, was {hsr_hair_ol_mat.use_transparency_overlap}"
+print("✔ HSR Hair Outlines settings verified (BLENDED and use_transparency_overlap = False)!")
 
 print("✔ Internal Shader to RGB fully intact and untouched!")
 print("✔ Dedicated Eye Through Hair Shader to RGB created with zero cycles!")
