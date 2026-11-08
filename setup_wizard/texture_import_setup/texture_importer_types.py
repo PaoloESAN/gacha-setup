@@ -373,7 +373,7 @@ def setup_crystal_material_nodes(crystal_material):
     if not output_node:
         return
 
-    body_shader = tree.nodes.get('PrimoToon')
+    body_shader = tree.nodes.get('PrimoToon') or tree.nodes.get('Body Shader')
 
     lightmap_img_nodes = [n for n in tree.nodes if n.type == 'TEX_IMAGE' and 'lightmap' in (n.name + " " + (n.label or "")).lower()]
     has_lightmap_image = any(n.image is not None for n in lightmap_img_nodes)
