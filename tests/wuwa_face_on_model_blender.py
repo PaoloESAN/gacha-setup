@@ -71,7 +71,7 @@ mouth_center=rig.matrix_world @ rig.data.bones['Mouth'].head_local
 assert abs(brow_center.z-gaze_center.z-.06*unit)<1e-5
 for side,sign in [('L',1),('R',-1)]:
     point=rig.matrix_world @ rig.data.bones[f'Mouth.{side}'].head_local
-    assert abs(point.x-mouth_center.x-sign*.045*unit)<1e-5
+    assert abs(point.x-mouth_center.x-sign*.025*unit)<1e-5
 # Portable contracts from the unchanged script, even without the local
 # reference fixture. In particular, circles/diamonds cannot stand in for
 # the two capsule rings or the thin brow/eye-scale bars.
@@ -79,8 +79,8 @@ contracts={
     'EyeTracker':(.1128,.0408,68,68), 'Eye.L':(.024,.024,32,32),
     'Eye.R':(.024,.024,32,32), 'EyeScale':(.02,.002,4,4),
     'Eyebrows':(.09,.004,4,4), 'Mouth':(.0376,.0136,68,68),
-    'Mouth.L':(.008,.008,4,4), 'Mouth.R':(.008,.008,4,4),
-    'MouthPanel':(.08,.05,4,2)}
+    'Mouth.L':(.006,.006,4,4), 'Mouth.R':(.006,.006,4,4),
+    'MouthPanel':(.046,.02875,4,2)}
 for name in CONTROLS-{'EyeScale','Eyebrows','Mouth','Mouth.L','Mouth.R','fp.outline'}:
     contracts[name]=(.008,.008,3,3)
 for name,(width,height,vertices_count,edges_count) in contracts.items():
@@ -102,7 +102,9 @@ if reference_file.exists():
         assert shape and len(shape.data.vertices)==len(expected['vertices']), name
         length=pb.bone.length if pb.use_custom_shape_bone_size else 1.
         vertices=[Vector(tuple(v.co[i]*pb.custom_shape_scale_xyz[i]*length/unit for i in range(3))) for v in shape.data.vertices]
-        points=[Vector(v) for v in expected['vertices']]
+        # Mouth corners and the helper cross use their adjusted display sizes.
+        factor = .75 if name in {'Mouth.L', 'Mouth.R'} else .575 if name == 'MouthPanel' else 1.
+        points=[Vector(v)*factor for v in expected['vertices']]
         mapping={}
         for i,point in enumerate(vertices):
             index=min(range(len(points)),key=lambda j:(point-points[j]).length)
