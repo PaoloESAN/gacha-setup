@@ -1,0 +1,481 @@
+---
+title: "Gacha Setup for Blender"
+description: Penyiapan karakter dan shader otomatis untuk model anime gacha. Blender 5.2 disarankan; Blender/Goo Engine 4.1+ didukung.
+template: splash
+editUrl: false
+lastUpdated: false
+hero:
+  tagline: Add-on Blender yang memudahkan penyiapan karakter favorit Anda dengan shader, rigging, dan lainnya.
+  image:
+    file: ../../../assets/evernight.gif
+  actions:
+    - text: Mulai
+      link: /id/quickstart/
+      icon: right-arrow
+      variant: primary
+    - text: Lihat Repositori GitHub
+      link: https://github.com/PaoloESAN/gacha-setup
+      icon: external
+      variant: minimal
+---
+
+import { CardGrid, Icon } from '@astrojs/starlight/components';
+import { Image } from 'astro:assets';
+import genshinIcon from '../../../assets/icons/genshin-icon.webp';
+import hsrIcon from '../../../assets/icons/hsr-icon.webp';
+import zzzIcon from '../../../assets/icons/zzz-icon.jpg';
+import nteIcon from '../../../assets/icons/nte-icon.jpg';
+import wuwaIcon from '../../../assets/icons/wuwa-icon.webp';
+import akeIcon from '../../../assets/icons/ake-icon.jpg';
+import silverIcon from '../../../assets/icons/silver-palace-icon.jpg';
+import pgrIcon from '../../../assets/icons/pgr-icon.jpg';
+import hi3Icon from '../../../assets/icons/hi3-icon.png';
+import hnaIcon from '../../../assets/icons/hna-icon.jpg';
+import laylaIcon from '../../../assets/chibis/genshin/layla.webp';
+
+## Gim yang Didukung
+
+<CardGrid>
+	<a href="/id/quickstart/" class="game-card-link">
+		<div class="card">
+			<div class="title">
+				<Image src={genshinIcon} alt="Genshin Impact" class="game-icon-img" loading="eager" />
+				<span>Genshin Impact</span>
+			</div>
+
+		</div>
+	</a>
+	<a href="/id/quickstart/" class="game-card-link">
+		<div class="card">
+			<div class="title">
+				<Image src={hsrIcon} alt="Honkai: Star Rail" class="game-icon-img" loading="eager" />
+				<span>Honkai: Star Rail</span>
+			</div>
+
+		</div>
+	</a>
+	<a href="/id/quickstart/" class="game-card-link">
+		<div class="card">
+			<div class="title">
+				<Image src={zzzIcon} alt="Zenless Zone Zero" class="game-icon-img" loading="eager" />
+				<span>Zenless Zone Zero</span>
+			</div>
+
+		</div>
+	</a>
+	<a href="/id/quickstart/" class="game-card-link">
+		<div class="card">
+			<div class="title">
+				<Image src={nteIcon} alt="Neverness to Everness" class="game-icon-img" loading="eager" />
+				<span>Neverness to Everness</span>
+			</div>
+
+		</div>
+	</a>
+	<a href="/id/quickstart/" class="game-card-link">
+		<div class="card">
+			<div class="title">
+				<Image src={wuwaIcon} alt="Wuthering Waves" class="game-icon-img" loading="eager" />
+				<span>Wuthering Waves</span>
+			</div>
+
+		</div>
+	</a>
+	<a href="/id/quickstart/" class="game-card-link">
+		<div class="card">
+			<div class="title">
+				<Image src={akeIcon} alt="Arknights: Endfield" class="game-icon-img" loading="eager" />
+				<span>Arknights: Endfield</span>
+			</div>
+
+		</div>
+	</a>
+	<a href="/id/quickstart/" class="game-card-link">
+		<div class="card">
+			<div class="title">
+				<Image src={pgrIcon} alt="Punishing: Gray Raven" class="game-icon-img" loading="eager" />
+				<span>Punishing: Gray Raven</span>
+			</div>
+		</div>
+	</a>
+	<a href="/id/quickstart/" class="game-card-link">
+		<div class="card">
+			<div class="title">
+				<Image src={hi3Icon} alt="Honkai Impact 3rd" class="game-icon-img" loading="eager" />
+				<span>Honkai Impact 3rd</span>
+			</div>
+		</div>
+	</a>
+	<a href="/id/quickstart/" class="game-card-link">
+		<div class="card">
+			<div class="title">
+				<Image src={hnaIcon} alt="Honkai: Nexus Anima" class="game-icon-img" loading="eager" />
+				<span>Honkai: Nexus Anima</span>
+			</div>
+		</div>
+	</a>
+	<div class="game-card-disabled">
+		<div class="card">
+			<div class="title">
+				<Image src={silverIcon} alt="Silver Palace" class="game-icon-img" loading="lazy" />
+				<span>Silver Palace</span>
+			</div>
+			<div class="body">
+				<span class="disabled-badge">SEGERA HADIR</span>
+			</div>
+		</div>
+	</div>
+</CardGrid>
+
+## Kredit dan Atribusi
+
+<p class="credits-intro">Proyek ini dapat terwujud berkat kontribusi semua orang berikut.</p>
+
+<div class="credits-original">
+	<div class="credits-card">
+		<div class="credits-main">
+			<div class="credits-name">Proyek Asli</div>
+			<div class="credits-role"><a href="https://github.com/michael-gh1/Addons-And-Tools-For-Blender-miHoYo-Shaders">michael-gh1/Addons-And-Tools-For-Blender-miHoYo-Shaders</a></div>
+		</div>
+		<div class="credits-links">
+			<a class="credits-link" href="https://github.com/michael-gh1/Addons-And-Tools-For-Blender-miHoYo-Shaders" aria-label="GitHub"><Icon name="github" /></a>
+		</div>
+	</div>
+</div>
+
+<div class="credits-grid">
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name"><a href="https://github.com/festivities">@Festivity</a></div>
+				<div class="credits-role">Shader Genshin dan HSR</div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://github.com/festivities" aria-label="GitHub"><Icon name="github" /></a>
+				<a class="credits-link" href="https://www.youtube.com/channel/UCXCTHNBA8TVs0s5aQuNtWwg" aria-label="YouTube"><Icon name="youtube" /></a>
+				<a class="credits-link" href="https://x.com/festivizing" aria-label="X"><Icon name="x.com" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name"><a href="https://github.com/BonnyAnimations">@BonnyAnimations</a></div>
+				<div class="credits-role">Shader ZZZ</div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://github.com/BonnyAnimations" aria-label="GitHub"><Icon name="github" /></a>
+				<a class="credits-link" href="https://www.youtube.com/@BonnyAnimations" aria-label="YouTube"><Icon name="youtube" /></a>
+				<a class="credits-link" href="https://x.com/BonnyAnimations" aria-label="X"><Icon name="x.com" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">Enthralpy</div>
+				<div class="credits-role">Rigging dan skrip ZZZ</div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://www.youtube.com/@Enthralpy" aria-label="YouTube"><Icon name="youtube" /></a>
+				<a class="credits-link" href="https://x.com/Enthralpy" aria-label="X"><Icon name="x.com" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name"><a href="https://github.com/OctavoPE">@OctavoPE</a></div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://github.com/OctavoPE" aria-label="GitHub"><Icon name="github" /></a>
+				<a class="credits-link" href="https://x.com/Llama3D" aria-label="X"><Icon name="x.com" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">Mken</div>
+				<div class="credits-role">Pembuat asli Character Setup Wizard</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">Meliodas</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">Manashiku</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name"><a href="https://github.com/fnoji">@fnoji</a></div>
+				<div class="credits-role">Penyiapan dan rigging WuWa</div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://github.com/fnoji" aria-label="GitHub"><Icon name="github" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name"><a href="https://github.com/nytsjared">@nytsjared</a></div>
+				<div class="credits-role">Shader WuWa dan PGR</div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://github.com/nytsjared" aria-label="GitHub"><Icon name="github" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">SubutaiProduction</div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://www.youtube.com/@SubutaiProduction" aria-label="YouTube"><Icon name="youtube" /></a>
+				<a class="credits-link" href="https://twitter.com/SubutaiEdits" aria-label="X"><Icon name="x.com" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">Aiko</div>
+				<div class="credits-role">Shader ZZZ</div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://www.youtube.com/@AikoDesu" aria-label="YouTube"><Icon name="youtube" /></a>
+				<a class="credits-link" href="https://x.com/Aiko__ya" aria-label="X"><Icon name="x.com" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">TheyCallMeSpy</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">Sultana</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">M4urlcl0</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">Modder4869</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name"><a href="https://github.com/Jideeh1">@jideeh</a></div>
+				<div class="credits-role">Alat dan rigging ZZZ</div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://github.com/Jideeh1" aria-label="GitHub"><Icon name="github" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">Kytherity</div>
+				<div class="credits-role">Shader ZZZ</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">Just_ScaasI</div>
+				<div class="credits-role">Shader ZZZ</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">Isaac</div>
+				<div class="credits-role">Rig wajah HSR</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">Stormz67</div>
+				<div class="credits-role">Pengawasan</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">Omatsuri</div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://discord.com/invite/85rP9SpAkF" aria-label="Discord"><Icon name="discord" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">矩阵映画</div>
+				<div class="credits-role">Rig NTE</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name"><a href="https://www.youtube.com/@thewindlead">thewindlead</a></div>
+				<div class="credits-role">Fisika rambut dan pakaian</div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://www.youtube.com/@thewindlead" aria-label="YouTube"><Icon name="youtube" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">VANS</div>
+				<div class="credits-role">Peninjauan Genshin</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">nedarb183</div>
+				<div class="credits-role">Kilau pupil Genshin</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">Hiragara</div>
+				<div class="credits-role">Aset karakter dan penguji beta</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">HoyoToon</div>
+				<div class="credits-role">Aset</div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://discord.com/invite/hoyotoon" aria-label="Discord"><Icon name="discord" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">Xiyang</div>
+				<div class="credits-role">Penyiapan AKE</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">starriia</div>
+				<div class="credits-role">Referensi model</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">VaSTuan</div>
+				<div class="credits-role">Dukungan banyak karakter</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">zmecyyyy</div>
+				<div class="credits-role">Peninjauan rig</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">crabnuts</div>
+				<div class="credits-role">Referensi rig</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">Akatsuki</div>
+				<div class="credits-role">Rig wajah WuWa</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name"><a href="https://x.com/nomianims">nomianims</a></div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://x.com/nomianims" aria-label="X"><Icon name="x.com" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name"><a href="https://x.com/emy_purpl">emy_purpl</a></div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://www.youtube.com/@emypurpl" aria-label="YouTube"><Icon name="youtube" /></a>
+				<a class="credits-link" href="https://x.com/emy_purpl" aria-label="X"><Icon name="x.com" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">ae_gm</div>
+				<div class="credits-role">Peninjau senjata Genshin</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">stalomeow</div>
+				<div class="credits-role">Shader HNA</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">max</div>
+				<div class="credits-role">Shader HI3</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">poke</div>
+				<div class="credits-role">Penyiapan ZZZ</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">cocopops</div>
+				<div class="credits-role">Lights+</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name"><a href="https://www.youtube.com/@aeo_346">aeo</a></div>
+				<div class="credits-role">Penerapan gerakan VMD</div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://www.youtube.com/@aeo_346" aria-label="YouTube"><Icon name="youtube" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">kori</div>
+				<div class="credits-role">Penerapan gerakan VMD</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">JARP3X</div>
+				<div class="credits-role">Penerapan gerakan VMD</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name">scheinze</div>
+				<div class="credits-role">Rig WuWa</div>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name"><a href="https://www.patreon.com/cw/GladiusTyrfing">Gladius Tyrfing</a></div>
+				<div class="credits-role">HJT Studios</div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://www.patreon.com/cw/GladiusTyrfing" aria-label="Patreon"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M0 0.5h4.2v23H0z" /><circle cx="15.4" cy="9.1" r="8.6" /></svg></a>
+				<a class="credits-link" href="https://x.com/Gladius_Tyrfing" aria-label="X"><Icon name="x.com" /></a>
+			</div>
+		</div>
+		<div class="credits-card">
+			<div class="credits-main">
+				<div class="credits-name"><a href="https://x.com/heikzs">vei</a></div>
+				<div class="credits-role">SkillObjects</div>
+			</div>
+			<div class="credits-links">
+				<a class="credits-link" href="https://x.com/heikzs" aria-label="X"><Icon name="x.com" /></a>
+			</div>
+		</div>
+	</div>
+
+---
+
+<p class="credits-end">Selamat Berkarya di Blender <Image src={laylaIcon} alt="" class="credits-end-img" loading="lazy" /></p>
+
+<div class="disclaimer-text">
+  <strong>Pernyataan:</strong> Alat ini merupakan proyek sumber terbuka independen dan tidak berafiliasi dengan, didukung, atau disponsori oleh HoYoverse, Kuro Games, Hotta Studio, Perfect World Games, maupun Hypergryph. Seluruh aset gim, merek dagang, dan nama karakter merupakan milik pemiliknya masing-masing. Add-on ini tidak menyertakan aset atau model berhak cipta.
+</div>

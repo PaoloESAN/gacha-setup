@@ -1,0 +1,52 @@
+---
+title: "Rigging dan Koleksi Tulang Honkai: Star Rail"
+description: "Kontrol ekspresi wajah Isaac, penyiapan rig wajah, dan koleksi tulang untuk Honkai: Star Rail. Blender 5.2 disarankan; Blender/Goo Engine 4.1+ didukung."
+---
+
+import { Image } from 'astro:assets';
+import hsrFacerig from '../../../../assets/content/hsr/hsr-facerig.png';
+import hsrManualrig from '../../../../assets/content/hsr/hsr-manualrig.png';
+import hsrShapekeys from '../../../../assets/content/hsr/hsr-shapekeys.png';
+import hsrTworigs from '../../../../assets/content/hsr/hsr-tworigs.png';
+import hsrBonecoll from '../../../../assets/content/hsr/hsr-bonecoll.png';
+
+## 1. Panel Kontrol Ekspresi Wajah 3D dan Isaac Face Rig
+
+Saat karakter diimpor dan disiapkan, add-on mengonfigurasi dua rig utama: rig tubuh biasa dan **Isaac Face Rig** sekunder di dekat kepala untuk mengatur ekspresi wajah.
+
+<Image src={hsrFacerig} alt="Panel kontrol 3D Isaac Face Rig dan rig karakter" loading="eager" />
+
+<Image src={hsrTworigs} alt="Struktur rig tubuh biasa dan Isaac Face Rig di Blender" loading="lazy" />
+
+### Mode Kontrol Wajah
+
+- **On-Face Manual Controls**: Widget kontrol tepat di atas mata, alis, dan mulut memungkinkan Anda mengatur setiap ekspresi wajah secara manual.
+
+<Image src={hsrManualrig} alt="Widget kontrol manual yang ditempatkan langsung pada wajah karakter" loading="lazy" />
+
+- **Side Preset Shapekey Sliders**: Penggeser di sisi kepala untuk mengaktifkan dan memadukan preset pose wajah bawaan karakter dengan mudah.
+
+<Image src={hsrShapekeys} alt="Penggeser samping untuk mengaktifkan dan memadukan preset shape key bawaan" loading="lazy" />
+
+---
+
+## 2. Koleksi Tulang
+
+Armature karakter Honkai: Star Rail disusun dalam kelompok terstruktur pada tab **Bone Collections** (Blender 5.2+).
+
+<Image src={hsrBonecoll} alt="Panel Bone Collections pada Armature Properties karakter Honkai: Star Rail" loading="lazy" />
+
+### Gambaran Umum Koleksi Tulang
+
+- **Face**: Pengontrol alis, mata, kelopak mata, pupil, hidung, dan mulut.
+- **Torso (IK / FK)**: Pengontrol tulang belakang, dada, leher, dan kepala.
+- **Arm.L / Arm.R (IK & FK)**: Rangkaian tulang lengan kiri dan kanan dengan target IK dan pole target terpisah.
+- **Leg.L / Leg.R (IK & FK)**: Rangkaian tulang kaki kiri dan kanan dengan pengaturan guliran telapak dan target lutut.
+- **Fingers**: Pengontrol tulang tangan dan jari.
+- **Hair**: Tulang sekunder dinamis untuk helai rambut dan kuncir.
+- **Clothes**: Tulang sekunder dinamis untuk mantel, rok, jubah, dan rumbai.
+- **Lighting**: Pengontrol vektor dan pencahayaan.
+
+:::tip
+Gunakan **ikon bintang** pada tab **Bone Collections** untuk mengisolasi koleksi tulang tertentu, atau klik **ikon mata** untuk mengatur visibilitas saat membuat animasi.
+:::

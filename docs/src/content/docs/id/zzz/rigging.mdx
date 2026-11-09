@@ -1,0 +1,42 @@
+---
+title: "Rigging dan Koleksi Tulang Zenless Zone Zero"
+description: "Kontrol ekspresi wajah jideeh, penyiapan rig wajah, dan koleksi tulang untuk Zenless Zone Zero. Blender 5.2 disarankan; Blender/Goo Engine 4.1+ didukung."
+---
+
+import { Image } from 'astro:assets';
+import zzzFacerig from '../../../../assets/content/zzz/zzz-facerig.png';
+import zzzBonecoll from '../../../../assets/content/zzz/zzz-bonecoll.png';
+
+## 1. Jideeh Face Rig
+
+Saat karakter Zenless Zone Zero diimpor dan disiapkan, add-on mengonfigurasi **jideeh ZZZ Face Rig** yang terintegrasi langsung dalam armature utama karakter untuk kontrol ekspresi wajah tingkat lanjut.
+
+<Image src={zzzFacerig} alt="Panel kontrol 3D jideeh ZZZ Face Rig dan rig karakter" loading="eager" />
+
+### Kontrol dan Fitur Utama Wajah
+
+- **Integrasi jideeh Facial Rig**: Driver lanjutan untuk alis, kelopak mata, pelacakan mata, dan shape key mulut.
+- **On-Face Control Widgets**: Memungkinkan pengaturan pose setiap bagian wajah secara intuitif langsung di 3D Viewport.
+
+---
+
+## 2. Koleksi Tulang
+
+Armature Zenless Zone Zero disusun dalam kelompok terstruktur pada tab **Bone Collections** (Blender 5.2+).
+
+<Image src={zzzBonecoll} alt="Panel Bone Collections pada Armature Properties karakter Zenless Zone Zero" loading="lazy" />
+
+### Gambaran Umum Koleksi Tulang
+
+- **Face**: Pengontrol alis, mata, kelopak mata, pupil, hidung, dan mulut.
+- **Torso (IK / FK)**: Tulang belakang, dada, leher, kepala, serta dinamika dada/badan.
+- **Arm.L / Arm.R (IK & FK)**: Rangkaian tulang lengan kiri dan kanan dengan target IK dan pole target terpisah.
+- **Leg.L / Leg.R (IK & FK)**: Rangkaian tulang kaki kiri dan kanan dengan pengaturan guliran telapak dan target lutut.
+- **Fingers**: Pengontrol tulang tangan dan jari.
+- **Hair**: Tulang sekunder dinamis untuk helai rambut dan ekor.
+- **Clothes**: Tulang sekunder dinamis untuk jaket, rok, dan aksesori.
+- **Lighting**: Pengontrol vektor dan pencahayaan.
+
+:::tip
+Gunakan **ikon bintang** pada tab **Bone Collections** untuk mengisolasi koleksi tulang tertentu, atau klik **ikon mata** untuk mengatur visibilitas saat membuat animasi.
+:::

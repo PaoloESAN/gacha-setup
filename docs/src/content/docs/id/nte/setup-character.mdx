@@ -1,0 +1,70 @@
+---
+title: "Penyiapan Karakter Neverness to Everness"
+description: "Panduan penyiapan model karakter Neverness to Everness langkah demi langkah. Blender 5.2 disarankan; Blender/Goo Engine 4.1+ didukung."
+---
+
+import { Image } from 'astro:assets';
+import ntePanel from '../../../../assets/content/nte/nte-panel.png';
+import nteCharacter from '../../../../assets/content/nte/nte-character.png';
+import nteScene from '../../../../assets/content/nte/nte-scene.png';
+import nteComp1 from '../../../../assets/content/nte/nte-comp1.png';
+import nteComp2 from '../../../../assets/content/nte/nte-comp2.png';
+import nteComp3 from '../../../../assets/content/nte/nte-comp3.png';
+
+## 1. Membuka Wizard Penyiapan
+
+1. Tekan `N` di 3D Viewport untuk membuka bilah samping.
+2. Buka tab **Character Setup Wizard**.
+3. Pada menu tarik-turun **Game**, pilih **Neverness to Everness**.
+
+<Image src={ntePanel} alt="Panel N wizard penyiapan Neverness to Everness" loading="eager" />
+
+---
+
+## 2. Mengimpor Karakter
+
+Anda dapat menyiapkan model dengan satu klik menggunakan **Run Entire Setup**, atau langkah demi langkah melalui **Old Setup**.
+
+1. *(Opsional)* Di **Setup Settings**, aktifkan **Hair & Clothes Physics** untuk menambahkan fisika dinamis pada rambut dan pakaian. Aktifkan **Disable Rigging** untuk melewati pembuatan rig dan hanya mengimpor material serta garis tepi.
+2. Klik **Run Entire Setup** (atau **Set Up Character** pada Old Setup).
+3. Jendela penelusuran berkas akan terbuka. Buka [folder karakter](/id/character-models/#nte) yang berisi model `.fbx` dan tekstur.
+4. Klik **Select NTE Character**.
+
+<Image src={nteCharacter} alt="Memilih folder model karakter NTE di Blender File View" loading="lazy" />
+
+:::note
+Proses impor mungkin memerlukan waktu cukup lama hingga selesai.
+:::
+
+---
+
+## 3. Alur Penyiapan Otomatis
+
+Saat penyiapan dijalankan, add-on melakukan langkah-langkah otomatis berikut untuk Neverness to Everness:
+
+- **Set Up Character**: Mengimpor mesh `.fbx`, membersihkan vertex group, dan menstandarkan hierarki tulang.
+- **Set Up Materials**: Mengganti material bawaan Blender dengan node **NTE Toon Shader** khusus dan menghubungkan tekstur diffuse, lightmap, serta gradasi warna.
+- **Set Up Outlines**: Menerapkan modifier garis tepi inverted-hull berbasis geometry node pada semua mesh karakter untuk menghasilkan garis yang tegas.
+- **Fix Transformations**: Mereset transformasi lokasi, rotasi, dan skala sekaligus menghubungkan driver wajah ke vektor cahaya.
+- **Rig Character**: Mengonfigurasi bentuk pengontrol dan driver tulang wajah.
+- **Finish Setup**: Mengganti Color Management ke **Standard** untuk menjaga akurasi warna asli tekstur.
+
+<Image src={nteScene} alt="Karakter Neverness to Everness yang sudah diimpor ke adegan 3D" loading="lazy" />
+
+---
+
+## 4. Pengaturan Viewport Shading dan Compositor
+
+Untuk menampilkan shader toon NTE dan compositing bayangan kepala secara langsung di viewport:
+
+1. Buka ruang kerja **Compositing** dari bilah menu atas Blender.
+
+<Image src={nteComp1} alt="Membuka ruang kerja Compositing dari bilah menu atas Blender" loading="lazy" />
+
+2. Pindahkan node **Alpha** untuk memutus hubungannya dengan **Group Output** dan **Viewer**, lalu hubungkan keluaran node **Mix** langsung ke **Group Output** dan **Viewer**.
+
+<Image src={nteComp2} alt="Memutus node Alpha dan menghubungkan node Mix ke Group Output serta Viewer" loading="lazy" />
+
+3. Kembali ke ruang kerja **Layout** pada bilah atas, buka menu **Viewport Shading**, lalu atur **Compositor** ke **Always** (atau **Camera**).
+
+<Image src={nteComp3} alt="Kembali ke ruang kerja Layout dan mengatur Compositor Viewport Shading ke Always" loading="lazy" />

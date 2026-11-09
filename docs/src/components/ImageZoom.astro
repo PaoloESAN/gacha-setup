@@ -1,11 +1,16 @@
 ---
 // Component: ImageZoom.astro
 // Lightweight, zero-dependency, accessible <dialog>-based Image Zoom for Markdown/MDX images
+const lang = Astro.locals.starlightRoute.lang;
+const labels = lang.startsWith('id')
+	? { title: 'Perbesar gambar', close: 'Tutup gambar yang diperbesar' }
+	: lang.startsWith('es') ? { title: 'Ampliar imagen', close: 'Cerrar imagen ampliada' }
+	: { title: 'Image Zoom', close: 'Close zoomed image' };
 ---
 
-<dialog id="starlight-image-zoom-dialog" class="image-zoom-dialog" aria-modal="true" aria-label="Image Zoom">
+<dialog id="starlight-image-zoom-dialog" class="image-zoom-dialog" aria-modal="true" aria-label={labels.title}>
 	<div class="image-zoom-container">
-		<button type="button" class="image-zoom-close" aria-label="Close zoomed image">
+		<button type="button" class="image-zoom-close" aria-label={labels.close}>
 			<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
 				<line x1="18" y1="6" x2="6" y2="18"></line>
 				<line x1="6" y1="6" x2="18" y2="18"></line>
@@ -64,7 +69,10 @@
 			img.setAttribute('role', 'button');
 			img.setAttribute('tabindex', '0');
 			img.setAttribute('aria-haspopup', 'dialog');
-			img.setAttribute('aria-label', `Zoom image: ${img.alt || 'Documentation illustration'}`);
+			const lang = document.documentElement.lang;
+			const prefix = lang.startsWith('id') ? 'Perbesar gambar' : lang.startsWith('es') ? 'Ampliar imagen' : 'Zoom image';
+			const fallback = lang.startsWith('id') ? 'Ilustrasi dokumentasi' : lang.startsWith('es') ? 'Ilustración de la documentación' : 'Documentation illustration';
+			img.setAttribute('aria-label', `${prefix}: ${img.alt || fallback}`);
 
 			const openZoom = () => {
 				const src = img.currentSrc || img.src;

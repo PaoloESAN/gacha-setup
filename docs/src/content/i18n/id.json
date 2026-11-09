@@ -1,0 +1,6 @@
+{
+  "page.draft": "Konten ini masih berupa draf dan tidak disertakan dalam build produksi.",
+  "fileTree.directory": "Direktori",
+  "builtWithStarlight.label": "Dibuat dengan Starlight",
+  "heading.anchorLabel": "Bagian berjudul “{{title}}”"
+}

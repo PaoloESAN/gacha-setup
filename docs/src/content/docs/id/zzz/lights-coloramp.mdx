@@ -1,0 +1,79 @@
+---
+title: "Konfigurasi Cahaya dan Gradasi Warna"
+description: "Mengatur arah cahaya, preset shader Kythera, warna kustom, dan cahaya tepi untuk model Zenless Zone Zero."
+---
+
+import { Image } from 'astro:assets';
+import zzzLightdir from '../../../../assets/content/zzz/zzz-lightdir.png';
+import zzzLight1 from '../../../../assets/content/zzz/zzz-light1.png';
+import zzzLight2 from '../../../../assets/content/zzz/zzz-light2.png';
+import zzzLightpanel from '../../../../assets/content/zzz/zzz-lightpanel.png';
+import zzzTworigs from '../../../../assets/content/zzz/zzz-tworigs.png';
+
+## 1. Mengatur Arah Cahaya dan Bayangan
+
+Selama penyiapan karakter, objek khusus `Light Direction_<Character>` dibuat dalam koleksi adegan.
+
+1. Temukan `Light Direction_<Character>` pada panel **Outliner**.
+2. Buka panel **Item Transform** pada Object Properties.
+3. Sesuaikan nilai **Rotation** (XYZ Euler) untuk memutar vektor cahaya:
+   - **Rotation Z**: Memutar sudut matahari secara horizontal mengelilingi karakter.
+   - **Rotation Y**: Menyesuaikan kemiringan horizontal cahaya pada karakter.
+   - **Rotation X**: Menyesuaikan kemiringan vertikal garis bayangan.
+
+<Image src={zzzLightdir} alt="Menyesuaikan rotasi objek Light Direction di Outliner untuk Zenless Zone Zero" loading="eager" />
+
+---
+
+## 2. Shader Kythera: Pengaturan Karakter (Panel Item)
+
+Saat menggunakan **Kythera's Shader**, pilih karakter dan buka tab **Item** di bilah samping 3D Viewport (tombol `N`) untuk mengakses kontrol shader secara langsung.
+
+### Mode dan Preset Pencahayaan
+
+Pilih preset pencahayaan lingkungan atau beralih ke mode Custom:
+
+- **Default**: Tampilan standar gim.
+- **Sunrise**: Cahaya pagi lembut dengan bayangan pastel.
+- **Day**: Pencahayaan siang yang tegas.
+- **Sunset**: Nuansa senja keemasan yang hangat.
+- **Night**: Palet cahaya bulan yang redup.
+- **Rainy**: Pencahayaan mendung yang menyebar.
+- **Custom**: Membuka pengaturan terperinci untuk warna, bayangan, dan cahaya tepi.
+
+<Image src={zzzLight1} alt="Preset Lighting Mode shader Kythera di Zenless Zone Zero" loading="lazy" />
+
+### Shading dan Warna (Mode Custom)
+
+Saat diatur ke **Custom**, Anda dapat menyesuaikan:
+
+- **Ambient**: Warna dasar cahaya ambien.
+- **Lit Tint / Lit Brightness**: Warna cahaya langsung dan tingkat kecerahannya.
+- **Shadow Tint / Shadow Intensity**: Warna bayangan cel dan tingkat kegelapannya.
+- **Fake SSS Intensity**: Menyesuaikan simulasi peredupan lembut Subsurface Scattering (SSS) pada kulit dan kain.
+
+<Image src={zzzLight2} alt="Pengaturan shading dan warna pada Character Settings ZZZ" loading="lazy" />
+
+### Pengaturan Cahaya Tepi
+
+Sesuaikan efek sorotan tepi di sekeliling karakter:
+
+- **Enable Rim Light**: Mengaktifkan atau menonaktifkan efek cahaya tepi.
+- **Color**: Warna kilau cahaya tepi.
+- **Coverage**: Seberapa jauh cahaya tepi menyebar pada siluet mesh.
+- **Brightness**: Intensitas cahaya tepi secara keseluruhan.
+- **Left / Right & Up / Down**: Pengaturan posisi terperinci untuk menggeser arah sorotan.
+
+---
+
+## 3. Legacy Shader: Rig Kontrol di 3D Viewport
+
+Saat menggunakan **Legacy Shader**, panel kontrol 3D dibuat di viewport sebagai objek rig terpisah.
+
+<Image src={zzzLightpanel} alt="Panel pencahayaan dan kontrol 3D di viewport untuk ZZZ Legacy Shader" loading="lazy" />
+
+<Image src={zzzTworigs} alt="Struktur rig armature panel kontrol pencahayaan di Blender" loading="lazy" />
+
+:::note
+Pilih rig panel pencahayaan, masuk ke **Pose Mode** (`Ctrl + Tab`), lalu gerakkan tulang pemilih warna dan penggeser untuk menyesuaikan parameter ambient, sharp lit, sharp shadow, dan rim pada Legacy Shader.
+:::

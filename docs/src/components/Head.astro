@@ -2,7 +2,7 @@
 import Default from '@astrojs/starlight/components/Head.astro';
 import { ClientRouter } from 'astro:transitions';
 
-const isHomepage = Astro.props.slug === '' || Astro.props.slug === 'es' || Astro.url.pathname === '/' || Astro.url.pathname === '/es/' || Astro.url.pathname === '/es';
+const isHomepage = /^\/(?:es\/?|id\/?)?$/.test(Astro.url.pathname);
 ---
 
 <Default {...Astro.props } transition:animate="none">
@@ -38,6 +38,7 @@ const isHomepage = Astro.props.slug === '' || Astro.props.slug === 'es' || Astro
 		if (document.querySelector('.profile-notice')) return;
 
 		const spanish = document.documentElement.lang.startsWith('es');
+		const indonesian = document.documentElement.lang.startsWith('id');
 		const dialog = document.createElement('dialog');
 		dialog.className = 'profile-notice';
 		dialog.setAttribute('aria-labelledby', 'profile-notice-title');
@@ -50,14 +51,14 @@ const isHomepage = Astro.props.slug === '' || Astro.props.slug === 'es' || Astro
 				<button type="button" data-cancel autofocus></button>
 				<button type="button" data-continue></button>
 			</div>`;
-		dialog.querySelector('h2')!.textContent = spanish ? 'Contenido para adultos' : 'Adult content';
+		dialog.querySelector('h2')!.textContent = indonesian ? 'Konten dewasa' : spanish ? 'Contenido para adultos' : 'Adult content';
 		dialog.querySelector('p')!.textContent = spanish
 			? 'El siguiente perfil contiene contenido +18. ¿Deseas continuar?'
-			: 'The following profile contains 18+ content. Do you wish to continue?';
+			: indonesian ? 'Profil berikut berisi konten 18+. Apakah Anda ingin melanjutkan?' : 'The following profile contains 18+ content. Do you wish to continue?';
 		const cancel = dialog.querySelector<HTMLButtonElement>('[data-cancel]')!;
 		const proceed = dialog.querySelector<HTMLButtonElement>('[data-continue]')!;
-		cancel.textContent = spanish ? 'Cancelar' : 'Cancel';
-		proceed.textContent = spanish ? 'Continuar' : 'Continue';
+		cancel.textContent = indonesian ? 'Batal' : spanish ? 'Cancelar' : 'Cancel';
+		proceed.textContent = indonesian ? 'Lanjutkan' : spanish ? 'Continuar' : 'Continue';
 		cancel.addEventListener('click', () => dialog.close());
 		const openNewTab = link.target === '_blank' || event.ctrlKey || event.metaKey || event.shiftKey || event.button === 1;
 		proceed.addEventListener('click', () => {

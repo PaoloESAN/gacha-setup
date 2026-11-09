@@ -1,0 +1,42 @@
+---
+title: "Rigging dan Koleksi Tulang Genshin Impact"
+description: Kontrol ekspresi wajah, penyiapan driver, dan koleksi tulang untuk model Genshin Impact.
+---
+
+import { Image } from 'astro:assets';
+import genshinRigpanel from '../../../../assets/content/genshin/genshin-rigpanel.png';
+import genshinBonecoll from '../../../../assets/content/genshin/genshin-bonecoll.png';
+
+
+## 1. Panel Kontrol Ekspresi Wajah 3D
+
+Panel driver 3D khusus ditempatkan di belakang kepala karakter agar shape key wajah mudah diatur saat membuat pose atau animasi.
+
+<Image src={genshinRigpanel} alt="Panel kontrol rig wajah 3D untuk alis, mata, dan bentuk mulut" loading="eager" />
+
+### Bagian Kontrol
+- **Brows**: Penggeser dan widget tulang khusus untuk mengaktifkan shape key marah, sedih, terkejut, dan kemiringan alis.
+- **Eyes**: Gizmo pelacakan bola mata, menyipitkan mata, pemicu kedipan, dan penggeser pencampuran shape key. Driver mata memiliki batas posisi Y dinamis agar mesh mata tidak saling menembus atau bergeser keluar secara mendadak.
+- **Mouth**: Penggeser tulang ekspresi untuk mulut terbuka, senyum, cemberut, bentuk O, dan fonem mulut kustom.
+
+---
+
+## 2. Koleksi Tulang
+
+Add-on secara otomatis mengelompokkan tulang karakter secara teratur.
+
+<Image src={genshinBonecoll} alt="Panel Bone Collections pada Armature Properties" loading="lazy" />
+
+### Gambaran Umum Kelompok Tulang
+- **Face**: Pengontrol alis, mata, hidung, mulut, dan pipi.
+- **Torso (IK / FK)**: Pengontrol FK/IK untuk tulang belakang, dada, leher, dan kepala.
+- **Arm.L / Arm.R (IK & FK)**: Rangkaian tulang lengan kiri dan kanan dengan target IK dan pole target terpisah.
+- **Leg.L / Leg.R (IK & FK)**: Rangkaian tulang kaki kiri dan kanan dengan pengaturan guliran telapak dan target lutut.
+- **Fingers & Fingers (Detail)**: Kontrol tulang setiap jari untuk mengatur pose tangan.
+- **Hair**: Tulang dinamis sekunder untuk animasi helai rambut.
+- **Clothes**: Tulang dinamis sekunder untuk animasi rok, jubah, dan pita.
+- **Lighting**: Gizmo khusus untuk menyesuaikan vektor cahaya dan panel Fresnel.
+
+:::tip
+Gunakan **ikon bintang** pada tab **Bone Collections** untuk menampilkan hanya satu koleksi tulang, atau **ikon mata** untuk menampilkan dan menyembunyikan kelompok tulang saat membuat animasi.
+:::

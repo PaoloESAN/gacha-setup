@@ -1,0 +1,84 @@
+---
+title: "Konfigurasi Cahaya dan Gradasi Warna"
+description: "Mengatur arah cahaya, preset, warna palet kustom, dan shader untuk model Wuthering Waves."
+---
+
+import { Image } from 'astro:assets';
+import wuwaLightdir from '../../../../assets/content/wuwa/wuwa-lightdir.png';
+import wuwaLight1 from '../../../../assets/content/wuwa/wuwa-light1.png';
+import wuwaLight2 from '../../../../assets/content/wuwa/wuwa-light2.png';
+import wuwaLight3 from '../../../../assets/content/wuwa/wuwa-light3.png';
+import wuwaLight4 from '../../../../assets/content/wuwa/wuwa-light4.png';
+import wuwaAnimateMode from '../../../../assets/content/wuwa/wuwa-animate-mode.png';
+
+## 1. Mengatur Arah Cahaya dan Bayangan
+
+Selama penyiapan karakter, objek khusus `Light Direction_<Character>` dibuat dalam koleksi adegan.
+
+1. Temukan `Light Direction_<Character>` pada panel **Outliner**.
+2. Buka panel **Item Transform** pada Object Properties.
+3. Sesuaikan nilai **Rotation** (XYZ Euler) untuk memutar vektor cahaya:
+   - **Rotation Z**: Memutar sudut matahari secara horizontal mengelilingi karakter.
+   - **Rotation Y**: Menyesuaikan kemiringan horizontal cahaya pada karakter.
+   - **Rotation X**: Menyesuaikan kemiringan vertikal garis bayangan.
+
+<Image src={wuwaLightdir} alt="Menyesuaikan rotasi objek Light Direction di Outliner untuk Wuthering Waves" loading="eager" />
+
+---
+
+## 2. Pengaturan Karakter (Panel Item)
+
+Pilih mesh atau armature karakter, lalu tekan `N` di 3D Viewport. Buka tab **Item** untuk mengakses panel **Character Settings**, yang menyediakan pengaturan langsung tanpa perlu mengedit susunan node shader secara manual:
+
+- **Animate Mode**: Mengganti sementara shader toon yang kompleks dengan material ringan agar pemutaran animasi di viewport tetap lancar.
+- **Lighting Mode**: Beralih di antara preset cahaya ambien bawaan, atau pilih Custom untuk menyesuaikan setiap kanal warna.
+- **Blush**: Menyesuaikan intensitas tekstur rona pipi karakter.
+- **Toggle Resonator Star**: Mengaktifkan atau menonaktifkan visibilitas dan driver animasi lambang bintang Resonator karakter.
+- **Use Fresnel**: Mengaktifkan efek tepi Fresnel pada shader.
+- **Alpha Transparency**: Mengganti material alfa, seperti kerudung transparan, renda pakaian, dan pita rambut, antara transparansi blended dan rendering padat.
+- **Outlines**: Beralih antara warna garis tepi Default dan Custom, serta menyesuaikan **Outline Thickness**.
+
+<Image src={wuwaLight1} alt="Panel Character Settings untuk Wuthering Waves" loading="lazy" />
+
+### Mode dan Preset Pencahayaan
+
+Anda dapat memilih beberapa mode preset pencahayaan yang telah disiapkan:
+
+- **Default**: Acuan pencahayaan asli gim.
+- **Sunrise**: Cahaya pagi yang hangat dan lembut dengan bayangan biru-ungu yang halus.
+- **Day**: Pencahayaan siang yang tegas dan seimbang.
+- **Sunset**: Nuansa senja dengan sorotan kuning ambar yang hangat dan bayangan kaya.
+- **Night**: Nuansa cahaya bulan yang redup dan dingin.
+- **Rainy**: Shading atmosfer mendung dengan cahaya menyebar.
+- **Custom**: Membuka pengaturan terperinci untuk warna Ambient, Light, Shadow, dan Rim.
+
+<Image src={wuwaLight2} alt="Menu preset Lighting Mode Wuthering Waves" loading="lazy" />
+
+<Image src={wuwaLight3} alt="Fresnel Options dan Custom Outline Colors pada Character Settings Wuthering Waves" loading="lazy" />
+
+### Fresnel dan Garis Tepi
+
+- **Use Fresnel**: Aktifkan untuk menampilkan subpanel **Fresnel Options** (**Fresnel Color**, **Fresnel Scale**, **Fresnel Strength**).
+- **Outlines**: Atur ke **Custom** untuk menampilkan **Custom Outline Colors** (**Outline Color 1 / 2**) dan **Outline Thickness**.
+
+### Warna Kustom (Mode Custom)
+
+Saat **Lighting Mode** diatur ke **Custom**, subpanel **Custom Colors** muncul agar Anda dapat menyesuaikan setiap kanal shader Gustling Waters:
+
+- **Ambient**: Mengatur warna dasar cahaya ambien tanpa bayangan.
+- **Light**: Warna yang diterapkan pada bagian yang mendapat cahaya penuh.
+- **Shadow**: Warna yang diterapkan pada area berbayang atau terhalang.
+- **Rim**: Warna sorotan spekular cahaya tepi.
+
+<Image src={wuwaLight4} alt="Panel mode Custom yang menampilkan palet Custom Colors, Toggle Resonator Star, dan Alpha Transparency" loading="lazy" />
+
+### Bintang Resonator dan Transparansi Alfa
+
+- **Toggle Resonator Star**: Tombol sekali klik untuk mengaktifkan atau menonaktifkan visibilitas dan driver animasi lambang bintang Resonator karakter.
+- **Alpha Transparency**: Kotak centang untuk mengganti material alfa, seperti kerudung transparan, renda pakaian, dan pita rambut, antara transparansi blended dan rendering padat.
+
+### Mode Animasi
+
+Untuk pemutaran animasi viewport yang lancar, klik **Enable Animate Mode** di panel Character Settings. Saat Anda membuat animasi, susunan node toon yang kompleks diganti sementara dengan material ringan. Anda dapat mengembalikannya dengan satu klik saat menyiapkan render akhir.
+
+<Image src={wuwaAnimateMode} alt="Enable Animate Mode pada Character Settings Wuthering Waves" loading="lazy" />

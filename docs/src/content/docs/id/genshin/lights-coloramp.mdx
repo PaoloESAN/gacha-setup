@@ -1,0 +1,45 @@
+---
+title: "Konfigurasi Cahaya dan Gradasi Warna"
+description: Mengatur arah cahaya dan menyesuaikan gradasi warna shader toon Festivity untuk model Genshin Impact.
+---
+
+import { Image } from 'astro:assets';
+import genshinLightdir from '../../../../assets/content/genshin/genshin-lightdir.png';
+import genshinLight from '../../../../assets/content/genshin/genshin-light.png';
+
+
+## 1. Mengatur Arah Cahaya dan Bayangan
+
+Selama penyiapan karakter, objek khusus `Light Direction_<Character>` dibuat dalam koleksi adegan.
+
+1. Temukan `Light Direction_<Character>` pada panel **Outliner** (misalnya `Light Direction_Charlotte`).
+2. Buka panel **Item Transform** pada Object Properties.
+3. Sesuaikan nilai **Rotation** (XYZ Euler) untuk memutar vektor cahaya:
+   - **Rotation Z**: Memutar sudut matahari secara horizontal mengelilingi karakter.
+   - **Rotation Y**: Menyesuaikan kemiringan horizontal cahaya pada karakter.
+   - **Rotation X**: Menyesuaikan kemiringan vertikal garis bayangan.
+
+<Image src={genshinLightdir} alt="Menyesuaikan rotasi objek Light Direction di Outliner dan Item Transform" loading="eager" />
+
+---
+
+## 2. Pengaturan Karakter (Panel Item)
+
+Pilih mesh atau armature karakter, lalu tekan `N` di 3D Viewport. Buka tab **Item** untuk mengakses panel **Character Settings** dan menyesuaikan pengaturan secara langsung tanpa membuka Shader Editor:
+
+<Image src={genshinLight} alt="Panel Character Settings Genshin Impact di tab Item" loading="lazy" />
+
+### Mode Pencahayaan
+- **Lighting Presets**: Beralih dengan cepat di antara preset pencahayaan lingkungan (*Default*, *Sunrise*, *Day*, *Sunset*, *Night*, *Rainy*).
+- **Custom Mode**: Memilih mode **Custom** akan menampilkan subpanel palet warna untuk menyesuaikan kanal **Ambient**, **Sharp Lit**, **Soft Lit**, **Sharp Shadow**, **Soft Shadow**, **Rim Lit**, dan **Rim Shadow** secara manual.
+
+### Opsi Fresnel
+- **Toggle Fresnel**: Kotak centang untuk mengaktifkan atau menonaktifkan kilau tepi luar.
+- **Fresnel Color**: Pemilih warna untuk menyesuaikan warna kilau tepi.
+- **Fresnel Power**: Penggeser 0..1 (terbalik). Nilai 0 mengatur Fresnel Power ke 10, sedangkan nilai 1 mengaturnya ke 0.
+- **Fresnel Scaler**: Penggeser 0..1. Nilai 0 mengatur Fresnel Scaler ke 1, sedangkan nilai 1 mengaturnya ke 10.
+
+### Pengaturan Bayangan dan Adegan
+- **Shadow Position**: Penggeser untuk mengalibrasi ambang batas dan posisi bayangan pada karakter.
+- **Catch Shadows**: Aktifkan untuk menambahkan bayangan dari bagian mesh karakter ke bagian lainnya.
+- **Day / Night**: Penggeser untuk mengatur keseimbangan dan peralihan antara pencahayaan siang dan malam.

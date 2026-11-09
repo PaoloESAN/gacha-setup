@@ -1,0 +1,140 @@
+---
+title: Pengaturan Karakter
+description: Panduan panel Character Settings di Blender, preset pencahayaan, arah cahaya, Fresnel, garis tepi, dan fisika.
+---
+
+import { Image } from 'astro:assets';
+import Carousel from '../../../components/Carousel.astro';
+import CarouselSlide from '../../../components/CarouselSlide.astro';
+import characterSettingsImg from '../../../assets/content/overview/character_settings.png';
+import animatedModeImg from '../../../assets/content/overview/animated_mode.png';
+import lightPanelImg from '../../../assets/content/overview/light_panel.png';
+import lightDefaultImg from '../../../assets/content/overview/light_default.png';
+import lightSunriseImg from '../../../assets/content/overview/light_sunrise.png';
+import lightDayImg from '../../../assets/content/overview/light_day.png';
+import lightSunsetImg from '../../../assets/content/overview/light_sunset.png';
+import lightNightImg from '../../../assets/content/overview/light_night.png';
+import lightRainyImg from '../../../assets/content/overview/light_rainy.png';
+import lightCustomImg from '../../../assets/content/overview/light_custom.png';
+import fresnelImg from '../../../assets/content/overview/fresnel.png';
+import physicsVideo from '../../../assets/content/overview/physics.mp4';
+import genshinLightdir from '../../../assets/content/genshin/genshin-lightdir.png';
+
+
+# Pengaturan Karakter
+
+Panel **Character Settings** tersedia di tab **Item** pada bilah samping 3D Viewport (panel `N`) saat armature atau mesh karakter dipilih. Panel ini memungkinkan Anda mengatur pencahayaan shader, garis tepi anime, efek tepi Fresnel, perilaku bayangan, dan fisika secara langsung tanpa membuka grafik node shader.
+
+<Image src={characterSettingsImg} alt="Panel Character Settings di tab Item" loading="eager" />
+
+---
+
+## Mode Animasi
+
+**Animate Mode** membuat pemutaran animasi di viewport lebih ringan dan lancar dengan mengganti sementara material toon berlapis yang berat dengan alternatif ringan serta menyembunyikan modifier garis tepi.
+
+- Klik **Enable Animate Mode** saat mengerjakan keyframe dan pengaturan waktu animasi.
+- Klik **Disable Animate Mode** sebelum merender atau menyiapkan pencahayaan akhir.
+
+<Image src={animatedModeImg} alt="Pratinjau mode animasi di viewport" loading="lazy" />
+
+---
+
+## Jenis dan Mode Pencahayaan
+
+Anda dapat mengatur pencahayaan karakter melalui gizmo **3D Lighting Panel** di dalam adegan atau melalui preset pada antarmuka **Character Settings**.
+
+### Panel Pencahayaan 3D
+Saat **Lighting Type** diatur ke **Lighting Panel**, roda warna tiga dimensi dan pengontrol arah di 3D Viewport mengatur warna cahaya utama, cahaya ambien, dan bayangan karakter secara interaktif.
+
+<Image src={lightPanelImg} alt="Panel pencahayaan 3D di viewport" loading="lazy" />
+
+Untuk menyesuaikan nilainya, masuk ke **Pose Mode**, pilih pengontrol pada panel, lalu tekan `G` untuk memindahkannya.
+
+### Preset Pencahayaan (This Panel)
+Saat diatur ke **This Panel**, Anda dapat memilih preset pencahayaan bawaan untuk berbagai suasana lingkungan. Gunakan karusel berikut untuk melihat preset yang tersedia:
+
+<Carousel lang="id">
+  <CarouselSlide title="Bawaan" description="Pencahayaan studio anime yang netral dan seimbang.">
+    <Image src={lightDefaultImg} alt="Preset pencahayaan bawaan" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Matahari Terbit" description="Nuansa pagi keemasan yang hangat dengan kontras lembut.">
+    <Image src={lightSunriseImg} alt="Preset pencahayaan matahari terbit" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Siang" description="Pencahayaan siang yang tegas dengan warna bayangan yang bersih.">
+    <Image src={lightDayImg} alt="Preset pencahayaan siang" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Matahari Terbenam" description="Warna senja yang kaya dengan sorotan hangat dan nuansa ambien yang hidup.">
+    <Image src={lightSunsetImg} alt="Preset pencahayaan matahari terbenam" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Malam" description="Nuansa malam dengan cahaya bulan ambien yang dingin dan bayangan pekat.">
+    <Image src={lightNightImg} alt="Preset pencahayaan malam" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Hujan" description="Suasana hujan mendung dengan cahaya menyebar dan sorotan lembut.">
+    <Image src={lightRainyImg} alt="Preset pencahayaan hujan" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Warna Kustom" description="Sesuaikan setiap kanal warna Ambient, Sharp/Soft Lit, Sharp/Soft Shadow, dan Rim secara terpisah.">
+    <Image src={lightCustomImg} alt="Pengaturan pencahayaan warna kustom" loading="lazy" />
+  </CarouselSlide>
+</Carousel>
+
+---
+
+## Arah Cahaya dan Bayangan (Objek Light Direction)
+
+Selama penyiapan, objek empty khusus bernama `Light Direction_<Character>` (misalnya `Light Direction_Charlotte`) dibuat di koleksi adegan untuk mengatur arah sinar matahari dan bayangan pada model.
+
+<Image src={genshinLightdir} alt="Objek Light Direction Genshin Impact di Outliner dan Item Transform" loading="lazy" />
+
+1. Pilih `Light Direction_<Character>` di 3D Viewport atau **Outliner**.
+2. Buka panel **Item Transform** di bilah samping (tombol `N`).
+3. Sesuaikan nilai **Rotation** (XYZ Euler):
+   - **Rotation Z**: Memutar sudut azimut matahari secara horizontal mengelilingi karakter.
+   - **Rotation Y**: Menyesuaikan kemiringan lateral vektor cahaya pada karakter.
+   - **Rotation X**: Menyesuaikan kemiringan vertikal dan sudut elevasi batas bayangan.
+
+---
+
+## Fresnel dan Garis Tepi
+
+### Fresnel
+Fresnel menambahkan kilau tepi atau spekular yang khas pada cel-shading berkualitas tinggi:
+- **Toggle Fresnel**: Mengaktifkan atau menonaktifkan efek.
+- **Fresnel Color**: Warna tepi luar.
+- **Fresnel Power**: Ketajaman peredupan pada permukaan melengkung.
+- **Fresnel Scaler**: Pengali intensitas keseluruhan.
+
+<Image src={fresnelImg} alt="Kontrol dan pratinjau efek tepi Fresnel" loading="lazy" />
+
+### Garis Tepi
+- **Enable Outlines**: Mengaktifkan atau menonaktifkan modifier garis tepi inverted-hull pada semua mesh karakter dengan cepat.
+- **Enable Night Soul**: Mengaktifkan atau menonaktifkan garis energi bercahaya khusus untuk karakter Natlan di Genshin Impact.
+
+---
+
+## Pengaturan Bayangan dan Adegan
+
+- **Shadow Position**: Menggeser ambang batas pencahayaan pada permukaan melengkung.
+- **Catch Shadows**: Menerima atau mengabaikan bayangan dari objek lain dalam adegan yang jatuh pada karakter.
+- **Day / Night**: Memadukan kalibrasi gradasi tekstur siang dan malam.
+- **Blush Strength**: Mengatur intensitas rona pipi jika didukung.
+
+---
+
+## Fisika Rambut dan Pakaian
+
+Anda dapat menerapkan atau menyesuaikan fisika dinamis secara interaktif tanpa menjalankan ulang wizard penyiapan:
+
+- **Hair Physics Slider**: Menyesuaikan kelenturan Damped Track dan pengaruh fisika pada helai rambut.
+- **Clothes Physics Slider**: Menyesuaikan gerakan dinamis pada pakaian dan aksesori rok.
+- **Apply Physics / Remove Physics**: Menambahkan atau menghapus sistem constraint kapan saja.
+
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={physicsVideo} type="video/mp4" />
+</video>

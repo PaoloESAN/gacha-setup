@@ -1,0 +1,67 @@
+---
+title: "Konfigurasi Cahaya dan Gradasi Warna"
+description: "Mengatur arah cahaya, preset pencahayaan, warna kustom, dan penggeser ekspresi untuk model Honkai: Star Rail."
+---
+
+import { Image } from 'astro:assets';
+import hsrLightdir from '../../../../assets/content/hsr/hsr-lightdir.png';
+import hsrLight1 from '../../../../assets/content/hsr/hsr-light1.png';
+import hsrLight2 from '../../../../assets/content/hsr/hsr-light2.png';
+import hsrLight3 from '../../../../assets/content/hsr/hsr-light3.png';
+import hsrLight4 from '../../../../assets/content/hsr/hsr-light4.png';
+
+## 1. Mengatur Arah Cahaya dan Bayangan
+
+Selama penyiapan karakter, objek khusus `Light Direction_<Character>` dibuat dalam koleksi adegan.
+
+1. Temukan `Light Direction_<Character>` pada panel **Outliner** (misalnya `Light Direction_March7th`).
+2. Buka panel **Item Transform** pada Object Properties.
+3. Sesuaikan nilai **Rotation** (XYZ Euler) untuk memutar vektor cahaya:
+   - **Rotation Z**: Memutar sudut matahari secara horizontal mengelilingi karakter.
+   - **Rotation Y**: Menyesuaikan kemiringan horizontal cahaya pada karakter.
+   - **Rotation X**: Menyesuaikan kemiringan vertikal garis bayangan.
+
+<Image src={hsrLightdir} alt="Menyesuaikan rotasi objek Light Direction di Outliner untuk Honkai: Star Rail" loading="eager" />
+
+---
+
+## 2. Pengaturan Karakter (Panel Item)
+
+Pilih mesh atau armature karakter, lalu tekan `N` di 3D Viewport. Buka tab **Item** untuk mengakses panel **Character Settings**, yang menyediakan pengaturan langsung tanpa perlu mengedit susunan node shader secara manual:
+
+- **Lighting Mode**: Beralih di antara preset cahaya ambien bawaan, atau pilih Custom untuk menyesuaikan setiap kanal warna.
+- **Expressions**: Penggeser khusus untuk mengatur lapisan efek wajah dengan cepat:
+  - **Cheek**: Mengatur intensitas lapisan rona pipi.
+  - **Shy**: Mengatur intensitas lapisan pipi memerah atau ekspresi malu.
+  - **Shadow**: Mengatur intensitas bayangan pada dahi dan wajah.
+- **Eye Can't Be Tinted?**: Aktifkan kotak centang ini agar warna mata karakter tidak dipengaruhi warna pencahayaan lingkungan atau pencahayaan kustom.
+
+<Image src={hsrLight1} alt="Panel Character Settings Honkai: Star Rail" loading="lazy" />
+
+### Mode dan Preset Pencahayaan
+
+Anda dapat memilih beberapa preset pencahayaan bawaan:
+
+- **Default**: Acuan pencahayaan bawaan gim.
+- **Sunrise**: Nuansa pagi yang hangat dengan bayangan lembut.
+- **Day**: Pencahayaan siang yang netral dan terang.
+- **Sunset**: Cahaya senja keemasan yang kaya dengan bayangan pekat.
+- **Night**: Palet malam yang dingin dan gelap.
+- **Rainy**: Cahaya ambien mendung yang menyebar.
+- **Custom**: Menampilkan pilihan warna untuk pengaturan kustom sepenuhnya.
+
+<Image src={hsrLight2} alt="Preset mode pencahayaan pada Character Settings Honkai: Star Rail" loading="lazy" />
+
+<Image src={hsrLight3} alt="Menu Lighting Mode pada Character Settings Honkai: Star Rail" loading="lazy" />
+
+### Warna Kustom
+
+Saat **Lighting Mode** diatur ke **Custom**, Anda dapat menyesuaikan setiap warna shader:
+
+- **Ambient**: Warna dasar cahaya ambien tanpa bayangan.
+- **Lit**: Warna cahaya langsung utama.
+- **Shadow**: Warna area bayangan utama.
+- **Sharp Lit**: Sorotan pencahayaan sekunder.
+- **Sharp Shadow**: Bayangan cel yang pekat pada area terhalang.
+
+<Image src={hsrLight4} alt="Kontrol warna kustom pada Character Settings Honkai: Star Rail" loading="lazy" />

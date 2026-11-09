@@ -1,0 +1,47 @@
+---
+title: "Rigging dan Koleksi Tulang Wuthering Waves"
+description: "Panel rig wajah, fisika rambut dan pakaian, serta koleksi tulang untuk Wuthering Waves. Blender 5.2 disarankan; Blender/Goo Engine 4.1+ didukung."
+---
+
+import { Image } from 'astro:assets';
+import wuwaBonecoll from '../../../../assets/content/wuwa/wuwa-bonecoll.png';
+
+## 1. Panel Kontrol Ekspresi Wajah 3D
+
+Saat karakter Wuthering Waves diimpor dan diberi rig, add-on membuat **Face Rig Panel** khusus dengan widget yang dapat digerakkan langsung secara intuitif serta penggeser preset ekspresi:
+
+- **Eyes & Brows**: Widget langsung di sekitar wajah untuk pelacakan pupil, menyipitkan mata, kedipan, dan kemiringan alis.
+- **Mouth Shapes**: Pengontrol terpisah untuk sudut bibir, mulut terbuka, senyum, cemberut, dan fonem.
+- **Cutscene Presets**: Penggeser teratur pada panel wajah untuk mengaktifkan dan memadukan pose ekspresi bawaan karakter dengan cepat.
+
+---
+
+## 2. Fisika Rambut dan Pakaian (Damped Track)
+
+Add-on secara otomatis membuat rig fisika dinamis menggunakan constraint **Damped Track** bawaan Blender:
+
+1. Aktifkan **Hair & Clothes Physics** di Setup Settings sebelum menjalankan penyiapan, atau terapkan setelahnya melalui Old Setup > Rig Character.
+2. Sesuaikan penggeser pengaruh **Hair** dan **Clothes** di panel N untuk mengatur respons dan kekuatan redaman gerakan sekunder dinamis.
+
+---
+
+## 3. Koleksi Tulang
+
+Armature karakter disusun dalam kelompok terstruktur pada tab **Bone Collections** (Blender 5.2+) agar bagian tubuh tertentu mudah diisolasi dan dianimasikan.
+
+<Image src={wuwaBonecoll} alt="Panel Bone Collections pada Armature Properties karakter Wuthering Waves" loading="lazy" />
+
+### Gambaran Umum Koleksi Tulang
+
+- **Face**: Pengontrol alis, mata, kelopak mata, pupil, hidung, dan mulut.
+- **Torso (IK / FK)**: Pengontrol tulang belakang, dada, leher, dan kepala.
+- **Arm.L / Arm.R (IK & FK)**: Rangkaian tulang lengan kiri dan kanan dengan target IK dan pole target terpisah.
+- **Leg.L / Leg.R (IK & FK)**: Rangkaian tulang kaki kiri dan kanan dengan pengaturan guliran telapak dan target lutut.
+- **Fingers**: Pengontrol tulang tangan dan jari.
+- **Hair**: Tulang sekunder dinamis untuk helai rambut dan kuncir.
+- **Clothes**: Tulang sekunder dinamis untuk mantel, rok, jubah, dan rumbai.
+- **Lighting**: Pengontrol vektor dan pencahayaan.
+
+:::tip
+Gunakan **ikon bintang** pada tab **Bone Collections** untuk mengisolasi koleksi tulang tertentu, atau klik **ikon mata** untuk mengatur visibilitas saat membuat animasi.
+:::

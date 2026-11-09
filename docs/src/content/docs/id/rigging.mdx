@@ -1,0 +1,127 @@
+---
+title: "Rigging"
+description: Panduan rigging karakter, koleksi tulang, Rig Layers, panel kontrol wajah, pengaturan IK/FK, dan pengontrol kepala.
+---
+
+import { Image } from 'astro:assets';
+import { Icon } from '@astrojs/starlight/components';
+import rigLayersImg from '../../../assets/content/overview/rig_layers.png';
+import headControllerVideo from '../../../assets/content/overview/head-controller.mp4';
+import armCogImg from '../../../assets/content/overview/arm_cog.png';
+import legCogImg from '../../../assets/content/overview/leg_cog.png';
+import topCogImg from '../../../assets/content/overview/top_cog.png';
+import genshinRigpanel from '../../../assets/content/genshin/genshin-rigpanel.png';
+import hsrFacerig from '../../../assets/content/hsr/hsr-facerig.png';
+import zzzFacerig from '../../../assets/content/zzz/zzz-facerig.png';
+
+
+# Gambaran Umum Fitur Rigging
+
+Modul rigging **Gacha Setup** menyatukan perbaikan hierarki tulang, pembuatan driver wajah, koleksi tulang, dan pembuatan rig Rigify untuk berbagai model anime. Modul ini menyediakan kontrol animasi khusus, penyematan anggota tubuh IK/FK, penggantian induk, panel driver wajah, dan lapisan visibilitas tulang.
+
+---
+
+## Panel Rig Wajah 3D
+
+Sesuai model dan penyiapan karakter, add-on membuat panel kontrol driver wajah 3D khusus di dekat kepala. Panel ini memungkinkan Anda mengatur shape key, kedipan, fonem mulut, dan pelacakan mata langsung di 3D Viewport tanpa menyesuaikan penggeser satu per satu. Jenis utama rig wajah yang disertakan adalah:
+
+### Panel Driver 3D Kustom
+Panel driver di belakang kepala karakter untuk mengatur ekspresi wajah, arah pandangan, dan visem mulut:
+
+<Image src={genshinRigpanel} alt="Panel driver rig wajah 3D" loading="eager" />
+
+- **Brows**: Penggeser dan widget tulang khusus untuk mengaktifkan shape key marah, sedih, terkejut, dan kemiringan alis.
+- **Eyes**: Gizmo pelacakan bola mata, menyipitkan mata, pemicu kedipan, dan penggeser pencampuran shape key dengan batas dinamis agar mesh mata tidak bergeser keluar secara mendadak.
+- **Mouth**: Penggeser tulang ekspresi untuk mulut terbuka, senyum, cemberut, bentuk O, dan fonem mulut kustom.
+
+### Sistem Isaac Face Rig
+Sistem kontrol wajah dengan dua mode: widget langsung pada wajah dan panel preset terpisah:
+
+<Image src={hsrFacerig} alt="Panel kontrol 3D Isaac Face Rig" loading="lazy" />
+
+- **On-Face Manual Controls**: Widget tulang langsung di atas mata, alis, dan mulut untuk mengatur ekspresi kecil secara terperinci.
+- **Side Preset Shape Key Sliders**: Penggeser di samping panel kepala untuk mengaktifkan dan memadukan preset ekspresi karakter yang sudah dikonfigurasi.
+
+### Jideeh Face Rig
+Struktur rig wajah terintegrasi untuk menggerakkan mulut dan mata anime secara ekspresif:
+
+<Image src={zzzFacerig} alt="Panel kontrol 3D jideeh Face Rig dan rig karakter" loading="lazy" />
+
+- **Integrasi jideeh Facial Rig**: Driver lanjutan untuk alis, kelopak mata, pelacakan mata, dan shape key mulut yang terperinci.
+- **On-Face Control Widgets**: Memungkinkan pengaturan pose setiap bagian wajah secara intuitif langsung di 3D Viewport.
+
+---
+
+## Rig Layers (Koleksi Tulang)
+
+Di Blender 5.2+ dan 4.x, armature menggunakan koleksi tulang yang terorganisasi. Panel **Rig Layers** di bilah samping 3D Viewport memungkinkan Anda menampilkan atau menyembunyikan bagian tubuh saat membuat animasi, atau mengisolasi satu lapisan dengan tombol bintang solo (<Icon name="star" class="inline-icon" />):
+
+<Image src={rigLayersImg} alt="Panel Rig Layers di Blender" loading="lazy" />
+
+### Kategori Lapisan Rig Standar
+
+1. **Wajah dan Detail**:
+   - `Face`, `Face (Detail)`: Tulang ekspresi, bentuk mulut, dan alis.
+   - `Face (Primary)`, `Face (Secondary)`: Pengontrol wajah utama dan driver kulit sekunder.
+2. **Badan dan Tulang Belakang**:
+   - `Torso (IK)`: Kontrol kinematika invers badan.
+   - `Torso (FK)`: Tulang rotasi tulang belakang dengan kinematika maju.
+3. **Jari dan Tangan**:
+   - `Fingers`, `Fingers (Detail)`: Menekuk dan merenggangkan jari serta menyesuaikan setiap sendi.
+4. **Anggota Tubuh (Lengan dan Kaki)**:
+   - `Arm.L (IK)` / `Arm.R (IK)` dan `Arm.L (FK)` / `Arm.R (FK)`: Dua sistem kontrol untuk lengan.
+   - `Leg.L (IK)` / `Leg.R (IK)` dan `Leg.L (FK)` / `Leg.R (FK)`: Dua sistem kontrol untuk tungkai dan kaki.
+5. **Penyesuaian, Pivot, dan Kontrol Sekunder**:
+   - `Tweaks`: Kontrol untuk menyesuaikan kelenturan dan deformasi secara terperinci.
+   - `Pivots & Pins`: Pivot rotasi tangan dan kaki serta penyematan siku/lutut.
+   - `Offsets`: Pergeseran posisi root dan aksesori yang terpasang.
+   - `Weapon`: Properti dan senjata yang digunakan karakter.
+   - `Root`: Tulang utama untuk menentukan posisi karakter.
+
+---
+
+## Pengontrol dan Pelacak Kepala
+
+Rig menyediakan sistem pelacakan **Head Controller** khusus. Saat dipilih, Anda dapat mengatur perilaku kepala saat mengikuti gerakan dan melihat constraint:
+
+<video loop muted playsinline controls preload="none" aria-label="Penggeser pelacakan Head Controller" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={headControllerVideo} type="video/mp4" />
+</video>
+
+- **Use Head Tracker Controller**: Mengganti arah kepala antara rotasi FK manual dan pelacakan otomatis ke tulang target pandangan (look-at).
+
+---
+
+## Gizmo Pengaturan Anggota Tubuh dan Kontrol IK / FK
+
+Rig Gacha memiliki gizmo tulang berbentuk roda gigi yang intuitif pada anggota tubuh dan pivot untuk mengatur penyelarasan IK/FK, peregangan, serta pergantian ruang koordinat secara langsung.
+
+### Pengaturan Utama (Top Cog / Plate Settings)
+Pengontrol pengaturan utama menyediakan penggeser global untuk karakter:
+
+<Image src={topCogImg} alt="Properti rig global Top Cog / Plate Settings" loading="lazy" />
+
+- **Use Head Tracker Controller**: Mengatur seberapa jauh kepala mengikuti pelacak kepala alih-alih rotasi manual.
+- **Head Follow**: Menyesuaikan seberapa jauh kepala mengikuti rotasi badan.
+- **Neck Follow**: Menyesuaikan seberapa jauh leher mengikuti rotasi badan.
+- **Skirt Auto**: Mengatur pengaruh gerakan otomatis rok saat kaki bergerak.
+- **Skirt Follow**: Menyesuaikan seberapa jauh rok mengikuti badan.
+- **Adjust Pupil Wink Distance**: Menyesuaikan koreksi pupil saat berkedip untuk mengurangi geometri yang saling menembus.
+
+### Pengaturan Lengan dan Elbow Pin
+Pilih pengontrol roda gigi lengan untuk menampilkan properti kinematika lengan:
+
+<Image src={armCogImg} alt="Pengontrol roda gigi lengan dan kontrol IK/FK" loading="lazy" />
+
+- **IK / FK Switch**: Beralih dengan lancar antara kinematika invers (target tangan IK) dan kinematika maju (sudut FK dari bahu ke tangan).
+- **Elbow Pin (Tweak Pin)**: Mengunci posisi siku di ruang koordinat terlepas dari rotasi lengan bawah.
+- **Parent Switch**: Mengganti target IK agar mengikuti `root`, `torso`, atau `chest`, dengan opsi baking.
+
+### Pengaturan Kaki dan Knee Pin
+Pilih pengontrol roda gigi kaki atau tungkai untuk membuka pengaturannya:
+
+<Image src={legCogImg} alt="Pengontrol roda gigi kaki dan Knee Pin" loading="lazy" />
+
+- **IK / FK Switch**: Mengganti mode animasi kaki antara pijakan kaki IK dan ayunan pinggul FK.
+- **Knee Pin**: Mengunci atau melonggarkan arah tekukan lutut.
+- **Foot Roll & Hinge**: Mengatur guliran telapak dari tumit ke ujung kaki dan tekukan jari saat berjalan atau berlari.

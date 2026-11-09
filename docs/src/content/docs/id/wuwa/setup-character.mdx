@@ -1,0 +1,57 @@
+---
+title: "Penyiapan Karakter Wuthering Waves"
+description: "Panduan penyiapan model karakter Wuthering Waves langkah demi langkah. Blender 5.2 disarankan; Blender/Goo Engine 4.1+ didukung."
+---
+
+import { Image } from 'astro:assets';
+import wuwaPanel from '../../../../assets/content/wuwa/wuwa-panel.png';
+import wuwaCharacter from '../../../../assets/content/wuwa/wuwa-character.png';
+import wuwaScene from '../../../../assets/content/wuwa/wuwa-scene.png';
+import wuwaCompositor from '../../../../assets/content/wuwa/wuwa-compositor.png';
+
+## 1. Membuka Wizard Penyiapan
+
+1. Tekan `N` di 3D Viewport untuk membuka bilah samping.
+2. Buka tab **Character Setup Wizard**.
+3. Pada menu tarik-turun **Game**, pilih **Wuthering Waves**.
+
+<Image src={wuwaPanel} alt="Panel N wizard penyiapan Wuthering Waves" loading="eager" />
+
+---
+
+## 2. Mengimpor Karakter
+
+Anda dapat menyiapkan model dengan satu klik menggunakan **Run Entire Setup**, atau langkah demi langkah melalui **Old Setup**.
+
+1. *(Opsional)* Di **Setup Settings**, aktifkan **Hair & Clothes Physics** untuk menambahkan fisika dinamis pada rambut dan pakaian. Aktifkan **Disable Rigging** untuk melewati pembuatan rig dan hanya mengimpor material serta garis tepi.
+2. Klik **Run Entire Setup** (atau **Set Up Character** pada Old Setup).
+3. Jendela penelusuran berkas akan terbuka. Buka [folder karakter](/id/character-models/#wuwa) yang berisi model `.uemodel` (UEFormat) atau `.fbx` beserta teksturnya.
+4. Klik **Select Character Folder**.
+
+<Image src={wuwaCharacter} alt="Memilih folder model karakter Wuthering Waves di Blender File View" loading="lazy" />
+
+---
+
+## 3. Alur Penyiapan Otomatis
+
+Saat penyiapan dijalankan, add-on melakukan langkah-langkah otomatis berikut untuk Wuthering Waves:
+
+- **Set Up Character**: Mengimpor mesh model, membersihkan vertex group, dan menstandarkan hierarki tulang.
+- **Set Up Materials**: Mengganti material bawaan Blender dengan node **Gustling Waters Toon Shader** khusus dan menghubungkan peta diffuse, normal, lightmap, serta transparansi alfa secara otomatis.
+- **Set Up Outlines**: Menerapkan modifier garis tepi inverted-hull berbasis geometry node pada semua mesh karakter untuk menghasilkan garis yang tegas.
+- **Rig Character**: Mengonfigurasi armature Rigify serta fisika rambut dan pakaian, lalu membuat panel kontrol wajah 3D.
+- **Finish Setup**: Mengonfigurasi driver kepala, screen-space reflections, penerimaan bayangan, dan node compositing, lalu mengganti Color Management ke **Standard** untuk menjaga akurasi tekstur asli.
+
+<Image src={wuwaScene} alt="Karakter Wuthering Waves yang sudah diimpor ke adegan 3D" loading="lazy" />
+
+---
+
+## 4. Pengaturan Viewport Shading dan Compositor
+
+Untuk menampilkan shader Gustling Waters dan compositing bayangan kepala secara langsung di viewport:
+
+1. Buka menu **Viewport Shading** di pojok kanan atas 3D Viewport.
+2. Pada bagian **Lighting**, aktifkan **Scene Lights** dan **Scene World**.
+3. Pada bagian **Compositor**, pilih mode **Always** (atau **Camera**).
+
+<Image src={wuwaCompositor} alt="Pengaturan compositor Viewport Shading pada Always untuk Wuthering Waves" loading="lazy" />

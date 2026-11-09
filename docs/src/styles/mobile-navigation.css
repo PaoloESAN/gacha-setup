@@ -1,0 +1,96 @@
+/* Keep the mobile contents index on its own row below the site header. */
+@media (max-width: 49.999rem) {
+  :root[data-has-sidebar] .main-frame {
+    padding-top: calc(var(--sl-nav-height) + var(--sl-mobile-toc-height, 3rem)) !important;
+  }
+  :root[data-has-sidebar]:not([data-has-toc]) .main-frame {
+    padding-top: var(--sl-nav-height) !important;
+  }
+  .mobile-header { border-bottom: 1px solid var(--sl-color-hairline) !important; }
+  .mobile-header > .title-wrapper { display: block !important; min-width: 0; }
+  .mobile-header > .title-wrapper .site-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-header mobile-starlight-toc {
+    position: absolute;
+    inset-inline: 0;
+    inset-block-start: 100%;
+    display: block;
+    width: 100%;
+  }
+  .mobile-header mobile-starlight-toc nav {
+    position: static;
+    border: 0;
+    border-top: 1px solid var(--sl-color-hairline);
+    background: var(--sl-color-bg-sidebar);
+  }
+  .mobile-header mobile-starlight-toc summary {
+    height: var(--sl-mobile-toc-height, 3rem);
+    padding: 0.6rem 1rem !important;
+    border-bottom: 1px solid var(--sl-color-hairline);
+    border-radius: 0;
+    background: transparent;
+    cursor: pointer;
+    list-style: none;
+  }
+  .mobile-header mobile-starlight-toc summary:focus-visible {
+    outline: 2px solid var(--sl-color-text-accent);
+    outline-offset: -3px;
+  }
+  .mobile-header mobile-starlight-toc .toggle {
+    gap: 0.5rem;
+    min-height: 1.75rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    color: var(--sl-color-gray-2);
+    font-size: 0.8125rem;
+    font-weight: 500;
+  }
+  .mobile-header mobile-starlight-toc details[open] .toggle { color: var(--sl-color-text); }
+  .mobile-header mobile-starlight-toc .dropdown {
+    position: fixed;
+    inset-block-start: calc(var(--sl-nav-height) + var(--sl-mobile-toc-height, 3rem) + 0.25rem);
+    inset-inline: 1rem;
+    width: auto;
+    max-height: calc(100vh - var(--sl-nav-height) - var(--sl-mobile-toc-height, 3rem) - 1.25rem);
+    max-height: calc(100dvh - var(--sl-nav-height) - var(--sl-mobile-toc-height, 3rem) - 1.25rem);
+    margin: 0;
+    padding: 0.5rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-bg);
+    background: color-mix(in srgb, var(--sl-color-bg) 94%, var(--sl-color-white) 6%);
+    box-shadow: 0 16px 30px rgb(0 0 0 / 18%);
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--sl-color-gray-4) transparent;
+  }
+  .mobile-header mobile-starlight-toc .dropdown ul { margin: 0; padding: 0; list-style: none; }
+  .mobile-header mobile-starlight-toc .dropdown ul ul {
+    margin-inline-start: 0.8rem;
+    padding-inline-start: 0.5rem;
+    border-inline-start: 1px solid var(--sl-color-hairline);
+  }
+  .mobile-header mobile-starlight-toc .dropdown a {
+    min-height: 2.75rem;
+    align-items: center;
+    padding: 0.65rem 0.8rem;
+    border: 0;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+  }
+  .mobile-header mobile-starlight-toc .dropdown a:hover,
+  .mobile-header mobile-starlight-toc .dropdown a:focus-visible { background: var(--sl-color-gray-6); }
+  .mobile-header mobile-starlight-toc .dropdown a[aria-current='true'] {
+    color: var(--sl-color-text-accent);
+    background: transparent;
+  }
+  .mobile-header mobile-starlight-toc .dropdown > ul > li:first-child > a {
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid var(--sl-color-hairline);
+    border-radius: 0;
+  }
+}

@@ -6,7 +6,7 @@ description: Overview of character rigging, bone collections, Rig Layers, facial
 import { Image } from 'astro:assets';
 import { Icon } from '@astrojs/starlight/components';
 import rigLayersImg from '../../assets/content/overview/rig_layers.png';
-import headControllerImg from '../../assets/content/overview/head_controller.png';
+import headControllerVideo from '../../assets/content/overview/head-controller.mp4';
 import armCogImg from '../../assets/content/overview/arm_cog.png';
 import legCogImg from '../../assets/content/overview/leg_cog.png';
 import topCogImg from '../../assets/content/overview/top_cog.png';
@@ -84,12 +84,11 @@ In Blender 5.2+ and 4.x, armatures utilize organized bone collections. The **Rig
 
 The rig includes a dedicated **Head Controller** tracking setup. When selected, you can control head follow dynamics and view constraints:
 
-<Image src={headControllerImg} alt="Head Controller bone and properties" loading="lazy" />
+<video loop muted playsinline controls preload="none" aria-label="Head Controller tracking slider" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={headControllerVideo} type="video/mp4" />
+</video>
 
 - **Use Head Tracker Controller**: Switches head aiming between manual FK rotation and the automated look-at target bone.
-- **Head Follow**: Determines how much the head rotates with torso orientation versus staying aligned with the world.
-- **Neck Follow**: Modulates neck movement relative to spine curvature.
-- **Parent Switch**: Re-parent the head tracker between `None`, `root`, `torso`, or `chest`.
 
 ---
 

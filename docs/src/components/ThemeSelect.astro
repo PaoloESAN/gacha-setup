@@ -196,7 +196,9 @@ const id = `moon-mask-${crypto.randomBytes(4).toString('hex')}`;
 					const theme = parseTheme(document.documentElement.dataset['theme']);
 					const newTheme = theme === 'dark' ? 'light' : theme === 'light' ? 'dark' : 'auto';
 					onThemeChange(newTheme);
-					button?.setAttribute('aria-label', `${newTheme} theme`);
+					const lang = document.documentElement.lang;
+					const names = lang.startsWith('id') ? { auto: 'Tema otomatis', dark: 'Tema gelap', light: 'Tema terang' } : lang.startsWith('es') ? { auto: 'Tema automático', dark: 'Tema oscuro', light: 'Tema claro' } : { auto: 'Automatic theme', dark: 'Dark theme', light: 'Light theme' };
+					button?.setAttribute('aria-label', names[newTheme]);
 				});
 			}
 		}

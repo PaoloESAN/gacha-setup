@@ -1,0 +1,51 @@
+---
+title: "Rigging dan Koleksi Tulang Neverness to Everness"
+description: "Kontrol ekspresi wajah, penyiapan rig wajah, dan koleksi tulang untuk Neverness to Everness. Blender 5.2 disarankan; Blender/Goo Engine 4.1+ didukung."
+---
+
+import { Image } from 'astro:assets';
+import nteFacerig from '../../../../assets/content/nte/nte-facerig.webp';
+import nteRig from '../../../../assets/content/nte/nte-rig.png';
+import nteBonecoll from '../../../../assets/content/nte/nte-bonecoll.png';
+
+:::note
+Menggerakkan rig dapat menyebabkan sedikit kelambatan viewport pada mesh dengan kepadatan tinggi.
+:::
+
+## 1. Panel Kontrol Ekspresi Wajah 3D
+
+Saat karakter NTE diimpor dan disiapkan, add-on mengonfigurasi **NTE Face Rig** terintegrasi yang diadaptasi dari sistem kontrol wajah Jideeh, dengan kontrol langsung pada wajah dan penggeser ekspresi:
+
+- **Eyebrow & Eyelid Controls**: Widget langsung pada wajah untuk mengatur pose alis dan kedipan secara presisi.
+- **Pupil & Eye Tracking**: Widget arah pandangan khusus dan driver dinamis.
+- **Mouth & Lip Phonemes**: Pengontrol untuk membuka mulut, tersenyum, cemberut, dan membentuk fonem ucapan.
+
+<Image src={nteFacerig} alt="Panel kontrol dan widget rig wajah 3D NTE" loading="eager" />
+
+---
+
+## 2. Rigging Tubuh dan Struktur Armature
+
+Rig tubuh menggunakan pengontrol standar Rigify untuk pengaturan pose IK/FK lengkap serta fisika rambut dan pakaian dinamis dengan constraint Damped Track.
+
+<Image src={nteRig} alt="Armature karakter NTE dan widget kontrol di Blender" loading="lazy" />
+
+---
+
+## 3. Koleksi Tulang dan Hierarki Armature
+
+Armature Neverness to Everness disusun dalam kelompok terstruktur pada tab **Bone Collections** (Blender 5.2+) untuk memudahkan pengaturan pose dan pembuatan animasi.
+
+<Image src={nteBonecoll} alt="Panel Bone Collections pada Armature Properties karakter NTE" loading="lazy" />
+
+### Gambaran Umum Kelompok Tulang
+- **Face**: Pengontrol alis, mata, kelopak mata, pupil, dan mulut.
+- **Torso & Spine**: Pengontrol FK/IK untuk tulang belakang, dada, leher, dan kepala.
+- **Arms & Hands**: Rangkaian tulang lengan kiri dan kanan dengan target IK terpisah dan kontrol tulang jari.
+- **Legs & Feet**: Rangkaian tulang kaki kiri dan kanan dengan pengaturan guliran telapak dan target lutut.
+- **Hair & Clothes**: Tulang dinamis sekunder untuk rok, jaket, pita, dan helai rambut.
+- **Lighting**: Gizmo vektor dan pengontrol pencahayaan.
+
+:::tip
+Gunakan **ikon bintang** pada tab **Bone Collections** untuk mengisolasi koleksi tulang tertentu, atau klik **ikon mata** untuk mengatur visibilitas saat membuat animasi.
+:::

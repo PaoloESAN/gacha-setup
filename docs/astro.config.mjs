@@ -48,36 +48,36 @@ export default defineConfig({
 						{
 							label: 'Genshin Impact',
 							description: 'Character importing, Festivity toon shader, facial rig, and lights for Genshin Impact.',
-							paths: ['genshin/**', 'es/genshin/**'],
+							paths: ['genshin/**', 'es/genshin/**', 'id/genshin/**'],
 						},
 						{
 							label: 'Honkai: Star Rail',
 							description: 'Character importing, StellarToon shader, Isaac face rig, and lighting for Honkai: Star Rail.',
-							paths: ['hsr/**', 'es/hsr/**'],
+							paths: ['hsr/**', 'es/hsr/**', 'id/hsr/**'],
 						},
 						{
 							label: 'Zenless Zone Zero',
 							description: 'Character importing, ZZZ shader, jideeh facial rig v6, and lighting for Zenless Zone Zero.',
-							paths: ['zzz/**', 'es/zzz/**'],
+							paths: ['zzz/**', 'es/zzz/**', 'id/zzz/**'],
 						},
 						{
 							label: 'Neverness to Everness',
 							description: 'Character importing, NTE toon shader, compositor setup, and rigging for Neverness to Everness.',
-							paths: ['nte/**', 'es/nte/**'],
+							paths: ['nte/**', 'es/nte/**', 'id/nte/**'],
 						},
 						{
 							label: 'Wuthering Waves',
 							description: 'Character importing, Gustling Waters shader, face rig panel, and lighting for Wuthering Waves.',
-							paths: ['wuwa/**', 'es/wuwa/**'],
+							paths: ['wuwa/**', 'es/wuwa/**', 'id/wuwa/**'],
 						},
 						{
 							label: 'Arknights: Endfield',
 							description: 'Character importing, Endfield PBRToon shader, Isaac face rig, and lighting for Arknights: Endfield.',
-							paths: ['ake/**', 'es/ake/**'],
+							paths: ['ake/**', 'es/ake/**', 'id/ake/**'],
 						},
 					],
-					promote: ['index*', 'quickstart*', 'character-settings*', 'rigging*', 'es/index*', 'es/quickstart*', 'es/character-settings*', 'es/rigging*'],
-					demote: ['credits*', 'es/credits*'],
+					promote: ['index*', 'quickstart*', 'character-settings*', 'rigging*', 'es/index*', 'es/quickstart*', 'es/character-settings*', 'es/rigging*', 'id/index*', 'id/quickstart*', 'id/character-settings*', 'id/rigging*'],
+					demote: ['credits*', 'es/credits*', 'id/credits*'],
 				}),
 			],
 			title: 'Gacha Setup for Blender',
@@ -95,6 +95,10 @@ export default defineConfig({
 				es: {
 					label: 'Español',
 					lang: 'es',
+				},
+				id: {
+					label: 'Bahasa Indonesia',
+					lang: 'id',
 				},
 			},
 			social: [
@@ -130,19 +134,19 @@ export default defineConfig({
 			sidebar: [
 				{
 					label: 'Overview',
-					translations: { es: 'Visión General' },
+					translations: { es: 'Visión General', id: 'Gambaran Umum' },
 					items: [
-						{ label: 'Quickstart', slug: 'quickstart', translations: { es: 'Guía Rápida' } },
-						{ label: 'Character Assets', slug: 'character-models', translations: { es: 'Assets de Personajes' } },
-						{ label: 'Character Settings', slug: 'character-settings', translations: { es: 'Ajustes del Personaje' } },
-						{ label: 'Rigging', slug: 'rigging', translations: { es: 'Rigging' } },
-						{ label: 'Utilities', slug: 'utilities', translations: { es: 'Utilidades' } },
-						{ label: 'Credits', slug: 'credits', translations: { es: 'Créditos' } },
+						{ label: 'Quickstart', slug: 'quickstart', translations: { es: 'Guía Rápida', id: 'Panduan Singkat' } },
+						{ label: 'Character Assets', slug: 'character-models', translations: { es: 'Assets de Personajes', id: 'Aset Karakter' } },
+						{ label: 'Character Settings', slug: 'character-settings', translations: { es: 'Ajustes del Personaje', id: 'Pengaturan Karakter' } },
+						{ label: 'Rigging', slug: 'rigging', translations: { es: 'Rigging', id: 'Rigging' } },
+						{ label: 'Utilities', slug: 'utilities', translations: { es: 'Utilidades', id: 'Utilitas' } },
+						{ label: 'Credits', slug: 'credits', translations: { es: 'Créditos', id: 'Kredit' } },
 					],
 				},
 				{
 					label: 'Bugs & Solutions',
-					translations: { es: 'Bugs y Soluciones' },
+					translations: { es: 'Bugs y Soluciones', id: 'Masalah dan Solusi' },
 					items: [
 						{ label: 'Genshin Impact', slug: 'genshin/bugs-solutions' },
 						{ label: 'Honkai: Star Rail', slug: 'hsr/bugs-solutions' },
@@ -157,6 +161,7 @@ export default defineConfig({
 				'./src/styles/centered-reading.css',
 				'./src/styles/base.css',
 				'./src/styles/page-transitions.css',
+				'./src/styles/mobile-navigation.css',
 			],
 			components: {
 				Head: './src/components/Head.astro',

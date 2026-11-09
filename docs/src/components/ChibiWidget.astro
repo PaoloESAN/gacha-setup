@@ -39,7 +39,7 @@ if (chibiName && CHIBI_MAP[chibiName]) {
 <div class="gacha-chibi-container">
   <Image
     src={selectedImage}
-    alt="Chibi Mascot"
+    alt={Astro.locals.starlightRoute.lang.startsWith('id') ? 'Maskot chibi' : Astro.locals.starlightRoute.lang.startsWith('es') ? 'Mascota chibi' : 'Chibi Mascot'}
     class="chibi-static-img"
     widths={[160, 300]}
     sizes="(max-width: 768px) 40vw, 300px"

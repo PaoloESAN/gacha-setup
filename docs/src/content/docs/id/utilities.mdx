@@ -1,0 +1,128 @@
+---
+title: Utilitas
+description: Alat, panduan, tutorial, dan sumber komunitas untuk bekerja dengan karakter, kamera, dan shader di Blender.
+---
+
+import { Image } from 'astro:assets';
+import vmdMotionImg from '../../../assets/content/utilities/vmd_motion.png';
+import eyeThroughHair1 from '../../../assets/content/utilities/eye-through-hair1.mp4';
+import eyeThroughHair2 from '../../../assets/content/utilities/eye-through-hair2.mp4';
+import hairShadowImg from '../../../assets/content/utilities/hair-shadow.png';
+
+## Kamera Jideeh
+
+### Cara Menggunakan
+
+- **Sudut L kuning / AIM**: Dapat diskalakan. Kamera mengikuti widget ini untuk membidik. Mengubah skalanya akan menyesuaikan FOV.
+- **Lingkaran oranye / FOCUS**: Mengatur kedalaman bidang, yaitu lokasi atau jarak fokus kamera.
+- **Lingkaran ungu / PIVOT**: Mengatur pusat orbit kamera.
+- **Garis kuning melengkung / FREQ**: Mengatur frekuensi guncangan.
+- **Penggeser kuning vertikal / SHAKE_Y**: Mengatur intensitas guncangan pada sumbu Y.
+- **Penggeser kuning horizontal / SHAKE_X**: Mengatur intensitas guncangan pada sumbu X.
+- **Widget F / DOF**: Mengaktifkan atau menonaktifkan kedalaman bidang.
+- **ROOT**: Pengontrol utama kamera.
+- **CAM (di belakang kamera)**: Berfungsi sebagai penstabil kamera. Anda dapat memindahkan kamera tanpa mengubah arah bidikannya.
+
+### Video Referensi
+
+<div class="video-container">
+  <iframe loading="lazy"
+    src="https://www.youtube-nocookie.com/embed/uU-YNxzpVE8"
+    title="Referensi kamera Jideeh"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    referrerpolicy="strict-origin-when-cross-origin"
+    allowfullscreen>
+  </iframe>
+</div>
+
+---
+
+## Mata Terlihat Menembus Rambut
+
+Membuat mata dan alis karakter terlihat menembus geometri rambut.
+
+### Otomatis:
+
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={eyeThroughHair1} type="video/mp4" />
+</video>
+
+### Cara Mengatur Opasitas:
+
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={eyeThroughHair2} type="video/mp4" />
+</video>
+
+### Manual
+
+Untuk Anda yang ingin menyiapkannya secara manual atau memahami cara kerja Shader to RGB dan pass AOV langkah demi langkah:
+
+<div class="video-container">
+  <iframe loading="lazy"
+    src="https://www.youtube-nocookie.com/embed/ZEjIt1ubZKU"
+    title="Cara menampilkan mata menembus rambut [Blender 5.2] - Tutorial Blender"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    referrerpolicy="strict-origin-when-cross-origin"
+    allowfullscreen>
+  </iframe>
+</div>
+
+---
+
+## Bayangan Rambut
+
+:::caution[Eksperimental]
+Fitur ini bersifat eksperimental dan dapat menghasilkan hasil yang tidak terduga.
+
+**Hair Shadows tidak dapat digunakan bersamaan dengan See Eye Through.**
+:::
+
+Menambahkan bayangan rambut pada wajah karakter di Blender 5.2 atau yang lebih baru.
+
+1. Dalam **Object Mode**, pilih mesh karakter atau armature-nya. Karakter harus memiliki material bernama Face dan Hair atau Bangs agar alat dapat mengenali wajah dan rambut.
+2. Di **Gacha Setup → Utilities**, klik **Hair Shadows**.
+3. Buka **Compositor** dan pilih grup **Hair Shadows** milik karakter. Sesuaikan **Offset X** dan **Offset Y** untuk posisi bayangan, **Shadow Tint** untuk warna, serta **Strength** untuk intensitasnya.
+
+<Image src={hairShadowImg} alt="Grup compositor Hair Shadows dan efeknya pada wajah karakter" loading="lazy" />
+
+Alat ini mengaktifkan compositor viewport secara otomatis. Periksa hasilnya dalam mode rendered shading atau hasil render. Jalankan kembali alat pada karakter yang sama untuk memperbarui efek yang sudah ada.
+
+---
+
+## Menerapkan Gerakan VMD
+
+:::caution[MMD Tools Diperlukan]
+Add-on **MMD Tools** harus terinstal di Blender untuk mengimpor gerakan VMD.
+:::
+
+1. Pilih armature karakter.
+2. Klik **Gacha Setup → Utilities → Apply VMD Motion**, lalu pilih berkas `.vmd` Anda.
+
+   <Image src={vmdMotionImg} alt="Pemilihan gerakan VMD dan opsi impor" loading="lazy" />
+
+3. Sesuaikan opsi di pojok kanan atas jika perlu, lalu konfirmasikan dengan **Apply VMD Motion**.
+
+:::caution
+Proses ini dapat memerlukan waktu, terutama saat mengimpor ekspresi wajah. Tunggu hingga selesai.
+:::
+
+---
+
+## Tutorial dan Panduan
+
+### Fisika Rambut dan Pakaian (Damped Track)
+
+Sistem fisika rambut dan pakaian dalam add-on ini diterapkan berkat video berikut.
+
+<div class="video-container">
+  <iframe loading="lazy"
+    src="https://www.youtube-nocookie.com/embed/tQV_wPQ8rBk"
+    title="Gerakan rambut/pakaian - Damped Track"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    referrerpolicy="strict-origin-when-cross-origin"
+    allowfullscreen>
+  </iframe>
+</div>

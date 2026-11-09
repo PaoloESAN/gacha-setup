@@ -1,0 +1,54 @@
+---
+title: Panduan Singkat
+description: Mulai menggunakan Gacha Setup dalam hitungan menit. Unduh, instal, dan siapkan karakter pertama Anda di Blender.
+---
+
+import QuickstartCards from '../../../components/QuickstartCards.astro';
+import { Image } from 'astro:assets';
+import entireSetupImg from '../../../assets/content/overview/entire_setup.png';
+import selectGameImg from '../../../assets/content/overview/select_game.png';
+import selectCharacter from '../../../assets/content/overview/select-character.png';
+import characterEscene from '../../../assets/content/overview/character-escene.png';
+
+## Langkah Instalasi
+
+1. Unduh `Gacha_Setup-<version>.zip` terbaru dari [rilis terbaru di GitHub](https://github.com/PaoloESAN/gacha-setup/releases/latest).
+2. Jalankan Blender 5.2 (disarankan) atau Blender/Goo Engine 4.1+. Untuk Blender di bawah versi 4.5, instal BetterFBX terlebih dahulu.
+3. Seret dan lepaskan berkas `.zip` yang telah diunduh ke jendela Blender.
+4. Centang **Enable Add-on**, lalu klik **OK** untuk mengonfirmasi.
+5. Jika instalasi tidak berjalan otomatis, buka **Edit > Preferences > Add-ons**, klik **Install from Disk...**, pilih berkas `.zip`, lalu centang add-on tersebut.
+
+## Menyiapkan Karakter
+
+1. Tekan `N` di 3D Viewport untuk membuka panel bilah samping **Character Setup Wizard**.
+
+<Image src={entireSetupImg} alt="Panel utama Character Setup Wizard" loading="eager" />
+
+2. Pilih gim Anda.
+
+<Image src={selectGameImg} alt="Menu pilihan gim" loading="lazy" />
+
+3. Klik **Run Entire Setup**.
+
+4. Pilih [folder karakter](/id/character-models/), lalu klik **Select Character Folder** (atau pilih berkas `.zip` / `.7z` karakter).
+
+<Image src={selectCharacter} alt="Memilih folder karakter" loading="lazy" />
+
+5. Tunggu beberapa detik hingga karakter siap digunakan dalam adegan.
+
+<Image src={characterEscene} alt="Karakter siap dalam adegan (penyiapan berhasil)" loading="lazy" />
+
+---
+
+## Informasi Tambahan
+
+<QuickstartCards>
+  <a href="/id/character-settings/" class="quickstart-card">
+    <p class="link-title">Pengaturan Karakter</p>
+    <p class="link-desc">Preset pencahayaan, objek arah cahaya, Fresnel, garis tepi, dan pengaturan fisika.</p>
+  </a>
+  <a href="/id/rigging/" class="quickstart-card">
+    <p class="link-title">Rigging</p>
+    <p class="link-desc">Panel kontrol wajah 3D, rig wajah, pengaturan lapisan rig, dan pengontrol gerakan utama.</p>
+  </a>
+</QuickstartCards>

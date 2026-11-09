@@ -24,6 +24,7 @@
 
 	function getMessage() {
 		const lang = document.documentElement.lang || '';
+		if (lang.toLowerCase().startsWith('id')) return 'Tautan disalin!';
 		return lang.toLowerCase().startsWith('es') ? '¡Enlace copiado!' : 'Link copied!';
 	}
 

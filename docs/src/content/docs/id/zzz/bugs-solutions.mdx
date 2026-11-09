@@ -1,0 +1,40 @@
+---
+title: "Masalah dan Solusi Zenless Zone Zero"
+description: "Panduan mengatasi masalah model, tekstur, dan shader Zenless Zone Zero. Blender 5.2 disarankan; Blender/Goo Engine 4.1+ didukung."
+---
+
+import { Image } from 'astro:assets';
+import zzzEyeshadow1 from '../../../../assets/content/zzz/zzz-eyeshadow1.png';
+import zzzEyeshadow2 from '../../../../assets/content/zzz/zzz-eyeshadow2.png';
+import zzzEyeshadow3 from '../../../../assets/content/zzz/zzz-eyeshadow3.png';
+import zzzShaderEyeVideo from '../../../../assets/content/zzz/zzz-shader-eye.mp4';
+
+:::note
+Menemukan bug atau masalah yang belum didokumentasikan? Laporkan melalui [issue baru di GitHub](https://github.com/PaoloESAN/gacha-setup/issues/new).
+:::
+
+## Material Bayangan Mata Tidak Terpasang
+
+Jika material bayangan mata belum ditetapkan pada karakter:
+
+### Panduan Video
+
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={zzzShaderEyeVideo} type="video/mp4" />
+</video>
+
+### Solusi Langkah demi Langkah
+
+1. Pilih mesh wajah karakter, lalu tekan `Tab` untuk masuk ke **Edit Mode**.
+2. Arahkan kursor ke geometri bayangan mata, lalu tekan `L` untuk memilih komponen mesh bayangan mata.
+3. Pada tab **Material Properties**, klik tombol `+` untuk membuat slot material baru.
+
+<Image src={zzzEyeshadow1} alt="Memilih mesh bayangan mata dalam Edit Mode dan menambahkan slot material baru" loading="lazy" />
+
+4. Pilih material **ZZZ Shader Eye** untuk slot yang baru dibuat.
+
+<Image src={zzzEyeshadow2} alt="Menetapkan material ZZZ Shader Eye pada slot" loading="lazy" />
+
+5. Klik tombol **Assign** untuk menerapkan material pada mesh bayangan mata yang dipilih.
+
+<Image src={zzzEyeshadow3} alt="Mengklik tombol Assign untuk menerapkan material bayangan mata" loading="lazy" />

@@ -1,0 +1,59 @@
+---
+title: "Konfigurasi Cahaya dan Gradasi Warna"
+description: "Mengatur arah cahaya, preset, warna palet kustom, dan shader untuk model Arknights: Endfield."
+---
+
+import { Image } from 'astro:assets';
+import akeLightdir from '../../../../assets/content/ake/ake-lightdir.png';
+import akeLight1 from '../../../../assets/content/ake/ake-light1.png';
+import akeLight2 from '../../../../assets/content/ake/ake-light2.png';
+
+## 1. Mengatur Arah Cahaya dan Bayangan
+
+Selama penyiapan karakter, objek khusus `Light` / `Light Direction_<Character>` dibuat dalam koleksi adegan.
+
+1. Temukan objek cahaya pada panel **Outliner**.
+2. Buka panel **Item Transform** pada Object Properties.
+3. Sesuaikan nilai **Rotation** (XYZ Euler) untuk memutar vektor cahaya:
+   - **Rotation Z**: Memutar sudut matahari secara horizontal mengelilingi karakter.
+   - **Rotation Y**: Menyesuaikan kemiringan horizontal cahaya pada karakter.
+   - **Rotation X**: Menyesuaikan kemiringan vertikal garis bayangan.
+
+<Image src={akeLightdir} alt="Menyesuaikan rotasi objek Light di Outliner untuk Arknights: Endfield" loading="eager" />
+
+---
+
+## 2. Pengaturan Karakter (Panel Item)
+
+Pilih mesh atau armature karakter, lalu tekan `N` di 3D Viewport. Buka tab **Item** untuk mengakses panel **Character Settings**, yang menyediakan pengaturan langsung tanpa perlu mengedit susunan node shader secara manual:
+
+- **Lighting Mode**: Beralih di antara preset pencahayaan bawaan (`Default`, `Sunrise`, `Day`, `Sunset`, `Night`, `Rainy`), atau pilih `Custom` untuk menyesuaikan setiap kanal warna.
+- **General Shading**: `Smoothness Max` (0–2, bawaan 2.0) dan `Normal Strength` (0–5, bawaan 1.5) untuk material tubuh, pakaian, dan wajah.
+- **Hair Shading**: `Hair Smoothness Max` (0–1, bawaan 1.0) dan `Hair Normal Strength` (0–5, bawaan 1.5).
+- **Eyes**: Penggeser `Eyes Brightness` (1–20, bawaan 1.0).
+- **Weather**: `Enable Rain` mengaktifkan atau menonaktifkan shading hujan pada tubuh dan kulit.
+- **Hair & Clothes Physics**: Tombol `Apply Physics` (atau penggeser pengaruh Hair/Clothes setelah fisika diterapkan).
+
+<Image src={akeLight1} alt="Panel Character Settings untuk Arknights: Endfield" loading="lazy" />
+
+### Mode dan Preset Pencahayaan
+
+- **Default**: Acuan pencahayaan asli gim.
+- **Sunrise**: Cahaya pagi yang hangat dan lembut.
+- **Day**: Pencahayaan siang yang tegas dan seimbang.
+- **Sunset**: Nuansa senja keemasan dengan sorotan hangat.
+- **Night**: Nuansa cahaya bulan yang redup dan dingin.
+- **Rainy**: Shading atmosfer mendung dengan cahaya menyebar.
+- **Custom**: Membuka pengaturan terperinci untuk warna Ambient, DirLight, Specular, Base Color, dan Fresnel.
+
+<Image src={akeLight2} alt="Menu preset Lighting Mode Arknights: Endfield (Rainy)" loading="lazy" />
+
+### Warna Kustom (Mode Custom)
+
+Saat **Lighting Mode** diatur ke **Custom**, sesuaikan setiap kanal shader Endfield PBRToon:
+
+- **Ambient**: Warna dasar cahaya ambien.
+- **Light (DirLight)**: Warna yang diterapkan pada bagian yang mendapat cahaya penuh.
+- **Specular**: Warna sorotan spekular.
+- **Base Color**: Pengali warna albedo dasar.
+- **Fresnel Inside / Outside**: Warna gradasi Fresnel pada tepi.

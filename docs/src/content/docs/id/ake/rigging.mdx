@@ -1,0 +1,49 @@
+---
+title: "Rigging dan Koleksi Tulang Arknights: Endfield"
+description: "Panel rig wajah, fisika rambut dan pakaian, serta koleksi tulang untuk Arknights: Endfield. Blender 5.2 disarankan; Blender/Goo Engine 4.1+ didukung."
+---
+
+import { Image } from 'astro:assets';
+import akeFacerig from '../../../../assets/content/ake/ake-facerig.png';
+import akeBonecoll from '../../../../assets/content/ake/ake-bonecoll.png';
+
+## 1. Panel Kontrol Ekspresi Wajah 3D
+
+Saat karakter Arknights: Endfield diimpor dan diberi rig, add-on membuat adaptasi **Isaac Face Rig** dengan widget yang dapat digerakkan langsung pada wajah:
+
+- **Eyebrow & Eyelid Controls**: Widget langsung pada wajah untuk mengatur pose alis dan kedipan secara presisi.
+- **Pupil & Eye Tracking**: Widget arah pandangan khusus dan driver dinamis.
+- **Mouth & Lip Phonemes**: Pengontrol untuk membuka mulut, tersenyum, cemberut, dan membentuk fonem ucapan.
+
+<Image src={akeFacerig} alt="Widget kontrol rig wajah 3D Arknights: Endfield" loading="eager" />
+
+---
+
+## 2. Fisika Rambut dan Pakaian (Damped Track)
+
+Add-on secara otomatis membuat rig fisika dinamis menggunakan constraint **Damped Track** bawaan Blender:
+
+1. Aktifkan **Hair & Clothes Physics** di Setup Settings sebelum menjalankan penyiapan, atau terapkan setelahnya melalui panel Character Settings > **Apply Physics**.
+2. Sesuaikan penggeser pengaruh **Hair** dan **Clothes** di panel N untuk mengatur respons dan kekuatan redaman gerakan sekunder dinamis.
+
+---
+
+## 3. Koleksi Tulang dan Rig Layers
+
+Armature karakter disusun dalam kelompok terstruktur pada tab **Bone Collections / Rig Layers** (Blender 5.2+) agar bagian tubuh tertentu mudah diisolasi dan dianimasikan.
+
+<Image src={akeBonecoll} alt="Panel Rig Layers karakter Arknights: Endfield (Face, Torso IK/FK, Fingers, Arm IK/FK, Leg IK/FK, Hair, Clothes)" loading="lazy" />
+
+### Gambaran Umum Rig Layers
+
+- **Face (Primary / Secondary)**: Pengontrol alis, mata, kelopak mata, pupil, hidung, dan mulut.
+- **Torso (IK / FK)**: Pengontrol tulang belakang, dada, leher, dan kepala.
+- **Arm.L / Arm.R (IK & FK)**: Rangkaian tulang lengan kiri dan kanan dengan target IK terpisah.
+- **Leg.L / Leg.R (IK & FK)**: Rangkaian tulang kaki kiri dan kanan dengan pengaturan guliran telapak dan target lutut.
+- **Fingers (Detail)**: Pengontrol tulang tangan dan jari.
+- **Hair / Clothes / Cage / Other**: Tulang sekunder dinamis untuk helai rambut, mantel, dan aksesori.
+- **Lighting / Tweaks / Pivots & Pins / Offsets / Weapon**: Lapisan kontrol utilitas dan senjata.
+
+:::tip
+Gunakan **ikon bintang** pada tab Rig Layers untuk mengisolasi koleksi tertentu, atau klik **ikon mata** untuk mengatur visibilitas saat membuat animasi.
+:::

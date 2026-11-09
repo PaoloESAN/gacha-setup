@@ -6,7 +6,7 @@ description: Visión general del sistema de rigging, colecciones de huesos, Rig 
 import { Image } from 'astro:assets';
 import { Icon } from '@astrojs/starlight/components';
 import rigLayersImg from '../../../assets/content/overview/rig_layers.png';
-import headControllerImg from '../../../assets/content/overview/head_controller.png';
+import headControllerVideo from '../../../assets/content/overview/head-controller.mp4';
 import armCogImg from '../../../assets/content/overview/arm_cog.png';
 import legCogImg from '../../../assets/content/overview/leg_cog.png';
 import topCogImg from '../../../assets/content/overview/top_cog.png';
@@ -84,12 +84,11 @@ En Blender 5.2+ y 4.x, las armaduras están organizadas en colecciones de huesos
 
 El rig incluye un sistema especializado de **Head Controller**. Al seleccionarlo, puedes definir el comportamiento de seguimiento y orientación de la cabeza:
 
-<Image src={headControllerImg} alt="Hueso Head Controller y sus propiedades" loading="lazy" />
+<video loop muted playsinline controls preload="none" aria-label="Deslizador de seguimiento de Head Controller" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={headControllerVideo} type="video/mp4" />
+</video>
 
 - **Use Head Tracker Controller**: Alterna entre rotación manual FK de la cabeza y seguimiento automático al hueso objetivo (look-at target).
-- **Head Follow**: Define cuánto sigue la orientación del torso frente a permanecer fijada en el espacio mundial.
-- **Neck Follow**: Modula la flexión del cuello con respecto a la columna.
-- **Parent Switch**: Cambia el emparentado del rastreador de cabeza entre `None`, `root`, `torso` o `chest`.
 
 ---
 
