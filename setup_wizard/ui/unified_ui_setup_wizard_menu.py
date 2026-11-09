@@ -252,7 +252,7 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
         OperatorFactory.create(
             run_entire_setup_column,
             op_name,
-            'Run Entire Setup',
+            'Setup Character',
             'PLAY',
             operator_context=op_context,
             game_type=gt_name,
@@ -284,12 +284,6 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
 
         props = getattr(context.scene, "character_rigger_props", None)
         if props:
-            enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
-            settings_col.prop(props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")
-            if enable_physics:
-                sliders_col = settings_col.column()
-                sliders_col.prop(props, "hair_physics_influence", text="Hair", slider=True)
-                sliders_col.prop(props, "clothes_physics_influence", text="Clothes", slider=True)
             settings_col.prop(props, "disable_rigging", text="Disable Rigging")
 
 

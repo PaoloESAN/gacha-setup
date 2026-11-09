@@ -74,6 +74,9 @@ class HNA_PT_CharacterSettings(Panel):
         return is_game_armature(context, GameType.HONKAI_NEXUS_ANIMA.name)
 
     def draw(self, context):
+        from setup_wizard.ui.character_settings_tabs import draw_character_settings_tabs
+        if draw_character_settings_tabs(self.layout, context):
+            return
         arm, materials = get_character_materials(context)
         draw_lights_plus(self.layout, context)
         rim = self.layout.box()

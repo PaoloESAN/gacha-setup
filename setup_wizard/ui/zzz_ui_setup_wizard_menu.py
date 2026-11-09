@@ -55,7 +55,7 @@ class ZZZ_PT_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
         OperatorFactory.create(
             run_entire_setup_column,
             "zenless_zone_zero.setup_wizard_ui",
-            "Run Entire Setup",
+            "Setup Character",
             "PLAY",
             game_type=GameType.ZENLESS_ZONE_ZERO.name,
         )
@@ -74,12 +74,6 @@ class ZZZ_PT_Setup_Wizard_UI_Layout(Panel, ZenlessZoneZeroUIRenderChecker):
                 row_by.alignment = 'RIGHT'
                 row_by.label(text="Made by Kythera")
         props = context.scene.character_rigger_props
-        enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
-        settings_col.prop(props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")
-        if enable_physics:
-            sliders_col = settings_col.column()
-            sliders_col.prop(props, "hair_physics_influence", text="Hair", slider=True)
-            sliders_col.prop(props, "clothes_physics_influence", text="Clothes", slider=True)
         settings_col.prop(props, "disable_rigging", text="Disable Rigging")
 
 
@@ -1042,6 +1036,9 @@ class ZZZ_PT_Rig_Character_Settings(Panel):
         return False
 
     def draw(self, context):
+        from setup_wizard.ui.character_settings_tabs import draw_character_settings_tabs
+        if draw_character_settings_tabs(self.layout, context):
+            return
         layout = self.layout
         scene = context.scene
 

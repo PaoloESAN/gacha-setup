@@ -213,6 +213,7 @@ else:
         NTE_PT_UI_Outlines_Menu,
         NTE_PT_UI_Rig_Character_Menu,
         NTE_PT_UI_Finish_Setup_Menu,
+        NTE_PT_Rig_Character_Settings,
     )
     from setup_wizard.ui.wuwa_ui_setup_wizard_menu import (
         WW_PT_Setup_Wizard_UI_Layout,
@@ -440,6 +441,7 @@ else:
         NTE_PT_UI_Outlines_Menu,
         NTE_PT_UI_Rig_Character_Menu,
         NTE_PT_UI_Finish_Setup_Menu,
+        NTE_PT_Rig_Character_Settings,
         NTE_OT_SetupWizardUI,
         NTE_OT_SetUpCharacter,
         NTE_OT_SetUpMaterials,
@@ -518,6 +520,8 @@ else:
         try:
             from setup_wizard.ui.character_settings_utils import invalidate_caches
             invalidate_caches()
+            from setup_wizard.ui.character_settings_tabs import hide_registered_rig_layers
+            hide_registered_rig_layers()
         except Exception:
             pass
         return None
@@ -530,6 +534,8 @@ else:
             pass
 
     def register():
+        from setup_wizard.ui.character_settings_tabs import register as register_character_tabs
+        register_character_tabs()
         try:
             register_genshin_setup_wizard()
         except Exception:
@@ -585,6 +591,8 @@ else:
 
 
     def unregister():
+        from setup_wizard.ui.character_settings_tabs import unregister as unregister_character_tabs
+        unregister_character_tabs()
         from setup_wizard.utilites.new_lights import unregister as unregister_new_lights
         unregister_new_lights()
         from setup_wizard.character_rig_setup.lighting_panel_setup import unregister_fresnel_repair

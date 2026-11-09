@@ -1676,6 +1676,9 @@ except Exception:
 """
     complete_rig_text += properties_order_fix
 
+    from setup_wizard.ui.character_settings_tabs import patch_standalone_layers
+    complete_rig_text = patch_standalone_layers(complete_rig_text)
+
     # Write modified content
     rig_file.clear()
     header_var = f'rig_name = "{clean_char_name}"\n'

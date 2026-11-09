@@ -322,6 +322,9 @@ class HI3_PT_CharacterSettings(Panel):
         return is_game_armature(context, GameType.HONKAI_IMPACT_3RD.name)
 
     def draw(self, context):
+        from setup_wizard.ui.character_settings_tabs import draw_character_settings_tabs
+        if draw_character_settings_tabs(self.layout, context):
+            return
         arm, materials = get_character_materials(context)
         output = _ready_output(arm, materials)
         layout = self.layout
