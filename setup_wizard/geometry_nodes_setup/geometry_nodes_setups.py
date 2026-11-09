@@ -1157,11 +1157,11 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
 
 def configure_hsr_hair_transparency():
     """
-    Step for HSR outlines:
-    - Hair outline materials: render method BLENDED, use_transparency_overlap = True.
-    - Hair mesh materials: render method BLENDED, use_transparency_overlap = False.
-      On versions without surface_render_method, use legacy Alpha Hashed.
-    Only applies to HSR.
+    HSR import defaults: Dithered hair and inverted-hull outlines.
+
+    Camera backface culling belongs only on the outline material. Eye Through
+    Hair switches both materials to Blended when the user adds that effect.
+    Older Eevee versions use Alpha Hashed for these import defaults.
     """
     processed = set()
     hair_keywords = ('hair', 'pelo', 'bangs')
@@ -1174,17 +1174,20 @@ def configure_hsr_hair_transparency():
 
         if hasattr(mat, "surface_render_method"):
             try:
-                mat.surface_render_method = 'BLENDED'
+                mat.surface_render_method = 'DITHERED'
             except Exception:
                 pass
         elif hasattr(mat, "blend_method"):
             try:
-                mat.blend_method = 'BLEND' if is_outline else 'HASHED'
+                mat.blend_method = 'HASHED'
             except Exception:
                 pass
+        mat.use_backface_culling = is_outline
+        if hasattr(mat, "use_transparent_shadow"):
+            mat.use_transparent_shadow = True
         if hasattr(mat, "use_transparency_overlap"):
             try:
-                mat.use_transparency_overlap = True if is_outline else False
+                mat.use_transparency_overlap = False
             except Exception:
                 pass
 

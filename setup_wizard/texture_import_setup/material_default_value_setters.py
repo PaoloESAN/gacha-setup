@@ -267,7 +267,12 @@ class PunishingGrayRavenMaterialDefaultValueSetter(MaterialDefaultValueSetter):
         return
 
     def set_default_values(self):
-        return
+        from setup_wizard.ui.pgr_character_settings import _global_nodes, _set_rim_scale
+        materials = [mat for mat in bpy.data.materials if mat.name.startswith('PGR - ')]
+        for tree in {node.node_tree for node in _global_nodes(materials)}:
+            if not tree.get('_pgr_rim_scale_default_v1'):
+                _set_rim_scale(tree, 0.0)
+                tree['_pgr_rim_scale_default_v1'] = True
 
 
 class ZenlessZoneZeroMaterialDefaultValueSetter(MaterialDefaultValueSetter):

@@ -8,7 +8,11 @@ def hide_unused_prop_controls(rig):
     """Hide prop widgets with no mesh influenced by their bone chain."""
     import bpy
 
-    props = [rig.data.bones.get(f'prop.{side}') for side in ('L', 'R')]
+    import re
+
+    props = [bone for bone in rig.data.bones
+             if bone.name in {'prop.L', 'prop.R'}
+             or re.search(r'bip\d*[ _.-]*prop', bone.name, re.IGNORECASE)]
     chains = {bone.name: {bone.name, *(child.name for child in bone.children_recursive)}
               for bone in props if bone}
     candidates = set().union(*chains.values()) if chains else set()
@@ -27,6 +31,9 @@ def hide_unused_prop_controls(rig):
     for bone in props:
         if bone:
             bone.hide = not bool(chains[bone.name] & used)
+    weapon_collection = rig.data.collections.get('Weapon')
+    if weapon_collection:
+        weapon_collection.is_visible = any(chains[name] & used for name in chains)
 
 
 def align_hand_ik_widgets(rig):

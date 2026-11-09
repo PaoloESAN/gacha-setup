@@ -27,6 +27,11 @@ for game in (*COMPOSITOR_OPERATORS, 'ZENLESS_ZONE_ZERO', 'GENSHIN_IMPACT', 'WUTH
     scene.game_type_dropdown = game
     # Leave a real object in place to ensure this never launches character setup.
     objects_before = set(scene.objects)
+    if game == 'PUNISHING_GRAY_RAVEN':
+        tree_before = (scene.compositing_node_group if hasattr(scene, 'compositing_node_group')
+                       else scene.node_tree)
+        nodes_before = set(tree_before.nodes) if tree_before else set()
+        compositing_before = scene.render.use_compositing
     assert bpy.ops.gacha.run_compositing('EXEC_DEFAULT') == {'FINISHED'}, game
     assert scene.view_settings.view_transform == ('AgX' if game == 'ARKNIGHTS_ENDFIELD' else 'Standard'), game
     if game in REFLECTION_GAMES:
@@ -37,6 +42,14 @@ for game in (*COMPOSITOR_OPERATORS, 'ZENLESS_ZONE_ZERO', 'GENSHIN_IMPACT', 'WUTH
             assert eevee.use_ssr, game
     assert set(scene.objects) == objects_before, game
     assert keep_scenes.issubset(set(bpy.data.scenes)), (game, 'Removed an existing scene')
+    if game == 'PUNISHING_GRAY_RAVEN':
+        current_tree = (scene.compositing_node_group if hasattr(scene, 'compositing_node_group')
+                        else scene.node_tree)
+        assert current_tree == tree_before
+        assert (set(current_tree.nodes) if current_tree else set()) == nodes_before
+        assert scene.render.use_compositing == compositing_before
+        print('COMPOSITOR_PASS', game, 'existing compositor preserved', flush=True)
+        continue
     tree = get_node_tree(scene)
     output = next((n for n in tree.nodes if n.bl_idname == get_output_node_type()), None)
     assert output and any(s.is_linked for s in output.inputs), (game, 'No connected image output')

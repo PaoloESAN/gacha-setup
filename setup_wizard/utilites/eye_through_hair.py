@@ -304,8 +304,8 @@ def configure_hair_materials_blended(context: bpy.types.Context) -> int:
     """
     Finds hair objects and materials in the scene (including NTE 'mrim' material)
     and ensures they use 'BLENDED' (Eevee Next) / 'BLEND' (legacy Eevee) render method.
-    Sets use_transparency_overlap to False ONLY on hair mesh materials, leaving
-    outline materials untouched.
+    Disables use_transparency_overlap on hair mesh materials and HSR outlines.
+    Other games' outline settings are preserved.
     Explicitly ignores eye-through-hair materials (_EyeThroughHair, _SeeThrough) so they
     remain DITHERED.
     """
@@ -332,8 +332,8 @@ def configure_hair_materials_blended(context: bpy.types.Context) -> int:
             mat.blend_method = 'BLEND'
             modified = True
 
-        # Only hair mesh materials get use_transparency_overlap = False; outlines are left untouched
-        if not is_outline:
+        is_hsr_outline = is_outline and mat.name.lower().startswith(('stellartoon', 'hsr -'))
+        if not is_outline or is_hsr_outline:
             if hasattr(mat, "use_transparency_overlap") and mat.use_transparency_overlap:
                 mat.use_transparency_overlap = False
                 modified = True

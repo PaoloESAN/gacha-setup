@@ -1491,6 +1491,8 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
                             pb.location.x = 0.0425
                         elif pb_name == "Rim.R":
                             pb.location.x = 0.050
+            from setup_wizard.utils.zzz_lighting_panel import bake_zzz_rim_slider_defaults
+            bake_zzz_rim_slider_defaults(armature, force=True)
         except Exception as e_lp_bones:
             print(f"[ZZZ Rig Warning] Configure Lighting Panel bones: {e_lp_bones}")
 

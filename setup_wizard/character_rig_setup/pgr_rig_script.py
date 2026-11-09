@@ -280,6 +280,9 @@ def rig_character(
         'breastM_R': 'DEF-breast.R',
         'OppeinBoneL01': 'DEF-breast.L',
         'OppeinBoneR01': 'DEF-breast.R',
+        # Shimmering Tide's weighted breast bones use this export naming.
+        'ChestBoneL003': 'DEF-breast.L',
+        'ChestBoneR003': 'DEF-breast.R',
 
         'HipPart1_R': 'DEF-thigh.R.001',
         'HipPart1_L': 'DEF-thigh.L.001',
@@ -3097,6 +3100,9 @@ def rig_character(
         {"divider": "num_rig_separators[0] += 1", "text": generate_string_for_parent_switch("head-controller")},
     ]
 
+    from setup_wizard.utils.auto_shoulders import setup_auto_shoulders, auto_shoulders_ui_splice
+    if setup_auto_shoulders(this_obj):
+        splices.append(auto_shoulders_ui_splice())
     modify_and_run_rig_ui_script(this_obj, original_name, char_name=char_name, extra_splices=splices)
     
     # Ensure all breast sub-bones (breast.L.001 - breast.L.005, breast.R.001 - breast.R.005, etc.) are parented to DEF-breast.L / DEF-breast.R
@@ -3752,6 +3758,21 @@ def rig_character(
 
     from setup_wizard.character_rig_setup.pgr_visual_widgets import align_hand_ik_widgets, hide_unused_prop_controls
     align_hand_ik_widgets(this_obj)
+    # Offset only the display circles, keeping the deform pivots unchanged.
+    for side in ('L', 'R'):
+        control = this_obj.pose.bones.get('breast.' + side)
+        if not control or not control.custom_shape:
+            continue
+        transform = control.custom_shape_transform or control
+        if control.use_custom_shape_bone_size:
+            control.custom_shape_scale_xyz *= control.length
+            control.use_custom_shape_bone_size = False
+        previous_factor = control.get('_setup_breast_widget_size', 1.0)
+        control.custom_shape_scale_xyz *= .9 / previous_factor
+        control['_setup_breast_widget_size'] = .9
+        inverse = transform.bone.matrix_local.to_3x3().normalized().inverted()
+        control.custom_shape_translation = inverse @ (
+            control.bone.tail_local - transform.bone.head_local)
     hide_unused_prop_controls(this_obj)
 
     # Clean up any leftover RIG_LOG text block

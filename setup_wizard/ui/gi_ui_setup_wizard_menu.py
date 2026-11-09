@@ -101,7 +101,7 @@ class GI_PT_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
         if should_show_better_fbx_warning(GameType.GENSHIN_IMPACT.name):
             warn_col = run_entire_setup_column.column()
             warn_col.alert = True
-            warn_col.label(text="BetterFBX is required for Blender < 4.5", icon="ERROR")
+            warn_col.label(text="FBX import requires BetterFBX (< 4.5)", icon="ERROR")
         from setup_wizard.services.isolation import isolation_service
         isolation_service.draw_setup_status_box(sub_layout, context, run_entire_setup_column)
 
@@ -968,6 +968,7 @@ def sync_genshin_shader_properties(scene=None, context=None):
     rim_scale_val = float(getattr(scene, "gi_rim_scale", 0.0))
 
     prop_map = {
+        "Outline Tint": list(getattr(scene, "gi_outline_tint", (1.0, 1.0, 1.0))) + [1.0],
         "Toggle Fresnel": use_fresnel,
         "Fresnel Color": fresnel_col,
         "Fresnel Power": fresnel_power,
@@ -1261,6 +1262,8 @@ def pull_gi_panel_values(scene, context, force=False):
                             )
                             if primo_node:
                                 inputs = primo_node.inputs
+                                if "Outline Tint" in inputs:
+                                    scene.gi_outline_tint = tuple(inputs["Outline Tint"].default_value)[:3]
                                 if "Toggle Fresnel" in inputs:
                                     scene.gi_use_fresnel = bool(inputs["Toggle Fresnel"].default_value)
                                 elif "Use Fresnel" in inputs:
@@ -1314,6 +1317,8 @@ def pull_gi_panel_values(scene, context, force=False):
                     out_node = target_tree.nodes.get("Global Properties") or target_tree.nodes.get("Group Output")
                     if out_node:
                         inputs = out_node.inputs
+                        if "Outline Tint" in inputs:
+                            scene.gi_outline_tint = tuple(inputs["Outline Tint"].default_value)[:3]
                         if "Toggle Fresnel" in inputs:
                             scene.gi_use_fresnel = bool(inputs["Toggle Fresnel"].default_value)
                         elif "Use Fresnel" in inputs:
@@ -2042,6 +2047,22 @@ class GI_OT_ToggleLightingPanelVisibility(Operator):
         return {'FINISHED'}
 
 
+def has_genshin_outline_tint(context, arm=None):
+    from setup_wizard.ui.character_settings_utils import get_character_materials
+    _, materials = get_character_materials(context, arm)
+    for material in materials:
+        if not material.node_tree:
+            continue
+        for node in material.node_tree.nodes:
+            if "Outline Tint" in node.inputs:
+                return True
+            if node.type == 'GROUP' and node.node_tree and "global material properties" in node.node_tree.name.lower():
+                output = node.node_tree.nodes.get("Global Properties") or node.node_tree.nodes.get("Group Output")
+                if output and "Outline Tint" in output.inputs:
+                    return True
+    return False
+
+
 class GI_PT_Rig_Character_Settings(Panel):
     bl_label = "Character Settings"
     bl_idname = "GI_PT_Rig_Character_Settings_Main"
@@ -2182,6 +2203,8 @@ class GI_PT_Rig_Character_Settings(Panel):
         box_outlines.label(text="Outlines", icon="STROKE")
         col_outlines = box_outlines.column(align=True)
         col_outlines.prop(scene, "gi_enable_outlines", text="Enable Outlines")
+        if has_genshin_outline_tint(context, arm):
+            col_outlines.prop(scene, "gi_outline_tint", text="Outline Tint")
         if character_has_night_soul(context):
             col_outlines.prop(scene, "gi_enable_night_soul", text="Enable Night Soul (Natlan Characters Only)")
 
@@ -2465,6 +2488,11 @@ def register_gi_properties():
         precision=2,
         update=update_gi_clothes_physics,
     )
+    bpy.types.Scene.gi_outline_tint = bpy.props.FloatVectorProperty(
+        name="Outline Tint", description="Outline Tint from this character's Global Properties",
+        subtype='COLOR', size=3, min=0.0, max=1.0, default=(1.0, 1.0, 1.0),
+        update=update_gi_scene_settings,
+    )
     bpy.types.Scene.gi_enable_outlines = bpy.props.BoolProperty(
         name="Enable Outlines",
         description="Enable or disable character outlines (Toggle Outlines)",
@@ -2498,7 +2526,7 @@ def unregister_gi_properties():
         "gi_catch_shadows", "gi_day_night", "gi_blush_strength",
         "gi_rim_lit_color", "gi_rim_shadow_color", "gi_rim_scale",
         "gi_hair_physics_influence", "gi_clothes_physics_influence",
-        "gi_enable_outlines", "gi_enable_night_soul", "gi_dark_eyes", "gi_shader_type"
+        "gi_enable_outlines", "gi_outline_tint", "gi_enable_night_soul", "gi_dark_eyes", "gi_shader_type"
     ]:
         if hasattr(bpy.types.Scene, prop):
             delattr(bpy.types.Scene, prop)

@@ -40,7 +40,7 @@ for builder in builders:
         group.interface.new_socket(name=expected_name, in_out='OUTPUT', socket_type='NodeSocketShader')
         node = tree.nodes.new('ShaderNodeGroup')
         node.node_tree = group
-        node.name = 'PrimoToon'
+        node.name = 'Body Shader' if variant == 'Performance' else 'PrimoToon'
         node.label = variant
         builder(material)
         mix = next(n for n in tree.nodes if n.type == 'MIX_SHADER')
@@ -56,15 +56,20 @@ for builder in builders:
         assert output.inputs['Surface'].links[0].from_node == mix
         checks += 1
 
-asset = ROOT / 'setup_wizard/shaders/gi/HoYoverse - PrimoToon v4.0.blend'
-with bpy.data.libraries.load(str(asset), link=False) as (source, loaded):
-    loaded.materials = [next(n for n in source.materials if 'body' in n.casefold())]
-for builder in builders:
-    material = loaded.materials[0].copy()
-    material.name = 'HoYoverse - Vodyanitsa Crystal01 Asset'
-    builder(material)
-    mix = next(n for n in material.node_tree.nodes if n.type == 'MIX_SHADER')
-    link = mix.inputs[2].links[0]
-    assert link.from_node.name == 'PrimoToon' and link.from_socket.type == 'SHADER'
-    checks += 1
+for asset_name, node_name in (
+        ('HoYoverse - PrimoToon v4.0.blend', 'PrimoToon'),
+        ('HoYoverse - Genshin Impact v3.4 starriia.blend', 'Body Shader')):
+    asset = ROOT / 'setup_wizard/shaders/gi' / asset_name
+    with bpy.data.libraries.load(str(asset), link=False) as (source, loaded):
+        loaded.materials = [next(n for n in source.materials if 'body' in n.casefold())]
+    for builder in builders:
+        material = loaded.materials[0].copy()
+        material.name = 'HoYoverse - Vodyanitsa Crystal01 Asset'
+        builder(material)
+        mix = next(n for n in material.node_tree.nodes if n.type == 'MIX_SHADER')
+        link = mix.inputs[2].links[0]
+        assert link.from_node.name == node_name and link.from_socket.type == 'SHADER'
+        builder(material)
+        assert mix.inputs[2].links[0].from_socket == link.from_socket
+        checks += 1
 print('CRYSTAL_SHADER_PASS', checks, 'quality performance legacy repair repeatability asset', flush=True)

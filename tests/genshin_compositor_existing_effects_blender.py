@@ -103,10 +103,10 @@ group = post.node_tree
 alpha = next(n for n in group.nodes if n.bl_idname == 'CompositorNodeAlphaOver')
 background = alpha.inputs.get('Background') or alpha.inputs[1]
 foreground = alpha.inputs.get('Foreground') or alpha.inputs[2]
-tone = background.links[0].from_socket
+tone = foreground.links[0].from_socket
 inner_grade = group.nodes.new('CompositorNodeExposure')
 group.links.new(tone, inner_grade.inputs['Image'])
-group.links.new(inner_grade.outputs['Image'], background)
+group.links.new(inner_grade.outputs['Image'], foreground)
 inner_eye = group.nodes.new('CompositorNodeGroup')
 inner_eye.node_tree = eye_group()
 raw = next(n for n in group.nodes if n.type == 'GROUP_INPUT').outputs['Image']
@@ -118,10 +118,14 @@ after = group.nodes.new('CompositorNodeExposure')
 group.links.new(alpha.outputs['Image'], after.inputs['Image'])
 group.links.new(after.outputs['Image'], inner_output.inputs['Image'])
 counts = len(group.nodes), len(group.links)
+# Simulate an older file with the reversed inputs, including user effects.
+group.links.new(inner_grade.outputs['Image'], background)
+group.links.new(inner_eye.outputs['Image'], foreground)
+alpha['_gacha_alpha_over_version'] = 1
 for repeat in range(2):
     assert ensure_hoyoverse_alpha_over(group)
-    assert background.links[0].from_node == inner_grade
-    assert foreground.links[0].from_node == inner_eye
+    assert foreground.links[0].from_node == inner_grade
+    assert background.links[0].from_node == inner_eye
     assert inner_output.inputs['Image'].links[0].from_node == after
     assert counts == (len(group.nodes), len(group.links))
 print('GENSHIN_INTERNAL_EFFECTS_PASS', flush=True)

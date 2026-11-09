@@ -162,7 +162,6 @@
       "join_meshes_on_armature",
       "rig_character",
       "setup_head_driver",
-      "pgr_setup_compositor",
       "paint_vertex_colors"
     ],
     "PUNISHING_GRAY_RAVEN_OT_setup_wizard_ui_no_outlines": [
@@ -180,7 +179,6 @@
       "join_meshes_on_armature",
       "rig_character",
       "setup_head_driver",
-      "pgr_setup_compositor",
       "paint_vertex_colors"
     ],
     "PUNISHING_GRAY_RAVEN_OT_set_up_character": [
@@ -209,7 +207,6 @@
       "rename_shader_materials",
       "set_up_armtwist_bone_constraints",
       "join_meshes_on_armature",
-      "pgr_setup_compositor",
       "paint_vertex_colors"
     ],
     "HONKAI_IMPACT_3RD_OT_setup_wizard_ui": [

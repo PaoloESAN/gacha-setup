@@ -21,16 +21,16 @@ from setup_wizard.utils.zzz_eye_highlights import assign_zzz_eye_highlights
 from setup_wizard.texture_import_setup.game_texture_importers import ZenlessZoneZeroTextureImporterFacade
 
 from itertools import product
-for shader, character in product(('LEGACY', 'KYTHERA'), ('Avatar_Female_Size03_Sunbringer_UI', 'Avatar_Female_Size02_Belle_UI', 'belle-summer-skies')):
+for shader, character in product(('LEGACY', 'KYTHERA'), ('Avatar_Female_Size03_Sunbringer_UI', 'Avatar_Female_Size02_Belle_UI', 'belle-summer-skies', 'Avatar_Female_Size02_Lindverne_UI')):
     bpy.ops.wm.read_factory_settings(use_empty=True)
     bpy.types.Scene.zzz_shader_type = bpy.props.EnumProperty(items=[('LEGACY', 'Legacy', ''), ('KYTHERA', 'Kythera', '')])
     bpy.context.scene.zzz_shader_type = shader
     folder = ROOT/'chars/zzz'/character
     _execute_fbx_import(str(next(folder.glob('*.fbx'))))
-    filename = 'ZZZ Setup v7.blend' if shader == 'LEGACY' else "Kythera's ZZZ Shader V1.5.1.blend"
+    filename = 'ZZZ Setup v7.blend' if shader == 'LEGACY' else "Kythera's ZZZ Shader V2.blend"
     with bpy.data.libraries.load(str(ROOT/'setup_wizard/shaders/zzz'/filename)) as (src, dst):
         dst.materials = src.materials
-    material = bpy.data.materials['ZZZ Shader EyeHighlights']
+    material = bpy.data.materials['ZZZ Shader EyeHighlights' if shader == 'LEGACY' else "Kythera's ZZZ Eye Highlights"]
     face = next(o for o in bpy.data.objects if o.type == 'MESH' and 'face' in o.name.lower())
     by_side = {}
     for side in ('L', 'R'):
@@ -63,11 +63,16 @@ for shader, character in product(('LEGACY', 'KYTHERA'), ('Avatar_Female_Size03_S
         # New/Better variants and a Blender numerical suffix are equivalent.
         for group in groups:
             side = 'L' if '_L_' in group.name else 'R'
-            group.name = f'Skn_{side}_Highlights_Better.001'
+            group.name = f'Skn_Wis_{side}_Highlights_Better.001'
         assert assign_zzz_eye_highlights(face, material) == len(expected)
         for group in groups:
             side = 'L' if '_L_' in group.name else 'R'
             group.name = 'Eye Highlight L' if side == 'L' else 'Eye Highliht R'
         assert assign_zzz_eye_highlights(face, material) == len(expected)
+    assert [p.material_index for p in face.data.polygons] == baseline
+    unrelated = next(p for p in face.data.polygons if p.index not in expected)
+    hair_group = face.vertex_groups.new(name='Skn_Hair_L_Highlights')
+    hair_group.add(list(unrelated.vertices), 1, 'REPLACE')
+    assert assign_zzz_eye_highlights(face, material) == len(expected)
     assert [p.material_index for p in face.data.polygons] == baseline
     print('PASS', shader, character, 'highlights:', len(expected), 'faces; correct atlas; unrelated faces preserved; repeated replacement stable')

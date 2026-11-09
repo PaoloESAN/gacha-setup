@@ -31,6 +31,8 @@ def call_compositor_operator(identifier, game):
 
 
 def setup_nodes(context, game):
+    if game == 'PUNISHING_GRAY_RAVEN':
+        return {'FINISHED'}
     context.scene.render.use_compositing = True
     if game == 'ZENLESS_ZONE_ZERO':
         from setup_wizard.services.zzz_bloom_service import setup_zzz_bloom
@@ -63,6 +65,8 @@ def setup_render_settings(context, game):
 
 
 def setup_defaults(context, game):
+    if game == 'PUNISHING_GRAY_RAVEN':
+        return {'FINISHED'}
     scene = context.scene
     scene.render.use_compositing = True
     if game == 'ZENLESS_ZONE_ZERO':
@@ -77,7 +81,7 @@ def setup_defaults(context, game):
         if hasattr(tree, 'use_two_pass'):
             tree.use_two_pass = True
     # WuWa / AKE apply their post-processing preset when creating the nodes.
-    # PGR only requires the render output; it has no HYV post-processing preset.
+    # PGR leaves the scene compositor untouched.
     return {'FINISHED'}
 
 

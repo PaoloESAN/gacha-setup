@@ -1562,8 +1562,7 @@ def rig_character(
             vis_eb.parent = pole_eb
             vis_eb.use_connect = False
     
-    # Shoulders setup (matching Miyabi reference rig):
-    # shoulder.L and shoulder.R are parented directly to chest/spine with NO damped track / follow constraints
+    # Establish the shoulder rest parents before adding automatic follow later.
     spine03 = armature.edit_bones.get('ORG-spine.003') or armature.edit_bones.get('chest') or armature.edit_bones.get('spine_fk.003')
     if spine03:
         if 'shoulder.L' in armature.edit_bones:
@@ -1571,7 +1570,7 @@ def rig_character(
         if 'shoulder.R' in armature.edit_bones:
             armature.edit_bones['shoulder.R'].parent = spine03
 
-    # Remove any unwanted shoulder driver / follow helper bones so shoulders are clean and free (like Miyabi)
+    # Discard template helpers; automatic follow is rebuilt for this character.
     for sb in ['shoulder_driver.L', 'shoulder_driver.R', 'MCH-shoulder_follow.L', 'MCH-shoulder_follow.R']:
         if sb in armature.edit_bones:
             armature.edit_bones.remove(armature.edit_bones[sb])
@@ -2421,8 +2420,7 @@ def rig_character(
 
             set_prop(plate, "Skirt_Auto", 1.00, 0.0, 1.0, "Auto Skirt Collision")
             set_prop(plate, "Toggle Skirt Constraints", 1.00, 0.0, 1.0, "Auto Skirt Collision")
-            if "Toggle Shoulder Constraints" in plate:
-                del plate["Toggle Shoulder Constraints"]
+            set_prop(plate, "Toggle Shoulder Constraints", 1.00, 0.0, 1.0, "Auto Shoulder Constraints")
             if "Viewport Outlines" in plate:
                 del plate["Viewport Outlines"]
             set_prop(plate, "Head Follow", 1.00, 0.0, 1.0, "Head Follow")
@@ -2998,14 +2996,6 @@ def rig_character(
     setup_ik_parent_dropdown("thigh_parent.L", default_val=1)
     setup_ik_parent_dropdown("thigh_parent.R", default_val=1)
 
-    # Ensure shoulders are completely clean and free with NO constraints (matching Miyabi reference rig)
-    for sh_name in ['shoulder.L', 'shoulder.R']:
-        pb_sh = bpy.context.scene.objects[ourRig].pose.bones.get(sh_name)
-        if pb_sh:
-            for c in list(pb_sh.constraints):
-                if c.type in ['DAMPED_TRACK', 'COPY_LOCATION', 'TRACK_TO', 'LOCKED_TRACK']:
-                    pb_sh.constraints.remove(c)
-
     # Configure prop bones: make widgets large and visible, completely free from hand constraints
     arm_obj_ref = bpy.context.scene.objects.get(ourRig) or our_char
     if arm_obj_ref and hasattr(arm_obj_ref, "pose") and arm_obj_ref.pose:
@@ -3471,6 +3461,11 @@ def rig_character(
         bone.name = newname
         print(f"[RIG OK] Renamed bone '{oldname}' -> '{newname}'")
 
+    # Build drivers with the final control names. Goo 4.3 does not reliably
+    # rewrite SINGLE_PROP driver paths when the source bones are renamed.
+    from setup_wizard.utils.auto_shoulders import setup_auto_shoulders
+    setup_auto_shoulders(this_obj)
+
     # Ensure prop.L, prop.R, and weapon bones are parented to root.002 so moving root.002 moves all weapons
     try:
         bpy.ops.object.mode_set(mode='EDIT')
@@ -3768,6 +3763,7 @@ def rig_character(
         {"divider": "num_rig_separators[0] += 1", "text": generate_string_for_parent_switch("shin_tweak-pin.R")},
         {"divider": "num_rig_separators[0] += 1", "text": generate_string_for_limb_pin("shin_tweak-pin.R", "thigh_parent.R", "shin_tweak.R", "Knee Pin")},
         {"divider": "num_rig_separators[0] += 1", "text": generate_string_for_settings_slider()},
+        {"divider": "num_rig_separators[0] += 1", "text": '\n        if is_selected({"plate-settings"}):\n            layout.prop(pose_bones["plate-settings"], \'["Toggle Shoulder Constraints"]\', text="Auto Shoulder Constraints", slider=True)'},
         {"divider": "num_rig_separators[0] += 1", "text": generate_string_for_head_controller_slider()},
         {"divider": "num_rig_separators[0] += 1", "text": generate_string_for_parent_switch("head-controller")},
     ]
@@ -4527,6 +4523,8 @@ def rig_character(
     # FBX pelvis helpers otherwise remain fixed when lifting the thigh.
     from setup_wizard.utils.zzz_hip_follow import setup_zzz_hip_follow
     setup_zzz_hip_follow(this_obj)
+    from setup_wizard.utils.zzz_shoulder_weights import smooth_zzz_shoulder_weights
+    smooth_zzz_shoulder_weights(this_obj)
 
     log_text = bpy.data.texts.get("RIG_LOG")
     if log_text:

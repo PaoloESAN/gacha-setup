@@ -1680,6 +1680,10 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
         if self.game_type == GameType.ZENLESS_ZONE_ZERO.name:
             try:
                 _execute_fbx_import(character_model_file_path)
+                from setup_wizard.utils.zzz_normal_repairs import repair_lindverne_body_normals
+                repair_lindverne_body_normals([
+                    imported for imported in bpy.context.scene.objects
+                    if imported.name not in existing_objects])
                 # Capture the FBX facial bind correction before any edit-mode
                 # bone cleanup can discard it, including chain connection.
                 if not is_rigging_disabled(bpy.context):
@@ -1690,6 +1694,8 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                             if _is_bangboo_character(bpy.context, imported):
                                 preserve_face_bind_rest(imported)
                             else:
+                                from setup_wizard.utils.zzz_bind_pose import restore_zzz_bind_pose
+                                restore_zzz_bind_pose(character_model_file_path, imported)
                                 normalize_zzz_spine_bind_pose(imported)
             except Exception as e:
                 # Clean up newly created objects

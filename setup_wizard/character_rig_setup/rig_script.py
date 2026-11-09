@@ -5045,7 +5045,7 @@ def rig_character(
         return f"\n        if is_selected({{'{bone}'}}):\n            group1 = layout.row(align=True)\n            group2 = group1.split(factor=0.75, align=True)\n            props = group2.operator('pose.rigify_switch_parent_{rig_char_id}', text='Parent Switch', icon='DOWNARROW_HLT')\n            props.bone = '{prop1}'\n            props.prop_bone = '{prop2}'\n            props.prop_id='IK_parent'\n            props.parent_names = '[\"None\", \"root\", \"root.001\", \"root.002\", \"torso\", \"chest\"]'\n            props.locks = (False, False, False)\n            group2.prop(pose_bones['{prop2}'], '[\"IK_parent\"]', text='')\n            props = group1.operator('pose.rigify_switch_parent_bake_{rig_char_id}', text='', icon='ACTION_TWEAK')\n            props.bone = '{prop1}'\n            props.prop_bone='{prop2}'\n            props.prop_id='IK_parent'\n            props.parent_names='[\"None\", \"root\", \"root.001\", \"root.002\", \"torso\", \"chest\"]'\n            props.locks = (False, False, False)"
 
     def generate_string_for_settings_slider():
-        return '\n        if is_selected({"plate-settings"}):\n            layout.prop(pose_bones["plate-settings"], \'["Viewport Outlines"]\', text="Show Viewport Outlines", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Tracker Controller", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Head Follow"]\', text="Head Follow", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Neck Follow"]\', text="Neck Follow", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Toggle Eyelid Constraints"]\', text="Auto Eyelid Constraints", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Toggle Shoulder Constraints"]\', text="Auto Shoulder Constraints", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Toggle Skirt Constraints"]\', text="Auto Skirt Constraints", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["EyeCorrection"]\', text="Adjust Pupil Wink Distance", slider=True)'
+        return '\n        if is_selected({"plate-settings"}):\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Tracker Controller", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Head Follow"]\', text="Head Follow", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Neck Follow"]\', text="Neck Follow", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Toggle Eyelid Constraints"]\', text="Auto Eyelid Constraints", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Toggle Shoulder Constraints"]\', text="Auto Shoulder Constraints", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Toggle Skirt Constraints"]\', text="Auto Skirt Constraints", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["EyeCorrection"]\', text="Adjust Pupil Wink Distance", slider=True)'
 
     def generate_string_for_head_controller_slider():
         return '\n        if is_selected({"head-controller"}):\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Tracker Controller", slider=True)\n        if is_selected({"head"}):\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Tracker Controller", slider=True)'
@@ -5630,6 +5630,74 @@ def rig_character(
         #        bone_to_layer(bone.name,24,"Cage")
 
     loop_place_def()
+
+    # Genshin keeps its weighted breast bones as imported physics bones.
+    # Give those bones selectable circles without replacing their rest pivots.
+    breast_controls = [this_obj.pose.bones.get('breast.' + side) for side in ('L', 'R')]
+    breast_controls = [control for control in breast_controls if control]
+    if breast_controls:
+        from math import cos, sin
+        shape_name = 'WGT-' + this_obj.name + '_breast'
+        breast_shape = bpy.data.objects.get(shape_name)
+        if breast_shape is None:
+            shape_mesh = bpy.data.meshes.new(shape_name)
+            vertices = [(.5 * cos(2 * pi * i / 32), 0, .5 * sin(2 * pi * i / 32))
+                        for i in range(32)]
+            shape_mesh.from_pydata(vertices, [(i, (i + 1) % 32) for i in range(32)], [])
+            breast_shape = bpy.data.objects.new(shape_name, shape_mesh)
+            this_obj.users_collection[0].objects.link(breast_shape)
+            breast_shape.hide_render = True
+            breast_shape.hide_set(True)
+        breast_meshes = [mesh for mesh in bpy.context.scene.objects
+                         if mesh.type == 'MESH' and any(
+                             mod.type == 'ARMATURE' and mod.object == this_obj
+                             for mod in mesh.modifiers)]
+        rig_inverse = this_obj.matrix_world.inverted()
+        for control in breast_controls:
+            chain = {control.name, *(bone.name for bone in control.bone.children_recursive)}
+            target = control.bone.tail_local.copy()
+            clearance = max(.005, control.length * .15)
+            region = []
+            region_weight = 0.0
+            for mesh in breast_meshes:
+                groups = {group.index for group in mesh.vertex_groups if group.name in chain}
+                if not groups:
+                    continue
+                to_rig = rig_inverse @ mesh.matrix_world
+                samples = []
+                for vertex in mesh.data.vertices:
+                    weight = sum(g.weight for g in vertex.groups if g.group in groups)
+                    if weight > .1:
+                        point = to_rig @ vertex.co
+                        samples.append((point, weight))
+                        target.y = min(target.y, point.y - clearance)
+                total_weight = sum(weight for _, weight in samples)
+                if total_weight > region_weight:
+                    region, region_weight = samples, total_weight
+            display_size = control.length
+            if region:
+                # Bone tips can point towards the shoulder (Varesa). Center
+                # the circles on the skin they move, rather than on those tips.
+                center = sum((point * weight for point, weight in region), Vector()) / region_weight
+                target.x, target.z = center.x, center.z
+                width = max(point.x for point, _ in region) - min(point.x for point, _ in region)
+                height = max(point.z for point, _ in region) - min(point.z for point, _ in region)
+                display_size = min(display_size, max(.01, min(width, height) * .8))
+            target.x += display_size * .05 * (1 if control.name.endswith('.L') else -1)
+            transform = control.custom_shape_transform or control
+            inverse = transform.bone.matrix_local.to_3x3().normalized().inverted()
+            control.custom_shape = breast_shape
+            control.use_custom_shape_bone_size = False
+            control.custom_shape_scale_xyz = (display_size,) * 3
+            control.custom_shape_rotation_euler = inverse.to_euler('XYZ')
+            control.custom_shape_translation = inverse @ (target - transform.bone.head_local)
+            control.bone.hide = False
+            control.bone.hide_select = False
+            if is_version_4:
+                for collection in list(control.bone.collections):
+                    collection.unassign(control.bone)
+            bone_to_layer(control.name, 3, 'Torso (IK)')
+            assign_bone_to_group(control.name, 'Torso')
 
     # MOVING OF BONES END -------------------------------
 

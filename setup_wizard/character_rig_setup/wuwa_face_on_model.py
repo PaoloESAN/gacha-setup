@@ -125,8 +125,8 @@ def build_wuwa_face_on_model(context, rig, primary, head_name):
     bone('Mouth', mouth, 'MouthPanel')
     for side, sign in [('L', 1), ('R', -1)]:
         # Smile morphs move much of the mouth; their centroid is not a lip
-        # corner. Use the original script's offset outside the mouth capsule.
-        corner = mouth + Vector((sign * .045 * unit, 0, 0))
+        # corner. Keep the controls just outside the mouth capsule.
+        corner = mouth + Vector((sign * .025 * unit, 0, 0))
         bone(f'Mouth.{side}', front(corner), 'MouthPanel')
         for i, name in enumerate(FANS):
             angle = math.radians(-60 + 30 * i)
@@ -207,7 +207,7 @@ def build_wuwa_face_on_model(context, rig, primary, head_name):
             pb.lock_location = (False, False, True)
             pb.lock_scale = (False, False, False)
         elif name.startswith('Mouth.'):
-            kind, size, color = 'diamond', .004 * unit, 'THEME03'
+            kind, size, color = 'diamond', .003 * unit, 'THEME03'
             pb.lock_location = (False, False, True)
         elif name in {'Eyebrows', 'EyeScale'}:
             kind, size, color = 'square', (.045 if name == 'Eyebrows' else .01) * unit, 'THEME01' if name == 'Eyebrows' else 'THEME09'
@@ -235,7 +235,7 @@ def build_wuwa_face_on_model(context, rig, primary, head_name):
         elif name == 'EyeScale':
             pb.custom_shape_scale_xyz = (.01 * unit, .001 * unit, .01 * unit)
         elif name == 'MouthPanel':
-            pb.custom_shape_scale_xyz = (.04 * unit, .025 * unit, .01 * unit)
+            pb.custom_shape_scale_xyz = (.023 * unit, .014375 * unit, .01 * unit)
         limit = pb.constraints.new('LIMIT_LOCATION')
         limit.owner_space = 'LOCAL'
         limit.use_transform_limit = True

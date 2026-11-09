@@ -373,7 +373,7 @@ def setup_crystal_material_nodes(crystal_material):
     if not output_node:
         return
 
-    body_shader = tree.nodes.get('PrimoToon')
+    body_shader = tree.nodes.get('PrimoToon') or tree.nodes.get('Body Shader')
 
     lightmap_img_nodes = [n for n in tree.nodes if n.type == 'TEX_IMAGE' and 'lightmap' in (n.name + " " + (n.label or "")).lower()]
     has_lightmap_image = any(n.image is not None for n in lightmap_img_nodes)
@@ -3711,8 +3711,12 @@ class PunishingGrayRavenTextureImporter(GenshinTextureImporter):
             lightmap_node.image = img
 
     def set_pbr_texture(self, type: TextureType, material, img):
-        img.colorspace_settings.name = 'Non-Color'
-        material.node_tree.nodes.get(self.texture_node_names.PBR).image = img
+        # Hair and face shaders do not expose the body's PBR texture input.
+        # Exports can still include PBR maps for those parts.
+        pbr_node = material.node_tree.nodes.get(self.texture_node_names.PBR)
+        if pbr_node is not None:
+            img.colorspace_settings.name = 'Non-Color'
+            pbr_node.image = img
 
     def set_normalmap_texture(self, type: TextureType, material, img):
         img.colorspace_settings.name = 'Non-Color'

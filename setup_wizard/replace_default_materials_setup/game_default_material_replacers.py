@@ -26,6 +26,7 @@ from setup_wizard.domain.shader_material_name_keywords import ShaderMaterialName
 from setup_wizard.utils.genshin_body_part_deducer import get_monster_body_part_name, \
     get_npc_mesh_body_part_name
 from setup_wizard.utils.shader_output_utils import surface_shader_output
+from setup_wizard.utils.zzz_material_json import is_untextured
 
 
 def _is_vodyanitsa_for_crystal(material_name=None, mesh=None):
@@ -615,6 +616,8 @@ def remove_set_depth_nodes_from_highlight_material(material=None):
     for mat in mats_to_check:
         if not mat or not getattr(mat, "use_nodes", False) or not mat.node_tree:
             continue
+        variants = json.loads(mat.node_tree.get('gacha_goo_links', '{}'))
+        native_nodes = {name for link in variants.get('native', []) for name in (link[0], link[2])}
         nodes_to_remove = []
         for n in mat.node_tree.nodes:
             is_set_depth = False
@@ -623,7 +626,8 @@ def remove_set_depth_nodes_from_highlight_material(material=None):
             elif n.type == 'GROUP' and n.node_tree and 'set depth' in n.node_tree.name.lower():
                 is_set_depth = True
 
-            if is_set_depth:
+            if (is_set_depth and n.name not in native_nodes
+                    and not any(socket.is_linked for socket in n.outputs)):
                 nodes_to_remove.append(n)
         for n in nodes_to_remove:
             try:
@@ -730,6 +734,8 @@ def setup_new_pupil_highlight_layer(mesh, material_names=None):
             elif poly.index in inner_faces:
                 poly.material_index = 0
 
+    from setup_wizard.utils.genshin_engine_nodes import configure_genshin_engine_nodes
+    configure_genshin_engine_nodes([new_pupil_mat, highlight_material])
 
 class GameDefaultMaterialReplacer(ABC):
     @abstractmethod
@@ -1322,7 +1328,7 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
         if not output_node:
             return
 
-        body_shader = tree.nodes.get('PrimoToon')
+        body_shader = tree.nodes.get('PrimoToon') or tree.nodes.get('Body Shader')
 
         lightmap_img_nodes = [n for n in tree.nodes if n.type == 'TEX_IMAGE' and 'lightmap' in (n.name + " " + (n.label or "")).lower()]
         has_lightmap_image = any(n.image is not None for n in lightmap_img_nodes)
@@ -1948,13 +1954,7 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     try:
                         with open(os.path.join(mat_dir, jf), 'r', encoding='utf-8') as f:
                             data = json.load(f)
-                        tex_envs = data.get("m_SavedProperties", {}).get("m_TexEnvs", {})
-                        for slot, val in tex_envs.items():
-                            if isinstance(val, dict):
-                                tex_info = val.get("m_Texture", {})
-                                if isinstance(tex_info, dict) and not tex_info.get("IsNull", True):
-                                    return False  # has at least one valid texture
-                        return True  # JSON exists and all textures are null
+                        return is_untextured(data)
                     except Exception:
                         pass
             return False
