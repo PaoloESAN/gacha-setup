@@ -2,13 +2,26 @@
 import re
 
 
+def _is_eye_highlight_group(name):
+    name = re.sub(r'\.\d+$', '', name)
+    normalized = re.sub(r'[^a-z0-9]', '', name.lower())
+    if any(token in normalized for token in ('hair', 'brow', 'eyelash')):
+        return False
+    if any(token in normalized for token in ('eyehighlight', 'eyehighliht', 'eyelight')):
+        return True
+    if re.fullmatch(r'(?:skn|bdy)[lr]highlights?(?:(?:new|better)[0-9]*)?', normalized):
+        return True
+    # Character namespaces, e.g. Skn_Wis_L_Highlights, are common. Preserve
+    # the side-token boundaries so "Hair" is never mistaken for right-eye R.
+    return bool(re.search(r'(?:^|[_ .-])(?:[lr]|left|right)[_ .-]+(?:eye[_ .-]+)?highlights?(?=$|[_ .-])', name, re.I))
+
+
 def assign_zzz_eye_highlights(mesh_object, material):
     if material is None or mesh_object.type != 'MESH':
         return 0
     groups = set()
     for group in mesh_object.vertex_groups:
-        name = re.sub(r'[^a-z0-9]', '', re.sub(r'\.\d+$', '', group.name.lower()))
-        if any(token in name for token in ('eyehighlight', 'eyehighliht', 'eyelight')) or re.fullmatch(r'(?:skn|bdy)[lr]highlights?(?:(?:new|better)[0-9]*)?', name):
+        if _is_eye_highlight_group(group.name):
             groups.add(group.index)
     vertices = {v.index for v in mesh_object.data.vertices
                 if any(g.group in groups and g.weight > 0.0001 for g in v.groups)}

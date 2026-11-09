@@ -4523,8 +4523,8 @@ def rig_character(
     # FBX pelvis helpers otherwise remain fixed when lifting the thigh.
     from setup_wizard.utils.zzz_hip_follow import setup_zzz_hip_follow
     setup_zzz_hip_follow(this_obj)
-    from setup_wizard.utils.zzz_shoulder_weights import smooth_lindverne_shoulder_weights
-    smooth_lindverne_shoulder_weights(this_obj)
+    from setup_wizard.utils.zzz_shoulder_weights import smooth_zzz_shoulder_weights
+    smooth_zzz_shoulder_weights(this_obj)
 
     log_text = bpy.data.texts.get("RIG_LOG")
     if log_text:

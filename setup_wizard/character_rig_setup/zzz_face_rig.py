@@ -198,6 +198,23 @@ def find_eye_bone_pair(armature):
         return None, None
     candidates_L = ("eye.L", "DEF-eye.L", "Skn_L_Eye", "+EyeBone L A01", "+EyeBone L A02", "EYE_L", "Eye_L", "PT_L_Eye", "Bn_Eye_L")
     candidates_R = ("eye.R", "DEF-eye.R", "Skn_R_Eye", "+EyeBone R A01", "+EyeBone R A02", "EYE_R", "Eye_R", "PT_R_Eye", "Bn_Eye_R")
+    # Aim the actual skin joints, not an unweighted Rigify/ORG alias.
+    bound_groups = {g.name for obj in bpy.context.scene.objects if obj.type == 'MESH'
+                    and (obj.parent == armature or any(m.type == 'ARMATURE' and m.object == armature for m in obj.modifiers))
+                    for g in obj.vertex_groups}
+    def weighted_eye(side, candidates):
+        names = list(candidates) + [b.name for b in armature.data.bones]
+        for name in names:
+            low = name.lower()
+            if (name in bound_groups and name in armature.data.bones and 'eye' in low
+                    and (name in candidates or any(s in low for s in ('_' + side, '.' + side, side + '_', ' ' + side + ' ')))
+                    and not any(s in low for s in ('ctrl', 'mch', 'org-', 'brow', 'lid', 'lash', 'highlight', 'track', 'aim', 'shadow'))):
+                return name
+        return None
+    skin_L = weighted_eye('l', candidates_L)
+    skin_R = weighted_eye('r', candidates_R)
+    if skin_L and skin_R:
+        return skin_L, skin_R
     eye_L = next((c for c in candidates_L if c in armature.data.bones), None)
     eye_R = next((c for c in candidates_R if c in armature.data.bones), None)
     if not eye_L:
@@ -1661,6 +1678,47 @@ def get_facerig_bone_collection(armature, name=FACERIG_COLLECTION):
     return None
 
 
+# Rest-space measurements from Alice Thymefield.blend. Expressing the rig
+# relative to the iris bounds transfers its rotation geometry to Belle without
+# requiring the reference .blend at runtime. Heights and offsets are in meters.
+ALICE_EYE_REFERENCE_HEIGHT = 0.03483152389526367
+ALICE_EYE_CONTROL_AXES = ((-0.99999899, -0.00141541, -0.00032256),
+                         (0.00145170, -0.97500837, -0.22216445),
+                         (-0.00000004, -0.22216503, 0.97500926))
+ALICE_EYE_REFERENCE = {
+    'L': {
+        'pivot': (-0.00940281898, 0.04801664874, 0.00742805004),
+        'aim': (0.01300920919, -0.06929097045, 0.01631569862),
+        'control': (0.00046230108, -0.06926475186, -0.01698303223),
+        'axes': ((-0.80523884, 0.18714188, 0.56264395),
+                 (-0.10969503, -0.97952592, 0.16880946),
+                 (0.58271551, 0.07421239, 0.80928075)),
+    },
+    'R': {
+        'pivot': (0.00940440036, 0.04801665619, 0.00742971897),
+        'aim': (-0.01300733536, -0.06929125264, 0.01631402969),
+        'control': (0.00033159927, -0.06926620379, -0.01685428619),
+        'axes': ((0.80511707, -0.18713938, 0.56281918),
+                 (-0.10967276, -0.97952843, -0.16880904),
+                 (0.58288807, 0.07418483, -0.80915910)),
+    },
+}
+
+
+def _needs_belle_eye_pivot_adjustment(armature, mesh_obj):
+    """Identify the validated Belle exports with off-center eye joints."""
+    names = [armature.name, armature.data.name]
+    if mesh_obj:
+        names.extend((mesh_obj.name, mesh_obj.data.name))
+        for material in mesh_obj.data.materials:
+            if material:
+                names.append(material.name)
+                names.append(str(material.get('_original_material_name', '')))
+    if armature.get('zzz_eye_gaze_mode') == 'BELLE_IRIS_CARD' or armature.get('zzz_eye_pivot_adjustment'):
+        return True
+    return any('belle' in name.casefold() for name in names)
+
+
 def setup_lookat_eyes(armature, head_name, fwd, up, face_size, mesh_obj=None):
     if bpy.context.object and bpy.context.object.mode != 'OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
@@ -1676,10 +1734,60 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size, mesh_obj=None):
 
     MASTER = "CTRL-Eye_Master"
     PAIRS = ((eye_L_name, "CTRL-Eye.L", "MCH-EyeAim.L"), (eye_R_name, "CTRL-Eye.R", "MCH-EyeAim.R"))
+    adjust_pivots = _needs_belle_eye_pivot_adjustment(armature, mesh_obj)
+    armature['zzz_eye_gaze_mode'] = 'ROTATION'
+
+    if adjust_pivots:
+        # Belle's concave iris can intersect the stationary white of the eye.
+        # Give only her eye-skinned geometry a small forward clearance, before
+        # measuring the Alice-based rig. Store the applied mesh-space offset
+        # so rebuilding the rig never advances the eyes a second time.
+        for obj in bpy.context.scene.objects:
+            if obj.type != 'MESH' or not (obj.parent == armature or any(
+                    m.type == 'ARMATURE' and m.object == armature for m in obj.modifiers)):
+                continue
+            groups = {g.index for g in obj.vertex_groups if g.name in (eye_L_name, eye_R_name)}
+            indices = [v.index for v in obj.data.vertices
+                       if any(g.group in groups and g.weight > .5 for g in v.groups)]
+            if not indices:
+                continue
+            heights = [(obj.matrix_world @ obj.data.vertices[i].co).dot(up) for i in indices]
+            clearance = (max(heights) - min(heights)) * .04
+            desired = obj.matrix_world.inverted().to_3x3() @ (fwd * clearance)
+            applied = Vector(obj.data.get('_zzz_belle_eye_forward_offset', (0, 0, 0)))
+            delta = desired - applied
+            if delta.length > 1e-8:
+                if obj.data.users > 1:
+                    obj.data = obj.data.copy()
+                # Snapshot both sources before writing; Basis and mesh data
+                # may synchronize, and all expression keys need the same shift.
+                vertices = {i: obj.data.vertices[i].co.copy() + delta for i in indices}
+                keys = [(key, {i: key.data[i].co.copy() + delta for i in indices})
+                        for key in obj.data.shape_keys.key_blocks] if obj.data.shape_keys else []
+                for i, co in vertices.items():
+                    obj.data.vertices[i].co = co
+                for key, coordinates in keys:
+                    for i, co in coordinates.items():
+                        key.data[i].co = co
+                obj.data['_zzz_belle_eye_forward_offset'] = list(desired)
+                obj.data.update()
+
+    for eye_name, _, name in PAIRS:
+        if armature.pose.bones.get(name):
+            armature.pose.bones[name].driver_remove('location')
+        # Remove the previous gaze system before deleting its helpers. Old
+        # custom-space bounds must not affect the scale-center measurement.
+        pbe = armature.pose.bones[eye_name]
+        for con in list(pbe.constraints):
+            if con.name in ("CTRL-EyeAim", "CTRL-EyeCardBounds", "CTRL-EyeNoScale", "CTRL-EyeScale", "CTRL-EyeScale_Master", "CTRL-EyeScalePivot", "CTRL-EyeScalePivot_Master") or (
+                    con.type == 'COPY_ROTATION' and con.target == armature
+                    and con.subtarget in ('+EyeBone L A01.001', '+EyeBone R A01.001')):
+                pbe.constraints.remove(con)
 
     bpy.ops.object.mode_set(mode='EDIT')
     eb = armature.data.edit_bones
-    for nm in (MASTER, "CTRL-Eye.L", "CTRL-Eye.R", "MCH-EyeAim.L", "MCH-EyeAim.R"):
+    for nm in (MASTER, "CTRL-Eye.L", "CTRL-Eye.R", "MCH-EyeAim.L", "MCH-EyeAim.R",
+               "MCH-EyePlane.L", "MCH-EyePlane.R", "MCH-EyeSlide.L", "MCH-EyeSlide.R"):
         old = eb.get(nm)
         if old:
             eb.remove(old)
@@ -1720,6 +1828,9 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size, mesh_obj=None):
         bpy.ops.object.mode_set(mode='OBJECT')
         return
 
+    # Preserve rest axes. Only the validated Belle exports receive the
+    # geometry-based pivot adjustment below.
+
     def is_valid_eye_vg(name, is_left):
         n = name.lower()
         if any(k in n for k in ['brow', 'lash', 'shadow', 'highlight', 'specular', 'lid', 'corner', 'tear']):
@@ -1729,11 +1840,69 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size, mesh_obj=None):
         else:
             return any(k in n for k in ['skn_r_eye', 'eye.r', 'eye_r', 'r_eye', 'eyeball.r', 'def-eye.r']) or ('eye' in n and any(k in n for k in ['_r', '.r', 'right']))
 
+    reference_eyes = {}
+    if adjust_pivots:
+        # The earlier half-iris-height radius put Belle's pivot too close to
+        # the surface. Transfer Alice's pivot, rest axes and target geometry
+        # together; changing only the pivot does not reproduce its eye motion.
+        lateral = up_arm.cross(fwd_arm).normalized()
+        axes = (lateral, -fwd_arm, up_arm)
+        reference_frame = Matrix(axes).transposed()
+        meshes = [obj for obj in bpy.context.scene.objects if obj.type == 'MESH'
+                  and (obj.parent == armature or any(m.type == 'ARMATURE' and m.object == armature for m in obj.modifiers))]
+        if mesh_obj in meshes:
+            meshes.remove(mesh_obj)
+            meshes.insert(0, mesh_obj)
+        adjusted = {}
+        previous = armature.get('zzz_eye_pivot_adjustment', {})
+        for side, (eye_name, _, _) in zip(('L', 'R'), PAIRS):
+            points = []
+            for obj in meshes:
+                group = obj.vertex_groups.get(eye_name)
+                if group is None:
+                    continue
+                transform = amw_inv @ obj.matrix_world
+                points = [transform @ v.co for v in obj.data.vertices
+                          if any(g.group == group.index and g.weight > .5 for g in v.groups)]
+                if len(points) >= 8:
+                    break
+            if len(points) < 8:
+                continue
+            bounds = [(min(p.dot(axis) for p in points), max(p.dot(axis) for p in points)) for axis in axes]
+            center = sum((axis * ((low + high) * .5) for axis, (low, high) in zip(axes, bounds)), Vector())
+            height = bounds[2][1] - bounds[2][0]
+            if height < 1e-6:
+                continue
+            factor = height / ALICE_EYE_REFERENCE_HEIGHT
+            ref = ALICE_EYE_REFERENCE[side]
+            pivot = center + reference_frame @ Vector(ref['pivot']) * factor
+            bone = eb[eye_name]
+            old = previous.get(eye_name, {})
+            adjusted[eye_name] = {'pivot': list(pivot), 'reference': 'ALICE', 'iris_height': height,
+                                  'previous_head': list(old.get('previous_head', bone.head))}
+            length = bone.length
+            matrix = (reference_frame @ Matrix(ref['axes'])).to_4x4()
+            matrix.translation = pivot
+            bone.matrix = matrix
+            bone.length = length
+            e_heads[eye_name] = bone.head.copy()
+            gaze_dirs[eye_name] = bone.matrix.col[1].to_3d().normalized()
+            track_axes[eye_name] = 'TRACK_Y'
+            reference_eyes[eye_name] = {
+                'aim': center + reference_frame @ Vector(ref['aim']) * factor,
+                'control': center + reference_frame @ Vector(ref['control']) * factor,
+            }
+        armature['zzz_eye_pivot_adjustment'] = adjusted
+        if len(adjusted) == 2 and 'zzz_eye_surface_pivots' in armature:
+            del armature['zzz_eye_surface_pivots']
+
     sep = (e_heads[eye_L_name] - e_heads[eye_R_name]).length
     if sep < 1e-6:
         sep = face_size * 0.1
     blen = max(sep * 0.5, face_size * BONE_LEN_F * 2.0)
-    offset = min(face_size * EYE_LOOK_FWD_F, sep * 3.0)
+    # Alice's reference target distance is ~2.34 times the inter-eye spacing.
+    # A farther target reduces excessive rotations from small control drags.
+    offset = max(face_size * .67, sep * 2.34)
     control_offset = offset
     if mesh_obj and mesh_obj.type == 'MESH' and mesh_obj.data.vertices:
         # Eye pivots may sit well behind the skin (Nicole). Measure clearance
@@ -1746,6 +1915,9 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size, mesh_obj=None):
     parent_bone = eb.get(head_name) if head_name else None
     if parent_bone is None and eye_L_name in eb:
         parent_bone = eb[eye_L_name].parent
+    for eye_name in (eye_L_name, eye_R_name):
+        eb[eye_name].use_connect = False
+        eb[eye_name].parent = parent_bone
 
     aim_heads = {}
     ctrl_heads = {}
@@ -1755,6 +1927,9 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size, mesh_obj=None):
         # Keep the hidden aim targets at their original rest positions so
         # spacing the three visible controls does not rotate the eyes.
         ctrl_heads[eye_name] = e_heads[eye_name] + fwd_arm * control_offset
+        if eye_name in reference_eyes:
+            aim_heads[eye_name] = reference_eyes[eye_name]['aim']
+            ctrl_heads[eye_name] = reference_eyes[eye_name]['control']
 
     master_head = (ctrl_heads[eye_L_name] + ctrl_heads[eye_R_name]) * 0.5
     mb = eb.new(MASTER)
@@ -1767,6 +1942,11 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size, mesh_obj=None):
     mb.use_deform = False
     mb.parent = parent_bone
     mb.use_connect = False
+    if reference_eyes:
+        matrix = (reference_frame @ Matrix(ALICE_EYE_CONTROL_AXES)).to_4x4()
+        matrix.translation = master_head
+        mb.matrix = matrix
+        mb.length = blen
 
     for eye_name, ctl_name, mch_name in PAIRS:
         ch = ctrl_heads[eye_name]
@@ -1778,8 +1958,13 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size, mesh_obj=None):
         except Exception:
             pass
         cb.use_deform = False
-        cb.parent = parent_bone
+        cb.parent = mb
         cb.use_connect = False
+        if eye_name in reference_eyes:
+            matrix = (reference_frame @ Matrix(ALICE_EYE_CONTROL_AXES)).to_4x4()
+            matrix.translation = ch
+            cb.matrix = matrix
+            cb.length = blen
 
         ah = aim_heads[eye_name]
         ab = eb.new(mch_name)
@@ -1821,25 +2006,6 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size, mesh_obj=None):
             pbc.custom_shape_scale_xyz = Vector((se, se, se))
             apply_color(armature, pbc, 'Face Eye-Aim', COL_EYEGREEN, {})
 
-            for con in list(pbc.constraints):
-                if con.name in ("MasterLoc", "MasterRot", "MasterScale"):
-                    pbc.constraints.remove(con)
-            con_loc = pbc.constraints.new('COPY_LOCATION')
-            con_loc.name = "MasterLoc"
-            con_loc.target = armature
-            con_loc.subtarget = MASTER
-            con_loc.target_space = 'LOCAL'
-            con_loc.owner_space = 'LOCAL'
-            con_loc.use_offset = True
-
-            con_rot = pbc.constraints.new('COPY_ROTATION')
-            con_rot.name = "MasterRot"
-            con_rot.target = armature
-            con_rot.subtarget = MASTER
-            con_rot.target_space = 'LOCAL'
-            con_rot.owner_space = 'LOCAL'
-            con_rot.use_offset = True
-
     depsgraph = bpy.context.evaluated_depsgraph_get()
     depsgraph.update()
     centers = {}
@@ -1853,11 +2019,9 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size, mesh_obj=None):
             has_mod = any(m.type == 'ARMATURE' and m.object == armature for m in obj.modifiers)
             if not (is_child or has_mod):
                 continue
-            target_vg = None
-            for vg in obj.vertex_groups:
-                if is_valid_eye_vg(vg.name, is_l):
-                    target_vg = vg
-                    break
+            target_vg = obj.vertex_groups.get(eye_name)
+            if target_vg is None:
+                target_vg = next((vg for vg in obj.vertex_groups if is_valid_eye_vg(vg.name, is_l)), None)
             if target_vg:
                 eval_obj = None
                 eval_mesh = None
@@ -1892,10 +2056,6 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size, mesh_obj=None):
         pbe = armature.pose.bones.get(eye_name)
         if not pbe:
             continue
-        for con in list(pbe.constraints):
-            if con.name in ("CTRL-EyeAim", "CTRL-EyeScale", "CTRL-EyeScale_Master", "CTRL-EyeScalePivot", "CTRL-EyeScalePivot_Master"):
-                pbe.constraints.remove(con)
-
         con = pbe.constraints.new('DAMPED_TRACK')
         con.name = "CTRL-EyeAim"
         con.target = armature
@@ -1984,7 +2144,7 @@ def setup_lookat_eyes(armature, head_name, fwd, up, face_size, mesh_obj=None):
             if b and hasattr(b, "layers"):
                 b.layers[0] = True
                 b.layers[1] = False
-    for nm in ("MCH-EyeAim.L", "MCH-EyeAim.R"):
+    for nm in ("MCH-EyeAim.L", "MCH-EyeAim.R", "MCH-EyePlane.L", "MCH-EyePlane.R", "MCH-EyeSlide.L", "MCH-EyeSlide.R"):
         b = armature.data.bones.get(nm)
         if b:
             b.hide = True

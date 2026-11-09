@@ -1,13 +1,11 @@
-"""Local skin-weight repair for Lindverne's shoulder transition."""
-import re
-
+"""Local shoulder-transition skin-weight smoothing for ZZZ characters."""
 import bpy
 import numpy as np
 
 from setup_wizard.utils.zzz_hip_follow import hip_seam_groups
 
 
-def smooth_lindverne_shoulder_weights(rig):
+def smooth_zzz_shoulder_weights(rig):
     """Smooth only the arm/clavicle/chest blend around the shoulder sockets.
 
     Retain every vertex position, morph, unrelated influence and per-vertex
@@ -28,10 +26,11 @@ def smooth_lindverne_shoulder_weights(rig):
             return 0
         joints.append((side, np.array(center), length))
     repaired = 0
-    tag = 'zzz_lindverne_shoulder_weights_v1'
+    tag = 'zzz_shoulder_weights_v1'
     for mesh in bpy.context.scene.objects:
-        if (mesh.type != 'MESH' or not re.fullmatch(r'lindverne_body_1(?:\.\d{3})?', mesh.name, re.I)
-                or mesh.find_armature() != rig or mesh.get(tag)):
+        if (mesh.type != 'MESH' or not mesh.data.vertices
+                or mesh.find_armature() != rig or mesh.get(tag)
+                or mesh.get('zzz_lindverne_shoulder_weights_v1')):
             continue
         if mesh.data.users > 1:
             mesh.data = mesh.data.copy()
