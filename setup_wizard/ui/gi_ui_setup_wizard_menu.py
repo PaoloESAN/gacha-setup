@@ -2224,6 +2224,9 @@ class GI_PT_Rig_Character_Settings(Panel):
             col_shadow.prop(scene, "gi_day_night", text="Day / Night", slider=True)
         col_shadow.prop(scene, "gi_blush_strength", text="Blush Strength", slider=True)
 
+        from setup_wizard.utils.genshin_face_expressions import draw_face_expressions
+        draw_face_expressions(layout, arm)
+
         # 5. Hair & Clothes Physics (Below Shadow & Scene Settings)
         box_physics = layout.box()
         box_physics.label(text="Hair & Clothes Physics", icon="PHYSICS")

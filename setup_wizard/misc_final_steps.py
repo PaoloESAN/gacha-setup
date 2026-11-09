@@ -85,6 +85,10 @@ class GI_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties
         except Exception:
             pass
 
+        if self.game_type == GameType.GENSHIN_IMPACT.name:
+            from setup_wizard.utils.genshin_face_expressions import setup_scene_face_expressions
+            setup_scene_face_expressions(context.scene)
+
         cleanup_temp_extracted_archive(context)
 
         return result
