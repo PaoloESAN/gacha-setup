@@ -12,7 +12,7 @@ Here you can find the places where you can download the character assets, which 
 - [Character Assets](https://hjtstudio.com/gi) by **[jideeh](https://ko-fi.com/jideeh)**, **hiragara**, **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)**
 - [Character Assets](https://drive.google.com/drive/folders/10Ib8DochTJrYPgygMxgdZXwp7TBiBlA2) by **hiragara**
 - [Character Assets](https://assets.hoyotoon.com/?game=gi&type=characters) by **HoyoToon** · [Discord](https://discord.com/invite/hoyotoon) · **On hiatus until further notice**
-- [SkillObjects](https://genshin-skillobj.pages.dev/) by **vei**
+- [SkillObjects](https://genshin-skillobj.pages.dev/) by **[vei](https://x.com/heikzs)**
 
 ### HSR
 
