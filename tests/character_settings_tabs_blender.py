@@ -1,6 +1,7 @@
 """Run with Blender --background --factory-startup --python-exit-code 1 --python FILE."""
 
 import ast
+import inspect
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -132,7 +133,13 @@ try:
             pass
 
     bpy.utils.register_class(VIEW3D_PT_rig_layers_tabs_test)
+    original_poll = VIEW3D_PT_rig_layers_tabs_test.__dict__['poll']
     tabs.hide_registered_rig_layers()
+    assert VIEW3D_PT_rig_layers_tabs_test.is_registered
+    assert len(inspect.signature(VIEW3D_PT_rig_layers_tabs_test.__dict__['poll'].__func__).parameters) == 2
+    hidden_poll = VIEW3D_PT_rig_layers_tabs_test.__dict__['poll']
+    tabs.hide_registered_rig_layers()
+    assert VIEW3D_PT_rig_layers_tabs_test.__dict__['poll'] is hidden_poll
     assert not VIEW3D_PT_rig_layers_tabs_test.poll(bpy.context)
     # Unrelated rigs retain their original standalone layers panel.
     stamp_rig_game(arm, 'UNRELATED_GAME')
@@ -143,6 +150,8 @@ try:
 finally:
     setup_wizard.unregister()
     if 'VIEW3D_PT_rig_layers_tabs_test' in locals():
+        assert VIEW3D_PT_rig_layers_tabs_test.is_registered
+        assert VIEW3D_PT_rig_layers_tabs_test.__dict__['poll'] is original_poll
         assert VIEW3D_PT_rig_layers_tabs_test.poll(bpy.context)
         bpy.utils.unregister_class(VIEW3D_PT_rig_layers_tabs_test)
     assert not hasattr(bpy.types.Object, 'gacha_settings_tab')

@@ -93,21 +93,50 @@ def patch_standalone_layers(source):
 _old_polls = {}
 
 
+def _replace_panel_poll(cls, replacement):
+    """Refresh RNA's callback cache whenever a panel's poll method changes."""
+    registered = cls.is_registered
+    original = cls.__dict__.get('poll')
+    if registered:
+        bpy.utils.unregister_class(cls)
+
+    def assign(value):
+        if value is None:
+            if 'poll' in cls.__dict__:
+                delattr(cls, 'poll')
+        else:
+            cls.poll = value
+
+    try:
+        assign(replacement)
+        if registered:
+            bpy.utils.register_class(cls)
+    except Exception:
+        assign(original)
+        if registered:
+            bpy.utils.register_class(cls)
+        raise
+
+
+def _layers_poll(original):
+    # RNA registers a two-argument class callback. Keep captured state in the
+    # closure rather than adding an extra default argument to its signature.
+    def poll(cls, context):
+        return not has_character_settings(context) and original(context)
+    return classmethod(poll)
+
+
 def hide_registered_rig_layers():
     """Also cover rig scripts already executed by Blender on file load."""
     for cls in bpy.types.Panel.__subclasses__():
         name = cls.__name__.lower()
         if name != 'riglayers' and 'rig_layers' not in name and name != 'dynamicriglayers':
             continue
-        if cls in _old_polls or not hasattr(cls, 'poll'):
+        if not cls.is_registered or cls in _old_polls or not hasattr(cls, 'poll'):
             continue
-        original = cls.poll
+        original = cls.__dict__.get('poll')
+        _replace_panel_poll(cls, _layers_poll(cls.poll))
         _old_polls[cls] = original
-
-        def poll(panel_cls, context, original=original):
-            return not has_character_settings(context) and original(context)
-
-        cls.poll = classmethod(poll)
 
 
 def register():
@@ -121,7 +150,7 @@ def register():
 
 def unregister():
     for cls, poll in _old_polls.items():
-        cls.poll = classmethod(lambda panel_cls, context, poll=poll: poll(context))
+        _replace_panel_poll(cls, poll)
     _old_polls.clear()
     if hasattr(bpy.types.Object, 'gacha_settings_tab'):
         del bpy.types.Object.gacha_settings_tab
