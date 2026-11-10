@@ -10,8 +10,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 addon_utils.enable('setup_wizard', default_set=True)
 from setup_wizard.ui.compositor_setup import (
     COMPOSITOR_OPERATORS, GACHA_PT_CompositorSetup, GACHA_PT_CompositorBasicSetup,
-    REFLECTION_GAMES,
+    REFLECTION_GAMES, NO_COMPOSITOR_GAMES,
 )
+from setup_wizard.domain.game_types import GameType
 from setup_wizard.genshin_compositing_node_setup import get_node_tree, get_output_node_type
 
 assert GACHA_PT_CompositorSetup.bl_category == 'Gacha Setup Compositor'
@@ -22,12 +23,12 @@ assert not hasattr(bpy.types, 'GI_PT_Custom_Compositing_Node_UI_Layout')
 assert GACHA_PT_CompositorSetup.poll(SimpleNamespace(space_data=SimpleNamespace(tree_type='CompositorNodeTree')))
 assert not GACHA_PT_CompositorSetup.poll(SimpleNamespace(space_data=SimpleNamespace(tree_type='ShaderNodeTree')))
 keep_scenes = {bpy.data.scenes.new('Preview'), bpy.data.scenes.new('Scene.001')}
-for game in (*COMPOSITOR_OPERATORS, 'ZENLESS_ZONE_ZERO', 'GENSHIN_IMPACT', 'WUTHERING_WAVES'):
+for game in (*GameType.__members__, 'GENSHIN_IMPACT', 'WUTHERING_WAVES'):
     scene = bpy.context.scene
     scene.game_type_dropdown = game
     # Leave a real object in place to ensure this never launches character setup.
     objects_before = set(scene.objects)
-    if game == 'PUNISHING_GRAY_RAVEN':
+    if game in NO_COMPOSITOR_GAMES:
         tree_before = (scene.compositing_node_group if hasattr(scene, 'compositing_node_group')
                        else scene.node_tree)
         nodes_before = set(tree_before.nodes) if tree_before else set()
@@ -42,7 +43,7 @@ for game in (*COMPOSITOR_OPERATORS, 'ZENLESS_ZONE_ZERO', 'GENSHIN_IMPACT', 'WUTH
             assert eevee.use_ssr, game
     assert set(scene.objects) == objects_before, game
     assert keep_scenes.issubset(set(bpy.data.scenes)), (game, 'Removed an existing scene')
-    if game == 'PUNISHING_GRAY_RAVEN':
+    if game in NO_COMPOSITOR_GAMES:
         current_tree = (scene.compositing_node_group if hasattr(scene, 'compositing_node_group')
                         else scene.node_tree)
         assert current_tree == tree_before
@@ -63,7 +64,7 @@ for game in (*COMPOSITOR_OPERATORS, 'ZENLESS_ZONE_ZERO', 'GENSHIN_IMPACT', 'WUTH
     if game == 'WUTHERING_WAVES':
         group = next(n.node_tree for n in tree.nodes if n.bl_idname == 'CompositorNodeGroup')
         assert 'shaders' in group['_gacha_compositor_source'] and 'wuwa' in group['_gacha_compositor_source']
-    if game in {'GENSHIN_IMPACT', 'HONKAI_STAR_RAIL', 'HONKAI_IMPACT_3RD', 'HONKAI_NEXUS_ANIMA'}:
+    if game in {'GENSHIN_IMPACT', 'HONKAI_NEXUS_ANIMA'}:
         group = tree.nodes['HoYoverse Post Processing'].node_tree
         assert 'gi' in group['_gacha_compositor_source']
     # Drawing both panels must work for every game, including the individual steps.

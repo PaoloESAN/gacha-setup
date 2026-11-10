@@ -534,6 +534,8 @@ else:
             pass
 
     def register():
+        from setup_wizard.ui.character_library import register as register_character_library
+        register_character_library()
         from setup_wizard.ui.character_settings_tabs import register as register_character_tabs
         register_character_tabs()
         try:
@@ -591,6 +593,8 @@ else:
 
 
     def unregister():
+        from setup_wizard.ui.character_library import unregister as unregister_character_library
+        unregister_character_library()
         from setup_wizard.ui.character_settings_tabs import unregister as unregister_character_tabs
         unregister_character_tabs()
         from setup_wizard.utilites.new_lights import unregister as unregister_new_lights

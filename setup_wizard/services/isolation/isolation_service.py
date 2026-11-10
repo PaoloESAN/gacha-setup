@@ -612,6 +612,8 @@ def append_result(
         f"Face widgets remapped: {face_stats.get('face_widget_bones_remapped', 0)}, "
         f"Rigs ready: {rig_stats.get('rig_ui_ready', 0)}"
     )
+    from setup_wizard.services.character_library import mark_setup_complete
+    mark_setup_complete(target)
     return rig_stats
 
 

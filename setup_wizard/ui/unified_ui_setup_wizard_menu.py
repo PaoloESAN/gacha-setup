@@ -258,6 +258,10 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
             game_type=gt_name,
         )
 
+        select_column = main_box.column()
+        select_column.operator_context = 'INVOKE_DEFAULT'
+        select_column.operator('gacha.select_character', text='Select Character', icon='OUTLINER_OB_ARMATURE')
+
         from setup_wizard.utils.better_fbx_utils import should_show_better_fbx_warning
         if should_show_better_fbx_warning(selected_game):
             warn_col = run_entire_setup_column.column()

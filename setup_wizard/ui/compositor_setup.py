@@ -1,20 +1,20 @@
 """Compositor-only setup, using each game's existing post-processing workflow."""
 import bpy
-from bpy.props import EnumProperty
+from bpy.props import EnumProperty, StringProperty
 from bpy.types import Operator, Panel
 
 from setup_wizard.domain.game_types import GameType
 
 
 HYV_GAMES = {
-    'GENSHIN_IMPACT', 'HONKAI_STAR_RAIL', 'HONKAI_IMPACT_3RD', 'HONKAI_NEXUS_ANIMA',
+    'GENSHIN_IMPACT', 'HONKAI_NEXUS_ANIMA',
 }
+NO_COMPOSITOR_GAMES = {'HONKAI_STAR_RAIL', 'HONKAI_IMPACT_3RD', 'PUNISHING_GRAY_RAVEN'}
 COMPOSITOR_OPERATORS = {
     **{game: 'hoyoverse.custom_composite_node_setup' for game in HYV_GAMES},
     'NEVERNESS_TO_EVERNESS': 'neverness_to_everness.setup_compositor_nodes',
     'WUTHERING_WAVES': 'wuthering_waves.setup_compositor_nodes',
     'ARKNIGHTS_ENDFIELD': 'arknights_endfield.setup_compositor_nodes',
-    'PUNISHING_GRAY_RAVEN': 'punishing_gray_raven.setup_compositor',
 }
 REFLECTION_GAMES = {
     'HONKAI_STAR_RAIL', 'HONKAI_NEXUS_ANIMA', 'NEVERNESS_TO_EVERNESS',
@@ -31,7 +31,7 @@ def call_compositor_operator(identifier, game):
 
 
 def setup_nodes(context, game):
-    if game == 'PUNISHING_GRAY_RAVEN':
+    if game in NO_COMPOSITOR_GAMES:
         return {'FINISHED'}
     context.scene.render.use_compositing = True
     if game == 'ZENLESS_ZONE_ZERO':
@@ -65,7 +65,7 @@ def setup_render_settings(context, game):
 
 
 def setup_defaults(context, game):
-    if game == 'PUNISHING_GRAY_RAVEN':
+    if game in NO_COMPOSITOR_GAMES:
         return {'FINISHED'}
     scene = context.scene
     scene.render.use_compositing = True
@@ -91,6 +91,8 @@ class GACHA_OT_RunCompositing(Operator):
     bl_label = 'Run Compositing'
     bl_options = {'REGISTER', 'UNDO'}
 
+    game_type: StringProperty(default='', options={'HIDDEN', 'SKIP_SAVE'})
+
     step: EnumProperty(items=[
         ('ALL', 'All', 'Set up color management, render settings, compositor and post-processing defaults'),
         ('COLOR', 'Color Management', 'Apply the selected game\'s color management preset'),
@@ -101,8 +103,8 @@ class GACHA_OT_RunCompositing(Operator):
     ], default='ALL', options={'HIDDEN'})
 
     def execute(self, context):
-        game = getattr(context.scene, 'game_type_dropdown', GameType.GENSHIN_IMPACT.name)
-        if game not in COMPOSITOR_OPERATORS and game != 'ZENLESS_ZONE_ZERO':
+        game = self.game_type or getattr(context.scene, 'game_type_dropdown', GameType.GENSHIN_IMPACT.name)
+        if game not in COMPOSITOR_OPERATORS and game not in NO_COMPOSITOR_GAMES and game != 'ZENLESS_ZONE_ZERO':
             self.report({'ERROR'}, 'Unsupported compositor game')
             return {'CANCELLED'}
         try:
@@ -169,6 +171,8 @@ class GACHA_PT_CompositorBasicSetup(CompositorPanel, Panel):
         if game in REFLECTION_GAMES:
             col.operator('gacha.run_compositing', text='Enable SSR / Ray Tracing & Shadows',
                          icon='SCENE').step = 'RENDER'
+        if game in NO_COMPOSITOR_GAMES:
+            return
         col.operator('gacha.run_compositing', text='Set Up Compositing Nodes',
                      icon='NODE_COMPOSITING').step = 'NODES'
         if game in HYV_GAMES:
