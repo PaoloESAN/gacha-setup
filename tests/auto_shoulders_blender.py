@@ -46,6 +46,14 @@ def check(game, path, require_generated=False):
         assert setup_auto_shoulders(rig), (game, 'Unsupported shoulder rig')
     assert has_auto_shoulders(rig)
     assert bpy.context.view_layer.objects.active == active and set(bpy.context.selected_objects) == selected
+    for side in ('L', 'R'):
+        for bname in ('shoulder_driver.' + side, 'MCH-shoulder_follow.' + side, 'MCH-shoulder_hand.' + side):
+            b = rig.data.bones.get(bname)
+            if b:
+                if hasattr(rig.data, 'collections'):
+                    assert [c.name for c in b.collections] == ['Other'], (game, bname, [c.name for c in b.collections])
+                else:
+                    assert b.layers[25], (game, bname, 'Not on layer 25')
     for name, matrix in deform.items():
         assert max(abs(rig.data.bones[name].matrix_local[i][j] - matrix[i][j])
                    for i in range(4) for j in range(4)) < 2e-6, (game, 'Deform rest changed', name)

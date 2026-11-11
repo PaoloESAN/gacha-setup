@@ -5440,6 +5440,8 @@ def rig_character(
         "shoulder_driver.L",
         "MCH-shoulder_follow.R",
         "MCH-shoulder_follow.L",
+        "MCH-shoulder_hand.R",
+        "MCH-shoulder_hand.L",
     ]
 
     fast_bone_move(list_to_send_other, 25, "Other")
