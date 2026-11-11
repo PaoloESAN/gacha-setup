@@ -143,7 +143,7 @@ def register():
     bpy.types.Object.gacha_settings_tab = bpy.props.EnumProperty(
         name='Character Settings',
         items=(('CHARACTER', 'Character', 'Character settings'),
-               ('BONE_LAYERS', 'Bone Layers', 'Show or hide groups of bones')),
+               ('BONE_LAYERS', 'Rig Layers', 'Show or hide groups of bones')),
         default='CHARACTER',
     )
 
