@@ -5,6 +5,9 @@ import json
 
 import bpy
 import bmesh
+from mathutils import Vector
+
+from setup_wizard.utils.genshin_engine_nodes import is_goo_engine
 
 
 SELECTOR = 'Genshin Face Expressions'
@@ -238,6 +241,7 @@ def _make_closed_cover(face, vertices, material, fit):
     finally:
         bm.free()
     holes = set(_eye_hole_edges(cover, range(len(mesh.polygons)), fit))
+    base_polygons = len(mesh.polygons)
     bm = bmesh.new()
     try:
         bm.from_mesh(mesh)
@@ -245,7 +249,21 @@ def _make_closed_cover(face, vertices, material, fit):
         bm.verts.index_update()
         edges = [edge for edge in bm.edges if tuple(sorted(v.index for v in edge.verts)) in holes]
         result = bmesh.ops.holes_fill(bm, edges=edges, sides=0)
-        if result['faces']:
+        if not result.get('faces') and edges:
+            result = bmesh.ops.contextual_create(bm, geom=edges)
+        if result.get('faces'):
+            uv_layers = list(bm.loops.layers.uv.values())
+            color_layers = (list(bm.loops.layers.color.values())
+                            + list(bm.loops.layers.float_color.values()))
+            for poly in result['faces']:
+                for loop in poly.loops:
+                    other = next((l for l in loop.vert.link_loops if l.face != poly), None)
+                    if other is not None:
+                        for layer in uv_layers:
+                            loop[layer].uv = other[layer].uv.copy()
+                        for layer in color_layers:
+                            loop[layer] = other[layer]
+            bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
             bmesh.ops.triangulate(bm, faces=result['faces'])
         bm.normal_update()
         offset = max(high - low for low, high in _bounds([v.co for v in bm.verts])) * .0005
@@ -261,6 +279,23 @@ def _make_closed_cover(face, vertices, material, fit):
         bm.to_mesh(mesh)
     finally:
         bm.free()
+    if len(mesh.polygons) > base_polygons and getattr(mesh, 'has_custom_normals', False):
+        try:
+            normals = [Vector((0.0, -1.0, 0.0))] * len(mesh.loops)
+            vert_normals = {}
+            for poly in mesh.polygons[:base_polygons]:
+                for li in poly.loop_indices:
+                    vi = mesh.loops[li].vertex_index
+                    n = Vector(mesh.corner_normals[li].vector)
+                    vert_normals[vi] = n
+                    normals[li] = n
+            for poly in mesh.polygons[base_polygons:]:
+                for li in poly.loop_indices:
+                    vi = mesh.loops[li].vertex_index
+                    normals[li] = vert_normals.get(vi, Vector((0.0, -1.0, 0.0)))
+            mesh.normals_split_custom_set(normals)
+        except Exception:
+            pass
     mesh.materials.clear()
     mesh.materials.append(material)
     mesh.update()
@@ -603,7 +638,6 @@ def setup_face_expressions(arm):
         if _expression_engine_links(tree, selector, output):
             from setup_wizard.utils.genshin_engine_nodes import configure_genshin_engine_nodes
             configure_genshin_engine_nodes([material])
-        from setup_wizard.utils.genshin_engine_nodes import is_goo_engine
         if is_goo_engine():
             cover_faces = polygons if expression_mesh == face else range(len(expression_mesh.data.polygons))
             _native_cover_visibility(expression_mesh, cover_faces, center)
