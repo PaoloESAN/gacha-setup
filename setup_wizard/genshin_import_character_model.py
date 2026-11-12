@@ -1942,8 +1942,9 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
         # Align eye bones and connect bone chains if imported FBX has offsets
         for obj in bpy.data.objects:
             if obj.type == "ARMATURE":
-                connect_armature_bone_chains(obj)
-                align_eye_bones(obj)
+                if not is_rigging_disabled(bpy.context):
+                    connect_armature_bone_chains(obj)
+                    align_eye_bones(obj)
                 try:
                     from setup_wizard.ui.character_settings_utils import stamp_rig_game
                     stamp_rig_game(obj, self.game_type)

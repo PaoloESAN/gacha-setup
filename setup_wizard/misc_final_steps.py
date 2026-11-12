@@ -1101,7 +1101,11 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
 
     def execute(self, context):
         from setup_wizard.genshin_import_character_model import is_rigging_disabled
-        if self.game_type == GameType.HONKAI_NEXUS_ANIMA.name and is_rigging_disabled(context):
+        if is_rigging_disabled(context) and (
+            self.game_type == GameType.HONKAI_NEXUS_ANIMA.name
+            or self._find_target_armature(context) is not None
+        ):
+            self.report({"INFO"}, "Transformations skipped. Disable Rigging is enabled in Setup Settings.")
             NextStepInvoker().invoke(self.next_step_idx, self.invoker_type, high_level_step_name=self.high_level_step_name, game_type=self.game_type)
             return {"FINISHED"}
         if context.object and context.object.mode != "OBJECT":
