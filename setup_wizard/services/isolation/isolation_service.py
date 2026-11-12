@@ -602,6 +602,8 @@ def append_result(
     except Exception:
         pass
 
+    disable_geometry_nodes_in_edit_mode(all_imported_objects)
+
     try:
         bpy.context.view_layer.update()
     except Exception:
@@ -615,6 +617,23 @@ def append_result(
     from setup_wizard.services.character_library import mark_setup_complete
     mark_setup_complete(target)
     return rig_stats
+
+
+def disable_geometry_nodes_in_edit_mode(objects):
+    """
+    Turn off 'Edit Mode' visibility for Geometry Nodes modifiers on imported meshes.
+
+    Blender 5.3 crashes (access violation in mesh_render_data_create) when the UV
+    editor draws a mesh in Edit Mode that still has Geometry Nodes modifiers
+    enabled for Edit Mode. The outline/lighting modifiers are only needed for
+    rendering/viewport shading, so keeping them out of Edit Mode is harmless.
+    """
+    for obj in objects or []:
+        if not obj or obj.type != 'MESH':
+            continue
+        for modifier in obj.modifiers:
+            if modifier.type == 'NODES' and modifier.show_in_editmode:
+                modifier.show_in_editmode = False
 
 
 def exclude_widget_collections(scene=None):
