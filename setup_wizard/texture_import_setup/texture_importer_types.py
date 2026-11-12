@@ -3619,61 +3619,62 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
             diffuse_img = None
             lightmap_img = None
 
-            # PRIORITY 1: Check existing texture on the material ("revisar en la textura del personaje del material que tiene actualmente")
-            current_tex = self._get_current_material_texture(material)
-            if current_tex:
-                diffuse_img = current_tex
-                self.set_diffuse_texture(tex_type, material, diffuse_img)
-                # Derive LightMap from this current texture ("y con eso sacar el lightmap y tal")
-                lightmap_img = self._find_matching_lightmap_for_texture(current_tex.name, image_files)
-                if lightmap_img:
-                    self.set_lightmap_texture(tex_type, material, lightmap_img)
+            # PRIORITY 1: Use Material JSON first (matches Genshin's deterministic resolution)
+            json_data = self._find_json_textures_for_material(material, json_map)
+            if json_data:
+                if json_data.get('diffuse'):
+                    diffuse_img = self._resolve_image(json_data['diffuse'], image_files)
+                    if diffuse_img:
+                        self.set_diffuse_texture(tex_type, material, diffuse_img)
 
-            # PRIORITY 2: If NO texture on material, use JSON ("si esque no hubiera textura, usa el json para saber la textura y tal")
+                if json_data.get('lightmap'):
+                    lightmap_img = self._resolve_image(json_data['lightmap'], image_files)
+                    if lightmap_img:
+                        self.set_lightmap_texture(tex_type, material, lightmap_img)
+
+                # Ramps / Stockings / Maps from JSON
+                if json_data.get('warm_ramp'):
+                    w_ramp = self._resolve_image(json_data['warm_ramp'], image_files)
+                    if w_ramp:
+                        self.set_warm_shadow_ramp_texture(tex_type, w_ramp)
+                        if tex_type == TextureType.BODY:
+                            self.set_weapon_ramp_texture(w_ramp)
+
+                if json_data.get('cool_ramp'):
+                    c_ramp = self._resolve_image(json_data['cool_ramp'], image_files)
+                    if c_ramp:
+                        self.set_cool_shadow_ramp_texture(tex_type, c_ramp)
+
+                if json_data.get('stockings'):
+                    stocking_img = self._resolve_image(json_data['stockings'], image_files)
+                    if stocking_img:
+                        self.set_stocking_texture(tex_type, material, stocking_img)
+
+                if json_data.get('facemap'):
+                    fmap = self._resolve_image(json_data['facemap'], image_files)
+                    if fmap:
+                        self.set_facemap_texture(fmap)
+
+                if json_data.get('expression'):
+                    exp_map = self._resolve_image(json_data['expression'], image_files)
+                    if exp_map:
+                        self.set_face_expression_texture(material, exp_map)
+
+            # PRIORITY 2: Fallback to existing texture on the material / derived lightmap
             if not diffuse_img or not lightmap_img:
-                json_data = self._find_json_textures_for_material(material, json_map)
-                if json_data:
-                    if not diffuse_img and json_data.get('diffuse'):
-                        diffuse_img = self._resolve_image(json_data['diffuse'], image_files)
-                        if diffuse_img:
-                            self.set_diffuse_texture(tex_type, material, diffuse_img)
-
-                    if not lightmap_img and json_data.get('lightmap'):
-                        lightmap_img = self._resolve_image(json_data['lightmap'], image_files)
+                current_tex = self._get_current_material_texture(material)
+                if current_tex:
+                    if not diffuse_img:
+                        diffuse_img = current_tex
+                        self.set_diffuse_texture(tex_type, material, diffuse_img)
+                    if not lightmap_img:
+                        lightmap_img = self._find_matching_lightmap_for_texture(current_tex.name, image_files)
                         if lightmap_img:
                             self.set_lightmap_texture(tex_type, material, lightmap_img)
-                        elif diffuse_img:
-                            lightmap_img = self._find_matching_lightmap_for_texture(diffuse_img.name, image_files)
-                            if lightmap_img:
-                                self.set_lightmap_texture(tex_type, material, lightmap_img)
-
-                    # Ramps / Stockings / Maps from JSON
-                    if json_data.get('warm_ramp'):
-                        w_ramp = self._resolve_image(json_data['warm_ramp'], image_files)
-                        if w_ramp:
-                            self.set_warm_shadow_ramp_texture(tex_type, w_ramp)
-                            if tex_type == TextureType.BODY:
-                                self.set_weapon_ramp_texture(w_ramp)
-
-                    if json_data.get('cool_ramp'):
-                        c_ramp = self._resolve_image(json_data['cool_ramp'], image_files)
-                        if c_ramp:
-                            self.set_cool_shadow_ramp_texture(tex_type, c_ramp)
-
-                    if json_data.get('stockings'):
-                        stocking_img = self._resolve_image(json_data['stockings'], image_files)
-                        if stocking_img:
-                            self.set_stocking_texture(tex_type, material, stocking_img)
-
-                    if json_data.get('facemap'):
-                        fmap = self._resolve_image(json_data['facemap'], image_files)
-                        if fmap:
-                            self.set_facemap_texture(fmap)
-
-                    if json_data.get('expression'):
-                        exp_map = self._resolve_image(json_data['expression'], image_files)
-                        if exp_map:
-                            self.set_face_expression_texture(material, exp_map)
+                elif diffuse_img and not lightmap_img:
+                    lightmap_img = self._find_matching_lightmap_for_texture(diffuse_img.name, image_files)
+                    if lightmap_img:
+                        self.set_lightmap_texture(tex_type, material, lightmap_img)
 
             # PRIORITY 3: Fallback heuristic scan if still missing diffuse or lightmap
             if not diffuse_img or not lightmap_img:
@@ -3947,7 +3948,7 @@ class PunishingGrayRavenAvatarTextureImporter(PunishingGrayRavenTextureImporter)
         materials = {slot.material for obj in bpy.context.scene.objects if obj.type == 'MESH'
                      for slot in obj.material_slots if slot.material}
         for material in materials:
-            source = re.sub(r'\.\d{3}$', '', material.get('pgr_source_material', ''))
+            source = re.sub(r'\.\d{3}$', '', material.get('pgr_source_material', '') or material.get('_original_material_name', ''))
             definition = definitions.get(source.lower())
             if not definition or not material.node_tree:
                 continue

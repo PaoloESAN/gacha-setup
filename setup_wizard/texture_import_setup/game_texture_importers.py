@@ -189,12 +189,8 @@ class HonkaiStarRailTextureImporterFacade(GameTextureImporter):
             or get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH) \
             or os.path.dirname(self.blender_operator.filepath)
 
-        if directory:
-            textures_subdir = os.path.join(directory, "Textures")
-            if os.path.isdir(textures_subdir):
-                directory = textures_subdir
-            elif not os.path.isdir(directory):
-                directory = None
+        if directory and not os.path.isdir(directory):
+            directory = None
 
         if not directory:
             bpy.ops.genshin.import_textures(
@@ -286,12 +282,8 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
             or get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH) \
             or os.path.dirname(self.blender_operator.filepath)
 
-        if directory:
-            textures_subdir = os.path.join(directory, "Textures")
-            if os.path.isdir(textures_subdir):
-                directory = textures_subdir
-            elif not os.path.isdir(directory):
-                directory = None
+        if directory and not os.path.isdir(directory):
+            directory = None
 
         if not directory:
             bpy.ops.genshin.import_textures(
@@ -1908,6 +1900,11 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
 
         json_mappings = load_wuwa_json_mappings(folder)
         json_params = load_wuwa_json_material_parameters(folder)
+        from setup_wizard.texture_import_setup.unified_json_texture_resolver import (
+            collect_character_image_files,
+            resolve_json_texture_image,
+        )
+        recursive_images = collect_character_image_files(folder)
 
         has_het_any = False
         has_id_any = False
@@ -1948,11 +1945,14 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
                     ver_patterns = make_texture_patterns(base_part, version, suffix, orig_name, mode=False)
                     img = find_texture_for_slot(all_texture_files, ver_patterns, folder, suffix)
 
-                # Check JSON mapping
+                # Check JSON mapping (root folder first, then recursive subdirectories)
                 if not img and suffix in mat_json_texs:
                     json_fname = mat_json_texs[suffix]
                     full_json_path = os.path.join(folder, json_fname)
                     img = load_image_safely(full_json_path, suffix)
+                    if not img:
+                        cs = "sRGB" if suffix in ("_D", "_Diffuse", "_MainTex") else "Non-Color"
+                        img = resolve_json_texture_image(json_fname, recursive_images, colorspace=cs)
 
                 # Fallback to pattern matching if not in JSON or image not found
                 if not img:
