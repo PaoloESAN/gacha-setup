@@ -3035,8 +3035,16 @@ class HonkaiStarRailTextureImporter(GenshinTextureImporter):
     nya222/outline diffuse node to avoid overwriting the body diffuse slot in face materials.
     '''
     def set_diffuse_texture(self, type: TextureType, material, img):
-        if not material or not material.node_tree:
+        if not material or not material.node_tree or not img:
             return
+        try:
+            img.colorspace_settings.name = 'sRGB'
+        except Exception:
+            pass
+        try:
+            img.alpha_mode = 'CHANNEL_PACKED'
+        except Exception:
+            pass
         nya222_or_outline_diffuse_node = material.node_tree.nodes.get(self.texture_node_names.DIFFUSE)
         # Support alternative node naming (e.g. 'Diffuse (sRGB) (Channel Packed)')
         diffuse_alt_node = material.node_tree.nodes.get(getattr(self.texture_node_names, 'DIFFUSE_ALT', ''))
@@ -3045,13 +3053,15 @@ class HonkaiStarRailTextureImporter(GenshinTextureImporter):
         face_color_node = material.node_tree.nodes.get(f'{type.value}{self.texture_node_names.FACE_COLOR_SUFFIX}')
 
         # If a face-specific color node exists (StellarToon), do NOT also write to the
-        # generic diffuse node – that node is shared with body-type materials and would
-        # end up holding the wrong texture.
+        # generic nya222/outline diffuse node ('Image Texture.001') – that node is shared
+        # with body-type materials and would end up holding the wrong texture.
+        # However, 'Diffuse (sRGB) (Channel Packed)' (diffuse_alt_node) is the explicit
+        # diffuse texture node on StellarToon materials (including Face) and MUST receive img.
         skip_generic_diffuse = (type is TextureType.FACE and face_color_node is not None)
 
         named_candidates = [
             None if skip_generic_diffuse else nya222_or_outline_diffuse_node,
-            None if skip_generic_diffuse else diffuse_alt_node,
+            diffuse_alt_node,
             diffuse_uv0_node,
             diffuse_uv1_node,
             face_color_node,
@@ -3060,14 +3070,31 @@ class HonkaiStarRailTextureImporter(GenshinTextureImporter):
         for diffuse_node in self._find_image_nodes(material, named_candidates, 'diffuse'):
             diffuse_node.image = img
 
+        # Ensure any image on a diffuse/channel-packed node in this material uses Channel Packed alpha
+        for node in material.node_tree.nodes:
+            if node.type == 'TEX_IMAGE' and node.image:
+                node_id = (node.name + " " + (node.label or "")).lower()
+                if 'channel packed' in node_id or 'diffuse' in node_id or '_color' in node_id:
+                    try:
+                        node.image.alpha_mode = 'CHANNEL_PACKED'
+                    except Exception:
+                        pass
+
     '''
     Lazy attempt at setting all known lightmaps across Nya222 HSR Shader and StellarToon.
     If the material has the texture node, set it.
     '''
     def set_lightmap_texture(self, type: TextureType, material, img):
-        if not material or not material.node_tree:
+        if not material or not material.node_tree or not img:
             return
-        img.colorspace_settings.name='Non-Color'
+        try:
+            img.colorspace_settings.name = 'Non-Color'
+        except Exception:
+            pass
+        try:
+            img.alpha_mode = 'CHANNEL_PACKED'
+        except Exception:
+            pass
         lightmap_nya222_node = material.node_tree.nodes.get(self.texture_node_names.LIGHTMAP)
         # Support alternative node naming (e.g. 'Lightmap (Non-Color) (Channel Packed)')
         lightmap_alt_node = material.node_tree.nodes.get(getattr(self.texture_node_names, 'LIGHTMAP_ALT', ''))
@@ -3401,19 +3428,27 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
         if not material:
             return None
 
+        def _ensure_channel_packed(img):
+            if img:
+                try:
+                    img.alpha_mode = 'CHANNEL_PACKED'
+                except Exception:
+                    pass
+            return img
+
         # 1. Diffuse node image
         if material.use_nodes and material.node_tree:
             diffuse_nodes = find_all_image_nodes_by_category(material.node_tree, 'diffuse')
             for n in diffuse_nodes:
                 if n.image and n.image.name and not n.image.name.startswith('White_'):
-                    return n.image
+                    return _ensure_channel_packed(n.image)
 
         # 2. _original_fbx_texture property
         orig_tex_name = material.get('_original_fbx_texture')
         if orig_tex_name:
             img = bpy.data.images.get(orig_tex_name)
             if img:
-                return img
+                return _ensure_channel_packed(img)
 
         # 3. Any non-ramp image node
         if material.use_nodes and material.node_tree:
@@ -3421,7 +3456,7 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
                 if n.type == 'TEX_IMAGE' and n.image and n.image.name:
                     i_low = n.image.name.lower()
                     if not any(k in i_low for k in ['ramp', 'white_', 'mask', 'curve']):
-                        return n.image
+                        return _ensure_channel_packed(n.image)
 
         # 4. Check original material if recorded
         orig_mat_name = material.get('_original_material_name')
@@ -3430,7 +3465,7 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
             if orig_mat and orig_mat.use_nodes and orig_mat.node_tree:
                 for n in orig_mat.node_tree.nodes:
                     if n.type == 'TEX_IMAGE' and n.image and n.image.name:
-                        return n.image
+                        return _ensure_channel_packed(n.image)
 
         return None
 

@@ -328,6 +328,16 @@ class HI3_PT_CharacterSettings(Panel):
         arm, materials = get_character_materials(context)
         output = _ready_output(arm, materials)
         layout = self.layout
+
+        # 0. Animate Mode (fast playback: lightweight materials, no outlines)
+        from setup_wizard.genshin_animate_mode import is_genshin_animate_mode
+        is_anim = is_genshin_animate_mode(arm, context=context)
+        layout.operator(
+            "genshin.toggle_animate_mode",
+            text="Disable Animate Mode" if is_anim else "Enable Animate Mode",
+            icon="SHADING_TEXTURE" if is_anim else "RESTRICT_RENDER_OFF"
+        )
+
         if not output:
             if _global_nodes(materials):
                 _queue_prepare()

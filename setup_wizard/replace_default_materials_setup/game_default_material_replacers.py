@@ -1198,7 +1198,16 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 
         if not old_image:
             return
-            
+
+        try:
+            old_image.colorspace_settings.name = 'sRGB'
+        except Exception:
+            pass
+        try:
+            old_image.alpha_mode = 'CHANNEL_PACKED'
+        except Exception:
+            pass
+
         diffuse_nodes = find_all_image_nodes_by_category(new_material.node_tree, 'diffuse')
         for node in diffuse_nodes:
             node.image = old_image
@@ -1477,7 +1486,16 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 
         if not old_image:
             return
-            
+
+        try:
+            old_image.colorspace_settings.name = 'sRGB'
+        except Exception:
+            pass
+        try:
+            old_image.alpha_mode = 'CHANNEL_PACKED'
+        except Exception:
+            pass
+
         diffuse_nodes = find_all_image_nodes_by_category(new_material.node_tree, 'diffuse')
         if not diffuse_nodes:
             for node in new_material.node_tree.nodes:

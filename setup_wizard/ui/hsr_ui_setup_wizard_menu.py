@@ -753,6 +753,22 @@ class HSR_PT_Rig_Character_Settings(Panel):
         except Exception:
             pass
 
+        arm = None
+        try:
+            from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+            arm = resolve_settings_armature(context)
+        except Exception:
+            pass
+
+        # 0. Animate Mode (fast playback: lightweight materials, no outlines)
+        from setup_wizard.genshin_animate_mode import is_genshin_animate_mode
+        is_anim = is_genshin_animate_mode(arm, context=context)
+        layout.operator(
+            "genshin.toggle_animate_mode",
+            text="Disable Animate Mode" if is_anim else "Enable Animate Mode",
+            icon="SHADING_TEXTURE" if is_anim else "RESTRICT_RENDER_OFF"
+        )
+
         # 1. Lighting Mode / Presets
         col_light = layout.column(align=True)
         col_light.label(text="Lighting Mode:")

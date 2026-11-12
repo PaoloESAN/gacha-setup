@@ -105,7 +105,7 @@ def _find_diffuse_image(mat):
 
     for node in candidate_nodes:
         target_inputs = []
-        for inp_name in ('Diffuse', 'Diffuse (sRGB)', 'Main Diffuse', 'Base Color', 'BaseColor', 'Color'):
+        for inp_name in ('Diffuse', 'Diffuse (sRGB)', 'Main Diffuse', 'Base Color', 'BaseColor', 'Color', '_MainTex', '_DiffuseTex1'):
             inp = node.inputs.get(inp_name)
             if inp and inp.is_linked:
                 target_inputs.append((inp_name, inp))
@@ -136,7 +136,8 @@ def _find_diffuse_image(mat):
     # 2. Node name explicitly indicates diffuse (e.g. Main_Diffuse, Face_Diffuse)
     diff_name_keywords = [
         'diffuse', 'main_diff', 'body_diff', 'face_diff', 'hair_diff',
-        'dress_diff', 'basecolor', 'base_color', '_diff', 'albedo'
+        'dress_diff', 'basecolor', 'base_color', '_diff', 'albedo',
+        'maintex', '_color', '基礎色', '基础色'
     ]
     for node in tree.nodes:
         if node.type == 'TEX_IMAGE' and getattr(node, "image", None):
@@ -365,6 +366,29 @@ def _is_exempt_from_animate_mode(mat, obj=None) -> bool:
         "eyelight",
         "eye_highlight",
         "eyehighlight",
+        "eyeshadow",
+        "eye_shadow",
+        "eyespecular",
+        "eye_specular",
+        "eyestar",
+        "eye_star",
+        "eyewhite",
+        "eye_white",
+        "whiteshadow",
+        "hairshadow",
+        "hair_shadow",
+        "face_mask",
+        "facemask",
+        "common_face",
+        "touming",
+        "bantou",
+        "gaoguang",
+        "目hi",
+        "目影",
+        "transp ol",
+        "eye transparent",
+        "avatar oqaque",
+        "avatar opaque",
         "colorwheel",
         "color-wheel",
         "color_wheel",
@@ -374,8 +398,8 @@ def _is_exempt_from_animate_mode(mat, obj=None) -> bool:
 
     if obj is not None and getattr(obj, "type", None) == 'MESH':
         obj_name_low = obj.name.lower()
-        if any(k in obj_name_low for k in ["highlight", "eyelight"]):
-            if any(k in name_low for k in ["highlight", "eye"]):
+        if any(k in obj_name_low for k in ["highlight", "eyelight", "eyeshadow", "hairshadow", "eyewhite"]):
+            if any(k in name_low for k in ["highlight", "eye", "shadow", "trans"]):
                 return True
 
     return False
@@ -464,7 +488,7 @@ def _restore_mesh_materials(mesh) -> bool:
         try:
             from setup_wizard.utils.modifier_utils import set_modifier_property
             for mod in getattr(mesh, "modifiers", []) or []:
-                if mod.type == 'NODES' and mod.node_group and "outline" in mod.node_group.name.lower():
+                if mod.type == 'NODES' and mod.node_group and ("outline" in mod.node_group.name.lower() or "描边" in mod.node_group.name):
                     set_modifier_property(mod, "Socket_24", True)
                     set_modifier_property(mod, "Toggle Outlines", True)
         except Exception:
@@ -513,7 +537,7 @@ def _set_gn_modifiers_visible(visible, meshes=None):
                 continue
             ng_low = mod.node_group.name.lower()
             mod_low = getattr(mod, "name", "").lower()
-            if "outline" in ng_low or "outline" in mod_low:
+            if "outline" in ng_low or "outline" in mod_low or "描边" in ng_low or "描边" in mod_low:
                 # A rig/animation driver overrides direct visibility writes
                 # on the next depsgraph update. Pause only these visibility
                 # drivers and persist their previous mute states with the mesh
@@ -782,7 +806,7 @@ class GI_OT_ToggleAnimateMode(Operator):
         from setup_wizard.ui.character_settings_utils import resolve_settings_armature, resolve_character_name
         arm = resolve_settings_armature(context)
         if not arm:
-            self.report({'WARNING'}, "No Genshin character selected for Animate Mode")
+            self.report({'WARNING'}, "No character selected for Animate Mode")
             return {'CANCELLED'}
 
         current = is_genshin_animate_mode(arm, context=context)

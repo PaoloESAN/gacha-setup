@@ -409,6 +409,12 @@ def get_ake_character_materials(context=None):
         if mat is not None and mat.name not in seen:
             seen.add(mat.name)
             mats.append(mat)
+        if mat is not None and mat.name.endswith("_Low"):
+            orig_name = mat.name[:-4]
+            orig_mat = bpy.data.materials.get(orig_name)
+            if orig_mat and orig_mat.name not in seen:
+                seen.add(orig_mat.name)
+                mats.append(orig_mat)
 
     try:
         for child in rig.children_recursive:
@@ -995,6 +1001,22 @@ class AKE_PT_Rig_Character_Settings(Panel):
             pull_ake_panel_values(scene, context)
         except Exception:
             pass
+
+        arm = None
+        try:
+            from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+            arm = resolve_settings_armature(context)
+        except Exception:
+            pass
+
+        # 0. Animate Mode (fast playback: lightweight materials, no outlines)
+        from setup_wizard.genshin_animate_mode import is_genshin_animate_mode
+        is_anim = is_genshin_animate_mode(arm, context=context)
+        layout.operator(
+            "genshin.toggle_animate_mode",
+            text="Disable Animate Mode" if is_anim else "Enable Animate Mode",
+            icon="SHADING_TEXTURE" if is_anim else "RESTRICT_RENDER_OFF"
+        )
 
         # 1. Lighting Mode / Presets
         col_light = layout.column(align=True)
