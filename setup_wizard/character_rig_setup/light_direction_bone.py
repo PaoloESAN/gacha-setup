@@ -164,6 +164,8 @@ def _create_or_update_widget_mesh(wgt_name, display_type, size, wgt_coll):
 def _assign_bone_to_visible_collection(rig_obj, bone):
     if not hasattr(rig_obj.data, "collections"):
         return
+    for c in list(bone.collections):
+        c.unassign(bone)
     colls = rig_obj.data.collections
     target = colls.get("Root") or colls.get("Other")
     if target is None:
@@ -176,10 +178,11 @@ def _assign_bone_to_visible_collection(rig_obj, bone):
 
 def _assign_bone_to_mch_collection(rig_obj, bone):
     if hasattr(rig_obj.data, "collections"):
-        mch_coll = rig_obj.data.collections.get("MCH")
+        for c in list(bone.collections):
+            c.unassign(bone)
+        mch_coll = rig_obj.data.collections.get("MCH") or rig_obj.data.collections.get("Other")
         if mch_coll is not None:
             mch_coll.assign(bone)
-            return
     bone.hide = True
 
 
@@ -324,6 +327,8 @@ def setup_light_direction_bone(context, game_type, rig_obj=None):
     if not rig_obj or rig_obj.type != "ARMATURE":
         return None
 
+    if game_type == GameType.NEVERNESS_TO_EVERNESS.name:
+        return None
     if game_type == GameType.ZENLESS_ZONE_ZERO.name and _is_zzz_kythera_v2(context, rig_obj):
         return None
 

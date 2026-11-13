@@ -14,7 +14,7 @@ from setup_wizard.character_rig_setup.rig_ui_utils import (
 
 
 def _align_finger_axes(edit_bones, source_bones):
-    """Align the four fingers to the palm; preserve the existing thumb frame."""
+    """Align the four fingers to curl toward the palm (-Z); preserve the existing thumb frame."""
     for side in ("L", "R"):
         hand = edit_bones.get(f'hand.{side}')
         index = edit_bones.get(f'f_index.01.{side}')
@@ -25,24 +25,68 @@ def _align_finger_axes(edit_bones, source_bones):
         if normal.length < 1e-8:
             continue
         normal.normalize()
+        # Ensure +Z points toward the palm (-Z in world) on both sides so super_finger's +X curl bends inward.
+        if normal.z > 0:
+            normal.negate()
         for finger in ("f_index", "f_middle", "f_ring", "f_pinky"):
             names = [f"{finger}.{joint:02d}.{side}" for joint in (1, 2, 3)]
             for name in names:
                 bone = edit_bones.get(name)
                 if bone:
-                    # A curl hinge lies across the palm, not along its normal.
-                    # Some imports already provide that frame; a fixed quarter
-                    # turn would break them while fixing Akane's straight hand.
                     target = normal - bone.y_axis * normal.dot(bone.y_axis)
                     if target.length < 1e-8:
                         continue
                     target.normalize()
-                    if target.dot(bone.z_axis) < 0:
-                        target.negate()
                     bone.align_roll(target)
                     source = source_bones.get(name) or source_bones.get("DEF-" + name)
                     if source:
                         source.roll = bone.roll
+
+
+def _align_limb_axes_and_bends(edit_bones):
+    """Ensure natural knee (-Y) / elbow (+Y) bends and consistent limb rolls on the metarig."""
+    for side in ("L", "R"):
+        thigh = edit_bones.get(f"thigh.{side}")
+        shin = edit_bones.get(f"shin.{side}")
+        foot = edit_bones.get(f"foot.{side}")
+        if thigh and shin and foot:
+            leg_span = (foot.head - thigh.head).length
+            if leg_span > 1e-4:
+                t = max(0.1, min(0.9, (shin.head.z - thigh.head.z) / (foot.head.z - thigh.head.z))) if abs(foot.head.z - thigh.head.z) > 1e-5 else 0.5
+                line_pt = thigh.head.lerp(foot.head, t)
+                # Knee must sit slightly in front (-Y) of hip-ankle line so IK bends forward, not backward/shrinking.
+                min_forward = 0.012 * leg_span
+                if (line_pt.y - shin.head.y) < min_forward:
+                    shin.head.y = line_pt.y - min_forward
+            thigh.tail = shin.head.copy()
+            shin.tail = foot.head.copy()
+            shin.use_connect = True
+
+            forward = mathutils.Vector((0.0, -1.0, 0.0))
+            for b in (thigh, shin):
+                target = forward - b.y_axis * forward.dot(b.y_axis)
+                if target.length > 1e-6:
+                    b.align_roll(target.normalized())
+
+        upper_arm = edit_bones.get(f"upper_arm.{side}")
+        forearm = edit_bones.get(f"forearm.{side}")
+        hand = edit_bones.get(f"hand.{side}")
+        if upper_arm and forearm and hand:
+            arm_span = (hand.head - upper_arm.head).length
+            if arm_span > 1e-4:
+                line_mid = upper_arm.head.lerp(hand.head, 0.5)
+                min_back = 0.010 * arm_span
+                if (forearm.head.y - line_mid.y) < min_back:
+                    forearm.head.y = line_mid.y + min_back
+            upper_arm.tail = forearm.head.copy()
+            forearm.tail = hand.head.copy()
+            forearm.use_connect = True
+
+            backward = mathutils.Vector((0.0, 1.0, 0.0))
+            for b in (upper_arm, forearm):
+                target = backward - b.y_axis * backward.dot(b.y_axis)
+                if target.length > 1e-6:
+                    b.align_roll(target.normalized())
 
 def _is_already_rigged(arm_obj):
     """Detecta si el armature ya es un rig Rigify generado (evita doble-rig,
@@ -540,11 +584,16 @@ def rig_character(
 
         # Rotating generated controls alone leaves Rigify's scale-driven curl
         # and IK hinges on the old axes. Generate all three from this roll.
+        _align_limb_axes_and_bends(metarm_ebs)
         _align_finger_axes(metarm_ebs, armature_ebs)
 
-        # Set primary rotation axis in Pose mode on metarig for fingers and thumb
+        # Set primary rotation axis in Pose mode on metarig for fingers, thumb, and limbs
         bpy.ops.object.mode_set(mode='POSE')
         metapose = metarig_obj.pose
+        for limb_name in ("thigh.L", "thigh.R", "upper_arm.L", "upper_arm.R"):
+            limb_pb = metapose.bones.get(limb_name)
+            if limb_pb and hasattr(limb_pb, "rigify_parameters") and hasattr(limb_pb.rigify_parameters, "rotation_axis"):
+                limb_pb.rigify_parameters.rotation_axis = "x"
         for fname in ["f_index", "f_middle", "f_ring", "f_pinky", "thumb"]:
             for side in [".L", ".R"]:
                 p_b = metapose.bones.get(f"{fname}.01{side}")
@@ -676,6 +725,34 @@ def rig_character(
                     pb.lock_rotation_w = False
                 except Exception:
                     pass
+
+        # Prevent IK solver from shrinking limbs when IK_Stretch is disabled
+        if disallow_leg_ik_stretch:
+            for ik_name in ("thigh_ik.L", "thigh_ik.R", "MCH-shin_ik.L", "MCH-shin_ik.R"):
+                ik_pb = rigifyr.pose.bones.get(ik_name)
+                if ik_pb is not None:
+                    ik_pb.ik_stretch = 0.0
+        if disallow_arm_ik_stretch:
+            for ik_name in ("upper_arm_ik.L", "upper_arm_ik.R", "MCH-forearm_ik.L", "MCH-forearm_ik.R"):
+                ik_pb = rigifyr.pose.bones.get(ik_name)
+                if ik_pb is not None:
+                    ik_pb.ik_stretch = 0.0
+
+        # Allow uniform XYZ scaling on finger master controls without Z-axis lock distortion
+        for fname in ("f_index", "f_middle", "f_ring", "f_pinky", "thumb"):
+            for side in (".L", ".R"):
+                fm_pb = rigifyr.pose.bones.get(f"{fname}.01_master{side}")
+                if fm_pb is not None:
+                    fm_pb.lock_scale[:] = (False, False, False)
+
+        # Ensure breast controls are unlocked
+        for b_name in ("breast.L", "breast.R"):
+            b_pb = rigifyr.pose.bones.get(b_name)
+            if b_pb is not None:
+                b_pb.lock_location[:] = (False, False, False)
+                b_pb.lock_rotation[:] = (False, False, False)
+                b_pb.lock_scale[:] = (False, False, False)
+                b_pb.lock_rotation_w = False
 
         if use_arm_ik_poles:
             for b_name in ["upper_arm_parent.L", "upper_arm_parent.R"]:

@@ -672,6 +672,7 @@ class NevernessToEvernessMaterialImporterFacade(GameMaterialImporter):
         except Exception as e_sdf:
             print(f"[NTE Face SDF Fix Notice] {e_sdf}")
 
+        cache_enabled = getattr(self.blender_operator, 'cache_enabled', True)
         project_root_directory_file_path = self.blender_operator.file_directory \
             or get_cache(cache_enabled).get(self.game_shader_folder_path) \
             or (os.path.dirname(self.blender_operator.filepath) if self.blender_operator.filepath else None)
