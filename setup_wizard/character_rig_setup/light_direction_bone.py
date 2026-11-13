@@ -1,3 +1,4 @@
+import json
 import bpy
 from mathutils import Matrix, Vector
 
@@ -5,6 +6,8 @@ from setup_wizard.domain.game_types import GameType
 
 
 BONE_NAME = "Light Direction"
+MCH_PARENT_BONE_NAME = "MCH-Light Direction-parent"
+PARENT_SWITCH_CANDIDATES = ("root", "root.001", "root.002")
 
 
 def _is_helper_rig(obj):
@@ -171,6 +174,143 @@ def _assign_bone_to_visible_collection(rig_obj, bone):
     target.assign(bone)
 
 
+def _assign_bone_to_mch_collection(rig_obj, bone):
+    if hasattr(rig_obj.data, "collections"):
+        mch_coll = rig_obj.data.collections.get("MCH")
+        if mch_coll is not None:
+            mch_coll.assign(bone)
+            return
+    bone.hide = True
+
+
+def _get_parent_switch_targets(rig_obj):
+    targets = [name for name in PARENT_SWITCH_CANDIDATES if name in rig_obj.pose.bones]
+    if not targets and "Root" in rig_obj.pose.bones:
+        targets.append("Root")
+    return targets
+
+
+def _get_default_parent_switch_index(sw_targets):
+    for preferred in ("root.002", "root.001", "root", "Root"):
+        if preferred in sw_targets:
+            return sw_targets.index(preferred) + 1
+    return 0
+
+
+def _setup_light_direction_parent_switch(rig_obj, pbone, sw_targets, default_idx):
+    items = [("P0", "None", "")] + [(f"P{i + 1}", name, "") for i, name in enumerate(sw_targets)]
+    pbone["parent_switch"] = default_idx
+    try:
+        pbone.id_properties_ui("parent_switch").update(
+            items=items,
+            default=default_idx,
+            description="Light Direction Parent",
+        )
+    except Exception:
+        pass
+
+    mch_pb = rig_obj.pose.bones.get(MCH_PARENT_BONE_NAME)
+    if mch_pb is None or not sw_targets:
+        return
+
+    const = mch_pb.constraints.get("SWITCH PARENT") or mch_pb.constraints.new("ARMATURE")
+    const.name = "SWITCH PARENT"
+    while len(const.targets) > len(sw_targets):
+        const.targets.remove(const.targets[-1])
+    while len(const.targets) < len(sw_targets):
+        const.targets.new()
+
+    for idx, subtarget in enumerate(sw_targets):
+        tgt = const.targets[idx]
+        tgt.target = rig_obj
+        tgt.subtarget = subtarget
+        try:
+            tgt.driver_remove("weight")
+        except Exception:
+            pass
+        fcurve = tgt.driver_add("weight")
+        drv = fcurve.driver
+        drv.type = "SCRIPTED"
+        var = drv.variables.new()
+        var.name = "toggle"
+        var.type = "SINGLE_PROP"
+        var.targets[0].id = rig_obj
+        var.targets[0].data_path = f'pose.bones["{BONE_NAME}"]["parent_switch"]'
+        drv.expression = f"toggle == {idx + 1}"
+
+    const.enabled = False
+    const.enabled = True
+
+
+def _find_rig_ui_text(rig_obj):
+    rig_id = rig_obj.data.get("rig_id") if getattr(rig_obj, "data", None) else None
+    if rig_id:
+        needle = f'rig_id = "{rig_id}"'
+        for txt in bpy.data.texts:
+            try:
+                if needle in txt.as_string():
+                    return txt, rig_id
+            except Exception:
+                continue
+    for txt in bpy.data.texts:
+        try:
+            content = txt.as_string()
+        except Exception:
+            continue
+        if 'rig_id = "' in content and "num_rig_separators[0] += 1" in content:
+            parsed_id = content.split('rig_id = "')[1].split('"')[0]
+            return txt, parsed_id
+    return None, None
+
+
+def _inject_light_direction_rig_ui(rig_obj, sw_targets):
+    rig_file, rig_id = _find_rig_ui_text(rig_obj)
+    if rig_file is None or not rig_id:
+        return
+
+    rig_text = rig_file.as_string()
+    if f"is_selected({{'{BONE_NAME}'}})" in rig_text or f'is_selected({{"{BONE_NAME}"}})' in rig_text:
+        return
+
+    divider = "num_rig_separators[0] += 1"
+    if divider not in rig_text:
+        return
+
+    pnames_json = json.dumps(["None"] + sw_targets)
+    ui_block = (
+        f"\n        if is_selected({{'{BONE_NAME}'}}):"
+        f"\n            group1 = layout.row(align=True)"
+        f"\n            group2 = group1.split(factor=0.55, align=True)"
+        f"\n            props = group2.operator('pose.rigify_switch_parent_{rig_id}', text='Parent Switch', icon='DOWNARROW_HLT')"
+        f"\n            props.bone = '{BONE_NAME}'"
+        f"\n            props.prop_bone = '{BONE_NAME}'"
+        f"\n            props.prop_id = 'parent_switch'"
+        f"\n            props.parent_names = '{pnames_json}'"
+        f"\n            props.locks = (False, False, False)"
+        f"\n            group2.prop(pose_bones['{BONE_NAME}'], '[\"parent_switch\"]', text='')"
+        f"\n            props = group1.operator('pose.rigify_switch_parent_bake_{rig_id}', text='', icon='ACTION_TWEAK')"
+        f"\n            props.bone = '{BONE_NAME}'"
+        f"\n            props.prop_bone = '{BONE_NAME}'"
+        f"\n            props.prop_id = 'parent_switch'"
+        f"\n            props.parent_names = '{pnames_json}'"
+        f"\n            props.locks = (False, False, False)"
+    )
+
+    parts = rig_text.split(divider, 1)
+    updated_text = parts[0] + divider + ui_block + parts[1]
+    rig_file.clear()
+    rig_file.write(updated_text)
+
+    try:
+        with bpy.context.temp_override(edit_text=rig_file):
+            bpy.ops.text.run_script()
+    except Exception:
+        try:
+            exec(compile(updated_text, rig_file.name, "exec"), {"__name__": "__main__"})
+        except Exception as ex:
+            print(f"[Light Direction] Warning: failed to reload rig UI script: {ex}")
+
+
 def setup_light_direction_bone(context, game_type, rig_obj=None):
     """Convert the character's Light Direction empty into a bone on the rig.
 
@@ -224,9 +364,18 @@ def setup_light_direction_bone(context, game_type, rig_obj=None):
 
         bpy.ops.object.mode_set(mode="EDIT")
         ebs = rig_obj.data.edit_bones
+        mch_eb = ebs.get(MCH_PARENT_BONE_NAME) or ebs.new(MCH_PARENT_BONE_NAME)
+        mch_eb.use_deform = False
+        mch_eb.use_connect = False
+        mch_eb.parent = None
+        mch_eb.head = loc
+        mch_eb.tail = loc + Vector((0.0, max(display_size * 0.5, 0.25), 0.0))
+        mch_eb.matrix = bone_mat
+
         eb = ebs.get(BONE_NAME) or ebs.new(BONE_NAME)
         eb.use_deform = False
-        eb.parent = None
+        eb.use_connect = False
+        eb.parent = mch_eb
         eb.head = loc
         eb.tail = loc + Vector((0.0, max(display_size * 0.5, 0.25), 0.0))
         eb.matrix = bone_mat
@@ -236,6 +385,10 @@ def setup_light_direction_bone(context, game_type, rig_obj=None):
         if bone is not None:
             _assign_bone_to_visible_collection(rig_obj, bone)
 
+        mch_bone = rig_obj.data.bones.get(MCH_PARENT_BONE_NAME)
+        if mch_bone is not None:
+            _assign_bone_to_mch_collection(rig_obj, mch_bone)
+
         pbone = rig_obj.pose.bones.get(BONE_NAME)
         if pbone is not None:
             pbone.rotation_mode = "XYZ"
@@ -243,6 +396,11 @@ def setup_light_direction_bone(context, game_type, rig_obj=None):
             pbone.custom_shape = wgt_obj
             pbone.use_custom_shape_bone_size = False
             pbone.custom_shape_scale_xyz = bone_scale
+
+            sw_targets = _get_parent_switch_targets(rig_obj)
+            default_idx = _get_default_parent_switch_index(sw_targets)
+            _setup_light_direction_parent_switch(rig_obj, pbone, sw_targets, default_idx)
+            _inject_light_direction_rig_ui(rig_obj, sw_targets)
 
         for emp in (light_dir, main_light_dir):
             if emp is None:
