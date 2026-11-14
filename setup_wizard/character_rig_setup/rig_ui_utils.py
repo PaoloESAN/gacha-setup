@@ -1205,18 +1205,25 @@ def build_rig_layers_ui_code(original_name, setup_version):
                 "                row.prop(collection['Facerig Detail'], 'is_visible', toggle=True, text='Facerig Detail')\n" +
                 "                row = split.row(align=True)\n" +
                 "                row.prop(collection['Facerig Detail'], 'is_solo', toggle=True, text='★')" +
-                "\n            row = col.row()" +
-                # Face (Primary) / Face (Secondary)
-                "\n            split = row.split(factor=split_small, align=True)" +
-                "\n            row_tweaks = split.row(align=True)" +
-                "\n            " + make_layer_str("Face (Primary)", 29, vers, "tweaks") +
-                "\n            row_tweaks = split.row(align=True)" +
-                "\n            " + make_solo_str("Face (Primary)", "tweaks") +
-                "\n            split = row.split(factor=split_small, align=True)" +
-                "\n            row_pivots = split.row(align=True)" +
-                "\n            " + make_layer_str("Face (Secondary)", 30, vers, "pivots") +
-                "\n            row_pivots = split.row(align=True)" +
-                "\n            " + make_solo_str("Face (Secondary)", "pivots") +
+                "\n            if 'Face (Primary)' in collection:" +
+                "\n                row = col.row()" +
+                "\n                split = row.split(factor=split_small, align=True)" +
+                "\n                row_tweaks = split.row(align=True)" +
+                "\n                row_tweaks.prop(collection['Face (Primary)'], 'is_visible', toggle=True, text='Face (Primary)')" +
+                "\n                row_tweaks = split.row(align=True)" +
+                "\n                row_tweaks.prop(collection['Face (Primary)'], 'is_solo', toggle=True, text='★')" +
+                "\n                split = row.split(factor=split_small, align=True)" +
+                "\n                row_pivots = split.row(align=True)" +
+                "\n                if 'Face (Secondary)' in collection: row_pivots.prop(collection['Face (Secondary)'], 'is_visible', toggle=True, text='Face (Secondary)')" +
+                "\n                row_pivots = split.row(align=True)" +
+                "\n                if 'Face (Secondary)' in collection: row_pivots.prop(collection['Face (Secondary)'], 'is_solo', toggle=True, text='★')" +
+                "\n            elif 'Face (Secondary)' in collection:" +
+                "\n                row = col.row()" +
+                "\n                split = row.split(align=True, factor=split_size)" +
+                "\n                row = split.row(align=True)" +
+                "\n                row.prop(collection['Face (Secondary)'], 'is_visible', toggle=True, text='Face (Secondary)')" +
+                "\n                row = split.row(align=True)" +
+                "\n                row.prop(collection['Face (Secondary)'], 'is_solo', toggle=True, text='★')" +
                 # Spacers
                 "\n            row = col.row()" +
                 "\n            row = col.row()" +

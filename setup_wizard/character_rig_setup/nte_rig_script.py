@@ -514,23 +514,24 @@ def rig_character(
         if sh_L and sh_R:
             sh_R.roll = -sh_L.roll
 
-        # Align hand.L and hand.R metarig bones straight along forearm vector so hand_ik widget is centered on wrist
-        forearm_R = metarig_obj.data.edit_bones.get("forearm.R")
-        hand_R = metarig_obj.data.edit_bones.get("hand.R")
-        if forearm_R and hand_R:
-            arm_vec_R = (forearm_R.tail - forearm_R.head).normalized()
-            hand_R.tail = hand_R.head + arm_vec_R * 0.05
-            hand_R.roll = forearm_R.roll
-
-        forearm_L = metarig_obj.data.edit_bones.get("forearm.L")
-        hand_L = metarig_obj.data.edit_bones.get("hand.L")
-        if forearm_L and hand_L:
-            arm_vec_L = (forearm_L.tail - forearm_L.head).normalized()
-            hand_L.tail = hand_L.head + arm_vec_L * 0.05
-            if hand_R:
-                hand_L.roll = -hand_R.roll
-            elif forearm_L:
-                hand_L.roll = -forearm_L.roll
+        # Align hand.L and hand.R over the hand with Z-Y plane flat on the back of the hand (WGT_hand_ik is in Z-Y plane)
+        for side in (".L", ".R"):
+            hand_b = metarig_obj.data.edit_bones.get("hand" + side)
+            if not hand_b:
+                continue
+            mid_b = metarig_obj.data.edit_bones.get("f_middle.01" + side)
+            if mid_b and (mid_b.head - hand_b.head).length > 0.02:
+                hand_b.tail = mid_b.head.copy()
+            idx_b = metarig_obj.data.edit_bones.get("f_index.01" + side)
+            pnk_b = metarig_obj.data.edit_bones.get("f_pinky.01" + side)
+            if idx_b and pnk_b:
+                back_normal = (idx_b.head - hand_b.head).cross(pnk_b.head - hand_b.head)
+                if back_normal.length > 1e-8:
+                    if back_normal.z < 0:
+                        back_normal.negate()
+                    across = back_normal.cross(hand_b.y_axis)
+                    if across.length > 1e-8:
+                        hand_b.align_roll(across)
 
         # Align metarig finger rolls directly to hand / index finger plane normal
         armature_ebs = obj.data.edit_bones
@@ -1048,7 +1049,10 @@ def rig_character(
                 ):
                     continue
 
-                if any(k in b_low for k in ["hair", "headline", "bone00", "ahoge"]):
+                if any(k in b_low for k in [
+                    "hair", "headline", "bone00", "ahoge",
+                    "liuhai", "binfa", "suifa", "houfa", "qianfa", "cefa", "toufa", "mawei", "duanfa", "changfa",
+                ]):
                     b2c_func(b_name, 20, "Hair")
                 elif any(k in b_low for k in ["qun", "skirt", "tail", "xiu", "sleeve", "cloth", "sce", "ribbon", "belt", "strap", "button", "dress"]):
                     b2c_func(b_name, 22, "Clothes")
@@ -1407,13 +1411,20 @@ def rig_character(
                             _face_coll.unassign(_rb)
                     except Exception:
                         pass
-            for _fn in ["head-controller", "Face-Root"]:
-                _fb = rigifyr.data.bones.get(_fn)
-                if _fb is not None and _face_coll is not None:
-                    try:
-                        _face_coll.assign(_fb)
-                    except Exception:
-                        pass
+            _hb = rigifyr.data.bones.get("head-controller")
+            if _hb is not None and _face_coll is not None:
+                try:
+                    _face_coll.assign(_hb)
+                except Exception:
+                    pass
+            _frb = rigifyr.data.bones.get("Face-Root")
+            if _frb is not None and _other_coll is not None:
+                try:
+                    for _c in list(_frb.collections):
+                        _c.unassign(_frb)
+                    _other_coll.assign(_frb)
+                except Exception:
+                    pass
             try:
                 _root_coll.is_visible = True
                 _face_coll.is_visible = True

@@ -18,6 +18,7 @@ TRAVEL_F     = 0.040
 SPACING_F    = 0.050
 WIDGET_F     = 1.0
 FACERIG_COLLECTION = "Face"
+FACERIG_SECONDARY_COLLECTION = "Face (Secondary)"
 RIGIFY_UI_ROW = 1
 
 COL_MOUTH      = (0.90, 0.20, 0.20)
@@ -602,7 +603,7 @@ def plan_nte_controls(mesh_obj, armature, head_name, keyblock):
 
             controls.append({
                 'name': c_name,
-                'collection': FACERIG_COLLECTION,
+                'collection': FACERIG_SECONDARY_COLLECTION,
                 'color': color,
                 'group': group_name,
                 'head': place(left_panel_origin, h=h, v=v),
@@ -643,7 +644,7 @@ def plan_nte_controls(mesh_obj, armature, head_name, keyblock):
     if unhandled_eb or unhandled_el:
         controls.append({
             'name': 'LABEL-Brows_Eyes',
-            'collection': FACERIG_COLLECTION,
+            'collection': FACERIG_SECONDARY_COLLECTION,
             'color': COL_LABEL,
             'group': 'Face Labels',
             'head': place(left_panel_origin, h=-4.5 * (face_size * ITEM_SP), v=face_size * 0.075),
@@ -689,7 +690,7 @@ def plan_nte_controls(mesh_obj, armature, head_name, keyblock):
 
             controls.append({
                 'name': c_name,
-                'collection': FACERIG_COLLECTION,
+                'collection': FACERIG_SECONDARY_COLLECTION,
                 'color': color,
                 'group': group_name,
                 'head': place(right_panel_origin, h=h, v=v),
@@ -740,7 +741,7 @@ def plan_nte_controls(mesh_obj, armature, head_name, keyblock):
     if viseme_items or unhandled_mouth:
         controls.append({
             'name': 'LABEL-Mouth',
-            'collection': FACERIG_COLLECTION,
+            'collection': FACERIG_SECONDARY_COLLECTION,
             'color': COL_LABEL,
             'group': 'Face Labels',
             'head': place(right_panel_origin, h=2.0 * (face_size * ITEM_SP), v=face_size * 0.075),
@@ -776,7 +777,7 @@ def plan_nte_controls(mesh_obj, armature, head_name, keyblock):
     if td_keys or remaining:
         controls.append({
             'name': 'LABEL-2D_VFX',
-            'collection': FACERIG_COLLECTION,
+            'collection': FACERIG_SECONDARY_COLLECTION,
             'color': COL_LABEL,
             'group': 'Face Labels',
             'head': place(right_panel_origin, h=col2_offset + 4.5 * (face_size * ITEM_SP), v=face_size * 0.075),
@@ -1075,28 +1076,20 @@ def setup_nte_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_si
             if bone and coll:
                 coll.assign(bone)
 
-        # Place Face-Root into Face (Secondary)
-        sec_coll = None
-        for scn in ["Face (Secondary)", "Face(Secondary)", "Face Secondary"]:
-            if scn in armature.data.collections:
-                sec_coll = armature.data.collections[scn]
-                break
-        if not sec_coll:
-            sec_coll = armature.data.collections.new("Face (Secondary)")
+        # Place Face-Root into Other (hidden) so Face (Secondary) only holds shapekey controls
+        other_coll = armature.data.collections.get("Other")
+        if not other_coll:
+            other_coll = armature.data.collections.new("Other")
             try:
-                sec_coll.is_visible = False
-            except Exception:
-                pass
-            try:
-                sec_coll.rigify_ui_row = RIGIFY_UI_ROW
+                other_coll.is_visible = False
             except Exception:
                 pass
 
         root_bone = armature.data.bones.get("Face-Root")
-        if root_bone and sec_coll:
+        if root_bone and other_coll:
             for c in list(root_bone.collections):
                 c.unassign(root_bone)
-            sec_coll.assign(root_bone)
+            other_coll.assign(root_bone)
     elif is_blender_3():
         root_bone = armature.data.bones.get("Face-Root")
         if root_bone:
