@@ -515,7 +515,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         face_candidates = []
         for f in image_files:
             f_low = f.lower()
-            if any(k in f_low for k in ['lightmap', 'ligthmap', 'facemap', 'expression', 'normal', 'bump', '_m.', '_m_', '_n.', '_n_', '_a.', '_a_', 'shadow', 'ramp', 'curve', 'lut', 'mask', 'eff_matcap']):
+            if any(k in f_low for k in ['lightmap', 'ligthmap', 'facemap', 'expression', 'normal', 'bump', '_m.', '_m_', '_n.', '_n_', '_a.', '_a_', '_e.', '_e_', 'shadow', 'ramp', 'curve', 'lut', 'mask', 'eff_matcap']):
                 continue
             if any(k in f_low for k in ['face', 'cara', 'head', 'rostro', 'eye', 'eyebrow', 'brow', '眉']):
                 face_candidates.append(f)
@@ -560,24 +560,28 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         return best
 
     def _build_zzz_json_texture_map(self, folder):
-        candidates_dirs = [
-            folder,
-            os.path.join(folder, "Materials"),
-        ]
-        
+        candidates_dirs = [folder]
+        if os.path.isdir(folder):
+            for entry in sorted(os.listdir(folder), key=str.casefold):
+                full_entry = os.path.join(folder, entry)
+                if os.path.isdir(full_entry) and entry.lower() in ("materials", "material"):
+                    candidates_dirs.append(full_entry)
+
         materials_dir = None
         for d in candidates_dirs:
             if os.path.isdir(d) and any(f.lower().endswith(".json") and not f.startswith("._") and not f.startswith(".") for f in os.listdir(d)):
                 materials_dir = d
                 break
-                
-        # Find texture directory
+
+        # Find texture directory (case-insensitive for Linux)
         tex_dir = folder
         if os.path.isdir(folder):
             if not any(f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg')) and not f.startswith("._") and not f.startswith(".") for f in os.listdir(folder)):
-                sub = os.path.join(folder, "Textures")
-                if os.path.isdir(sub):
-                    tex_dir = sub
+                for entry in sorted(os.listdir(folder), key=str.casefold):
+                    sub = os.path.join(folder, entry)
+                    if os.path.isdir(sub) and entry.lower() in ("textures", "texture"):
+                        tex_dir = sub
+                        break
 
         if not materials_dir or not os.path.isdir(tex_dir):
             return {}, tex_dir
@@ -602,7 +606,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
             return None
 
         mat_map = {}
-        for jf in os.listdir(materials_dir):
+        for jf in sorted(os.listdir(materials_dir), key=str.casefold):
             if not jf.lower().endswith(".json") or jf.startswith("._") or jf.startswith("."):
                 continue
             jpath = os.path.join(materials_dir, jf)
@@ -644,7 +648,8 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                                     extracted['lightmap'] = resolved
                                     extracted['n'] = resolved
                                 else:
-                                    extracted[map_key] = resolved
+                                    if map_key not in extracted:
+                                        extracted[map_key] = resolved
 
             if not extracted:
                 # If Name is empty in JSON (Unity dump), infer from active slots and JSON name
