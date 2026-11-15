@@ -16,4 +16,5 @@ class GameType(Enum):
     ARKNIGHTS_ENDFIELD = auto()
     HONKAI_IMPACT_3RD = auto()
     HONKAI_NEXUS_ANIMA = auto()
+    MILASTRA_WONDERLAND = auto()
 

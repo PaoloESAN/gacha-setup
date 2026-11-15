@@ -115,6 +115,7 @@ else:
     from setup_wizard.genshin_setup_wizard import (
         register as register_genshin_setup_wizard,
     )
+    from setup_wizard.milastra import MILASTRA_OT_SetupWizardUI
     from setup_wizard.set_up_head_driver import (
         ZZZ_OT_SetUpHeadDriver,
         WW_OT_SetUpHeadDriver,
@@ -498,6 +499,7 @@ else:
         PGR_OT_SetupFaceRig,
         HI3_OT_SetupFaceRig,
         HNA_OT_SetupFaceRig,
+        MILASTRA_OT_SetupWizardUI,
     ]
 
     for module in modules:

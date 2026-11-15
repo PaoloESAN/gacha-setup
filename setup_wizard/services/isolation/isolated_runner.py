@@ -20,6 +20,7 @@ GAME_TO_WIZARD = {
     "PUNISHING_GRAY_RAVEN": "punishing_gray_raven.setup_wizard_ui",
     "HONKAI_IMPACT_3RD": "honkai_impact_3rd.setup_wizard_ui",
     "HONKAI_NEXUS_ANIMA": "honkai_nexus_anima.setup_wizard_ui",
+    "MILASTRA_WONDERLAND": "milastra_wonderland.setup_wizard_ui",
 }
 
 
@@ -160,7 +161,7 @@ def apply_settings():
         except Exception:
             pass
 
-    if JOB["game_type"] == "GENSHIN_IMPACT" and hasattr(scene, "gi_shader_type"):
+    if JOB["game_type"] in ("GENSHIN_IMPACT", "MILASTRA_WONDERLAND") and hasattr(scene, "gi_shader_type"):
         from setup_wizard.utils.genshin_shader_selection import default_genshin_shader
         scene.gi_shader_type = JOB.get("gi_shader_type", default_genshin_shader())
 
@@ -392,28 +393,37 @@ def run_setup():
         )
 
         with override_ctx:
-            with checked_workflow(import_order, steps):
-                if selected_file and os.path.isfile(selected_file):
-                    import_op = import_order.ComponentFunctionFactory.create_component_function(
-                        "import_character_model"
-                    )
-                    import_op(
+            if game == "MILASTRA_WONDERLAND":
+                milastra_steps = order.get("GENSHIN_OT_setup_wizard_ui") or steps
+                with checked_workflow(import_order, milastra_steps):
+                    bpy.ops.milastra_wonderland.setup_wizard_ui(
                         "EXEC_DEFAULT",
-                        filepath=selected_file,
-                        file_directory=character_dir,
-                        next_step_idx=1,
-                        invoker_type="invoke_next_step_ui",
-                        high_level_step_name=GAME_TO_WIZARD[game],
-                        game_type=game,
+                        directory=character_dir,
+                        gender=JOB.get("milastra_gender", "GIRL"),
                     )
-                else:
-                    import_order.NextStepInvoker().invoke(
-                        0,
-                        "invoke_next_step_ui",
-                        file_path_to_cache=character_dir,
-                        high_level_step_name=GAME_TO_WIZARD[game],
-                        game_type=game,
-                    )
+            else:
+                with checked_workflow(import_order, steps):
+                    if selected_file and os.path.isfile(selected_file):
+                        import_op = import_order.ComponentFunctionFactory.create_component_function(
+                            "import_character_model"
+                        )
+                        import_op(
+                            "EXEC_DEFAULT",
+                            filepath=selected_file,
+                            file_directory=character_dir,
+                            next_step_idx=1,
+                            invoker_type="invoke_next_step_ui",
+                            high_level_step_name=GAME_TO_WIZARD[game],
+                            game_type=game,
+                        )
+                    else:
+                        import_order.NextStepInvoker().invoke(
+                            0,
+                            "invoke_next_step_ui",
+                            file_path_to_cache=character_dir,
+                            high_level_step_name=GAME_TO_WIZARD[game],
+                            game_type=game,
+                        )
 
         if bpy.app.background:
             save_and_quit()

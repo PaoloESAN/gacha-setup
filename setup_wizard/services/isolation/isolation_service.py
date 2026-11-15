@@ -150,6 +150,7 @@ def launch_job(
     selected_model_file="",
     game_type="",
     high_level_step_name="",
+    extra_job_data=None,
 ):
     global _ACTIVE_JOB
 
@@ -233,6 +234,8 @@ def launch_job(
             "result_path": str(result_path),
         }
     )
+    if extra_job_data:
+        job.update(extra_job_data)
     job_json.write_text(json.dumps(job, ensure_ascii=False, indent=2), encoding="utf-8")
 
     log_handle = open(log_path, "w", encoding="utf-8", errors="replace")

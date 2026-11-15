@@ -1782,14 +1782,58 @@ class GenshinTextureImporter:
         is_lightmap = 'lightmap' in f_lower or 'light_map' in f_lower
         is_normal = 'normal' in f_lower or 'normalmap' in f_lower
         is_shadow_ramp = 'shadow_ramp' in f_lower
+        is_sdf = 'sdf' in f_lower
 
-        if not (is_diffuse or is_lightmap or is_normal or is_shadow_ramp):
+        if not (is_diffuse or is_lightmap or is_normal or is_shadow_ramp or is_sdf):
             return False
 
         if any(k in f_lower for k in ['facelightmap', 'face_lightmap', 'face lightmap', 'face_shadow', 'face_diffuse']):
             return False
 
         matched_any = False
+
+        if file.startswith('Beyd_Avatar_'):
+            from setup_wizard.milastra.milastra_utils import parse_milastra_part_name
+            part = parse_milastra_part_name(file)
+            if part:
+                part_lower = part.lower()
+                tex_type = (
+                    TextureType.HAIR if part_lower in ('hair', 'headwear')
+                    else TextureType.FACE if part_lower in ('face', 'eyebrow', 'pupil')
+                    else TextureType.BODY
+                )
+                target_materials = [
+                    mat for mat in bpy.data.materials
+                    if mat.use_nodes
+                    and 'outlines' not in mat.name.lower()
+                    and 'outline' not in mat.name.lower()
+                    and mat.name.lower().endswith(f' {part_lower}')
+                    and self._is_genshin_shader_material(mat)
+                ]
+                for target_mat in target_materials:
+                    if part_lower == 'face':
+                        if is_diffuse:
+                            self.set_face_diffuse_texture(target_mat, img)
+                            matched_any = True
+                        elif is_lightmap or 'sdf' in f_lower or 'shadow' in f_lower:
+                            self.set_face_shadow_texture(target_mat, img)
+                            self.set_face_lightmap_texture(img)
+                            matched_any = True
+                    else:
+                        if is_diffuse:
+                            self.set_diffuse_texture(tex_type, target_mat, img)
+                            matched_any = True
+                        elif is_lightmap:
+                            self.set_lightmap_texture(tex_type, target_mat, img)
+                            matched_any = True
+                        elif is_normal:
+                            self.set_normalmap_texture(tex_type, target_mat, img)
+                            matched_any = True
+                if is_shadow_ramp:
+                    self.set_shadow_ramp_texture(tex_type, img)
+                    matched_any = True
+                if matched_any:
+                    return True
 
         # Match equipment / weapon textures directly
         if f_lower.startswith(('equip_', 'equipskin_')) or 'equip' in f_lower:
@@ -2222,7 +2266,12 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
     def import_textures(self, directory):
         self.directory = directory
         fix_missing_textures(directory)
-        if self.import_textures_from_json(directory):
+        is_milastra = any(
+            f.startswith('Beyd_Avatar_')
+            for _, _, files_in_dir in os.walk(directory)
+            for f in files_in_dir
+        )
+        if not is_milastra and self.import_textures_from_json(directory):
             for mat in bpy.data.materials:
                 if mat.use_nodes and not any(k in mat.name.lower() for k in ['outlines', 'outline', 'face', 'pupil', 'brow', 'eye']):
                     sync_material_category_textures(mat)
@@ -2302,8 +2351,12 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                             break
 
             has_multiple_pupil_diffuse = len(pupil_diffuse_images) > 1
+            is_milastra_scene = any(m.name.startswith('Beyd_Avatar_') for m in bpy.data.materials)
             has_new_pupil_setup = has_multiple_pupil_diffuse or is_sandrone or any('new pupil' in m.name.lower() or m.name in DURIN_EYE_MATERIAL_NAMES for m in bpy.data.materials)
-            if bpy.context.scene.get('setup_wizard_imported_pmx_path'):
+            if is_milastra_scene:
+                # Milastra uses a single Pupil material with Diffuse + Lightmap, never Genshin's New Pupil.
+                has_new_pupil_setup = False
+            elif bpy.context.scene.get('setup_wizard_imported_pmx_path'):
                 # PMX assigns its eye atlas explicitly. Merely appending the
                 # unused New Pupil template must not replace that assignment.
                 has_new_pupil_setup = has_multiple_pupil_diffuse
@@ -2710,7 +2763,12 @@ class GenshinNPCTextureImporter(GenshinTextureImporter):
 
     def import_textures(self, directory):
         fix_missing_textures(directory)
-        if self.import_textures_from_json(directory):
+        is_milastra = any(
+            f.startswith('Beyd_Avatar_')
+            for _, _, files_in_dir in os.walk(directory)
+            for f in files_in_dir
+        )
+        if not is_milastra and self.import_textures_from_json(directory):
             for mat in bpy.data.materials:
                 if mat.use_nodes and not any(k in mat.name.lower() for k in ['outlines', 'outline', 'face', 'pupil', 'brow', 'eye']):
                     sync_material_category_textures(mat)
@@ -2900,7 +2958,12 @@ class GenshinMonsterTextureImporter(GenshinTextureImporter):
 
     def import_textures(self, directory):
         fix_missing_textures(directory)
-        if self.import_textures_from_json(directory):
+        is_milastra = any(
+            f.startswith('Beyd_Avatar_')
+            for _, _, files_in_dir in os.walk(directory)
+            for f in files_in_dir
+        )
+        if not is_milastra and self.import_textures_from_json(directory):
             for mat in bpy.data.materials:
                 if mat.use_nodes and not any(k in mat.name.lower() for k in ['outlines', 'outline', 'face', 'pupil', 'brow', 'eye']):
                     sync_material_category_textures(mat)

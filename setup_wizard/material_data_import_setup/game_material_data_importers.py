@@ -338,6 +338,10 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
                 # applied for them.
                 body_part = PurePosixPath(file.name).stem
                 character_type = CharacterType.UNKNOWN
+            elif file.name.startswith('Beyd_Avatar_'):
+                from setup_wizard.milastra.milastra_utils import parse_milastra_part_name
+                body_part = parse_milastra_part_name(file.name) or PurePosixPath(file.name).stem.split('_')[-1]
+                character_type = CharacterType.UNKNOWN
             else:
                 stem = PurePosixPath(file.name).stem
                 if stem.endswith('_D') or stem.endswith('_S'):
@@ -401,6 +405,89 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
                 character_type
             )
             self.apply_material_data(body_part, material_data_appliers, file)
+            if file.name.startswith('Beyd_Avatar_') and material and material.node_tree:
+                skin_tint = (json_material_data.get('m_SavedProperties', {}).get('m_Colors') or {}).get('_SkinTintColor')
+                tint_rgba = None
+                if isinstance(skin_tint, dict):
+                    tint_rgba = (
+                        float(skin_tint.get('r', 1.0)),
+                        float(skin_tint.get('g', 1.0)),
+                        float(skin_tint.get('b', 1.0)),
+                        float(skin_tint.get('a', 1.0)),
+                    )
+                skin_rgba = None
+                if tint_rgba:
+                    # Milastra BaseBody/Face Diffuse textures are neutral/mask; multiply _SkinTintColor
+                    # by a standard Genshin fair base skin tone (Linear) so skin doesn't blow out white.
+                    base_skin = (0.965, 0.847, 0.730)
+                    skin_rgba = (
+                        tint_rgba[0] * base_skin[0],
+                        tint_rgba[1] * base_skin[1],
+                        tint_rgba[2] * base_skin[2],
+                        tint_rgba[3],
+                    )
+                for node in material.node_tree.nodes:
+                    if node.type == 'GROUP':
+                        if 'Toggle Vertex Color AO' in node.inputs:
+                            try:
+                                node.inputs['Toggle Vertex Color AO'].default_value = False
+                            except Exception:
+                                pass
+                        if 'Toggle Shadow Ramp' in node.inputs:
+                            try:
+                                node.inputs['Toggle Shadow Ramp'].default_value = False
+                            except Exception:
+                                pass
+                        if skin_rgba and 'Tint' in node.inputs:
+                            try:
+                                if body_part in ('Body', 'Face'):
+                                    node.inputs['Tint'].default_value = (1.0, 1.0, 1.0, 1.0)
+                                else:
+                                    node.inputs['Tint'].default_value = tint_rgba
+                            except Exception:
+                                pass
+                        if skin_rgba and body_part == 'Face' and 'Diffuse Color' in node.inputs:
+                            diff_inp = node.inputs['Diffuse Color']
+                            if diff_inp.links and diff_inp.links[0].from_node.name != 'Milastra_Face_Skin_Mult':
+                                src_socket = diff_inp.links[0].from_socket
+                                mult = material.node_tree.nodes.get('Milastra_Face_Skin_Mult') or material.node_tree.nodes.new('ShaderNodeMix')
+                                mult.name = 'Milastra_Face_Skin_Mult'
+                                mult.label = 'Milastra Face Skin Tint'
+                                mult.data_type = 'RGBA'
+                                mult.blend_type = 'MULTIPLY'
+                                mult.inputs['Factor'].default_value = 1.0
+                                mult.inputs['B'].default_value = skin_rgba
+                                material.node_tree.links.new(src_socket, mult.inputs['A'])
+                                material.node_tree.links.new(mult.outputs['Result'], diff_inp)
+                            elif not diff_inp.links:
+                                diff_inp.default_value = skin_rgba
+                        if skin_rgba and body_part == 'Body' and 'Diffuse Color' in node.inputs:
+                            rgb_node = material.node_tree.nodes.get('Milastra_Skin_RGB') or material.node_tree.nodes.new('ShaderNodeRGB')
+                            rgb_node.name = 'Milastra_Skin_RGB'
+                            rgb_node.label = 'Milastra Skin Color'
+                            rgb_node.outputs[0].default_value = skin_rgba
+                            material.node_tree.links.new(rgb_node.outputs[0], node.inputs['Diffuse Color'])
+                        if body_part == 'Body' and 'Lightmap Color' in node.inputs:
+                            lm_rgb = material.node_tree.nodes.get('Milastra_Body_Lightmap_RGB') or material.node_tree.nodes.new('ShaderNodeRGB')
+                            lm_rgb.name = 'Milastra_Body_Lightmap_RGB'
+                            lm_rgb.outputs[0].default_value = (0.0, 0.5, 0.0, 1.0)
+                            material.node_tree.links.new(lm_rgb.outputs[0], node.inputs['Lightmap Color'])
+                        if body_part == 'Body' and 'Lightmap Alpha' in node.inputs:
+                            lm_alpha = material.node_tree.nodes.get('Milastra_Body_Lightmap_Alpha') or material.node_tree.nodes.new('ShaderNodeValue')
+                            lm_alpha.name = 'Milastra_Body_Lightmap_Alpha'
+                            lm_alpha.outputs[0].default_value = 0.0
+                            material.node_tree.links.new(lm_alpha.outputs[0], node.inputs['Lightmap Alpha'])
+                if body_part == 'Face':
+                    st_node = material.node_tree.nodes.get('Shader Textures')
+                    if st_node and 'Vector' in st_node.inputs:
+                        uv_node = material.node_tree.nodes.get('Milastra_Face_UV1') or material.node_tree.nodes.new('ShaderNodeUVMap')
+                        uv_node.name = 'Milastra_Face_UV1'
+                        uv_node.uv_map = 'UV1'
+                        material.node_tree.links.new(uv_node.outputs['UV'], st_node.inputs['Vector'])
+                if body_part == 'Body':
+                    lm_node = material.node_tree.nodes.get('Main_Lightmap')
+                    if lm_node and lm_node.type == 'TEX_IMAGE':
+                        lm_node.image = None
 
         # Apply diffuse fallback to any outline materials in the scene that still have sentinel colors
         for mat in bpy.data.materials:
@@ -772,6 +859,89 @@ class HonkaiStarRailMaterialDataImporter(GameMaterialDataImporter):
                 character_type
             )
             self.apply_material_data(body_part, material_data_appliers, file)
+            if file.name.startswith('Beyd_Avatar_') and material and material.node_tree:
+                skin_tint = (json_material_data.get('m_SavedProperties', {}).get('m_Colors') or {}).get('_SkinTintColor')
+                tint_rgba = None
+                if isinstance(skin_tint, dict):
+                    tint_rgba = (
+                        float(skin_tint.get('r', 1.0)),
+                        float(skin_tint.get('g', 1.0)),
+                        float(skin_tint.get('b', 1.0)),
+                        float(skin_tint.get('a', 1.0)),
+                    )
+                skin_rgba = None
+                if tint_rgba:
+                    # Milastra BaseBody/Face Diffuse textures are neutral/mask; multiply _SkinTintColor
+                    # by a standard Genshin fair base skin tone (Linear) so skin doesn't blow out white.
+                    base_skin = (0.965, 0.847, 0.730)
+                    skin_rgba = (
+                        tint_rgba[0] * base_skin[0],
+                        tint_rgba[1] * base_skin[1],
+                        tint_rgba[2] * base_skin[2],
+                        tint_rgba[3],
+                    )
+                for node in material.node_tree.nodes:
+                    if node.type == 'GROUP':
+                        if 'Toggle Vertex Color AO' in node.inputs:
+                            try:
+                                node.inputs['Toggle Vertex Color AO'].default_value = False
+                            except Exception:
+                                pass
+                        if 'Toggle Shadow Ramp' in node.inputs:
+                            try:
+                                node.inputs['Toggle Shadow Ramp'].default_value = False
+                            except Exception:
+                                pass
+                        if skin_rgba and 'Tint' in node.inputs:
+                            try:
+                                if body_part in ('Body', 'Face'):
+                                    node.inputs['Tint'].default_value = (1.0, 1.0, 1.0, 1.0)
+                                else:
+                                    node.inputs['Tint'].default_value = tint_rgba
+                            except Exception:
+                                pass
+                        if skin_rgba and body_part == 'Face' and 'Diffuse Color' in node.inputs:
+                            diff_inp = node.inputs['Diffuse Color']
+                            if diff_inp.links and diff_inp.links[0].from_node.name != 'Milastra_Face_Skin_Mult':
+                                src_socket = diff_inp.links[0].from_socket
+                                mult = material.node_tree.nodes.get('Milastra_Face_Skin_Mult') or material.node_tree.nodes.new('ShaderNodeMix')
+                                mult.name = 'Milastra_Face_Skin_Mult'
+                                mult.label = 'Milastra Face Skin Tint'
+                                mult.data_type = 'RGBA'
+                                mult.blend_type = 'MULTIPLY'
+                                mult.inputs['Factor'].default_value = 1.0
+                                mult.inputs['B'].default_value = skin_rgba
+                                material.node_tree.links.new(src_socket, mult.inputs['A'])
+                                material.node_tree.links.new(mult.outputs['Result'], diff_inp)
+                            elif not diff_inp.links:
+                                diff_inp.default_value = skin_rgba
+                        if skin_rgba and body_part == 'Body' and 'Diffuse Color' in node.inputs:
+                            rgb_node = material.node_tree.nodes.get('Milastra_Skin_RGB') or material.node_tree.nodes.new('ShaderNodeRGB')
+                            rgb_node.name = 'Milastra_Skin_RGB'
+                            rgb_node.label = 'Milastra Skin Color'
+                            rgb_node.outputs[0].default_value = skin_rgba
+                            material.node_tree.links.new(rgb_node.outputs[0], node.inputs['Diffuse Color'])
+                        if body_part == 'Body' and 'Lightmap Color' in node.inputs:
+                            lm_rgb = material.node_tree.nodes.get('Milastra_Body_Lightmap_RGB') or material.node_tree.nodes.new('ShaderNodeRGB')
+                            lm_rgb.name = 'Milastra_Body_Lightmap_RGB'
+                            lm_rgb.outputs[0].default_value = (0.0, 0.5, 0.0, 1.0)
+                            material.node_tree.links.new(lm_rgb.outputs[0], node.inputs['Lightmap Color'])
+                        if body_part == 'Body' and 'Lightmap Alpha' in node.inputs:
+                            lm_alpha = material.node_tree.nodes.get('Milastra_Body_Lightmap_Alpha') or material.node_tree.nodes.new('ShaderNodeValue')
+                            lm_alpha.name = 'Milastra_Body_Lightmap_Alpha'
+                            lm_alpha.outputs[0].default_value = 0.0
+                            material.node_tree.links.new(lm_alpha.outputs[0], node.inputs['Lightmap Alpha'])
+                if body_part == 'Face':
+                    st_node = material.node_tree.nodes.get('Shader Textures')
+                    if st_node and 'Vector' in st_node.inputs:
+                        uv_node = material.node_tree.nodes.get('Milastra_Face_UV1') or material.node_tree.nodes.new('ShaderNodeUVMap')
+                        uv_node.name = 'Milastra_Face_UV1'
+                        uv_node.uv_map = 'UV1'
+                        material.node_tree.links.new(uv_node.outputs['UV'], st_node.inputs['Vector'])
+                if body_part == 'Body':
+                    lm_node = material.node_tree.nodes.get('Main_Lightmap')
+                    if lm_node and lm_node.type == 'TEX_IMAGE':
+                        lm_node.image = None
         return {'FINISHED'}
 
 
