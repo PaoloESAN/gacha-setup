@@ -777,6 +777,10 @@ class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
         maxlen=255,
     )
 
+    def draw(self, context):
+        from setup_wizard.ui.unified_ui_setup_wizard_menu import draw_file_browser_setup_settings
+        draw_file_browser_setup_settings(self.layout, context, game_type=GameType.NEVERNESS_TO_EVERNESS.name, operator=self)
+
     def execute(self, context):
         if not self.filepath:
             return {"CANCELLED"}
@@ -828,6 +832,10 @@ class WW_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
         options={'HIDDEN'},
         maxlen=255,
     )
+
+    def draw(self, context):
+        from setup_wizard.ui.unified_ui_setup_wizard_menu import draw_file_browser_setup_settings
+        draw_file_browser_setup_settings(self.layout, context, game_type=GameType.WUTHERING_WAVES.name, operator=self)
 
     def execute(self, context):
         if not self.filepath:
@@ -1197,6 +1205,10 @@ class AKE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
         maxlen=255,
     )
 
+    def draw(self, context):
+        from setup_wizard.ui.unified_ui_setup_wizard_menu import draw_file_browser_setup_settings
+        draw_file_browser_setup_settings(self.layout, context, game_type=GameType.ARKNIGHTS_ENDFIELD.name, operator=self)
+
     def execute(self, context):
         if not self.filepath:
             return {"CANCELLED"}
@@ -1392,6 +1404,11 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
         options={"HIDDEN"},
         maxlen=255,  # Max internal buffer length, longer would be clamped.
     )
+
+    def draw(self, context):
+        from setup_wizard.ui.unified_ui_setup_wizard_menu import draw_file_browser_setup_settings
+        game_type = self.game_type or getattr(context.scene, "game_type_dropdown", GameType.GENSHIN_IMPACT.name)
+        draw_file_browser_setup_settings(self.layout, context, game_type=game_type, operator=self)
 
     def execute(self, context):
         from setup_wizard.utils.archive_extractor import is_archive_file, extract_character_archive

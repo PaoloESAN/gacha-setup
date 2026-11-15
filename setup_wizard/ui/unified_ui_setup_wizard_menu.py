@@ -275,24 +275,52 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
         from setup_wizard.services.isolation import isolation_service
         isolation_service.draw_setup_status_box(main_box, context, run_entire_setup_column)
 
-        settings_box = layout.box()
-        settings_header = settings_box.row()
-        settings_header.label(text="Setup Settings", icon="PREFERENCES")
 
-        settings_col = settings_box.column()
-        if selected_game in (GameType.GENSHIN_IMPACT.name, GameType.MILASTRA_WONDERLAND.name):
-            settings_col.prop(context.scene, "gi_shader_type", text="Shader")
-        if (selected_game == GameType.ZENLESS_ZONE_ZERO.name
-                and bpy.app.version >= (5, 2, 0) and hasattr(context.scene, "zzz_shader_type")):
-            settings_col.prop(context.scene, "zzz_shader_type", text="Shader")
-            if getattr(context.scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
-                row_by = settings_col.row(align=True)
-                row_by.alignment = 'RIGHT'
-                row_by.label(text="Made by Kythera")
+def draw_file_browser_setup_settings(layout, context, game_type=None, operator=None):
+    """Draw unified Setup Settings inside the file browser operator panel."""
+    selected_game = game_type or getattr(context.scene, "game_type_dropdown", GameType.GENSHIN_IMPACT.name)
 
-        props = getattr(context.scene, "character_rigger_props", None)
-        if props:
-            settings_col.prop(props, "disable_rigging", text="Disable Rigging")
+    settings_box = layout.box()
+    settings_header = settings_box.row()
+    settings_header.label(text="Setup Settings", icon="PREFERENCES")
+
+    settings_col = settings_box.column()
+    props = getattr(context.scene, "character_rigger_props", None)
+
+    # 1. Shader settings
+    if selected_game in (GameType.GENSHIN_IMPACT.name, GameType.MILASTRA_WONDERLAND.name):
+        settings_col.prop(context.scene, "gi_shader_type", text="Shader")
+    if (selected_game == GameType.ZENLESS_ZONE_ZERO.name
+            and bpy.app.version >= (5, 2, 0) and hasattr(context.scene, "zzz_shader_type")):
+        settings_col.prop(context.scene, "zzz_shader_type", text="Shader")
+        if getattr(context.scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
+            row_by = settings_col.row(align=True)
+            row_by.alignment = 'RIGHT'
+            row_by.label(text="Made by Kythera")
+
+    # 2. Disable Rigging
+    if props:
+        settings_col.prop(props, "disable_rigging", text="Disable Rigging (for weapons, anims, etc.)")
+
+    # 3. Base Model (Milastra Wonderland)
+    if selected_game == GameType.MILASTRA_WONDERLAND.name and operator is not None and hasattr(operator, "gender"):
+        settings_col.label(text="Base Model", icon="ARMATURE_DATA")
+        settings_col.row(align=True).prop(operator, "gender", expand=True)
+
+    # 4. Physics
+    if props:
+        enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
+        settings_col.prop(props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")
+        if enable_physics:
+            sliders_col = settings_col.column()
+            sliders_col.prop(props, "hair_physics_influence", text="Hair", slider=True)
+            sliders_col.prop(props, "clothes_physics_influence", text="Clothes", slider=True)
+            info_box = sliders_col.box()
+            info_col = info_box.column(align=True)
+            info_col.scale_y = 0.8
+            info_col.label(text="You can adjust these values later", icon="INFO")
+            info_col.label(text="in the Items section under")
+            info_col.label(text="Character Settings.")
 
 
 class CSW_PT_Old_Setup_UI_Layout(Panel):

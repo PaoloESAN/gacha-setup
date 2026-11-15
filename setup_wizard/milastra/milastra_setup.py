@@ -173,10 +173,13 @@ class MILASTRA_OT_SetupWizardUI(Operator, ImportHelper, CustomOperatorProperties
     )
 
     def draw(self, context):
-        layout = self.layout
-        box = layout.box()
-        box.label(text="Base Model", icon="ARMATURE_DATA")
-        box.row(align=True).prop(self, "gender", expand=True)
+        from setup_wizard.ui.unified_ui_setup_wizard_menu import draw_file_browser_setup_settings
+        draw_file_browser_setup_settings(
+            self.layout,
+            context,
+            game_type=GameType.MILASTRA_WONDERLAND.name,
+            operator=self,
+        )
 
     def execute(self, context):
         selected_folder = _resolve_selected_folder(self.filepath, self.directory, self.file_directory)
