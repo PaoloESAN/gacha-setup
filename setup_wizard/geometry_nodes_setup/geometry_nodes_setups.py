@@ -385,7 +385,7 @@ class GameGeometryNodesSetup(ABC):
         # Specifically do not try to get modifiers from context because context does not have newly
         # created geometry nodes yet during the setup_wizard!! (or it just doesn't work in general)
         # face_eye_outlines = bpy.context.object.modifiers.get('GeometryNodes Face_Eye')  # Bad!
-        set_modifier_property(modifier, OUTLINE_THICKNESS_INPUT, 0.0)
+        set_modifier_property(modifier, getattr(self, 'OUTLINE_THICKNESS_INPUT', OUTLINE_THICKNESS_INPUT), 0.0)
 
     '''
         Necessary otherwise meshes/textures on character are visually messed up
@@ -491,6 +491,8 @@ class GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
                 geometry_nodes_modifier = mesh.modifiers.new(f'{NAME_OF_GEOMETRY_NODES_MODIFIER} {mesh_name}', 'NODES')
                 geometry_nodes_modifier.node_group = outlines_node_group
                 self.set_up_modifier_default_values(geometry_nodes_modifier, mesh)
+            if mesh.name == 'Face_Eye' or mesh.name.startswith('Face_Eye.'):
+                self.disable_face_eye_outlines(geometry_nodes_modifier)
         return geometry_nodes_modifier
 
 
@@ -589,6 +591,8 @@ class V3_GenshinImpactGeometryNodesSetup(GameGeometryNodesSetup):
                 geometry_nodes_modifier = mesh.modifiers.new(f'{NAME_OF_GEOMETRY_NODES_MODIFIER} {mesh_name}', 'NODES')
                 geometry_nodes_modifier.node_group = outlines_node_group
                 self.set_up_modifier_default_values(geometry_nodes_modifier, mesh)
+            if mesh.name == 'Face_Eye' or mesh.name.startswith('Face_Eye.'):
+                self.disable_face_eye_outlines(geometry_nodes_modifier)
         return geometry_nodes_modifier 
 
     def set_up_modifier_default_values(self, modifier, mesh):
@@ -1417,6 +1421,8 @@ class HonkaiStarRailGeometryNodesSetup(GameGeometryNodesSetup):
                 geometry_nodes_modifier = mesh.modifiers.new(f'{NAME_OF_GEOMETRY_NODES_MODIFIER} {mesh_name}', 'NODES')
                 geometry_nodes_modifier.node_group = outlines_node_group
                 self.set_up_modifier_default_values(geometry_nodes_modifier, mesh)
+            if mesh.name == 'Face_Eye' or mesh.name.startswith('Face_Eye.'):
+                self.disable_face_eye_outlines(geometry_nodes_modifier)
         return geometry_nodes_modifier
 
 
@@ -1529,6 +1535,8 @@ class PunishingGrayRavenGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
                 geometry_nodes_modifier = mesh.modifiers.new(f'{NAME_OF_GEOMETRY_NODES_MODIFIER} {mesh_name}', 'NODES')
                 geometry_nodes_modifier.node_group = outlines_node_group
                 self.set_up_modifier_default_values(geometry_nodes_modifier, mesh)
+            if mesh.name == 'Face_Eye' or mesh.name.startswith('Face_Eye.'):
+                self.disable_face_eye_outlines(geometry_nodes_modifier)
         return geometry_nodes_modifier
 
     def set_up_modifier_default_values(self, modifier, mesh):
@@ -1623,6 +1631,8 @@ class V2_PunishingGrayRavenGeometryNodesSetup(GameGeometryNodesSetup):
                 geometry_nodes_modifier = mesh.modifiers.new(f'{NAME_OF_GEOMETRY_NODES_MODIFIER} {mesh_name}', 'NODES')
                 geometry_nodes_modifier.node_group = outlines_node_group
                 self.set_up_modifier_default_values(geometry_nodes_modifier, mesh)
+            if mesh.name == 'Face_Eye' or mesh.name.startswith('Face_Eye.'):
+                self.disable_face_eye_outlines(geometry_nodes_modifier)
         return geometry_nodes_modifier
 
 

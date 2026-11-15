@@ -5633,6 +5633,62 @@ def rig_character(
 
     loop_place_def()
 
+    if not (this_obj.data.bones.get('breast.L') and this_obj.data.bones.get('breast.R')):
+        if this_obj.data.bones.get('DEF-spine.003'):
+            bpy.context.view_layer.objects.active = this_obj
+            bpy.ops.object.mode_set(mode='EDIT')
+            eb_spine3 = this_obj.data.edit_bones.get('DEF-spine.003')
+            if eb_spine3:
+                sp_head = eb_spine3.head.copy()
+                for side, sx in (('L', 1.0), ('R', -1.0)):
+                    bname = f'breast.{side}'
+                    if not this_obj.data.edit_bones.get(bname):
+                        eb = this_obj.data.edit_bones.new(bname)
+                        eb.head = sp_head + Vector((0.0495 * sx, -0.0252, 0.0541))
+                        eb.tail = sp_head + Vector((0.1293 * sx, -0.0658, 0.1412))
+                        eb.use_deform = True
+                        eb.parent = eb_spine3
+                        eb.use_connect = False
+            bpy.ops.object.mode_set(mode='POSE')
+
+    for side, sx in (('L', 1.0), ('R', -1.0)):
+        b_bone = this_obj.data.bones.get(f'breast.{side}')
+        if not b_bone:
+            continue
+        has_weights = any(
+            mesh.vertex_groups.get(b_bone.name) and any(
+                g.group == mesh.vertex_groups[b_bone.name].index and g.weight > 0.01
+                for v in mesh.data.vertices for g in v.groups
+            )
+            for mesh in bpy.context.scene.objects
+            if mesh.type == 'MESH' and any(m.type == 'ARMATURE' and m.object == this_obj for m in mesh.modifiers)
+        )
+        if not has_weights:
+            c_world = this_obj.matrix_world @ b_bone.head_local
+            radius = 0.085
+            for mesh in bpy.context.scene.objects:
+                if mesh.type != 'MESH' or not mesh.name.startswith('Body'):
+                    continue
+                vg_sp3 = mesh.vertex_groups.get('DEF-spine.003')
+                if not vg_sp3:
+                    continue
+                vg_b = mesh.vertex_groups.get(b_bone.name) or mesh.vertex_groups.new(name=b_bone.name)
+                for v in mesh.data.vertices:
+                    p = mesh.matrix_world @ v.co
+                    if p.y > c_world.y + 0.035 or p.x * sx <= 0.004:
+                        continue
+                    w3 = next((g.weight for g in v.groups if g.group == vg_sp3.index), 0.0)
+                    if w3 <= 0.001:
+                        continue
+                    d = (p - c_world).length
+                    if d < radius:
+                        t = 1.0 - (d / radius) ** 2
+                        falloff = (t * t) * min(1.0, (p.x * sx - 0.004) / 0.02)
+                        w_b = w3 * falloff * 0.85
+                        if w_b > 0.001:
+                            vg_b.add([v.index], w_b, 'REPLACE')
+                            vg_sp3.add([v.index], w3 - w_b, 'REPLACE')
+
     # Genshin keeps its weighted breast bones as imported physics bones.
     # Give those bones selectable circles without replacing their rest pivots.
     breast_controls = [this_obj.pose.bones.get('breast.' + side) for side in ('L', 'R')]
