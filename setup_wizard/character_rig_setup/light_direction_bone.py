@@ -335,7 +335,8 @@ def setup_light_direction_bone(context, game_type, rig_obj=None):
     char_name = rig_obj.name[:-3] if rig_obj.name.endswith("Rig") else rig_obj.name
     light_dir = _find_light_empty("Light Direction", char_name, rig_obj)
     main_light_dir = _find_light_empty("Main Light Direction", char_name, rig_obj)
-    source_empty = light_dir or main_light_dir
+    ake_light = _find_light_empty("Light", char_name, rig_obj) if game_type == GameType.ARKNIGHTS_ENDFIELD.name else None
+    source_empty = light_dir or main_light_dir or ake_light
     if source_empty is None:
         return None
 
@@ -408,7 +409,7 @@ def setup_light_direction_bone(context, game_type, rig_obj=None):
             _setup_light_direction_parent_switch(rig_obj, pbone, sw_targets, default_idx)
             _inject_light_direction_rig_ui(rig_obj, sw_targets)
 
-        for emp in (light_dir, main_light_dir):
+        for emp in (light_dir, main_light_dir, ake_light):
             if emp is None:
                 continue
             for con in list(emp.constraints):

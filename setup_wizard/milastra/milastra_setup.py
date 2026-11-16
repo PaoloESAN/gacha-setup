@@ -83,6 +83,14 @@ def _copy_basebody_assets(extract_dir: str, gender: str):
         if not existing_face_sdf and os.path.isfile(face_sdf_src):
             shutil.copy2(face_sdf_src, os.path.join(extract_dir, "Beyd_Avatar_Girl_Face_Tex_SDF.png"))
 
+        existing_face_diff = glob.glob(
+            os.path.join(extract_dir, "**", "*Face*Diffuse*.png"),
+            recursive=True,
+        )
+        face_diff_src = os.path.join(assets_dir, "Beyd_Avatar_Girl_Face_P0144_01_Tex_Diffuse.png")
+        if not existing_face_diff and os.path.isfile(face_diff_src):
+            shutil.copy2(face_diff_src, os.path.join(extract_dir, "Beyd_Avatar_Girl_Face_P0144_01_Tex_Diffuse.png"))
+
     return fbx_dst
 
 
@@ -280,7 +288,7 @@ def _fix_milastra_missing_mat_json_defaults():
         pt = nt.nodes.get("PrimoToon")
 
         # 1. Replace neon-green/placeholder default outlines with Main_Diffuse Color output
-        if "outlines" in m_low and pt:
+        if "outlines" in m_low and "face" not in m_low and pt:
             diff_node = nt.nodes.get("Main_Diffuse")
             is_basebody_mask = (
                 "basebody body" in m_low
@@ -321,11 +329,44 @@ def _fix_milastra_missing_mat_json_defaults():
                         pass
 
 
+def _restore_milastra_face_shadow():
+    """Ensure Shadow Alpha.Face_Shadow uses PrimoToon's Face_Shadow mask rather than an SDF lightmap."""
+    shadow_alpha = bpy.data.node_groups.get("Shadow Alpha")
+    fs_node = shadow_alpha.nodes.get("Face_Shadow") if shadow_alpha else None
+    if not fs_node:
+        return
+    cur_img = getattr(fs_node, "image", None)
+    if cur_img and not any(k in cur_img.name.lower() for k in ("sdf", "facelightmap", "face_lightmap")):
+        return
+
+    fs_img = bpy.data.images.get("Avatar_Tex_Face_Shadow.png")
+    if fs_img is None:
+        shader_blend = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "shaders",
+            "gi",
+            "HoYoverse - PrimoToon v4.0.blend",
+        )
+        if os.path.isfile(shader_blend):
+            with bpy.data.libraries.load(shader_blend, link=False) as (df, dt):
+                if "Avatar_Tex_Face_Shadow.png" in df.images:
+                    dt.images = ["Avatar_Tex_Face_Shadow.png"]
+            fs_img = bpy.data.images.get("Avatar_Tex_Face_Shadow.png")
+
+    if fs_img:
+        try:
+            fs_img.colorspace_settings.name = "Non-Color"
+        except Exception:
+            pass
+        fs_node.image = fs_img
+
+
 def apply_milastra_face_skin_tint():
     """Apply Milastra post-setup material fixes (SubXX split, BaseBody skin, Face tint, Outlines)."""
     extract_dir = _find_extract_dir_for_milastra()
     _fix_milastra_sub_materials(extract_dir)
     _fix_milastra_missing_mat_json_defaults()
+    _restore_milastra_face_shadow()
 
     for mat in bpy.data.materials:
         if not getattr(mat, "use_nodes", False) or not mat.node_tree:
