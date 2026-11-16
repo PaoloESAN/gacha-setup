@@ -32,7 +32,7 @@ def stamp_rig_game(rig_obj, game_name, char_name=None):
 
     if str(game_name).upper() in ("ZENLESS_ZONE_ZERO", "ZZZ"):
         import bpy
-        st = getattr(bpy.context.scene, "zzz_shader_type", "LEGACY")
+        st = "LEGACY" if bpy.app.version < (5, 2, 0) else getattr(bpy.context.scene, "zzz_shader_type", "LEGACY")
         try:
             if "zzz_shader_type" not in rig_obj:
                 rig_obj["zzz_shader_type"] = st

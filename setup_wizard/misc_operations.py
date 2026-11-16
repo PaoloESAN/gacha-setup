@@ -723,10 +723,16 @@ def _is_wgt_or_lights_collection(name):
         n_low in ["lights", "wgt", "wgts", "collection", "master collection", "eye", "eyes", "widgets", "widget"]
         or n_low.startswith("wgt")
         or n_low.startswith("wgts_")
+        or n_low.startswith("kythera light receivers")
     )
 
 
 def find_zzz_character_collection():
+    main_rig = find_zzz_character_armature()
+    if main_rig:
+        for coll in main_rig.users_collection:
+            if not _is_wgt_or_lights_collection(coll.name):
+                return coll
     for coll in bpy.data.collections:
         if coll.name.lower() not in ["lights", "wgt", "wgts", "collection", "master collection", "eye", "eyes", "widgets", "widget"] and ("Avatar_" in coll.name or "Size" in coll.name):
             return coll
