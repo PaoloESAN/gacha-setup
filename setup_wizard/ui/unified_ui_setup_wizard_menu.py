@@ -287,25 +287,39 @@ def draw_file_browser_setup_settings(layout, context, game_type=None, operator=N
     settings_col = settings_box.column()
     props = getattr(context.scene, "character_rigger_props", None)
 
-    # 1. Shader settings
+    # 1. Base Model (Milastra Wonderland)
+    if selected_game == GameType.MILASTRA_WONDERLAND.name and operator is not None and hasattr(operator, "gender"):
+        settings_col.label(text="Base Model", icon="ARMATURE_DATA")
+        settings_col.row(align=True).prop(operator, "gender", expand=True)
+        settings_col.separator(factor=0.6)
+
+    # 2. Shader settings
+    has_shader = False
     if selected_game in (GameType.GENSHIN_IMPACT.name, GameType.MILASTRA_WONDERLAND.name):
         settings_col.prop(context.scene, "gi_shader_type", text="Shader")
+        has_shader = True
     if (selected_game == GameType.ZENLESS_ZONE_ZERO.name
             and bpy.app.version >= (5, 2, 0) and hasattr(context.scene, "zzz_shader_type")):
         settings_col.prop(context.scene, "zzz_shader_type", text="Shader")
+        has_shader = True
         if getattr(context.scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
             row_by = settings_col.row(align=True)
             row_by.alignment = 'RIGHT'
             row_by.label(text="Made by Kythera")
+    if has_shader:
+        settings_col.separator(factor=0.6)
 
-    # 2. Disable Rigging
+    # 3. Disable Rigging
     if props:
-        settings_col.prop(props, "disable_rigging", text="Disable Rigging (for weapons, anims, etc.)")
-
-    # 3. Base Model (Milastra Wonderland)
-    if selected_game == GameType.MILASTRA_WONDERLAND.name and operator is not None and hasattr(operator, "gender"):
-        settings_col.label(text="Base Model", icon="ARMATURE_DATA")
-        settings_col.row(align=True).prop(operator, "gender", expand=True)
+        rig_box = settings_col.box()
+        rig_col = rig_box.column(align=False)
+        rig_col.prop(props, "disable_rigging", text="Disable Rigging")
+        rig_col.separator(factor=0.3)
+        rig_info_col = rig_col.column(align=True)
+        rig_info_col.scale_y = 0.8
+        rig_info_col.label(text="Enable for props, weapons,", icon="INFO")
+        rig_info_col.label(text="objects, or animations only.")
+        settings_col.separator(factor=0.6)
 
     # 4. Physics
     if props:

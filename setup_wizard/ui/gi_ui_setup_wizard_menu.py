@@ -2280,7 +2280,7 @@ def register_gi_properties():
         description="Genshin shader used when setting up a character",
         items=[
             ('NEW', 'Quality', 'PrimoToon v4.0'),
-            ('OLD', 'Performance', 'Starriia v3.4 with separate outlines and post-processing'),
+            ('OLD', 'Performance', 'Starriia v3.4 for better performance'),
         ],
         default=default_genshin_shader(),
     )

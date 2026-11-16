@@ -688,6 +688,8 @@ def is_game_armature(context, game_name):
         return False
     detected = detect_armature_game(arm)
     if detected is not None:
+        if detected == "MILASTRA_WONDERLAND" and str(game_name) == "GENSHIN_IMPACT":
+            return True
         return detected == str(game_name)
     return False
 
