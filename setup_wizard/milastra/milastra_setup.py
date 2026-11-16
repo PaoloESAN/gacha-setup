@@ -367,6 +367,11 @@ def apply_milastra_face_skin_tint():
     _fix_milastra_sub_materials(extract_dir)
     _fix_milastra_missing_mat_json_defaults()
     _restore_milastra_face_shadow()
+    try:
+        from setup_wizard.ui.character_settings_tabs import hide_registered_rig_layers
+        hide_registered_rig_layers()
+    except Exception:
+        pass
 
     for mat in bpy.data.materials:
         if not getattr(mat, "use_nodes", False) or not mat.node_tree:

@@ -2041,20 +2041,36 @@ class GI_OT_ToggleLightingPanelVisibility(Operator):
         return {'FINISHED'}
 
 
+_OUTLINE_TINT_CACHE = {}
+
+
 def has_genshin_outline_tint(context, arm=None):
-    from setup_wizard.ui.character_settings_utils import get_character_materials
-    _, materials = get_character_materials(context, arm)
+    from setup_wizard.ui.character_settings_utils import get_character_materials, resolve_settings_armature
+    target_arm = arm or resolve_settings_armature(context)
+    cache_key = (target_arm.as_pointer() if target_arm else 0, len(bpy.data.materials))
+    if cache_key in _OUTLINE_TINT_CACHE:
+        return _OUTLINE_TINT_CACHE[cache_key]
+
+    _, materials = get_character_materials(context, target_arm)
+    found = False
     for material in materials:
         if not material.node_tree:
             continue
         for node in material.node_tree.nodes:
             if "Outline Tint" in node.inputs:
-                return True
+                found = True
+                break
             if node.type == 'GROUP' and node.node_tree and "global material properties" in node.node_tree.name.lower():
                 output = node.node_tree.nodes.get("Global Properties") or node.node_tree.nodes.get("Group Output")
                 if output and "Outline Tint" in output.inputs:
-                    return True
-    return False
+                    found = True
+                    break
+        if found:
+            break
+    if len(_OUTLINE_TINT_CACHE) > 64:
+        _OUTLINE_TINT_CACHE.clear()
+    _OUTLINE_TINT_CACHE[cache_key] = found
+    return found
 
 
 class GI_PT_Rig_Character_Settings(Panel):
@@ -2223,9 +2239,6 @@ class GI_PT_Rig_Character_Settings(Panel):
         if not is_lp_mode:
             col_shadow.prop(scene, "gi_day_night", text="Day / Night", slider=True)
         col_shadow.prop(scene, "gi_blush_strength", text="Blush Strength", slider=True)
-
-        from setup_wizard.utils.genshin_face_expressions import draw_face_expressions
-        draw_face_expressions(layout, arm)
 
         # 5. Hair & Clothes Physics (Below Shadow & Scene Settings)
         box_physics = layout.box()

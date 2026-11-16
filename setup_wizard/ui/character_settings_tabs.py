@@ -7,7 +7,7 @@ import bpy
 
 
 SUPPORTED_GAMES = {
-    'GENSHIN_IMPACT', 'HONKAI_STAR_RAIL', 'ZENLESS_ZONE_ZERO',
+    'GENSHIN_IMPACT', 'MILASTRA_WONDERLAND', 'HONKAI_STAR_RAIL', 'ZENLESS_ZONE_ZERO',
     'PUNISHING_GRAY_RAVEN', 'HONKAI_IMPACT_3RD', 'HONKAI_NEXUS_ANIMA',
     'NEVERNESS_TO_EVERNESS', 'WUTHERING_WAVES', 'ARKNIGHTS_ENDFIELD',
 }
@@ -35,6 +35,10 @@ def draw_character_settings_tabs(layout, context):
     card.row(align=True).prop(arm, 'gacha_settings_tab', expand=True)
     if arm.gacha_settings_tab == 'BONE_LAYERS':
         draw_bone_layers(layout, arm)
+        return True
+    if arm.gacha_settings_tab == 'EXPRESSIONS':
+        from setup_wizard.utils.genshin_face_expressions import draw_face_expressions
+        draw_face_expressions(layout, arm)
         return True
     layout.separator()
     return False
@@ -130,7 +134,16 @@ def hide_registered_rig_layers():
     """Also cover rig scripts already executed by Blender on file load."""
     for cls in bpy.types.Panel.__subclasses__():
         name = cls.__name__.lower()
-        if name != 'riglayers' and 'rig_layers' not in name and name != 'dynamicriglayers':
+        idname = getattr(cls, 'bl_idname', '').lower()
+        label = getattr(cls, 'bl_label', '')
+        is_layers_panel = (
+            name == 'riglayers'
+            or 'rig_layers' in name
+            or name == 'dynamicriglayers'
+            or 'rig_layers_' in idname
+            or label.startswith('Rig Layers:')
+        )
+        if not is_layers_panel:
             continue
         if not cls.is_registered or cls in _old_polls or not hasattr(cls, 'poll'):
             continue
@@ -139,12 +152,34 @@ def hide_registered_rig_layers():
         _old_polls[cls] = original
 
 
+_BASE_TAB_ITEMS = (
+    ('CHARACTER', 'Character', 'Character settings'),
+    ('BONE_LAYERS', 'Rig Layers', 'Show or hide groups of bones'),
+)
+_GENSHIN_EXPRESSIONS_TAB_ITEMS = (
+    ('CHARACTER', 'Character', 'Character settings'),
+    ('BONE_LAYERS', 'Rig Layers', 'Show or hide groups of bones'),
+    ('EXPRESSIONS', 'Expressions', 'Facial expressions'),
+)
+
+
+def _tab_items(self, context):
+    if self is not None:
+        try:
+            from setup_wizard.ui.character_settings_utils import detect_armature_game
+            if detect_armature_game(self) == 'GENSHIN_IMPACT':
+                from setup_wizard.utils.genshin_face_expressions import expression_nodes
+                if next(expression_nodes(self), None) is not None:
+                    return _GENSHIN_EXPRESSIONS_TAB_ITEMS
+        except Exception:
+            pass
+    return _BASE_TAB_ITEMS
+
+
 def register():
     bpy.types.Object.gacha_settings_tab = bpy.props.EnumProperty(
         name='Character Settings',
-        items=(('CHARACTER', 'Character', 'Character settings'),
-               ('BONE_LAYERS', 'Rig Layers', 'Show or hide groups of bones')),
-        default='CHARACTER',
+        items=_tab_items,
     )
 
 

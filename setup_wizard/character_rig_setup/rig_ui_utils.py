@@ -1726,26 +1726,20 @@ except Exception:
 def find_target_armature(context=None, armature_obj=None):
     context = context or bpy.context
     if armature_obj and getattr(armature_obj, "type", None) == "ARMATURE":
-        print(f"[GACHA SETUP LOG] find_target_armature: directly provided '{armature_obj.name}'")
         return armature_obj
 
     # 1. Check active object
     act = context.active_object or getattr(context, "object", None)
     if act:
         if act.type == "ARMATURE" and not act.name.startswith("WGT"):
-            print(f"[GACHA SETUP LOG] find_target_armature: active object is armature '{act.name}'")
             return act
         if act.type == "MESH":
             if hasattr(act, "find_armature") and act.find_armature():
-                arm = act.find_armature()
-                print(f"[GACHA SETUP LOG] find_target_armature: found via active mesh.find_armature() -> '{arm.name}'")
-                return arm
+                return act.find_armature()
             for m in act.modifiers:
                 if m.type == 'ARMATURE' and m.object:
-                    print(f"[GACHA SETUP LOG] find_target_armature: found via active mesh modifier -> '{m.object.name}'")
                     return m.object
             if act.parent and act.parent.type == 'ARMATURE':
-                print(f"[GACHA SETUP LOG] find_target_armature: found via active mesh parent -> '{act.parent.name}'")
                 return act.parent
 
     # 2. Check selected objects
