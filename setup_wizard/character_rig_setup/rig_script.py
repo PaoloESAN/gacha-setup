@@ -3655,23 +3655,28 @@ def rig_character(
             except Exception as e:
                 _rig_log.append(f"ZZZ Brow driver failed: {e}")
         else:
-            try:
-                makeCon("Brow_Down_L", "Brow-L-Control", "bone * -4", "LOC_Y")
-                makeCon("Brow_Down_R", "Brow-R-Control", "bone * -4", "LOC_Y")
-                makeCon("Brow_Up_L", "Brow-L-Control", "bone * 4", "LOC_Y")
-                makeCon("Brow_Up_R", "Brow-R-Control", "bone * 4", "LOC_Y")
-                makeCon("Brow_Trouble_L", "Brow-Trouble-L-Control", "bone * 2", "LOC_X")
-                makeCon("Brow_Trouble_R", "Brow-Trouble-R-Control", "bone * 2", "LOC_X")
-                makeCon("Brow_Smily_R", "Brow-Smily-R-Control", "bone * 2", "LOC_X")
-                makeCon("Brow_Smily_L", "Brow-Smily-L-Control", "bone * 2", "LOC_X")
-                makeCon("Brow_Angry_L", "Brow-Angry-L-Control", "bone * 2", "LOC_X")
-                makeCon("Brow_Angry_R", "Brow-Angry-R-Control", "bone * 2", "LOC_X")
-                makeCon("Brow_Shy_L", "Brow-Shy-L-Control", "bone * 2", "LOC_X")
-                makeCon("Brow_Shy_R", "Brow-Shy-R-Control", "bone * 2", "LOC_X")
-                makeCon("Brow_Squeeze_R", "Brow-R-Control", "bone * 4", "LOC_X")
-                makeCon("Brow_Squeeze_L", "Brow-L-Control", "bone * -4", "LOC_X")
-            except Exception as e:
-                _rig_log.append(f"Brow driver failed: {e}")
+            brow_configs = [
+                ("Brow_Down_L", "Brow-L-Control", "bone * -4", "LOC_Y"),
+                ("Brow_Down_R", "Brow-R-Control", "bone * -4", "LOC_Y"),
+                ("Brow_Up_L", "Brow-L-Control", "bone * 4", "LOC_Y"),
+                ("Brow_Up_R", "Brow-R-Control", "bone * 4", "LOC_Y"),
+                ("Brow_Trouble_L", "Brow-Trouble-L-Control", "bone * 2", "LOC_X"),
+                ("Brow_Trouble_R", "Brow-Trouble-R-Control", "bone * 2", "LOC_X"),
+                ("Brow_Smily_R", "Brow-Smily-R-Control", "bone * 2", "LOC_X"),
+                ("Brow_Smily_L", "Brow-Smily-L-Control", "bone * 2", "LOC_X"),
+                ("Brow_Angry_L", "Brow-Angry-L-Control", "bone * 2", "LOC_X"),
+                ("Brow_Angry_R", "Brow-Angry-R-Control", "bone * 2", "LOC_X"),
+                ("Brow_Shy_L", "Brow-Shy-L-Control", "bone * 2", "LOC_X"),
+                ("Brow_Shy_R", "Brow-Shy-R-Control", "bone * 2", "LOC_X"),
+                ("Brow_Squeeze_R", "Brow-R-Control", "bone * 4", "LOC_X"),
+                ("Brow_Squeeze_L", "Brow-L-Control", "bone * -4", "LOC_X"),
+            ]
+            for sk_name, bone_name, expression, transform in brow_configs:
+                if sk_name in obj.data.shape_keys.key_blocks:
+                    try:
+                        makeCon(sk_name, bone_name, expression, transform)
+                    except Exception as e:
+                        _rig_log.append(f"Brow driver failed: '{sk_name}' / '{bone_name}' -> {e}")
 
         # HSR brow variants
         try:
@@ -3717,24 +3722,28 @@ def rig_character(
                 ("Eye_WinkA_R", "WinkA-R-Invis", "bone * -.82", "LOC_Y"),
                 ("Eye_WinkB_L", "WinkB-L-Invis", "bone * -.82", "LOC_Y"),
                 ("Eye_WinkB_R", "WinkB-R-Invis", "bone * -.82", "LOC_Y"),
+                ("Eye_WinkB", "Eye-WinkB-Control", "bone * 3.3333", "LOC_X"),
                 ("Eye_WinkC_L", "WinkC-L-Invis", "bone * -.82", "LOC_Y"),
                 ("Eye_WinkC_R", "WinkC-R-Invis", "bone * -.82", "LOC_Y"),
                 ("Eye_Ha", "Eye-Ha-Control", "bone * -2.22", "LOC_Y"),
                 ("Eye_Jito", "Eye-Jito-Control", "bone * -2.22", "LOC_Y"),
                 ("Eye_Wail", "Eye-Wail-Control", "bone * -2.22", "LOC_Y"),
+                ("Eye_Sad", "Eye-Wail-Control", "bone * -2.22", "LOC_Y"),
                 ("Eye_Hostility", "Eye-Hostility-Control", "bone * -2.22", "LOC_Y"),
+                ("Eye_Angry", "Eye-Hostility-Control", "bone * -2.22", "LOC_Y"),
                 ("Eye_Tired", "Eye-Tired-Control", "bone * -2.22", "LOC_Y"),
                 ("Eye_WUp", "Eye-Up-Control", "bone * -2.22", "LOC_Y"),
                 ("Eye_WDown", "Eye-Down-Control", "bone * -2.22", "LOC_Y"),
                 ("Eye_Lowereyelid", "Eye-LowerEyelid-Control", "bone * -2.22", "LOC_Y"),
             ]
             for sk_name, bone_name, expression, transform in eye_shape_key_configs:
-                try:
-                    makeCon(sk_name, bone_name, expression, transform)
-                except Exception as e:
-                    _rig_log.append(
-                        f"Eye driver failed: '{sk_name}' / '{bone_name}' -> {e}"
-                    )
+                if sk_name in obj.data.shape_keys.key_blocks:
+                    try:
+                        makeCon(sk_name, bone_name, expression, transform)
+                    except Exception as e:
+                        _rig_log.append(
+                            f"Eye driver failed: '{sk_name}' / '{bone_name}' -> {e}"
+                        )
 
         # HSR eye shape keys (Face object variants like 00_Close01_Eye)
         hsr_eye_configs = [
@@ -3799,27 +3808,34 @@ def rig_character(
                 except Exception as e:
                     _rig_log.append(f"ZZZ Mouth driver failed: {sk_name} -> {e}")
         else:
-            try:
-                makeCon(
-                    "Mouth_Default", "Mouth-Default-Control", "bone * 1.67", "LOC_X"
-                )
-                makeCon("Mouth_A01", "Mouth-Control", "bone * -1.33", "LOC_Y")
-                makeCon("Mouth_Open01", "Mouth-Control", "bone * 1.33", "LOC_Y")
-                makeCon("Mouth_Smile01", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X")
-                makeCon("Mouth_Smile02", "Mouth-Smile2-Control", "bone * 1.67", "LOC_X")
-                makeCon("Mouth_Angry01", "Mouth-Angry1-Control", "bone * 1.67", "LOC_X")
-                makeCon("Mouth_Angry02", "Mouth-Angry2-Control", "bone * 1.67", "LOC_X")
-                makeCon("Mouth_Angry03", "Mouth-Angry3-Control", "bone * 1.67", "LOC_X")
-                makeCon("Mouth_Fury01", "Mouth-Fury1-Control", "bone * 1.67", "LOC_X")
-                makeCon("Mouth_Doya01", "Mouth-Doya1-Control", "bone * 1.67", "LOC_X")
-                makeCon("Mouth_Doya02", "Mouth-Doya2-Control", "bone * 1.67", "LOC_X")
-                makeCon("Mouth_Pero01", "Mouth-Pero1-Control", "bone * 1.67", "LOC_X")
-                makeCon("Mouth_Pero02", "Mouth-Pero2-Control", "bone * 1.67", "LOC_X")
-                makeCon("Mouth_Line01", "Mouth-Control", "bone * 1.33", "LOC_X")
-                makeCon("Mouth_Line02", "Mouth-Control", "bone * -1.33", "LOC_X")
-                makeCon("Mouth_Neko01", "Mouth-Neko1-Control", "bone * 1.67", "LOC_X")
-            except Exception as e:
-                _rig_log.append(f"Mouth driver failed: {e}")
+            mouth_shape_key_configs = [
+                ("Mouth_Default", "Mouth-Default-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_A01", "Mouth-Control", "bone * -1.33", "LOC_Y"),
+                ("Mouth_Open01", "Mouth-Control", "bone * 1.33", "LOC_Y"),
+                ("Mouth_Small", "Mouth-Control", "bone * 1.33", "LOC_Y"),
+                ("Mouth_Smile01", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Smile", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Smile02", "Mouth-Smile2-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Angry01", "Mouth-Angry1-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Angry", "Mouth-Angry1-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Angry02", "Mouth-Angry2-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Angry03", "Mouth-Angry3-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Fury01", "Mouth-Fury1-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Fury", "Mouth-Fury1-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Doya01", "Mouth-Doya1-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Doya02", "Mouth-Doya2-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Pero01", "Mouth-Pero1-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Pero02", "Mouth-Pero2-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Line01", "Mouth-Control", "bone * 1.33", "LOC_X"),
+                ("Mouth_Line02", "Mouth-Control", "bone * -1.33", "LOC_X"),
+                ("Mouth_Neko01", "Mouth-Neko1-Control", "bone * 1.67", "LOC_X"),
+            ]
+            for sk_name, bone_name, expression, transform in mouth_shape_key_configs:
+                if sk_name in obj.data.shape_keys.key_blocks:
+                    try:
+                        makeCon(sk_name, bone_name, expression, transform)
+                    except Exception as e:
+                        _rig_log.append(f"Mouth driver failed: '{sk_name}' / '{bone_name}' -> {e}")
 
         # HSR mouth shape keys
         hsr_mouth_configs = [
@@ -3957,6 +3973,14 @@ def rig_character(
         "Eye_WUp",
         "Eye_WDown",
         "Eye_Lowereyelid",
+        # Milastra / Face-key variants
+        "Eye_WinkB",
+        "Eye_Sad",
+        "Eye_Angry",
+        "Mouth_Smile",
+        "Mouth_Angry",
+        "Mouth_Fury",
+        "Mouth_Small",
         # HSR / Face-key variants
         "00_Close01_Eye",
         "00_Default_Brow",

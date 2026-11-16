@@ -395,12 +395,14 @@ def run_setup():
         with override_ctx:
             if game == "MILASTRA_WONDERLAND":
                 milastra_steps = order.get("GENSHIN_OT_setup_wizard_ui") or steps
+                milastra_source = JOB.get("milastra_source") or character_dir
+                op_kwargs = {"gender": JOB.get("milastra_gender", "GIRL")}
+                if milastra_source and os.path.isfile(milastra_source) and milastra_source.lower().endswith(".zip"):
+                    op_kwargs["filepath"] = milastra_source
+                else:
+                    op_kwargs["directory"] = milastra_source
                 with checked_workflow(import_order, milastra_steps):
-                    bpy.ops.milastra_wonderland.setup_wizard_ui(
-                        "EXEC_DEFAULT",
-                        directory=character_dir,
-                        gender=JOB.get("milastra_gender", "GIRL"),
-                    )
+                    bpy.ops.milastra_wonderland.setup_wizard_ui("EXEC_DEFAULT", **op_kwargs)
             else:
                 with checked_workflow(import_order, steps):
                     if selected_file and os.path.isfile(selected_file):

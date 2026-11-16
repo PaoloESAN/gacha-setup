@@ -361,6 +361,12 @@ class HYV_OT_HoyoversePostProcessingDefaultSettings(Operator, ImportHelper, Cust
             bpy.context.scene.eevee.use_bloom = False
         bpy.context.scene.render.film_transparent = False
 
+        try:
+            from setup_wizard.milastra.milastra_setup import apply_milastra_face_skin_tint
+            apply_milastra_face_skin_tint()
+        except Exception:
+            pass
+
         if self.next_step_idx:
             NextStepInvoker().invoke(
                 self.next_step_idx, 

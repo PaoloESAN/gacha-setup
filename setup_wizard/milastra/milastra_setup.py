@@ -87,6 +87,23 @@ def _copy_basebody_assets(extract_dir: str, gender: str):
 
 
 def _remove_opposite_gender_files(extract_dir: str, gender: str):
+    opposite_dir = "boy" if gender == "GIRL" else "girl"
+    target_dir = "girl" if gender == "GIRL" else "boy"
+    has_target_dir = any(
+        d.lower() == target_dir
+        for _, dirs, _ in os.walk(extract_dir)
+        for d in dirs
+    )
+    if has_target_dir:
+        for root, dirs, _ in os.walk(extract_dir, topdown=True):
+            for d in list(dirs):
+                if d.lower() == opposite_dir:
+                    try:
+                        shutil.rmtree(os.path.join(root, d))
+                    except OSError:
+                        pass
+                    dirs.remove(d)
+
     opposite_prefix = "Beyd_Avatar_Boy_" if gender == "GIRL" else "Beyd_Avatar_Girl_"
     for root, _, files in os.walk(extract_dir):
         for fname in files:
@@ -98,8 +115,42 @@ def _remove_opposite_gender_files(extract_dir: str, gender: str):
 
 
 def _merge_sub_armature_into_base(base_arm, sub_arm, new_meshes):
+    base_scale = base_arm.matrix_world.to_scale()
+    sub_scale = sub_arm.matrix_world.to_scale()
+    # Some standalone assets (e.g. Face_P0146.fbx, Pupil_P0466.fbx) are exported at 1.0
+    # meter scale while BaseBody FBXs are 0.01; align sub_arm scale & head height before join.
+    scale_mismatch = (
+        abs(base_scale.x) > 1e-6
+        and abs(sub_scale.x / base_scale.x) > 10.0
+    )
+    if scale_mismatch:
+        ratio = base_scale.x / sub_scale.x
+        base_head = base_arm.data.bones.get("Bip001 Head")
+        sub_head = sub_arm.data.bones.get("Bip001 Head")
+        if base_head and sub_head:
+            base_head_w = base_arm.matrix_world @ base_head.head_local
+            sub_head_w = sub_arm.matrix_world @ sub_head.head_local
+            sub_arm.scale = (
+                sub_arm.scale.x * ratio,
+                sub_arm.scale.y * ratio,
+                sub_arm.scale.z * ratio,
+            )
+            sub_arm.location += base_head_w - (sub_head_w * ratio)
+        else:
+            sub_arm.scale = (
+                sub_arm.scale.x * ratio,
+                sub_arm.scale.y * ratio,
+                sub_arm.scale.z * ratio,
+            )
+    base_inv = base_arm.matrix_world.inverted()
     for mesh in new_meshes:
-        mesh.parent = base_arm
+        if scale_mismatch:
+            mesh.parent = base_arm
+        else:
+            mw = mesh.matrix_world.copy()
+            mesh.parent = base_arm
+            mesh.matrix_parent_inverse = base_inv
+            mesh.matrix_world = mw
         for mod in mesh.modifiers:
             if mod.type == "ARMATURE":
                 mod.object = base_arm
@@ -142,10 +193,187 @@ def _rename_mesh_color_attributes(target_name: str):
                     break
 
 
+def _find_extract_dir_for_milastra():
+    scene = getattr(bpy.context, "scene", None)
+    if scene and scene.get("setup_wizard_temp_extract_dir"):
+        d = scene.get("setup_wizard_temp_extract_dir")
+        if d and os.path.isdir(d):
+            return d
+    for img in bpy.data.images:
+        fp = getattr(img, "filepath", "") or ""
+        if fp and "milastra_" in fp.lower():
+            p = fp
+            while p and os.path.basename(p).lower() != "" and not os.path.basename(p).lower().startswith("milastra_"):
+                p = os.path.dirname(p)
+            if p and os.path.isdir(p):
+                return p
+    return ""
+
+
+def _fix_milastra_sub_materials(extract_dir):
+    """Give _Sub01 / _Sub02 meshes their own material copy with matching SubXX Diffuse/Lightmap."""
+    if not extract_dir or not os.path.isdir(extract_dir):
+        return
+    sub_re = re.compile(r"^(.*?)_(Sub\d+)(?:_.*)?$", re.IGNORECASE)
+    mat_cache = {}
+    for obj in bpy.data.objects:
+        if obj.type != "MESH":
+            continue
+        m = sub_re.match(obj.name)
+        if not m:
+            continue
+        prefix_part, sub_tag = m.group(1), m.group(2)
+        for slot in obj.material_slots:
+            mat = slot.material
+            if not mat or not getattr(mat, "use_nodes", False) or not mat.node_tree:
+                continue
+            if "outlines" in mat.name.lower():
+                continue
+            diff_node = mat.node_tree.nodes.get("Main_Diffuse")
+            if not diff_node or not getattr(diff_node, "image", None):
+                continue
+            if sub_tag.lower() in diff_node.image.name.lower():
+                continue
+            cache_key = (mat.name, prefix_part.lower(), sub_tag.lower())
+            if cache_key in mat_cache:
+                slot.material = mat_cache[cache_key]
+                continue
+            diff_matches = glob.glob(
+                os.path.join(extract_dir, "**", f"*{prefix_part}*{sub_tag}*Diffuse*.png"),
+                recursive=True,
+            )
+            lm_matches = glob.glob(
+                os.path.join(extract_dir, "**", f"*{prefix_part}*{sub_tag}*Lightmap*.png"),
+                recursive=True,
+            )
+            if not diff_matches:
+                continue
+            new_mat = mat.copy()
+            new_mat.name = f"{mat.name}_{sub_tag}"
+            n_diff = new_mat.node_tree.nodes.get("Main_Diffuse")
+            if n_diff:
+                n_diff.image = bpy.data.images.load(diff_matches[0], check_existing=True)
+            n_lm = new_mat.node_tree.nodes.get("Main_Lightmap")
+            if n_lm and lm_matches:
+                n_lm.image = bpy.data.images.load(lm_matches[0], check_existing=True)
+            slot.material = new_mat
+            mat_cache[cache_key] = new_mat
+
+
+def _fix_milastra_missing_mat_json_defaults():
+    """Fix orange BaseBody and neon-green Outlines when a Milastra set has no Materials/*.json."""
+    extract_dir = _find_extract_dir_for_milastra()
+    has_mat_json = bool(
+        extract_dir and glob.glob(os.path.join(extract_dir, "**", "*_Mat.json"), recursive=True)
+    )
+    if has_mat_json:
+        return
+
+    skin_rgba = (1.0, 0.76, 0.62, 1.0)
+    dark_outline = (0.12, 0.07, 0.07, 1.0)
+
+    for mat in bpy.data.materials:
+        if not getattr(mat, "use_nodes", False) or not mat.node_tree:
+            continue
+        nt = mat.node_tree
+        m_low = mat.name.lower()
+        pt = nt.nodes.get("PrimoToon")
+
+        # 1. Replace neon-green/placeholder default outlines with Main_Diffuse Color output
+        if "outlines" in m_low and pt:
+            diff_node = nt.nodes.get("Main_Diffuse")
+            is_basebody_mask = (
+                "basebody body" in m_low
+                and diff_node
+                and getattr(diff_node, "image", None)
+                and "basebody_common" in diff_node.image.name.lower()
+            )
+            for inp in pt.inputs:
+                if inp.name.startswith("Outline Color") and not inp.links and hasattr(inp, "default_value"):
+                    try:
+                        if is_basebody_mask:
+                            inp.default_value = skin_rgba
+                        elif diff_node and getattr(diff_node, "image", None) and "Color" in diff_node.outputs:
+                            nt.links.new(diff_node.outputs["Color"], inp)
+                        else:
+                            inp.default_value = dark_outline
+                    except Exception:
+                        pass
+
+        # 2. Fix BaseBody orange mask texture when no Mat.json was imported
+        if "basebody body" in m_low and "outlines" not in m_low and pt:
+            diff_node = nt.nodes.get("Main_Diffuse")
+            if diff_node and getattr(diff_node, "image", None) and "basebody_common" in diff_node.image.name.lower():
+                diff_in = pt.inputs.get("Diffuse Color")
+                if diff_in and not nt.nodes.get("Milastra_Body_Skin_Color"):
+                    rgb = nt.nodes.new("ShaderNodeRGB")
+                    rgb.name = "Milastra_Body_Skin_Color"
+                    rgb.location = (diff_node.location.x + 220, diff_node.location.y)
+                    rgb.outputs[0].default_value = skin_rgba
+                    for l in list(diff_in.links):
+                        nt.links.remove(l)
+                    nt.links.new(rgb.outputs[0], diff_in)
+            for inp in pt.inputs:
+                if inp.name in ("Toggle Lightmap AO", "Toggle Shadow Ramp") and not inp.links:
+                    try:
+                        inp.default_value = False
+                    except Exception:
+                        pass
+
+
+def apply_milastra_face_skin_tint():
+    """Apply Milastra post-setup material fixes (SubXX split, BaseBody skin, Face tint, Outlines)."""
+    extract_dir = _find_extract_dir_for_milastra()
+    _fix_milastra_sub_materials(extract_dir)
+    _fix_milastra_missing_mat_json_defaults()
+
+    for mat in bpy.data.materials:
+        if not getattr(mat, "use_nodes", False) or not mat.node_tree:
+            continue
+        if "face" not in mat.name.lower():
+            continue
+        nt = mat.node_tree
+        face_diff = nt.nodes.get("Face_Diffuse")
+        primotoon = nt.nodes.get("PrimoToon")
+        if not face_diff or not primotoon or not getattr(face_diff, "image", None):
+            continue
+        if "face_p0144" not in face_diff.image.name.lower():
+            continue
+        if nt.nodes.get("Milastra_Face_Skin_Tint"):
+            continue
+        diff_in = primotoon.inputs.get("Diffuse Color")
+        if not diff_in:
+            continue
+        mix = nt.nodes.new("ShaderNodeMix")
+        mix.name = "Milastra_Face_Skin_Tint"
+        mix.data_type = "RGBA"
+        mix.blend_type = "MULTIPLY"
+        mix.location = (face_diff.location.x + 260, face_diff.location.y)
+        mix.inputs[0].default_value = 1.0  # Factor
+        # Warm peach skin tint (linear) matching Beyd_Avatar_Girl_BaseBody neck/body
+        mix.inputs[7].default_value = (1.0, 0.85, 0.64, 1.0)
+        body_mat = next(
+            (m for m in bpy.data.materials if "basebody body" in m.name.lower() and "outlines" not in m.name.lower() and getattr(m, "use_nodes", False)),
+            None,
+        )
+        body_pt = body_mat.node_tree.nodes.get("PrimoToon") if body_mat and body_mat.node_tree else None
+        if body_pt:
+            for sock_name in ("Cold Shadow Color", "Warm Shadow Color"):
+                if sock_name in body_pt.inputs and sock_name in primotoon.inputs and not primotoon.inputs[sock_name].links:
+                    try:
+                        primotoon.inputs[sock_name].default_value = body_pt.inputs[sock_name].default_value
+                    except Exception:
+                        pass
+        for l in list(diff_in.links):
+            nt.links.remove(l)
+        nt.links.new(face_diff.outputs["Color"], mix.inputs[6])
+        nt.links.new(mix.outputs[2], diff_in)
+
+
 class MILASTRA_OT_SetupWizardUI(Operator, ImportHelper, CustomOperatorProperties):
-    """Select a folder containing Milastra Wonderland .zip files and choose gender"""
+    """Select a Milastra Wonderland .zip set or folder containing .zip files and choose gender"""
     bl_idname = "milastra_wonderland.setup_wizard_ui"
-    bl_label = "Milastra Wonderland: Select .zip Folder"
+    bl_label = "Milastra Wonderland: Select .zip or Folder"
 
     filename_ext = ""
 
@@ -164,10 +392,10 @@ class MILASTRA_OT_SetupWizardUI(Operator, ImportHelper, CustomOperatorProperties
 
     gender: EnumProperty(
         name="Base Model",
-        description="Select Female or Male BaseBody",
+        description="Select Girl or Boy BaseBody",
         items=[
-            ("GIRL", "Female", "Use female BaseBody (Beyd_Avatar_Girl)"),
-            ("BOY", "Male", "Use male BaseBody (Beyd_Avatar_Boy)"),
+            ("GIRL", "Girl", "Use Girl BaseBody (Beyd_Avatar_Girl)"),
+            ("BOY", "Boy", "Use Boy BaseBody (Beyd_Avatar_Boy)"),
         ],
         default="GIRL",
     )
@@ -182,19 +410,29 @@ class MILASTRA_OT_SetupWizardUI(Operator, ImportHelper, CustomOperatorProperties
         )
 
     def execute(self, context):
-        selected_folder = _resolve_selected_folder(self.filepath, self.directory, self.file_directory)
-        if not selected_folder or not os.path.isdir(selected_folder):
-            self.report({"ERROR"}, "Please select a valid folder containing .zip files.")
-            return {"CANCELLED"}
-
-        zip_files = sorted(
-            os.path.join(selected_folder, f)
-            for f in os.listdir(selected_folder)
-            if f.lower().endswith(".zip") and not f.startswith("._")
+        selected_zip = (
+            self.filepath
+            if self.filepath and os.path.isfile(self.filepath) and self.filepath.lower().endswith(".zip")
+            else None
         )
-        if not zip_files:
-            self.report({"ERROR"}, f"No .zip files found in: {selected_folder}")
-            return {"CANCELLED"}
+        if selected_zip:
+            zip_files = [selected_zip]
+            char_target = selected_zip
+        else:
+            selected_folder = _resolve_selected_folder(self.filepath, self.directory, self.file_directory)
+            if not selected_folder or not os.path.isdir(selected_folder):
+                self.report({"ERROR"}, "Please select a .zip file or a valid folder containing .zip files.")
+                return {"CANCELLED"}
+
+            zip_files = sorted(
+                os.path.join(selected_folder, f)
+                for f in os.listdir(selected_folder)
+                if f.lower().endswith(".zip") and not f.startswith("._")
+            )
+            if not zip_files:
+                self.report({"ERROR"}, f"No .zip files found in: {selected_folder}")
+                return {"CANCELLED"}
+            char_target = selected_folder
 
         from setup_wizard.services.isolation import isolation_service
         if (
@@ -202,15 +440,17 @@ class MILASTRA_OT_SetupWizardUI(Operator, ImportHelper, CustomOperatorProperties
             and isolation_service.is_isolated_mode_enabled()
         ):
             try:
+                job_char_dir = os.path.dirname(char_target) if selected_zip else char_target
                 return isolation_service.launch_job(
                     context,
                     self,
-                    character_dir=selected_folder,
+                    character_dir=job_char_dir,
                     game_type=GameType.MILASTRA_WONDERLAND.name,
                     high_level_step_name=self.bl_idname,
                     extra_job_data={
                         "milastra_gender": self.gender,
-                        "is_archive": True,
+                        "milastra_source": char_target,
+                        "is_archive": False,
                     },
                 )
             finally:
@@ -260,6 +500,12 @@ class MILASTRA_OT_SetupWizardUI(Operator, ImportHelper, CustomOperatorProperties
             if not is_rigging_disabled(context):
                 clear_armature_pose(base_arm)
                 reorient_armature_bones(base_arm)
+
+            try:
+                from setup_wizard.ui.character_settings_utils import tag_armature_game
+                tag_armature_game(base_arm, GameType.GENSHIN_IMPACT.name)
+            except Exception:
+                pass
 
             _rename_mesh_color_attributes(SHADER_COLOR_ATTRIBUTE_NAME)
 
