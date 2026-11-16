@@ -117,6 +117,71 @@ def initialize_genshin_rim_x(rig):
             rim.location.x = -0.0075
 
 
+def apply_genshin_lighting_rest_pose(rig):
+    """Bake default RimX and Light Direction pose transforms into rest pose so Alt+G/Alt+R keeps Rim=0.0 and Light Direction rotation."""
+    if not rig or rig.type != "ARMATURE" or not rig.pose:
+        return
+    target_names = [b for b in ("RimX", "Light Direction") if b in rig.pose.bones]
+    if not target_names:
+        return
+
+    prev_active = bpy.context.view_layer.objects.active
+    prev_mode = rig.mode
+    try:
+        bpy.context.view_layer.objects.active = rig
+        if rig.mode != "POSE":
+            bpy.ops.object.mode_set(mode="POSE")
+
+        for pb in rig.pose.bones:
+            if hasattr(pb, "select"):
+                pb.select = False
+            elif hasattr(pb.bone, "select"):
+                pb.bone.select = False
+
+        pb_rim = rig.pose.bones.get("RimX")
+        rim_dx = pb_rim.location.x if pb_rim and abs(pb_rim.location.x) > 1e-6 else 0.0
+
+        saved_hide = {}
+        saved_coll_vis = {}
+        for bname in target_names:
+            pb = rig.pose.bones[bname]
+            saved_hide[bname] = pb.bone.hide
+            pb.bone.hide = False
+            if hasattr(pb.bone, "collections"):
+                for coll in pb.bone.collections:
+                    if coll.name not in saved_coll_vis:
+                        saved_coll_vis[coll.name] = coll.is_visible
+                    coll.is_visible = True
+            if hasattr(pb, "select"):
+                pb.select = True
+            elif hasattr(pb.bone, "select"):
+                pb.bone.select = True
+
+        bpy.ops.pose.armature_apply(selected=True)
+
+        if pb_rim and abs(rim_dx) > 1e-6:
+            for c in pb_rim.constraints:
+                if c.type == "LIMIT_LOCATION" and c.owner_space == "LOCAL":
+                    c.min_x -= rim_dx
+                    c.max_x -= rim_dx
+
+        for bname, was_hidden in saved_hide.items():
+            rig.pose.bones[bname].bone.hide = was_hidden
+        for cname, was_vis in saved_coll_vis.items():
+            if hasattr(rig.data, "collections") and cname in rig.data.collections:
+                rig.data.collections[cname].is_visible = was_vis
+    except Exception as e:
+        print(f"[GI RIG] apply_genshin_lighting_rest_pose failed: {e}")
+    finally:
+        try:
+            if rig.mode != prev_mode:
+                bpy.ops.object.mode_set(mode=prev_mode)
+        except Exception:
+            pass
+        if prev_active:
+            bpy.context.view_layer.objects.active = prev_active
+
+
 def bind_viewport_outlines(rig):
     """Connect the settings plate to this character's outline modifiers."""
     plate = rig.pose.bones.get('plate-settings') if rig and rig.pose else None
@@ -5902,6 +5967,7 @@ def rig_character(
 
     from setup_wizard.character_rig_setup.pole_targets import setup_pole_targets
     setup_pole_targets(this_obj, use_arm_ik_poles, use_leg_ik_poles)
+    apply_genshin_lighting_rest_pose(this_obj)
 
 
 def setup_neck_and_head_follow(neck_follow_value, head_follow_value):

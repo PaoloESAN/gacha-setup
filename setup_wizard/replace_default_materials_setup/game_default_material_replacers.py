@@ -3627,19 +3627,14 @@ class ArknightsEndfieldDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 
         for mesh in meshes:
             mesh_name = mesh.name.lower()
-            is_hair = 'hair_01' in mesh_name or ('hair' in mesh_name and 'shadow' not in mesh_name)
             is_face = 'face_01' in mesh_name or 'face' in mesh_name
 
-            # Light modifier on non-hair meshes
-            if light_ng and not is_hair:
+            # Light modifier on all meshes (including hair, which reads LightDirection)
+            if light_ng:
                 mod_light = mesh.modifiers.get('Light')
                 if not mod_light:
                     mod_light = mesh.modifiers.new('Light', 'NODES')
                 mod_light.node_group = light_ng
-            elif is_hair:
-                mod_light = mesh.modifiers.get('Light')
-                if mod_light:
-                    mesh.modifiers.remove(mod_light)
 
             # Face modifiers on face mesh
             if is_face:

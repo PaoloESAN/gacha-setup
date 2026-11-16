@@ -351,6 +351,7 @@ def setup_light_direction_bone(context, game_type, rig_obj=None):
     init_euler = arm_local_mat.to_euler("XYZ")
     bone_scale = tuple(arm_local_mat.to_scale())
     bone_mat = Matrix.Translation(loc)
+    eb_mat = Matrix.Translation(loc) @ init_euler.to_matrix().to_4x4()
 
     prev_active = getattr(context.view_layer.objects, "active", None)
     prev_mode = prev_active.mode if prev_active else "OBJECT"
@@ -383,7 +384,7 @@ def setup_light_direction_bone(context, game_type, rig_obj=None):
         eb.parent = mch_eb
         eb.head = loc
         eb.tail = loc + Vector((0.0, max(display_size * 0.5, 0.25), 0.0))
-        eb.matrix = bone_mat
+        eb.matrix = eb_mat
         bpy.ops.object.mode_set(mode="OBJECT")
 
         bone = rig_obj.data.bones.get(BONE_NAME)
@@ -397,7 +398,7 @@ def setup_light_direction_bone(context, game_type, rig_obj=None):
         pbone = rig_obj.pose.bones.get(BONE_NAME)
         if pbone is not None:
             pbone.rotation_mode = "XYZ"
-            pbone.rotation_euler = init_euler
+            pbone.rotation_euler = (0.0, 0.0, 0.0)
             pbone.custom_shape = wgt_obj
             pbone.use_custom_shape_bone_size = False
             pbone.custom_shape_scale_xyz = bone_scale
