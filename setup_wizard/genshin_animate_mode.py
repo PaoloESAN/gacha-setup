@@ -350,12 +350,30 @@ def _get_low_material(mat):
     return low_mat
 
 
+def _is_face_expressions_material(mat) -> bool:
+    """Returns True if the material is a Genshin Face Expressions overlay/selector material."""
+    if not mat:
+        return False
+    name_low = mat.name.lower()
+    if name_low.endswith(" - expressions") or " - expressions" in name_low or "face_expressions" in name_low:
+        return True
+    tree = getattr(mat, "node_tree", None) if getattr(mat, "use_nodes", False) else None
+    if tree:
+        if tree.nodes.get("Genshin Face Expressions") is not None:
+            return True
+        for node in tree.nodes:
+            ng = getattr(node, "node_tree", None)
+            if node.type == 'GROUP' and ng and ng.name == "Genshin - Face Expressions":
+                return True
+    return False
+
+
 def _is_exempt_from_animate_mode(mat, obj=None) -> bool:
     """Returns True if the material should NOT be replaced by Animate Mode.
-    Exempts eye highlight materials and Color-Wheel objects/materials."""
+    Exempts eye highlight materials, face expression materials, and Color-Wheel objects/materials."""
     if not mat:
         return True
-    if _is_color_wheel(mat):
+    if _is_color_wheel(mat) or _is_face_expressions_material(mat):
         return True
     if obj is not None and (_is_color_wheel(obj) or _is_helper_object(obj)):
         return True
