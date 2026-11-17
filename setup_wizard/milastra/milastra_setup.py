@@ -115,6 +115,9 @@ def _remove_opposite_gender_files(extract_dir: str, gender: str):
     for root, _, files in os.walk(extract_dir):
         for fname in files:
             if fname.startswith(opposite_prefix):
+                f_low = fname.lower()
+                if any(k in f_low for k in ("pupil", "eyebrow", "face", "eye", "eyelash")):
+                    continue
                 try:
                     os.remove(os.path.join(root, fname))
                 except OSError:
@@ -122,6 +125,7 @@ def _remove_opposite_gender_files(extract_dir: str, gender: str):
 
 
 def _merge_sub_armature_into_base(base_arm, sub_arm, new_meshes):
+    from mathutils import Vector
     base_scale = base_arm.matrix_world.to_scale()
     sub_scale = sub_arm.matrix_world.to_scale()
     applied_delta = None
@@ -138,31 +142,46 @@ def _merge_sub_armature_into_base(base_arm, sub_arm, new_meshes):
             sub_arm.scale.y * ratio,
             sub_arm.scale.z * ratio,
         )
-        base_head = base_arm.data.bones.get("Bip001 Head")
-        sub_head = sub_arm.data.bones.get("Bip001 Head")
-        if base_head and sub_head:
-            base_head_w = base_arm.matrix_world @ base_head.head_local
-            sub_head_w = sub_arm.matrix_world @ sub_head.head_local
-            # Only align via Bip001 Head when sub_head is at full-character height
-            # (e.g. Face_P0146 at ~1.33m), not local-origin assets like Pupil/Eyebrow/Headwear.
-            if (sub_head_w.z * ratio) > (0.5 * base_head_w.z):
-                delta = base_head_w - (sub_head_w * ratio)
-                if delta.length > 0.005 * abs(base_scale.x):
-                    sub_arm.location += delta
-                    applied_delta = delta
-        bpy.context.view_layer.update()
     else:
-        base_head = base_arm.data.bones.get("Bip001 Head")
-        sub_head = sub_arm.data.bones.get("Bip001 Head")
-        if base_head and sub_head and "Bip001 L Calf" not in sub_arm.data.bones:
-            base_head_w = base_arm.matrix_world @ base_head.head_local
-            sub_head_w = sub_arm.matrix_world @ sub_head.head_local
-            if sub_head_w.z > (0.5 * base_head_w.z):
-                delta = base_head_w - sub_head_w
-                if delta.length > 0.005 * max(abs(base_scale.x), 1e-3):
-                    sub_arm.location += delta
-                    applied_delta = delta
-                    bpy.context.view_layer.update()
+        ratio = 1.0
+
+    base_head = base_arm.data.bones.get("Bip001 Head")
+    sub_head = sub_arm.data.bones.get("Bip001 Head")
+    if base_head and sub_head and "Bip001 L Calf" not in sub_arm.data.bones:
+        base_head_w = base_arm.matrix_world @ base_head.head_local
+        sub_head_w = sub_arm.matrix_world @ sub_head.head_local
+        if (sub_head_w.z * ratio) > (0.5 * base_head_w.z):
+            dz = base_head_w.z - (sub_head_w.z * ratio)
+            dy = 0.0
+            face_mesh = next((m for m in new_meshes if "face" in m.name.lower()), None)
+            ear_mesh = next((o for o in bpy.data.objects if o.type == "MESH" and o.parent == base_arm and "earwear" in o.name.lower()), None)
+            if face_mesh and ear_mesh:
+                ear_pts = [ear_mesh.matrix_world @ Vector(c) for c in ear_mesh.bound_box]
+                ear_min_y = min(p.y for p in ear_pts)
+                ear_ctr_z = 0.5 * (min(p.z for p in ear_pts) + max(p.z for p in ear_pts))
+                face_max_y = max((face_mesh.matrix_world @ Vector(c)).y for c in face_mesh.bound_box) * ratio
+                dy = (ear_min_y + 0.0082 * abs(base_scale.x)) - face_max_y
+                dz = ear_ctr_z - (sub_head_w.z * ratio + 0.0516 * abs(base_scale.x))
+            delta = Vector((0.0, dy, dz))
+            if delta.length > 0.005 * abs(base_scale.x):
+                sub_arm.location += delta
+                applied_delta = delta
+        else:
+            # Local-origin sub-armatures (e.g. Pupil, Eyebrow, Headwear) have their meshes
+            # at world head height while their bones sit near origin; shift edit bones only.
+            bone_delta_w = base_head_w - (sub_head_w * ratio)
+            bpy.context.view_layer.update()
+            bone_delta_local = sub_arm.matrix_world.inverted().to_3x3() @ bone_delta_w
+            bpy.ops.object.select_all(action="DESELECT")
+            sub_arm.select_set(True)
+            bpy.context.view_layer.objects.active = sub_arm
+            bpy.ops.object.mode_set(mode="EDIT")
+            for eb in sub_arm.data.edit_bones:
+                eb.head += bone_delta_local
+                eb.tail += bone_delta_local
+            bpy.ops.object.mode_set(mode="OBJECT")
+
+    bpy.context.view_layer.update()
     base_inv = base_arm.matrix_world.inverted()
     for mesh in new_meshes:
         mw = mesh.matrix_world.copy()
