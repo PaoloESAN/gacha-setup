@@ -2028,6 +2028,8 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     target_mat_name = None
                     if "hair" in matname:
                         target_mat_name = "ZZZ Shader Hair"
+                    elif "eyeglass" in matname or "glasses" in matname:
+                        target_mat_name = "ZZZ Shader Body"
                     elif "eyebrow" in matname or "brow" in matname or "眉" in matname:
                         target_mat_name = "ZZZ Shader Face"
                     elif "eyehighlight" in matname or "highlight" in matname:
@@ -2163,8 +2165,9 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     if mat and (mat.name.startswith("ZZZ ") or mat.name.startswith("Kythera") or mat.name == "Eye Transparent" or mat.name == "Transp OL"):
                         continue
 
-                    is_face = any(k in matname for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight"])
-                    template_mat = (highlight_template if 'highlight' in matname and highlight_template
+                    is_eyeglass = "eyeglass" in matname or "glasses" in matname
+                    is_face = not is_eyeglass and any(k in matname for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight"])
+                    template_mat = (highlight_template if 'highlight' in matname and highlight_template and not is_eyeglass
                                     else face_template if is_face else shader_template)
 
                     if template_mat:

@@ -653,7 +653,8 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
 
             if not extracted:
                 # If Name is empty in JSON (Unity dump), infer from active slots and JSON name
-                is_mat_face = any(k in mat_key for k in ['face', 'eye', 'head', 'cara', 'eyebrow', 'brow'])
+                is_mat_eyeglass = 'eyeglass' in mat_key or 'glasses' in mat_key
+                is_mat_face = not is_mat_eyeglass and any(k in mat_key for k in ['face', 'eye', 'head', 'cara', 'eyebrow', 'brow'])
                 for slot_name, map_key in slot_mappings.items():
                     slot_data = tex_envs.get(slot_name, {})
                     if isinstance(slot_data, dict):
@@ -759,8 +760,11 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         import re, os
         resolved = {}
         matname = mat.name.lower()
-        is_face = any(k in matname for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight", "cara", "head", "rostro"]) or \
-                  any(any(k in m for k in ["face", "eyebrow", "brow", "eye"]) for m in mesh_names)
+        is_eyeglass = "eyeglass" in matname or "glasses" in matname or any("eyeglass" in m or "glasses" in m for m in mesh_names)
+        is_face = not is_eyeglass and (
+            any(k in matname for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight", "cara", "head", "rostro"]) or
+            any(any(k in m for k in ["face", "eyebrow", "brow", "eye"]) for m in mesh_names)
+        )
 
         # Helper to find file by stem in image_files
         def find_file_by_stem(stem_to_find, target_type='d'):
@@ -1091,7 +1095,8 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                                         mat.node_tree.links.remove(l)
                     continue
 
-                is_face = any(k in combined_names for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight", "cara", "head", "rostro"]) or \
+                is_eyeglass = "eyeglass" in combined_names or "glasses" in combined_names
+                is_face = (not is_eyeglass and any(k in combined_names for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight", "cara", "head", "rostro"])) or \
                     (kythera_group_node.node_tree and "face" in kythera_group_node.node_tree.name.lower())
 
                 if is_face:
@@ -1199,7 +1204,8 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                                 mat.node_tree.links.new(tex_node.outputs['Color'], target_socket)
                     continue
 
-                is_face = any(k in combined_names for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight", "cara", "head", "rostro"])
+                is_eyeglass = "eyeglass" in combined_names or "glasses" in combined_names
+                is_face = not is_eyeglass and any(k in combined_names for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight", "cara", "head", "rostro"])
 
                 if is_face:
                     face_d = res_textures.get('d')
