@@ -184,8 +184,6 @@ def configure_genshin_engine_nodes(materials=None):
     """
     native = is_goo_engine()
     candidates = list(materials if materials is not None else bpy.data.materials)
-    if native and materials is None:
-        candidates.extend(_isolate_legacy_eye_materials())
     _configure_eye_depth(candidates)
     if native:
         _configure_native_depth_materials(candidates)

@@ -995,7 +995,26 @@ class GenshinTextureImporter:
             return False
         return any(part_name.lower() in f.lower() and tex_type.lower() in f.lower() for f in self.files)
 
+    def _fix_night_soul_blessing_set_depth(self):
+        ng = bpy.data.node_groups.get('Night Soul Blessing')
+        if not ng:
+            return
+        sd = ng.nodes.get('Set Depth')
+        if not sd or sd.bl_idname != 'NodeUndefined':
+            return
+        in_sock = sd.inputs[0].links[0].from_socket if sd.inputs and sd.inputs[0].links else None
+        out_targets = [l.to_socket for l in sd.outputs[0].links] if sd.outputs else []
+        em = ng.nodes.new('ShaderNodeEmission')
+        em.location = sd.location
+        em.inputs['Strength'].default_value = 5.0
+        if in_sock:
+            ng.links.new(in_sock, em.inputs['Color'])
+        for ts in out_targets:
+            ng.links.new(em.outputs['Emission'], ts)
+        ng.nodes.remove(sd)
+
     def set_up_night_soul_outlines_material(self):
+        self._fix_night_soul_blessing_set_depth()
         night_soul_outline_material = self.create_night_soul_outlines()
         if not night_soul_outline_material or not night_soul_outline_material.node_tree:
             return None

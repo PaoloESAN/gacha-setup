@@ -894,6 +894,11 @@ class V4_GenshinImpactGeometryNodesSetup(V3_GenshinImpactGeometryNodesSetup):
             if base_ns:
                 set_modifier_property(modifier, self.NIGHT_SOUL_OUTLINE_SOCKET, base_ns)
 
+        mesh_low = mesh.name.lower()
+        if not any(k in mesh_low for k in ('face', 'brow', 'eye')):
+            set_modifier_property(modifier, 'Socket_13', 5.0)
+            set_modifier_property(modifier, 'NS Outline Thickness', 5.0)
+
     def assign_face_lightmap_texture(self, modifier):
         face_lightmap_node_group = bpy.data.node_groups.get(self.texture_node_names.FACE_LIGHTMAP_NODE_GROUP)
         if face_lightmap_node_group:

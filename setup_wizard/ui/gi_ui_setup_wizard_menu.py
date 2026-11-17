@@ -1190,6 +1190,13 @@ def pull_gi_panel_values(scene, context, force=False):
                             v23 = get_modifier_property(mod, "Toggle Night Soul State")
                         if v23 is not None:
                             scene.gi_enable_night_soul = bool(v23)
+
+                        if not any(k in mesh.name.lower() for k in ("face", "brow", "eye")):
+                            v13 = get_modifier_property(mod, "Socket_13")
+                            if v13 is None:
+                                v13 = get_modifier_property(mod, "NS Outline Thickness")
+                            if isinstance(v13, (int, float)) and v13 > 0.0:
+                                scene.gi_ns_outline_thickness = max(1.0, min(10.0, float(v13)))
                         found_outlines = True
                         break
                 if found_outlines:
@@ -1518,6 +1525,40 @@ def update_gi_night_soul(self, context):
     outlines_on = getattr(self, "gi_enable_outlines", True)
     ns_on = getattr(self, "gi_enable_night_soul", False)
     _apply_outlines_and_night_soul(context, outlines_on, ns_on)
+
+
+def update_gi_ns_outline_thickness(self, context):
+    global _is_updating_gi_props
+    if _is_updating_gi_props:
+        return
+    try:
+        from setup_wizard.ui.character_settings_utils import resolve_settings_armature, _iter_rig_meshes
+        from setup_wizard.utils.modifier_utils import set_modifier_property
+        arm = resolve_settings_armature(context)
+        meshes = list(_iter_rig_meshes(arm)) if arm else [obj for obj in bpy.data.objects if obj.type == 'MESH']
+        thickness = float(getattr(self, "gi_ns_outline_thickness", 5.0))
+        for mesh in meshes:
+            if any(k in mesh.name.lower() for k in ("face", "brow", "eye")):
+                continue
+            updated = False
+            for mod in getattr(mesh, "modifiers", []):
+                if mod.type == 'NODES' and mod.node_group and "outlines" in mod.node_group.name.lower():
+                    set_modifier_property(mod, "Socket_13", thickness)
+                    set_modifier_property(mod, "NS Outline Thickness", thickness)
+                    updated = True
+            if updated:
+                try:
+                    mesh.update_tag()
+                except Exception:
+                    pass
+        for win in getattr(bpy.context.window_manager, 'windows', []):
+            screen = getattr(win, 'screen', None)
+            if screen:
+                for area in screen.areas:
+                    if area.type == 'VIEW_3D':
+                        area.tag_redraw()
+    except Exception:
+        pass
 
 
 def character_has_night_soul(context):
@@ -2218,8 +2259,13 @@ class GI_PT_Rig_Character_Settings(Panel):
         col_outlines.prop(scene, "gi_enable_outlines", text="Enable Outlines")
         if has_genshin_outline_tint(context, arm):
             col_outlines.prop(scene, "gi_outline_tint", text="Outline Tint")
+
         if character_has_night_soul(context):
-            col_outlines.prop(scene, "gi_enable_night_soul", text="Enable Night Soul (Natlan Characters Only)")
+            box_ns = layout.box()
+            box_ns.label(text="Night Soul (Natlan Only)", icon="SOLO_ON")
+            col_ns = box_ns.column(align=True)
+            col_ns.prop(scene, "gi_enable_night_soul", text="Enable Night Soul")
+            col_ns.prop(scene, "gi_ns_outline_thickness", text="NS Outlines Thickness", slider=True)
 
         # Dark Eyes (Durin Only)
         if is_durin(context):
@@ -2518,6 +2564,14 @@ def register_gi_properties():
         default=False,
         update=update_gi_night_soul,
     )
+    bpy.types.Scene.gi_ns_outline_thickness = bpy.props.FloatProperty(
+        name="NS Outlines Thickness",
+        description="Night Soul outline thickness (non-face meshes)",
+        min=1.0,
+        max=10.0,
+        default=5.0,
+        update=update_gi_ns_outline_thickness,
+    )
     bpy.types.Scene.gi_dark_eyes = bpy.props.BoolProperty(
         name="Dark Eyes",
         description="Toggle Durin's dark eyes. When enabled (1), sets Mix Shader Fac to 1 (transparent BSDF, revealing slot 1 dark eyes). When disabled (0), sets Mix Shader Fac to 0",
@@ -2539,7 +2593,7 @@ def unregister_gi_properties():
         "gi_catch_shadows", "gi_day_night", "gi_blush_strength",
         "gi_rim_lit_color", "gi_rim_shadow_color", "gi_rim_scale",
         "gi_hair_physics_influence", "gi_clothes_physics_influence",
-        "gi_enable_outlines", "gi_outline_tint", "gi_enable_night_soul", "gi_dark_eyes", "gi_shader_type"
+        "gi_enable_outlines", "gi_outline_tint", "gi_enable_night_soul", "gi_ns_outline_thickness", "gi_dark_eyes", "gi_shader_type"
     ]:
         if hasattr(bpy.types.Scene, prop):
             delattr(bpy.types.Scene, prop)
