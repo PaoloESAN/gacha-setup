@@ -746,6 +746,14 @@ def rig_character(
                 if fm_pb is not None:
                     fm_pb.lock_scale[:] = (False, False, False)
 
+        # Genshin/ZZZ parity: scale.x curls finger tip (.03), scale.y curls .01/.02
+        if getattr(rigifyr, "animation_data", None):
+            for oDrv in rigifyr.animation_data.drivers:
+                for variable in oDrv.driver.variables:
+                    for target in variable.targets:
+                        if ".03" in oDrv.data_path and target.data_path.endswith("scale.y"):
+                            target.data_path = target.data_path[:-1] + "x"
+
         # Ensure breast controls are unlocked
         for b_name in ("breast.L", "breast.R"):
             b_pb = rigifyr.pose.bones.get(b_name)
@@ -997,6 +1005,38 @@ def rig_character(
         except Exception as ex_mch:
             print(f"[NTE RIG] head-controller edit notice: {ex_mch}")
 
+        # ZZZ-style weapon prop.L / prop.R controls for hand-weighted weapons (e.g. Lacrimosa)
+        _used_vgs = {
+            vg.name
+            for o in bpy.data.objects
+            if o.type == 'MESH'
+            for vg in o.vertex_groups
+        }
+        _nte_weapon_prop_bones = []
+        _root_master = eb.get("root.002") or eb.get("root.001") or eb.get("root")
+        for _side, _cand_names in (
+            ("L", ("Lhand_Weapon2", "Lhand_Weapon")),
+            ("R", ("Rhand_Weapon2", "Rhand_Weapon")),
+        ):
+            _wb_name = next((n for n in _cand_names if n in eb and n in _used_vgs), None)
+            if not _wb_name:
+                continue
+            _wb = eb[_wb_name]
+            # Unparent weapon bone from hand/prop/root so moving hand does not drag weapon unless constrained
+            _wb.parent = None
+            _prop_name = f"prop.{_side}"
+            _ep = eb.get(_prop_name) or eb.new(_prop_name)
+            _ep.head = _wb.head.copy()
+            _ep.tail = _wb.tail.copy()
+            if (_ep.tail - _ep.head).length < 0.02:
+                _ep.tail = _ep.head + _Vec((0.0, 0.1, 0.0))
+            _ep.roll = _wb.roll
+            _ep.use_deform = False
+            _ep.inherit_scale = "FULL"
+            _ep.parent = _root_master
+            _wb.parent = _ep
+            _nte_weapon_prop_bones.append((_prop_name, _wb_name, _side))
+
         bpy.ops.object.mode_set(mode='OBJECT')
 
     if is_version_4 and rigifyr:
@@ -1007,10 +1047,16 @@ def rig_character(
                 b_name = bone.name
                 b_low = b_name.lower()
                 # NTE imports weapon attachment joints without the weapons.
-                # Keep these joints for compatibility, outside visible controls.
-                if b_low in {'lhand_weapon', 'rhand_weapon'}:
-                    b2c_func(b_name, 25, "Other")
-                    bone.hide = True
+                # Keep unused joints/sockets hidden in Other, unless weighted to a weapon mesh.
+                if b_low in {
+                    'lhand_weapon', 'rhand_weapon', 'lhand_weapon2', 'rhand_weapon2',
+                    'weapon_finger_l1', 'weapon_finger_r1', 'weaponsocket',
+                }:
+                    if any(b_name == wb for _, wb, _ in _nte_weapon_prop_bones):
+                        b2c_func(b_name, 21, "Weapon")
+                    else:
+                        b2c_func(b_name, 25, "Other")
+                        bone.hide = True
                     continue
                 # Skip ALL control bones, standard Rigify limbs/fingers, and raw deform/twist/base bones
                 if (
@@ -1067,10 +1113,67 @@ def rig_character(
             physics_bone_callback=nte_physics_classifier,
             detect_prop_keyword=False,
         )
+        _w_coll = rigifyr.data.collections.get("Weapon")
+        _other_coll = rigifyr.data.collections.get("Other")
+        _active_wb_names = {wb for _, wb, _ in _nte_weapon_prop_bones} | {p for p, _, _ in _nte_weapon_prop_bones}
+        if _w_coll:
+            for _wb in list(_w_coll.bones):
+                if _wb.name not in _active_wb_names:
+                    _w_coll.unassign(_wb)
+                    if _other_coll:
+                        _other_coll.assign(_wb)
+                    _wb.hide = True
+
         for name in ("Weapon", "Props"):
             collection = rigifyr.data.collections.get(name)
             if collection and not collection.bones:
                 collection.is_visible = False
+
+        if _nte_weapon_prop_bones:
+            _wgt_prop = bpy.data.objects.get("WGT-prop")
+            if _wgt_prop is None:
+                _pmesh = bpy.data.meshes.new("WGT-prop")
+                _pmesh.from_pydata(
+                    [
+                        (-0.5, -0.5, -0.5),
+                        (0.5, -0.5, -0.5),
+                        (0.5, 0.5, -0.5),
+                        (-0.5, 0.5, -0.5),
+                        (-0.5, -0.5, 0.5),
+                        (0.5, -0.5, 0.5),
+                        (0.5, 0.5, 0.5),
+                        (-0.5, 0.5, 0.5),
+                    ],
+                    [
+                        (0, 1), (1, 2), (2, 3), (3, 0),
+                        (4, 5), (5, 6), (6, 7), (7, 4),
+                        (0, 4), (1, 5), (2, 6), (3, 7),
+                    ],
+                    [],
+                )
+                _wgt_prop = bpy.data.objects.new("WGT-prop", _pmesh)
+                _wgt_col = next((c for c in bpy.data.collections if c.name.startswith("WGTS")), None)
+                if _wgt_col:
+                    _wgt_col.objects.link(_wgt_prop)
+                else:
+                    context.scene.collection.objects.link(_wgt_prop)
+                _wgt_prop.hide_viewport = True
+                _wgt_prop.hide_render = True
+
+            _w_coll = rigifyr.data.collections.get("Weapon") or rigifyr.data.collections.new("Weapon")
+            for _prop_name, _wb_name, _side in _nte_weapon_prop_bones:
+                for _bn in (_prop_name, _wb_name):
+                    _db = rigifyr.data.bones.get(_bn)
+                    if _db:
+                        _w_coll.assign(_db)
+                        _db.hide = False
+                _pb = rigifyr.pose.bones.get(_prop_name)
+                if _pb:
+                    _pb.custom_shape = _wgt_prop
+                    _pb.use_custom_shape_bone_size = False
+                    _pb.custom_shape_scale_xyz = (0.12, 0.12, 0.12)
+                    _pb.color.palette = 'THEME04' if _side == 'L' else 'THEME01'
+            _w_coll.is_visible = True
 
     elif rigifyr:
         for bone in rigifyr.data.bones:

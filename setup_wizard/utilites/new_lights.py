@@ -105,10 +105,22 @@ def is_color_wheel(value):
     return any('colorwheel' in ''.join(c for c in name.lower() if c.isalnum()) for name in names)
 
 
+def is_eye_specular(material):
+    names = [material.name, str(material.get('_original_material_name', ''))]
+    if material.node_tree:
+        names.extend(n.node_tree.name for n in material.node_tree.nodes
+                     if n.type == 'GROUP' and n.node_tree)
+    compact = ''.join(c for c in ' '.join(names).lower() if c.isalnum())
+    return 'eyespecular' in compact
+
+
 def excluded_materials(objects, owner):
     materials = {m for obj in objects for m in object_materials(obj)}
     wheels = {m for obj in objects if is_color_wheel(obj) for m in object_materials(obj)}
-    return wheels | {m for m in materials if is_color_wheel(m) or is_genshin_highlight(m, owner)}
+    return wheels | {
+        m for m in materials
+        if is_color_wheel(m) or is_genshin_highlight(m, owner) or is_eye_specular(m)
+    }
 
 
 def is_light_node(node):
