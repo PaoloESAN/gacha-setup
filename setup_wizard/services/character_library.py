@@ -133,36 +133,6 @@ def _file_entries(filepath, scenes, include_linked=False):
     return entries
 
 
-def _scene_state(scene):
-    """Compare only the object list, regardless of poses, geometry or settings."""
-    objects = sorted((obj.name, obj.type) for obj in scene.objects)
-    return hashlib.sha256(json.dumps(objects).encode()).hexdigest()
-
-
-def mark_setup_complete(scene=None):
-    scene = scene or bpy.context.scene
-    scene['gacha_library_setup_state'] = _scene_state(scene)
-
-
-def index_current_file():
-    """Only catalog completed setups that retain the same object list."""
-    if os.environ.get('GACHA_SETUP_ISOLATED_WORKER') == '1' or not bpy.data.filepath:
-        return
-    filepath = str(Path(bpy.data.filepath).resolve())
-    if not Path(filepath).is_file():
-        return
-    scenes = list(bpy.data.scenes)
-    if not scenes or any(scene.get('gacha_library_setup_state') != _scene_state(scene)
-                         for scene in scenes):
-        return
-    fresh = _file_entries(filepath, scenes)
-    allowed = {name for entry in fresh for name in entry['objects']}
-    if not fresh or any(obj.name not in allowed and obj.type not in {'CAMERA', 'LIGHT'}
-                        for scene in scenes for obj in scene.objects):
-        return
-    _merge_file_entries(filepath, fresh)
-
-
 def _merge_file_entries(filepath, fresh):
     entries = read_catalog()
     previous = {entry['key']: entry for entry in entries}
@@ -229,14 +199,6 @@ def remove_blend(filepath):
     normalized = os.path.normcase(filepath)
     removed.write_text(json.dumps(sorted(set(excluded) | {normalized})), encoding='utf-8')
     write_catalog([entry for entry in read_catalog() if entry['filepath'] != filepath])
-
-
-@persistent
-def saved_characters_post(_unused):
-    try:
-        index_current_file()
-    except Exception as exc:
-        print(f'[GACHA SETUP] Could not update character catalog: {exc}')
 
 
 def _setup_character_compositor(entry):
@@ -349,10 +311,8 @@ def append_character(entry, context, *, link=False):
 
 
 def register():
-    if saved_characters_post not in bpy.app.handlers.save_post:
-        bpy.app.handlers.save_post.append(saved_characters_post)
+    pass
 
 
 def unregister():
-    if saved_characters_post in bpy.app.handlers.save_post:
-        bpy.app.handlers.save_post.remove(saved_characters_post)
+    pass
