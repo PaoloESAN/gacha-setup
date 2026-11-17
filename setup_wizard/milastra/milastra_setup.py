@@ -66,30 +66,29 @@ def _copy_basebody_assets(extract_dir: str, gender: str):
         if not existing_tex:
             shutil.copy2(tex_src, os.path.join(extract_dir, f"{prefix}_01_Tex_Diffuse.png"))
 
-    if gender == "GIRL":
-        existing_face_fbx = [
-            f for f in glob.glob(os.path.join(extract_dir, "**", "*.fbx"), recursive=True)
-            if "face" in os.path.basename(f).lower()
-        ]
-        face_fbx_src = os.path.join(assets_dir, "Face_P0146.fbx")
-        if not existing_face_fbx and os.path.isfile(face_fbx_src):
-            shutil.copy2(face_fbx_src, os.path.join(extract_dir, "Face_P0146.fbx"))
+    existing_face_fbx = [
+        f for f in glob.glob(os.path.join(extract_dir, "**", "*.fbx"), recursive=True)
+        if "face" in os.path.basename(f).lower()
+    ]
+    face_fbx_src = os.path.join(assets_dir, "Face_P0146.fbx")
+    if not existing_face_fbx and os.path.isfile(face_fbx_src):
+        shutil.copy2(face_fbx_src, os.path.join(extract_dir, "Face_P0146.fbx"))
 
-        existing_face_sdf = glob.glob(
-            os.path.join(extract_dir, "**", "*Face*SDF*.png"),
-            recursive=True,
-        )
-        face_sdf_src = os.path.join(assets_dir, "Beyd_Avatar_Girl_Face_Tex_SDF.png")
-        if not existing_face_sdf and os.path.isfile(face_sdf_src):
-            shutil.copy2(face_sdf_src, os.path.join(extract_dir, "Beyd_Avatar_Girl_Face_Tex_SDF.png"))
+    existing_face_sdf = glob.glob(
+        os.path.join(extract_dir, "**", "*Face*SDF*.png"),
+        recursive=True,
+    )
+    face_sdf_src = os.path.join(assets_dir, "Beyd_Avatar_Girl_Face_Tex_SDF.png")
+    if not existing_face_sdf and os.path.isfile(face_sdf_src):
+        shutil.copy2(face_sdf_src, os.path.join(extract_dir, "Beyd_Avatar_Girl_Face_Tex_SDF.png"))
 
-        existing_face_diff = glob.glob(
-            os.path.join(extract_dir, "**", "*Face*Diffuse*.png"),
-            recursive=True,
-        )
-        face_diff_src = os.path.join(assets_dir, "Beyd_Avatar_Girl_Face_P0144_01_Tex_Diffuse.png")
-        if not existing_face_diff and os.path.isfile(face_diff_src):
-            shutil.copy2(face_diff_src, os.path.join(extract_dir, "Beyd_Avatar_Girl_Face_P0144_01_Tex_Diffuse.png"))
+    existing_face_diff = glob.glob(
+        os.path.join(extract_dir, "**", "*Face*Diffuse*.png"),
+        recursive=True,
+    )
+    face_diff_src = os.path.join(assets_dir, "Beyd_Avatar_Girl_Face_P0144_01_Tex_Diffuse.png")
+    if not existing_face_diff and os.path.isfile(face_diff_src):
+        shutil.copy2(face_diff_src, os.path.join(extract_dir, "Beyd_Avatar_Girl_Face_P0144_01_Tex_Diffuse.png"))
 
     return fbx_dst
 
@@ -125,6 +124,7 @@ def _remove_opposite_gender_files(extract_dir: str, gender: str):
 def _merge_sub_armature_into_base(base_arm, sub_arm, new_meshes):
     base_scale = base_arm.matrix_world.to_scale()
     sub_scale = sub_arm.matrix_world.to_scale()
+    applied_delta = None
     # Some standalone assets (e.g. Face_P0146.fbx, Pupil_P0466.fbx) are exported at 1.0
     # meter scale while BaseBody FBXs are 0.01; align sub_arm scale & head height before join.
     scale_mismatch = (
@@ -133,32 +133,42 @@ def _merge_sub_armature_into_base(base_arm, sub_arm, new_meshes):
     )
     if scale_mismatch:
         ratio = base_scale.x / sub_scale.x
+        sub_arm.scale = (
+            sub_arm.scale.x * ratio,
+            sub_arm.scale.y * ratio,
+            sub_arm.scale.z * ratio,
+        )
         base_head = base_arm.data.bones.get("Bip001 Head")
         sub_head = sub_arm.data.bones.get("Bip001 Head")
         if base_head and sub_head:
             base_head_w = base_arm.matrix_world @ base_head.head_local
             sub_head_w = sub_arm.matrix_world @ sub_head.head_local
-            sub_arm.scale = (
-                sub_arm.scale.x * ratio,
-                sub_arm.scale.y * ratio,
-                sub_arm.scale.z * ratio,
-            )
-            sub_arm.location += base_head_w - (sub_head_w * ratio)
-        else:
-            sub_arm.scale = (
-                sub_arm.scale.x * ratio,
-                sub_arm.scale.y * ratio,
-                sub_arm.scale.z * ratio,
-            )
+            # Only align via Bip001 Head when sub_head is at full-character height
+            # (e.g. Face_P0146 at ~1.33m), not local-origin assets like Pupil/Eyebrow/Headwear.
+            if (sub_head_w.z * ratio) > (0.5 * base_head_w.z):
+                delta = base_head_w - (sub_head_w * ratio)
+                if delta.length > 0.005 * abs(base_scale.x):
+                    sub_arm.location += delta
+                    applied_delta = delta
+        bpy.context.view_layer.update()
+    else:
+        base_head = base_arm.data.bones.get("Bip001 Head")
+        sub_head = sub_arm.data.bones.get("Bip001 Head")
+        if base_head and sub_head and "Bip001 L Calf" not in sub_arm.data.bones:
+            base_head_w = base_arm.matrix_world @ base_head.head_local
+            sub_head_w = sub_arm.matrix_world @ sub_head.head_local
+            if sub_head_w.z > (0.5 * base_head_w.z):
+                delta = base_head_w - sub_head_w
+                if delta.length > 0.005 * max(abs(base_scale.x), 1e-3):
+                    sub_arm.location += delta
+                    applied_delta = delta
+                    bpy.context.view_layer.update()
     base_inv = base_arm.matrix_world.inverted()
     for mesh in new_meshes:
-        if scale_mismatch:
-            mesh.parent = base_arm
-        else:
-            mw = mesh.matrix_world.copy()
-            mesh.parent = base_arm
-            mesh.matrix_parent_inverse = base_inv
-            mesh.matrix_world = mw
+        mw = mesh.matrix_world.copy()
+        mesh.parent = base_arm
+        mesh.matrix_parent_inverse = base_inv
+        mesh.matrix_world = mw
         for mod in mesh.modifiers:
             if mod.type == "ARMATURE":
                 mod.object = base_arm
@@ -168,6 +178,7 @@ def _merge_sub_armature_into_base(base_arm, sub_arm, new_meshes):
     base_arm.select_set(True)
     bpy.context.view_layer.objects.active = base_arm
     bpy.ops.object.join()
+    return applied_delta
 
 
 def _cleanup_duplicate_bones(base_arm):
@@ -532,6 +543,8 @@ class MILASTRA_OT_SetupWizardUI(Operator, ImportHelper, CustomOperatorProperties
                 self.report({"ERROR"}, f"Failed to import BaseBody armature from {base_fbx}")
                 return {"CANCELLED"}
 
+            face_shift_delta = None
+            facial_feature_meshes = []
             for fbx_path in other_fbxs:
                 before = set(bpy.data.objects)
                 _execute_fbx_import(fbx_path)
@@ -539,7 +552,26 @@ class MILASTRA_OT_SetupWizardUI(Operator, ImportHelper, CustomOperatorProperties
                 sub_arms = [o for o in new_objs if o.type == "ARMATURE"]
                 new_meshes = [o for o in new_objs if o.type == "MESH"]
                 for sub_arm in sub_arms:
-                    _merge_sub_armature_into_base(base_arm, sub_arm, new_meshes)
+                    applied_delta = _merge_sub_armature_into_base(base_arm, sub_arm, new_meshes)
+                    if applied_delta is not None and any("face" in m.name.lower() for m in new_meshes):
+                        face_shift_delta = applied_delta
+                    elif applied_delta is None:
+                        for m in new_meshes:
+                            if any(k in m.name.lower() for k in ("pupil", "eyebrow", "eyelash")):
+                                facial_feature_meshes.append(m)
+
+            if face_shift_delta is not None:
+                from mathutils import Vector
+                base_head = base_arm.data.bones.get("Bip001 Head")
+                if base_head:
+                    base_head_z = (base_arm.matrix_world @ base_head.head_local).z
+                    base_scale_x = abs(base_arm.matrix_world.to_scale().x) or 1.0
+                    threshold_z = base_head_z + 0.03 * base_scale_x
+                    for m in facial_feature_meshes:
+                        pts = [m.matrix_world @ Vector(c) for c in m.bound_box]
+                        ctr_z = sum(p.z for p in pts) / 8.0
+                        if ctr_z < threshold_z:
+                            m.location += face_shift_delta
 
             _cleanup_duplicate_bones(base_arm)
 
