@@ -489,51 +489,43 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
                     if lm_node and lm_node.type == 'TEX_IMAGE':
                         lm_node.image = None
 
-        # Apply diffuse fallback to any outline materials in the scene that still have sentinel colors
+        # Apply diffuse fallback only to outline materials that still hold the unmodified
+        # template sentinel colors (and already have their own diffuse image).
         for mat in bpy.data.materials:
-            if 'outline' in mat.name.lower() and mat.node_tree:
-                pt = mat.node_tree.nodes.get(self.shader_node_names.OUTLINES_SHADER) or \
-                     mat.node_tree.nodes.get('PrimoToon')
-                if not pt:
+            if 'outline' not in mat.name.lower() or 'face' in mat.name.lower() or not mat.node_tree:
+                continue
+            pt = mat.node_tree.nodes.get(self.shader_node_names.OUTLINES_SHADER) or \
+                 mat.node_tree.nodes.get('PrimoToon')
+            if not pt:
+                for n in mat.node_tree.nodes:
+                    if n.type == 'GROUP' and any(inp.name.startswith('Outline Color') for inp in n.inputs):
+                        pt = n
+                        break
+            if not pt:
+                continue
+            indexed = {}
+            for inp in pt.inputs:
+                if inp.name.startswith('Outline Color'):
+                    try:
+                        idx = int(inp.name.split('Outline Color')[1].strip())
+                        indexed[idx] = inp
+                    except Exception:
+                        pass
+            if MaterialDataApplier._defaults_match_sentinels(indexed):
+                targets = [indexed[i] for i in (1, 2, 3, 4, 5) if i in indexed]
+                if targets and all(len(list(inp.links)) == 0 for inp in targets):
+                    diffuse_node = None
                     for n in mat.node_tree.nodes:
-                        if n.type == 'GROUP' and any(inp.name.startswith('Outline Color') for inp in n.inputs):
-                            pt = n
+                        if n.type == 'TEX_IMAGE' and 'diffuse' in (n.name + ' ' + (n.label or '')).lower():
+                            diffuse_node = n
                             break
-                if pt:
-                    indexed = {}
-                    for inp in pt.inputs:
-                        if inp.name.startswith('Outline Color'):
-                            try:
-                                idx = int(inp.name.split('Outline Color')[1].strip())
-                                indexed[idx] = inp
-                            except Exception:
-                                pass
-                    if MaterialDataApplier._defaults_match_sentinels(indexed):
-                        targets = [indexed[i] for i in (1, 2, 3, 4, 5) if i in indexed]
-                        if targets and all(len(list(inp.links)) == 0 for inp in targets):
-                            diffuse_node = None
-                            for n in mat.node_tree.nodes:
-                                if n.type == 'TEX_IMAGE' and 'diffuse' in (n.name + ' ' + (n.label or '')).lower():
-                                    diffuse_node = n
-                                    break
-                            if diffuse_node and not diffuse_node.image:
-                                for other_mat in bpy.data.materials:
-                                    if other_mat.node_tree and 'outline' not in other_mat.name.lower():
-                                        for n in other_mat.node_tree.nodes:
-                                            if n.type == 'TEX_IMAGE' and 'diffuse' in (n.name + ' ' + (n.label or '')).lower() and n.image:
-                                                diffuse_node.image = n.image
-                                                break
-                                        if diffuse_node.image:
-                                            break
-                            if diffuse_node and diffuse_node.image:
-                                color_out = diffuse_node.outputs.get('Color') or diffuse_node.outputs[0]
-                                color_out.hide = False
-                                for inp in targets:
-                                    inp.hide = False
-                                    for link in list(inp.links):
-                                        mat.node_tree.links.remove(link)
-                                    mat.node_tree.links.new(color_out, inp)
-                                mat[MaterialDataApplier.OUTLINE_DIFFUSE_FALLBACK_TAG] = True
+                    if diffuse_node and diffuse_node.image:
+                        color_out = diffuse_node.outputs.get('Color') or diffuse_node.outputs[0]
+                        color_out.hide = False
+                        for inp in targets:
+                            inp.hide = False
+                            mat.node_tree.links.new(color_out, inp)
+                        mat[MaterialDataApplier.OUTLINE_DIFFUSE_FALLBACK_TAG] = True
 
         return {'FINISHED'}
 

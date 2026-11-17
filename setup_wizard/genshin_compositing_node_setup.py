@@ -361,11 +361,13 @@ class HYV_OT_HoyoversePostProcessingDefaultSettings(Operator, ImportHelper, Cust
             bpy.context.scene.eevee.use_bloom = False
         bpy.context.scene.render.film_transparent = False
 
-        try:
-            from setup_wizard.milastra.milastra_setup import apply_milastra_face_skin_tint
-            apply_milastra_face_skin_tint()
-        except Exception:
-            pass
+        game_type = self.game_type or getattr(bpy.context.scene, "game_type_dropdown", "")
+        if game_type == "MILASTRA_WONDERLAND":
+            try:
+                from setup_wizard.milastra.milastra_setup import apply_milastra_face_skin_tint
+                apply_milastra_face_skin_tint()
+            except Exception:
+                pass
 
         if self.next_step_idx:
             NextStepInvoker().invoke(

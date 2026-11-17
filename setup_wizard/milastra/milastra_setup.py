@@ -393,6 +393,8 @@ def _restore_milastra_face_shadow():
 
 def apply_milastra_face_skin_tint():
     """Apply Milastra post-setup material fixes (SubXX split, BaseBody skin, Face tint, Outlines)."""
+    if getattr(bpy.context.scene, "game_type_dropdown", "") != "MILASTRA_WONDERLAND":
+        return
     extract_dir = _find_extract_dir_for_milastra()
     _fix_milastra_sub_materials(extract_dir)
     _fix_milastra_missing_mat_json_defaults()
