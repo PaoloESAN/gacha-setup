@@ -175,10 +175,6 @@ def invoke_next_step_ui(
         game_type=game_type,
         file_directory=file_directory or '',
     )
-    if (result == {'FINISHED'} and current_step_index == 0
-            and 'setup_wizard' in high_level_step_name.lower()):
-        from setup_wizard.services.character_library import mark_setup_complete
-        mark_setup_complete()
 
 
 _ACTIVE_CHARACTER_DIRECTORY = ""
