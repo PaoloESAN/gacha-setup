@@ -1201,6 +1201,11 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
                 bpy.ops.object.rotation_clear()
                 armature.rotation_euler[0] = 1.5708  # x-axis, 90 degrees
                 context.view_layer.update()
+            elif self.game_type == GameType.HONKAI_IMPACT_3RD.name:
+                if abs(armature.location.x) > 1e-4 or abs(armature.location.y) > 1e-4:
+                    armature.location.x = 0.0
+                    armature.location.y = 0.0
+                    context.view_layer.update()
 
             bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
         except Exception as e:

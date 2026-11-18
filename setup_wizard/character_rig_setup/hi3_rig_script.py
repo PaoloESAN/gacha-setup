@@ -1207,7 +1207,7 @@ def rig_character(
     # Make our lives easier, display the bones as sticks and make sure we can view from front.    
     if original_name in bpy.data.armatures:
         bpy.data.armatures[original_name].display_type = 'STICK'
-    elif our_char and hasattr(our_char, 'data'):
+    if our_char and hasattr(our_char, 'data') and our_char.data:
         our_char.data.display_type = 'STICK'
     if (rig_name) in bpy.data.objects:
         bpy.data.objects[rig_name].show_in_front = True
@@ -1283,8 +1283,8 @@ def rig_character(
     )
     if this_obj and this_obj.pose and "root" in this_obj.pose.bones and root_plate_inner:
         this_obj.pose.bones["root"].custom_shape = root_plate_inner
-        this_obj.pose.bones["root"].use_custom_shape_bone_size = True
-        this_obj.pose.bones["root"].custom_shape_scale_xyz = (1.0, 1.0, 1.0)
+        this_obj.pose.bones["root"].use_custom_shape_bone_size = False
+        this_obj.pose.bones["root"].custom_shape_scale_xyz = (0.85, 0.85, 0.85)
     
     this_obj.pose.bones["head"].custom_shape_scale_xyz = (1.25, 1.25, 1.25)
     this_obj.pose.bones["head"].custom_shape = bpy.data.objects["neck"]
@@ -2942,8 +2942,8 @@ def rig_character(
         _pb_r002 = this_obj.pose.bones.get("root.002")
         if _pb_r002:
             _pb_r002.custom_shape = _rp_inner
-            _pb_r002.use_custom_shape_bone_size = True
-            _pb_r002.custom_shape_scale_xyz = (1.0, 1.0, 1.0)
+            _pb_r002.use_custom_shape_bone_size = False
+            _pb_r002.custom_shape_scale_xyz = (0.85, 0.85, 0.85)
 
     # 3. Ensure prop.L, prop.R, and weapon bones are parented to root.002
     try:
