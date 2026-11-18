@@ -1,8 +1,22 @@
 import os
 import bpy
+from bpy.app.handlers import persistent
 from bpy.types import Operator
 
 from setup_wizard.services.isolation import isolation_service
+
+
+@persistent
+def _clear_stale_setup_state(_dummy=None):
+    """Reset persisted setup-running flags when opening a .blend with no live worker."""
+    if isolation_service.job_is_running():
+        return
+    for scene in getattr(bpy.data, "scenes", ()):
+        if getattr(scene, "gacha_setup_is_running", False):
+            scene.gacha_setup_is_running = False
+            status = getattr(scene, "gacha_setup_status", "")
+            if status and "error" not in status.lower() and "failed" not in status.lower():
+                scene.gacha_setup_status = "Idle"
 
 
 class GACHA_OT_CancelIsolatedSetup(Operator):
@@ -58,8 +72,14 @@ def register():
         subtype="FILE_PATH",
     )
 
+    if _clear_stale_setup_state not in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.append(_clear_stale_setup_state)
+
 
 def unregister():
+    if _clear_stale_setup_state in bpy.app.handlers.load_post:
+        bpy.app.handlers.load_post.remove(_clear_stale_setup_state)
+
     isolation_service.cancel_job()
 
     for name in (

@@ -38,7 +38,7 @@ def should_auto_cleanup():
 
 def draw_setup_status_box(sub_layout, context, column):
     """Draws execution status and cancel/open log buttons in wizard UI panels."""
-    is_running = getattr(context.scene, "gacha_setup_is_running", False)
+    is_running = getattr(context.scene, "gacha_setup_is_running", False) and _ACTIVE_JOB is not None
     column.enabled = not is_running
     if is_running:
         status_row = sub_layout.row(align=True)
@@ -124,6 +124,12 @@ def job_is_running():
 def cancel_job():
     global _ACTIVE_JOB
     if not _ACTIVE_JOB:
+        scene = getattr(bpy.context, "scene", None)
+        if scene and getattr(scene, "gacha_setup_is_running", False):
+            scene.gacha_setup_is_running = False
+            if hasattr(scene, "gacha_setup_status"):
+                scene.gacha_setup_status = "Idle"
+            return True
         return False
     try:
         proc = _ACTIVE_JOB.get("process")
