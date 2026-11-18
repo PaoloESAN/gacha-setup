@@ -369,6 +369,8 @@ class GenshinImpactOutlineTextureImporter(OutlineTextureImporter):
         for o_mat in all_outlines:
             part = o_mat.name.split()[-2] if len(o_mat.name.split()) >= 2 else ""
             actual_part = get_actual_material_name_for_dress(part, 'AVATAR') if part.lower() == 'dress' else part
+            if 'face' in o_mat.name.lower() or 'face' in part.lower() or 'face' in actual_part.lower():
+                continue
             self.assign_lightmap_texture(character_model_folder_file_path, lightmap_files, part, actual_part, target_outline_material=o_mat)
             self.assign_diffuse_texture(character_model_folder_file_path, diffuse_files, part, actual_part, target_outline_material=o_mat)
 

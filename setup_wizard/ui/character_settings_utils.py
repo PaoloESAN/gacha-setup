@@ -31,7 +31,8 @@ def stamp_rig_game(rig_obj, game_name, char_name=None):
         pass
 
     if str(game_name).upper() in ("ZENLESS_ZONE_ZERO", "ZZZ"):
-        st = getattr(bpy.context.scene, "zzz_shader_type", "LEGACY")
+        import bpy
+        st = "LEGACY" if bpy.app.version < (5, 2, 0) else getattr(bpy.context.scene, "zzz_shader_type", "LEGACY")
         try:
             if "zzz_shader_type" not in rig_obj:
                 rig_obj["zzz_shader_type"] = st
@@ -197,7 +198,8 @@ def patch_rig_ui_text_content(text_content):
     elif old_rig_ui_draw_start in text_content:
         text_content = text_content.replace(old_rig_ui_draw_start, new_rig_ui_draw_start)
 
-    return text_content
+    from setup_wizard.ui.character_settings_tabs import patch_standalone_layers
+    return patch_standalone_layers(text_content)
 
 
 def _register_fallback_rig_panels(target_armature, r_id):
@@ -216,6 +218,9 @@ def _register_fallback_rig_panels(target_armature, r_id):
 
         @classmethod
         def poll(cls, context):
+            from setup_wizard.ui.character_settings_tabs import has_character_settings
+            if has_character_settings(context):
+                return False
             try:
                 arm = resolve_settings_armature(context)
                 return bool(arm and getattr(arm, "data", None) and arm.data.get("rig_id") == r_id)
@@ -280,6 +285,8 @@ def _register_fallback_rig_panels(target_armature, r_id):
 def ensure_all_rig_uis_registered(target_armature=None):
     """Auto-registers Rig UI / Rig Layers panels for all rigs in the scene or .blend file."""
     import bpy
+    from setup_wizard.ui.character_settings_tabs import hide_registered_rig_layers
+    hide_registered_rig_layers()
     if "RIG_LOG" in bpy.data.texts:
         try:
             bpy.data.texts.remove(bpy.data.texts["RIG_LOG"])
@@ -681,6 +688,8 @@ def is_game_armature(context, game_name):
         return False
     detected = detect_armature_game(arm)
     if detected is not None:
+        if detected == "MILASTRA_WONDERLAND" and str(game_name) == "GENSHIN_IMPACT":
+            return True
         return detected == str(game_name)
     return False
 

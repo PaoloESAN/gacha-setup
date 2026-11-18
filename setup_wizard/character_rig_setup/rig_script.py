@@ -117,6 +117,71 @@ def initialize_genshin_rim_x(rig):
             rim.location.x = -0.0075
 
 
+def apply_genshin_lighting_rest_pose(rig):
+    """Bake default RimX and Light Direction pose transforms into rest pose so Alt+G/Alt+R keeps Rim=0.0 and Light Direction rotation."""
+    if not rig or rig.type != "ARMATURE" or not rig.pose:
+        return
+    target_names = [b for b in ("RimX", "Light Direction") if b in rig.pose.bones]
+    if not target_names:
+        return
+
+    prev_active = bpy.context.view_layer.objects.active
+    prev_mode = rig.mode
+    try:
+        bpy.context.view_layer.objects.active = rig
+        if rig.mode != "POSE":
+            bpy.ops.object.mode_set(mode="POSE")
+
+        for pb in rig.pose.bones:
+            if hasattr(pb, "select"):
+                pb.select = False
+            elif hasattr(pb.bone, "select"):
+                pb.bone.select = False
+
+        pb_rim = rig.pose.bones.get("RimX")
+        rim_dx = pb_rim.location.x if pb_rim and abs(pb_rim.location.x) > 1e-6 else 0.0
+
+        saved_hide = {}
+        saved_coll_vis = {}
+        for bname in target_names:
+            pb = rig.pose.bones[bname]
+            saved_hide[bname] = pb.bone.hide
+            pb.bone.hide = False
+            if hasattr(pb.bone, "collections"):
+                for coll in pb.bone.collections:
+                    if coll.name not in saved_coll_vis:
+                        saved_coll_vis[coll.name] = coll.is_visible
+                    coll.is_visible = True
+            if hasattr(pb, "select"):
+                pb.select = True
+            elif hasattr(pb.bone, "select"):
+                pb.bone.select = True
+
+        bpy.ops.pose.armature_apply(selected=True)
+
+        if pb_rim and abs(rim_dx) > 1e-6:
+            for c in pb_rim.constraints:
+                if c.type == "LIMIT_LOCATION" and c.owner_space == "LOCAL":
+                    c.min_x -= rim_dx
+                    c.max_x -= rim_dx
+
+        for bname, was_hidden in saved_hide.items():
+            rig.pose.bones[bname].bone.hide = was_hidden
+        for cname, was_vis in saved_coll_vis.items():
+            if hasattr(rig.data, "collections") and cname in rig.data.collections:
+                rig.data.collections[cname].is_visible = was_vis
+    except Exception as e:
+        print(f"[GI RIG] apply_genshin_lighting_rest_pose failed: {e}")
+    finally:
+        try:
+            if rig.mode != prev_mode:
+                bpy.ops.object.mode_set(mode=prev_mode)
+        except Exception:
+            pass
+        if prev_active:
+            bpy.context.view_layer.objects.active = prev_active
+
+
 def bind_viewport_outlines(rig):
     """Connect the settings plate to this character's outline modifiers."""
     plate = rig.pose.bones.get('plate-settings') if rig and rig.pose else None
@@ -3655,23 +3720,28 @@ def rig_character(
             except Exception as e:
                 _rig_log.append(f"ZZZ Brow driver failed: {e}")
         else:
-            try:
-                makeCon("Brow_Down_L", "Brow-L-Control", "bone * -4", "LOC_Y")
-                makeCon("Brow_Down_R", "Brow-R-Control", "bone * -4", "LOC_Y")
-                makeCon("Brow_Up_L", "Brow-L-Control", "bone * 4", "LOC_Y")
-                makeCon("Brow_Up_R", "Brow-R-Control", "bone * 4", "LOC_Y")
-                makeCon("Brow_Trouble_L", "Brow-Trouble-L-Control", "bone * 2", "LOC_X")
-                makeCon("Brow_Trouble_R", "Brow-Trouble-R-Control", "bone * 2", "LOC_X")
-                makeCon("Brow_Smily_R", "Brow-Smily-R-Control", "bone * 2", "LOC_X")
-                makeCon("Brow_Smily_L", "Brow-Smily-L-Control", "bone * 2", "LOC_X")
-                makeCon("Brow_Angry_L", "Brow-Angry-L-Control", "bone * 2", "LOC_X")
-                makeCon("Brow_Angry_R", "Brow-Angry-R-Control", "bone * 2", "LOC_X")
-                makeCon("Brow_Shy_L", "Brow-Shy-L-Control", "bone * 2", "LOC_X")
-                makeCon("Brow_Shy_R", "Brow-Shy-R-Control", "bone * 2", "LOC_X")
-                makeCon("Brow_Squeeze_R", "Brow-R-Control", "bone * 4", "LOC_X")
-                makeCon("Brow_Squeeze_L", "Brow-L-Control", "bone * -4", "LOC_X")
-            except Exception as e:
-                _rig_log.append(f"Brow driver failed: {e}")
+            brow_configs = [
+                ("Brow_Down_L", "Brow-L-Control", "bone * -4", "LOC_Y"),
+                ("Brow_Down_R", "Brow-R-Control", "bone * -4", "LOC_Y"),
+                ("Brow_Up_L", "Brow-L-Control", "bone * 4", "LOC_Y"),
+                ("Brow_Up_R", "Brow-R-Control", "bone * 4", "LOC_Y"),
+                ("Brow_Trouble_L", "Brow-Trouble-L-Control", "bone * 2", "LOC_X"),
+                ("Brow_Trouble_R", "Brow-Trouble-R-Control", "bone * 2", "LOC_X"),
+                ("Brow_Smily_R", "Brow-Smily-R-Control", "bone * 2", "LOC_X"),
+                ("Brow_Smily_L", "Brow-Smily-L-Control", "bone * 2", "LOC_X"),
+                ("Brow_Angry_L", "Brow-Angry-L-Control", "bone * 2", "LOC_X"),
+                ("Brow_Angry_R", "Brow-Angry-R-Control", "bone * 2", "LOC_X"),
+                ("Brow_Shy_L", "Brow-Shy-L-Control", "bone * 2", "LOC_X"),
+                ("Brow_Shy_R", "Brow-Shy-R-Control", "bone * 2", "LOC_X"),
+                ("Brow_Squeeze_R", "Brow-R-Control", "bone * 4", "LOC_X"),
+                ("Brow_Squeeze_L", "Brow-L-Control", "bone * -4", "LOC_X"),
+            ]
+            for sk_name, bone_name, expression, transform in brow_configs:
+                if sk_name in obj.data.shape_keys.key_blocks:
+                    try:
+                        makeCon(sk_name, bone_name, expression, transform)
+                    except Exception as e:
+                        _rig_log.append(f"Brow driver failed: '{sk_name}' / '{bone_name}' -> {e}")
 
         # HSR brow variants
         try:
@@ -3717,24 +3787,28 @@ def rig_character(
                 ("Eye_WinkA_R", "WinkA-R-Invis", "bone * -.82", "LOC_Y"),
                 ("Eye_WinkB_L", "WinkB-L-Invis", "bone * -.82", "LOC_Y"),
                 ("Eye_WinkB_R", "WinkB-R-Invis", "bone * -.82", "LOC_Y"),
+                ("Eye_WinkB", "Eye-WinkB-Control", "bone * 3.3333", "LOC_X"),
                 ("Eye_WinkC_L", "WinkC-L-Invis", "bone * -.82", "LOC_Y"),
                 ("Eye_WinkC_R", "WinkC-R-Invis", "bone * -.82", "LOC_Y"),
                 ("Eye_Ha", "Eye-Ha-Control", "bone * -2.22", "LOC_Y"),
                 ("Eye_Jito", "Eye-Jito-Control", "bone * -2.22", "LOC_Y"),
                 ("Eye_Wail", "Eye-Wail-Control", "bone * -2.22", "LOC_Y"),
+                ("Eye_Sad", "Eye-Wail-Control", "bone * -2.22", "LOC_Y"),
                 ("Eye_Hostility", "Eye-Hostility-Control", "bone * -2.22", "LOC_Y"),
+                ("Eye_Angry", "Eye-Hostility-Control", "bone * -2.22", "LOC_Y"),
                 ("Eye_Tired", "Eye-Tired-Control", "bone * -2.22", "LOC_Y"),
                 ("Eye_WUp", "Eye-Up-Control", "bone * -2.22", "LOC_Y"),
                 ("Eye_WDown", "Eye-Down-Control", "bone * -2.22", "LOC_Y"),
                 ("Eye_Lowereyelid", "Eye-LowerEyelid-Control", "bone * -2.22", "LOC_Y"),
             ]
             for sk_name, bone_name, expression, transform in eye_shape_key_configs:
-                try:
-                    makeCon(sk_name, bone_name, expression, transform)
-                except Exception as e:
-                    _rig_log.append(
-                        f"Eye driver failed: '{sk_name}' / '{bone_name}' -> {e}"
-                    )
+                if sk_name in obj.data.shape_keys.key_blocks:
+                    try:
+                        makeCon(sk_name, bone_name, expression, transform)
+                    except Exception as e:
+                        _rig_log.append(
+                            f"Eye driver failed: '{sk_name}' / '{bone_name}' -> {e}"
+                        )
 
         # HSR eye shape keys (Face object variants like 00_Close01_Eye)
         hsr_eye_configs = [
@@ -3799,27 +3873,34 @@ def rig_character(
                 except Exception as e:
                     _rig_log.append(f"ZZZ Mouth driver failed: {sk_name} -> {e}")
         else:
-            try:
-                makeCon(
-                    "Mouth_Default", "Mouth-Default-Control", "bone * 1.67", "LOC_X"
-                )
-                makeCon("Mouth_A01", "Mouth-Control", "bone * -1.33", "LOC_Y")
-                makeCon("Mouth_Open01", "Mouth-Control", "bone * 1.33", "LOC_Y")
-                makeCon("Mouth_Smile01", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X")
-                makeCon("Mouth_Smile02", "Mouth-Smile2-Control", "bone * 1.67", "LOC_X")
-                makeCon("Mouth_Angry01", "Mouth-Angry1-Control", "bone * 1.67", "LOC_X")
-                makeCon("Mouth_Angry02", "Mouth-Angry2-Control", "bone * 1.67", "LOC_X")
-                makeCon("Mouth_Angry03", "Mouth-Angry3-Control", "bone * 1.67", "LOC_X")
-                makeCon("Mouth_Fury01", "Mouth-Fury1-Control", "bone * 1.67", "LOC_X")
-                makeCon("Mouth_Doya01", "Mouth-Doya1-Control", "bone * 1.67", "LOC_X")
-                makeCon("Mouth_Doya02", "Mouth-Doya2-Control", "bone * 1.67", "LOC_X")
-                makeCon("Mouth_Pero01", "Mouth-Pero1-Control", "bone * 1.67", "LOC_X")
-                makeCon("Mouth_Pero02", "Mouth-Pero2-Control", "bone * 1.67", "LOC_X")
-                makeCon("Mouth_Line01", "Mouth-Control", "bone * 1.33", "LOC_X")
-                makeCon("Mouth_Line02", "Mouth-Control", "bone * -1.33", "LOC_X")
-                makeCon("Mouth_Neko01", "Mouth-Neko1-Control", "bone * 1.67", "LOC_X")
-            except Exception as e:
-                _rig_log.append(f"Mouth driver failed: {e}")
+            mouth_shape_key_configs = [
+                ("Mouth_Default", "Mouth-Default-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_A01", "Mouth-Control", "bone * -1.33", "LOC_Y"),
+                ("Mouth_Open01", "Mouth-Control", "bone * 1.33", "LOC_Y"),
+                ("Mouth_Small", "Mouth-Control", "bone * 1.33", "LOC_Y"),
+                ("Mouth_Smile01", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Smile", "Mouth-Smile1-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Smile02", "Mouth-Smile2-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Angry01", "Mouth-Angry1-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Angry", "Mouth-Angry1-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Angry02", "Mouth-Angry2-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Angry03", "Mouth-Angry3-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Fury01", "Mouth-Fury1-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Fury", "Mouth-Fury1-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Doya01", "Mouth-Doya1-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Doya02", "Mouth-Doya2-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Pero01", "Mouth-Pero1-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Pero02", "Mouth-Pero2-Control", "bone * 1.67", "LOC_X"),
+                ("Mouth_Line01", "Mouth-Control", "bone * 1.33", "LOC_X"),
+                ("Mouth_Line02", "Mouth-Control", "bone * -1.33", "LOC_X"),
+                ("Mouth_Neko01", "Mouth-Neko1-Control", "bone * 1.67", "LOC_X"),
+            ]
+            for sk_name, bone_name, expression, transform in mouth_shape_key_configs:
+                if sk_name in obj.data.shape_keys.key_blocks:
+                    try:
+                        makeCon(sk_name, bone_name, expression, transform)
+                    except Exception as e:
+                        _rig_log.append(f"Mouth driver failed: '{sk_name}' / '{bone_name}' -> {e}")
 
         # HSR mouth shape keys
         hsr_mouth_configs = [
@@ -3957,6 +4038,14 @@ def rig_character(
         "Eye_WUp",
         "Eye_WDown",
         "Eye_Lowereyelid",
+        # Milastra / Face-key variants
+        "Eye_WinkB",
+        "Eye_Sad",
+        "Eye_Angry",
+        "Mouth_Smile",
+        "Mouth_Angry",
+        "Mouth_Fury",
+        "Mouth_Small",
         # HSR / Face-key variants
         "00_Close01_Eye",
         "00_Default_Brow",
@@ -5440,6 +5529,8 @@ def rig_character(
         "shoulder_driver.L",
         "MCH-shoulder_follow.R",
         "MCH-shoulder_follow.L",
+        "MCH-shoulder_hand.R",
+        "MCH-shoulder_hand.L",
     ]
 
     fast_bone_move(list_to_send_other, 25, "Other")
@@ -5631,6 +5722,62 @@ def rig_character(
 
     loop_place_def()
 
+    if not (this_obj.data.bones.get('breast.L') and this_obj.data.bones.get('breast.R')):
+        if this_obj.data.bones.get('DEF-spine.003'):
+            bpy.context.view_layer.objects.active = this_obj
+            bpy.ops.object.mode_set(mode='EDIT')
+            eb_spine3 = this_obj.data.edit_bones.get('DEF-spine.003')
+            if eb_spine3:
+                sp_head = eb_spine3.head.copy()
+                for side, sx in (('L', 1.0), ('R', -1.0)):
+                    bname = f'breast.{side}'
+                    if not this_obj.data.edit_bones.get(bname):
+                        eb = this_obj.data.edit_bones.new(bname)
+                        eb.head = sp_head + Vector((0.0495 * sx, -0.0252, 0.0541))
+                        eb.tail = sp_head + Vector((0.1293 * sx, -0.0658, 0.1412))
+                        eb.use_deform = True
+                        eb.parent = eb_spine3
+                        eb.use_connect = False
+            bpy.ops.object.mode_set(mode='POSE')
+
+    for side, sx in (('L', 1.0), ('R', -1.0)):
+        b_bone = this_obj.data.bones.get(f'breast.{side}')
+        if not b_bone:
+            continue
+        has_weights = any(
+            mesh.vertex_groups.get(b_bone.name) and any(
+                g.group == mesh.vertex_groups[b_bone.name].index and g.weight > 0.01
+                for v in mesh.data.vertices for g in v.groups
+            )
+            for mesh in bpy.context.scene.objects
+            if mesh.type == 'MESH' and any(m.type == 'ARMATURE' and m.object == this_obj for m in mesh.modifiers)
+        )
+        if not has_weights:
+            c_world = this_obj.matrix_world @ b_bone.head_local
+            radius = 0.085
+            for mesh in bpy.context.scene.objects:
+                if mesh.type != 'MESH' or not mesh.name.startswith('Body'):
+                    continue
+                vg_sp3 = mesh.vertex_groups.get('DEF-spine.003')
+                if not vg_sp3:
+                    continue
+                vg_b = mesh.vertex_groups.get(b_bone.name) or mesh.vertex_groups.new(name=b_bone.name)
+                for v in mesh.data.vertices:
+                    p = mesh.matrix_world @ v.co
+                    if p.y > c_world.y + 0.035 or p.x * sx <= 0.004:
+                        continue
+                    w3 = next((g.weight for g in v.groups if g.group == vg_sp3.index), 0.0)
+                    if w3 <= 0.001:
+                        continue
+                    d = (p - c_world).length
+                    if d < radius:
+                        t = 1.0 - (d / radius) ** 2
+                        falloff = (t * t) * min(1.0, (p.x * sx - 0.004) / 0.02)
+                        w_b = w3 * falloff * 0.85
+                        if w_b > 0.001:
+                            vg_b.add([v.index], w_b, 'REPLACE')
+                            vg_sp3.add([v.index], w3 - w_b, 'REPLACE')
+
     # Genshin keeps its weighted breast bones as imported physics bones.
     # Give those bones selectable circles without replacing their rest pivots.
     breast_controls = [this_obj.pose.bones.get('breast.' + side) for side in ('L', 'R')]
@@ -5820,6 +5967,7 @@ def rig_character(
 
     from setup_wizard.character_rig_setup.pole_targets import setup_pole_targets
     setup_pole_targets(this_obj, use_arm_ik_poles, use_leg_ik_poles)
+    apply_genshin_lighting_rest_pose(this_obj)
 
 
 def setup_neck_and_head_follow(neck_follow_value, head_follow_value):

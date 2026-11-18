@@ -85,6 +85,10 @@ class GI_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties
         except Exception:
             pass
 
+        if self.game_type == GameType.GENSHIN_IMPACT.name:
+            from setup_wizard.utils.genshin_face_expressions import setup_scene_face_expressions
+            setup_scene_face_expressions(context.scene)
+
         cleanup_temp_extracted_archive(context)
 
         return result
@@ -1097,7 +1101,11 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
 
     def execute(self, context):
         from setup_wizard.genshin_import_character_model import is_rigging_disabled
-        if self.game_type == GameType.HONKAI_NEXUS_ANIMA.name and is_rigging_disabled(context):
+        if is_rigging_disabled(context) and (
+            self.game_type == GameType.HONKAI_NEXUS_ANIMA.name
+            or self._find_target_armature(context) is not None
+        ):
+            self.report({"INFO"}, "Transformations skipped. Disable Rigging is enabled in Setup Settings.")
             NextStepInvoker().invoke(self.next_step_idx, self.invoker_type, high_level_step_name=self.high_level_step_name, game_type=self.game_type)
             return {"FINISHED"}
         if context.object and context.object.mode != "OBJECT":
@@ -1193,6 +1201,11 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
                 bpy.ops.object.rotation_clear()
                 armature.rotation_euler[0] = 1.5708  # x-axis, 90 degrees
                 context.view_layer.update()
+            elif self.game_type == GameType.HONKAI_IMPACT_3RD.name:
+                if abs(armature.location.x) > 1e-4 or abs(armature.location.y) > 1e-4:
+                    armature.location.x = 0.0
+                    armature.location.y = 0.0
+                    context.view_layer.update()
 
             bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
         except Exception as e:

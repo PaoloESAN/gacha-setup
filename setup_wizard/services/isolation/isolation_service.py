@@ -38,7 +38,7 @@ def should_auto_cleanup():
 
 def draw_setup_status_box(sub_layout, context, column):
     """Draws execution status and cancel/open log buttons in wizard UI panels."""
-    is_running = getattr(context.scene, "gacha_setup_is_running", False)
+    is_running = getattr(context.scene, "gacha_setup_is_running", False) and _ACTIVE_JOB is not None
     column.enabled = not is_running
     if is_running:
         status_row = sub_layout.row(align=True)
@@ -124,6 +124,12 @@ def job_is_running():
 def cancel_job():
     global _ACTIVE_JOB
     if not _ACTIVE_JOB:
+        scene = getattr(bpy.context, "scene", None)
+        if scene and getattr(scene, "gacha_setup_is_running", False):
+            scene.gacha_setup_is_running = False
+            if hasattr(scene, "gacha_setup_status"):
+                scene.gacha_setup_status = "Idle"
+            return True
         return False
     try:
         proc = _ACTIVE_JOB.get("process")
@@ -150,6 +156,7 @@ def launch_job(
     selected_model_file="",
     game_type="",
     high_level_step_name="",
+    extra_job_data=None,
 ):
     global _ACTIVE_JOB
 
@@ -233,6 +240,8 @@ def launch_job(
             "result_path": str(result_path),
         }
     )
+    if extra_job_data:
+        job.update(extra_job_data)
     job_json.write_text(json.dumps(job, ensure_ascii=False, indent=2), encoding="utf-8")
 
     log_handle = open(log_path, "w", encoding="utf-8", errors="replace")
@@ -602,6 +611,8 @@ def append_result(
     except Exception:
         pass
 
+    disable_geometry_nodes_in_edit_mode(all_imported_objects)
+
     try:
         bpy.context.view_layer.update()
     except Exception:
@@ -613,6 +624,23 @@ def append_result(
         f"Rigs ready: {rig_stats.get('rig_ui_ready', 0)}"
     )
     return rig_stats
+
+
+def disable_geometry_nodes_in_edit_mode(objects):
+    """
+    Turn off 'Edit Mode' visibility for Geometry Nodes modifiers on imported meshes.
+
+    Blender 5.3 crashes (access violation in mesh_render_data_create) when the UV
+    editor draws a mesh in Edit Mode that still has Geometry Nodes modifiers
+    enabled for Edit Mode. The outline/lighting modifiers are only needed for
+    rendering/viewport shading, so keeping them out of Edit Mode is harmless.
+    """
+    for obj in objects or []:
+        if not obj or obj.type != 'MESH':
+            continue
+        for modifier in obj.modifiers:
+            if modifier.type == 'NODES' and modifier.show_in_editmode:
+                modifier.show_in_editmode = False
 
 
 def exclude_widget_collections(scene=None):

@@ -59,18 +59,16 @@ def _configure_eye_depth(materials):
     """Keep the split pupil/highlight materials on the bundled Goo depth path."""
     if not is_goo_engine():
         return
+    eye_depth_tree = next((tree for tree in bpy.data.node_groups
+                           if tree.get('_gacha_goo_eye_depth_v1')), None)
     depth_tree = next((tree for tree in bpy.data.node_groups
                        if tree.name == 'Set Depth' and any(
                            node.bl_idname == 'ShaderNodeSetDepth' for node in tree.nodes)), None)
-    if depth_tree is None:
+    if eye_depth_tree is None and depth_tree is None:
         return
-    eye_depth_tree = None
 
     def eye_depth():
         nonlocal eye_depth_tree
-        if eye_depth_tree is None:
-            eye_depth_tree = next((tree for tree in bpy.data.node_groups
-                                   if tree.get('_gacha_goo_eye_depth_v1')), None)
         if eye_depth_tree is None:
             eye_depth_tree = depth_tree.copy()
             eye_depth_tree.name = 'Goo Eye Depth'
@@ -176,6 +174,66 @@ def _configure_native_depth_materials(materials):
         scene['_gacha_goo_depth_scene_v1'] = True
 
 
+_UNDEFINED_GOO_NODE_SIGNATURES = (
+    ('ShaderNodeShaderInfo', {'Cast Shadows', 'Half-lambert factor'}),
+    ('ShaderNodeCurvature', {'Scene Curvature', 'Scene Rim'}),
+    ('ShaderNodeSetDepth', {'Shader'}),
+    ('ShaderNodeScreenspaceInfo', {'Scene Color', 'Scene Depth'}),
+)
+
+
+def _repair_undefined_goo_nodes(tree):
+    """Replace NodeUndefined Goo nodes (e.g. 4.4 -> 4.2 downgrade) with native nodes."""
+    changed = 0
+    for node in list(tree.nodes):
+        if node.bl_idname != 'NodeUndefined':
+            continue
+        out_names = {sock.name for sock in node.outputs}
+        target_idname = next(
+            (bl_id for bl_id, req in _UNDEFINED_GOO_NODE_SIGNATURES
+             if req.issubset(out_names) and hasattr(bpy.types, bl_id)),
+            None,
+        )
+        if target_idname is None:
+            continue
+        old_name = node.name
+        old_label = node.label
+        old_parent = node.parent
+        old_loc = tuple(node.location)
+        old_width = node.width
+        old_hide = node.hide
+        old_mute = node.mute
+        in_conns = [
+            (sock.name, link.from_socket)
+            for sock in node.inputs
+            for link in sock.links
+        ]
+        out_conns = [
+            (sock.name, link.to_socket)
+            for sock in node.outputs
+            for link in sock.links
+        ]
+        new_node = tree.nodes.new(target_idname)
+        new_node.parent = old_parent
+        new_node.location = old_loc
+        new_node.label = old_label
+        new_node.width = old_width
+        new_node.hide = old_hide
+        new_node.mute = old_mute
+        for sock_name, from_sock in in_conns:
+            dst = new_node.inputs.get(sock_name)
+            if dst is not None:
+                tree.links.new(from_sock, dst)
+        for sock_name, to_sock in out_conns:
+            src = new_node.outputs.get(sock_name)
+            if src is not None:
+                tree.links.new(src, to_sock)
+        tree.nodes.remove(node)
+        new_node.name = old_name
+        changed += 1
+    return changed
+
+
 def configure_genshin_engine_nodes(materials=None):
     """Restore native or portable links on marked trees, including nested copies.
 
@@ -184,8 +242,6 @@ def configure_genshin_engine_nodes(materials=None):
     """
     native = is_goo_engine()
     candidates = list(materials if materials is not None else bpy.data.materials)
-    if native and materials is None:
-        candidates.extend(_isolate_legacy_eye_materials())
     _configure_eye_depth(candidates)
     if native:
         _configure_native_depth_materials(candidates)
@@ -201,6 +257,8 @@ def configure_genshin_engine_nodes(materials=None):
             continue
         visited.add(tree)
         roots.extend(n.node_tree for n in tree.nodes if n.type == 'GROUP' and n.node_tree)
+        if native:
+            changed += _repair_undefined_goo_nodes(tree)
         if native and any(node.bl_idname == 'ShaderNodeSetDepth' for node in tree.nodes):
             # The bundled color mask is not painted consistently across
             # characters (and exists under different attribute names).

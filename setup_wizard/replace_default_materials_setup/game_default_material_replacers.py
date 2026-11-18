@@ -183,6 +183,9 @@ def join_pupil_and_highlight_meshes(material_names=None):
         n_low = obj.name.lower()
         mat_names_low = [slot.material.name.lower() for slot in obj.material_slots if slot.material]
 
+        if any(m.startswith('beyd_avatar_') for m in mat_names_low):
+            continue
+
         if any(ex in n_low for ex in ['eyestar', 'star', 'brow', 'face_eye', 'body', 'hair', 'bang', 'dress', 'mic', 'tail', 'ribbon']):
             continue
 
@@ -878,6 +881,10 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     # by design (no outline modifier nor outline materials).
                     mesh_body_part_name = material_name
                     character_type = TextureImporterType.AVATAR
+                elif material_name.startswith('Beyd_Avatar_'):
+                    from setup_wizard.milastra.milastra_utils import parse_milastra_part_name
+                    mesh_body_part_name = parse_milastra_part_name(material_name) or material_name.split('_')[-1]
+                    character_type = TextureImporterType.AVATAR
                 else:
                     mesh_body_part_name = material_name.split('_')[-1]
                     character_type = TextureImporterType.AVATAR
@@ -934,10 +941,13 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 if mesh_body_part_name in ['Eye', 'EyeStar', 'Eyes', 'EyeShadow']:
                     mesh_body_part_name = 'Face'
                 elif is_pupil_part:
-                    from setup_wizard.utils.aether_gun_pupil import is_aether_gun, TAG as AETHER_GUN_PUPIL
-                    if is_aether_gun(mesh, material_name):
-                        mesh[AETHER_GUN_PUPIL] = True
-                        is_numbered_pupil = True
+                    if material_name.startswith('Beyd_Avatar_'):
+                        is_numbered_pupil = False
+                    else:
+                        from setup_wizard.utils.aether_gun_pupil import is_aether_gun, TAG as AETHER_GUN_PUPIL
+                        if is_aether_gun(mesh, material_name):
+                            mesh[AETHER_GUN_PUPIL] = True
+                            is_numbered_pupil = True
                     if is_numbered_pupil:
                         mesh_body_part_name = 'New Pupil'
                     else:
@@ -957,6 +967,19 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     material_slot.material = genshin_material
                     if mesh_body_part_name == 'New Pupil':
                         setup_new_pupil_highlight_layer(mesh, self.material_names)
+                elif material_name.startswith('Beyd_Avatar_') and mesh_body_part_name:
+                    template_part = 'Hair' if 'hair' in mesh_body_part_name.lower() else (
+                        'Face' if mesh_body_part_name.lower() in ('eyebrow', 'face') else 'Body'
+                    )
+                    genshin_material = self.__clone_material_and_rename(
+                        material_slot,
+                        f'{self.material_names.MATERIAL_PREFIX}{template_part}',
+                        mesh_body_part_name
+                    )
+                    if not genshin_material:
+                        self.blender_operator.report({'WARNING'}, f'Could not find template material for "{template_part}", skipping material: {material_name}')
+                        continue
+                    self.blender_operator.report({'INFO'}, f'Replaced Milastra material: "{material_name}" with "{mesh_body_part_name}"')
                 elif mesh_body_part_name and ('Dress' in mesh_body_part_name or 'Arm' in mesh_body_part_name or 'Cloak' in mesh_body_part_name):
                     # Xiao is the only character with an Arm material
                     # Dainsleif and Paimon are the only characters with Cloak materials
@@ -1198,7 +1221,16 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 
         if not old_image:
             return
-            
+
+        try:
+            old_image.colorspace_settings.name = 'sRGB'
+        except Exception:
+            pass
+        try:
+            old_image.alpha_mode = 'CHANNEL_PACKED'
+        except Exception:
+            pass
+
         diffuse_nodes = find_all_image_nodes_by_category(new_material.node_tree, 'diffuse')
         for node in diffuse_nodes:
             node.image = old_image
@@ -1477,7 +1509,16 @@ class HonkaiStarRailDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 
         if not old_image:
             return
-            
+
+        try:
+            old_image.colorspace_settings.name = 'sRGB'
+        except Exception:
+            pass
+        try:
+            old_image.alpha_mode = 'CHANNEL_PACKED'
+        except Exception:
+            pass
+
         diffuse_nodes = find_all_image_nodes_by_category(new_material.node_tree, 'diffuse')
         if not diffuse_nodes:
             for node in new_material.node_tree.nodes:
@@ -1987,6 +2028,8 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     target_mat_name = None
                     if "hair" in matname:
                         target_mat_name = "ZZZ Shader Hair"
+                    elif "eyeglass" in matname or "glasses" in matname:
+                        target_mat_name = "ZZZ Shader Body"
                     elif "eyebrow" in matname or "brow" in matname or "眉" in matname:
                         target_mat_name = "ZZZ Shader Face"
                     elif "eyehighlight" in matname or "highlight" in matname:
@@ -2122,8 +2165,9 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     if mat and (mat.name.startswith("ZZZ ") or mat.name.startswith("Kythera") or mat.name == "Eye Transparent" or mat.name == "Transp OL"):
                         continue
 
-                    is_face = any(k in matname for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight"])
-                    template_mat = (highlight_template if 'highlight' in matname and highlight_template
+                    is_eyeglass = "eyeglass" in matname or "glasses" in matname
+                    is_face = not is_eyeglass and any(k in matname for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight"])
+                    template_mat = (highlight_template if 'highlight' in matname and highlight_template and not is_eyeglass
                                     else face_template if is_face else shader_template)
 
                     if template_mat:
@@ -3586,19 +3630,14 @@ class ArknightsEndfieldDefaultMaterialReplacer(GameDefaultMaterialReplacer):
 
         for mesh in meshes:
             mesh_name = mesh.name.lower()
-            is_hair = 'hair_01' in mesh_name or ('hair' in mesh_name and 'shadow' not in mesh_name)
             is_face = 'face_01' in mesh_name or 'face' in mesh_name
 
-            # Light modifier on non-hair meshes
-            if light_ng and not is_hair:
+            # Light modifier on all meshes (including hair, which reads LightDirection)
+            if light_ng:
                 mod_light = mesh.modifiers.get('Light')
                 if not mod_light:
                     mod_light = mesh.modifiers.new('Light', 'NODES')
                 mod_light.node_group = light_ng
-            elif is_hair:
-                mod_light = mesh.modifiers.get('Light')
-                if mod_light:
-                    mesh.modifiers.remove(mod_light)
 
             # Face modifiers on face mesh
             if is_face:

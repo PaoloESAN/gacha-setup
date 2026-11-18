@@ -2,6 +2,55 @@
 import bpy
 from mathutils import Vector
 
+AUTO_SHOULDER_BONES = (
+    'shoulder_driver.L', 'shoulder_driver.R',
+    'MCH-shoulder_follow.L', 'MCH-shoulder_follow.R',
+    'MCH-shoulder_hand.L', 'MCH-shoulder_hand.R',
+)
+
+
+def assign_auto_shoulders_to_other(rig):
+    if rig is None or rig.type != 'ARMATURE' or not getattr(rig, 'data', None):
+        return
+    arm_data = rig.data
+    orig_mode = None
+    if bpy.context.object == rig and bpy.context.object.mode == 'EDIT':
+        orig_mode = 'EDIT'
+        bpy.ops.object.mode_set(mode='OBJECT')
+    try:
+        # Blender 4.0+ bone collections: move all auto shoulder bones to 'Other'
+        if hasattr(arm_data, 'collections'):
+            other_coll = arm_data.collections.get('Other') or arm_data.collections.get('Others')
+            if not other_coll:
+                other_coll = arm_data.collections.new('Other')
+                other_coll.is_visible = False
+            for bone_name in AUTO_SHOULDER_BONES:
+                bone = arm_data.bones.get(bone_name)
+                if not bone:
+                    continue
+                other_coll.assign(bone)
+                for c in list(bone.collections):
+                    if c != other_coll:
+                        try:
+                            c.unassign(bone)
+                        except Exception:
+                            pass
+        # Blender 3.6 / legacy layers fallback (layer 25 is 'Other')
+        for bone_name in AUTO_SHOULDER_BONES:
+            bone = arm_data.bones.get(bone_name)
+            if not bone:
+                continue
+            bone.hide = True
+            if hasattr(bone, 'layers'):
+                try:
+                    for idx in range(32):
+                        bone.layers[idx] = (idx == 25)
+                except Exception:
+                    pass
+    finally:
+        if orig_mode:
+            bpy.ops.object.mode_set(mode=orig_mode)
+
 
 def has_auto_shoulders(rig):
     if rig is None or rig.type != 'ARMATURE' or rig.pose is None:
@@ -37,6 +86,7 @@ def setup_auto_shoulders(rig):
         return False
     # Keep working Genshin/NPC and previously generated rigs intact.
     if has_auto_shoulders(rig):
+        assign_auto_shoulders_to_other(rig)
         return True
     plate = rig.pose.bones.get('plate-settings')
     if plate is None:
@@ -134,6 +184,7 @@ def setup_auto_shoulders(rig):
         variable.targets[0].data_path = 'pose.bones["plate-settings"]["Toggle Shoulder Constraints"]'
         influence.expression = 'bone * 0.4'
         follow.bone.hide = driver.bone.hide = motion.bone.hide = True
+    assign_auto_shoulders_to_other(rig)
     rig.update_tag()
     bpy.context.view_layer.update()
     bpy.ops.object.select_all(action='DESELECT')

@@ -93,7 +93,7 @@ class GI_PT_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
         OperatorFactory.create(
             run_entire_setup_column,
             'genshin.setup_wizard_ui',
-            'Run Entire Setup',
+            'Setup Character',
             'PLAY',
             game_type=GameType.GENSHIN_IMPACT.name
         )
@@ -112,12 +112,6 @@ class GI_PT_Setup_Wizard_UI_Layout(Panel, GenshinImpactUIRenderChecker):
         settings_col = settings_box.column()
         settings_col.prop(context.scene, "gi_shader_type", text="Shader")
         props = context.scene.character_rigger_props
-        enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
-        settings_col.prop(props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")
-        if enable_physics:
-            sliders_col = settings_col.column()
-            sliders_col.prop(props, "hair_physics_influence", text="Hair", slider=True)
-            sliders_col.prop(props, "clothes_physics_influence", text="Clothes", slider=True)
         settings_col.prop(props, "disable_rigging", text="Disable Rigging")
 
 
@@ -1196,6 +1190,13 @@ def pull_gi_panel_values(scene, context, force=False):
                             v23 = get_modifier_property(mod, "Toggle Night Soul State")
                         if v23 is not None:
                             scene.gi_enable_night_soul = bool(v23)
+
+                        if not any(k in mesh.name.lower() for k in ("face", "brow", "eye")):
+                            v13 = get_modifier_property(mod, "Socket_13")
+                            if v13 is None:
+                                v13 = get_modifier_property(mod, "NS Outline Thickness")
+                            if isinstance(v13, (int, float)) and v13 > 0.0:
+                                scene.gi_ns_outline_thickness = max(1.0, min(10.0, float(v13)))
                         found_outlines = True
                         break
                 if found_outlines:
@@ -1524,6 +1525,40 @@ def update_gi_night_soul(self, context):
     outlines_on = getattr(self, "gi_enable_outlines", True)
     ns_on = getattr(self, "gi_enable_night_soul", False)
     _apply_outlines_and_night_soul(context, outlines_on, ns_on)
+
+
+def update_gi_ns_outline_thickness(self, context):
+    global _is_updating_gi_props
+    if _is_updating_gi_props:
+        return
+    try:
+        from setup_wizard.ui.character_settings_utils import resolve_settings_armature, _iter_rig_meshes
+        from setup_wizard.utils.modifier_utils import set_modifier_property
+        arm = resolve_settings_armature(context)
+        meshes = list(_iter_rig_meshes(arm)) if arm else [obj for obj in bpy.data.objects if obj.type == 'MESH']
+        thickness = float(getattr(self, "gi_ns_outline_thickness", 5.0))
+        for mesh in meshes:
+            if any(k in mesh.name.lower() for k in ("face", "brow", "eye")):
+                continue
+            updated = False
+            for mod in getattr(mesh, "modifiers", []):
+                if mod.type == 'NODES' and mod.node_group and "outlines" in mod.node_group.name.lower():
+                    set_modifier_property(mod, "Socket_13", thickness)
+                    set_modifier_property(mod, "NS Outline Thickness", thickness)
+                    updated = True
+            if updated:
+                try:
+                    mesh.update_tag()
+                except Exception:
+                    pass
+        for win in getattr(bpy.context.window_manager, 'windows', []):
+            screen = getattr(win, 'screen', None)
+            if screen:
+                for area in screen.areas:
+                    if area.type == 'VIEW_3D':
+                        area.tag_redraw()
+    except Exception:
+        pass
 
 
 def character_has_night_soul(context):
@@ -2047,20 +2082,36 @@ class GI_OT_ToggleLightingPanelVisibility(Operator):
         return {'FINISHED'}
 
 
+_OUTLINE_TINT_CACHE = {}
+
+
 def has_genshin_outline_tint(context, arm=None):
-    from setup_wizard.ui.character_settings_utils import get_character_materials
-    _, materials = get_character_materials(context, arm)
+    from setup_wizard.ui.character_settings_utils import get_character_materials, resolve_settings_armature
+    target_arm = arm or resolve_settings_armature(context)
+    cache_key = (target_arm.as_pointer() if target_arm else 0, len(bpy.data.materials))
+    if cache_key in _OUTLINE_TINT_CACHE:
+        return _OUTLINE_TINT_CACHE[cache_key]
+
+    _, materials = get_character_materials(context, target_arm)
+    found = False
     for material in materials:
         if not material.node_tree:
             continue
         for node in material.node_tree.nodes:
             if "Outline Tint" in node.inputs:
-                return True
+                found = True
+                break
             if node.type == 'GROUP' and node.node_tree and "global material properties" in node.node_tree.name.lower():
                 output = node.node_tree.nodes.get("Global Properties") or node.node_tree.nodes.get("Group Output")
                 if output and "Outline Tint" in output.inputs:
-                    return True
-    return False
+                    found = True
+                    break
+        if found:
+            break
+    if len(_OUTLINE_TINT_CACHE) > 64:
+        _OUTLINE_TINT_CACHE.clear()
+    _OUTLINE_TINT_CACHE[cache_key] = found
+    return found
 
 
 class GI_PT_Rig_Character_Settings(Panel):
@@ -2090,6 +2141,9 @@ class GI_PT_Rig_Character_Settings(Panel):
         return False
 
     def draw(self, context):
+        from setup_wizard.ui.character_settings_tabs import draw_character_settings_tabs
+        if draw_character_settings_tabs(self.layout, context):
+            return
         layout = self.layout
         scene = context.scene
 
@@ -2205,8 +2259,13 @@ class GI_PT_Rig_Character_Settings(Panel):
         col_outlines.prop(scene, "gi_enable_outlines", text="Enable Outlines")
         if has_genshin_outline_tint(context, arm):
             col_outlines.prop(scene, "gi_outline_tint", text="Outline Tint")
+
         if character_has_night_soul(context):
-            col_outlines.prop(scene, "gi_enable_night_soul", text="Enable Night Soul (Natlan Characters Only)")
+            box_ns = layout.box()
+            box_ns.label(text="Night Soul (Natlan Only)", icon="SOLO_ON")
+            col_ns = box_ns.column(align=True)
+            col_ns.prop(scene, "gi_enable_night_soul", text="Enable Night Soul")
+            col_ns.prop(scene, "gi_ns_outline_thickness", text="NS Outlines Thickness", slider=True)
 
         # Dark Eyes (Durin Only)
         if is_durin(context):
@@ -2280,7 +2339,7 @@ def register_gi_properties():
         description="Genshin shader used when setting up a character",
         items=[
             ('NEW', 'Quality', 'PrimoToon v4.0'),
-            ('OLD', 'Performance', 'Starriia v3.4 with separate outlines and post-processing'),
+            ('OLD', 'Performance', 'Starriia v3.4 for better performance'),
         ],
         default=default_genshin_shader(),
     )
@@ -2505,6 +2564,14 @@ def register_gi_properties():
         default=False,
         update=update_gi_night_soul,
     )
+    bpy.types.Scene.gi_ns_outline_thickness = bpy.props.FloatProperty(
+        name="NS Outlines Thickness",
+        description="Night Soul outline thickness (non-face meshes)",
+        min=1.0,
+        max=10.0,
+        default=5.0,
+        update=update_gi_ns_outline_thickness,
+    )
     bpy.types.Scene.gi_dark_eyes = bpy.props.BoolProperty(
         name="Dark Eyes",
         description="Toggle Durin's dark eyes. When enabled (1), sets Mix Shader Fac to 1 (transparent BSDF, revealing slot 1 dark eyes). When disabled (0), sets Mix Shader Fac to 0",
@@ -2526,7 +2593,7 @@ def unregister_gi_properties():
         "gi_catch_shadows", "gi_day_night", "gi_blush_strength",
         "gi_rim_lit_color", "gi_rim_shadow_color", "gi_rim_scale",
         "gi_hair_physics_influence", "gi_clothes_physics_influence",
-        "gi_enable_outlines", "gi_outline_tint", "gi_enable_night_soul", "gi_dark_eyes", "gi_shader_type"
+        "gi_enable_outlines", "gi_outline_tint", "gi_enable_night_soul", "gi_ns_outline_thickness", "gi_dark_eyes", "gi_shader_type"
     ]:
         if hasattr(bpy.types.Scene, prop):
             delattr(bpy.types.Scene, prop)

@@ -782,6 +782,14 @@ class GlobalPropertiesNames:
     }
 
 
+def _get_mix_socket(node, name, socket_type):
+    """Return the input socket matching both name and Blender socket type (for ShaderNodeMix)."""
+    for sock in node.inputs:
+        if sock.name == name and sock.type == socket_type:
+            return sock
+    return None
+
+
 def connect_zzz_lighting_panel(target_materials=None):
     """
     Connects ZZZ lighting panel attributes to materials for both Kythera and Legacy shaders.
@@ -897,14 +905,17 @@ def connect_zzz_lighting_panel(target_materials=None):
                 mix_node = ng.nodes.get("Mix")
                 vm_node = ng.nodes.get("Vector Math.001")
                 if mix_node:
-                    sock_b = mix_node.inputs.get("B") or (mix_node.inputs[7] if len(mix_node.inputs) > 7 else None)
-                    sock_a = mix_node.inputs.get("A") or (mix_node.inputs[6] if len(mix_node.inputs) > 6 else None)
-                    if sock_b and "Lit" in lp_node.outputs:
-                        for l in list(sock_b.links): ng.links.remove(l)
-                        ng.links.new(lp_node.outputs["Lit"], sock_b)
-                    if sock_a and "Shad" in lp_node.outputs:
-                        for l in list(sock_a.links): ng.links.remove(l)
-                        ng.links.new(lp_node.outputs["Shad"], sock_a)
+                    for stype in ("VECTOR", "RGBA"):
+                        sock_b = _get_mix_socket(mix_node, "B", stype)
+                        sock_a = _get_mix_socket(mix_node, "A", stype)
+                        if sock_b and "Lit" in lp_node.outputs:
+                            for l in list(sock_b.links):
+                                ng.links.remove(l)
+                            ng.links.new(lp_node.outputs["Lit"], sock_b)
+                        if sock_a and "Shad" in lp_node.outputs:
+                            for l in list(sock_a.links):
+                                ng.links.remove(l)
+                            ng.links.new(lp_node.outputs["Shad"], sock_a)
                 if vm_node and len(vm_node.inputs) > 1 and "Ambient" in lp_node.outputs:
                     sock_amb = vm_node.inputs[1]
                     for l in list(sock_amb.links): ng.links.remove(l)
@@ -913,14 +924,15 @@ def connect_zzz_lighting_panel(target_materials=None):
                 amb_node = ng.nodes.get("Ambient")
                 mix_node = ng.nodes.get("Mix")
                 rim_node = ng.nodes.get("Group.001")
+                mix_rim = ng.nodes.get("Mix.002")
                 if amb_node:
-                    sock_b = amb_node.inputs.get("B") or (amb_node.inputs[7] if len(amb_node.inputs) > 7 else None)
+                    sock_b = _get_mix_socket(amb_node, "B", "RGBA") or (amb_node.inputs[7] if len(amb_node.inputs) > 7 else None)
                     if sock_b and "Ambient" in lp_node.outputs:
                         for l in list(sock_b.links): ng.links.remove(l)
                         ng.links.new(lp_node.outputs["Ambient"], sock_b)
                 if mix_node:
-                    sock_b = mix_node.inputs.get("B") or (mix_node.inputs[7] if len(mix_node.inputs) > 7 else None)
-                    sock_a = mix_node.inputs.get("A") or (mix_node.inputs[6] if len(mix_node.inputs) > 6 else None)
+                    sock_b = _get_mix_socket(mix_node, "B", "RGBA") or (mix_node.inputs[7] if len(mix_node.inputs) > 7 else None)
+                    sock_a = _get_mix_socket(mix_node, "A", "RGBA") or (mix_node.inputs[6] if len(mix_node.inputs) > 6 else None)
                     if sock_b and "Lit" in lp_node.outputs:
                         for l in list(sock_b.links): ng.links.remove(l)
                         ng.links.new(lp_node.outputs["Lit"], sock_b)
@@ -933,6 +945,17 @@ def connect_zzz_lighting_panel(target_materials=None):
                             sock = rim_node.inputs[inp_name]
                             for l in list(sock.links): ng.links.remove(l)
                             ng.links.new(lp_node.outputs[out_name], sock)
+                if mix_rim and rim_node:
+                    sock_fac = _get_mix_socket(mix_rim, "Factor", "VALUE") or (mix_rim.inputs[0] if mix_rim.inputs else None)
+                    out_fac = rim_node.outputs.get("Factor")
+                    if sock_fac and out_fac:
+                        if getattr(bpy.context.scene, "zzz_legacy_enable_rim_light", True):
+                            if not sock_fac.links:
+                                ng.links.new(out_fac, sock_fac)
+                        else:
+                            for l in list(sock_fac.links):
+                                ng.links.remove(l)
+                            sock_fac.default_value = 0.0
 
 
 def disconnect_zzz_lighting_panel(target_materials=None):

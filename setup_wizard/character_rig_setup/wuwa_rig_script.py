@@ -188,6 +188,288 @@ def _wuwa_set_prop(pb_bone, prop_name, default_val, min_val=0.0, max_val=1.0, de
         pass
 
 
+def setup_wuwa_head_neck_follow(rig_obj):
+    """Sets up Neck Follow and Head Follow via intermediate MCH bones.
+
+    Architecture (ZZZ/Miyabi parity):
+      - MCH-Neck (parented to original neck parent, e.g. ORG-Spine2 / chest)
+      - MCH-INT-Neck (parented to root)
+        * COPY_LOCATION & COPY_SCALE from MCH-Neck (infl=1.0)
+        * COPY_ROTATION from MCH-Neck (driven by plate-settings["Neck Follow"])
+      - neck (parented to MCH-INT-Neck)
+      - MCH-Head (parented to neck)
+      - MCH-INT-Head (parented to root)
+        * COPY_LOCATION & COPY_SCALE from MCH-Head (infl=1.0)
+        * COPY_ROTATION from MCH-Head (driven by plate-settings["Head Follow"])
+      - head (parented to MCH-INT-Head)
+    """
+    if not rig_obj or rig_obj.type != 'ARMATURE':
+        return False
+
+    orig_mode = bpy.context.mode
+    ctx = bpy.context
+    ctx.view_layer.objects.active = rig_obj
+
+    # 1. EDIT MODE: Create / reparent intermediate bones
+    bpy.ops.object.mode_set(mode='EDIT')
+    eb = rig_obj.data.edit_bones
+
+    root_name = "root" if "root" in eb else ("root.002" if "root.002" in eb else ("root.001" if "root.001" in eb else None))
+    root_eb = eb.get(root_name) if root_name else None
+    if not root_eb:
+        print("[WUWA RIG] setup_wuwa_head_neck_follow: root bone not found.")
+        if orig_mode != 'EDIT':
+            bpy.ops.object.mode_set(mode='POSE' if orig_mode.startswith('POSE') else 'OBJECT')
+        return False
+
+    neck_name = "neck" if "neck" in eb else ("Bip001Neck" if "Bip001Neck" in eb else None)
+    if not neck_name:
+        for b in eb:
+            if "neck" in b.name.lower():
+                neck_name = b.name
+                break
+
+    head_name = "head" if "head" in eb else ("Bip001Head" if "Bip001Head" in eb else None)
+    if not head_name:
+        for b in eb:
+            if "head" in b.name.lower():
+                head_name = b.name
+                break
+
+    neck_eb = eb.get(neck_name) if neck_name else None
+    head_eb = eb.get(head_name) if head_name else None
+
+    if not neck_eb or not head_eb:
+        print(f"[WUWA RIG] setup_wuwa_head_neck_follow: neck={neck_name}, head={head_name} not found.")
+        if orig_mode != 'EDIT':
+            bpy.ops.object.mode_set(mode='POSE' if orig_mode.startswith('POSE') else 'OBJECT')
+        return False
+
+    # Capture original rest transforms. If already collapsed from a previous run, recover from ORG/DEF.
+    ref_head = eb.get("ORG-" + head_name) or eb.get("ORG-head") or eb.get("DEF-head") or eb.get("DEF-" + head_name)
+    if (head_eb.tail - head_eb.head).length < 1e-4 and ref_head:
+        orig_head_head = ref_head.head.copy()
+        orig_head_tail = ref_head.tail.copy()
+        orig_head_roll = ref_head.roll
+    else:
+        orig_head_head = head_eb.head.copy()
+        orig_head_tail = head_eb.tail.copy()
+        orig_head_roll = head_eb.roll
+
+    ref_neck = eb.get("ORG-" + neck_name) or eb.get("ORG-neck") or eb.get("DEF-neck") or eb.get("DEF-" + neck_name)
+    if (neck_eb.tail - neck_eb.head).length < 1e-4 and ref_neck:
+        orig_neck_head = ref_neck.head.copy()
+        orig_neck_tail = ref_neck.tail.copy()
+        orig_neck_roll = ref_neck.roll
+    else:
+        orig_neck_head = neck_eb.head.copy()
+        orig_neck_tail = neck_eb.tail.copy()
+        orig_neck_roll = neck_eb.roll
+
+    # Crucial: disconnect before reparenting to prevent Blender from snapping head to parent's tail
+    neck_eb.use_connect = False
+    head_eb.use_connect = False
+
+    # Neck intermediate bones
+    mch_int_neck = eb.get("MCH-INT-Neck")
+    mch_neck = eb.get("MCH-Neck")
+
+    if mch_neck is None:
+        mch_neck = eb.new("MCH-Neck")
+        mch_neck.head = orig_neck_head.copy()
+        mch_neck.tail = orig_neck_tail.copy()
+        mch_neck.roll = orig_neck_roll
+        mch_neck.parent = neck_eb.parent
+        mch_neck.use_connect = False
+        mch_neck.use_deform = False
+    else:
+        mch_neck.use_connect = False
+        mch_neck.head = orig_neck_head.copy()
+        mch_neck.tail = orig_neck_tail.copy()
+        mch_neck.roll = orig_neck_roll
+        if neck_eb.parent != mch_int_neck:
+            mch_neck.parent = neck_eb.parent
+
+    if mch_int_neck is None:
+        mch_int_neck = eb.new("MCH-INT-Neck")
+        mch_int_neck.head = orig_neck_head.copy()
+        mch_int_neck.tail = orig_neck_tail.copy()
+        mch_int_neck.roll = orig_neck_roll
+        mch_int_neck.parent = root_eb
+        mch_int_neck.use_connect = False
+        mch_int_neck.use_deform = False
+    else:
+        mch_int_neck.use_connect = False
+        mch_int_neck.head = orig_neck_head.copy()
+        mch_int_neck.tail = orig_neck_tail.copy()
+        mch_int_neck.roll = orig_neck_roll
+        mch_int_neck.parent = root_eb
+
+    neck_eb.parent = mch_int_neck
+    neck_eb.head = orig_neck_head
+    neck_eb.tail = orig_neck_tail
+    neck_eb.roll = orig_neck_roll
+
+    # Head intermediate bones
+    mch_int_head = eb.get("MCH-INT-Head")
+    mch_head = eb.get("MCH-Head")
+
+    if mch_head is None:
+        mch_head = eb.new("MCH-Head")
+        mch_head.head = orig_head_head.copy()
+        mch_head.tail = orig_head_tail.copy()
+        mch_head.roll = orig_head_roll
+        mch_head.parent = neck_eb
+        mch_head.use_connect = False
+        mch_head.use_deform = False
+    else:
+        mch_head.use_connect = False
+        mch_head.head = orig_head_head.copy()
+        mch_head.tail = orig_head_tail.copy()
+        mch_head.roll = orig_head_roll
+        if head_eb.parent != mch_int_head:
+            mch_head.parent = head_eb.parent
+        elif mch_head.parent != neck_eb:
+            mch_head.parent = neck_eb
+
+    if mch_int_head is None:
+        mch_int_head = eb.new("MCH-INT-Head")
+        mch_int_head.head = orig_head_head.copy()
+        mch_int_head.tail = orig_head_tail.copy()
+        mch_int_head.roll = orig_head_roll
+        mch_int_head.parent = root_eb
+        mch_int_head.use_connect = False
+        mch_int_head.use_deform = False
+    else:
+        mch_int_head.use_connect = False
+        mch_int_head.head = orig_head_head.copy()
+        mch_int_head.tail = orig_head_tail.copy()
+        mch_int_head.roll = orig_head_roll
+        mch_int_head.parent = root_eb
+
+    head_eb.parent = mch_int_head
+    head_eb.head = orig_head_head
+    head_eb.tail = orig_head_tail
+    head_eb.roll = orig_head_roll
+
+    # 2. POSE MODE: Constraints & Drivers
+    bpy.ops.object.mode_set(mode='POSE')
+    pb = rig_obj.pose.bones
+
+    # Ensure plate-settings has properties
+    plate = pb.get("plate-settings")
+    if plate is not None:
+        _wuwa_set_prop(plate, "Head Follow", 1.0, 0.0, 1.0, "Head Follow")
+        _wuwa_set_prop(plate, "Neck Follow", 1.0, 0.0, 1.0, "Neck Follow")
+
+    def _setup_mch_constraints(bone_name, target_mch, prop_name):
+        pbone = pb.get(bone_name)
+        if not pbone:
+            return
+
+        c_loc = pbone.constraints.get("Copy Location") or pbone.constraints.get("COPY_LOCATION")
+        if not c_loc or c_loc.type != 'COPY_LOCATION':
+            if c_loc:
+                pbone.constraints.remove(c_loc)
+            c_loc = pbone.constraints.new('COPY_LOCATION')
+            c_loc.name = "Copy Location"
+        c_loc.target = rig_obj
+        c_loc.subtarget = target_mch
+        c_loc.influence = 1.0
+
+        c_scale = pbone.constraints.get("Copy Scale") or pbone.constraints.get("COPY_SCALE")
+        if not c_scale or c_scale.type != 'COPY_SCALE':
+            if c_scale:
+                pbone.constraints.remove(c_scale)
+            c_scale = pbone.constraints.new('COPY_SCALE')
+            c_scale.name = "Copy Scale"
+        c_scale.target = rig_obj
+        c_scale.subtarget = target_mch
+        c_scale.influence = 1.0
+
+        c_rot = pbone.constraints.get("Copy Rotation") or pbone.constraints.get("COPY_ROTATION")
+        if not c_rot or c_rot.type != 'COPY_ROTATION':
+            if c_rot:
+                pbone.constraints.remove(c_rot)
+            c_rot = pbone.constraints.new('COPY_ROTATION')
+            c_rot.name = "Copy Rotation"
+        c_rot.target = rig_obj
+        c_rot.subtarget = target_mch
+
+        try:
+            d = c_rot.driver_add('influence').driver
+            d.type = 'SCRIPTED'
+            d.expression = 'var'
+            for v in list(d.variables):
+                d.variables.remove(v)
+            v = d.variables.new()
+            v.name = 'var'
+            v.type = 'SINGLE_PROP'
+            v.targets[0].id = rig_obj
+            v.targets[0].data_path = f'pose.bones["plate-settings"]["{prop_name}"]'
+        except Exception as ex_drv:
+            print(f"[WUWA RIG] driver setup notice for {bone_name}: {ex_drv}")
+
+    _setup_mch_constraints("MCH-INT-Neck", "MCH-Neck", "Neck Follow")
+    _setup_mch_constraints("MCH-INT-Head", "MCH-Head", "Head Follow")
+
+    # Keep torso drivers for parity
+    for tn in ["torso", "torso.002"]:
+        pbt = pb.get(tn)
+        if pbt is not None:
+            for prop_name, key in [("Head Follow", "head_follow"), ("Neck Follow", "neck_follow")]:
+                try:
+                    d = pbt.driver_add(f'["{key}"]').driver
+                    d.type = 'SCRIPTED'
+                    d.expression = 'var'
+                    for v in list(d.variables):
+                        d.variables.remove(v)
+                    v = d.variables.new()
+                    v.name = 'var'
+                    v.type = 'SINGLE_PROP'
+                    v.targets[0].id = rig_obj
+                    v.targets[0].data_path = f'pose.bones["plate-settings"]["{prop_name}"]'
+                except Exception:
+                    pass
+            try:
+                if "head_follow" in pbt:
+                    pbt["head_follow"] = 1.0
+                if "neck_follow" in pbt:
+                    pbt["neck_follow"] = 1.0
+            except Exception:
+                pass
+
+    # 3. Bone collections: Assign MCH-* to "Other" (or "MCH")
+    if hasattr(rig_obj.data, "collections"):
+        try:
+            colls = rig_obj.data.collections
+            other_coll = colls.get("Other") or colls.get("MCH")
+            if other_coll is None:
+                other_coll = colls.new("Other")
+            mch_names = ["MCH-Neck", "MCH-INT-Neck", "MCH-Head", "MCH-INT-Head"]
+            for mchn in mch_names:
+                b = rig_obj.data.bones.get(mchn)
+                if b is not None:
+                    other_coll.assign(b)
+                    for c in list(b.collections):
+                        if c != other_coll:
+                            try:
+                                c.unassign(b)
+                            except Exception:
+                                pass
+        except Exception as ex_coll:
+            print(f"[WUWA RIG] follow collections notice: {ex_coll}")
+
+    if orig_mode == 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+    elif orig_mode == 'EDIT_ARMATURE':
+        bpy.ops.object.mode_set(mode='EDIT')
+    else:
+        bpy.ops.object.mode_set(mode='POSE')
+
+    return True
+
+
 def _apply_zzz_parity_wuwa(rig_obj, context, orig_arm_name):
     """Paridad ZZZ/NTE para WuWa: plate-settings minimo + head-controller +
     roots 3-tier + shapes + UI. No toca el face rig propio ni el clasificador
@@ -337,51 +619,10 @@ def _apply_zzz_parity_wuwa(rig_obj, context, orig_arm_name):
     except Exception as ex_rcol:
         print(f"[WUWA RIG] root color notice: {ex_rcol}")
 
-    if rig_obj.animation_data:
-        for _fc in list(rig_obj.animation_data.drivers):
-            try:
-                for _var in _fc.driver.variables:
-                    for _tgt in _var.targets:
-                        if _tgt.id == rig_obj and _tgt.data_path:
-                            if '["head_follow"]' in _tgt.data_path:
-                                _tgt.data_path = 'pose.bones["plate-settings"]["Head Follow"]'
-                            elif '["neck_follow"]' in _tgt.data_path:
-                                _tgt.data_path = 'pose.bones["plate-settings"]["Neck Follow"]'
-            except Exception:
-                pass
-    _root_bname = "root" if "root" in rig_obj.pose.bones else (
-        "root.002" if "root.002" in rig_obj.pose.bones else "root.001")
-    for _rb in ["MCH-ROT-head", "MCH-ROT-neck"]:
-        _pb_rot = rig_obj.pose.bones.get(_rb)
-        if _pb_rot is not None:
-            for _c in _pb_rot.constraints:
-                if _c.type == 'COPY_ROTATION' and _root_bname:
-                    try:
-                        _c.subtarget = _root_bname
-                    except Exception:
-                        pass
-    for _tn in ["torso", "torso.002"]:
-        _pb_t = rig_obj.pose.bones.get(_tn)
-        if _pb_t is not None:
-            for _prop, _key in [("Head Follow", "head_follow"), ("Neck Follow", "neck_follow")]:
-                try:
-                    _d = _pb_t.driver_add(f'["{_key}"]').driver
-                    _d.type = 'SCRIPTED'
-                    _d.expression = "var"
-                    _vh = _d.variables.new()
-                    _vh.name = "var"
-                    _vh.type = 'SINGLE_PROP'
-                    _vh.targets[0].id = rig_obj
-                    _vh.targets[0].data_path = f'pose.bones["plate-settings"]["{_prop}"]'
-                except Exception:
-                    pass
-            try:
-                if "head_follow" in _pb_t:
-                    _pb_t["head_follow"] = 1.0
-                if "neck_follow" in _pb_t:
-                    _pb_t["neck_follow"] = 1.0
-            except Exception:
-                pass
+    try:
+        setup_wuwa_head_neck_follow(rig_obj)
+    except Exception as ex_fol:
+        print(f"[WUWA RIG] head/neck follow notice: {ex_fol}")
 
     # Switch targets: solo huesos existentes (WuWa no tiene torso.002)
     _sw_cands = ["root", "root.001", "root.002", "torso", "chest"]
@@ -1212,6 +1453,10 @@ def rig_wuthering_waves_character(context=None):
                     bpy.ops.object.mode_set(mode='OBJECT')
                 except Exception:
                     pass
+            try:
+                setup_wuwa_head_neck_follow(obj)
+            except Exception as ex_fol:
+                print(f"[WUWA RIG] follow heal notice: {ex_fol}")
             unlock_wuwa_secondary_bones(obj)
             return True
         else:

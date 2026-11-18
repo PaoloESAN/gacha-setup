@@ -9,6 +9,8 @@ This folder contains the shader files for setting up **Genshin Impact** characte
 
 ## Included Shader File
 
+* `Face Expressions.blend` — Recreated and saved with Goo Engine 4.1.1 (Blender 4.1 format), preserving the selector and packed eye atlas from the supplied `face_expresions.blend` reference. Compatible characters are detected through two overlapping face shells. Character Settings exposes the expression index (0 restores the original eyes), individual eye overrides, intensity, scale, and rotation. For covers with eye openings, setup creates a closed cover, suppresses the redundant skin and internal outline seams, and preserves the original shape keys. Eye details disappear while their expression is active. This is applied during setup; existing files are not migrated on load.
+
 * **Quality**: `HoYoverse - PrimoToon v4.0.blend` — Unified Genshin Impact shader file containing character shaders (Body, Face, Outlines, VFX), geometry nodes outlines, and compositing post-processing node groups. Selected by default in Blender 5.0 and newer.
 * **Performance**: `HoYoverse - Genshin Impact v3.4 starriia.blend` — Legacy Starriia shader with Body, Hair, Face, Pupil, New Pupil, Highlight, Weapons, and Outlines materials. Selected by default in Blender versions below 5.0.
 * `HoYoverse - Genshin Impact Outlines v3.blend` — Geometry-node outlines used by Performance.

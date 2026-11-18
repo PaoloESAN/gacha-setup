@@ -243,6 +243,10 @@ class MaterialDataApplier(ABC):
             self.apply_material_data(self.outline_mapping, outline_node.inputs)
             return
 
+        if 'face' in (getattr(self.outline_material, 'name', '') or '').lower():
+            self._clear_diffuse_outline_color_fallback(outline_node)
+            return
+
         indexed = self._get_indexed_outline_color_inputs(outline_node)
         if self._defaults_match_sentinels(indexed):
             targets = [indexed[i] for i in (1, 2, 3, 4, 5)]

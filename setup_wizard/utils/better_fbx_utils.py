@@ -154,7 +154,7 @@ def should_show_better_fbx_warning(game_type: str = None) -> bool:
     fbx_games = {
         'GENSHIN_IMPACT', 'HONKAI_STAR_RAIL', 'PUNISHING_GRAY_RAVEN',
         'ZENLESS_ZONE_ZERO', 'ARKNIGHTS_ENDFIELD', 'HONKAI_IMPACT_3RD',
-        'HONKAI_NEXUS_ANIMA',
+        'HONKAI_NEXUS_ANIMA', 'MILASTRA_WONDERLAND',
     }
     if game_type and game_type not in fbx_games:
         return False

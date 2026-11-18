@@ -3,7 +3,7 @@ import os
 bl_info = {
     "name": "Gacha Setup",
     "author": "Mken, OctavoPE, Enthralpy, PaoloESAN",
-    "version": (3, 8, 5),
+    "version": (3, 9, 0),
     "blender": (4, 1, 0),
     "location": "3D View > Sidebar > Gacha Setup",
     "description": "An addon to streamline the character model setup process for Gacha games in Blender 4.1+",
@@ -115,6 +115,7 @@ else:
     from setup_wizard.genshin_setup_wizard import (
         register as register_genshin_setup_wizard,
     )
+    from setup_wizard.milastra import MILASTRA_OT_SetupWizardUI
     from setup_wizard.set_up_head_driver import (
         ZZZ_OT_SetUpHeadDriver,
         WW_OT_SetUpHeadDriver,
@@ -213,6 +214,7 @@ else:
         NTE_PT_UI_Outlines_Menu,
         NTE_PT_UI_Rig_Character_Menu,
         NTE_PT_UI_Finish_Setup_Menu,
+        NTE_PT_Rig_Character_Settings,
     )
     from setup_wizard.ui.wuwa_ui_setup_wizard_menu import (
         WW_PT_Setup_Wizard_UI_Layout,
@@ -440,6 +442,7 @@ else:
         NTE_PT_UI_Outlines_Menu,
         NTE_PT_UI_Rig_Character_Menu,
         NTE_PT_UI_Finish_Setup_Menu,
+        NTE_PT_Rig_Character_Settings,
         NTE_OT_SetupWizardUI,
         NTE_OT_SetUpCharacter,
         NTE_OT_SetUpMaterials,
@@ -496,6 +499,7 @@ else:
         PGR_OT_SetupFaceRig,
         HI3_OT_SetupFaceRig,
         HNA_OT_SetupFaceRig,
+        MILASTRA_OT_SetupWizardUI,
     ]
 
     for module in modules:
@@ -518,6 +522,8 @@ else:
         try:
             from setup_wizard.ui.character_settings_utils import invalidate_caches
             invalidate_caches()
+            from setup_wizard.ui.character_settings_tabs import hide_registered_rig_layers
+            hide_registered_rig_layers()
         except Exception:
             pass
         return None
@@ -530,6 +536,10 @@ else:
             pass
 
     def register():
+        from setup_wizard.ui.character_library import register as register_character_library
+        register_character_library()
+        from setup_wizard.ui.character_settings_tabs import register as register_character_tabs
+        register_character_tabs()
         try:
             register_genshin_setup_wizard()
         except Exception:
@@ -585,6 +595,10 @@ else:
 
 
     def unregister():
+        from setup_wizard.ui.character_library import unregister as unregister_character_library
+        unregister_character_library()
+        from setup_wizard.ui.character_settings_tabs import unregister as unregister_character_tabs
+        unregister_character_tabs()
         from setup_wizard.utilites.new_lights import unregister as unregister_new_lights
         unregister_new_lights()
         from setup_wizard.character_rig_setup.lighting_panel_setup import unregister_fresnel_repair

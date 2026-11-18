@@ -618,26 +618,25 @@ class HNA_OT_SetUpCharacter(Operator, BasicSetupUIOperator):
     bl_label = "Honkai: Nexus Anima: Set Up Character (UI)"
 
 
-def find_largest_uemodel_file(directory_or_file):
+def find_all_uemodel_files(directory_or_file):
     """
-    Finds the largest .uemodel file in the given directory or file path.
-    Selecting the largest file ensures we import the full detailed character model (e.g. LOD0)
-    rather than a low-poly LOD, accessory, or sub-mesh.
+    Finds all .uemodel files in the given directory (sorted largest first),
+    or returns [file] when given a single .uemodel file path.
     """
     if not directory_or_file:
-        return None
+        return []
 
     if os.path.isfile(directory_or_file):
         if os.path.basename(directory_or_file).startswith("._"):
             real_cand = os.path.join(os.path.dirname(directory_or_file), os.path.basename(directory_or_file)[2:])
             if os.path.isfile(real_cand) and real_cand.lower().endswith(".uemodel"):
-                return real_cand
+                return [real_cand]
         elif directory_or_file.lower().endswith(".uemodel"):
-            return directory_or_file
+            return [directory_or_file]
         directory_or_file = os.path.dirname(directory_or_file)
 
     if not os.path.isdir(directory_or_file):
-        return None
+        return []
 
     uemodel_files = []
     for root, _, files in os.walk(directory_or_file):
@@ -655,12 +654,27 @@ def find_largest_uemodel_file(directory_or_file):
                     uemodel_files.append((0, full_path))
 
     if not uemodel_files:
-        return None
+        return []
 
-    # Sort descending by file size
     uemodel_files.sort(key=lambda item: item[0], reverse=True)
-    largest_file = uemodel_files[0][1]
-    print(f"[NTE IMPORT] Scanned {len(uemodel_files)} .uemodel files. Selected largest ({uemodel_files[0][0]} bytes): {largest_file}")
+    return [item[1] for item in uemodel_files]
+
+
+def find_largest_uemodel_file(directory_or_file):
+    """
+    Finds the largest .uemodel file in the given directory or file path.
+    Selecting the largest file ensures we import the full detailed character model (e.g. LOD0)
+    rather than a low-poly LOD, accessory, or sub-mesh.
+    """
+    uemodel_files = find_all_uemodel_files(directory_or_file)
+    if not uemodel_files:
+        return None
+    largest_file = uemodel_files[0]
+    try:
+        size = os.path.getsize(largest_file)
+    except Exception:
+        size = 0
+    print(f"[NTE IMPORT] Scanned {len(uemodel_files)} .uemodel files. Selected largest ({size} bytes): {largest_file}")
     return largest_file
 
 
@@ -708,6 +722,235 @@ def _derive_nte_character_name(uemodel_path, folder, new_objects):
                 return cleaned
 
     return "Character"
+
+
+_NTE_ADJUST_BONE_MAP = {
+    "Pelvis_adjust": "Bip001-Pelvis",
+    "spine_adjust": "Bip001-Spine",
+    "spine_01_adjust": "Bip001-Spine1",
+    "spine_02_adjust": "Bip001-Spine2",
+    "neck_01_adjust": "Bip001-Neck",
+    "head_adjust": "Bip001-Head",
+    "clavicle_l_adjust": "Bip001-L-Clavicle",
+    "upperarm_l_adjust": "Bip001-L-UpperArm",
+    "forearm_l_adjust": "Bip001-L-Forearm",
+    "hand_l_adjust": "Bip001-L-Hand",
+    "clavicle_r_adjust": "Bip001-R-Clavicle",
+    "upperarm_r_adjust": "Bip001-R-UpperArm",
+    "forearm_r_adjust": "Bip001-R-Forearm",
+    "hand_r_adjust": "Bip001-R-Hand",
+    "ThighL_adjust": "Bip001-L-Thigh",
+    "Thigh_L_adjust": "Bip001-L-Thigh",
+    "ThighR_adjust": "Bip001-R-Thigh",
+    "Thigh_R_adjust": "Bip001-R-Thigh",
+}
+
+
+def _compute_nte_adjust_transform(primary_arm, sub_arm):
+    """Compute rigid 4x4 transform from sub_arm local space to primary_arm local space using *_adjust bones."""
+    from mathutils import Matrix, Vector
+    import numpy as np
+
+    pairs = []
+    for adj_name, main_name in _NTE_ADJUST_BONE_MAP.items():
+        sb = sub_arm.data.bones.get(adj_name)
+        mb = primary_arm.data.bones.get(main_name)
+        if sb and mb:
+            pairs.append((adj_name, main_name, sb.head_local.copy(), mb.head_local.copy()))
+
+    if len(pairs) < 3:
+        return None, None, None
+
+    src_pts = np.array([[p[2].x, p[2].y, p[2].z] for p in pairs], dtype=np.float64)
+    dst_pts = np.array([[p[3].x, p[3].y, p[3].z] for p in pairs], dtype=np.float64)
+    c_src = src_pts.mean(axis=0)
+    c_dst = dst_pts.mean(axis=0)
+    H = (src_pts - c_src).T @ (dst_pts - c_dst)
+    U, _, Vt = np.linalg.svd(H)
+    R = Vt.T @ U.T
+    if np.linalg.det(R) < 0:
+        Vt[-1, :] *= -1
+        R = Vt.T @ U.T
+    t = c_dst - R @ c_src
+
+    mat = Matrix((
+        (R[0, 0], R[0, 1], R[0, 2], t[0]),
+        (R[1, 0], R[1, 1], R[1, 2], t[1]),
+        (R[2, 0], R[2, 1], R[2, 2], t[2]),
+        (0.0, 0.0, 0.0, 1.0),
+    ))
+    errs = [((mat @ p[2]) - p[3]).length for p in pairs]
+    rms = (sum(e * e for e in errs) / len(errs)) ** 0.5
+
+    # Attach to the primary Bip001 bone closest to the sub-armature origin in primary space
+    origin_in_primary = mat @ Vector((0.0, 0.0, 0.0))
+    bip_candidates = [b for b in primary_arm.data.bones if b.name.startswith("Bip001-") and "Twist" not in b.name]
+    closest_bone = min(
+        bip_candidates or list(primary_arm.data.bones),
+        key=lambda b: (b.head_local - origin_in_primary).length,
+    ).name
+    return mat, closest_bone, rms
+
+
+def _merge_nte_secondary_armatures(context, new_objects):
+    """Merge secondary NTE .uemodel armatures into the primary armature and align socket-local attachments."""
+    from mathutils import Matrix, Vector
+
+    armatures = [o for o in new_objects if getattr(o, "type", None) == "ARMATURE"]
+    if len(armatures) <= 1:
+        return
+
+    # Primary armature is the one with the most bones (main body skeleton)
+    primary_arm = max(armatures, key=lambda a: len(a.data.bones) if a.data else 0)
+    secondary_arms = [a for a in armatures if a != primary_arm]
+    head_bone_name = next((b for b in ("Bip001-Head", "Head", "head") if b in primary_arm.data.bones), None)
+    head_offset = primary_arm.data.bones[head_bone_name].head_local.copy() if head_bone_name else Vector((0.0, 0.0, 0.0))
+
+    prev_active = context.view_layer.objects.active
+    prev_mode = prev_active.mode if prev_active else "OBJECT"
+    if prev_active and prev_mode != "OBJECT":
+        try:
+            bpy.ops.object.mode_set(mode="OBJECT")
+        except Exception:
+            pass
+
+    mesh_objs = [o for o in new_objects if o not in armatures and getattr(o, "type", None) == "MESH"]
+    for sub_arm in secondary_arms:
+        sub_meshes = [
+            o for o in mesh_objs
+            if (
+                o.parent == sub_arm
+                or any(m.type == "ARMATURE" and m.object == sub_arm for m in o.modifiers)
+            )
+        ]
+        align_mat, attach_parent, rms = _compute_nte_adjust_transform(primary_arm, sub_arm)
+        if align_mat is not None and rms is not None and rms < 0.05:
+            mode_tag = f"adjust_rms={rms:.4f}"
+        else:
+            sub_bone_names = set(sub_arm.data.bones.keys())
+            has_head_adjust = "head_adjust" in sub_bone_names
+            lacks_body = not any(b in sub_bone_names for b in ("Bip001-Pelvis", "Bip001-Spine", "Bip001-Head"))
+            mesh_z_max = max((v.co.z for m in sub_meshes for v in m.data.vertices), default=0.0)
+            is_head_attachment = bool(head_bone_name and has_head_adjust and lacks_body and mesh_z_max < 0.8)
+            align_mat = Matrix.Translation(head_offset) if is_head_attachment else Matrix.Identity(4)
+            attach_parent = head_bone_name if is_head_attachment else ("root" if "root" in primary_arm.data.bones else None)
+            mode_tag = f"head_fallback={is_head_attachment}"
+
+        # Transform mesh vertices into primary_arm local space
+        is_identity = all(
+            abs(align_mat[i][j] - (1.0 if i == j else 0.0)) < 1e-5
+            for i in range(4) for j in range(4)
+        )
+        if not is_identity:
+            for m in sub_meshes:
+                m.data.transform(align_mat)
+                m.data.update()
+
+        # Copy unique non-adjust bones into primary_arm
+        sub_bones_data = [
+            (b.name, b.parent.name if b.parent else None, align_mat @ b.matrix_local, b.length)
+            for b in sub_arm.data.bones
+            if not b.name.endswith("_adjust")
+        ]
+
+        context.view_layer.objects.active = primary_arm
+        bpy.ops.object.mode_set(mode="EDIT")
+        ebones = primary_arm.data.edit_bones
+        created = {}
+        for bname, _, mat, length in sub_bones_data:
+            if bname == "root" or bname in ebones:
+                continue
+            eb = ebones.new(bname)
+            eb.head = mat.translation
+            y_axis = mat.to_3x3() @ Vector((0.0, 1.0, 0.0))
+            eb.tail = eb.head + (y_axis.normalized() * max(length, 1e-3))
+            eb.matrix = mat
+            created[bname] = eb
+
+        for bname, pname, _, _ in sub_bones_data:
+            eb = created.get(bname)
+            if not eb:
+                continue
+            if pname and pname in created:
+                eb.parent = created[pname]
+            elif pname and pname != "root" and pname in ebones:
+                eb.parent = ebones[pname]
+            elif attach_parent and attach_parent in ebones:
+                eb.parent = ebones[attach_parent]
+
+        bpy.ops.object.mode_set(mode="OBJECT")
+
+        for m in sub_meshes:
+            m.parent = primary_arm
+            m.matrix_parent_inverse = Matrix.Identity(4)
+            for mod in m.modifiers:
+                if mod.type == "ARMATURE" and mod.object == sub_arm:
+                    mod.object = primary_arm
+
+        sub_arm_name = sub_arm.name
+        try:
+            bpy.data.objects.remove(sub_arm, do_unlink=True)
+        except Exception:
+            pass
+        print(f"[NTE IMPORT] Merged '{sub_arm_name}' into '{primary_arm.name}' ({mode_tag}, attach='{attach_parent}')")
+
+
+def _attach_nte_static_weapons(new_objects):
+    """Attach unweighted NTE weapon meshes (e.g. Lacrimosa) to Lhand/Rhand weapon socket bones."""
+    from mathutils import Matrix
+
+    armatures = [o for o in new_objects if getattr(o, "type", None) == "ARMATURE"]
+    if not armatures:
+        return
+    primary_arm = max(armatures, key=lambda a: len(a.data.bones) if a.data else 0)
+
+    l_bone = next((b for b in ("Lhand_Weapon2", "Lhand_Weapon") if b in primary_arm.data.bones), None)
+    r_bone = next((b for b in ("Rhand_Weapon2", "Rhand_Weapon") if b in primary_arm.data.bones), None)
+    hand_bones = [b for b in (l_bone, r_bone) if b]
+    if not hand_bones:
+        return
+
+    weapon_meshes = [
+        o for o in list(new_objects)
+        if getattr(o, "type", None) == "MESH"
+        and o.parent is None
+        and len(o.vertex_groups) == 0
+        and "weapon" in o.name.lower()
+    ]
+    for w in weapon_meshes:
+        base_data = w.data
+        base_name = w.name
+        # Pre-create target objects before mutating modifiers/vertex_groups on w
+        targets = []
+        for idx, bname in enumerate(hand_bones):
+            if idx == 0:
+                target = w
+                target.data = base_data.copy()
+            else:
+                target = w.copy()
+                target.data = base_data.copy()
+                for col in w.users_collection:
+                    col.objects.link(target)
+                new_objects.append(target)
+            if len(hand_bones) > 1:
+                suffix = "_L" if bname == l_bone else "_R"
+                target.name = f"{base_name}{suffix}"
+            targets.append((target, bname))
+
+        for target, bname in targets:
+            bone = primary_arm.data.bones[bname]
+            target.data.transform(bone.matrix_local)
+            target.data.update()
+            target.vertex_groups.clear()
+            for m in [m for m in target.modifiers if m.type == "ARMATURE"]:
+                target.modifiers.remove(m)
+            vg = target.vertex_groups.new(name=bname)
+            vg.add(list(range(len(target.data.vertices))), 1.0, "REPLACE")
+            mod = target.modifiers.new(name="Armature", type="ARMATURE")
+            mod.object = primary_arm
+            target.parent = primary_arm
+            target.matrix_parent_inverse = Matrix.Identity(4)
+            print(f"[NTE IMPORT] Attached static weapon '{target.name}' to '{primary_arm.name}:{bname}'")
 
 
 def _package_nte_import_into_collection(context, uemodel_path, folder, existing_objects):
@@ -777,6 +1020,10 @@ class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
         maxlen=255,
     )
 
+    def draw(self, context):
+        from setup_wizard.ui.unified_ui_setup_wizard_menu import draw_file_browser_setup_settings
+        draw_file_browser_setup_settings(self.layout, context, game_type=GameType.NEVERNESS_TO_EVERNESS.name, operator=self)
+
     def execute(self, context):
         if not self.filepath:
             return {"CANCELLED"}
@@ -792,26 +1039,32 @@ class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
                 self.report({"ERROR"}, f"Failed to extract archive: {e_ext}")
                 return {"CANCELLED"}
 
-        uemodel_path = find_largest_uemodel_file(self.filepath)
-        if not uemodel_path or not os.path.isfile(uemodel_path):
+        uemodel_paths = find_all_uemodel_files(self.filepath)
+        if not uemodel_paths or not os.path.isfile(uemodel_paths[0]):
             self.report({"ERROR"}, f"No .uemodel file found in: {self.filepath}")
             return {"CANCELLED"}
 
-        folder = os.path.dirname(uemodel_path)
-        filename = os.path.basename(uemodel_path)
+        primary_uemodel = uemodel_paths[0]
+        folder = self.filepath if os.path.isdir(self.filepath) else os.path.dirname(primary_uemodel)
+        filename = os.path.basename(primary_uemodel)
         set_active_character_directory(folder)
         cache_using_cache_key(get_cache(True), CHARACTER_MODEL_FOLDER_FILE_PATH, folder)
         cache_using_cache_key(get_cache(True), NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH, folder)
         cache_using_cache_key(get_cache(True), NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH, folder)
         context.scene["setup_wizard_imported_model_dir"] = folder
-        context.scene["setup_wizard_imported_uemodel_path"] = uemodel_path
-        print(f"[NTE SETUP] Cached character folder: {folder} (model: {filename})")
+        context.scene["setup_wizard_imported_uemodel_path"] = primary_uemodel
+        print(f"[NTE SETUP] Cached character folder: {folder} ({len(uemodel_paths)} .uemodel files, primary: {filename})")
 
         existing_objects = set(context.scene.objects)
 
-        _import_nte_uemodel(context, uemodel_path)
-        _package_nte_import_into_collection(context, uemodel_path, folder, existing_objects)
-        self.report({"INFO"}, f"Imported NTE character model: {filename}")
+        for uemodel_path in uemodel_paths:
+            _import_nte_uemodel(context, uemodel_path)
+        new_nte_objects = [o for o in context.scene.objects if o not in existing_objects]
+        _merge_nte_secondary_armatures(context, new_nte_objects)
+        new_nte_objects = [o for o in context.scene.objects if o not in existing_objects]
+        _attach_nte_static_weapons(new_nte_objects)
+        _package_nte_import_into_collection(context, primary_uemodel, folder, existing_objects)
+        self.report({"INFO"}, f"Imported {len(uemodel_paths)} NTE .uemodel file(s) (primary: {filename})")
 
         return {"FINISHED"}
 
@@ -828,6 +1081,10 @@ class WW_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
         options={'HIDDEN'},
         maxlen=255,
     )
+
+    def draw(self, context):
+        from setup_wizard.ui.unified_ui_setup_wizard_menu import draw_file_browser_setup_settings
+        draw_file_browser_setup_settings(self.layout, context, game_type=GameType.WUTHERING_WAVES.name, operator=self)
 
     def execute(self, context):
         if not self.filepath:
@@ -1197,6 +1454,10 @@ class AKE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
         maxlen=255,
     )
 
+    def draw(self, context):
+        from setup_wizard.ui.unified_ui_setup_wizard_menu import draw_file_browser_setup_settings
+        draw_file_browser_setup_settings(self.layout, context, game_type=GameType.ARKNIGHTS_ENDFIELD.name, operator=self)
+
     def execute(self, context):
         if not self.filepath:
             return {"CANCELLED"}
@@ -1393,6 +1654,11 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
         maxlen=255,  # Max internal buffer length, longer would be clamped.
     )
 
+    def draw(self, context):
+        from setup_wizard.ui.unified_ui_setup_wizard_menu import draw_file_browser_setup_settings
+        game_type = self.game_type or getattr(context.scene, "game_type_dropdown", GameType.GENSHIN_IMPACT.name)
+        draw_file_browser_setup_settings(self.layout, context, game_type=game_type, operator=self)
+
     def execute(self, context):
         from setup_wizard.utils.archive_extractor import is_archive_file, extract_character_archive
 
@@ -1538,28 +1804,38 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                     character_model_file_path_or_directory = real_f
 
         if self.game_type == GameType.NEVERNESS_TO_EVERNESS.name:
-            uemodel_path = find_largest_uemodel_file(character_model_file_path_or_directory)
-            if not uemodel_path or not os.path.isfile(uemodel_path):
+            uemodel_paths = find_all_uemodel_files(character_model_file_path_or_directory)
+            if not uemodel_paths or not os.path.isfile(uemodel_paths[0]):
                 self.report({"ERROR"}, f"No .uemodel file found in: {character_model_file_path_or_directory}")
                 raise RuntimeError(f"No .uemodel file found in: {character_model_file_path_or_directory}")
 
-            folder = os.path.dirname(uemodel_path)
-            filename = os.path.basename(uemodel_path)
+            primary_uemodel = uemodel_paths[0]
+            folder = (
+                character_model_file_path_or_directory
+                if os.path.isdir(character_model_file_path_or_directory)
+                else os.path.dirname(primary_uemodel)
+            )
+            filename = os.path.basename(primary_uemodel)
             set_active_character_directory(folder)
             cache_using_cache_key(get_cache(True), CHARACTER_MODEL_FOLDER_FILE_PATH, folder)
             cache_using_cache_key(get_cache(True), NEVERNESS_TO_EVERNESS_ROOT_FOLDER_FILE_PATH, folder)
             cache_using_cache_key(get_cache(True), NEVERNESS_TO_EVERNESS_SHADER_FILE_PATH, folder)
             try:
                 bpy.context.scene["setup_wizard_imported_model_dir"] = folder
-                bpy.context.scene["setup_wizard_imported_uemodel_path"] = uemodel_path
+                bpy.context.scene["setup_wizard_imported_uemodel_path"] = primary_uemodel
             except Exception:
                 pass
 
             existing_nte_objects = set(bpy.context.scene.objects)
-            _import_nte_uemodel(bpy.context, uemodel_path)
+            for uemodel_path in uemodel_paths:
+                _import_nte_uemodel(bpy.context, uemodel_path)
+            new_nte_objects = [o for o in bpy.context.scene.objects if o not in existing_nte_objects]
+            _merge_nte_secondary_armatures(bpy.context, new_nte_objects)
+            new_nte_objects = [o for o in bpy.context.scene.objects if o not in existing_nte_objects]
+            _attach_nte_static_weapons(new_nte_objects)
             _package_nte_import_into_collection(
-                bpy.context, uemodel_path, folder, existing_nte_objects)
-            self.report({"INFO"}, f"Imported NTE character model (largest .uemodel): {filename}")
+                bpy.context, primary_uemodel, folder, existing_nte_objects)
+            self.report({"INFO"}, f"Imported {len(uemodel_paths)} NTE .uemodel file(s) (primary: {filename})")
             return
 
         if self.game_type == GameType.WUTHERING_WAVES.name:
@@ -1942,8 +2218,9 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
         # Align eye bones and connect bone chains if imported FBX has offsets
         for obj in bpy.data.objects:
             if obj.type == "ARMATURE":
-                connect_armature_bone_chains(obj)
-                align_eye_bones(obj)
+                if not is_rigging_disabled(bpy.context):
+                    connect_armature_bone_chains(obj)
+                    align_eye_bones(obj)
                 try:
                     from setup_wizard.ui.character_settings_utils import stamp_rig_game
                     stamp_rig_game(obj, self.game_type)

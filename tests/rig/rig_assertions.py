@@ -75,6 +75,10 @@ def assert_rig(game, char_dir):
     if game == "zzz":
         checks.extend(test_zzz_pole_and_foot(rig))
 
+    # --- 5. WUWA SPECIFIC HEAD AND NECK FOLLOW TESTS ---
+    if game == "wuwa":
+        checks.extend(test_wuwa_head_neck_follow(rig))
+
     # Reset rig to neutral rest pose
     reset_rig_pose(rig)
 
@@ -527,5 +531,105 @@ def test_zzz_pole_and_foot(rig):
         "passed": len(vis_missing) == 0 and len(vis_issues) == 0,
         "message": f"VIS stretch bones issues (missing: {vis_missing}, issues: {vis_issues})" if (vis_missing or vis_issues) else "All 4 VIS stretch bones present, parented to pole targets, unselectable, with line widgets and STRETCH_TO constraints to joints",
     })
+
+    return checks
+
+
+def test_wuwa_head_neck_follow(rig):
+    """Test WuWa Head Follow and Neck Follow rotation isolation."""
+    import math
+    checks = []
+
+    ps = rig.pose.bones.get("plate-settings")
+    head_pb = rig.pose.bones.get("head")
+    neck_pb = rig.pose.bones.get("neck")
+    torso_pb = rig.pose.bones.get("torso")
+    mch_int_head = rig.pose.bones.get("MCH-INT-Head")
+    mch_int_neck = rig.pose.bones.get("MCH-INT-Neck")
+
+    has_bones = bool(ps and head_pb and neck_pb and torso_pb and mch_int_head and mch_int_neck)
+    has_props = bool(ps and "Head Follow" in ps and "Neck Follow" in ps)
+
+    checks.append({
+        "name": "WuWa Head/Neck Follow Structure",
+        "passed": has_bones and has_props,
+        "message": f"Bones present: {has_bones}, plate-settings props present: {has_props}",
+    })
+
+    if not has_bones or not has_props:
+        return checks
+
+    # Save original poses and settings
+    orig_torso_mode = torso_pb.rotation_mode
+    orig_torso_rot = torso_pb.rotation_euler.copy() if hasattr(torso_pb.rotation_euler, "copy") else (0, 0, 0)
+    orig_use_hc = ps.get("Use Head Controller", 0.0)
+    orig_hf = ps.get("Head Follow", 1.0)
+    orig_nf = ps.get("Neck Follow", 1.0)
+
+    try:
+        # Turn off head controller so Damped Track does not override FK test
+        ps["Use Head Controller"] = 0.0
+
+        # Rotate torso 45 degrees around Z
+        torso_pb.rotation_mode = 'XYZ'
+        torso_pb.rotation_euler.z = math.radians(45)
+
+        # 1. Test Head Follow (1.0 vs 0.0)
+        ps["Head Follow"] = 1.0
+        ps["Neck Follow"] = 1.0
+        rig.update_tag()
+        bpy.context.view_layer.update()
+        eval_rig = rig.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        h_rot_1 = math.degrees((eval_rig.matrix_world @ eval_rig.pose.bones["head"].matrix).to_euler().z)
+
+        ps["Head Follow"] = 0.0
+        ps["Neck Follow"] = 1.0
+        rig.update_tag()
+        bpy.context.view_layer.update()
+        eval_rig = rig.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        h_rot_0 = math.degrees((eval_rig.matrix_world @ eval_rig.pose.bones["head"].matrix).to_euler().z)
+
+        diff_head = abs(h_rot_1 - h_rot_0)
+        while diff_head > 180:
+            diff_head = abs(diff_head - 360)
+
+        checks.append({
+            "name": "WuWa Head Follow Rotation Isolation",
+            "passed": diff_head > 30.0,
+            "message": f"Head Follow 1.0 -> {h_rot_1:.2f}°, 0.0 -> {h_rot_0:.2f}°, diff={diff_head:.2f}° (expected ~45°)",
+        })
+
+        # 2. Test Neck Follow (1.0 vs 0.0)
+        ps["Head Follow"] = 1.0
+        ps["Neck Follow"] = 1.0
+        rig.update_tag()
+        bpy.context.view_layer.update()
+        eval_rig = rig.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        n_rot_1 = math.degrees((eval_rig.matrix_world @ eval_rig.pose.bones["neck"].matrix).to_euler().z)
+
+        ps["Neck Follow"] = 0.0
+        rig.update_tag()
+        bpy.context.view_layer.update()
+        eval_rig = rig.evaluated_get(bpy.context.evaluated_depsgraph_get())
+        n_rot_0 = math.degrees((eval_rig.matrix_world @ eval_rig.pose.bones["neck"].matrix).to_euler().z)
+
+        diff_neck = abs(n_rot_1 - n_rot_0)
+        while diff_neck > 180:
+            diff_neck = abs(diff_neck - 360)
+
+        checks.append({
+            "name": "WuWa Neck Follow Rotation Isolation",
+            "passed": diff_neck > 30.0,
+            "message": f"Neck Follow 1.0 -> {n_rot_1:.2f}°, 0.0 -> {n_rot_0:.2f}°, diff={diff_neck:.2f}° (expected ~45°)",
+        })
+    finally:
+        # Restore settings
+        torso_pb.rotation_euler = orig_torso_rot
+        torso_pb.rotation_mode = orig_torso_mode
+        ps["Use Head Controller"] = orig_use_hc
+        ps["Head Follow"] = orig_hf
+        ps["Neck Follow"] = orig_nf
+        rig.update_tag()
+        bpy.context.view_layer.update()
 
     return checks

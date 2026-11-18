@@ -167,4 +167,10 @@ def initialize_rig_uis(objects, *, texts=()):
             print(f"[GACHA SETUP] Error initializing Rig UI: {message}")
             traceback.print_exc()
 
+    try:
+        from setup_wizard.ui.character_settings_tabs import hide_registered_rig_layers
+        hide_registered_rig_layers()
+    except Exception:
+        pass
+
     return stats

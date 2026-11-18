@@ -175,13 +175,9 @@ def fix_missing_textures(directory=None, images=None):
     if not os.path.isdir(directory):
         return
 
-    # The native operator searches every image in the project. During append,
-    # restrict repairs to the new character so existing characters keep theirs.
-    if images is None:
-        try:
-            bpy.ops.file.find_missing_files(directory=directory)
-        except Exception as e:
-            print(f"[TEXTURE UTILS] Notice find_missing_files: {e}")
+    # Index all image files in directory (and parent if in a Textures/Materials subfolder)
+    # and resolve missing datablocks directly without running bpy.ops.file.find_missing_files,
+    # which spams console warnings for unrelated template images in appended shaders.
 
     # 2. Build index of all image files in directory and parent if in subfolder
     filename_map, stem_map = scan_directory_for_textures(directory)

@@ -28,7 +28,7 @@ class NTE_PT_Setup_Wizard_UI_Layout(Panel, NevernessToEvernessUIRenderChecker):
         OperatorFactory.create(
             run_entire_setup_column,
             "neverness_to_everness.setup_wizard_ui",
-            "Run Entire Setup",
+            "Setup Character",
             "PLAY",
             game_type=GameType.NEVERNESS_TO_EVERNESS.name,
             operator_context="INVOKE_DEFAULT",
@@ -42,12 +42,6 @@ class NTE_PT_Setup_Wizard_UI_Layout(Panel, NevernessToEvernessUIRenderChecker):
 
         settings_col = settings_box.column()
         props = context.scene.character_rigger_props
-        enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
-        settings_col.prop(props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")
-        if enable_physics:
-            sliders_col = settings_col.column()
-            sliders_col.prop(props, "hair_physics_influence", text="Hair", slider=True)
-            sliders_col.prop(props, "clothes_physics_influence", text="Clothes", slider=True)
         settings_col.prop(props, "disable_rigging", text="Disable Rigging")
 
 
@@ -253,6 +247,43 @@ class NTE_PT_UI_Finish_Setup_Menu(Panel, NevernessToEvernessUIRenderChecker):
         )
 
 
+class NTE_PT_Rig_Character_Settings(Panel):
+    bl_label = "Character Settings"
+    bl_idname = "NTE_PT_Rig_Character_Settings_Main"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Item"
+    bl_order = 1
+
+    @classmethod
+    def poll(cls, context):
+        from setup_wizard.ui.character_settings_utils import is_game_armature
+        return is_game_armature(context, GameType.NEVERNESS_TO_EVERNESS.name)
+
+    def draw(self, context):
+        from setup_wizard.ui.character_settings_tabs import draw_character_settings_tabs
+        if draw_character_settings_tabs(self.layout, context):
+            return
+        arm = None
+        try:
+            from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+            arm = resolve_settings_armature(context)
+        except Exception:
+            pass
+
+        # 0. Animate Mode (fast playback: lightweight materials, no outlines)
+        from setup_wizard.genshin_animate_mode import is_genshin_animate_mode
+        is_anim = is_genshin_animate_mode(arm, context=context)
+        self.layout.operator(
+            "genshin.toggle_animate_mode",
+            text="Disable Animate Mode" if is_anim else "Enable Animate Mode",
+            icon="SHADING_TEXTURE" if is_anim else "RESTRICT_RENDER_OFF"
+        )
+
+        from setup_wizard.ui.hi3_character_settings import _draw_physics
+        _draw_physics(self.layout, context)
+
+
 classes = (
     NTE_PT_Setup_Wizard_UI_Layout,
     NTE_PT_Basic_Setup_Wizard_UI_Layout,
@@ -262,6 +293,7 @@ classes = (
     NTE_PT_UI_Outlines_Menu,
     NTE_PT_UI_Rig_Character_Menu,
     NTE_PT_UI_Finish_Setup_Menu,
+    NTE_PT_Rig_Character_Settings,
 )
 
 

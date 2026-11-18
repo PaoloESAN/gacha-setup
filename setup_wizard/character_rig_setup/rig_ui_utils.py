@@ -1205,18 +1205,25 @@ def build_rig_layers_ui_code(original_name, setup_version):
                 "                row.prop(collection['Facerig Detail'], 'is_visible', toggle=True, text='Facerig Detail')\n" +
                 "                row = split.row(align=True)\n" +
                 "                row.prop(collection['Facerig Detail'], 'is_solo', toggle=True, text='★')" +
-                "\n            row = col.row()" +
-                # Face (Primary) / Face (Secondary)
-                "\n            split = row.split(factor=split_small, align=True)" +
-                "\n            row_tweaks = split.row(align=True)" +
-                "\n            " + make_layer_str("Face (Primary)", 29, vers, "tweaks") +
-                "\n            row_tweaks = split.row(align=True)" +
-                "\n            " + make_solo_str("Face (Primary)", "tweaks") +
-                "\n            split = row.split(factor=split_small, align=True)" +
-                "\n            row_pivots = split.row(align=True)" +
-                "\n            " + make_layer_str("Face (Secondary)", 30, vers, "pivots") +
-                "\n            row_pivots = split.row(align=True)" +
-                "\n            " + make_solo_str("Face (Secondary)", "pivots") +
+                "\n            if 'Face (Primary)' in collection:" +
+                "\n                row = col.row()" +
+                "\n                split = row.split(factor=split_small, align=True)" +
+                "\n                row_tweaks = split.row(align=True)" +
+                "\n                row_tweaks.prop(collection['Face (Primary)'], 'is_visible', toggle=True, text='Face (Primary)')" +
+                "\n                row_tweaks = split.row(align=True)" +
+                "\n                row_tweaks.prop(collection['Face (Primary)'], 'is_solo', toggle=True, text='★')" +
+                "\n                split = row.split(factor=split_small, align=True)" +
+                "\n                row_pivots = split.row(align=True)" +
+                "\n                if 'Face (Secondary)' in collection: row_pivots.prop(collection['Face (Secondary)'], 'is_visible', toggle=True, text='Face (Secondary)')" +
+                "\n                row_pivots = split.row(align=True)" +
+                "\n                if 'Face (Secondary)' in collection: row_pivots.prop(collection['Face (Secondary)'], 'is_solo', toggle=True, text='★')" +
+                "\n            elif 'Face (Secondary)' in collection:" +
+                "\n                row = col.row()" +
+                "\n                split = row.split(align=True, factor=split_size)" +
+                "\n                row = split.row(align=True)" +
+                "\n                row.prop(collection['Face (Secondary)'], 'is_visible', toggle=True, text='Face (Secondary)')" +
+                "\n                row = split.row(align=True)" +
+                "\n                row.prop(collection['Face (Secondary)'], 'is_solo', toggle=True, text='★')" +
                 # Spacers
                 "\n            row = col.row()" +
                 "\n            row = col.row()" +
@@ -1676,6 +1683,9 @@ except Exception:
 """
     complete_rig_text += properties_order_fix
 
+    from setup_wizard.ui.character_settings_tabs import patch_standalone_layers
+    complete_rig_text = patch_standalone_layers(complete_rig_text)
+
     # Write modified content
     rig_file.clear()
     header_var = f'rig_name = "{clean_char_name}"\n'
@@ -1716,26 +1726,20 @@ except Exception:
 def find_target_armature(context=None, armature_obj=None):
     context = context or bpy.context
     if armature_obj and getattr(armature_obj, "type", None) == "ARMATURE":
-        print(f"[GACHA SETUP LOG] find_target_armature: directly provided '{armature_obj.name}'")
         return armature_obj
 
     # 1. Check active object
     act = context.active_object or getattr(context, "object", None)
     if act:
         if act.type == "ARMATURE" and not act.name.startswith("WGT"):
-            print(f"[GACHA SETUP LOG] find_target_armature: active object is armature '{act.name}'")
             return act
         if act.type == "MESH":
             if hasattr(act, "find_armature") and act.find_armature():
-                arm = act.find_armature()
-                print(f"[GACHA SETUP LOG] find_target_armature: found via active mesh.find_armature() -> '{arm.name}'")
-                return arm
+                return act.find_armature()
             for m in act.modifiers:
                 if m.type == 'ARMATURE' and m.object:
-                    print(f"[GACHA SETUP LOG] find_target_armature: found via active mesh modifier -> '{m.object.name}'")
                     return m.object
             if act.parent and act.parent.type == 'ARMATURE':
-                print(f"[GACHA SETUP LOG] find_target_armature: found via active mesh parent -> '{act.parent.name}'")
                 return act.parent
 
     # 2. Check selected objects

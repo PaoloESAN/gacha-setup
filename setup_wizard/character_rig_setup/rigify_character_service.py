@@ -9,6 +9,7 @@ from setup_wizard.domain.game_types import GameType
 class RigifyCharacterService:
     def __init__(self, game_type: GameType, blender_operator: Operator, context: Context):
         self.context = context
+        self.game_type = game_type
         self.blender_operator = blender_operator
         self.character_rigger = CharacterRiggerFactory.create(game_type, blender_operator, context)
 
@@ -21,3 +22,6 @@ class RigifyCharacterService:
                 self.blender_operator.report({'INFO'}, 'Rigging skipped. Disable Rigging is enabled.')
             return
         self.character_rigger.rig_character()
+        from setup_wizard.character_rig_setup.light_direction_bone import setup_light_direction_bone
+        game_type = getattr(self, "game_type", None) or getattr(self.blender_operator, "game_type", None)
+        setup_light_direction_bone(self.context, game_type)

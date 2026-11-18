@@ -2809,7 +2809,7 @@ def rig_character(
         bone_to_layer("eyetrack_R",25,"Other")
            
     # New bones, post append 
-    list_to_send_other = ["MCH-thigh_ik_target_sub.L","MCH-thigh_ik_target_sub.R","MCH-foot_ik_pivot.L","MCH-foot_ik_pivot.R","MCH-hand_ik_pivot.L","MCH-hand_ik_pivot.R","MCH-hand_ik_wrist.L","MCH-hand_ik_wrist.R","MCH-torso_pivot.002","shoulder_driver.R","shoulder_driver.L","MCH-shoulder_follow.R","MCH-shoulder_follow.L"]
+    list_to_send_other = ["MCH-thigh_ik_target_sub.L","MCH-thigh_ik_target_sub.R","MCH-foot_ik_pivot.L","MCH-foot_ik_pivot.R","MCH-hand_ik_pivot.L","MCH-hand_ik_pivot.R","MCH-hand_ik_wrist.L","MCH-hand_ik_wrist.R","MCH-torso_pivot.002","shoulder_driver.R","shoulder_driver.L","MCH-shoulder_follow.R","MCH-shoulder_follow.L","MCH-shoulder_hand.R","MCH-shoulder_hand.L"]
     
     fast_bone_move(list_to_send_other,25,"Other")
     

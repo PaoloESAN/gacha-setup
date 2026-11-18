@@ -29,7 +29,7 @@ class AKE_PT_Setup_Wizard_UI_Layout(Panel, ArknightsEndfieldUIRenderChecker):
         OperatorFactory.create(
             run_entire_setup_column,
             "arknights_endfield.setup_wizard_ui",
-            "Run Entire Setup",
+            "Setup Character",
             "PLAY",
             game_type=GameType.ARKNIGHTS_ENDFIELD.name,
             operator_context="INVOKE_DEFAULT",
@@ -43,12 +43,6 @@ class AKE_PT_Setup_Wizard_UI_Layout(Panel, ArknightsEndfieldUIRenderChecker):
 
         settings_col = settings_box.column()
         props = context.scene.character_rigger_props
-        enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
-        settings_col.prop(props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")
-        if enable_physics:
-            sliders_col = settings_col.column()
-            sliders_col.prop(props, "hair_physics_influence", text="Hair", slider=True)
-            sliders_col.prop(props, "clothes_physics_influence", text="Clothes", slider=True)
         settings_col.prop(props, "disable_rigging", text="Disable Rigging")
 
 
@@ -415,6 +409,12 @@ def get_ake_character_materials(context=None):
         if mat is not None and mat.name not in seen:
             seen.add(mat.name)
             mats.append(mat)
+        if mat is not None and mat.name.endswith("_Low"):
+            orig_name = mat.name[:-4]
+            orig_mat = bpy.data.materials.get(orig_name)
+            if orig_mat and orig_mat.name not in seen:
+                seen.add(orig_mat.name)
+                mats.append(orig_mat)
 
     try:
         for child in rig.children_recursive:
@@ -989,6 +989,9 @@ class AKE_PT_Rig_Character_Settings(Panel):
         return False
 
     def draw(self, context):
+        from setup_wizard.ui.character_settings_tabs import draw_character_settings_tabs
+        if draw_character_settings_tabs(self.layout, context):
+            return
         layout = self.layout
         scene = context.scene
 
@@ -998,6 +1001,22 @@ class AKE_PT_Rig_Character_Settings(Panel):
             pull_ake_panel_values(scene, context)
         except Exception:
             pass
+
+        arm = None
+        try:
+            from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+            arm = resolve_settings_armature(context)
+        except Exception:
+            pass
+
+        # 0. Animate Mode (fast playback: lightweight materials, no outlines)
+        from setup_wizard.genshin_animate_mode import is_genshin_animate_mode
+        is_anim = is_genshin_animate_mode(arm, context=context)
+        layout.operator(
+            "genshin.toggle_animate_mode",
+            text="Disable Animate Mode" if is_anim else "Enable Animate Mode",
+            icon="SHADING_TEXTURE" if is_anim else "RESTRICT_RENDER_OFF"
+        )
 
         # 1. Lighting Mode / Presets
         col_light = layout.column(align=True)

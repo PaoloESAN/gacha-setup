@@ -189,12 +189,8 @@ class HonkaiStarRailTextureImporterFacade(GameTextureImporter):
             or get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH) \
             or os.path.dirname(self.blender_operator.filepath)
 
-        if directory:
-            textures_subdir = os.path.join(directory, "Textures")
-            if os.path.isdir(textures_subdir):
-                directory = textures_subdir
-            elif not os.path.isdir(directory):
-                directory = None
+        if directory and not os.path.isdir(directory):
+            directory = None
 
         if not directory:
             bpy.ops.genshin.import_textures(
@@ -286,12 +282,8 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
             or get_cache(cache_enabled).get(CHARACTER_MODEL_FOLDER_FILE_PATH) \
             or os.path.dirname(self.blender_operator.filepath)
 
-        if directory:
-            textures_subdir = os.path.join(directory, "Textures")
-            if os.path.isdir(textures_subdir):
-                directory = textures_subdir
-            elif not os.path.isdir(directory):
-                directory = None
+        if directory and not os.path.isdir(directory):
+            directory = None
 
         if not directory:
             bpy.ops.genshin.import_textures(
@@ -523,7 +515,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         face_candidates = []
         for f in image_files:
             f_low = f.lower()
-            if any(k in f_low for k in ['lightmap', 'ligthmap', 'facemap', 'expression', 'normal', 'bump', '_m.', '_m_', '_n.', '_n_', '_a.', '_a_', 'shadow', 'ramp', 'curve', 'lut', 'mask', 'eff_matcap']):
+            if any(k in f_low for k in ['lightmap', 'ligthmap', 'facemap', 'expression', 'normal', 'bump', '_m.', '_m_', '_n.', '_n_', '_a.', '_a_', '_e.', '_e_', 'shadow', 'ramp', 'curve', 'lut', 'mask', 'eff_matcap']):
                 continue
             if any(k in f_low for k in ['face', 'cara', 'head', 'rostro', 'eye', 'eyebrow', 'brow', '眉']):
                 face_candidates.append(f)
@@ -568,24 +560,28 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         return best
 
     def _build_zzz_json_texture_map(self, folder):
-        candidates_dirs = [
-            folder,
-            os.path.join(folder, "Materials"),
-        ]
-        
+        candidates_dirs = [folder]
+        if os.path.isdir(folder):
+            for entry in sorted(os.listdir(folder), key=str.casefold):
+                full_entry = os.path.join(folder, entry)
+                if os.path.isdir(full_entry) and entry.lower() in ("materials", "material"):
+                    candidates_dirs.append(full_entry)
+
         materials_dir = None
         for d in candidates_dirs:
             if os.path.isdir(d) and any(f.lower().endswith(".json") and not f.startswith("._") and not f.startswith(".") for f in os.listdir(d)):
                 materials_dir = d
                 break
-                
-        # Find texture directory
+
+        # Find texture directory (case-insensitive for Linux)
         tex_dir = folder
         if os.path.isdir(folder):
             if not any(f.lower().endswith(('.png', '.tga', '.dds', '.jpg', '.jpeg')) and not f.startswith("._") and not f.startswith(".") for f in os.listdir(folder)):
-                sub = os.path.join(folder, "Textures")
-                if os.path.isdir(sub):
-                    tex_dir = sub
+                for entry in sorted(os.listdir(folder), key=str.casefold):
+                    sub = os.path.join(folder, entry)
+                    if os.path.isdir(sub) and entry.lower() in ("textures", "texture"):
+                        tex_dir = sub
+                        break
 
         if not materials_dir or not os.path.isdir(tex_dir):
             return {}, tex_dir
@@ -610,7 +606,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
             return None
 
         mat_map = {}
-        for jf in os.listdir(materials_dir):
+        for jf in sorted(os.listdir(materials_dir), key=str.casefold):
             if not jf.lower().endswith(".json") or jf.startswith("._") or jf.startswith("."):
                 continue
             jpath = os.path.join(materials_dir, jf)
@@ -652,11 +648,13 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                                     extracted['lightmap'] = resolved
                                     extracted['n'] = resolved
                                 else:
-                                    extracted[map_key] = resolved
+                                    if map_key not in extracted:
+                                        extracted[map_key] = resolved
 
             if not extracted:
                 # If Name is empty in JSON (Unity dump), infer from active slots and JSON name
-                is_mat_face = any(k in mat_key for k in ['face', 'eye', 'head', 'cara', 'eyebrow', 'brow'])
+                is_mat_eyeglass = 'eyeglass' in mat_key or 'glasses' in mat_key
+                is_mat_face = not is_mat_eyeglass and any(k in mat_key for k in ['face', 'eye', 'head', 'cara', 'eyebrow', 'brow'])
                 for slot_name, map_key in slot_mappings.items():
                     slot_data = tex_envs.get(slot_name, {})
                     if isinstance(slot_data, dict):
@@ -762,8 +760,11 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         import re, os
         resolved = {}
         matname = mat.name.lower()
-        is_face = any(k in matname for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight", "cara", "head", "rostro"]) or \
-                  any(any(k in m for k in ["face", "eyebrow", "brow", "eye"]) for m in mesh_names)
+        is_eyeglass = "eyeglass" in matname or "glasses" in matname or any("eyeglass" in m or "glasses" in m for m in mesh_names)
+        is_face = not is_eyeglass and (
+            any(k in matname for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight", "cara", "head", "rostro"]) or
+            any(any(k in m for k in ["face", "eyebrow", "brow", "eye"]) for m in mesh_names)
+        )
 
         # Helper to find file by stem in image_files
         def find_file_by_stem(stem_to_find, target_type='d'):
@@ -1094,7 +1095,8 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                                         mat.node_tree.links.remove(l)
                     continue
 
-                is_face = any(k in combined_names for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight", "cara", "head", "rostro"]) or \
+                is_eyeglass = "eyeglass" in combined_names or "glasses" in combined_names
+                is_face = (not is_eyeglass and any(k in combined_names for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight", "cara", "head", "rostro"])) or \
                     (kythera_group_node.node_tree and "face" in kythera_group_node.node_tree.name.lower())
 
                 if is_face:
@@ -1202,7 +1204,8 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                                 mat.node_tree.links.new(tex_node.outputs['Color'], target_socket)
                     continue
 
-                is_face = any(k in combined_names for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight", "cara", "head", "rostro"])
+                is_eyeglass = "eyeglass" in combined_names or "glasses" in combined_names
+                is_face = not is_eyeglass and any(k in combined_names for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight", "cara", "head", "rostro"])
 
                 if is_face:
                     face_d = res_textures.get('d')
@@ -1908,6 +1911,11 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
 
         json_mappings = load_wuwa_json_mappings(folder)
         json_params = load_wuwa_json_material_parameters(folder)
+        from setup_wizard.texture_import_setup.unified_json_texture_resolver import (
+            collect_character_image_files,
+            resolve_json_texture_image,
+        )
+        recursive_images = collect_character_image_files(folder)
 
         has_het_any = False
         has_id_any = False
@@ -1948,11 +1956,14 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
                     ver_patterns = make_texture_patterns(base_part, version, suffix, orig_name, mode=False)
                     img = find_texture_for_slot(all_texture_files, ver_patterns, folder, suffix)
 
-                # Check JSON mapping
+                # Check JSON mapping (root folder first, then recursive subdirectories)
                 if not img and suffix in mat_json_texs:
                     json_fname = mat_json_texs[suffix]
                     full_json_path = os.path.join(folder, json_fname)
                     img = load_image_safely(full_json_path, suffix)
+                    if not img:
+                        cs = "sRGB" if suffix in ("_D", "_Diffuse", "_MainTex") else "Non-Color"
+                        img = resolve_json_texture_image(json_fname, recursive_images, colorspace=cs)
 
                 # Fallback to pattern matching if not in JSON or image not found
                 if not img:

@@ -105,10 +105,22 @@ def is_color_wheel(value):
     return any('colorwheel' in ''.join(c for c in name.lower() if c.isalnum()) for name in names)
 
 
+def is_eye_specular(material):
+    names = [material.name, str(material.get('_original_material_name', ''))]
+    if material.node_tree:
+        names.extend(n.node_tree.name for n in material.node_tree.nodes
+                     if n.type == 'GROUP' and n.node_tree)
+    compact = ''.join(c for c in ' '.join(names).lower() if c.isalnum())
+    return 'eyespecular' in compact
+
+
 def excluded_materials(objects, owner):
     materials = {m for obj in objects for m in object_materials(obj)}
     wheels = {m for obj in objects if is_color_wheel(obj) for m in object_materials(obj)}
-    return wheels | {m for m in materials if is_color_wheel(m) or is_genshin_highlight(m, owner)}
+    return wheels | {
+        m for m in materials
+        if is_color_wheel(m) or is_genshin_highlight(m, owner) or is_eye_specular(m)
+    }
 
 
 def is_light_node(node):
@@ -120,10 +132,35 @@ def is_light_node(node):
         and node.outputs.get('Shader') is not None))
 
 
+_HAS_SETUP_CACHE = {}
+_NEEDS_SETUP_CACHE = {}
+
+
+def _lights_cache_key(owner):
+    return (
+        owner.as_pointer(),
+        len(bpy.data.objects),
+        len(bpy.data.materials),
+        bool(owner.get(TAG)),
+    )
+
+
+def _clear_lights_cache():
+    _HAS_SETUP_CACHE.clear()
+    _NEEDS_SETUP_CACHE.clear()
+
+
 def has_setup(owner):
-    return bool(owner.get(TAG) or any(
+    key = _lights_cache_key(owner)
+    if key in _HAS_SETUP_CACHE:
+        return _HAS_SETUP_CACHE[key]
+    res = bool(owner.get(TAG) or any(
         material.node_tree and any(is_light_node(n) for n in material.node_tree.nodes)
         for obj in character_objects(owner) for material in object_materials(obj)))
+    if len(_HAS_SETUP_CACHE) > 64:
+        _HAS_SETUP_CACHE.clear()
+    _HAS_SETUP_CACHE[key] = res
+    return res
 
 
 def localize_materials(objects, owner=None, force=False):
@@ -301,11 +338,24 @@ class GACHA_OT_SetupNewLights(Operator):
         excluded = excluded_materials(objects, owner)
         count = sum(bool(setup_material(m, owner, group, excluded)) for m in materials)
         owner[TAG] = True
+        _clear_lights_cache()
         self.report({'INFO'}, f'Lights+ configured on {count} character materials')
         return {'FINISHED'}
 
 
 def needs_setup(owner):
+    """Inspect the current outputs, including newly added modifier materials."""
+    key = _lights_cache_key(owner)
+    if key in _NEEDS_SETUP_CACHE:
+        return _NEEDS_SETUP_CACHE[key]
+    res = _needs_setup_uncached(owner)
+    if len(_NEEDS_SETUP_CACHE) > 64:
+        _NEEDS_SETUP_CACHE.clear()
+    _NEEDS_SETUP_CACHE[key] = res
+    return res
+
+
+def _needs_setup_uncached(owner):
     """Inspect the current outputs, including newly added modifier materials."""
     objects = character_objects(owner)
     materials = {m for obj in objects for m in object_materials(obj)}

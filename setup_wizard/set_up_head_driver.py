@@ -1103,9 +1103,37 @@ def organize_ake_lighting_collections(context=None, arm=None):
                 pass
 
     # 4b. The main Light empty stays in the character collection (like other
-    # games' Light Direction), with a single link: out of WGTS, scene root and
-    # default collections. Never steal one living in another character's collection.
-    if light_obj is not None and char_coll is not None and char_coll != context.scene.collection:
+    # games' Light Direction), unless already converted to a rig bone (constrained
+    # to Light Direction bone and stashed in WGTS). Never steal one living in
+    # another character's collection.
+    _light_is_bone_driven = (
+        light_obj is not None
+        and any(
+            c.type == "COPY_TRANSFORMS" and getattr(c, "subtarget", None) == "Light Direction"
+            for c in (getattr(light_obj, "constraints", None) or [])
+        )
+    )
+    if _light_is_bone_driven and _stash_target is not None:
+        if light_obj.name not in _stash_target.objects:
+            try:
+                _stash_target.objects.link(light_obj)
+            except Exception:
+                pass
+        for _uc in list(getattr(light_obj, "users_collection", []) or []):
+            if _uc != _stash_target:
+                try:
+                    _uc.objects.unlink(light_obj)
+                except Exception:
+                    pass
+        if light_obj.name in context.scene.collection.objects:
+            try:
+                context.scene.collection.objects.unlink(light_obj)
+            except Exception:
+                pass
+        light_obj.hide_viewport = True
+        light_obj.hide_select = True
+        light_obj.hide_render = True
+    elif light_obj is not None and char_coll is not None and char_coll != context.scene.collection:
         _foreign_light = False
         for _uc in list(getattr(light_obj, "users_collection", []) or []):
             if _uc == char_coll:

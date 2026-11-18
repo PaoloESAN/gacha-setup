@@ -167,7 +167,7 @@ def invoke_next_step_ui(
     operator_to_execute = ComponentFunctionFactory.create_component_function(component_name)
     print(f"[DEBUG] Executing operator: {operator_to_execute}")
 
-    operator_to_execute(
+    result = operator_to_execute(
         'EXEC_DEFAULT',
         next_step_idx=current_step_index + 1,
         invoker_type='invoke_next_step_ui',

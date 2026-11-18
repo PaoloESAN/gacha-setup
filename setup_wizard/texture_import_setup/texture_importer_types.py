@@ -995,7 +995,26 @@ class GenshinTextureImporter:
             return False
         return any(part_name.lower() in f.lower() and tex_type.lower() in f.lower() for f in self.files)
 
+    def _fix_night_soul_blessing_set_depth(self):
+        ng = bpy.data.node_groups.get('Night Soul Blessing')
+        if not ng:
+            return
+        sd = ng.nodes.get('Set Depth')
+        if not sd or sd.bl_idname != 'NodeUndefined':
+            return
+        in_sock = sd.inputs[0].links[0].from_socket if sd.inputs and sd.inputs[0].links else None
+        out_targets = [l.to_socket for l in sd.outputs[0].links] if sd.outputs else []
+        em = ng.nodes.new('ShaderNodeEmission')
+        em.location = sd.location
+        em.inputs['Strength'].default_value = 5.0
+        if in_sock:
+            ng.links.new(in_sock, em.inputs['Color'])
+        for ts in out_targets:
+            ng.links.new(em.outputs['Emission'], ts)
+        ng.nodes.remove(sd)
+
     def set_up_night_soul_outlines_material(self):
+        self._fix_night_soul_blessing_set_depth()
         night_soul_outline_material = self.create_night_soul_outlines()
         if not night_soul_outline_material or not night_soul_outline_material.node_tree:
             return None
@@ -1782,14 +1801,58 @@ class GenshinTextureImporter:
         is_lightmap = 'lightmap' in f_lower or 'light_map' in f_lower
         is_normal = 'normal' in f_lower or 'normalmap' in f_lower
         is_shadow_ramp = 'shadow_ramp' in f_lower
+        is_sdf = 'sdf' in f_lower
 
-        if not (is_diffuse or is_lightmap or is_normal or is_shadow_ramp):
+        if not (is_diffuse or is_lightmap or is_normal or is_shadow_ramp or is_sdf):
             return False
 
         if any(k in f_lower for k in ['facelightmap', 'face_lightmap', 'face lightmap', 'face_shadow', 'face_diffuse']):
             return False
 
         matched_any = False
+
+        if file.startswith('Beyd_Avatar_'):
+            from setup_wizard.milastra.milastra_utils import parse_milastra_part_name
+            part = parse_milastra_part_name(file)
+            if part:
+                part_lower = part.lower()
+                tex_type = (
+                    TextureType.HAIR if part_lower in ('hair', 'headwear')
+                    else TextureType.FACE if part_lower in ('face', 'eyebrow', 'pupil')
+                    else TextureType.BODY
+                )
+                target_materials = [
+                    mat for mat in bpy.data.materials
+                    if mat.use_nodes
+                    and 'outlines' not in mat.name.lower()
+                    and 'outline' not in mat.name.lower()
+                    and mat.name.lower().endswith(f' {part_lower}')
+                    and self._is_genshin_shader_material(mat)
+                ]
+                for target_mat in target_materials:
+                    if part_lower == 'face':
+                        if is_diffuse:
+                            self.set_face_diffuse_texture(target_mat, img)
+                            matched_any = True
+                        elif is_lightmap or 'sdf' in f_lower or 'shadow' in f_lower:
+                            self.set_face_shadow_texture(target_mat, img)
+                            self.set_face_lightmap_texture(img)
+                            matched_any = True
+                    else:
+                        if is_diffuse:
+                            self.set_diffuse_texture(tex_type, target_mat, img)
+                            matched_any = True
+                        elif is_lightmap:
+                            self.set_lightmap_texture(tex_type, target_mat, img)
+                            matched_any = True
+                        elif is_normal:
+                            self.set_normalmap_texture(tex_type, target_mat, img)
+                            matched_any = True
+                if is_shadow_ramp:
+                    self.set_shadow_ramp_texture(tex_type, img)
+                    matched_any = True
+                if matched_any:
+                    return True
 
         # Match equipment / weapon textures directly
         if f_lower.startswith(('equip_', 'equipskin_')) or 'equip' in f_lower:
@@ -2222,7 +2285,12 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
     def import_textures(self, directory):
         self.directory = directory
         fix_missing_textures(directory)
-        if self.import_textures_from_json(directory):
+        is_milastra = any(
+            f.startswith('Beyd_Avatar_')
+            for _, _, files_in_dir in os.walk(directory)
+            for f in files_in_dir
+        )
+        if not is_milastra and self.import_textures_from_json(directory):
             for mat in bpy.data.materials:
                 if mat.use_nodes and not any(k in mat.name.lower() for k in ['outlines', 'outline', 'face', 'pupil', 'brow', 'eye']):
                     sync_material_category_textures(mat)
@@ -2302,8 +2370,12 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                             break
 
             has_multiple_pupil_diffuse = len(pupil_diffuse_images) > 1
+            is_milastra_scene = any(m.name.startswith('Beyd_Avatar_') for m in bpy.data.materials)
             has_new_pupil_setup = has_multiple_pupil_diffuse or is_sandrone or any('new pupil' in m.name.lower() or m.name in DURIN_EYE_MATERIAL_NAMES for m in bpy.data.materials)
-            if bpy.context.scene.get('setup_wizard_imported_pmx_path'):
+            if is_milastra_scene:
+                # Milastra uses a single Pupil material with Diffuse + Lightmap, never Genshin's New Pupil.
+                has_new_pupil_setup = False
+            elif bpy.context.scene.get('setup_wizard_imported_pmx_path'):
                 # PMX assigns its eye atlas explicitly. Merely appending the
                 # unused New Pupil template must not replace that assignment.
                 has_new_pupil_setup = has_multiple_pupil_diffuse
@@ -2710,7 +2782,12 @@ class GenshinNPCTextureImporter(GenshinTextureImporter):
 
     def import_textures(self, directory):
         fix_missing_textures(directory)
-        if self.import_textures_from_json(directory):
+        is_milastra = any(
+            f.startswith('Beyd_Avatar_')
+            for _, _, files_in_dir in os.walk(directory)
+            for f in files_in_dir
+        )
+        if not is_milastra and self.import_textures_from_json(directory):
             for mat in bpy.data.materials:
                 if mat.use_nodes and not any(k in mat.name.lower() for k in ['outlines', 'outline', 'face', 'pupil', 'brow', 'eye']):
                     sync_material_category_textures(mat)
@@ -2900,7 +2977,12 @@ class GenshinMonsterTextureImporter(GenshinTextureImporter):
 
     def import_textures(self, directory):
         fix_missing_textures(directory)
-        if self.import_textures_from_json(directory):
+        is_milastra = any(
+            f.startswith('Beyd_Avatar_')
+            for _, _, files_in_dir in os.walk(directory)
+            for f in files_in_dir
+        )
+        if not is_milastra and self.import_textures_from_json(directory):
             for mat in bpy.data.materials:
                 if mat.use_nodes and not any(k in mat.name.lower() for k in ['outlines', 'outline', 'face', 'pupil', 'brow', 'eye']):
                     sync_material_category_textures(mat)
@@ -3035,8 +3117,16 @@ class HonkaiStarRailTextureImporter(GenshinTextureImporter):
     nya222/outline diffuse node to avoid overwriting the body diffuse slot in face materials.
     '''
     def set_diffuse_texture(self, type: TextureType, material, img):
-        if not material or not material.node_tree:
+        if not material or not material.node_tree or not img:
             return
+        try:
+            img.colorspace_settings.name = 'sRGB'
+        except Exception:
+            pass
+        try:
+            img.alpha_mode = 'CHANNEL_PACKED'
+        except Exception:
+            pass
         nya222_or_outline_diffuse_node = material.node_tree.nodes.get(self.texture_node_names.DIFFUSE)
         # Support alternative node naming (e.g. 'Diffuse (sRGB) (Channel Packed)')
         diffuse_alt_node = material.node_tree.nodes.get(getattr(self.texture_node_names, 'DIFFUSE_ALT', ''))
@@ -3045,13 +3135,15 @@ class HonkaiStarRailTextureImporter(GenshinTextureImporter):
         face_color_node = material.node_tree.nodes.get(f'{type.value}{self.texture_node_names.FACE_COLOR_SUFFIX}')
 
         # If a face-specific color node exists (StellarToon), do NOT also write to the
-        # generic diffuse node – that node is shared with body-type materials and would
-        # end up holding the wrong texture.
+        # generic nya222/outline diffuse node ('Image Texture.001') – that node is shared
+        # with body-type materials and would end up holding the wrong texture.
+        # However, 'Diffuse (sRGB) (Channel Packed)' (diffuse_alt_node) is the explicit
+        # diffuse texture node on StellarToon materials (including Face) and MUST receive img.
         skip_generic_diffuse = (type is TextureType.FACE and face_color_node is not None)
 
         named_candidates = [
             None if skip_generic_diffuse else nya222_or_outline_diffuse_node,
-            None if skip_generic_diffuse else diffuse_alt_node,
+            diffuse_alt_node,
             diffuse_uv0_node,
             diffuse_uv1_node,
             face_color_node,
@@ -3060,14 +3152,31 @@ class HonkaiStarRailTextureImporter(GenshinTextureImporter):
         for diffuse_node in self._find_image_nodes(material, named_candidates, 'diffuse'):
             diffuse_node.image = img
 
+        # Ensure any image on a diffuse/channel-packed node in this material uses Channel Packed alpha
+        for node in material.node_tree.nodes:
+            if node.type == 'TEX_IMAGE' and node.image:
+                node_id = (node.name + " " + (node.label or "")).lower()
+                if 'channel packed' in node_id or 'diffuse' in node_id or '_color' in node_id:
+                    try:
+                        node.image.alpha_mode = 'CHANNEL_PACKED'
+                    except Exception:
+                        pass
+
     '''
     Lazy attempt at setting all known lightmaps across Nya222 HSR Shader and StellarToon.
     If the material has the texture node, set it.
     '''
     def set_lightmap_texture(self, type: TextureType, material, img):
-        if not material or not material.node_tree:
+        if not material or not material.node_tree or not img:
             return
-        img.colorspace_settings.name='Non-Color'
+        try:
+            img.colorspace_settings.name = 'Non-Color'
+        except Exception:
+            pass
+        try:
+            img.alpha_mode = 'CHANNEL_PACKED'
+        except Exception:
+            pass
         lightmap_nya222_node = material.node_tree.nodes.get(self.texture_node_names.LIGHTMAP)
         # Support alternative node naming (e.g. 'Lightmap (Non-Color) (Channel Packed)')
         lightmap_alt_node = material.node_tree.nodes.get(getattr(self.texture_node_names, 'LIGHTMAP_ALT', ''))
@@ -3401,19 +3510,27 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
         if not material:
             return None
 
+        def _ensure_channel_packed(img):
+            if img:
+                try:
+                    img.alpha_mode = 'CHANNEL_PACKED'
+                except Exception:
+                    pass
+            return img
+
         # 1. Diffuse node image
         if material.use_nodes and material.node_tree:
             diffuse_nodes = find_all_image_nodes_by_category(material.node_tree, 'diffuse')
             for n in diffuse_nodes:
                 if n.image and n.image.name and not n.image.name.startswith('White_'):
-                    return n.image
+                    return _ensure_channel_packed(n.image)
 
         # 2. _original_fbx_texture property
         orig_tex_name = material.get('_original_fbx_texture')
         if orig_tex_name:
             img = bpy.data.images.get(orig_tex_name)
             if img:
-                return img
+                return _ensure_channel_packed(img)
 
         # 3. Any non-ramp image node
         if material.use_nodes and material.node_tree:
@@ -3421,7 +3538,7 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
                 if n.type == 'TEX_IMAGE' and n.image and n.image.name:
                     i_low = n.image.name.lower()
                     if not any(k in i_low for k in ['ramp', 'white_', 'mask', 'curve']):
-                        return n.image
+                        return _ensure_channel_packed(n.image)
 
         # 4. Check original material if recorded
         orig_mat_name = material.get('_original_material_name')
@@ -3430,7 +3547,7 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
             if orig_mat and orig_mat.use_nodes and orig_mat.node_tree:
                 for n in orig_mat.node_tree.nodes:
                     if n.type == 'TEX_IMAGE' and n.image and n.image.name:
-                        return n.image
+                        return _ensure_channel_packed(n.image)
 
         return None
 
@@ -3584,61 +3701,62 @@ class HonkaiStarRailAvatarTextureImporter(HonkaiStarRailTextureImporter):
             diffuse_img = None
             lightmap_img = None
 
-            # PRIORITY 1: Check existing texture on the material ("revisar en la textura del personaje del material que tiene actualmente")
-            current_tex = self._get_current_material_texture(material)
-            if current_tex:
-                diffuse_img = current_tex
-                self.set_diffuse_texture(tex_type, material, diffuse_img)
-                # Derive LightMap from this current texture ("y con eso sacar el lightmap y tal")
-                lightmap_img = self._find_matching_lightmap_for_texture(current_tex.name, image_files)
-                if lightmap_img:
-                    self.set_lightmap_texture(tex_type, material, lightmap_img)
+            # PRIORITY 1: Use Material JSON first (matches Genshin's deterministic resolution)
+            json_data = self._find_json_textures_for_material(material, json_map)
+            if json_data:
+                if json_data.get('diffuse'):
+                    diffuse_img = self._resolve_image(json_data['diffuse'], image_files)
+                    if diffuse_img:
+                        self.set_diffuse_texture(tex_type, material, diffuse_img)
 
-            # PRIORITY 2: If NO texture on material, use JSON ("si esque no hubiera textura, usa el json para saber la textura y tal")
+                if json_data.get('lightmap'):
+                    lightmap_img = self._resolve_image(json_data['lightmap'], image_files)
+                    if lightmap_img:
+                        self.set_lightmap_texture(tex_type, material, lightmap_img)
+
+                # Ramps / Stockings / Maps from JSON
+                if json_data.get('warm_ramp'):
+                    w_ramp = self._resolve_image(json_data['warm_ramp'], image_files)
+                    if w_ramp:
+                        self.set_warm_shadow_ramp_texture(tex_type, w_ramp)
+                        if tex_type == TextureType.BODY:
+                            self.set_weapon_ramp_texture(w_ramp)
+
+                if json_data.get('cool_ramp'):
+                    c_ramp = self._resolve_image(json_data['cool_ramp'], image_files)
+                    if c_ramp:
+                        self.set_cool_shadow_ramp_texture(tex_type, c_ramp)
+
+                if json_data.get('stockings'):
+                    stocking_img = self._resolve_image(json_data['stockings'], image_files)
+                    if stocking_img:
+                        self.set_stocking_texture(tex_type, material, stocking_img)
+
+                if json_data.get('facemap'):
+                    fmap = self._resolve_image(json_data['facemap'], image_files)
+                    if fmap:
+                        self.set_facemap_texture(fmap)
+
+                if json_data.get('expression'):
+                    exp_map = self._resolve_image(json_data['expression'], image_files)
+                    if exp_map:
+                        self.set_face_expression_texture(material, exp_map)
+
+            # PRIORITY 2: Fallback to existing texture on the material / derived lightmap
             if not diffuse_img or not lightmap_img:
-                json_data = self._find_json_textures_for_material(material, json_map)
-                if json_data:
-                    if not diffuse_img and json_data.get('diffuse'):
-                        diffuse_img = self._resolve_image(json_data['diffuse'], image_files)
-                        if diffuse_img:
-                            self.set_diffuse_texture(tex_type, material, diffuse_img)
-
-                    if not lightmap_img and json_data.get('lightmap'):
-                        lightmap_img = self._resolve_image(json_data['lightmap'], image_files)
+                current_tex = self._get_current_material_texture(material)
+                if current_tex:
+                    if not diffuse_img:
+                        diffuse_img = current_tex
+                        self.set_diffuse_texture(tex_type, material, diffuse_img)
+                    if not lightmap_img:
+                        lightmap_img = self._find_matching_lightmap_for_texture(current_tex.name, image_files)
                         if lightmap_img:
                             self.set_lightmap_texture(tex_type, material, lightmap_img)
-                        elif diffuse_img:
-                            lightmap_img = self._find_matching_lightmap_for_texture(diffuse_img.name, image_files)
-                            if lightmap_img:
-                                self.set_lightmap_texture(tex_type, material, lightmap_img)
-
-                    # Ramps / Stockings / Maps from JSON
-                    if json_data.get('warm_ramp'):
-                        w_ramp = self._resolve_image(json_data['warm_ramp'], image_files)
-                        if w_ramp:
-                            self.set_warm_shadow_ramp_texture(tex_type, w_ramp)
-                            if tex_type == TextureType.BODY:
-                                self.set_weapon_ramp_texture(w_ramp)
-
-                    if json_data.get('cool_ramp'):
-                        c_ramp = self._resolve_image(json_data['cool_ramp'], image_files)
-                        if c_ramp:
-                            self.set_cool_shadow_ramp_texture(tex_type, c_ramp)
-
-                    if json_data.get('stockings'):
-                        stocking_img = self._resolve_image(json_data['stockings'], image_files)
-                        if stocking_img:
-                            self.set_stocking_texture(tex_type, material, stocking_img)
-
-                    if json_data.get('facemap'):
-                        fmap = self._resolve_image(json_data['facemap'], image_files)
-                        if fmap:
-                            self.set_facemap_texture(fmap)
-
-                    if json_data.get('expression'):
-                        exp_map = self._resolve_image(json_data['expression'], image_files)
-                        if exp_map:
-                            self.set_face_expression_texture(material, exp_map)
+                elif diffuse_img and not lightmap_img:
+                    lightmap_img = self._find_matching_lightmap_for_texture(diffuse_img.name, image_files)
+                    if lightmap_img:
+                        self.set_lightmap_texture(tex_type, material, lightmap_img)
 
             # PRIORITY 3: Fallback heuristic scan if still missing diffuse or lightmap
             if not diffuse_img or not lightmap_img:
@@ -3912,7 +4030,7 @@ class PunishingGrayRavenAvatarTextureImporter(PunishingGrayRavenTextureImporter)
         materials = {slot.material for obj in bpy.context.scene.objects if obj.type == 'MESH'
                      for slot in obj.material_slots if slot.material}
         for material in materials:
-            source = re.sub(r'\.\d{3}$', '', material.get('pgr_source_material', ''))
+            source = re.sub(r'\.\d{3}$', '', material.get('pgr_source_material', '') or material.get('_original_material_name', ''))
             definition = definitions.get(source.lower())
             if not definition or not material.node_tree:
                 continue

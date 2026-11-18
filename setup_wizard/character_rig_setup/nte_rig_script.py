@@ -14,7 +14,7 @@ from setup_wizard.character_rig_setup.rig_ui_utils import (
 
 
 def _align_finger_axes(edit_bones, source_bones):
-    """Align the four fingers to the palm; preserve the existing thumb frame."""
+    """Align the four fingers to curl toward the palm (-Z); preserve the existing thumb frame."""
     for side in ("L", "R"):
         hand = edit_bones.get(f'hand.{side}')
         index = edit_bones.get(f'f_index.01.{side}')
@@ -25,24 +25,68 @@ def _align_finger_axes(edit_bones, source_bones):
         if normal.length < 1e-8:
             continue
         normal.normalize()
+        # Ensure +Z points toward the palm (-Z in world) on both sides so super_finger's +X curl bends inward.
+        if normal.z > 0:
+            normal.negate()
         for finger in ("f_index", "f_middle", "f_ring", "f_pinky"):
             names = [f"{finger}.{joint:02d}.{side}" for joint in (1, 2, 3)]
             for name in names:
                 bone = edit_bones.get(name)
                 if bone:
-                    # A curl hinge lies across the palm, not along its normal.
-                    # Some imports already provide that frame; a fixed quarter
-                    # turn would break them while fixing Akane's straight hand.
                     target = normal - bone.y_axis * normal.dot(bone.y_axis)
                     if target.length < 1e-8:
                         continue
                     target.normalize()
-                    if target.dot(bone.z_axis) < 0:
-                        target.negate()
                     bone.align_roll(target)
                     source = source_bones.get(name) or source_bones.get("DEF-" + name)
                     if source:
                         source.roll = bone.roll
+
+
+def _align_limb_axes_and_bends(edit_bones):
+    """Ensure natural knee (-Y) / elbow (+Y) bends and consistent limb rolls on the metarig."""
+    for side in ("L", "R"):
+        thigh = edit_bones.get(f"thigh.{side}")
+        shin = edit_bones.get(f"shin.{side}")
+        foot = edit_bones.get(f"foot.{side}")
+        if thigh and shin and foot:
+            leg_span = (foot.head - thigh.head).length
+            if leg_span > 1e-4:
+                t = max(0.1, min(0.9, (shin.head.z - thigh.head.z) / (foot.head.z - thigh.head.z))) if abs(foot.head.z - thigh.head.z) > 1e-5 else 0.5
+                line_pt = thigh.head.lerp(foot.head, t)
+                # Knee must sit slightly in front (-Y) of hip-ankle line so IK bends forward, not backward/shrinking.
+                min_forward = 0.012 * leg_span
+                if (line_pt.y - shin.head.y) < min_forward:
+                    shin.head.y = line_pt.y - min_forward
+            thigh.tail = shin.head.copy()
+            shin.tail = foot.head.copy()
+            shin.use_connect = True
+
+            forward = mathutils.Vector((0.0, -1.0, 0.0))
+            for b in (thigh, shin):
+                target = forward - b.y_axis * forward.dot(b.y_axis)
+                if target.length > 1e-6:
+                    b.align_roll(target.normalized())
+
+        upper_arm = edit_bones.get(f"upper_arm.{side}")
+        forearm = edit_bones.get(f"forearm.{side}")
+        hand = edit_bones.get(f"hand.{side}")
+        if upper_arm and forearm and hand:
+            arm_span = (hand.head - upper_arm.head).length
+            if arm_span > 1e-4:
+                line_mid = upper_arm.head.lerp(hand.head, 0.5)
+                min_back = 0.010 * arm_span
+                if (forearm.head.y - line_mid.y) < min_back:
+                    forearm.head.y = line_mid.y + min_back
+            upper_arm.tail = forearm.head.copy()
+            forearm.tail = hand.head.copy()
+            forearm.use_connect = True
+
+            backward = mathutils.Vector((0.0, 1.0, 0.0))
+            for b in (upper_arm, forearm):
+                target = backward - b.y_axis * backward.dot(b.y_axis)
+                if target.length > 1e-6:
+                    b.align_roll(target.normalized())
 
 def _is_already_rigged(arm_obj):
     """Detecta si el armature ya es un rig Rigify generado (evita doble-rig,
@@ -452,41 +496,30 @@ def rig_character(
                 eb_br.head = mathutils.Vector((-0.050, cy, cz))
                 eb_br.tail = mathutils.Vector((-0.050, cy - 0.05, cz))
 
-        # Empujar controles al frente del volumen (como ZZZ): el hueso nace dentro
-        # del pecho y el circulo queda enterrado. Push proporcional al halfwidth
-        # en -Y (frente NTE), pre-generate para no desplazar el deform.
-        for _bb in [b for b in [eb_bl, eb_br] if b is not None]:
-            try:
-                _push = abs(_bb.head.x) * 2.0
-                _dir = _bb.tail - _bb.head
-                _bb.head.y -= _push
-                _bb.tail = _bb.head + _dir
-            except Exception as ex_push:
-                print(f"[NTE RIG] breast push notice: {ex_push}")
-
         # Align shoulder.R metarig bone roll so widget is symmetrical and not flipped
         sh_L = metarig_obj.data.edit_bones.get("shoulder.L")
         sh_R = metarig_obj.data.edit_bones.get("shoulder.R")
         if sh_L and sh_R:
             sh_R.roll = -sh_L.roll
 
-        # Align hand.L and hand.R metarig bones straight along forearm vector so hand_ik widget is centered on wrist
-        forearm_R = metarig_obj.data.edit_bones.get("forearm.R")
-        hand_R = metarig_obj.data.edit_bones.get("hand.R")
-        if forearm_R and hand_R:
-            arm_vec_R = (forearm_R.tail - forearm_R.head).normalized()
-            hand_R.tail = hand_R.head + arm_vec_R * 0.05
-            hand_R.roll = forearm_R.roll
-
-        forearm_L = metarig_obj.data.edit_bones.get("forearm.L")
-        hand_L = metarig_obj.data.edit_bones.get("hand.L")
-        if forearm_L and hand_L:
-            arm_vec_L = (forearm_L.tail - forearm_L.head).normalized()
-            hand_L.tail = hand_L.head + arm_vec_L * 0.05
-            if hand_R:
-                hand_L.roll = -hand_R.roll
-            elif forearm_L:
-                hand_L.roll = -forearm_L.roll
+        # Align hand.L and hand.R over the hand with Z-Y plane flat on the back of the hand (WGT_hand_ik is in Z-Y plane)
+        for side in (".L", ".R"):
+            hand_b = metarig_obj.data.edit_bones.get("hand" + side)
+            if not hand_b:
+                continue
+            mid_b = metarig_obj.data.edit_bones.get("f_middle.01" + side)
+            if mid_b and (mid_b.head - hand_b.head).length > 0.02:
+                hand_b.tail = mid_b.head.copy()
+            idx_b = metarig_obj.data.edit_bones.get("f_index.01" + side)
+            pnk_b = metarig_obj.data.edit_bones.get("f_pinky.01" + side)
+            if idx_b and pnk_b:
+                back_normal = (idx_b.head - hand_b.head).cross(pnk_b.head - hand_b.head)
+                if back_normal.length > 1e-8:
+                    if back_normal.z < 0:
+                        back_normal.negate()
+                    across = back_normal.cross(hand_b.y_axis)
+                    if across.length > 1e-8:
+                        hand_b.align_roll(across)
 
         # Align metarig finger rolls directly to hand / index finger plane normal
         armature_ebs = obj.data.edit_bones
@@ -540,11 +573,16 @@ def rig_character(
 
         # Rotating generated controls alone leaves Rigify's scale-driven curl
         # and IK hinges on the old axes. Generate all three from this roll.
+        _align_limb_axes_and_bends(metarm_ebs)
         _align_finger_axes(metarm_ebs, armature_ebs)
 
-        # Set primary rotation axis in Pose mode on metarig for fingers and thumb
+        # Set primary rotation axis in Pose mode on metarig for fingers, thumb, and limbs
         bpy.ops.object.mode_set(mode='POSE')
         metapose = metarig_obj.pose
+        for limb_name in ("thigh.L", "thigh.R", "upper_arm.L", "upper_arm.R"):
+            limb_pb = metapose.bones.get(limb_name)
+            if limb_pb and hasattr(limb_pb, "rigify_parameters") and hasattr(limb_pb.rigify_parameters, "rotation_axis"):
+                limb_pb.rigify_parameters.rotation_axis = "x"
         for fname in ["f_index", "f_middle", "f_ring", "f_pinky", "thumb"]:
             for side in [".L", ".R"]:
                 p_b = metapose.bones.get(f"{fname}.01{side}")
@@ -626,6 +664,8 @@ def rig_character(
 
         # Circulos grandes y deterministas: tamano absoluto (widget unitario r=0.5),
         # sin bone-size (antes 0.70 x hueso 0.06 = diminutos y enterrados).
+        # Desplazar solo el widget hacia adelante (+Y local del hueso = -Y mundo)
+        # para mantener el pivote de rotacion en el hueso original del pecho.
         for b_name in ["breast.L", "breast.R"]:
             pb = rigifyr.pose.bones.get(b_name)
             if pb:
@@ -634,6 +674,7 @@ def rig_character(
                 except Exception:
                     pass
                 pb.custom_shape_scale_xyz = (0.07, 0.07, 0.07)
+                pb.custom_shape_translation = (0.0, abs(pb.bone.head_local.x) * 2.0, 0.0)
 
         for b_name in finger_masters:
             pb = rigifyr.pose.bones.get(b_name)
@@ -676,6 +717,42 @@ def rig_character(
                     pb.lock_rotation_w = False
                 except Exception:
                     pass
+
+        # Prevent IK solver from shrinking limbs when IK_Stretch is disabled
+        if disallow_leg_ik_stretch:
+            for ik_name in ("thigh_ik.L", "thigh_ik.R", "MCH-shin_ik.L", "MCH-shin_ik.R"):
+                ik_pb = rigifyr.pose.bones.get(ik_name)
+                if ik_pb is not None:
+                    ik_pb.ik_stretch = 0.0
+        if disallow_arm_ik_stretch:
+            for ik_name in ("upper_arm_ik.L", "upper_arm_ik.R", "MCH-forearm_ik.L", "MCH-forearm_ik.R"):
+                ik_pb = rigifyr.pose.bones.get(ik_name)
+                if ik_pb is not None:
+                    ik_pb.ik_stretch = 0.0
+
+        # Allow uniform XYZ scaling on finger master controls without Z-axis lock distortion
+        for fname in ("f_index", "f_middle", "f_ring", "f_pinky", "thumb"):
+            for side in (".L", ".R"):
+                fm_pb = rigifyr.pose.bones.get(f"{fname}.01_master{side}")
+                if fm_pb is not None:
+                    fm_pb.lock_scale[:] = (False, False, False)
+
+        # Genshin/ZZZ parity: scale.x curls finger tip (.03), scale.y curls .01/.02
+        if getattr(rigifyr, "animation_data", None):
+            for oDrv in rigifyr.animation_data.drivers:
+                for variable in oDrv.driver.variables:
+                    for target in variable.targets:
+                        if ".03" in oDrv.data_path and target.data_path.endswith("scale.y"):
+                            target.data_path = target.data_path[:-1] + "x"
+
+        # Ensure breast controls are unlocked
+        for b_name in ("breast.L", "breast.R"):
+            b_pb = rigifyr.pose.bones.get(b_name)
+            if b_pb is not None:
+                b_pb.lock_location[:] = (False, False, False)
+                b_pb.lock_rotation[:] = (False, False, False)
+                b_pb.lock_scale[:] = (False, False, False)
+                b_pb.lock_rotation_w = False
 
         if use_arm_ik_poles:
             for b_name in ["upper_arm_parent.L", "upper_arm_parent.R"]:
@@ -919,6 +996,38 @@ def rig_character(
         except Exception as ex_mch:
             print(f"[NTE RIG] head-controller edit notice: {ex_mch}")
 
+        # ZZZ-style weapon prop.L / prop.R controls for hand-weighted weapons (e.g. Lacrimosa)
+        _used_vgs = {
+            vg.name
+            for o in bpy.data.objects
+            if o.type == 'MESH'
+            for vg in o.vertex_groups
+        }
+        _nte_weapon_prop_bones = []
+        _root_master = eb.get("root.002") or eb.get("root.001") or eb.get("root")
+        for _side, _cand_names in (
+            ("L", ("Lhand_Weapon2", "Lhand_Weapon")),
+            ("R", ("Rhand_Weapon2", "Rhand_Weapon")),
+        ):
+            _wb_name = next((n for n in _cand_names if n in eb and n in _used_vgs), None)
+            if not _wb_name:
+                continue
+            _wb = eb[_wb_name]
+            # Unparent weapon bone from hand/prop/root so moving hand does not drag weapon unless constrained
+            _wb.parent = None
+            _prop_name = f"prop.{_side}"
+            _ep = eb.get(_prop_name) or eb.new(_prop_name)
+            _ep.head = _wb.head.copy()
+            _ep.tail = _wb.tail.copy()
+            if (_ep.tail - _ep.head).length < 0.02:
+                _ep.tail = _ep.head + _Vec((0.0, 0.1, 0.0))
+            _ep.roll = _wb.roll
+            _ep.use_deform = False
+            _ep.inherit_scale = "FULL"
+            _ep.parent = _root_master
+            _wb.parent = _ep
+            _nte_weapon_prop_bones.append((_prop_name, _wb_name, _side))
+
         bpy.ops.object.mode_set(mode='OBJECT')
 
     if is_version_4 and rigifyr:
@@ -929,10 +1038,16 @@ def rig_character(
                 b_name = bone.name
                 b_low = b_name.lower()
                 # NTE imports weapon attachment joints without the weapons.
-                # Keep these joints for compatibility, outside visible controls.
-                if b_low in {'lhand_weapon', 'rhand_weapon'}:
-                    b2c_func(b_name, 25, "Other")
-                    bone.hide = True
+                # Keep unused joints/sockets hidden in Other, unless weighted to a weapon mesh.
+                if b_low in {
+                    'lhand_weapon', 'rhand_weapon', 'lhand_weapon2', 'rhand_weapon2',
+                    'weapon_finger_l1', 'weapon_finger_r1', 'weaponsocket',
+                }:
+                    if any(b_name == wb for _, wb, _ in _nte_weapon_prop_bones):
+                        b2c_func(b_name, 21, "Weapon")
+                    else:
+                        b2c_func(b_name, 25, "Other")
+                        bone.hide = True
                     continue
                 # Skip ALL control bones, standard Rigify limbs/fingers, and raw deform/twist/base bones
                 if (
@@ -971,7 +1086,10 @@ def rig_character(
                 ):
                     continue
 
-                if any(k in b_low for k in ["hair", "headline", "bone00", "ahoge"]):
+                if any(k in b_low for k in [
+                    "hair", "headline", "bone00", "ahoge",
+                    "liuhai", "binfa", "suifa", "houfa", "qianfa", "cefa", "toufa", "mawei", "duanfa", "changfa",
+                ]):
                     b2c_func(b_name, 20, "Hair")
                 elif any(k in b_low for k in ["qun", "skirt", "tail", "xiu", "sleeve", "cloth", "sce", "ribbon", "belt", "strap", "button", "dress"]):
                     b2c_func(b_name, 22, "Clothes")
@@ -986,10 +1104,67 @@ def rig_character(
             physics_bone_callback=nte_physics_classifier,
             detect_prop_keyword=False,
         )
+        _w_coll = rigifyr.data.collections.get("Weapon")
+        _other_coll = rigifyr.data.collections.get("Other")
+        _active_wb_names = {wb for _, wb, _ in _nte_weapon_prop_bones} | {p for p, _, _ in _nte_weapon_prop_bones}
+        if _w_coll:
+            for _wb in list(_w_coll.bones):
+                if _wb.name not in _active_wb_names:
+                    _w_coll.unassign(_wb)
+                    if _other_coll:
+                        _other_coll.assign(_wb)
+                    _wb.hide = True
+
         for name in ("Weapon", "Props"):
             collection = rigifyr.data.collections.get(name)
             if collection and not collection.bones:
                 collection.is_visible = False
+
+        if _nte_weapon_prop_bones:
+            _wgt_prop = bpy.data.objects.get("WGT-prop")
+            if _wgt_prop is None:
+                _pmesh = bpy.data.meshes.new("WGT-prop")
+                _pmesh.from_pydata(
+                    [
+                        (-0.5, -0.5, -0.5),
+                        (0.5, -0.5, -0.5),
+                        (0.5, 0.5, -0.5),
+                        (-0.5, 0.5, -0.5),
+                        (-0.5, -0.5, 0.5),
+                        (0.5, -0.5, 0.5),
+                        (0.5, 0.5, 0.5),
+                        (-0.5, 0.5, 0.5),
+                    ],
+                    [
+                        (0, 1), (1, 2), (2, 3), (3, 0),
+                        (4, 5), (5, 6), (6, 7), (7, 4),
+                        (0, 4), (1, 5), (2, 6), (3, 7),
+                    ],
+                    [],
+                )
+                _wgt_prop = bpy.data.objects.new("WGT-prop", _pmesh)
+                _wgt_col = next((c for c in bpy.data.collections if c.name.startswith("WGTS")), None)
+                if _wgt_col:
+                    _wgt_col.objects.link(_wgt_prop)
+                else:
+                    context.scene.collection.objects.link(_wgt_prop)
+                _wgt_prop.hide_viewport = True
+                _wgt_prop.hide_render = True
+
+            _w_coll = rigifyr.data.collections.get("Weapon") or rigifyr.data.collections.new("Weapon")
+            for _prop_name, _wb_name, _side in _nte_weapon_prop_bones:
+                for _bn in (_prop_name, _wb_name):
+                    _db = rigifyr.data.bones.get(_bn)
+                    if _db:
+                        _w_coll.assign(_db)
+                        _db.hide = False
+                _pb = rigifyr.pose.bones.get(_prop_name)
+                if _pb:
+                    _pb.custom_shape = _wgt_prop
+                    _pb.use_custom_shape_bone_size = False
+                    _pb.custom_shape_scale_xyz = (0.12, 0.12, 0.12)
+                    _pb.color.palette = 'THEME04' if _side == 'L' else 'THEME01'
+            _w_coll.is_visible = True
 
     elif rigifyr:
         for bone in rigifyr.data.bones:
@@ -1330,13 +1505,20 @@ def rig_character(
                             _face_coll.unassign(_rb)
                     except Exception:
                         pass
-            for _fn in ["head-controller", "Face-Root"]:
-                _fb = rigifyr.data.bones.get(_fn)
-                if _fb is not None and _face_coll is not None:
-                    try:
-                        _face_coll.assign(_fb)
-                    except Exception:
-                        pass
+            _hb = rigifyr.data.bones.get("head-controller")
+            if _hb is not None and _face_coll is not None:
+                try:
+                    _face_coll.assign(_hb)
+                except Exception:
+                    pass
+            _frb = rigifyr.data.bones.get("Face-Root")
+            if _frb is not None and _other_coll is not None:
+                try:
+                    for _c in list(_frb.collections):
+                        _c.unassign(_frb)
+                    _other_coll.assign(_frb)
+                except Exception:
+                    pass
             try:
                 _root_coll.is_visible = True
                 _face_coll.is_visible = True

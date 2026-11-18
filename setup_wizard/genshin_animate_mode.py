@@ -105,7 +105,7 @@ def _find_diffuse_image(mat):
 
     for node in candidate_nodes:
         target_inputs = []
-        for inp_name in ('Diffuse', 'Diffuse (sRGB)', 'Main Diffuse', 'Base Color', 'BaseColor', 'Color'):
+        for inp_name in ('Diffuse', 'Diffuse (sRGB)', 'Main Diffuse', 'Base Color', 'BaseColor', 'Color', '_MainTex', '_DiffuseTex1'):
             inp = node.inputs.get(inp_name)
             if inp and inp.is_linked:
                 target_inputs.append((inp_name, inp))
@@ -136,7 +136,8 @@ def _find_diffuse_image(mat):
     # 2. Node name explicitly indicates diffuse (e.g. Main_Diffuse, Face_Diffuse)
     diff_name_keywords = [
         'diffuse', 'main_diff', 'body_diff', 'face_diff', 'hair_diff',
-        'dress_diff', 'basecolor', 'base_color', '_diff', 'albedo'
+        'dress_diff', 'basecolor', 'base_color', '_diff', 'albedo',
+        'maintex', '_color', '基礎色', '基础色'
     ]
     for node in tree.nodes:
         if node.type == 'TEX_IMAGE' and getattr(node, "image", None):
@@ -349,12 +350,30 @@ def _get_low_material(mat):
     return low_mat
 
 
+def _is_face_expressions_material(mat) -> bool:
+    """Returns True if the material is a Genshin Face Expressions overlay/selector material."""
+    if not mat:
+        return False
+    name_low = mat.name.lower()
+    if name_low.endswith(" - expressions") or " - expressions" in name_low or "face_expressions" in name_low:
+        return True
+    tree = getattr(mat, "node_tree", None) if getattr(mat, "use_nodes", False) else None
+    if tree:
+        if tree.nodes.get("Genshin Face Expressions") is not None:
+            return True
+        for node in tree.nodes:
+            ng = getattr(node, "node_tree", None)
+            if node.type == 'GROUP' and ng and ng.name == "Genshin - Face Expressions":
+                return True
+    return False
+
+
 def _is_exempt_from_animate_mode(mat, obj=None) -> bool:
     """Returns True if the material should NOT be replaced by Animate Mode.
-    Exempts eye highlight materials and Color-Wheel objects/materials."""
+    Exempts eye highlight materials, face expression materials, and Color-Wheel objects/materials."""
     if not mat:
         return True
-    if _is_color_wheel(mat):
+    if _is_color_wheel(mat) or _is_face_expressions_material(mat):
         return True
     if obj is not None and (_is_color_wheel(obj) or _is_helper_object(obj)):
         return True
@@ -365,6 +384,29 @@ def _is_exempt_from_animate_mode(mat, obj=None) -> bool:
         "eyelight",
         "eye_highlight",
         "eyehighlight",
+        "eyeshadow",
+        "eye_shadow",
+        "eyespecular",
+        "eye_specular",
+        "eyestar",
+        "eye_star",
+        "eyewhite",
+        "eye_white",
+        "whiteshadow",
+        "hairshadow",
+        "hair_shadow",
+        "face_mask",
+        "facemask",
+        "common_face",
+        "touming",
+        "bantou",
+        "gaoguang",
+        "目hi",
+        "目影",
+        "transp ol",
+        "eye transparent",
+        "avatar oqaque",
+        "avatar opaque",
         "colorwheel",
         "color-wheel",
         "color_wheel",
@@ -374,8 +416,8 @@ def _is_exempt_from_animate_mode(mat, obj=None) -> bool:
 
     if obj is not None and getattr(obj, "type", None) == 'MESH':
         obj_name_low = obj.name.lower()
-        if any(k in obj_name_low for k in ["highlight", "eyelight"]):
-            if any(k in name_low for k in ["highlight", "eye"]):
+        if any(k in obj_name_low for k in ["highlight", "eyelight", "eyeshadow", "hairshadow", "eyewhite"]):
+            if any(k in name_low for k in ["highlight", "eye", "shadow", "trans"]):
                 return True
 
     return False
@@ -464,7 +506,7 @@ def _restore_mesh_materials(mesh) -> bool:
         try:
             from setup_wizard.utils.modifier_utils import set_modifier_property
             for mod in getattr(mesh, "modifiers", []) or []:
-                if mod.type == 'NODES' and mod.node_group and "outline" in mod.node_group.name.lower():
+                if mod.type == 'NODES' and mod.node_group and ("outline" in mod.node_group.name.lower() or "描边" in mod.node_group.name):
                     set_modifier_property(mod, "Socket_24", True)
                     set_modifier_property(mod, "Toggle Outlines", True)
         except Exception:
@@ -513,7 +555,7 @@ def _set_gn_modifiers_visible(visible, meshes=None):
                 continue
             ng_low = mod.node_group.name.lower()
             mod_low = getattr(mod, "name", "").lower()
-            if "outline" in ng_low or "outline" in mod_low:
+            if "outline" in ng_low or "outline" in mod_low or "描边" in ng_low or "描边" in mod_low:
                 # A rig/animation driver overrides direct visibility writes
                 # on the next depsgraph update. Pause only these visibility
                 # drivers and persist their previous mute states with the mesh
@@ -782,7 +824,7 @@ class GI_OT_ToggleAnimateMode(Operator):
         from setup_wizard.ui.character_settings_utils import resolve_settings_armature, resolve_character_name
         arm = resolve_settings_armature(context)
         if not arm:
-            self.report({'WARNING'}, "No Genshin character selected for Animate Mode")
+            self.report({'WARNING'}, "No character selected for Animate Mode")
             return {'CANCELLED'}
 
         current = is_genshin_animate_mode(arm, context=context)

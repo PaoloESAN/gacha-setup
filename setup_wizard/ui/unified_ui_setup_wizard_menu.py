@@ -153,6 +153,7 @@ class CSW_MT_GameSelectorMenu(bpy.types.Menu):
             (GameType.ZENLESS_ZONE_ZERO.name, "Zenless Zone Zero"),
             (GameType.HONKAI_IMPACT_3RD.name, "Honkai Impact 3rd"),
             (GameType.HONKAI_NEXUS_ANIMA.name, "Honkai: Nexus Anima"),
+            (GameType.MILASTRA_WONDERLAND.name, "Milastra Wonderland"),
         ]
         for g_type, g_label in hoyo_games:
             icon = "CHECKMARK" if current_game == g_type else "BLANK1"
@@ -192,6 +193,7 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
             (GameType.PUNISHING_GRAY_RAVEN.name, 'Punishing Gray Raven', 'Punishing Gray Raven Setup'),
             (GameType.HONKAI_IMPACT_3RD.name, 'Honkai Impact 3rd', 'Honkai Impact 3rd Setup'),
             (GameType.HONKAI_NEXUS_ANIMA.name, 'Honkai: Nexus Anima', 'Honkai: Nexus Anima Setup'),
+            (GameType.MILASTRA_WONDERLAND.name, 'Milastra Wonderland', 'Milastra Wonderland Setup'),
             (GameType.NEVERNESS_TO_EVERNESS.name, 'Neverness to Everness', 'Neverness to Everness Setup'),
             (GameType.WUTHERING_WAVES.name, 'Wuthering Waves', 'Wuthering Waves Setup'),
             (GameType.ARKNIGHTS_ENDFIELD.name, 'Arknights: Endfield', 'Arknights: Endfield Setup'),
@@ -218,6 +220,7 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
             GameType.PUNISHING_GRAY_RAVEN.name: "Punishing Gray Raven",
             GameType.HONKAI_IMPACT_3RD.name: "Honkai Impact 3rd",
             GameType.HONKAI_NEXUS_ANIMA.name: "Honkai: Nexus Anima",
+            GameType.MILASTRA_WONDERLAND.name: "Milastra Wonderland",
             GameType.NEVERNESS_TO_EVERNESS.name: "Neverness to Everness",
             GameType.WUTHERING_WAVES.name: "Wuthering Waves",
             GameType.ARKNIGHTS_ENDFIELD.name: "Arknights: Endfield",
@@ -234,6 +237,7 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
             GameType.PUNISHING_GRAY_RAVEN.name: ('punishing_gray_raven.setup_wizard_ui', GameType.PUNISHING_GRAY_RAVEN.name, 'EXEC_DEFAULT'),
             GameType.HONKAI_IMPACT_3RD.name: ('honkai_impact_3rd.setup_wizard_ui', GameType.HONKAI_IMPACT_3RD.name, 'EXEC_DEFAULT'),
             GameType.HONKAI_NEXUS_ANIMA.name: ('honkai_nexus_anima.setup_wizard_ui', GameType.HONKAI_NEXUS_ANIMA.name, 'EXEC_DEFAULT'),
+            GameType.MILASTRA_WONDERLAND.name: ('milastra_wonderland.setup_wizard_ui', GameType.MILASTRA_WONDERLAND.name, 'INVOKE_DEFAULT'),
             GameType.ZENLESS_ZONE_ZERO.name: ('zenless_zone_zero.setup_wizard_ui', GameType.ZENLESS_ZONE_ZERO.name, 'EXEC_DEFAULT'),
             GameType.NEVERNESS_TO_EVERNESS.name: ('neverness_to_everness.setup_wizard_ui', GameType.NEVERNESS_TO_EVERNESS.name, 'INVOKE_DEFAULT'),
             GameType.WUTHERING_WAVES.name: ('wuthering_waves.setup_wizard_ui', GameType.WUTHERING_WAVES.name, 'INVOKE_DEFAULT'),
@@ -252,11 +256,15 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
         OperatorFactory.create(
             run_entire_setup_column,
             op_name,
-            'Run Entire Setup',
+            'Setup Character',
             'PLAY',
             operator_context=op_context,
             game_type=gt_name,
         )
+
+        select_column = main_box.column()
+        select_column.operator_context = 'INVOKE_DEFAULT'
+        select_column.operator('gacha.select_character', text='Select Character', icon='OUTLINER_OB_ARMATURE')
 
         from setup_wizard.utils.better_fbx_utils import should_show_better_fbx_warning
         if should_show_better_fbx_warning(selected_game):
@@ -267,30 +275,66 @@ class CSW_PT_Unified_Character_Setup_Wizard_UI_Layout(Panel):
         from setup_wizard.services.isolation import isolation_service
         isolation_service.draw_setup_status_box(main_box, context, run_entire_setup_column)
 
-        settings_box = layout.box()
-        settings_header = settings_box.row()
-        settings_header.label(text="Setup Settings", icon="PREFERENCES")
 
-        settings_col = settings_box.column()
-        if selected_game == GameType.GENSHIN_IMPACT.name:
-            settings_col.prop(context.scene, "gi_shader_type", text="Shader")
-        if (selected_game == GameType.ZENLESS_ZONE_ZERO.name
-                and bpy.app.version >= (5, 2, 0) and hasattr(context.scene, "zzz_shader_type")):
-            settings_col.prop(context.scene, "zzz_shader_type", text="Shader")
-            if getattr(context.scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
-                row_by = settings_col.row(align=True)
-                row_by.alignment = 'RIGHT'
-                row_by.label(text="Made by Kythera")
+def draw_file_browser_setup_settings(layout, context, game_type=None, operator=None):
+    """Draw unified Setup Settings inside the file browser operator panel."""
+    selected_game = game_type or getattr(context.scene, "game_type_dropdown", GameType.GENSHIN_IMPACT.name)
 
-        props = getattr(context.scene, "character_rigger_props", None)
-        if props:
-            enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
-            settings_col.prop(props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")
-            if enable_physics:
-                sliders_col = settings_col.column()
-                sliders_col.prop(props, "hair_physics_influence", text="Hair", slider=True)
-                sliders_col.prop(props, "clothes_physics_influence", text="Clothes", slider=True)
-            settings_col.prop(props, "disable_rigging", text="Disable Rigging")
+    settings_box = layout.box()
+    settings_header = settings_box.row()
+    settings_header.label(text="Setup Settings", icon="PREFERENCES")
+
+    settings_col = settings_box.column()
+    props = getattr(context.scene, "character_rigger_props", None)
+
+    # 1. Base Model (Milastra Wonderland)
+    if selected_game == GameType.MILASTRA_WONDERLAND.name and operator is not None and hasattr(operator, "gender"):
+        settings_col.label(text="Base Model", icon="ARMATURE_DATA")
+        settings_col.row(align=True).prop(operator, "gender", expand=True)
+        settings_col.separator(factor=0.6)
+
+    # 2. Shader settings
+    has_shader = False
+    if selected_game in (GameType.GENSHIN_IMPACT.name, GameType.MILASTRA_WONDERLAND.name):
+        settings_col.prop(context.scene, "gi_shader_type", text="Shader")
+        has_shader = True
+    if (selected_game == GameType.ZENLESS_ZONE_ZERO.name
+            and bpy.app.version >= (5, 2, 0) and hasattr(context.scene, "zzz_shader_type")):
+        settings_col.prop(context.scene, "zzz_shader_type", text="Shader")
+        has_shader = True
+        if getattr(context.scene, "zzz_shader_type", "LEGACY") == "KYTHERA":
+            row_by = settings_col.row(align=True)
+            row_by.alignment = 'RIGHT'
+            row_by.label(text="Made by Kythera")
+    if has_shader:
+        settings_col.separator(factor=0.6)
+
+    # 3. Disable Rigging
+    if props:
+        rig_box = settings_col.box()
+        rig_col = rig_box.column(align=False)
+        rig_col.prop(props, "disable_rigging", text="Disable Rigging")
+        rig_col.separator(factor=0.3)
+        rig_info_col = rig_col.column(align=True)
+        rig_info_col.scale_y = 0.8
+        rig_info_col.label(text="Enable for props, weapons,", icon="INFO")
+        rig_info_col.label(text="objects, or animations only.")
+        settings_col.separator(factor=0.6)
+
+    # 4. Physics
+    if props:
+        enable_physics = getattr(props, "enable_hair_clothes_physics", getattr(props, "enable_hair_dress_physics", False))
+        settings_col.prop(props, "enable_hair_clothes_physics", text="Hair & Clothes Physics")
+        if enable_physics:
+            sliders_col = settings_col.column()
+            sliders_col.prop(props, "hair_physics_influence", text="Hair", slider=True)
+            sliders_col.prop(props, "clothes_physics_influence", text="Clothes", slider=True)
+            info_box = sliders_col.box()
+            info_col = info_box.column(align=True)
+            info_col.scale_y = 0.8
+            info_col.label(text="You can adjust these values later", icon="INFO")
+            info_col.label(text="in the Items section under")
+            info_col.label(text="Character Settings.")
 
 
 class CSW_PT_Old_Setup_UI_Layout(Panel):

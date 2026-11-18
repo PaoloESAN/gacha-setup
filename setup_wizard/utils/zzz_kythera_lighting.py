@@ -97,6 +97,9 @@ def setup_kythera_lighting(context, armature=None, final=False):
                 sun.light_linking.receiver_collection = receivers
             for obj in context.scene.objects:
                 if obj.type == 'MESH' and (obj.find_armature() == owner or obj.parent == owner):
+                    o_low = obj.name.lower()
+                    if any(k in o_low for k in ('colorwheel', 'wgt-', 'lightpanel')):
+                        continue
                     if obj.name not in receivers.objects:
                         receivers.objects.link(obj)
 
