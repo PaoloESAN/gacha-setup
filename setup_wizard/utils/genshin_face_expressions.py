@@ -477,6 +477,10 @@ def _detached_eye_covers(face, components, cover, fit):
         # extends that cleanup to zero without changing any active expression.
         if not other_polygons or not set(other_polygons) <= active_masks:
             continue
+        # Neutral eye-socket / eyelid rings have an eye-opening boundary of
+        # their own; deleting them at Expression == 0 leaves holes around the eyes.
+        if _eye_hole_edges(face, other_polygons, fit):
+            continue
         tree = KDTree(len(other_vertices))
         for number, index in enumerate(other_vertices):
             tree.insert(mesh.vertices[index].co, number)
