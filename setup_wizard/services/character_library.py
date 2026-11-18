@@ -92,6 +92,17 @@ def write_catalog(entries):
     temporary.replace(path)
 
 
+def _character_collection(scene, rig):
+    """Return the top-level collection under scene.collection containing rig, if any."""
+    for top in scene.collection.children:
+        if rig in top.all_objects[:]:
+            return top
+    for coll in rig.users_collection:
+        if coll != scene.collection:
+            return coll
+    return None
+
+
 def _file_entries(filepath, scenes, include_linked=False):
     normalized = os.path.normcase(filepath)
     entries = []
@@ -120,9 +131,11 @@ def _file_entries(filepath, scenes, include_linked=False):
                 if text:
                     texts.add(text.name)
             key = hashlib.sha256((normalized + '\0' + rig.name).encode('utf-8')).hexdigest()
+            char_coll = _character_collection(scene, rig)
             entries.append({
                 'key': key, 'name': resolve_character_name(rig, rig.name),
                 'game': detect_armature_game(rig), 'filepath': filepath, 'rig': rig.name,
+                'collection': char_coll.name if char_coll else '',
                 'objects': [obj.name for obj in objects], 'texts': sorted(texts),
                 'widgets': [obj.name for obj in objects if _is_widget_helper(obj)
                             or any(coll.name.casefold().startswith(('wgt', 'widget'))
@@ -209,36 +222,49 @@ def _setup_character_compositor(entry):
 
 
 def _link_character(entry, context):
-    """Instance a local wrapper of linked dependencies without editing library data."""
+    """Instance a linked collection (preserving Library Override support) or fallback to linked objects."""
     object_names = list(entry['objects'])
+    coll_name = entry.get('collection', '')
+    linked_col = None
     with bpy.data.libraries.load(entry['filepath'], link=True) as (source, target):
         if set(object_names) - set(source.objects):
             raise ValueError('Character changed in the saved file. Add the .blend again to refresh it')
-        target.objects = object_names
+        if coll_name and coll_name in source.collections:
+            target.collections = [coll_name]
+        elif not coll_name and entry['name'] in source.collections:
+            target.collections = [entry['name']]
+        else:
+            target.objects = object_names
         target.texts = [name for name in entry['texts'] if name in source.texts]
-    loaded = dict(zip(object_names, target.objects))
-    collection = bpy.data.collections.new(entry['name'])
-    widgets = {bone.custom_shape for obj in target.objects if obj.type == 'ARMATURE'
-               for bone in obj.pose.bones if bone.custom_shape}
-    widgets.update(loaded[name] for name in entry.get('widgets', ()) if name in loaded)
-    widgets.update(obj for obj in target.objects if _is_widget_helper(obj))
-    widget_collection = bpy.data.collections.new('WGTS_' + entry['name'])
-    widget_collection.hide_viewport = True
-    widget_collection.hide_render = True
-    collection.children.link(widget_collection)
-    hidden_collection = bpy.data.collections.new('Hidden_' + entry['name'])
-    hidden_collection.hide_viewport = True
-    collection.children.link(hidden_collection)
-    hidden = set(entry.get('hidden', ()))
-    for name, obj in loaded.items():
-        destination = widget_collection if obj in widgets else hidden_collection if name in hidden else collection
-        destination.objects.link(obj)
+    if target.collections:
+        linked_col = target.collections[0]
+        collection = linked_col
+        rig_objects = list(linked_col.all_objects)
+    else:
+        loaded = dict(zip(object_names, target.objects))
+        collection = bpy.data.collections.new(entry['name'])
+        widgets = {bone.custom_shape for obj in target.objects if obj.type == 'ARMATURE'
+                   for bone in obj.pose.bones if bone.custom_shape}
+        widgets.update(loaded[name] for name in entry.get('widgets', ()) if name in loaded)
+        widgets.update(obj for obj in target.objects if _is_widget_helper(obj))
+        widget_collection = bpy.data.collections.new('WGTS_' + entry['name'])
+        widget_collection.hide_viewport = True
+        widget_collection.hide_render = True
+        collection.children.link(widget_collection)
+        hidden_collection = bpy.data.collections.new('Hidden_' + entry['name'])
+        hidden_collection.hide_viewport = True
+        collection.children.link(hidden_collection)
+        hidden = set(entry.get('hidden', ()))
+        for name, obj in loaded.items():
+            destination = widget_collection if obj in widgets else hidden_collection if name in hidden else collection
+            destination.objects.link(obj)
+        rig_objects = list(target.objects)
     instance = bpy.data.objects.new(entry['name'], None)
     instance.instance_type = 'COLLECTION'
     instance.instance_collection = collection
     context.scene.collection.objects.link(instance)
     from setup_wizard.services.isolation.rig_ui_manager import initialize_rig_uis
-    initialize_rig_uis(target.objects, texts=[text for text in target.texts if text])
+    initialize_rig_uis(rig_objects, texts=[text for text in target.texts if text])
     invalidate_caches()
     from setup_wizard.ui.character_settings_tabs import hide_registered_rig_layers
     hide_registered_rig_layers()
