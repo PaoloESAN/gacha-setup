@@ -496,18 +496,6 @@ def rig_character(
                 eb_br.head = mathutils.Vector((-0.050, cy, cz))
                 eb_br.tail = mathutils.Vector((-0.050, cy - 0.05, cz))
 
-        # Empujar controles al frente del volumen (como ZZZ): el hueso nace dentro
-        # del pecho y el circulo queda enterrado. Push proporcional al halfwidth
-        # en -Y (frente NTE), pre-generate para no desplazar el deform.
-        for _bb in [b for b in [eb_bl, eb_br] if b is not None]:
-            try:
-                _push = abs(_bb.head.x) * 2.0
-                _dir = _bb.tail - _bb.head
-                _bb.head.y -= _push
-                _bb.tail = _bb.head + _dir
-            except Exception as ex_push:
-                print(f"[NTE RIG] breast push notice: {ex_push}")
-
         # Align shoulder.R metarig bone roll so widget is symmetrical and not flipped
         sh_L = metarig_obj.data.edit_bones.get("shoulder.L")
         sh_R = metarig_obj.data.edit_bones.get("shoulder.R")
@@ -676,6 +664,8 @@ def rig_character(
 
         # Circulos grandes y deterministas: tamano absoluto (widget unitario r=0.5),
         # sin bone-size (antes 0.70 x hueso 0.06 = diminutos y enterrados).
+        # Desplazar solo el widget hacia adelante (+Y local del hueso = -Y mundo)
+        # para mantener el pivote de rotacion en el hueso original del pecho.
         for b_name in ["breast.L", "breast.R"]:
             pb = rigifyr.pose.bones.get(b_name)
             if pb:
@@ -684,6 +674,7 @@ def rig_character(
                 except Exception:
                     pass
                 pb.custom_shape_scale_xyz = (0.07, 0.07, 0.07)
+                pb.custom_shape_translation = (0.0, abs(pb.bone.head_local.x) * 2.0, 0.0)
 
         for b_name in finger_masters:
             pb = rigifyr.pose.bones.get(b_name)
