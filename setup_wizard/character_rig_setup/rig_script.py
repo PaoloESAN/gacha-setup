@@ -2800,6 +2800,18 @@ def rig_character(
             plate["Head Follow"] = 1.00
         if "Neck Follow" not in plate:
             plate["Neck Follow"] = 1.00
+        for _fol_prop in ("Head Follow", "Neck Follow"):
+            try:
+                plate.id_properties_ui(_fol_prop).update(
+                    default=1.0,
+                    min=0.0,
+                    max=1.0,
+                    soft_min=0.0,
+                    soft_max=1.0,
+                    description=_fol_prop,
+                )
+            except Exception:
+                pass
         if "Use Head Controller" not in plate:
             plate["Use Head Controller"] = 0.00
         if "Viewport Outlines" not in plate:
@@ -4424,9 +4436,13 @@ def rig_character(
                 except Exception:
                     rig_obj.pose.bones[b_name]["pole_vector"] = 1 if use_leg_ik_poles else 0
 
-        if "torso" in rig_obj.pose.bones:
-            rig_obj.pose.bones["torso"]["head_follow"] = 1.0
-            rig_obj.pose.bones["torso"]["neck_follow"] = 1.0
+        for t_name in ["torso", "torso.002"]:
+            pb_t = rig_obj.pose.bones.get(t_name)
+            if pb_t:
+                if "head_follow" in pb_t:
+                    pb_t["head_follow"] = 1.0
+                if "neck_follow" in pb_t:
+                    pb_t["neck_follow"] = 1.0
 
     def add_shoulder_const(follow, driver, hand):
         armature = bpy.context.scene.objects[ourRig]
@@ -5014,12 +5030,60 @@ def rig_character(
         depsgraph = bpy.context.evaluated_depsgraph_get()
         depsgraph.update()
 
-    swap_const_follow_in_const(
-        "MCH-ROT-head", "COPY_ROTATION", 'pose.bones["plate-settings"]["Head Follow"]', target_bone="torso.002"
+    # Connect Head Follow and Neck Follow from plate-settings directly to Rigify's head and neck constraints
+    if this_obj.animation_data:
+        for fcurve in this_obj.animation_data.drivers:
+            drv = fcurve.driver
+            for var in drv.variables:
+                for target in var.targets:
+                    if target.id == this_obj and target.data_path:
+                        if '["head_follow"]' in target.data_path:
+                            target.data_path = 'pose.bones["plate-settings"]["Head Follow"]'
+                        elif '["neck_follow"]' in target.data_path:
+                            target.data_path = 'pose.bones["plate-settings"]["Neck Follow"]'
+
+    # Retarget head and neck follow Copy Rotation constraints to root instead of torso/COG,
+    # ensuring that when Head/Neck Follow = 0, the head stays upright in world/root space
+    # instead of rotating with COG while ignoring chest.
+    root_bname = (
+        "root"
+        if "root" in this_obj.pose.bones
+        else ("root.002" if "root.002" in this_obj.pose.bones else "root.001")
     )
-    swap_const_follow_in_const(
-        "MCH-ROT-neck", "COPY_ROTATION", 'pose.bones["plate-settings"]["Neck Follow"]', target_bone="torso.002"
-    )
+    for b_name in ["MCH-ROT-head", "MCH-ROT-neck"]:
+        pb_rot = this_obj.pose.bones.get(b_name)
+        if pb_rot:
+            for c in pb_rot.constraints:
+                if c.type == "COPY_ROTATION" and root_bname:
+                    c.subtarget = root_bname
+
+    for t_name in ["torso", "torso.002"]:
+        pb_t = this_obj.pose.bones.get(t_name)
+        if pb_t:
+            if "head_follow" in pb_t:
+                try:
+                    d_hf = pb_t.driver_add('["head_follow"]').driver
+                    d_hf.type = "SCRIPTED"
+                    d_hf.expression = "var"
+                    var_hf = d_hf.variables.new()
+                    var_hf.name = "var"
+                    var_hf.type = "SINGLE_PROP"
+                    var_hf.targets[0].id = this_obj
+                    var_hf.targets[0].data_path = 'pose.bones["plate-settings"]["Head Follow"]'
+                except Exception:
+                    pass
+            if "neck_follow" in pb_t:
+                try:
+                    d_nf = pb_t.driver_add('["neck_follow"]').driver
+                    d_nf.type = "SCRIPTED"
+                    d_nf.expression = "var"
+                    var_nf = d_nf.variables.new()
+                    var_nf.name = "var"
+                    var_nf.type = "SINGLE_PROP"
+                    var_nf.targets[0].id = this_obj
+                    var_nf.targets[0].data_path = 'pose.bones["plate-settings"]["Neck Follow"]'
+                except Exception:
+                    pass
 
     # Delete all existing bone collections, and make new ones.
     if is_version_4:
@@ -5970,9 +6034,15 @@ def rig_character(
     apply_genshin_lighting_rest_pose(this_obj)
 
 
-def setup_neck_and_head_follow(neck_follow_value, head_follow_value):
-    bpy.context.object.pose.bones["torso"]["neck_follow"] = neck_follow_value
-    bpy.context.object.pose.bones["torso"]["head_follow"] = head_follow_value
+def setup_neck_and_head_follow(neck_follow_value=1.0, head_follow_value=1.0):
+    if bpy.context.object and hasattr(bpy.context.object, "pose") and bpy.context.object.pose:
+        for t_name in ["torso", "torso.002"]:
+            torso_pb = bpy.context.object.pose.bones.get(t_name)
+            if torso_pb:
+                if "neck_follow" in torso_pb:
+                    torso_pb["neck_follow"] = neck_follow_value
+                if "head_follow" in torso_pb:
+                    torso_pb["head_follow"] = head_follow_value
 
 
 # Make it so that the finger scale controls can be scaled on the X axis to curl in just the fingertips instead of the entire finger.
