@@ -1071,26 +1071,30 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
 
         return None
 
-    def _is_armature_already_upright(self, armature):
-        """Return True if an armature is already oriented Z-up in Blender space."""
+    def _armature_upright_axes(self, armature, world_space=False):
+        """Return (dz, dy) between head and pelvis (or Z/Y spans) in local or world space."""
         if not armature or armature.type != 'ARMATURE' or not armature.data or not armature.data.bones:
-            return False
-        if abs(armature.rotation_euler.x) > 0.1 or abs(armature.rotation_euler.y) > 0.1:
-            return False
-
+            return 0.0, 0.0
         bones = armature.data.bones
+        mat = armature.matrix_world if world_space else None
         head = next((bones.get(n) for n in ('Bip001 Head', 'Bone_Head01_M', 'Head', 'head') if bones.get(n)), None)
         pelvis = next((bones.get(n) for n in ('Bip001 Pelvis', 'Bone_Pelvis01_M', 'Pelvis', 'Bip001') if bones.get(n)), None)
         if head and pelvis:
-            dz = head.head_local.z - pelvis.head_local.z
-            dy = abs(head.head_local.y - pelvis.head_local.y)
-            return dz > dy and dz > 0.0
+            p_head = (mat @ head.head_local) if mat else head.head_local
+            p_pelvis = (mat @ pelvis.head_local) if mat else pelvis.head_local
+            return p_head.z - p_pelvis.z, abs(p_head.y - p_pelvis.y)
 
-        zs = [b.head_local.z for b in bones]
-        ys = [b.head_local.y for b in bones]
-        z_span = max(zs) - min(zs)
-        y_span = max(ys) - min(ys)
-        return z_span > y_span and z_span > 0.2
+        pts = [(mat @ b.head_local) if mat else b.head_local for b in bones]
+        z_span = max(p.z for p in pts) - min(p.z for p in pts)
+        y_span = max(p.y for p in pts) - min(p.y for p in pts)
+        return z_span, y_span
+
+    def _is_armature_already_upright(self, armature):
+        """Return True if an armature is already oriented Z-up in world space."""
+        if not armature or armature.type != 'ARMATURE' or not armature.data or not armature.data.bones:
+            return False
+        dz, dy = self._armature_upright_axes(armature, world_space=True)
+        return dz > dy and dz > 0.0
 
     def _normalize_pgr_scale(self, armature, context):
         """Remove a redundant FBX centimeter scale from meter-sized PGR assets.
@@ -1206,6 +1210,16 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
         elif should_force_upright_rotation and self._is_armature_already_upright(armature):
             # Already Z-up in Blender coordinates (e.g. NPC FBXs exported upright).
             should_force_upright_rotation = False
+        elif not should_force_upright_rotation and not self._is_armature_already_upright(armature):
+            # Some HI3/BetterFBX imports (e.g. Blender 4.2) have Z-up local bones
+            # with a spurious +90deg X quaternion on the Armature, leaving the model lying flat.
+            local_dz, local_dy = self._armature_upright_axes(armature, world_space=False)
+            if local_dz > local_dy and local_dz > 0.0:
+                armature.rotation_quaternion = (1.0, 0.0, 0.0, 0.0)
+                armature.rotation_euler = (0.0, 0.0, 0.0)
+                context.view_layer.update()
+            else:
+                should_force_upright_rotation = True
 
         # Hidden FBX children retain stale parent transforms during apply.
         # EyeStar then inherits a compensating 0.01 scale while visible face
@@ -1232,6 +1246,9 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
                     context.view_layer.update()
 
             bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
+            if self.game_type == GameType.HONKAI_IMPACT_3RD.name:
+                from setup_wizard.utils.hi3_model_utils import nudge_hi3_eye_mouth_layers
+                nudge_hi3_eye_mouth_layers(context.scene.objects)
         except Exception as e:
             print(f"Warning in transform_apply: {e}")
         finally:

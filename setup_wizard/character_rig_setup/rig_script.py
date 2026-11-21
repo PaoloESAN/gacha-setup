@@ -5867,7 +5867,6 @@ def rig_character(
         for control in breast_controls:
             chain = {control.name, *(bone.name for bone in control.bone.children_recursive)}
             target = control.bone.tail_local.copy()
-            clearance = max(.005, control.length * .15)
             region = []
             region_weight = 0.0
             for mesh in breast_meshes:
@@ -5881,19 +5880,20 @@ def rig_character(
                     if weight > .1:
                         point = to_rig @ vertex.co
                         samples.append((point, weight))
-                        target.y = min(target.y, point.y - clearance)
                 total_weight = sum(weight for _, weight in samples)
                 if total_weight > region_weight:
                     region, region_weight = samples, total_weight
             display_size = control.length
             if region:
-                # Bone tips can point towards the shoulder (Varesa). Center
-                # the circles on the skin they move, rather than on those tips.
+                # Bone tips can point towards the shoulder (Varesa) or far forward (Sandrone).
+                # Place the circles just in front of the skin they move, rather than on those tips.
                 center = sum((point * weight for point, weight in region), Vector()) / region_weight
                 target.x, target.z = center.x, center.z
                 width = max(point.x for point, _ in region) - min(point.x for point, _ in region)
                 height = max(point.z for point, _ in region) - min(point.z for point, _ in region)
                 display_size = min(display_size, max(.01, min(width, height) * .8))
+                clearance = min(.02, max(.005, display_size * .15))
+                target.y = min(point.y for point, _ in region) - clearance
             target.x += display_size * .05 * (1 if control.name.endswith('.L') else -1)
             transform = control.custom_shape_transform or control
             inverse = transform.bone.matrix_local.to_3x3().normalized().inverted()
