@@ -504,6 +504,32 @@ def rig_character(
         if bone.name in abadidea:
             bone.name = abadidea[bone.name]
 
+    # Fallback: detect symmetric numbered front-chest breast bones (e.g. Bone023/Bone021 on Kiana)
+    # Keep their original names so vertex groups stay intact, and align/parent them to DEF-breast.L/.R.
+    generic_breast_pair = (None, None)
+    if 'DEF-breast.L' not in armature.edit_bones and 'DEF-breast.R' not in armature.edit_bones:
+        sp3 = armature.edit_bones.get('DEF-spine.003')
+        if sp3:
+            import re as _re
+            sp3_w = obj.matrix_world @ sp3.head
+            front_cands = []
+            for eb in armature.edit_bones:
+                if eb.parent == sp3 and _re.match(r'^bone\d+$', eb.name, _re.IGNORECASE):
+                    wp = obj.matrix_world @ eb.head
+                    if wp.y < sp3_w.y - 0.015 and abs(wp.x) > 0.02:
+                        front_cands.append((eb, wp))
+            left_c = [(eb, wp) for eb, wp in front_cands if wp.x > 0]
+            right_c = [(eb, wp) for eb, wp in front_cands if wp.x < 0]
+            for bl, wpl in left_c:
+                for br, wpr in right_c:
+                    if (abs(wpl.x + wpr.x) < 0.01
+                            and abs(wpl.y - wpr.y) < 0.01
+                            and abs(wpl.z - wpr.z) < 0.01):
+                        generic_breast_pair = (bl.name, br.name)
+                        break
+                if generic_breast_pair[0]:
+                    break
+
     # Imported connected helper bones must keep their bind positions when the
     # body tails are extended to the wrist/elbow for the metarig.
     body_bone_names = set(abadidea.values())
@@ -697,6 +723,34 @@ def rig_character(
                     heel_b.roll = 0.0
                 print(f"[HI3 RIG] Repositioned {heel_name} to {heel_b.head}")
 
+    # Ensure metarig elbows have a slight backward (+Y) pre-bend so Rigify places IK poles behind the arms
+    for side in ('L', 'R'):
+        ua = metarm.edit_bones.get(f'upper_arm.{side}')
+        fa = metarm.edit_bones.get(f'forearm.{side}')
+        if ua and fa:
+            mid_y = 0.5 * (ua.head.y + fa.tail.y)
+            if ua.tail.y < mid_y + 0.005:
+                ua.tail.y = mid_y + 0.01
+                fa.head.y = mid_y + 0.01
+
+    # Align hand.L and hand.R metarig bones straight along forearm vector so hand_ik rotation & widget align cleanly
+    forearm_R = metarm.edit_bones.get("forearm.R")
+    hand_R = metarm.edit_bones.get("hand.R")
+    if forearm_R and hand_R:
+        arm_vec_R = (forearm_R.tail - forearm_R.head).normalized()
+        hand_R.tail = hand_R.head + arm_vec_R * 0.05
+        hand_R.roll = forearm_R.roll
+
+    forearm_L = metarm.edit_bones.get("forearm.L")
+    hand_L = metarm.edit_bones.get("hand.L")
+    if forearm_L and hand_L:
+        arm_vec_L = (forearm_L.tail - forearm_L.head).normalized()
+        hand_L.tail = hand_L.head + arm_vec_L * 0.05
+        if hand_R:
+            hand_L.roll = -hand_R.roll
+        elif forearm_L:
+            hand_L.roll = -forearm_L.roll
+
     # Breast bones in metarig
     bpy.ops.object.mode_set(mode='EDIT')
     armature = bpy.data.objects[obj.name].data
@@ -708,8 +762,11 @@ def rig_character(
             return armature.edit_bones[bone].tail.x, armature.edit_bones[bone].tail.y, armature.edit_bones[bone].tail.z
 
     try:
-        xh, yh, zh = getboob("DEF-breast.L", "head")
-        xt, yt, zt = getboob("DEF-breast.L", "tail")
+        src_breast_l = "DEF-breast.L" if "DEF-breast.L" in armature.edit_bones else generic_breast_pair[0]
+        if not src_breast_l or src_breast_l not in armature.edit_bones:
+            raise KeyError("DEF-breast.L")
+        xh, yh, zh = getboob(src_breast_l, "head")
+        xt, yt, zt = getboob(src_breast_l, "tail")
 
         def fixboob(bone, xh, yh, zh, xt, yt, zt):
             bone.head.x = xh
@@ -724,7 +781,7 @@ def rig_character(
         boobR = metarm.edit_bones["breast.R"]
         fixboob(boobR, -xh, yh, zh, -xt, yt, zt)
 
-        boobL.roll = armature.edit_bones["DEF-breast.L"].roll
+        boobL.roll = armature.edit_bones[src_breast_l].roll
         boobR.roll = -boobL.roll
     except Exception:
         if "breast.L" in metarm.edit_bones:
@@ -1694,6 +1751,28 @@ def rig_character(
         collect_descendants(wb)
 
     raw_weapon_bones = list(weapon_bones_set)
+    # Filter out dummy weapon/prop bones that have no weighted vertices and no bone-parented meshes
+    if raw_weapon_bones:
+        wb_names = {b.name for b in raw_weapon_bones}
+        has_real_weapon_mesh = False
+        for m_obj in bpy.context.scene.objects:
+            if m_obj.type != 'MESH':
+                continue
+            if m_obj.parent_type == 'BONE' and m_obj.parent_bone in wb_names:
+                has_real_weapon_mesh = True
+                break
+            if any(mod.type == 'ARMATURE' and mod.object == obj for mod in m_obj.modifiers):
+                vg_indices = {g.index for g in m_obj.vertex_groups if g.name in wb_names}
+                if vg_indices and any(
+                    g.group in vg_indices and g.weight > 0.01
+                    for v in m_obj.data.vertices
+                    for g in v.groups
+                ):
+                    has_real_weapon_mesh = True
+                    break
+        if not has_real_weapon_mesh:
+            print(f"[HI3 RIG] Weapon bones {[b.name for b in raw_weapon_bones]} have no mesh/weights; treating as unused.")
+            raw_weapon_bones = []
     print(f"[HI3 RIG] Detected {len(raw_weapon_bones)} weapon bones: {[b.name for b in raw_weapon_bones]}")
 
     def get_weapon_roots(b_list):
@@ -3383,10 +3462,10 @@ def rig_character(
                 b_low = b.name.lower()
                 if b.name in ["breast.L", "breast.R", "DEF-breast.L", "DEF-breast.R", "ORG-breast.L", "ORG-breast.R", "MCH-breast.L", "MCH-breast.R"]:
                     continue
-                if ("breast.l" in b_low or "breast_l" in b_low or "skn_l_chest" in b_low or "chest_l" in b_low or "+breast l" in b_low) and def_l:
+                if ("breast.l" in b_low or "breast_l" in b_low or "skn_l_chest" in b_low or "chest_l" in b_low or "+breast l" in b_low or b.name == generic_breast_pair[0]) and def_l:
                     b.parent = def_l
                     b.use_connect = False
-                elif ("breast.r" in b_low or "breast_r" in b_low or "skn_r_chest" in b_low or "chest_r" in b_low or "+breast r" in b_low) and def_r:
+                elif ("breast.r" in b_low or "breast_r" in b_low or "skn_r_chest" in b_low or "chest_r" in b_low or "+breast r" in b_low or b.name == generic_breast_pair[1]) and def_r:
                     b.parent = def_r
                     b.use_connect = False
 
@@ -4003,8 +4082,16 @@ def rig_character(
         face_coll.is_visible = True
         root_coll.is_visible = True
         if "Weapon" in colls:
-            actual_w_bones = [b for b in colls["Weapon"].bones if b.name not in ["prop.L", "prop.R"]]
-            colls["Weapon"].is_visible = len(actual_w_bones) > 0
+            if not detected_weapon_bone_names:
+                for wb in list(colls["Weapon"].bones):
+                    colls["Weapon"].unassign(wb)
+                    if other_coll:
+                        other_coll.assign(wb)
+                colls["Weapon"].is_visible = False
+                colls.remove(colls["Weapon"])
+            else:
+                actual_w_bones = [b for b in colls["Weapon"].bones if b.name not in ["prop.L", "prop.R"]]
+                colls["Weapon"].is_visible = len(actual_w_bones) > 0
     else:
         actual_w_bones = [b for b in this_obj.data.bones if b.layers[21] and b.name not in ["prop.L", "prop.R"]]
         this_obj.data.layers[21] = len(actual_w_bones) > 0
@@ -4140,9 +4227,18 @@ def rig_character(
                         for i in range(32)]
             shape_mesh.from_pydata(vertices, [(i, (i + 1) % 32) for i in range(32)], [])
             breast_shape = bpy.data.objects.new(shape_name, shape_mesh)
-            our_char.users_collection[0].objects.link(breast_shape)
+            wgt_coll = (
+                next((c for c in our_char.users_collection[0].children if c.name.startswith('WGTS')), None)
+                or next((c for c in bpy.data.collections if c.name.startswith('WGTS_')), None)
+                or our_char.users_collection[0]
+            )
+            wgt_coll.objects.link(breast_shape)
             breast_shape.hide_render = True
-            breast_shape.hide_set(True)
+            breast_shape.hide_viewport = True
+            try:
+                breast_shape.hide_set(True)
+            except RuntimeError:
+                pass
         breast_meshes = [
             m for m in bpy.context.scene.objects
             if m.type == 'MESH' and any(
@@ -4191,6 +4287,24 @@ def rig_character(
             control.custom_shape_scale_xyz = (display_size,) * 3
             control.custom_shape_rotation_euler = inverse.to_euler('XYZ')
             control.custom_shape_translation = inverse @ (target - transform.bone.head_local)
+
+    for side in ('L', 'R'):
+        h_ik = our_char.pose.bones.get('hand_ik.' + side)
+        fa_b = our_char.data.bones.get('DEF-forearm.' + side)
+        fa_len = (fa_b.length * 2.0) if fa_b else 0.25
+        if h_ik and not h_ik.use_custom_shape_bone_size:
+            s = max(1.1, fa_len * 4.0)
+            h_ik.custom_shape_scale_xyz = (s, s, s)
+        h_piv = our_char.pose.bones.get('hand_ik_pivot.' + side)
+        if h_piv and not h_piv.use_custom_shape_bone_size:
+            s = max(1.0, fa_len * 3.5)
+            h_piv.custom_shape_scale_xyz = (s, s, s)
+
+    for m_obj in bpy.context.scene.objects:
+        if m_obj.type == 'MESH':
+            for mod in m_obj.modifiers:
+                if mod.type == 'ARMATURE' and mod.object == our_char:
+                    mod.use_deform_preserve_volume = True
 
     from setup_wizard.character_rig_setup.pole_targets import setup_pole_targets
     setup_pole_targets(our_char, use_arm_ik_poles, use_leg_ik_poles)

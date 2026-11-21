@@ -402,7 +402,12 @@ def build_wuwa_face_on_model(context, rig, primary, head_name):
                 elif hit:
                     drive_shared(hit, f'{fan_name}.L', f'{fan_name}.R')
         if 'M_Smile_L' not in keys.key_blocks and 'Mouth_Smile01' in keys.key_blocks:
-            drive_shared('Mouth_Smile01', 'Mouth.L', 'Mouth.R')
+            if all(f'Mouth_Smile01.{s}' in keys.key_blocks for s in ('L', 'R')):
+                reset_global('Mouth_Smile01')
+                for side in ('L', 'R'):
+                    linear(f'Mouth_Smile01.{side}', f'Mouth.{side}')
+            else:
+                drive_shared('Mouth_Smile01', 'Mouth.L', 'Mouth.R')
 
         close_all = first_key('E_Close', 'Eye_Lookat_Close')
         if close_all:

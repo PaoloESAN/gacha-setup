@@ -1156,6 +1156,7 @@ SHAPE_KEYS_TO_SPLIT = [
     "Pupil_L", "Pupil_R", "Pupil_Up", "Pupil_Down",
     "Eye_Lookat_Left", "Eye_Lookat_Right", "Eye_Lookat_Top", "Eye_Lookat_Bottom",
     "Eye_Lookat_Close", "Eye_Half01", "Eye_Contempt", "Eye_Wail", "Eye_Hostitlity", "Eye_Hostility",
+    "Mouth_Smile01",
 ]
 
 
