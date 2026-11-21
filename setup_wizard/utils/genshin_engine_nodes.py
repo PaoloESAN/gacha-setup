@@ -134,6 +134,47 @@ def _configure_eye_depth(materials):
         })
 
 
+def _is_goo_depth_group_node(node):
+    if node.type != 'GROUP':
+        return False
+    if node.name == 'Goo Eye Set Depth':
+        return True
+    if node.node_tree and node.node_tree.name in ('Set Depth', 'Goo Eye Depth'):
+        return True
+    return bool(
+        node.node_tree
+        and any(child.bl_idname == 'ShaderNodeSetDepth' for child in node.node_tree.nodes)
+    )
+
+
+def _configure_portable_depth_materials(materials):
+    """Disable Goo refraction/depth overhead when running in standard Blender."""
+    for material in materials:
+        tree = material.node_tree
+        if tree is None:
+            continue
+        depth_nodes = [node for node in tree.nodes if _is_goo_depth_group_node(node)]
+        if not tree.get('gacha_goo_links') and not depth_nodes:
+            continue
+        for attribute in ('use_screen_refraction', 'use_raytrace_refraction'):
+            if hasattr(material, attribute):
+                setattr(material, attribute, False)
+        if hasattr(material, 'thickness_mode'):
+            material.thickness_mode = 'SPHERE'
+        material.pop('_gacha_goo_depth_defaults_v1', None)
+        removed_eye_depth = False
+        for node in depth_nodes:
+            if not any(s.is_linked for s in node.inputs) and not any(s.is_linked for s in node.outputs):
+                if node.name == 'Goo Eye Set Depth':
+                    removed_eye_depth = True
+                tree.nodes.remove(node)
+        if removed_eye_depth:
+            tree.pop('gacha_goo_links', None)
+    scene = bpy.context.scene
+    if scene is not None:
+        scene.pop('_gacha_goo_depth_scene_v1', None)
+
+
 def _configure_native_depth_materials(materials):
     """Native depth shaders need the Goo refraction pass, unlike the fallback."""
     uses_depth = False
@@ -245,6 +286,8 @@ def configure_genshin_engine_nodes(materials=None):
     _configure_eye_depth(candidates)
     if native:
         _configure_native_depth_materials(candidates)
+    else:
+        _configure_portable_depth_materials(candidates)
     roots = [m.node_tree for m in candidates
              if m.node_tree]
     if materials is None:
