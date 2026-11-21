@@ -221,81 +221,162 @@ def configure_material_eye_through_hair_nodes(mat: bpy.types.Material) -> bool:
     return True
 
 
+def _is_eye_through_hair_material(mat: bpy.types.Material) -> bool:
+    name_lower = mat.name.lower()
+    return "_eyethroughhair" in name_lower or "_seethrough" in name_lower
+
+
+def _set_dithered_blend(mat: bpy.types.Material) -> None:
+    if hasattr(mat, "surface_render_method"):
+        mat.surface_render_method = 'DITHERED'
+    if hasattr(mat, "blend_method"):
+        try:
+            mat.blend_method = 'HASHED'
+        except Exception:
+            pass
+
+
+def _get_or_create_eye_through_hair_slot(
+    obj: bpy.types.Object, orig_mat: bpy.types.Material
+) -> Tuple[bpy.types.Material, int]:
+    """Reuse or duplicate {orig_mat.name}_EyeThroughHair and assign its slot on obj."""
+    target_name = f"{orig_mat.name}{EYE_THROUGH_HAIR_SUFFIX}"
+    existing_slot = next(
+        (i for i, s in enumerate(obj.material_slots) if s.material and s.material.name == target_name),
+        None,
+    )
+    if existing_slot is not None:
+        return obj.material_slots[existing_slot].material, existing_slot
+
+    existing_mat = bpy.data.materials.get(target_name)
+    if existing_mat:
+        new_mat = existing_mat
+    else:
+        new_mat = orig_mat.copy()
+        new_mat.name = target_name
+
+    obj.data.materials.append(new_mat)
+    return new_mat, len(obj.material_slots) - 1
+
+
 def isolate_and_assign_eye_through_hair_materials(obj: bpy.types.Object) -> List[bpy.types.Material]:
     """
-    Duplicates materials for selected faces of an object and assigns the duplicates
-    exclusively to those selected faces. Reuses existing EyeThroughHair slots without
-    creating .001 duplicates.
+    Duplicates the selected faces on an object (like Shift+D in Edit Mode), then
+    duplicates their materials into {mat}_EyeThroughHair and assigns those exclusively
+    to the duplicated faces, leaving the original faces untouched.
+    Reuses existing EyeThroughHair faces/slots without double-duplicating geometry.
     """
-    selected_face_indices, mat_index_to_faces = get_selected_faces_and_materials(obj)
-    if not selected_face_indices:
-        return []
+    was_edit_mode = (obj.mode == 'EDIT')
+    if not was_edit_mode:
+        has_sel = any(p.select for p in obj.data.polygons) or any(v.select for v in obj.data.vertices)
+        if not has_sel:
+            return []
 
-    is_edit_mode = (obj.mode == 'EDIT')
-    bm = bmesh.from_edit_mesh(obj.data) if is_edit_mode else None
+    view_layer = bpy.context.view_layer
+    prev_active = None
+    prev_selected = []
+    if not was_edit_mode:
+        prev_active = view_layer.objects.active
+        prev_selected = list(getattr(bpy.context, "selected_objects", []))
+        for o in prev_selected:
+            o.select_set(False)
+        obj.select_set(True)
+        view_layer.objects.active = obj
+        bpy.ops.object.mode_set(mode='EDIT')
 
-    created_materials = []
+    created_materials: List[bpy.types.Material] = []
+    seen_created: Set[str] = set()
 
-    for mat_idx, face_indices in mat_index_to_faces.items():
-        if mat_idx >= len(obj.material_slots) or not obj.material_slots[mat_idx].material:
-            continue
+    try:
+        bm = bmesh.from_edit_mesh(obj.data)
+        bm.faces.ensure_lookup_table()
 
-        orig_mat = obj.material_slots[mat_idx].material
+        selected_faces = [f for f in bm.faces if f.select]
+        if not selected_faces:
+            selected_faces = [f for f in bm.faces if any(v.select for v in f.verts)]
+        if not selected_faces:
+            return []
 
-        if "_EyeThroughHair" in orig_mat.name or "_SeeThrough" in orig_mat.name:
-            new_mat = orig_mat
-            new_slot_idx = mat_idx
-        else:
-            target_name = f"{orig_mat.name}{EYE_THROUGH_HAIR_SUFFIX}"
-            # 1. Reuse existing slot on this object if already present
-            existing_slot = next(
-                (i for i, s in enumerate(obj.material_slots) if s.material and s.material.name == target_name),
-                None
-            )
-            if existing_slot is not None:
-                new_mat = obj.material_slots[existing_slot].material
-                new_slot_idx = existing_slot
+        faces_to_dup: List[bmesh.types.BMFace] = []
+        existing_eth_faces: List[bmesh.types.BMFace] = []
+        for f in selected_faces:
+            if f.material_index < 0 or f.material_index >= len(obj.material_slots):
+                continue
+            mat = obj.material_slots[f.material_index].material
+            if not mat:
+                continue
+            if _is_eye_through_hair_material(mat):
+                existing_eth_faces.append(f)
             else:
-                # 2. Reuse existing material from scene if already created
-                existing_mat = bpy.data.materials.get(target_name)
-                if existing_mat:
-                    new_mat = existing_mat
-                    obj.data.materials.append(new_mat)
-                    new_slot_idx = len(obj.material_slots) - 1
-                else:
-                    # 3. Create first duplicate cleanly
-                    new_mat = orig_mat.copy()
-                    new_mat.name = target_name
-                    obj.data.materials.append(new_mat)
-                    new_slot_idx = len(obj.material_slots) - 1
+                faces_to_dup.append(f)
 
-        configure_material_eye_through_hair_nodes(new_mat)
-        if hasattr(new_mat, "surface_render_method"):
-            new_mat.surface_render_method = 'DITHERED'
-        if hasattr(new_mat, "blend_method"):
-            try:
-                new_mat.blend_method = 'HASHED'
-            except Exception:
-                pass
-        created_materials.append(new_mat)
-        _assign_to_genshin_other_material_option(obj, new_mat)
+        # Reconfigure already-isolated eye-through-hair faces without duplicating again
+        for f in existing_eth_faces:
+            mat = obj.material_slots[f.material_index].material
+            if mat.name not in seen_created:
+                configure_material_eye_through_hair_nodes(mat)
+                _set_dithered_blend(mat)
+                _assign_to_genshin_other_material_option(obj, mat)
+                created_materials.append(mat)
+                seen_created.add(mat.name)
 
-        # Reassign faces to new material slot
-        target_indices_set = set(face_indices)
-        if is_edit_mode and bm:
-            bm.faces.ensure_lookup_table()
-            for f in bm.faces:
-                if f.index in target_indices_set:
-                    f.material_index = new_slot_idx
-        else:
-            for poly in obj.data.polygons:
-                if poly.index in target_indices_set:
-                    poly.material_index = new_slot_idx
+        if faces_to_dup:
+            # Capture original materials before appending new slots shifts slot count
+            face_orig_mats = [obj.material_slots[f.material_index].material for f in faces_to_dup]
+            verts_to_dup = list({v for f in faces_to_dup for v in f.verts})
+            edges_to_dup = list({e for f in faces_to_dup for e in f.edges})
+            geom_to_dup = verts_to_dup + edges_to_dup + faces_to_dup
 
-    if is_edit_mode and bm:
+            ret = bmesh.ops.duplicate(bm, geom=geom_to_dup)
+            dup_faces = [e for e in ret["geom"] if isinstance(e, bmesh.types.BMFace)]
+
+            for elem in geom_to_dup:
+                elem.select = False
+            for f in existing_eth_faces:
+                f.select = True
+                for e in f.edges:
+                    e.select = True
+                for v in f.verts:
+                    v.select = True
+            for elem in ret["geom"]:
+                elem.select = True
+
+            # Map duplicated faces to their respective source material index
+            mat_index_to_dup_faces: dict = {}
+            for df in dup_faces:
+                mat_index_to_dup_faces.setdefault(df.material_index, []).append(df)
+
+            orig_by_index = {}
+            for f, mat in zip(faces_to_dup, face_orig_mats):
+                orig_by_index.setdefault(f.material_index, mat)
+
+            for mat_idx, grp_faces in mat_index_to_dup_faces.items():
+                orig_mat = orig_by_index.get(mat_idx)
+                if not orig_mat:
+                    continue
+                new_mat, new_slot_idx = _get_or_create_eye_through_hair_slot(obj, orig_mat)
+                if new_mat.name not in seen_created:
+                    configure_material_eye_through_hair_nodes(new_mat)
+                    _set_dithered_blend(new_mat)
+                    _assign_to_genshin_other_material_option(obj, new_mat)
+                    created_materials.append(new_mat)
+                    seen_created.add(new_mat.name)
+
+                for df in grp_faces:
+                    df.material_index = new_slot_idx
+
+        bm.select_flush_mode()
         bmesh.update_edit_mesh(obj.data)
-    else:
-        obj.data.update()
+    finally:
+        if not was_edit_mode:
+            bpy.ops.object.mode_set(mode='OBJECT')
+            for o in list(getattr(bpy.context, "selected_objects", [])):
+                o.select_set(False)
+            for o in prev_selected:
+                if o and o.name in bpy.data.objects:
+                    o.select_set(True)
+            if prev_active and prev_active.name in bpy.data.objects:
+                view_layer.objects.active = prev_active
 
     return created_materials
 
@@ -515,7 +596,7 @@ class CSW_OT_EyeThroughHair(bpy.types.Operator):
     """Configure eye through hair effect for selected mesh faces with AOVs and Compositor"""
     bl_idname = "setup_wizard.eye_through_hair"
     bl_label = "Eye Through Hair"
-    bl_description = "Duplicate materials for selected eye/eyebrow faces across objects, add AOVs, set hair to Blended, and set Compositor to Always"
+    bl_description = "Duplicate selected eye/eyebrow faces and assign EyeThroughHair materials to the duplicates, add AOVs, set hair to Blended, and set Compositor to Always"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
