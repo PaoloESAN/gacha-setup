@@ -256,7 +256,7 @@ def _setup_lighting_panel_and_empties(rig_obj, char_name, char_coll, wgt_coll):
                     var.name = 'is_visible'
                     var.type = 'SINGLE_PROP'
                     var.targets[0].id_type = 'ARMATURE'
-                    var.targets[0].id = rig_obj
+                    var.targets[0].id = rig_obj.data
                     var.targets[0].data_path = 'collections["Lighting"].is_visible'
                 except Exception:
                     pass
@@ -317,9 +317,8 @@ def _organize_bone_collections(rig_obj, bone_map, orig_order):
             assign_only(bn, 'Torso (IK)')
         elif bn.startswith('spine_fk'):
             assign_only(bn, 'Torso (FK)')
-        elif bn.endswith('_master.L') or bn.endswith('_master.R') or bn.endswith('_ik.L') or bn.endswith('_ik.R'):
-            if bn.startswith(('thumb', 'f_')):
-                assign_only(bn, 'Fingers')
+        elif bn.startswith(('thumb', 'f_')) and (bn.endswith('_master.L') or bn.endswith('_master.R') or bn.endswith('_ik.L') or bn.endswith('_ik.R')):
+            assign_only(bn, 'Fingers')
         elif bn.startswith(('thumb.', 'f_index.', 'f_middle.', 'f_ring.', 'f_pinky.')):
             assign_only(bn, 'Fingers (Detail)')
         elif bn in ('upper_arm_parent.L', 'upper_arm_ik_target.L', 'hand_ik.L', 'shoulder.L', 'upper_arm_ik.L'):
@@ -332,12 +331,16 @@ def _organize_bone_collections(rig_obj, bone_map, orig_order):
             assign_only(bn, 'Arm.R (FK)')
         elif bn in ('tail', 'tail.001', 'tail.002', 'tail.003', 'tail.004', 'tail_master'):
             assign_only(bn, 'Tail')
+        elif bn.startswith('LimitDistance-'):
+            assign_only(bn, 'Other')
+            b.hide = True
         elif bn in (
             LightingPanelNames.Bones.LIGHTING_PANEL,
             'Fresnel', 'Ambient', 'SoftLit', 'Lit', 'SoftShadow', 'Shadow',
             'RimShadow', 'Rim Lit', 'RimX', 'RimY',
             'RimLitPin', 'ShadowPin', 'LitPin', 'AmbientPin',
             'RimShadowPin', 'SoftShadowPin', 'SoftLitPin', 'FresnelPin',
+            'ShadowOffset', 'FresnelSize', 'FresnelToggle',
         ):
             assign_only(bn, 'Lighting')
 
@@ -480,8 +483,8 @@ def rig_custom_npc(
                 except Exception:
                     pass
 
-    _organize_bone_collections(armature, bone_map, orig_order)
     _setup_lighting_panel_and_empties(armature, char_name, char_coll, wgt_coll)
+    _organize_bone_collections(armature, bone_map, orig_order)
 
     wgt_coll.hide_select = True
     wgt_coll.hide_viewport = True
