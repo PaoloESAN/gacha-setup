@@ -701,22 +701,14 @@ def hi3_face_rig_main():
         print("[HI3 Face Rig] Skipped: character has no facial shape keys beyond Basis.")
         return
 
-    # 1. Import WuWa 3D Face Panel
-    import os
-    cur_dir = os.path.dirname(os.path.abspath(__file__))
-    blend_path = os.path.join(cur_dir, "face_panel_wuwa.blend")
-    if os.path.exists(blend_path):
-        try:
-            from setup_wizard.character_rig_setup.wuwa_face_panel import import_wuwa_face_panel_blend
-            import_wuwa_face_panel_blend(bpy.context, face_meshes, armature, head_name)
-            if hasattr(armature.data, 'collections'):
-                fc = armature.data.collections.get("Face")
-                if fc:
-                    fc.is_visible = True
-            print("[HI3 FACE RIG] Successfully created face rig using face_panel_wuwa.blend!")
+    # 1. Build WuWa V3 on-face rig (EyeTracker in center, expressions around face)
+    try:
+        from setup_wizard.character_rig_setup.wuwa_face_on_model import build_wuwa_face_on_model
+        if build_wuwa_face_on_model(bpy.context, armature, face_meshes, head_name):
+            print("[HI3 FACE RIG] Successfully created face rig using WuWa on-face rig!")
             return
-        except Exception as ex:
-            print(f"[HI3 FACE RIG] Notice importing blend face panel: {ex}. Falling back to procedural sliders.")
+    except Exception as ex:
+        print(f"[HI3 FACE RIG] Notice building WuWa on-face rig: {ex}. Falling back to procedural sliders.")
 
     if not face_meshes:
         print("[HI3 Face Rig] Notice: No mesh with shape keys found for procedural sliders.")
