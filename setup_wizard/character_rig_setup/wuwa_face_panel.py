@@ -165,11 +165,9 @@ def feature_centroid(mesh_obj, key_names, side=None):
     if not idx:
         return None
 
-    is_already_single_sided = False
-    if key.name:
-        kn_low = key.name.lower()
-        if "_l" in kn_low or ".l" in kn_low or "left" in kn_low or "_r" in kn_low or ".r" in kn_low or "right" in kn_low:
-            is_already_single_sided = True
+    is_already_single_sided = bool(
+        re.search(r'(?:^|[_.])(l|r|left|right)(?:$|[_.])', (key.name or '').lower())
+    )
 
     if side in ('L', 'R') and not is_already_single_sided:
         xs = sorted(basis.data[i].co.x for i in idx)
@@ -1155,7 +1153,10 @@ def setup_wuwa_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_s
 SHAPE_KEYS_TO_SPLIT = [
     "E_Close", "E_Anger", "E_Sad", "E_Focus", "E_Insipid",
     "P_M_Scale_Add",
-    "Pupil_L", "Pupil_R", "Pupil_Up", "Pupil_Down"
+    "Pupil_L", "Pupil_R", "Pupil_Up", "Pupil_Down",
+    "Eye_Lookat_Left", "Eye_Lookat_Right", "Eye_Lookat_Top", "Eye_Lookat_Bottom",
+    "Eye_Lookat_Close", "Eye_Half01", "Eye_Contempt", "Eye_Wail", "Eye_Hostitlity", "Eye_Hostility",
+    "Mouth_Smile01",
 ]
 
 

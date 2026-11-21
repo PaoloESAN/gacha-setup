@@ -289,6 +289,7 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
                 )
                 return {'SKIP'}
             print("[SETUP WIZARD] No Material Data JSON files found. Skipping.")
+            self._apply_outline_diffuse_fallback_if_unmodified()
             return {'FINISHED'}
 
         self.validate_num_of_file_inputs_for_targeted_material_data_import(material_data_directory.files)
@@ -489,8 +490,32 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
                     if lm_node and lm_node.type == 'TEX_IMAGE':
                         lm_node.image = None
 
-        # Apply diffuse fallback only to outline materials that still hold the unmodified
-        # template sentinel colors (and already have their own diffuse image).
+        self._apply_outline_diffuse_fallback_if_unmodified()
+
+        return {'FINISHED'}
+
+    @staticmethod
+    def _find_diffuse_tex_node(node_tree):
+        """Find the diffuse TEX_IMAGE node in a material node tree, excluding maps and masks."""
+        if not node_tree:
+            return None
+        candidates = []
+        for n in node_tree.nodes:
+            if getattr(n, 'type', '') != 'TEX_IMAGE':
+                continue
+            node_id = (f"{getattr(n, 'name', '') or ''} {getattr(n, 'label', '') or ''}").lower()
+            if 'diffuse' not in node_id:
+                continue
+            if any(k in node_id for k in ('lightmap', 'normal', 'ramp', 'mask')):
+                continue
+            candidates.append(n)
+        if not candidates:
+            return None
+        with_image = [n for n in candidates if getattr(n, 'image', None)]
+        return (with_image or candidates)[0]
+
+    def _apply_outline_diffuse_fallback_if_unmodified(self):
+        """Link diffuse Color to Outline Color 1..5 when all template sentinel colors are unmodified."""
         for mat in bpy.data.materials:
             if 'outline' not in mat.name.lower() or 'face' in mat.name.lower() or not mat.node_tree:
                 continue
@@ -514,11 +539,14 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
             if MaterialDataApplier._defaults_match_sentinels(indexed):
                 targets = [indexed[i] for i in (1, 2, 3, 4, 5) if i in indexed]
                 if targets and all(len(list(inp.links)) == 0 for inp in targets):
-                    diffuse_node = None
-                    for n in mat.node_tree.nodes:
-                        if n.type == 'TEX_IMAGE' and 'diffuse' in (n.name + ' ' + (n.label or '')).lower():
-                            diffuse_node = n
-                            break
+                    diffuse_node = self._find_diffuse_tex_node(mat.node_tree)
+                    if diffuse_node and not diffuse_node.image:
+                        base_mat_name = mat.name.replace(' Outlines', '').replace(' outlines', '')
+                        base_mat = bpy.data.materials.get(base_mat_name)
+                        if base_mat and base_mat.node_tree:
+                            base_diffuse = self._find_diffuse_tex_node(base_mat.node_tree)
+                            if base_diffuse and base_diffuse.image:
+                                diffuse_node.image = base_diffuse.image
                     if diffuse_node and diffuse_node.image:
                         color_out = diffuse_node.outputs.get('Color') or diffuse_node.outputs[0]
                         color_out.hide = False
@@ -526,8 +554,6 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
                             inp.hide = False
                             mat.node_tree.links.new(color_out, inp)
                         mat[MaterialDataApplier.OUTLINE_DIFFUSE_FALLBACK_TAG] = True
-
-        return {'FINISHED'}
 
     def __customized_skirk_starcloak_material_data_setup(self, material_data_parser, character_type, file, body_part):
         material, outlines_material, night_soul_outlines_material = self.find_material_and_outline_material_for_body_part(body_part)
@@ -1043,6 +1069,8 @@ class HonkaiImpact3rdMaterialDataImporter(GameMaterialDataImporter):
         if not isinstance(jdata, dict):
             return colors, floats, keywords
         kw = jdata.get("m_ShaderKeywords")
+        if kw is None:
+            kw = jdata.get("keywords")
         if isinstance(kw, list):
             keywords = [str(x) for x in kw]
         elif isinstance(kw, str):
@@ -1071,6 +1099,25 @@ class HonkaiImpact3rdMaterialDataImporter(GameMaterialDataImporter):
                             float(v.get("b", 1.0)),
                             float(v.get("a", 1.0)),
                         )
+        simple_colors = jdata.get("colors")
+        if isinstance(simple_colors, dict):
+            for k, v in simple_colors.items():
+                if k in colors:
+                    continue
+                if isinstance(v, (list, tuple)) and len(v) >= 3:
+                    colors[k] = (
+                        float(v[0]),
+                        float(v[1]),
+                        float(v[2]),
+                        float(v[3]) if len(v) > 3 else 1.0,
+                    )
+                elif isinstance(v, dict) and "r" in v:
+                    colors[k] = (
+                        float(v.get("r", 1.0)),
+                        float(v.get("g", 1.0)),
+                        float(v.get("b", 1.0)),
+                        float(v.get("a", 1.0)),
+                    )
 
         raw_floats = saved.get("m_Floats")
         if isinstance(raw_floats, dict):
@@ -1084,6 +1131,11 @@ class HonkaiImpact3rdMaterialDataImporter(GameMaterialDataImporter):
                     v = entry.get("Value") or entry.get("second")
                     if k and isinstance(v, (int, float)):
                         floats[k] = float(v)
+        simple_floats = jdata.get("floats")
+        if isinstance(simple_floats, dict):
+            for k, v in simple_floats.items():
+                if k not in floats and isinstance(v, (int, float)):
+                    floats[k] = float(v)
 
         return colors, floats, keywords
 
@@ -1124,6 +1176,31 @@ class HonkaiImpact3rdMaterialDataImporter(GameMaterialDataImporter):
                 "path_id": tex_ref.get("m_PathID", 0),
                 "is_null": is_null,
             }
+        simple_textures = jdata.get("textures")
+        if isinstance(simple_textures, list):
+            for entry in simple_textures:
+                if not isinstance(entry, dict):
+                    continue
+                k = entry.get("slot")
+                if not k or k in tex_envs:
+                    continue
+                tiling = entry.get("tiling") or [1.0, 1.0]
+                offset = entry.get("offset") or [0.0, 0.0]
+                sx = float(tiling[0]) if len(tiling) > 0 else 1.0
+                sy = float(tiling[1]) if len(tiling) > 1 else 1.0
+                ox = float(offset[0]) if len(offset) > 0 else 0.0
+                oy = float(offset[1]) if len(offset) > 1 else 0.0
+                f_path = str(entry.get("file") or "")
+                t_name = str(entry.get("name") or "")
+                is_null = bool(entry.get("empty", False)) or (not f_path and not t_name)
+                tex_envs[k] = {
+                    "scale": (sx, sy),
+                    "offset": (ox, oy),
+                    "name": t_name,
+                    "file": f_path,
+                    "path_id": 0,
+                    "is_null": is_null,
+                }
         return tex_envs
 
     @staticmethod
@@ -1238,6 +1315,98 @@ class HonkaiImpact3rdMaterialDataImporter(GameMaterialDataImporter):
         ng["_hi3_eye_atlas_v1"] = True
         return ng
 
+    @staticmethod
+    def _ensure_mouth_atlas_node_group():
+        """Creates or returns the 'HI3 Mouth Atlas Controller' ShaderNodeTree.
+
+        Maps a 'Mouth Type' index (1..16) on a 4x4 HI3 mouth texture sheet:
+        col = idx % 4, row = floor(idx / 4).
+        """
+        ng_name = "HI3 Mouth Atlas Controller"
+        ng = bpy.data.node_groups.get(ng_name)
+        if ng and ng.get("_hi3_mouth_atlas_v1"):
+            return ng
+        if ng:
+            ng.nodes.clear()
+        else:
+            ng = bpy.data.node_groups.new(ng_name, "ShaderNodeTree")
+
+        if hasattr(ng, "interface"):
+            ng.interface.clear()
+            ng.interface.new_socket(name="UV", in_out="INPUT", socket_type="NodeSocketVector")
+            s_type = ng.interface.new_socket(name="Mouth Type", in_out="INPUT", socket_type="NodeSocketInt")
+            s_type.min_value = 1
+            s_type.max_value = 16
+            s_type.default_value = 1
+            s_scale = ng.interface.new_socket(name="Scale", in_out="INPUT", socket_type="NodeSocketVector")
+            s_scale.default_value = (0.25, 0.25, 1.0)
+            ng.interface.new_socket(name="Vector", in_out="OUTPUT", socket_type="NodeSocketVector")
+        else:
+            ng.inputs.clear()
+            ng.outputs.clear()
+            ng.inputs.new("NodeSocketVector", "UV")
+            s_type = ng.inputs.new("NodeSocketInt", "Mouth Type")
+            s_type.min_value = 1
+            s_type.max_value = 16
+            s_type.default_value = 1
+            s_scale = ng.inputs.new("NodeSocketVector", "Scale")
+            s_scale.default_value = (0.25, 0.25, 1.0)
+            ng.outputs.new("NodeSocketVector", "Vector")
+
+        n_in = ng.nodes.new("NodeGroupInput")
+        n_in.location = (-800, 0)
+        n_out = ng.nodes.new("NodeGroupOutput")
+        n_out.location = (600, 0)
+
+        def _math(op, loc, val1=None, val2=None):
+            m = ng.nodes.new("ShaderNodeMath")
+            m.operation = op
+            m.location = loc
+            if val1 is not None:
+                m.inputs[0].default_value = val1
+            if val2 is not None and len(m.inputs) > 1:
+                m.inputs[1].default_value = val2
+            return m
+
+        m_min16 = _math('MINIMUM', (-600, 100), val2=16.0)
+        ng.links.new(n_in.outputs["Mouth Type"], m_min16.inputs[0])
+        m_max1 = _math('MAXIMUM', (-450, 100), val2=1.0)
+        ng.links.new(m_min16.outputs[0], m_max1.inputs[0])
+        m_sub1 = _math('SUBTRACT', (-300, 100), val2=1.0)
+        ng.links.new(m_max1.outputs[0], m_sub1.inputs[0])
+        m_idx = _math('FLOOR', (-150, 100))
+        ng.links.new(m_sub1.outputs[0], m_idx.inputs[0])
+
+        # col = idx % 4.0 -> off_x = col * 0.25
+        m_mod4 = _math('MODULO', (0, 180), val2=4.0)
+        ng.links.new(m_idx.outputs[0], m_mod4.inputs[0])
+        m_off_x = _math('MULTIPLY', (200, 180), val2=0.25)
+        ng.links.new(m_mod4.outputs[0], m_off_x.inputs[0])
+
+        # row = floor(idx / 4.0) -> off_y = row * 0.25
+        m_div4 = _math('DIVIDE', (0, -60), val2=4.0)
+        ng.links.new(m_idx.outputs[0], m_div4.inputs[0])
+        m_row = _math('FLOOR', (150, -60))
+        ng.links.new(m_div4.outputs[0], m_row.inputs[0])
+        m_off_y = _math('MULTIPLY', (300, -60), val2=0.25)
+        ng.links.new(m_row.outputs[0], m_off_y.inputs[0])
+
+        n_comb = ng.nodes.new("ShaderNodeCombineXYZ")
+        n_comb.location = (420, 0)
+        ng.links.new(m_off_x.outputs[0], n_comb.inputs["X"])
+        ng.links.new(m_off_y.outputs[0], n_comb.inputs["Y"])
+
+        n_map = ng.nodes.new("ShaderNodeMapping")
+        n_map.vector_type = 'POINT'
+        n_map.location = (500, 100)
+        ng.links.new(n_in.outputs["UV"], n_map.inputs["Vector"])
+        ng.links.new(n_in.outputs["Scale"], n_map.inputs["Scale"])
+        ng.links.new(n_comb.outputs["Vector"], n_map.inputs["Location"])
+        ng.links.new(n_map.outputs["Vector"], n_out.inputs["Vector"])
+
+        ng["_hi3_mouth_atlas_v1"] = True
+        return ng
+
     @classmethod
     def _apply_uv_scale_offset(cls, mat, scale, offset, orig_low=""):
         if not mat or not mat.use_nodes or not mat.node_tree:
@@ -1285,6 +1454,34 @@ class HonkaiImpact3rdMaterialDataImporter(GameMaterialDataImporter):
                 grp_node.inputs["Eye Type"].default_value = initial_type
                 mat["_hi3_eye_controller_init"] = True
             mat["_hi3_eye_side"] = "L" if is_left else "R"
+            nt.links.new(uv_out, grp_node.inputs["UV"])
+            for tex_name in ("Image Texture.001", "Outline_Diffuse"):
+                tex_node = nt.nodes.get(tex_name)
+                if tex_node and "Vector" in tex_node.inputs:
+                    nt.links.new(grp_node.outputs["Vector"], tex_node.inputs["Vector"])
+            return
+
+        is_mouth_4x4 = ("mouth" in orig_low and abs(sx - 0.25) <= 1e-3 and abs(sy - 0.25) <= 1e-3)
+        if is_mouth_4x4:
+            old_map = nt.nodes.get("HI3_Atlas_Mapping")
+            if old_map and old_map.type != 'GROUP':
+                nt.nodes.remove(old_map)
+            ctrl_ng = cls._ensure_mouth_atlas_node_group()
+            grp_node = nt.nodes.get("HI3_Mouth_Atlas_Controller")
+            if not grp_node or grp_node.type != 'GROUP':
+                grp_node = nt.nodes.new("ShaderNodeGroup")
+                grp_node.name = "HI3_Mouth_Atlas_Controller"
+            grp_node.node_tree = ctrl_ng
+            grp_node.label = "HI3 Mouth Controller"
+            grp_node.location = (uv_group.location.x + 180, uv_group.location.y)
+            if "Scale" in grp_node.inputs:
+                grp_node.inputs["Scale"].default_value = (sx, sy, 1.0)
+            col_idx = max(0, min(3, int(round(ox / 0.25))))
+            row_idx = max(0, min(3, int(round(oy / 0.25))))
+            initial_type = row_idx * 4 + col_idx + 1
+            if "Mouth Type" in grp_node.inputs and not mat.get("_hi3_mouth_controller_init"):
+                grp_node.inputs["Mouth Type"].default_value = initial_type
+                mat["_hi3_mouth_controller_init"] = True
             nt.links.new(uv_out, grp_node.inputs["UV"])
             for tex_name in ("Image Texture.001", "Outline_Diffuse"):
                 tex_node = nt.nodes.get(tex_name)
@@ -1345,17 +1542,28 @@ class HonkaiImpact3rdMaterialDataImporter(GameMaterialDataImporter):
                         continue
                     full_p = os.path.join(root, f)
                     stem = os.path.splitext(f)[0].lower()
-                    if stem not in material_json_map:
-                        try:
-                            with open(full_p, "r", encoding="utf-8") as jf:
-                                jdata = json.load(jf)
-                            if isinstance(jdata, dict) and "m_SavedProperties" in jdata:
+                    try:
+                        with open(full_p, "r", encoding="utf-8") as jf:
+                            jdata = json.load(jf)
+                        if isinstance(jdata, dict) and (
+                            "m_SavedProperties" in jdata
+                            or any(k in jdata for k in ("floats", "colors", "textures", "keywords"))
+                        ):
+                            if stem not in material_json_map:
                                 material_json_map[stem] = jdata
-                                m_name = (jdata.get("m_Name") or "").lower()
-                                if m_name:
-                                    material_json_map[m_name] = jdata
-                        except Exception:
-                            pass
+                            m_name = (jdata.get("m_Name") or jdata.get("name") or "").lower()
+                            if m_name and m_name not in material_json_map:
+                                material_json_map[m_name] = jdata
+                        elif isinstance(jdata, list):
+                            for entry in jdata:
+                                if isinstance(entry, dict) and any(
+                                    k in entry for k in ("m_SavedProperties", "floats", "colors", "textures", "keywords")
+                                ):
+                                    m_name = (entry.get("m_Name") or entry.get("name") or "").lower()
+                                    if m_name and m_name not in material_json_map:
+                                        material_json_map[m_name] = entry
+                    except Exception:
+                        pass
 
         def _set_sock(node, name, val):
             if node and name in node.inputs:
@@ -1379,6 +1587,7 @@ class HonkaiImpact3rdMaterialDataImporter(GameMaterialDataImporter):
             orig_m = (mat.get("_original_material_name") or mat.name.replace("ImpactToon - ", "").replace(" Outlines", "")).strip()
             orig_low = orig_m.lower()
             part_key = 'face' if ('face' in orig_low and 'dualface' not in orig_low) else \
+                       'eyeshadow' if ('eyeshadow' in orig_low or 'shadow_eye' in orig_low) else \
                        'hair' if 'hair' in orig_low else \
                        'eye' if 'eye' in orig_low else \
                        'body' if 'body' in orig_low else orig_low.split('_')[-1]
@@ -1405,11 +1614,12 @@ class HonkaiImpact3rdMaterialDataImporter(GameMaterialDataImporter):
             if is_atlas:
                 cls._apply_uv_scale_offset(mat, uv_scale, uv_offset, orig_low=orig_low)
                 if "eye" in orig_low:
-                    tex_id = main_tex_info.get("name") or main_tex_info.get("path_id")
+                    tex_id = main_tex_info.get("file") or main_tex_info.get("name") or main_tex_info.get("path_id")
                     if tex_id:
                         eye_atlas_tex_ids.add(tex_id)
 
             is_eye_decal = ("lefteye" in orig_low or "righteye" in orig_low or ("eye" in orig_low and is_atlas))
+            is_mouth_decal = ("mouth" in orig_low and is_atlas)
             is_eyeshadow_overlay = ("eyeshadow" in orig_low or "shadow_eye" in orig_low) and main_tex_is_null
 
             use_alpha = 1.0 if (
@@ -1417,11 +1627,12 @@ class HonkaiImpact3rdMaterialDataImporter(GameMaterialDataImporter):
                 or floats.get("_EnableAlphaTest", 0.0) == 1.0
                 or floats.get("_AlphaClip", 0.0) == 1.0
                 or is_eye_decal
+                or is_mouth_decal
                 or is_eyeshadow_overlay
             ) else 0.0
-            cutoff = floats.get("_AlphaClipThreshold", floats.get("_CutOff", 0.05 if is_eye_decal else 0.5))
+            cutoff = floats.get("_AlphaClipThreshold", floats.get("_CutOff", 0.05 if (is_eye_decal or is_mouth_decal) else 0.5))
 
-            if is_eye_decal or is_eyeshadow_overlay:
+            if is_eye_decal or is_mouth_decal or is_eyeshadow_overlay:
                 if hasattr(mat, "surface_render_method"):
                     try:
                         mat.surface_render_method = 'BLENDED'
@@ -1429,7 +1640,7 @@ class HonkaiImpact3rdMaterialDataImporter(GameMaterialDataImporter):
                         pass
 
             if "mouth" in orig_low and is_atlas:
-                tex_id = main_tex_info.get("name") or main_tex_info.get("path_id")
+                tex_id = main_tex_info.get("file") or main_tex_info.get("name") or main_tex_info.get("path_id")
                 if tex_id:
                     mouth_materials_using_eye_atlas.add((mat.name, tex_id))
 
@@ -1513,7 +1724,7 @@ class HonkaiImpact3rdMaterialDataImporter(GameMaterialDataImporter):
 
                 _set_sock(sh_node, "_LightArea", floats.get("_LightArea", 0.51))
                 _set_sock(sh_node, "_Shininess", max(float(floats.get("_Shininess", 10.0) or 10.0), 0.1))
-                _set_sock(sh_node, "_SpecMulti", floats.get("_SpecMulti", 0.0))
+                _set_sock(sh_node, "_SpecMulti", 0.0)
                 lsc = colors.get("_LightSpecColor", (1.0, 1.0, 1.0, 1.0))
                 _set_sock(sh_node, "_LightSpecColor", (lsc[0], lsc[1], lsc[2], 1.0))
 

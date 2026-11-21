@@ -89,16 +89,47 @@ class GenshinImpactTextureImporterFacade(GameTextureImporter):
             return {'SKIP'}
 
         texture_importer_type = ''
-        
+
+        def _is_avatar_token(name):
+            low = (name or '').lower()
+            return low.startswith('avatar_') and 'avatar_default_mat' not in low
+
+        has_avatar_asset = (
+            any(
+                _is_avatar_token(m.name) or _is_avatar_token(m.get('_original_material_name', ''))
+                for m in bpy.data.materials
+            )
+            or any(_is_avatar_token(obj.name) for obj in bpy.data.objects)
+        )
+        has_monster_asset = (
+            any(
+                'monster' in (m.name or '').lower()
+                or 'monster' in str(m.get('_original_material_name', '')).lower()
+                for m in bpy.data.materials
+            )
+            or any('monster' in obj.name.lower() for obj in bpy.data.objects)
+        )
+        has_npc_asset = (
+            any(
+                (m.name or '').lower().startswith('npc_')
+                or str(m.get('_original_material_name', '')).lower().startswith('npc_')
+                for m in bpy.data.materials
+            )
+            or any(obj.name.lower().startswith('npc_') for obj in bpy.data.objects)
+        )
         is_avatar = (
             any('avatar' in material_name.lower() and 'avatar_default_mat' not in material_name.lower() for material_name in bpy.data.materials.keys()) or
             any('avatar' in obj.name.lower() for obj in bpy.data.objects) or
             any(k in bpy.data.materials for k in ['Body', 'Hair', 'Face', 'HoYoverse - Genshin Body', 'HoYoverse - Genshin Hair', 'HoYoverse - Genshin Face'])
         )
-        if is_avatar:
+        if has_avatar_asset:
             texture_importer_type = TextureImporterType.AVATAR
-        elif [material_name for material_name, material in bpy.data.materials.items() if 'Monster'.lower() in material_name.lower()]:
+        elif has_monster_asset:
             texture_importer_type = TextureImporterType.MONSTER
+        elif has_npc_asset:
+            texture_importer_type = TextureImporterType.NPC
+        elif is_avatar:
+            texture_importer_type = TextureImporterType.AVATAR
         else:
             texture_importer_type = TextureImporterType.NPC
 
@@ -139,7 +170,7 @@ class GenshinImpactTextureImporterFacade(GameTextureImporter):
             If an asset does exist, leave it as the default value (1.0).
         '''
         if (texture_importer_type is TextureImporterType.NPC or texture_importer_type is TextureImporterType.MONSTER) and \
-            not any('shadow_ramp' in filename for filename in scan_directory_for_textures(directory)[0]):
+            not any('shadow_ramp' in filename.lower() for filename in scan_directory_for_textures(directory)[0]):
             ShaderConfigurator().update_shader_value(
                 materials = [
                     bpy.data.materials.get('miHoYo - Genshin Hair'),
@@ -150,7 +181,17 @@ class GenshinImpactTextureImporterFacade(GameTextureImporter):
                 node_name = 'miHoYo - Genshin Impact',
                 input_name = 'Use Shadow Ramp',
                 value = 0
-        )
+            )
+            for mat in bpy.data.materials:
+                if not getattr(mat, 'use_nodes', False) or not mat.node_tree:
+                    continue
+                if 'outline' in mat.name.lower():
+                    continue
+                for n in mat.node_tree.nodes:
+                    if n.type == 'GROUP' and 'Toggle Shadow Ramp' in n.inputs:
+                        n.inputs['Toggle Shadow Ramp'].default_value = False
+                    elif n.type == 'GROUP' and 'Use Shadow Ramp' in n.inputs:
+                        n.inputs['Use Shadow Ramp'].default_value = 0.0
 
         self.blender_operator.report({'INFO'}, 'Imported textures')
         if cache_enabled and directory:
@@ -2717,6 +2758,21 @@ class HonkaiImpact3rdTextureImporterFacade(GameTextureImporter):
                         t_name = tex_info.get("Name") or ""
                         if t_name:
                             tex_map[k] = t_name
+        # Simplified Unity Shader Extractor format ("textures" list)
+        simple_textures = json_data.get("textures")
+        if isinstance(simple_textures, list):
+            for entry in simple_textures:
+                if not isinstance(entry, dict):
+                    continue
+                if entry.get("empty"):
+                    continue
+                slot = entry.get("slot")
+                if not slot:
+                    continue
+                f_path = entry.get("file") or ""
+                t_name = os.path.splitext(os.path.basename(f_path))[0] if f_path else (entry.get("name") or "")
+                if t_name and slot not in tex_map:
+                    tex_map[slot] = t_name
         return tex_map
 
     def import_textures(self):
@@ -2774,17 +2830,28 @@ class HonkaiImpact3rdTextureImporterFacade(GameTextureImporter):
                         texture_file_map[f_low] = full_p
                     elif f_low.endswith('.json'):
                         stem = os.path.splitext(f)[0].lower()
-                        if stem not in material_json_map:
-                            try:
-                                with open(full_p, 'r', encoding='utf-8') as jf:
-                                    jdata = json.load(jf)
-                                if isinstance(jdata, dict) and "m_SavedProperties" in jdata:
+                        try:
+                            with open(full_p, 'r', encoding='utf-8') as jf:
+                                jdata = json.load(jf)
+                            if isinstance(jdata, dict) and (
+                                "m_SavedProperties" in jdata
+                                or any(k in jdata for k in ("floats", "colors", "textures", "keywords"))
+                            ):
+                                if stem not in material_json_map:
                                     material_json_map[stem] = jdata
-                                    m_name = (jdata.get("m_Name") or "").lower()
-                                    if m_name:
-                                        material_json_map[m_name] = jdata
-                            except Exception:
-                                pass
+                                m_name = (jdata.get("m_Name") or jdata.get("name") or "").lower()
+                                if m_name and m_name not in material_json_map:
+                                    material_json_map[m_name] = jdata
+                            elif isinstance(jdata, list):
+                                for entry in jdata:
+                                    if isinstance(entry, dict) and any(
+                                        k in entry for k in ("m_SavedProperties", "floats", "colors", "textures", "keywords")
+                                    ):
+                                        m_name = (entry.get("m_Name") or entry.get("name") or "").lower()
+                                        if m_name and m_name not in material_json_map:
+                                            material_json_map[m_name] = entry
+                        except Exception:
+                            pass
 
         def load_img(fpath, colorspace='sRGB'):
             if not fpath or not os.path.isfile(fpath):
@@ -2831,6 +2898,7 @@ class HonkaiImpact3rdTextureImporterFacade(GameTextureImporter):
                 for n in mat.node_tree.nodes
             )
             part_key = 'face' if is_face else \
+                       'eyeshadow' if ('eyeshadow' in orig_low or 'shadow_eye' in orig_low) else \
                        'hair' if 'hair' in orig_low else \
                        'eye' if 'eye' in orig_low else \
                        'body' if 'body' in orig_low else orig_low.split('_')[-1]

@@ -18,6 +18,29 @@ def eye_bone_deforms_mesh(armature, bone_name):
             return True
     return False
 
+def nudge_hi3_eye_mouth_layers(objects, forward_offset=0.0015):
+    """Nudge separate HI3 2D eye/mouth overlay meshes slightly forward (-Y) to avoid face occlusion."""
+    import re
+    from mathutils import Vector
+
+    moved = []
+    target_names = {'eyel', 'eyer', 'mouth'}
+    for obj in objects:
+        if obj.type != 'MESH' or not obj.data or not obj.data.vertices:
+            continue
+        base_name = re.sub(r'\.\d+$', '', obj.name)
+        clean_name = re.sub(r'[^a-z0-9]', '', base_name.lower())
+        if clean_name not in target_names:
+            continue
+        # Convert world-space -Y offset into mesh local space
+        local_delta = obj.matrix_world.to_3x3().inverted_safe() @ Vector((0.0, -forward_offset, 0.0))
+        for vertex in obj.data.vertices:
+            vertex.co += local_delta
+        obj.data.update()
+        moved.append(obj.name)
+    return moved
+
+
 def hide_hi3_body_shadow_meshes(objects):
     hidden = []
     for obj in objects:

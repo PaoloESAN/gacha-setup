@@ -32,7 +32,7 @@ def extract_clean_character_name(raw_name):
     noise_tokens = {
         "avatar", "armature", "model", "mesh", "ui", "costume", "root", "fbx", "pmx",
         "uemodel", "uimodel", "uim", "00", "01", "02", "03", "04", "000", "grp", "group",
-        "skin", "joint", "rig", "char", "character",
+        "skin", "joint", "rig", "char", "character", "standard",
         "female", "male", "lady", "girl", "boy", "loli", "size01", "size02", "size03",
         "size04", "npc", "base", "main", "common", "high", "low", "body", "face", "hair",
         "eye", "eyes", "eyerig", "facerig",
@@ -48,7 +48,7 @@ def extract_clean_character_name(raw_name):
         "swimsuit", "outfit", "dress", "morpher", "morph",
     }
 
-    parts = [p for p in re.split(r"[_\-\s.]+", name) if p]
+    parts = [p for p in re.split(r"[_\-\s.\(\)\[\]\{\}]+", name) if p]
     filtered = []
     for p in parts:
         low = p.lower()
@@ -84,7 +84,7 @@ def extract_clean_character_name(raw_name):
 _GENERIC_RIG_NAME_RESULTS = {
     "armature", "character", "char", "root", "rig", "rigify", "metarig",
     "skeleton", "skel", "mesh", "model", "object", "collection", "scene",
-    "body", "face", "hair",
+    "body", "face", "hair", "standard",
     "lod", "lod0", "lod1", "lod2", "lod3",
 }
 
@@ -92,7 +92,7 @@ _GENERIC_RIG_NAME_RESULTS = {
 _STEM_NOISE_TOKENS = {
     "avatar", "art", "player", "chr", "s", "actor", "npc",
     "armature", "model", "mesh", "fbx", "pmx", "uemodel", "uimodel", "uim",
-    "ui", "costume", "root", "rig", "char", "character",
+    "ui", "costume", "root", "rig", "char", "character", "standard",
     "female", "male", "lady", "girl", "boy", "loli",
     "size01", "size02", "size03", "size04",
     "base", "main", "common", "high", "low", "grp", "group",
@@ -123,7 +123,28 @@ def _capitalize_name_token(token):
 
 
 def _stem_tokens(stem):
-    return [t for t in re.split(r"[_\-\s.]+", str(stem or "")) if t]
+    return [t for t in re.split(r"[_\-\s.\(\)\[\]\{\}]+", str(stem or "")) if t]
+
+
+def _filter_stem_tokens(stem):
+    """Return stem tokens excluding numeric tokens and generic noise words."""
+    survivors = []
+    for t in _stem_tokens(stem):
+        low = t.lower()
+        if low in _STEM_NOISE_TOKENS or t.isdigit():
+            continue
+        base = re.sub(r"\d+$", "", low)
+        if base in _STEM_NOISE_TOKENS:
+            continue
+        survivors.append(t)
+    return survivors
+
+
+def _normalize_stem_token(token):
+    base = re.sub(r"\d+$", "", token)
+    if base and len(base) >= 2:
+        token = base
+    return _capitalize_name_token(token)
 
 
 def _parse_stem_name(stem, prefer="last"):
@@ -136,30 +157,18 @@ def _parse_stem_name(stem, prefer="last"):
     token like 'radio072' is normalized back to its base ('radio').
     Returns "" when nothing meaningful survives.
     """
-    survivors = []
-    for t in _stem_tokens(stem):
-        low = t.lower()
-        if low in _STEM_NOISE_TOKENS or t.isdigit():
-            continue
-        base = re.sub(r"\d+$", "", low)
-        if base in _STEM_NOISE_TOKENS:
-            continue
-        survivors.append(t)
+    survivors = _filter_stem_tokens(stem)
     if not survivors:
         return ""
     picked = survivors[0] if prefer == "first" else survivors[-1]
-    # Normalize glued asset ids: 'radio072' -> 'radio' (same codename vote as
-    # 'player_072_radio_...'). Tokens whose base is noise were filtered above.
-    base = re.sub(r"\d+$", "", picked)
-    if base and len(base) >= 2:
-        picked = base
-    return _capitalize_name_token(picked)
+    return _normalize_stem_token(picked)
 
 
 def _parse_folder_name(folder):
     """Character candidate from a model folder basename (first survivor).
 
     "Zankou swimsuit" -> Zankou, "firefly-spring-missive" -> Firefly,
+    "Elysia (Swimsuit)" -> Elysia, "Avatar_UI (Raiden Mei)" -> Raiden Mei,
     "Perlica" -> Perlica. Walks up to parent directory if basename is a
     generic asset folder (e.g. "Default" inside "elysia-miss-pink-elf").
     """
@@ -173,6 +182,14 @@ def _parse_folder_name(folder):
         if not parent_base or parent_base.lower() in _ASSET_DIR_NAMES:
             return ""
         base = parent_base
+    outside = re.sub(r"\([^()]*\)", " ", base)
+    outside_hit = _parse_stem_name(outside, prefer="first")
+    if outside_hit:
+        return outside_hit
+    for group in re.findall(r"\(([^()]+)\)", base):
+        tokens = [_normalize_stem_token(t) for t in _filter_stem_tokens(group)]
+        if tokens:
+            return " ".join(tokens)
     return _parse_stem_name(base, prefer="first")
 
 
@@ -439,7 +456,7 @@ def ensure_character_collection(context, rig_obj, char_name):
         # Character name appears as a whole token inside the collection name
         # (e.g. 'Linko fashion 1' contains 'Linko').
         try:
-            if char_low in re.split(r"[_\-\s.]+", coll_low):
+            if char_low in re.split(r"[_\-\s.\(\)\[\]\{\}]+", coll_low):
                 return True
         except Exception:
             pass

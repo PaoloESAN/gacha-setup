@@ -40,6 +40,10 @@ def draw_character_settings_tabs(layout, context):
         from setup_wizard.utils.genshin_face_expressions import draw_face_expressions
         draw_face_expressions(layout, arm)
         return True
+    if arm.gacha_settings_tab == 'FACE':
+        from setup_wizard.ui.hi3_character_settings import draw_face_settings
+        draw_face_settings(layout, arm, context)
+        return True
     layout.separator()
     return False
 
@@ -161,16 +165,26 @@ _GENSHIN_EXPRESSIONS_TAB_ITEMS = (
     ('BONE_LAYERS', 'Rig Layers', 'Show or hide groups of bones'),
     ('EXPRESSIONS', 'Expressions', 'Facial expressions'),
 )
+_HI3_FACE_TAB_ITEMS = (
+    ('CHARACTER', 'Character', 'Character settings'),
+    ('BONE_LAYERS', 'Rig Layers', 'Show or hide groups of bones'),
+    ('FACE', 'Face', 'Face settings and expressions'),
+)
 
 
 def _tab_items(self, context):
     if self is not None:
         try:
             from setup_wizard.ui.character_settings_utils import detect_armature_game
-            if detect_armature_game(self) == 'GENSHIN_IMPACT':
+            game = detect_armature_game(self)
+            if game == 'GENSHIN_IMPACT':
                 from setup_wizard.utils.genshin_face_expressions import expression_nodes
                 if next(expression_nodes(self), None) is not None:
                     return _GENSHIN_EXPRESSIONS_TAB_ITEMS
+            elif game == 'HONKAI_IMPACT_3RD':
+                from setup_wizard.ui.hi3_character_settings import has_face_settings
+                if has_face_settings(self):
+                    return _HI3_FACE_TAB_ITEMS
         except Exception:
             pass
     return _BASE_TAB_ITEMS

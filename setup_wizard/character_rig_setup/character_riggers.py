@@ -292,15 +292,23 @@ class GenshinImpactCharacterRigger(CharacterRigger):
                 character_rigger_props.use_head_tracker,
             )
         elif not is_playable_character:
-            rig_npc(
-                filepath,
-                not character_rigger_props.allow_arm_ik_stretch,
-                not character_rigger_props.allow_leg_ik_stretch,
-                character_rigger_props.use_arm_ik_poles,
-                character_rigger_props.use_leg_ik_poles,
-                character_rigger_props.add_children_of_constraints,
-                character_rigger_props.use_head_tracker,
-            )                                 
+            if 'Bip001 Head' not in armature.data.bones and 'Bip001 Pelvis' not in armature.data.bones:
+                from setup_wizard.character_rig_setup.custom_npc_rig import rig_custom_npc
+                rig_custom_npc(
+                    armature,
+                    disallow_arm_ik_stretch=not character_rigger_props.allow_arm_ik_stretch,
+                    use_arm_ik_poles=character_rigger_props.use_arm_ik_poles,
+                )
+            else:
+                rig_npc(
+                    filepath,
+                    not character_rigger_props.allow_arm_ik_stretch,
+                    not character_rigger_props.allow_leg_ik_stretch,
+                    character_rigger_props.use_arm_ik_poles,
+                    character_rigger_props.use_leg_ik_poles,
+                    character_rigger_props.add_children_of_constraints,
+                    character_rigger_props.use_head_tracker,
+                )                                 
         else:
             rig_character(
                 filepath,
@@ -732,6 +740,57 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
                 for c in pb.constraints:
                     if hasattr(c, "target") and c.target and c.target != body_rig and "isaac" in c.target.name.lower():
                         c.target = body_rig
+
+            # 5c. Fix Eye-Scale-Control axis alignment via MCH-EyeScale.{side}:
+            # eyeEnd_L/R have a rotated rest orientation, so copying Eye-Scale-Control's scale
+            # directly in LOCAL space skews X/Y/Z scaling diagonally. Route Copy Scale through
+            # a hidden mechanism bone aligned to Eye-Scale-Control.{side}.
+            self.context.view_layer.objects.active = body_rig
+            bpy.ops.object.mode_set(mode='OBJECT')
+            for side in ('L', 'R'):
+                pb_end = body_rig.pose.bones.get(f"eyeEnd_{side}")
+                if pb_end:
+                    for c in list(pb_end.constraints):
+                        if c.type == 'COPY_SCALE':
+                            pb_end.constraints.remove(c)
+            bpy.ops.object.mode_set(mode='EDIT')
+            ebs = body_rig.data.edit_bones
+            created_mch_sides = []
+            for side in ('L', 'R'):
+                eb_end = ebs.get(f"eyeEnd_{side}")
+                eb_ctrl = ebs.get(f"Eye-Scale-Control.{side}")
+                eb_eye = ebs.get(f"eye_{side}")
+                if eb_end and eb_ctrl and eb_eye:
+                    mch_name = f"MCH-EyeScale.{side}"
+                    mch = ebs.get(mch_name) or ebs.new(mch_name)
+                    mch.use_deform = False
+                    mch.use_connect = False
+                    mch.head = eb_end.head.copy()
+                    mch.tail = eb_end.head + (eb_ctrl.tail - eb_ctrl.head).normalized() * max(eb_end.length, 0.01)
+                    mch.align_roll(eb_ctrl.z_axis)
+                    mch.parent = eb_eye
+                    eb_end.use_connect = False
+                    eb_end.parent = mch
+                    created_mch_sides.append(side)
+            bpy.ops.object.mode_set(mode='OBJECT')
+            other_coll = body_rig.data.collections.get("Other")
+            if not other_coll:
+                other_coll = body_rig.data.collections.new("Other")
+                other_coll.is_visible = False
+            for side in created_mch_sides:
+                mch_pb = body_rig.pose.bones.get(f"MCH-EyeScale.{side}")
+                if mch_pb:
+                    mch_pb.bone.collections.clear()
+                    other_coll.assign(mch_pb.bone)
+                    mch_pb.bone.hide = True
+                    for c in list(mch_pb.constraints):
+                        mch_pb.constraints.remove(c)
+                    con = mch_pb.constraints.new('COPY_SCALE')
+                    con.name = f"Copy Scale Eye.{side}"
+                    con.target = body_rig
+                    con.subtarget = f"Eye-Scale-Control.{side}"
+                    con.owner_space = 'LOCAL'
+                    con.target_space = 'LOCAL'
 
             # 6. Ensure all meshes with Armature modifiers point to body_rig
             for obj in bpy.data.objects:

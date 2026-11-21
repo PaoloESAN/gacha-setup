@@ -3721,6 +3721,8 @@ class HonkaiImpact3rdDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                 low = mat_name.lower()
                 if "face" in low and "dualface" not in low:
                     template_name = "ImpactToon - Face"
+                elif "eyeshadow" in low or "shadow_eye" in low:
+                    template_name = "ImpactToon - Base"
                 elif "eye" in low:
                     template_name = "ImpactToon - Eye"
                 elif "hair" in low:

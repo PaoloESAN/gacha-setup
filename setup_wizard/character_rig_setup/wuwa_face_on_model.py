@@ -22,6 +22,39 @@ GAZE = {'EyeTracker', 'Eye.L', 'Eye.R'}
 HIGHLIGHTS = {'CTRL-Eye_Highlight', 'CTRL-Highlight_Top', 'CTRL-Highlight_Bottom'}
 
 
+def _ensure_hi3_pupil_scale_keys(mesh_obj):
+    """Synthesize Pupil_Scale.L/.R from Eye_Lookat iris verts when absent."""
+    sk = getattr(mesh_obj.data, 'shape_keys', None)
+    if not sk or not sk.key_blocks:
+        return
+    kb = sk.key_blocks
+    if any(k in kb for k in ('Pupil_Scale', 'Pupil_Scale.L', 'Pupil_Scale.R')):
+        return
+    lookat_kbs = [kb[k] for k in ('Eye_Lookat_Top', 'Eye_Lookat_Bottom', 'Eye_Lookat_Left', 'Eye_Lookat_Right') if k in kb]
+    if not lookat_kbs:
+        return
+    basis = kb.get('Basis') or kb[0]
+    mw = mesh_obj.matrix_world
+    moving = [
+        i for i in range(len(basis.data))
+        if any((lk.data[i].co - basis.data[i].co).length > 1e-5 for lk in lookat_kbs)
+    ]
+    if not moving:
+        return
+    l_idx = [i for i in moving if (mw @ basis.data[i].co).x >= 0.0]
+    r_idx = [i for i in moving if (mw @ basis.data[i].co).x < 0.0]
+    for side, idxs in (('L', l_idx), ('R', r_idx)):
+        if not idxs:
+            continue
+        center = sum((basis.data[i].co for i in idxs), Vector()) / len(idxs)
+        new_kb = mesh_obj.shape_key_add(name=f'Pupil_Scale.{side}', from_mix=False)
+        new_kb.slider_min = -1.0
+        new_kb.slider_max = 1.0
+        new_kb.value = 0.0
+        for i in idxs:
+            new_kb.data[i].co = center + (basis.data[i].co - center) * 0.5
+
+
 def build_wuwa_face_on_model(context, rig, primary, head_name):
     from . import wuwa_face_panel as shared
     meshes = shared._collect_character_face_meshes(primary, rig)
@@ -30,11 +63,13 @@ def build_wuwa_face_on_model(context, rig, primary, head_name):
         return False
     # Prefer the character's actual facial expressions over a hair/eyebrow mesh.
     face = max(meshes, key=lambda m: sum(k in m.data.shape_keys.key_blocks
-               for k in ('E_Close', 'M_OpenSmall', 'Pupil_Up', 'B_Anger', 'Aa')))
+               for k in ('E_Close', 'M_OpenSmall', 'Pupil_Up', 'B_Anger', 'Aa',
+                         'Mouth_A01', 'Eye_Wink01_L', 'Eye_Lookat_Top')))
     if context.object and context.object.mode != 'OBJECT':
         bpy.ops.object.mode_set(mode='OBJECT')
     for mesh in meshes:
         shared.split_shape_keys(mesh)
+        _ensure_hi3_pupil_scale_keys(mesh)
 
     def centroid(keys, side=None):
         for mesh in [face] + [m for m in meshes if m != face]:
@@ -46,16 +81,17 @@ def build_wuwa_face_on_model(context, rig, primary, head_name):
     fallback = rig.matrix_world @ rig.data.bones[head_name].head_local
     eyes = {}
     for side, sign in [('L', 1), ('R', -1)]:
-        point = centroid([f'E_Close.{side}', f'E_Smile_{side}', f'Pupil_Up.{side}'], side)
+        point = centroid([f'E_Close.{side}', f'E_Smile_{side}', f'Pupil_Up.{side}',
+                          f'Eye_Wink01_{side}', f'Eye_Wink02_{side}', 'Eye_Lookat_Top', 'Eye_Lookat_Left'], side)
         if point is None:
             point = fallback + Vector((sign * .03, -.06, .03))
         eyes[side] = point
     eye_center = (eyes['L'] + eyes['R']) * .5
     unit = max(.5, min(2., (eyes['L'] - eyes['R']).length / .06))
-    mouth = centroid(['M_OpenSmall', 'Aa', 'A', 'M_A'])
+    mouth = centroid(['M_OpenSmall', 'Aa', 'A', 'M_A', 'Mouth_A01', 'Mouth_O01', 'Mouth_Smile01'])
     if mouth is None:
         mouth = eye_center - Vector((0, 0, .055 * unit))
-    brow = centroid(list(BROWS))
+    brow = centroid(list(BROWS) + ['Eyebrow_Up', 'Eyebrow_Down', 'Eyebrow_Angry', 'Eyebrow_Trouble', 'Eyebrow_Smily'])
     if brow is None:
         brow = eye_center + Vector((0, 0, .04 * unit))
     depth = min(eye_center.y, mouth.y, brow.y) - .02 * unit
@@ -175,6 +211,7 @@ def build_wuwa_face_on_model(context, rig, primary, head_name):
         obj.hide_render = True
         return obj
 
+    has_blephar = any('E_Blephar' in m.data.shape_keys.key_blocks for m in meshes)
     for name in created:
         pb = rig.pose.bones[name]
         for old in list(pb.bone.collections):
@@ -213,6 +250,8 @@ def build_wuwa_face_on_model(context, rig, primary, head_name):
             kind, size, color = 'square', (.045 if name == 'Eyebrows' else .01) * unit, 'THEME01' if name == 'Eyebrows' else 'THEME09'
             if name == 'EyeScale':
                 pb.lock_scale = (False, True, True)
+                if not has_blephar:
+                    pb.lock_location = (True, True, True)
             else:
                 pb.lock_rotation = (True, True, False)
         elif name == 'fp.outline':
@@ -256,7 +295,10 @@ def build_wuwa_face_on_model(context, rig, primary, head_name):
             limit.max_x = .01 * unit if name.startswith('Mouth.') else 0
             limit.min_y, limit.max_y = -.01 * unit, .01 * unit
         else:
-            limit.max_y = (.01 if name == 'EyeScale' else .02) * unit
+            if name == 'EyeScale':
+                limit.max_y = (.01 * unit) if has_blephar else 0.0
+            else:
+                limit.max_y = .02 * unit
         if not all(pb.lock_scale):
             scale = pb.constraints.new('LIMIT_SCALE')
             scale.owner_space = 'LOCAL'
@@ -314,34 +356,89 @@ def build_wuwa_face_on_model(context, rig, primary, head_name):
         def linear(key, bone, channel='location.y', distance=.02, sign=1):
             drive(key, f'max(0,min(1,{sign}*v/{distance*unit!r}))', [('v', bone, channel)])
 
+        def first_key(*candidates):
+            return next((c for c in candidates if c in keys.key_blocks), None)
+
+        def drive_shared(key, bone_l, bone_r, channel='location.y', distance=.02, sign=1):
+            drive(key, f'max(0,min(1,max({sign}*l,{sign}*r)/{distance*unit!r}))',
+                  [('l', bone_l, channel), ('r', bone_r, channel)])
+
         for name in (*BROWS, *MOUTHS):
             linear(name, name)
+        hi3_mouth_map = {'M_Anger': 'Mouth_Angry01', 'M_Laugh': 'Mouth_Smile02', 'M_O': 'Mouth_O02'}
+        for ctrl, hi3_key in hi3_mouth_map.items():
+            if ctrl not in keys.key_blocks and hi3_key in keys.key_blocks:
+                linear(hi3_key, ctrl)
+
         for side in ('L', 'R'):
             for name in FANS:
                 key = f'E_Smile_{side}' if name == 'Smile' else f'E_{name}.{side}'
                 linear(key, f'{name}.{side}')
             for key, sign in [(f'M_Smile_{side}', 1), (f'M_Ennui_{side}', -1)]:
                 linear(key, f'Mouth.{side}', sign=sign)
-            drive(f'E_Close.{side}', 'max(0,min(1,(1-v)*2))', [('v', f'Eye.{side}', 'scale.y')])
-        drive('E_Close', 'max(0,min(1,(1-v)*2))', [('v', 'EyeTracker', 'scale.y')])
-        drive('E_Stare', 'max(0,min(1,(v-1)*2))', [('v', 'EyeTracker', 'scale.y')])
-        linear('E_Blephar', 'EyeScale')
-        # Rebind gaze too: an existing scene may still target the old panel.
-        # Use either split morphs or their global source, never both together.
+            close_side = first_key(f'E_Close.{side}', f'Eye_Wink01_{side}', f'Eye_Wink02_{side}')
+            if close_side:
+                drive(close_side, 'max(0,min(1,(1-v)*2))', [('v', f'Eye.{side}', 'scale.y')])
+
         def reset_global(key):
             if key in keys.key_blocks:
                 keys.key_blocks[key].driver_remove('value')
                 keys.key_blocks[key].value = 0
 
-        for key, axis, sign in [('Pupil_L', 'x', 1), ('Pupil_R', 'x', -1),
-                                ('Pupil_Up', 'y', 1), ('Pupil_Down', 'y', -1)]:
-            if all(f'{key}.{s}' in keys.key_blocks for s in ('L', 'R')):
-                reset_global(key)
+        # HI3 eye expression fallbacks (split .L/.R first, shared fallback otherwise)
+        hi3_fan_shared = (
+            ('Insipid', ('Eye_Half01', 'Eye_Half')),
+            ('Focus', ('Eye_Contempt',)),
+            ('Sad', ('Eye_Wail',)),
+            ('Anger', ('Eye_Hostitlity', 'Eye_Hostility')),
+        )
+        for fan_name, cands in hi3_fan_shared:
+            if f'E_{fan_name}.L' not in keys.key_blocks and f'E_{fan_name}.R' not in keys.key_blocks:
+                hit = first_key(*cands)
+                if hit and all(f'{hit}.{s}' in keys.key_blocks for s in ('L', 'R')):
+                    reset_global(hit)
+                    for side in ('L', 'R'):
+                        linear(f'{hit}.{side}', f'{fan_name}.{side}')
+                elif hit:
+                    drive_shared(hit, f'{fan_name}.L', f'{fan_name}.R')
+        if 'M_Smile_L' not in keys.key_blocks and 'Mouth_Smile01' in keys.key_blocks:
+            if all(f'Mouth_Smile01.{s}' in keys.key_blocks for s in ('L', 'R')):
+                reset_global('Mouth_Smile01')
                 for side in ('L', 'R'):
-                    drive(f'{key}.{side}', f'max(0,min(1,{sign}*(m+i)*10))',
-                          [('m', 'EyeTracker', f'location.{axis}'), ('i', f'Eye.{side}', f'location.{axis}')])
+                    linear(f'Mouth_Smile01.{side}', f'Mouth.{side}')
             else:
-                linear(key, 'EyeTracker', f'location.{axis}', .1 / unit, sign)
+                drive_shared('Mouth_Smile01', 'Mouth.L', 'Mouth.R')
+
+        close_all = first_key('E_Close', 'Eye_Lookat_Close')
+        if close_all:
+            if all(f'{close_all}.{s}' in keys.key_blocks for s in ('L', 'R')):
+                reset_global(close_all)
+                for side in ('L', 'R'):
+                    drive(f'{close_all}.{side}', 'max(0,min(1,(1-v)*2))', [('v', 'EyeTracker', 'scale.y')])
+            else:
+                drive(close_all, 'max(0,min(1,(1-v)*2))', [('v', 'EyeTracker', 'scale.y')])
+        stare_key = first_key('E_Stare', 'Eye_Surprised', 'Eye_Surprised02')
+        if stare_key:
+            drive(stare_key, 'max(0,min(1,(v-1)*2))', [('v', 'EyeTracker', 'scale.y')])
+        linear('E_Blephar', 'EyeScale')
+        # Rebind gaze too: an existing scene may still target the old panel.
+        # Use either split morphs or their global source, never both together.
+        for key, hi3_key, axis, sign in [('Pupil_L', 'Eye_Lookat_Left', 'x', 1),
+                                         ('Pupil_R', 'Eye_Lookat_Right', 'x', -1),
+                                         ('Pupil_Up', 'Eye_Lookat_Top', 'y', 1),
+                                         ('Pupil_Down', 'Eye_Lookat_Bottom', 'y', -1)]:
+            target_base = first_key(key, hi3_key)
+            if target_base and all(f'{target_base}.{s}' in keys.key_blocks for s in ('L', 'R')):
+                reset_global(target_base)
+                dist = .1 / unit
+                for side in ('L', 'R'):
+                    drive(f'{target_base}.{side}', f'max(0,min(1,{sign}*(m+i)/{dist!r}))',
+                          [('m', 'EyeTracker', f'location.{axis}'), ('i', f'Eye.{side}', f'location.{axis}')])
+            elif target_base:
+                drive(target_base, f'max(0,min(1,{sign}*(m+0.5*(l+r))/{.1 / unit!r}))',
+                      [('m', 'EyeTracker', f'location.{axis}'),
+                       ('l', 'Eye.L', f'location.{axis}'),
+                       ('r', 'Eye.R', f'location.{axis}')])
         if all(f'Pupil_Scale.{s}' in keys.key_blocks for s in ('L', 'R')):
             reset_global('Pupil_Scale')
             for side in ('L', 'R'):
@@ -359,15 +456,23 @@ def build_wuwa_face_on_model(context, rig, primary, head_name):
         for key, bone, sign in [('P_M_Scale_Add.L', 'Mouth.L', -1), ('P_M_L_Add', 'Mouth.L', 1),
                                 ('P_M_R_Add', 'Mouth.R', -1), ('P_M_Scale_Add.R', 'Mouth.R', 1)]:
             linear(key, bone, 'location.x', .01, sign)
-        drive('O', 'max(0,min(1,((sx+sy+sz)/3-1)*2))', [(f's{a}', 'Mouth', f'scale.{a}') for a in 'xyz'])
-        for key, axis, sign in [('E', 'x', -1), ('I', 'x', 1), ('A', 'y', 1), ('U', 'y', -1)]:
+        o_key = first_key('O', 'Mouth_O01')
+        if o_key:
+            drive(o_key, 'max(0,min(1,((sx+sy+sz)/3-1)*2))', [(f's{a}', 'Mouth', f'scale.{a}') for a in 'xyz'])
+        for key, hi3_key, axis, sign in [('E', 'Mouth_E01', 'x', -1),
+                                         ('I', 'Mouth_I01', 'x', 1),
+                                         ('A', 'Mouth_A01', 'y', 1),
+                                         ('U', 'Mouth_U01', 'y', -1)]:
+            target_vowel = first_key(key, hi3_key)
+            if not target_vowel:
+                continue
             channels = [('v', 'Mouth', f'location.{axis}'), ('y', 'Mouth', 'location.y')]
             expression = f'max(0,min(1,{sign}*v/{.02*unit!r}))'
             if axis == 'x':
                 expression += f'*(1-min(abs(y)/{.02*unit!r},1))'
             channels += [(f's{a}', 'Mouth', f'scale.{a}') for a in 'xyz']
             expression += '*(1-.6*max(0,min(1,((sx+sy+sz)/3-1)*2)))'
-            drive(key, expression, channels)
+            drive(target_vowel, expression, channels)
         mesh['ww_face_panel_armature'] = rig.name
         mesh['ww_face_panel_assigned'] = True
     if not HIGHLIGHTS.intersection(rig.pose.bones.keys()):
