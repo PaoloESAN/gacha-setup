@@ -628,12 +628,201 @@ def update_hsr_stellartoon_props(self, context=None):
 
     # 5. Tag 3D areas for redraw
     if hasattr(bpy.context, 'window_manager') and bpy.context.window_manager:
-        for win in getattr(bpy.context.window_manager, 'windows', []):
+        for win in getattr(bpy.context, 'window_manager', 'windows', []) if False else getattr(bpy.context.window_manager, 'windows', []):
             screen = getattr(win, 'screen', None)
             if screen:
                 for area in screen.areas:
                     if area.type == 'VIEW_3D':
                         area.tag_redraw()
+
+
+def _redraw_view3d():
+    wm = getattr(bpy.context, 'window_manager', None)
+    if not wm:
+        return
+    for win in getattr(wm, 'windows', []):
+        screen = getattr(win, 'screen', None)
+        if screen:
+            for area in screen.areas:
+                if area.type == 'VIEW_3D':
+                    area.tag_redraw()
+
+
+def _iter_hsr_outline_nodes(materials):
+    for mat in materials:
+        if getattr(mat, "use_nodes", False) and mat.node_tree:
+            for node in mat.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree and "outlines" in node.node_tree.name.lower():
+                    yield mat, node
+
+
+def _outline_thickness_socket_id(mod):
+    ng = getattr(mod, "node_group", None)
+    if ng and hasattr(ng, "interface") and hasattr(ng.interface, "items_tree"):
+        for item in ng.interface.items_tree:
+            if getattr(item, "item_type", None) == 'SOCKET' and item.in_out == 'INPUT' and item.name == "Outline Thickness":
+                return item.identifier
+    return "Input_7"
+
+
+def _get_outline_thickness(mod):
+    from setup_wizard.utils.modifier_utils import get_modifier_property
+    ident = _outline_thickness_socket_id(mod)
+    val = get_modifier_property(mod, ident)
+    if val is None and ident != "Outline Thickness":
+        val = get_modifier_property(mod, "Outline Thickness")
+    return val
+
+
+def _set_outline_thickness(mod, val):
+    from setup_wizard.utils.modifier_utils import set_modifier_property
+    ident = _outline_thickness_socket_id(mod)
+    if not set_modifier_property(mod, ident, val) and ident != "Outline Thickness":
+        return set_modifier_property(mod, "Outline Thickness", val)
+    return True
+
+
+def _ensure_hsr_outline_override_group():
+    ng_name = "HSR Outline Color Override"
+    ng = bpy.data.node_groups.get(ng_name)
+    if ng and ng.get("_hsr_outline_override_v1"):
+        return ng
+    if ng:
+        ng.nodes.clear()
+    else:
+        ng = bpy.data.node_groups.new(ng_name, "ShaderNodeTree")
+
+    if hasattr(ng, "interface"):
+        ng.interface.clear()
+        s_mix = ng.interface.new_socket(name="Mix", in_out="INPUT", socket_type="NodeSocketFloat")
+        s_mix.min_value = 0.0
+        s_mix.max_value = 1.0
+        s_mix.default_value = 0.0
+        s_ovr = ng.interface.new_socket(name="Override Color", in_out="INPUT", socket_type="NodeSocketColor")
+        s_ovr.default_value = (0.0, 0.0, 0.0, 1.0)
+        for i in range(1, 9):
+            s_orig = ng.interface.new_socket(name=f"Original {i}", in_out="INPUT", socket_type="NodeSocketColor")
+            s_orig.default_value = (0.0, 0.0, 0.0, 1.0)
+            ng.interface.new_socket(name=f"Color {i}", in_out="OUTPUT", socket_type="NodeSocketColor")
+    else:
+        ng.inputs.clear()
+        ng.outputs.clear()
+        s_mix = ng.inputs.new("NodeSocketFloat", "Mix")
+        s_mix.min_value = 0.0
+        s_mix.max_value = 1.0
+        s_mix.default_value = 0.0
+        s_ovr = ng.inputs.new("NodeSocketColor", "Override Color")
+        s_ovr.default_value = (0.0, 0.0, 0.0, 1.0)
+        for i in range(1, 9):
+            s_orig = ng.inputs.new("NodeSocketColor", f"Original {i}")
+            s_orig.default_value = (0.0, 0.0, 0.0, 1.0)
+            ng.outputs.new("NodeSocketColor", f"Color {i}")
+
+    n_in = ng.nodes.new("NodeGroupInput")
+    n_in.location = (-400, 0)
+    n_out = ng.nodes.new("NodeGroupOutput")
+    n_out.location = (400, 0)
+
+    for i in range(1, 9):
+        m = ng.nodes.new("ShaderNodeMix")
+        m.data_type = 'RGBA'
+        m.blend_type = 'MIX'
+        m.clamp_factor = True
+        m.location = (0, (4 - i) * 160)
+        ng.links.new(n_in.outputs["Mix"], m.inputs["Factor"])
+        ng.links.new(n_in.outputs[f"Original {i}"], m.inputs[6])
+        ng.links.new(n_in.outputs["Override Color"], m.inputs[7])
+        ng.links.new(m.outputs[2], n_out.inputs[f"Color {i}"])
+
+    ng["_hsr_outline_override_v1"] = True
+    return ng
+
+
+def _ensure_outline_override_nodes(materials):
+    ng = _ensure_hsr_outline_override_group()
+    nodes = []
+    for mat, ol_node in _iter_hsr_outline_nodes(materials):
+        nt = mat.node_tree
+        ovr = nt.nodes.get("HSR_Outline_Color_Override")
+        if not ovr or ovr.type != 'GROUP':
+            ovr = nt.nodes.new("ShaderNodeGroup")
+            ovr.name = "HSR_Outline_Color_Override"
+            ovr.label = "Outline Color Override"
+            ovr.location = (ol_node.location.x - 260, ol_node.location.y)
+        if ovr.node_tree != ng:
+            ovr.node_tree = ng
+        for i in range(1, 9):
+            target_sock = ol_node.inputs.get(f"Outline Color {i}")
+            orig_sock = ovr.inputs.get(f"Original {i}")
+            out_sock = ovr.outputs.get(f"Color {i}")
+            if not target_sock or not orig_sock or not out_sock:
+                continue
+            if not any(l.from_node == ovr for l in target_sock.links):
+                if target_sock.is_linked:
+                    src = target_sock.links[0].from_socket
+                    nt.links.new(src, orig_sock)
+                else:
+                    orig_sock.default_value = tuple(target_sock.default_value)
+                nt.links.new(out_sock, target_sock)
+        nodes.append(ovr)
+    return nodes
+
+
+def update_hsr_outline_color(self, context):
+    global _is_updating_hsr_props
+    if _is_updating_hsr_props:
+        return
+    try:
+        from setup_wizard.ui.character_settings_utils import (
+            get_character_materials,
+            ensure_character_node_trees_isolated,
+        )
+        arm, mats = get_character_materials(context)
+        if arm and mats:
+            ensure_character_node_trees_isolated(arm, mats)
+    except Exception:
+        arm, mats = None, []
+    if arm:
+        arm["hsr_outline_color"] = list(self.hsr_outline_color)
+        arm["hsr_outline_color_mix"] = float(self.hsr_outline_color_mix)
+    color = tuple(self.hsr_outline_color) + (1.0,)
+    mix_val = float(self.hsr_outline_color_mix)
+    mats_to_update = mats if mats else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
+    for ovr in _ensure_outline_override_nodes(mats_to_update):
+        if "Override Color" in ovr.inputs:
+            ovr.inputs["Override Color"].default_value = color
+        if "Mix" in ovr.inputs:
+            ovr.inputs["Mix"].default_value = mix_val
+    _redraw_view3d()
+
+
+def update_hsr_outline_thickness(self, context):
+    global _is_updating_hsr_props
+    if _is_updating_hsr_props:
+        return
+    try:
+        from setup_wizard.ui.character_settings_utils import (
+            resolve_settings_armature,
+            _iter_rig_meshes,
+        )
+        arm = resolve_settings_armature(context)
+        meshes = list(_iter_rig_meshes(arm)) if arm else []
+    except Exception:
+        arm, meshes = None, []
+    if arm:
+        arm["hsr_outline_thickness"] = float(self.hsr_outline_thickness)
+    if not meshes:
+        meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+    val = float(self.hsr_outline_thickness)
+    for obj in meshes:
+        for mod in obj.modifiers:
+            if mod.type == 'NODES' and (
+                "outline" in mod.name.lower()
+                or (mod.node_group and "outline" in mod.node_group.name.lower())
+            ):
+                if _set_outline_thickness(mod, val):
+                    obj.update_tag()
+    _redraw_view3d()
 
 
 def pull_hsr_panel_values(scene, context, force=False):
@@ -712,6 +901,46 @@ def pull_hsr_panel_values(scene, context, force=False):
             scene.hsr_sharp_lit_color = tuple(inputs["Custom Sharp Lit Color"].default_value)[:3]
         if "Custom Sharp Shadow Color" in inputs:
             scene.hsr_sharp_shadow_color = tuple(inputs["Custom Sharp Shadow Color"].default_value)[:3]
+
+        saved_ol_color = arm.get("hsr_outline_color")
+        if saved_ol_color is not None and len(saved_ol_color) >= 3:
+            scene.hsr_outline_color = tuple(saved_ol_color)[:3]
+        else:
+            ovr = next((m.node_tree.nodes.get("HSR_Outline_Color_Override") for m in mats if m.node_tree and m.node_tree.nodes.get("HSR_Outline_Color_Override")), None)
+            if ovr and "Override Color" in ovr.inputs:
+                scene.hsr_outline_color = tuple(ovr.inputs["Override Color"].default_value)[:3]
+            else:
+                scene.hsr_outline_color = (0.0, 0.0, 0.0)
+
+        saved_ol_mix = arm.get("hsr_outline_color_mix")
+        if saved_ol_mix is not None:
+            scene.hsr_outline_color_mix = float(saved_ol_mix)
+        else:
+            ovr = next((m.node_tree.nodes.get("HSR_Outline_Color_Override") for m in mats if m.node_tree and m.node_tree.nodes.get("HSR_Outline_Color_Override")), None)
+            if ovr and "Mix" in ovr.inputs:
+                scene.hsr_outline_color_mix = float(ovr.inputs["Mix"].default_value)
+            else:
+                scene.hsr_outline_color_mix = 0.0
+
+        saved_ol_thick = arm.get("hsr_outline_thickness")
+        if saved_ol_thick is not None:
+            scene.hsr_outline_thickness = float(saved_ol_thick)
+        else:
+            from setup_wizard.ui.character_settings_utils import _iter_rig_meshes
+            for obj in _iter_rig_meshes(arm):
+                found_thick = False
+                for mod in obj.modifiers:
+                    if mod.type == 'NODES' and (
+                        "outline" in mod.name.lower()
+                        or (mod.node_group and "outline" in mod.node_group.name.lower())
+                    ):
+                        val = _get_outline_thickness(mod)
+                        if val is not None:
+                            scene.hsr_outline_thickness = float(val)
+                            found_thick = True
+                            break
+                if found_thick:
+                    break
     except Exception:
         pass
     finally:
@@ -798,7 +1027,15 @@ class HSR_PT_Rig_Character_Settings(Panel):
         # 4. Eye Can't Be Tinted?
         layout.prop(scene, "hsr_eye_cant_be_tinted", text="Eye Can't Be Tinted?")
 
-        # 5. Hair & Clothes Physics
+        # 5. Outlines
+        box_outlines = layout.box()
+        box_outlines.label(text="Outlines", icon="STROKE")
+        col_outlines = box_outlines.column(align=True)
+        col_outlines.prop(scene, "hsr_outline_color", text="Outline Color")
+        col_outlines.prop(scene, "hsr_outline_color_mix", text="Mix (0 = Original)", slider=True)
+        col_outlines.prop(scene, "hsr_outline_thickness", text="Outline Thickness", slider=True)
+
+        # 6. Hair & Clothes Physics
         box_physics = layout.box()
         box_physics.label(text="Hair & Clothes Physics", icon="PHYSICS")
         col_physics = box_physics.column(align=True)
@@ -930,6 +1167,39 @@ def register_hsr_properties():
         update=update_hsr_stellartoon_props,
     )
 
+    bpy.types.Scene.hsr_outline_color = FloatVectorProperty(
+        name="Outline Color",
+        description="Override outline color for Honkai Star Rail outlines",
+        subtype='COLOR',
+        size=3,
+        min=0.0,
+        max=1.0,
+        default=(0.0, 0.0, 0.0),
+        update=update_hsr_outline_color,
+    )
+
+    bpy.types.Scene.hsr_outline_color_mix = FloatProperty(
+        name="Outline Color Mix",
+        description="Blend between original per-part outline colors (0) and Outline Color (1)",
+        min=0.0,
+        max=1.0,
+        default=0.0,
+        step=5,
+        precision=2,
+        update=update_hsr_outline_color,
+    )
+
+    bpy.types.Scene.hsr_outline_thickness = FloatProperty(
+        name="Outline Thickness",
+        description="Outline thickness from the Geometry Nodes Outlines modifier",
+        min=0.0,
+        max=5.0,
+        default=0.375,
+        step=5,
+        precision=3,
+        update=update_hsr_outline_thickness,
+    )
+
 
 def unregister_hsr_properties():
     props = [
@@ -943,6 +1213,9 @@ def unregister_hsr_properties():
         "hsr_shadow_color",
         "hsr_sharp_lit_color",
         "hsr_sharp_shadow_color",
+        "hsr_outline_color",
+        "hsr_outline_color_mix",
+        "hsr_outline_thickness",
     ]
     for p in props:
         if hasattr(bpy.types.Scene, p):
