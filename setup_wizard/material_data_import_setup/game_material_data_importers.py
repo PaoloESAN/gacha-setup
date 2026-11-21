@@ -289,6 +289,7 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
                 )
                 return {'SKIP'}
             print("[SETUP WIZARD] No Material Data JSON files found. Skipping.")
+            self._apply_outline_diffuse_fallback_if_unmodified()
             return {'FINISHED'}
 
         self.validate_num_of_file_inputs_for_targeted_material_data_import(material_data_directory.files)
@@ -489,8 +490,32 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
                     if lm_node and lm_node.type == 'TEX_IMAGE':
                         lm_node.image = None
 
-        # Apply diffuse fallback only to outline materials that still hold the unmodified
-        # template sentinel colors (and already have their own diffuse image).
+        self._apply_outline_diffuse_fallback_if_unmodified()
+
+        return {'FINISHED'}
+
+    @staticmethod
+    def _find_diffuse_tex_node(node_tree):
+        """Find the diffuse TEX_IMAGE node in a material node tree, excluding maps and masks."""
+        if not node_tree:
+            return None
+        candidates = []
+        for n in node_tree.nodes:
+            if getattr(n, 'type', '') != 'TEX_IMAGE':
+                continue
+            node_id = (f"{getattr(n, 'name', '') or ''} {getattr(n, 'label', '') or ''}").lower()
+            if 'diffuse' not in node_id:
+                continue
+            if any(k in node_id for k in ('lightmap', 'normal', 'ramp', 'mask')):
+                continue
+            candidates.append(n)
+        if not candidates:
+            return None
+        with_image = [n for n in candidates if getattr(n, 'image', None)]
+        return (with_image or candidates)[0]
+
+    def _apply_outline_diffuse_fallback_if_unmodified(self):
+        """Link diffuse Color to Outline Color 1..5 when all template sentinel colors are unmodified."""
         for mat in bpy.data.materials:
             if 'outline' not in mat.name.lower() or 'face' in mat.name.lower() or not mat.node_tree:
                 continue
@@ -514,11 +539,14 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
             if MaterialDataApplier._defaults_match_sentinels(indexed):
                 targets = [indexed[i] for i in (1, 2, 3, 4, 5) if i in indexed]
                 if targets and all(len(list(inp.links)) == 0 for inp in targets):
-                    diffuse_node = None
-                    for n in mat.node_tree.nodes:
-                        if n.type == 'TEX_IMAGE' and 'diffuse' in (n.name + ' ' + (n.label or '')).lower():
-                            diffuse_node = n
-                            break
+                    diffuse_node = self._find_diffuse_tex_node(mat.node_tree)
+                    if diffuse_node and not diffuse_node.image:
+                        base_mat_name = mat.name.replace(' Outlines', '').replace(' outlines', '')
+                        base_mat = bpy.data.materials.get(base_mat_name)
+                        if base_mat and base_mat.node_tree:
+                            base_diffuse = self._find_diffuse_tex_node(base_mat.node_tree)
+                            if base_diffuse and base_diffuse.image:
+                                diffuse_node.image = base_diffuse.image
                     if diffuse_node and diffuse_node.image:
                         color_out = diffuse_node.outputs.get('Color') or diffuse_node.outputs[0]
                         color_out.hide = False
@@ -526,8 +554,6 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
                             inp.hide = False
                             mat.node_tree.links.new(color_out, inp)
                         mat[MaterialDataApplier.OUTLINE_DIFFUSE_FALLBACK_TAG] = True
-
-        return {'FINISHED'}
 
     def __customized_skirk_starcloak_material_data_setup(self, material_data_parser, character_type, file, body_part):
         material, outlines_material, night_soul_outlines_material = self.find_material_and_outline_material_for_body_part(body_part)

@@ -292,15 +292,23 @@ class GenshinImpactCharacterRigger(CharacterRigger):
                 character_rigger_props.use_head_tracker,
             )
         elif not is_playable_character:
-            rig_npc(
-                filepath,
-                not character_rigger_props.allow_arm_ik_stretch,
-                not character_rigger_props.allow_leg_ik_stretch,
-                character_rigger_props.use_arm_ik_poles,
-                character_rigger_props.use_leg_ik_poles,
-                character_rigger_props.add_children_of_constraints,
-                character_rigger_props.use_head_tracker,
-            )                                 
+            if 'Bip001 Head' not in armature.data.bones and 'Bip001 Pelvis' not in armature.data.bones:
+                from setup_wizard.character_rig_setup.custom_npc_rig import rig_custom_npc
+                rig_custom_npc(
+                    armature,
+                    disallow_arm_ik_stretch=not character_rigger_props.allow_arm_ik_stretch,
+                    use_arm_ik_poles=character_rigger_props.use_arm_ik_poles,
+                )
+            else:
+                rig_npc(
+                    filepath,
+                    not character_rigger_props.allow_arm_ik_stretch,
+                    not character_rigger_props.allow_leg_ik_stretch,
+                    character_rigger_props.use_arm_ik_poles,
+                    character_rigger_props.use_leg_ik_poles,
+                    character_rigger_props.add_children_of_constraints,
+                    character_rigger_props.use_head_tracker,
+                )                                 
         else:
             rig_character(
                 filepath,

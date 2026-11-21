@@ -1071,6 +1071,27 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
 
         return None
 
+    def _is_armature_already_upright(self, armature):
+        """Return True if an armature is already oriented Z-up in Blender space."""
+        if not armature or armature.type != 'ARMATURE' or not armature.data or not armature.data.bones:
+            return False
+        if abs(armature.rotation_euler.x) > 0.1 or abs(armature.rotation_euler.y) > 0.1:
+            return False
+
+        bones = armature.data.bones
+        head = next((bones.get(n) for n in ('Bip001 Head', 'Bone_Head01_M', 'Head', 'head') if bones.get(n)), None)
+        pelvis = next((bones.get(n) for n in ('Bip001 Pelvis', 'Bone_Pelvis01_M', 'Pelvis', 'Bip001') if bones.get(n)), None)
+        if head and pelvis:
+            dz = head.head_local.z - pelvis.head_local.z
+            dy = abs(head.head_local.y - pelvis.head_local.y)
+            return dz > dy and dz > 0.0
+
+        zs = [b.head_local.z for b in bones]
+        ys = [b.head_local.y for b in bones]
+        z_span = max(zs) - min(zs)
+        y_span = max(ys) - min(ys)
+        return z_span > y_span and z_span > 0.2
+
     def _normalize_pgr_scale(self, armature, context):
         """Remove a redundant FBX centimeter scale from meter-sized PGR assets.
 
@@ -1181,6 +1202,9 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
         ]
         if armature.get('setup_wizard_pmx_normalized'):
             # MMD Tools already converts PMX coordinates to Blender's Z-up.
+            should_force_upright_rotation = False
+        elif should_force_upright_rotation and self._is_armature_already_upright(armature):
+            # Already Z-up in Blender coordinates (e.g. NPC FBXs exported upright).
             should_force_upright_rotation = False
 
         # Hidden FBX children retain stale parent transforms during apply.

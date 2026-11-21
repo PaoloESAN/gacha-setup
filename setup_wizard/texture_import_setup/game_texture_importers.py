@@ -89,16 +89,47 @@ class GenshinImpactTextureImporterFacade(GameTextureImporter):
             return {'SKIP'}
 
         texture_importer_type = ''
-        
+
+        def _is_avatar_token(name):
+            low = (name or '').lower()
+            return low.startswith('avatar_') and 'avatar_default_mat' not in low
+
+        has_avatar_asset = (
+            any(
+                _is_avatar_token(m.name) or _is_avatar_token(m.get('_original_material_name', ''))
+                for m in bpy.data.materials
+            )
+            or any(_is_avatar_token(obj.name) for obj in bpy.data.objects)
+        )
+        has_monster_asset = (
+            any(
+                'monster' in (m.name or '').lower()
+                or 'monster' in str(m.get('_original_material_name', '')).lower()
+                for m in bpy.data.materials
+            )
+            or any('monster' in obj.name.lower() for obj in bpy.data.objects)
+        )
+        has_npc_asset = (
+            any(
+                (m.name or '').lower().startswith('npc_')
+                or str(m.get('_original_material_name', '')).lower().startswith('npc_')
+                for m in bpy.data.materials
+            )
+            or any(obj.name.lower().startswith('npc_') for obj in bpy.data.objects)
+        )
         is_avatar = (
             any('avatar' in material_name.lower() and 'avatar_default_mat' not in material_name.lower() for material_name in bpy.data.materials.keys()) or
             any('avatar' in obj.name.lower() for obj in bpy.data.objects) or
             any(k in bpy.data.materials for k in ['Body', 'Hair', 'Face', 'HoYoverse - Genshin Body', 'HoYoverse - Genshin Hair', 'HoYoverse - Genshin Face'])
         )
-        if is_avatar:
+        if has_avatar_asset:
             texture_importer_type = TextureImporterType.AVATAR
-        elif [material_name for material_name, material in bpy.data.materials.items() if 'Monster'.lower() in material_name.lower()]:
+        elif has_monster_asset:
             texture_importer_type = TextureImporterType.MONSTER
+        elif has_npc_asset:
+            texture_importer_type = TextureImporterType.NPC
+        elif is_avatar:
+            texture_importer_type = TextureImporterType.AVATAR
         else:
             texture_importer_type = TextureImporterType.NPC
 
@@ -139,7 +170,7 @@ class GenshinImpactTextureImporterFacade(GameTextureImporter):
             If an asset does exist, leave it as the default value (1.0).
         '''
         if (texture_importer_type is TextureImporterType.NPC or texture_importer_type is TextureImporterType.MONSTER) and \
-            not any('shadow_ramp' in filename for filename in scan_directory_for_textures(directory)[0]):
+            not any('shadow_ramp' in filename.lower() for filename in scan_directory_for_textures(directory)[0]):
             ShaderConfigurator().update_shader_value(
                 materials = [
                     bpy.data.materials.get('miHoYo - Genshin Hair'),
@@ -150,7 +181,17 @@ class GenshinImpactTextureImporterFacade(GameTextureImporter):
                 node_name = 'miHoYo - Genshin Impact',
                 input_name = 'Use Shadow Ramp',
                 value = 0
-        )
+            )
+            for mat in bpy.data.materials:
+                if not getattr(mat, 'use_nodes', False) or not mat.node_tree:
+                    continue
+                if 'outline' in mat.name.lower():
+                    continue
+                for n in mat.node_tree.nodes:
+                    if n.type == 'GROUP' and 'Toggle Shadow Ramp' in n.inputs:
+                        n.inputs['Toggle Shadow Ramp'].default_value = False
+                    elif n.type == 'GROUP' and 'Use Shadow Ramp' in n.inputs:
+                        n.inputs['Use Shadow Ramp'].default_value = 0.0
 
         self.blender_operator.report({'INFO'}, 'Imported textures')
         if cache_enabled and directory:

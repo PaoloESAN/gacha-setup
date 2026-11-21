@@ -32,7 +32,7 @@ def extract_clean_character_name(raw_name):
     noise_tokens = {
         "avatar", "armature", "model", "mesh", "ui", "costume", "root", "fbx", "pmx",
         "uemodel", "uimodel", "uim", "00", "01", "02", "03", "04", "000", "grp", "group",
-        "skin", "joint", "rig", "char", "character",
+        "skin", "joint", "rig", "char", "character", "standard",
         "female", "male", "lady", "girl", "boy", "loli", "size01", "size02", "size03",
         "size04", "npc", "base", "main", "common", "high", "low", "body", "face", "hair",
         "eye", "eyes", "eyerig", "facerig",
@@ -84,7 +84,7 @@ def extract_clean_character_name(raw_name):
 _GENERIC_RIG_NAME_RESULTS = {
     "armature", "character", "char", "root", "rig", "rigify", "metarig",
     "skeleton", "skel", "mesh", "model", "object", "collection", "scene",
-    "body", "face", "hair",
+    "body", "face", "hair", "standard",
     "lod", "lod0", "lod1", "lod2", "lod3",
 }
 
@@ -92,7 +92,7 @@ _GENERIC_RIG_NAME_RESULTS = {
 _STEM_NOISE_TOKENS = {
     "avatar", "art", "player", "chr", "s", "actor", "npc",
     "armature", "model", "mesh", "fbx", "pmx", "uemodel", "uimodel", "uim",
-    "ui", "costume", "root", "rig", "char", "character",
+    "ui", "costume", "root", "rig", "char", "character", "standard",
     "female", "male", "lady", "girl", "boy", "loli",
     "size01", "size02", "size03", "size04",
     "base", "main", "common", "high", "low", "grp", "group",
