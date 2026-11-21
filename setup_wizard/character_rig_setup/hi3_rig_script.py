@@ -4128,10 +4128,69 @@ def rig_character(
             pb.custom_shape_rotation_euler = rotation.to_euler()
             pb.custom_shape_translation = -(rotation @ (base * 0.85)) + bone_axes_inverse @ (dorsal * 0.025)
 
-    for side in ('L', 'R'):
-        breast = our_char.pose.bones.get('breast.' + side)
-        if breast:
-            breast.custom_shape_scale_xyz = (0.45,) * 3
+    breast_controls = [our_char.pose.bones.get('breast.' + side) for side in ('L', 'R')]
+    breast_controls = [c for c in breast_controls if c]
+    if breast_controls:
+        from math import cos, sin, pi
+        shape_name = 'WGT-' + our_char.name + '_breast'
+        breast_shape = bpy.data.objects.get(shape_name)
+        if breast_shape is None:
+            shape_mesh = bpy.data.meshes.new(shape_name)
+            vertices = [(0.5 * cos(2 * pi * i / 32), 0.0, 0.5 * sin(2 * pi * i / 32))
+                        for i in range(32)]
+            shape_mesh.from_pydata(vertices, [(i, (i + 1) % 32) for i in range(32)], [])
+            breast_shape = bpy.data.objects.new(shape_name, shape_mesh)
+            our_char.users_collection[0].objects.link(breast_shape)
+            breast_shape.hide_render = True
+            breast_shape.hide_set(True)
+        breast_meshes = [
+            m for m in bpy.context.scene.objects
+            if m.type == 'MESH' and any(
+                mod.type == 'ARMATURE' and mod.object == our_char
+                for mod in m.modifiers
+            )
+        ]
+        rig_inverse = our_char.matrix_world.inverted()
+        for control in breast_controls:
+            chain = {control.name, *(b.name for b in control.bone.children_recursive)}
+            def_bone = our_char.data.bones.get('DEF-' + control.name)
+            if def_bone:
+                chain.add(def_bone.name)
+                chain.update(b.name for b in def_bone.children_recursive)
+            target = control.bone.tail_local.copy()
+            clearance = max(0.01, control.length * 0.2)
+            region = []
+            region_weight = 0.0
+            for mesh in breast_meshes:
+                groups = {g.index for g in mesh.vertex_groups if g.name in chain}
+                if not groups:
+                    continue
+                to_rig = rig_inverse @ mesh.matrix_world
+                samples = []
+                for vertex in mesh.data.vertices:
+                    weight = sum(g.weight for g in vertex.groups if g.group in groups)
+                    if weight > 0.1:
+                        point = to_rig @ vertex.co
+                        samples.append((point, weight))
+                        target.y = min(target.y, point.y - clearance)
+                total_weight = sum(w for _, w in samples)
+                if total_weight > region_weight:
+                    region, region_weight = samples, total_weight
+            display_size = max(0.08, control.length * 0.85)
+            if region:
+                center = sum((p * w for p, w in region), Vector()) / region_weight
+                target.x, target.z = center.x, center.z
+                width = max(p.x for p, _ in region) - min(p.x for p, _ in region)
+                height = max(p.z for p, _ in region) - min(p.z for p, _ in region)
+                display_size = max(0.06, min(width, height) * 0.85)
+            target.x += display_size * 0.05 * (1 if control.name.endswith('.L') else -1)
+            transform = control.custom_shape_transform or control
+            inverse = transform.bone.matrix_local.to_3x3().normalized().inverted()
+            control.custom_shape = breast_shape
+            control.use_custom_shape_bone_size = False
+            control.custom_shape_scale_xyz = (display_size,) * 3
+            control.custom_shape_rotation_euler = inverse.to_euler('XYZ')
+            control.custom_shape_translation = inverse @ (target - transform.bone.head_local)
 
     from setup_wizard.character_rig_setup.pole_targets import setup_pole_targets
     setup_pole_targets(our_char, use_arm_ik_poles, use_leg_ik_poles)

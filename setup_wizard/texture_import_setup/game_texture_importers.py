@@ -2758,6 +2758,21 @@ class HonkaiImpact3rdTextureImporterFacade(GameTextureImporter):
                         t_name = tex_info.get("Name") or ""
                         if t_name:
                             tex_map[k] = t_name
+        # Simplified Unity Shader Extractor format ("textures" list)
+        simple_textures = json_data.get("textures")
+        if isinstance(simple_textures, list):
+            for entry in simple_textures:
+                if not isinstance(entry, dict):
+                    continue
+                if entry.get("empty"):
+                    continue
+                slot = entry.get("slot")
+                if not slot:
+                    continue
+                f_path = entry.get("file") or ""
+                t_name = os.path.splitext(os.path.basename(f_path))[0] if f_path else (entry.get("name") or "")
+                if t_name and slot not in tex_map:
+                    tex_map[slot] = t_name
         return tex_map
 
     def import_textures(self):
@@ -2815,17 +2830,28 @@ class HonkaiImpact3rdTextureImporterFacade(GameTextureImporter):
                         texture_file_map[f_low] = full_p
                     elif f_low.endswith('.json'):
                         stem = os.path.splitext(f)[0].lower()
-                        if stem not in material_json_map:
-                            try:
-                                with open(full_p, 'r', encoding='utf-8') as jf:
-                                    jdata = json.load(jf)
-                                if isinstance(jdata, dict) and "m_SavedProperties" in jdata:
+                        try:
+                            with open(full_p, 'r', encoding='utf-8') as jf:
+                                jdata = json.load(jf)
+                            if isinstance(jdata, dict) and (
+                                "m_SavedProperties" in jdata
+                                or any(k in jdata for k in ("floats", "colors", "textures", "keywords"))
+                            ):
+                                if stem not in material_json_map:
                                     material_json_map[stem] = jdata
-                                    m_name = (jdata.get("m_Name") or "").lower()
-                                    if m_name:
-                                        material_json_map[m_name] = jdata
-                            except Exception:
-                                pass
+                                m_name = (jdata.get("m_Name") or jdata.get("name") or "").lower()
+                                if m_name and m_name not in material_json_map:
+                                    material_json_map[m_name] = jdata
+                            elif isinstance(jdata, list):
+                                for entry in jdata:
+                                    if isinstance(entry, dict) and any(
+                                        k in entry for k in ("m_SavedProperties", "floats", "colors", "textures", "keywords")
+                                    ):
+                                        m_name = (entry.get("m_Name") or entry.get("name") or "").lower()
+                                        if m_name and m_name not in material_json_map:
+                                            material_json_map[m_name] = entry
+                        except Exception:
+                            pass
 
         def load_img(fpath, colorspace='sRGB'):
             if not fpath or not os.path.isfile(fpath):
@@ -2872,6 +2898,7 @@ class HonkaiImpact3rdTextureImporterFacade(GameTextureImporter):
                 for n in mat.node_tree.nodes
             )
             part_key = 'face' if is_face else \
+                       'eyeshadow' if ('eyeshadow' in orig_low or 'shadow_eye' in orig_low) else \
                        'hair' if 'hair' in orig_low else \
                        'eye' if 'eye' in orig_low else \
                        'body' if 'body' in orig_low else orig_low.split('_')[-1]

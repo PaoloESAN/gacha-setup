@@ -110,6 +110,18 @@ def _eye_controller_nodes(materials):
     return result
 
 
+def _mouth_controller_nodes(materials):
+    """Returns list of (mat, grp_node) for HI3_Mouth_Atlas_Controller nodes on mouth materials."""
+    result = []
+    for mat in materials:
+        if not mat or not mat.node_tree or "outlines" in mat.name.lower():
+            continue
+        grp = mat.node_tree.nodes.get("HI3_Mouth_Atlas_Controller")
+        if grp and grp.type == 'GROUP':
+            result.append((mat, grp))
+    return result
+
+
 def prepare_character_settings(arm, materials):
     ensure_character_node_trees_isolated(arm, materials)
     nodes = _global_nodes(materials)
@@ -188,6 +200,38 @@ def prepare_character_settings(arm, materials):
                 target = grp_node.inputs['Eye Type']
                 if not any(link.from_socket == source for link in target.links):
                     nt.links.new(source, target)
+
+    # Wire 4x4 Mouth Atlas Controller (Mouth Type 1..16)
+    mouth_ctrls = _mouth_controller_nodes(materials)
+    if mouth_ctrls:
+        sock_name = "Mouth Type"
+        mouth_sock = _interface_socket(tree, sock_name, 'OUTPUT')
+        init_val = int(mouth_ctrls[0][1].inputs['Mouth Type'].default_value) if 'Mouth Type' in mouth_ctrls[0][1].inputs else 1
+        init_val = max(1, min(16, init_val))
+        if not mouth_sock:
+            if hasattr(tree, 'interface'):
+                mouth_sock = tree.interface.new_socket(
+                    name=sock_name, in_out='OUTPUT', socket_type='NodeSocketInt'
+                )
+            else:
+                mouth_sock = tree.outputs.new('NodeSocketInt', sock_name)
+            mouth_sock.min_value = 1
+            mouth_sock.max_value = 16
+            mouth_sock.default_value = init_val
+            if sock_name in output.inputs:
+                output.inputs[sock_name].default_value = init_val
+        else:
+            mouth_sock.min_value = 1
+            mouth_sock.max_value = 16
+        for mat, grp_node in mouth_ctrls:
+            nt = mat.node_tree
+            global_node = next((n for n in nt.nodes if n.type == 'GROUP' and n.node_tree == tree), None)
+            if not global_node or sock_name not in global_node.outputs or 'Mouth Type' not in grp_node.inputs:
+                continue
+            source = global_node.outputs[sock_name]
+            target = grp_node.inputs['Mouth Type']
+            if not any(link.from_socket == source for link in target.links):
+                nt.links.new(source, target)
 
     tree['_hi3_character_settings_ready'] = True
     tree['_hi3_eye_settings_ready'] = True
@@ -374,20 +418,63 @@ class HI3_PT_CharacterSettings(Panel):
         shadow_position = output.inputs.get('Shadow Position')
         if shadow_position:
             shadow.column(align=True).prop(shadow_position, 'default_value', text='Shadow Position', slider=True)
-        blush = output.inputs.get('Exp Blush Intensity')
-        left_eye = output.inputs.get('Left Eye Type')
-        right_eye = output.inputs.get('Right Eye Type')
-        if blush or left_eye or right_eye:
-            face = layout.box()
-            face.label(text='Face', icon='USER')
-            face_col = face.column(align=True)
-            if blush:
-                face_col.prop(blush, 'default_value', text='Exp Blush Intensity', slider=True)
-            if left_eye:
-                face_col.prop(left_eye, 'default_value', text='Left Eye Type', slider=True)
-            if right_eye:
-                face_col.prop(right_eye, 'default_value', text='Right Eye Type', slider=True)
         _draw_physics(layout, context)
+
+
+def _iter_armature_materials(arm):
+    from setup_wizard.ui.character_settings_utils import _iter_rig_meshes
+    seen = set()
+    for obj in _iter_rig_meshes(arm):
+        for mat in obj.data.materials:
+            if mat and mat not in seen:
+                seen.add(mat)
+                yield mat
+
+
+def has_face_settings(arm):
+    if arm is None:
+        return False
+    for mat in _iter_armature_materials(arm):
+        if not mat.node_tree:
+            continue
+        for node in mat.node_tree.nodes:
+            if node.name in ('HI3_Eye_Atlas_Controller', 'HI3_Mouth_Atlas_Controller'):
+                return True
+            if (node.type == 'GROUP' and node.node_tree
+                    and 'impacttoon - face' in node.node_tree.name.lower()
+                    and '_ExpBlushIntensity' in node.inputs):
+                return True
+    return False
+
+
+def draw_face_settings(layout, arm, context=None):
+    materials = list(_iter_armature_materials(arm))
+    output = _ready_output(arm, materials)
+    if not output:
+        if _global_nodes(materials):
+            _queue_prepare()
+            layout.label(text='Loading face settings…')
+        else:
+            layout.label(text='Set up HI3 materials first', icon='INFO')
+        return
+    blush = output.inputs.get('Exp Blush Intensity')
+    left_eye = output.inputs.get('Left Eye Type')
+    right_eye = output.inputs.get('Right Eye Type')
+    mouth_type = output.inputs.get('Mouth Type')
+    if blush or left_eye or right_eye or mouth_type:
+        face = layout.box()
+        face.label(text='Face', icon='FACESEL')
+        face_col = face.column(align=True)
+        if blush:
+            face_col.prop(blush, 'default_value', text='Exp Blush Intensity', slider=True)
+        if left_eye:
+            face_col.prop(left_eye, 'default_value', text='Left Eye Type', slider=True)
+        if right_eye:
+            face_col.prop(right_eye, 'default_value', text='Right Eye Type', slider=True)
+        if mouth_type:
+            face_col.prop(mouth_type, 'default_value', text='Mouth Type', slider=True)
+    else:
+        layout.label(text='No face settings on this character', icon='INFO')
 
 
 def unregister_pending():
