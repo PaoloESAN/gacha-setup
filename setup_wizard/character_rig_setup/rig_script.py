@@ -1095,9 +1095,9 @@ def rig_character(
                 index_plane_normal = cross_vec.normalized()
 
         if not index_plane_normal and hand_mb:
-            index_plane_normal = hand_mb.matrix.col[2].normalized()
+            index_plane_normal = hand_mb.matrix.col[2].to_3d().normalized()
         elif not index_plane_normal and hand_ab:
-            index_plane_normal = hand_ab.matrix.col[2].normalized()
+            index_plane_normal = hand_ab.matrix.col[2].to_3d().normalized()
 
         if not index_plane_normal:
             continue

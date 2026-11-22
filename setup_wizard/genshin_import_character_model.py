@@ -1746,7 +1746,16 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                     GameType.ARKNIGHTS_ENDFIELD.name,
                 ):
                     if armatures:
+                        bone_parented_meshes = [
+                            (m, m.matrix_world.copy())
+                            for m in bpy.data.objects
+                            if m.type == "MESH" and m.parent == armatures[0] and m.parent_type == "BONE"
+                        ]
                         reorient_armature_bones(armatures[0])
+                        if bone_parented_meshes:
+                            context.view_layer.update()
+                            for m, world_mat in bone_parented_meshes:
+                                m.matrix_world = world_mat
 
             self.rename_mesh_color_attribute_name(
                 SHADER_COLOR_ATTRIBUTE_NAME

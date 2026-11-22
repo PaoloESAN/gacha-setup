@@ -52,6 +52,11 @@ def rig_character(
             raise RuntimeError("No armature found. Please select the character's armature and try again.")
 
     temp_armature = head_bone_arm_target.data
+    bone_parented_meshes = [
+        (m, m.matrix_world.copy())
+        for m in bpy.data.objects
+        if m.type == 'MESH' and m.parent == head_bone_arm_target and m.parent_type == 'BONE'
+    ]
 
     bpy.ops.object.mode_set(mode='EDIT')
 
@@ -494,8 +499,10 @@ def rig_character(
                      
                                                                    
 
-    armature.edit_bones["shoulder.L"].roll += 3.14
-    armature.edit_bones["shoulder.R"].roll -= 3.14        
+    if "shoulder.L" in armature.edit_bones:
+        armature.edit_bones["shoulder.L"].align_roll(Vector((0, 0, 1)))
+    if "shoulder.R" in armature.edit_bones:
+        armature.edit_bones["shoulder.R"].align_roll(Vector((0, 0, 1)))
  
 
                                     
@@ -667,6 +674,22 @@ def rig_character(
             o.select_set(True)
 
     bpy.ops.object.mode_set(mode='EDIT')
+    # Fix unpositioned .03 finger tip bones in metarig when source armature only has 2-bone fingers
+    for side in [".L", ".R"]:
+        for fname in ["thumb", "f_index", "f_middle", "f_ring", "f_pinky"]:
+            b_02 = metarm.edit_bones.get(f"{fname}.02{side}")
+            b_03 = metarm.edit_bones.get(f"{fname}.03{side}")
+            has_source_03 = (
+                f"DEF-{fname}.03{side}" in armature.edit_bones
+                or f"{fname}.03{side}" in armature.edit_bones
+            )
+            if b_02 and b_03 and not has_source_03:
+                dir_02 = b_02.tail - b_02.head
+                if dir_02.length > 0.0001:
+                    b_03.head = b_02.tail.copy()
+                    b_03.tail = b_02.tail + dir_02 * 0.6
+                    b_03.roll = b_02.roll
+
     # Align hand.L and hand.R metarig bones straight along forearm vector so hand_ik widget is centered on wrist
     forearm_R = metarm.edit_bones.get("forearm.R")
     hand_R = metarm.edit_bones.get("hand.R")
@@ -706,9 +729,9 @@ def rig_character(
                     index_plane_normal = cross_vec.normalized()
 
             if not index_plane_normal and hand_mb:
-                index_plane_normal = hand_mb.matrix.col[2].normalized()
+                index_plane_normal = hand_mb.matrix.col[2].to_3d().normalized()
             elif not index_plane_normal and hand_ab:
-                index_plane_normal = hand_ab.matrix.col[2].normalized()
+                index_plane_normal = hand_ab.matrix.col[2].to_3d().normalized()
 
             if not index_plane_normal:
                 continue
@@ -757,6 +780,11 @@ def rig_character(
             metarm.edit_bones["upper_arm.L"].tail.y += .003
         if "upper_arm.R" in metarm.edit_bones:
             metarm.edit_bones["upper_arm.R"].tail.y += .003
+
+    if "shoulder.L" in metarm.edit_bones:
+        metarm.edit_bones["shoulder.L"].align_roll(Vector((0, 0, 1)))
+    if "shoulder.R" in metarm.edit_bones:
+        metarm.edit_bones["shoulder.R"].align_roll(Vector((0, 0, 1)))
 
     ###########  DETACH PHYSICS BONES,  
 
@@ -1211,7 +1239,7 @@ def rig_character(
     
     this_obj.pose.bones["chest"].custom_shape = bpy.data.objects["chest"]
     this_obj.pose.bones["chest"].custom_shape_scale_xyz = (0.6,0.6,0.6)
-    this_obj.pose.bones["chest"].custom_shape_translation = (0.0,0.18,0.0)
+    this_obj.pose.bones["chest"].custom_shape_translation = (0.0,0.08,0.0)
     this_obj.pose.bones["chest"].custom_shape_rotation_euler[0] = 1.5708
     this_obj.pose.bones["chest"].use_custom_shape_bone_size = False
     
@@ -1256,6 +1284,12 @@ def rig_character(
     # Select lighting panel armature
     lighting_panel_rig_obj = bpy.data.objects.get(LightingPanelNames.Objects.LIGHTING_PANEL)
     if lighting_panel_rig_obj:
+        if our_char and our_char.data.bones.get('neck'):
+            lp_bone = lighting_panel_rig_obj.data.bones.get(LightingPanelNames.Bones.LIGHTING_PANEL)
+            if lp_bone:
+                neck_world_z = (our_char.matrix_world @ our_char.data.bones['neck'].head_local).z
+                lp_world_z = (lighting_panel_rig_obj.matrix_world @ lp_bone.head_local).z
+                lighting_panel_rig_obj.location.z += (neck_world_z - lp_world_z)
         lighting_panel_rig_obj.select_set(True)
 
     # Select eye rig    
@@ -2512,10 +2546,10 @@ def rig_character(
         return "\n        if is_selected({'"+bone+"'}):\n            group1 = layout.row(align=True)\n            group2 = group1.split(factor=0.75, align=True)\n            props = group2.operator('pose.rigify_switch_parent_"+rig_char_id+"\', text=\'Parent Switch\', icon=\'DOWNARROW_HLT\')\n            props.bone = \'"+prop1+"\'\n            props.prop_bone = \'"+prop2+"\'\n            props.prop_id=\'IK_parent\'\n            props.parent_names = '[\"None\", \"root\", \"root.001\", \"root.002\", \"torso\", \"chest\"]'\n            props.locks = (False, False, False)\n            group2.prop(pose_bones['"+prop2+"'], '[\"IK_parent\"]', text='')\n            props = group1.operator('pose.rigify_switch_parent_bake_"+rig_char_id+"', text='', icon='ACTION_TWEAK')\n            props.bone = \'"+prop1+"\'\n            props.prop_bone='"+prop2+"'\n            props.prop_id='IK_parent'\n            props.parent_names='[\"None\", \"root\", \"root.001\", \"root.002\", \"torso\", \"chest\"]'\n            props.locks = (False, False, False)"
         
     def generate_string_for_settings_slider():
-        return '\n        if is_selected({"plate-settings"}):\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Tracker Controller"]\', text="Use Head Controller", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Head Follow"]\', text="Head Follow", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Neck Follow"]\', text="Neck Follow", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Toggle Shoulder Constraints"]\', text="Auto Shoulder Constraints", slider=True)'
+        return '\n        if is_selected({"plate-settings"}):\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Controller", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Head Follow"]\', text="Head Follow", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Neck Follow"]\', text="Neck Follow", slider=True)\n            layout.prop(pose_bones["plate-settings"], \'["Toggle Shoulder Constraints"]\', text="Auto Shoulder Constraints", slider=True)'
 
     def generate_string_for_head_controller_slider():
-        return '\n        if is_selected({"head-controller"}):\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Tracker Controller"]\', text="Use Head Controller", slider=True)\n        if is_selected({"head"}):\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Tracker Controller"]\', text="Use Head Controller", slider=True)'
+        return '\n        if is_selected({"head-controller"}):\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Controller", slider=True)\n        if is_selected({"head"}):\n            layout.prop(pose_bones["plate-settings"], \'["Use Head Controller"]\', text="Use Head Controller", slider=True)'
 
     splices = [
         {"divider": "num_rig_separators[0] += 1", "text": generate_string_for_parent_switch("forearm_tweak-pin.L")},
@@ -2947,6 +2981,19 @@ def rig_character(
 
     from setup_wizard.character_rig_setup.pole_targets import setup_pole_targets
     setup_pole_targets(this_obj, use_arm_ik_poles, use_leg_ik_poles)
+
+    from setup_wizard.character_rig_setup.rig_script import (
+        initialize_genshin_rim_x,
+        apply_genshin_lighting_rest_pose,
+    )
+    initialize_genshin_rim_x(this_obj)
+    apply_genshin_lighting_rest_pose(this_obj)
+
+    if bone_parented_meshes:
+        bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.context.view_layer.update()
+        for m, world_mat in bone_parented_meshes:
+            m.matrix_world = world_mat
 
     # MOVING OF BONES END -------------------------------    
 def setup_neck_and_head_follow(neck_follow_value, head_follow_value):

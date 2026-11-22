@@ -251,7 +251,8 @@ class GenshinImpactCharacterRigger(CharacterRigger):
         number_of_hand_bone_children = max([len(hand_bone.children) for hand_bone in hand_bones]) if hand_bones else 0
         is_player_hand = number_of_hand_bone_children >= 5
         avatar_in_texture_name = self.__get_body_diffuse_texture_name().startswith('Avatar')
-        is_playable_character = avatar_in_texture_name or is_player_hand
+        has_spine2 = 'Bip001 Spine2' in armature.data.bones
+        is_playable_character = has_spine2 and (avatar_in_texture_name or is_player_hand)
 
         # Lighting Panel is an Armature, so it's important this goes after the armature variable initialization above
         # Genshin Shader >= v3.4
