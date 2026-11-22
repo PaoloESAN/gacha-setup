@@ -1,0 +1,84 @@
+---
+title: "Wuthering Waves (WuWa) dans Blender — Lights+ & Coloramp Toon Shader"
+description: "Contrôle de la direction lumineuse Lights+, préréglages, palette de couleurs et toon shader pour Wuthering Waves (WuWa) dans Blender."
+---
+
+import { Image } from 'astro:assets';
+import wuwaLightdir from '../../../../assets/content/wuwa/wuwa-lightdir.png';
+import wuwaLight1 from '../../../../assets/content/wuwa/wuwa-light1.png';
+import wuwaLight2 from '../../../../assets/content/wuwa/wuwa-light2.png';
+import wuwaLight3 from '../../../../assets/content/wuwa/wuwa-light3.png';
+import wuwaLight4 from '../../../../assets/content/wuwa/wuwa-light4.png';
+import wuwaAnimateMode from '../../../../assets/content/wuwa/wuwa-animate-mode.png';
+
+## 1. Contrôler la direction de la lumière et des ombres
+
+Lors de la configuration du personnage, un objet dédié `Light Direction_<Character>` est créé dans la collection de votre scène.
+
+1. Localisez `Light Direction_<Character>` dans le panneau **Outliner**.
+2. Ouvrez le panneau **Item Transform** dans Object Properties.
+3. Ajustez les valeurs **Rotation** (XYZ Euler) pour faire pivoter le vecteur lumineux :
+   - **Rotation Z** : Fait pivoter l'angle du soleil horizontalement autour du personnage.
+   - **Rotation Y** : Ajuste l'inclinaison horizontale de la lumière sur le personnage.
+   - **Rotation X** : Ajuste l'inclinaison verticale de la ligne d'ombre.
+
+<Image src={wuwaLightdir} alt="Ajustement de la rotation de l'objet Light Direction dans l'Outliner pour Wuthering Waves" loading="eager" />
+
+---
+
+## 2. Character Settings (Panneau Item)
+
+Sélectionnez le maillage ou l'armature de votre personnage et appuyez sur `N` dans la vue 3D. Ouvrez l'onglet **Item** pour accéder au panneau **Character Settings**, offrant des contrôles en temps réel sans avoir à modifier manuellement les arbres de nœuds de shader :
+
+- **Animate Mode** : Remplace temporairement les toon shaders complexes par des matériaux légers pour garantir une lecture fluide de l'animation dans la vue 3D.
+- **Lighting Mode** : Basculez entre les préréglages d'éclairage ambiant intégrés ou choisissez Custom pour ajuster individuellement les canaux de couleur.
+- **Blush** : Ajuste l'intensité de la texture de rougissement facial du personnage.
+- **Toggle Resonator Star** : Active ou désactive la visibilité/le pilote d'animation de l'emblème d'étoile Resonator du personnage.
+- **Use Fresnel** : Active l'effet de contour Fresnel sur le shader.
+- **Alpha Transparency** : Basculez facilement la transparence sur les matériaux alpha (tels que les voiles transparents, dentelles et rubans de cheveux) entre transparence mélangée et rendu solide.
+- **Outlines** : Basculez entre les couleurs de contour Default et Custom, et ajustez **Outline Thickness**.
+
+<Image src={wuwaLight1} alt="Panneau Character Settings pour Wuthering Waves" loading="lazy" />
+
+### Modes d'éclairage et préréglages
+
+Vous pouvez choisir parmi plusieurs modes de préréglages d'éclairage soignés :
+
+- **Default** : Base d'éclairage originale du jeu.
+- **Sunrise** : Lueur matinale chaude et douce avec de légères teintes d'ombre bleu-violet.
+- **Day** : Éclairage de jour net et équilibré.
+- **Sunset** : Tons d'heure dorée avec des reflets ambrés chauds et des ombres riches.
+- **Night** : Tons de clair de lune froids et tamisés.
+- **Rainy** : Ombrage atmosphérique couvert et diffus.
+- **Custom** : Débloque le contrôle granulaire sur les sélecteurs de couleur Ambient, Light, Shadow et Rim.
+
+<Image src={wuwaLight2} alt="Menu déroulant des préréglages Lighting Mode de Wuthering Waves" loading="lazy" />
+
+<Image src={wuwaLight3} alt="Fresnel Options et Custom Outline Colors dans Character Settings de Wuthering Waves" loading="lazy" />
+
+### Fresnel & Outlines
+
+- **Use Fresnel** : Activez-le pour révéler le sous-panneau **Fresnel Options** (**Fresnel Color**, **Fresnel Scale**, **Fresnel Strength**).
+- **Outlines** : Réglez sur **Custom** pour révéler **Custom Outline Colors** (**Outline Color 1 / 2**) ainsi que **Outline Thickness**.
+
+### Couleurs personnalisées (Custom Mode)
+
+Lorsque **Lighting Mode** est réglé sur **Custom**, le sous-panneau **Custom Colors** apparaît pour vous permettre d'ajuster finement chaque canal du shader Gustling Waters :
+
+- **Ambient** : Contrôle la couleur d'illumination ambiante de base non ombrée.
+- **Light** : Teinte de couleur appliquée aux régions entièrement éclairées.
+- **Shadow** : Ton appliqué aux régions ombrées/occluses.
+- **Rim** : Couleur du reflet lumineux de contour spéculaire.
+
+<Image src={wuwaLight4} alt="Panneau Custom mode affichant la palette Custom Colors, Toggle Resonator Star et Alpha Transparency" loading="lazy" />
+
+### Resonator Star & Alpha Transparency
+
+- **Toggle Resonator Star** : Bouton en un clic pour activer ou désactiver la visibilité et le pilote d'animation de l'emblème d'étoile Resonator du personnage.
+- **Alpha Transparency** : Case à cocher pour basculer la transparence sur les matériaux basés sur l'alpha (tels que les voiles transparents, dentelles et rubans de cheveux) entre transparence mélangée et rendu solide.
+
+### Animate Mode
+
+Pour une lecture d'animation fluide et sans ralentissement dans la vue 3D, cliquez sur **Enable Animate Mode** dans le panneau Character Settings. Cela remplace temporairement les arbres de toon shader complexes par des matériaux légers à faible surcharge pendant que vous animez, et vous pouvez revenir en arrière en un clic lors de la préparation de votre rendu final.
+
+<Image src={wuwaAnimateMode} alt="Enable Animate Mode dans Character Settings de Wuthering Waves" loading="lazy" />

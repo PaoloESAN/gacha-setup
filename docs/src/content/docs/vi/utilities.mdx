@@ -1,0 +1,128 @@
+---
+title: "Tiện ích, FBX & VMD trong Blender"
+description: "Các công cụ, hướng dẫn và tài nguyên hữu ích để nhập character models (FBX, VMD), cấu hình Lights+ và tối ưu anime toon shaders trong Blender."
+---
+
+import { Image } from 'astro:assets';
+import vmdMotionImg from '../../../assets/content/utilities/vmd_motion.png';
+import eyeThroughHair1 from '../../../assets/content/utilities/eye-through-hair1.mp4';
+import eyeThroughHair2 from '../../../assets/content/utilities/eye-through-hair2.mp4';
+import hairShadowImg from '../../../assets/content/utilities/hair-shadow.png';
+
+## Jideeh's Camera
+
+### Cách sử dụng
+
+- **Yellow L corners / AIM**: Có thể thay đổi tỷ lệ. Camera theo dõi widget này để ngắm. Nếu thay đổi tỷ lệ, FOV sẽ được điều chỉnh.
+- **Orange Circle / FOCUS**: Điều khiển độ sâu trường ảnh (depth of field) — điểm lấy nét gần hay xa của camera.
+- **Purple Circle / PIVOT**: Điều khiển tâm quỹ đạo xoay của camera.
+- **Curved Yellow Line / FREQ**: Điều khiển tần số rung lắc.
+- **Vertical Yellow Slider / SHAKE_Y**: Điều khiển cường độ rung theo trục Y.
+- **Horizontal Yellow Slider / SHAKE_X**: Điều khiển cường độ rung theo trục X.
+- **Widget có chữ F / DOF**: Nút bật/tắt độ sâu trường ảnh.
+- **ROOT**: Bộ điều khiển tổng thể của camera.
+- **CAM (phía sau camera)**: Hoạt động như một bộ ổn định camera. Bạn có thể di chuyển camera mà không làm thay đổi hướng ngắm.
+
+### Video tham khảo
+
+<div class="video-container">
+  <iframe loading="lazy"
+    src="https://www.youtube-nocookie.com/embed/uU-YNxzpVE8"
+    title="Tham khảo Jideeh's Camera"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    referrerpolicy="strict-origin-when-cross-origin"
+    allowfullscreen>
+  </iframe>
+</div>
+
+---
+
+## Eye Through Hair
+
+Giúp mắt và lông mày của nhân vật hiển thị xuyên qua hình học của tóc.
+
+### Tự động:
+
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={eyeThroughHair1} type="video/mp4" />
+</video>
+
+### Cách điều chỉnh độ mờ đục:
+
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={eyeThroughHair2} type="video/mp4" />
+</video>
+
+### Thủ công
+
+Dành cho những ai cần thiết lập thủ công hoặc muốn hiểu từng bước cách hoạt động của Shader to RGB và các AOV pass:
+
+<div class="video-container">
+  <iframe loading="lazy"
+    src="https://www.youtube-nocookie.com/embed/ZEjIt1ubZKU"
+    title="Cách nhìn thấy mắt xuyên qua tóc [Blender 5.2] - Hướng dẫn Blender"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    referrerpolicy="strict-origin-when-cross-origin"
+    allowfullscreen>
+  </iframe>
+</div>
+
+---
+
+## Hair Shadows
+
+:::caution[Thử nghiệm]
+Tính năng này đang ở giai đoạn thử nghiệm và có thể tạo ra kết quả không mong muốn.
+
+**Không thể sử dụng Hair Shadows cùng lúc với See Eye Through.**
+:::
+
+Thêm bóng đổ từ tóc của nhân vật lên khuôn mặt trong Blender 5.2 trở lên.
+
+1. Trong **Object Mode**, chọn một mesh nhân vật hoặc armature của nó. Nhân vật cần có các vật liệu tên là Face và Hair hoặc Bangs để công cụ có thể nhận diện khuôn mặt và tóc.
+2. Trong **Gacha Setup → Utilities**, nhấp **Hair Shadows**.
+3. Mở **Compositor** và chọn nhóm **Hair Shadows** của nhân vật. Điều chỉnh **Offset X** và **Offset Y** để định vị bóng đổ, **Shadow Tint** cho màu sắc và **Strength** cho cường độ.
+
+<Image src={hairShadowImg} alt="Nhóm compositor Hair Shadows và hiệu ứng lên khuôn mặt nhân vật" loading="lazy" />
+
+Công cụ sẽ tự động bật compositor của viewport. Kiểm tra kết quả ở chế độ rendered shading hoặc trong ảnh kết xuất. Chạy lại công cụ trên cùng một nhân vật để cập nhật hiệu ứng hiện có.
+
+---
+
+## Apply VMD Motion
+
+:::caution[Yêu cầu MMD Tools]
+Bạn cần cài đặt add-on **MMD Tools** trong Blender để nhập VMD Motion.
+:::
+
+1. Chọn armature của nhân vật.
+2. Nhấp **Gacha Setup → Utilities → Apply VMD Motion** và chọn tệp `.vmd` của bạn.
+
+   <Image src={vmdMotionImg} alt="Tùy chọn chọn và nhập chuyển động VMD" loading="lazy" />
+
+3. Điều chỉnh các tùy chọn ở góc trên bên phải nếu cần, sau đó xác nhận bằng **Apply VMD Motion**.
+
+:::caution
+Quá trình này có thể mất một chút thời gian, đặc biệt là khi nhập biểu cảm khuôn mặt. Hãy đợi cho đến khi hoàn tất.
+:::
+
+---
+
+## Hướng dẫn & Tài liệu
+
+### Vật lý tóc & quần áo (Damped Track)
+
+Nhờ video này, hệ thống vật lý tóc & quần áo đã được triển khai cho add-on này.
+
+<div class="video-container">
+  <iframe loading="lazy"
+    src="https://www.youtube-nocookie.com/embed/tQV_wPQ8rBk"
+    title="Movimiento de cabello/ropa - Damped Track"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    referrerpolicy="strict-origin-when-cross-origin"
+    allowfullscreen>
+  </iframe>
+</div>

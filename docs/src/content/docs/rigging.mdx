@@ -1,6 +1,6 @@
 ---
-title: Rigging
-description: Overview of character rigging, bone collections, Rig Layers, facial control boards, IK/FK cog settings, and head controllers.
+title: "Rigging"
+description: "Overview of character rigging in Blender: bone collections, Rig Layers, facial expression control boards, IK/FK cog settings, and head controllers for anime character models."
 ---
 
 import { Image } from 'astro:assets';
@@ -54,15 +54,15 @@ An integrated facial rig structure designed for expressive anime mouth and eye a
 
 ## Rig Layers (Bone Collections)
 
-In Blender 5.2+ and 4.x, armatures utilize organized bone collections. The **Rig Layers** panel in the 3D Viewport sidebar lets you toggle body parts on and off while animating, or solo individual layers using the solo star buttons (<Icon name="star" class="inline-icon" />):
+In Blender 5.2+ and 4.x, armatures utilize organized bone collections. The **Rig Layers** tab inside **Character Settings** (in the **Item** tab of the 3D Viewport sidebar) lets you toggle body parts on and off while animating, or solo individual layers using the solo star buttons (<Icon name="star" class="inline-icon" />):
 
-<Image src={rigLayersImg} alt="Rig Layers panel in Blender" loading="lazy" />
+<Image src={rigLayersImg} alt="Rig Layers tab in Character Settings" loading="lazy" />
 
 ### Standard Rig Layer Categories
 
-1. **Face & Details**:
-   - `Face`, `Face (Detail)`: Expression bones, mouth shapes, and eyebrows.
-   - `Face (Primary)`, `Face (Secondary)`: Core facial controllers and secondary skin drivers.
+1. **Lighting & Face**:
+   - `Lighting`: 3D lighting panel and `Light Direction` bone controls.
+   - `Face`: Expression bones, mouth shapes, eyebrows, and eye tracking.
 2. **Torso & Spine**:
    - `Torso (IK)`: Torso inverse kinematics controls.
    - `Torso (FK)`: Forward kinematics spine rotation bones.
@@ -77,6 +77,7 @@ In Blender 5.2+ and 4.x, armatures utilize organized bone collections. The **Rig
    - `Offsets`: Position offsets for root and attachment accessories.
    - `Weapon`: Props and equipped character weapons.
    - `Root`: Master character placement bone.
+   - `Hair`, `Clothes`, `Cage`, `Other`: Secondary physics chains, deformation cages, and miscellaneous bones.
 
 ---
 

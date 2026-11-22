@@ -1,6 +1,6 @@
 ---
-title: Character Assets
-description: Where to download character assets (models, textures, and materials) for each supported game.
+title: "Character Assets"
+description: "Where to download FBX and UEFormat character models, textures, and materials for Genshin Impact, HSR, ZZZ, WuWa, NTE, and Arknights: Endfield in Blender."
 ---
 
 ## Where to Download Character Assets
@@ -11,20 +11,20 @@ Here you can find the places where you can download the character assets, which 
 
 - [Character Assets](https://hjtstudio.com/gi) by **[jideeh](https://ko-fi.com/jideeh)**, **hiragara**, **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)**
 - [Character Assets](https://drive.google.com/drive/folders/10Ib8DochTJrYPgygMxgdZXwp7TBiBlA2) by **hiragara**
-- [Character Assets](https://assets.hoyotoon.com/?game=gi&type=characters) by **HoyoToon** · [Discord](https://discord.com/invite/hoyotoon) · **On hiatus until further notice**
-- [SkillObjects](https://genshin-skillobj.pages.dev/) by **[vei](https://x.com/heikzs)**
+- [GI Characters - HoyoToon Assets](https://rehoyotoon.pages.dev/gi/characters/) by **[HoyoToon Assets](https://rehoyotoon.pages.dev/)** · [Discord](https://discord.com/invite/hoyotoon)
+- [SkillObjects](https://vei-z.pages.dev/) by **[vei](https://x.com/heikzs)**
 
 ### HSR
 
 - [Character Assets](https://hjtstudio.com/hsr) by **[jideeh](https://ko-fi.com/jideeh)**, **hiragara**, **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)**
 - [Character Assets](https://drive.google.com/drive/folders/1KTC40gnQPytyrl-7zZm1QJOgQbWIZhOU) by **hiragara**
-- [Character Assets](https://assets.hoyotoon.com/?game=hsr&type=characters) by **HoyoToon** · [Discord](https://discord.com/invite/hoyotoon) · **On hiatus until further notice**
+- [HSR Characters - HoyoToon Assets](https://rehoyotoon.pages.dev/hsr/characters/) by **[HoyoToon Assets](https://rehoyotoon.pages.dev/)** · [Discord](https://discord.com/invite/hoyotoon)
 
 ### ZZZ
 
 - [Character Assets](https://hjtstudio.com/zzz) by **[jideeh](https://ko-fi.com/jideeh)**, **hiragara**, **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)**
 - [Character Assets](https://drive.google.com/drive/folders/1hdXOi_2WFI-ktAt-jpn-b-OKUnQlJCKW) by **hiragara**
-- [Character Assets](https://assets.hoyotoon.com/?game=zzz&type=characters) by **HoyoToon** · [Discord](https://discord.com/invite/hoyotoon) · **On hiatus until further notice**
+- [ZZZ Agents - HoyoToon Assets](https://rehoyotoon.pages.dev/zzz/characters/) by **[HoyoToon Assets](https://rehoyotoon.pages.dev/)** · [Discord](https://discord.com/invite/hoyotoon)
 
 ### NTE
 
@@ -45,7 +45,7 @@ Here you can find the places where you can download the character assets, which 
 
 - [Character Assets](https://hjtstudio.com/hi3) by **[jideeh](https://ko-fi.com/jideeh)**, **hiragara**, **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)**
 - [Character Assets](https://drive.google.com/drive/folders/1QjJMSQV2luuHkrh0E5rcdIlKnT4W8LiT?usp=drive_link) by **hiragara**
-- [Character Assets](https://assets.hoyotoon.com/?game=hi3&type=characters) by **HoyoToon** · [Discord](https://discord.com/invite/hoyotoon) · **On hiatus until further notice**
+- [HI3 Companions - HoyoToon Assets](https://rehoyotoon.pages.dev/hi3/companions/) by **[HoyoToon Assets](https://rehoyotoon.pages.dev/)** · [Discord](https://discord.com/invite/hoyotoon)
 
 ### HNA
 
@@ -56,3 +56,7 @@ Here you can find the places where you can download the character assets, which 
 
 - [Character Assets](https://hjtstudio.com/ef) by **[jideeh](https://ko-fi.com/jideeh)**, **hiragara**, **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)**
 - [Character Assets](https://drive.google.com/drive/folders/1HhYu3KYx01vCzc_O6Kd4TacP-XCQSLx7?usp=drive_link) by **hiragara**
+
+### Miliastra Wonderland
+
+- [MW Customizer - HoyoToon Assets](https://rehoyotoon.pages.dev/miliastra/customizer/) by **[HoyoToon Assets](https://rehoyotoon.pages.dev/)** · [Discord](https://discord.com/invite/hoyotoon)

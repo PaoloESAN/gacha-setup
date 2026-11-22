@@ -1,0 +1,67 @@
+---
+title: "Honkai: Star Rail (HSR) trong Blender — Lights+ & Coloramp Toon Shader"
+description: "Điều khiển hướng sáng Lights+, thiết lập sẵn ánh sáng, màu sắc tùy chỉnh và toon shader cho Honkai: Star Rail (HSR) trong Blender."
+---
+
+import { Image } from 'astro:assets';
+import hsrLightdir from '../../../../assets/content/hsr/hsr-lightdir.png';
+import hsrLight1 from '../../../../assets/content/hsr/hsr-light1.png';
+import hsrLight2 from '../../../../assets/content/hsr/hsr-light2.png';
+import hsrLight3 from '../../../../assets/content/hsr/hsr-light3.png';
+import hsrLight4 from '../../../../assets/content/hsr/hsr-light4.png';
+
+## 1. Điều khiển hướng sáng & bóng đổ
+
+Trong quá trình thiết lập nhân vật, một đối tượng `Light Direction_<Character>` chuyên dụng sẽ được tạo trong bộ sưu tập cảnh của bạn.
+
+1. Tìm `Light Direction_<Character>` trong bảng **Outliner** (ví dụ `Light Direction_March7th`).
+2. Mở bảng **Item Transform** trong Object Properties.
+3. Điều chỉnh các giá trị **Rotation** (XYZ Euler) để xoay vector ánh sáng:
+   - **Rotation Z**: Xoay góc mặt trời theo chiều ngang xung quanh nhân vật.
+   - **Rotation Y**: Điều chỉnh độ nghiêng ngang của ánh sáng trên nhân vật.
+   - **Rotation X**: Điều chỉnh độ cao dọc của đường ranh giới bóng đổ.
+
+<Image src={hsrLightdir} alt="Điều chỉnh góc xoay đối tượng Light Direction trong Outliner cho Honkai: Star Rail" loading="eager" />
+
+---
+
+## 2. Character Settings (Bảng Item)
+
+Chọn mesh hoặc armature của nhân vật và nhấn `N` trong 3D Viewport. Mở tab **Item** để truy cập bảng **Character Settings**, cung cấp các điều khiển theo thời gian thực mà không cần chỉnh sửa thủ công cây node shader:
+
+- **Lighting Mode**: Chuyển đổi giữa các thiết lập sẵn ánh sáng môi trường tích hợp hoặc chọn Custom để tinh chỉnh từng kênh màu riêng lẻ.
+- **Expressions**: Các thanh trượt chuyên dụng cho lớp phủ khuôn mặt nhanh:
+  - **Cheek**: Điều khiển cường độ lớp phủ ửng hồng trên má.
+  - **Shy**: Điều khiển cường độ lớp phủ má ửng đỏ / ngại ngùng.
+  - **Shadow**: Điều khiển cường độ bóng đổ trên trán và khuôn mặt.
+- **Eye Can't Be Tinted?**: Bật hộp kiểm này để ngăn mắt nhân vật bị nhuộm màu bởi ánh sáng môi trường hoặc màu ánh sáng tùy chỉnh.
+
+<Image src={hsrLight1} alt="Bảng Character Settings trong Honkai Star Rail" loading="lazy" />
+
+### Các chế độ & Thiết lập sẵn ánh sáng
+
+Bạn có thể chọn từ nhiều thiết lập sẵn ánh sáng tích hợp:
+
+- **Default**: Thiết lập ánh sáng mặc định của trò chơi.
+- **Sunrise**: Sắc thái buổi sáng ấm áp với bóng đổ dịu nhẹ.
+- **Day**: Ánh sáng ban ngày trung tính, tươi sáng.
+- **Sunset**: Ánh hoàng hôn rực rỡ với tông màu bóng đổ sâu.
+- **Night**: Bảng màu ban đêm mát mẻ, tối trầm.
+- **Rainy**: Ánh sáng môi trường u ám và khuếch tán.
+- **Custom**: Hiển thị các ô chọn màu để tùy chỉnh hoàn toàn.
+
+<Image src={hsrLight2} alt="Các chế độ ánh sáng thiết lập sẵn trong Character Settings cho Honkai Star Rail" loading="lazy" />
+
+<Image src={hsrLight3} alt="Menu thả xuống Lighting Mode trong Character Settings cho Honkai Star Rail" loading="lazy" />
+
+### Custom Colors
+
+Khi **Lighting Mode** được đặt thành **Custom**, bạn có thể điều chỉnh từng tông màu shader riêng lẻ:
+
+- **Ambient**: Màu ánh sáng môi trường cơ bản không bị đổ bóng.
+- **Lit**: Tông màu ánh sáng trực tiếp chính.
+- **Shadow**: Tông màu vùng bóng đổ chính.
+- **Sharp Lit**: Các điểm sáng phụ.
+- **Sharp Shadow**: Bóng cel bị che khuất sâu.
+
+<Image src={hsrLight4} alt="Các điều khiển màu tùy chỉnh trong Character Settings cho Honkai Star Rail" loading="lazy" />

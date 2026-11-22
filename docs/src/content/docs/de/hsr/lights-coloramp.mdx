@@ -1,0 +1,67 @@
+---
+title: "Honkai: Star Rail (HSR) in Blender — Lights+ & Coloramp Toon Shader"
+description: "Steuerung der Lichtrichtung mit Lights+, Beleuchtungsvoreinstellungen, benutzerdefinierte Farben und Toon-Shader für Honkai: Star Rail (HSR) in Blender."
+---
+
+import { Image } from 'astro:assets';
+import hsrLightdir from '../../../../assets/content/hsr/hsr-lightdir.png';
+import hsrLight1 from '../../../../assets/content/hsr/hsr-light1.png';
+import hsrLight2 from '../../../../assets/content/hsr/hsr-light2.png';
+import hsrLight3 from '../../../../assets/content/hsr/hsr-light3.png';
+import hsrLight4 from '../../../../assets/content/hsr/hsr-light4.png';
+
+## 1. Licht- & Schattenrichtung steuern
+
+Während der Charaktereinrichtung wird ein spezielles `Light Direction_<Character>`-Objekt in deiner Szenen-Collection erstellt.
+
+1. Suche `Light Direction_<Character>` im **Outliner**-Panel (z. B. `Light Direction_March7th`).
+2. Öffne das **Item Transform**-Panel in den Object Properties.
+3. Passe die **Rotation**-Werte (XYZ Euler) an, um den Lichtvektor zu drehen:
+   - **Rotation Z**: Dreht den Sonnenwinkel horizontal um den Charakter.
+   - **Rotation Y**: Passt die horizontale Neigung des Lichts über den Charakter an.
+   - **Rotation X**: Passt die vertikale Neigung der Schattenlinie an.
+
+<Image src={hsrLightdir} alt="Anpassen der Rotation des Light Direction-Objekts im Outliner für Honkai: Star Rail" loading="eager" />
+
+---
+
+## 2. Character Settings (Item-Panel)
+
+Wähle dein Charakter-Mesh oder -Armature aus und drücke `N` im 3D Viewport. Öffne den Tab **Item**, um auf das Panel **Character Settings** zuzugreifen, das Echtzeit-Steuerungen bietet, ohne dass du Shader-Node-Trees manuell bearbeiten musst:
+
+- **Lighting Mode**: Wechsle zwischen integrierten Umgebungsbeleuchtungs-Voreinstellungen oder wähle **Custom**, um einzelne Farbkanäle anzupassen.
+- **Expressions**: Spezielle Slider für schnelle Gesichts-Overlays:
+  - **Cheek**: Steuert die Intensität des Wangenröte-Overlays.
+  - **Shy**: Steuert die Intensität des erröteten / schüchternen Wangen-Overlays.
+  - **Shadow**: Steuert die Intensität des Stirn- und Gesichts-Schlagschattens.
+- **Eye Can't Be Tinted?**: Aktiviere dieses Kontrollkästchen, um zu verhindern, dass die Augen des Charakters durch Umgebungs- oder benutzerdefinierte Lichtfarben eingefärbt werden.
+
+<Image src={hsrLight1} alt="Character Settings-Panel in Honkai: Star Rail" loading="lazy" />
+
+### Beleuchtungsmodi & Voreinstellungen
+
+Du kannst aus mehreren integrierten Beleuchtungsvoreinstellungen wählen:
+
+- **Default**: Standard-Spielbeleuchtungs-Basis.
+- **Sunrise**: Warmer Morgenton mit weichen Schatten.
+- **Day**: Neutrale, helle Tageslichtbeleuchtung.
+- **Sunset**: Sattes goldenes Sonnenuntergangslicht mit tiefen Schattentönen.
+- **Night**: Kühle, dunkle Nachtpalette.
+- **Rainy**: Bedeckte und diffuse Umgebungsbeleuchtung.
+- **Custom**: Zeigt Farbfelder für vollständige benutzerdefinierte Kontrolle an.
+
+<Image src={hsrLight2} alt="Voreingestellte Lichtmodi in Character Settings für Honkai: Star Rail" loading="lazy" />
+
+<Image src={hsrLight3} alt="Dropdown-Menü Lighting Mode in Character Settings für Honkai: Star Rail" loading="lazy" />
+
+### Benutzerdefinierte Farben
+
+Wenn **Lighting Mode** auf **Custom** eingestellt ist, kannst du einzelne Shader-Töne anpassen:
+
+- **Ambient**: Unschattierte Basis-Umgebungsbeleuchtungsfarbe.
+- **Lit**: Primärer Farbton für direktes Licht.
+- **Shadow**: Farbton für Hauptschattenbereiche.
+- **Sharp Lit**: Sekundäre beleuchtete Highlights.
+- **Sharp Shadow**: Tiefe verdeckte Cel-Schatten.
+
+<Image src={hsrLight4} alt="Steuerelemente für benutzerdefinierte Farben in Character Settings für Honkai: Star Rail" loading="lazy" />

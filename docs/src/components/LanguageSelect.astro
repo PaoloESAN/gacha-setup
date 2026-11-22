@@ -1,0 +1,241 @@
+---
+import { Icon } from '@astrojs/starlight/components';
+import config from 'virtual:starlight/user-config';
+
+const currentLocale = Astro.locals.starlightRoute.locale;
+const currentCode = currentLocale ?? 'root';
+
+function getLocalizedPath(targetCode: string): string {
+	let path = Astro.url.pathname;
+	if (currentLocale) {
+		const prefix = `/${currentLocale}`;
+		if (path === prefix || path === `${prefix}/`) {
+			path = '/';
+		} else if (path.startsWith(`${prefix}/`)) {
+			path = path.slice(prefix.length);
+		}
+	}
+	if (!path.startsWith('/')) path = `/${path}`;
+	if (targetCode === 'root') return path;
+	return path === '/' ? `/${targetCode}/` : `/${targetCode}${path}`;
+}
+
+const locales = config.locales
+	? Object.entries(config.locales).map(([code, locale]) => ({
+			code,
+			label: locale!.label,
+			href: getLocalizedPath(code),
+			active: code === currentCode,
+		}))
+	: [];
+
+const activeLabel = locales.find((l) => l.active)?.label ?? 'English';
+---
+
+{
+	config.isMultilingual && (
+		<gacha-lang-select>
+			<div class="lang-dropdown">
+				<button
+					type="button"
+					class="lang-trigger"
+					aria-haspopup="menu"
+					aria-expanded="false"
+					aria-label={Astro.locals.t('languageSelect.accessibleLabel')}
+				>
+					<Icon name="translate" class="lang-icon" size="1rem" />
+					<span class="lang-current">{activeLabel}</span>
+					<Icon name="down-caret" class="lang-caret" size="0.95rem" />
+				</button>
+
+				<ul class="lang-menu" role="menu">
+					{locales.map((locale) => (
+						<li role="none">
+							<a
+								href={locale.href}
+								role="menuitemradio"
+								aria-checked={locale.active ? 'true' : 'false'}
+								class:list={['lang-option', { 'is-active': locale.active }]}
+							>
+								<span>{locale.label}</span>
+								{locale.active && <Icon name="approve-check" class="lang-check" size="0.95rem" />}
+							</a>
+						</li>
+					))}
+				</ul>
+			</div>
+		</gacha-lang-select>
+	)
+}
+
+<script>
+	class GachaLanguageSelect extends HTMLElement {
+		constructor() {
+			super();
+			const trigger = this.querySelector<HTMLButtonElement>('.lang-trigger');
+			const dropdown = this.querySelector<HTMLDivElement>('.lang-dropdown');
+			if (!trigger || !dropdown) return;
+
+			const setOpen = (open: boolean) => {
+				dropdown.classList.toggle('is-open', open);
+				trigger.setAttribute('aria-expanded', String(open));
+			};
+
+			trigger.addEventListener('click', (e) => {
+				e.stopPropagation();
+				setOpen(!dropdown.classList.contains('is-open'));
+			});
+
+			document.addEventListener('click', (e) => {
+				if (!this.contains(e.target as Node)) setOpen(false);
+			});
+
+			document.addEventListener('keydown', (e) => {
+				if (e.key === 'Escape' && dropdown.classList.contains('is-open')) {
+					setOpen(false);
+					trigger.focus();
+				}
+			});
+		}
+	}
+
+	if (!customElements.get('gacha-lang-select')) {
+		customElements.define('gacha-lang-select', GachaLanguageSelect);
+	}
+</script>
+
+<style>
+	.lang-dropdown {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+	}
+
+	.lang-trigger {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+		padding: 0.4rem 0.65rem;
+		border-radius: 0.55rem;
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		background: rgba(255, 255, 255, 0.04);
+		color: var(--sl-color-gray-1);
+		font-size: var(--sl-text-sm);
+		font-weight: 500;
+		cursor: pointer;
+		transition: border-color 0.2s ease, background 0.2s ease, color 0.2s ease;
+		white-space: nowrap;
+	}
+
+	.lang-trigger:hover,
+	.lang-dropdown.is-open .lang-trigger {
+		border-color: rgba(255, 112, 36, 0.45);
+		background: rgba(255, 112, 36, 0.1);
+		color: var(--sl-color-white);
+	}
+
+	.lang-icon {
+		color: var(--sl-color-gray-2);
+		flex-shrink: 0;
+	}
+
+	.lang-caret {
+		color: var(--sl-color-gray-3);
+		transition: transform 0.2s ease;
+		flex-shrink: 0;
+	}
+
+	.lang-dropdown.is-open .lang-caret {
+		transform: rotate(180deg);
+		color: #ff7024;
+	}
+
+	.lang-menu {
+		position: absolute;
+		top: calc(100% + 0.45rem);
+		right: 0;
+		min-width: 10.5rem;
+		margin: 0;
+		padding: 0.35rem;
+		list-style: none;
+		border-radius: 0.75rem;
+		border: 1px solid rgba(255, 255, 255, 0.12);
+		background: rgba(20, 18, 22, 0.96);
+		backdrop-filter: blur(12px);
+		box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+		z-index: 100;
+		opacity: 0;
+		visibility: hidden;
+		transform: translateY(-4px) scale(0.98);
+		transform-origin: top right;
+		transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s ease;
+	}
+
+	.lang-dropdown.is-open .lang-menu {
+		opacity: 1;
+		visibility: visible;
+		transform: translateY(0) scale(1);
+	}
+
+	.lang-option {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		padding: 0.48rem 0.65rem;
+		border-radius: 0.5rem;
+		color: var(--sl-color-gray-2);
+		font-size: var(--sl-text-sm);
+		text-decoration: none;
+		transition: background 0.15s ease, color 0.15s ease;
+	}
+
+	.lang-option:hover {
+		background: rgba(255, 255, 255, 0.08);
+		color: var(--sl-color-white);
+	}
+
+	.lang-option.is-active {
+		background: rgba(255, 112, 36, 0.14);
+		color: #ff8c4c;
+		font-weight: 600;
+	}
+
+	.lang-check {
+		color: #ff7024;
+		flex-shrink: 0;
+	}
+
+	:global(:root[data-theme='light']) .lang-trigger {
+		border-color: rgba(0, 0, 0, 0.12);
+		background: rgba(0, 0, 0, 0.03);
+		color: var(--sl-color-gray-1);
+	}
+
+	:global(:root[data-theme='light']) .lang-trigger:hover,
+	:global(:root[data-theme='light']) .lang-dropdown.is-open .lang-trigger {
+		border-color: rgba(255, 112, 36, 0.45);
+		background: rgba(255, 112, 36, 0.08);
+		color: #111;
+	}
+
+	:global(:root[data-theme='light']) .lang-menu {
+		border-color: rgba(0, 0, 0, 0.1);
+		background: rgba(255, 255, 255, 0.96);
+		box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
+	}
+
+	:global(:root[data-theme='light']) .lang-option {
+		color: #333;
+	}
+
+	:global(:root[data-theme='light']) .lang-option:hover {
+		background: rgba(0, 0, 0, 0.05);
+		color: #111;
+	}
+
+	:global(:root[data-theme='light']) .lang-option.is-active {
+		background: rgba(255, 112, 36, 0.12);
+		color: #d9520b;
+	}
+</style>

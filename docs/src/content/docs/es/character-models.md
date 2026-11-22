@@ -1,6 +1,6 @@
 ---
-title: Assets de Personajes
-description: Dónde descargar los assets de personajes (modelos, texturas y materiales) para cada juego soportado.
+title: "Assets de Personajes"
+description: "Dónde descargar modelos de personajes FBX y UEFormat, texturas y materiales para Genshin Impact, HSR, ZZZ, WuWa, NTE y Arknights: Endfield en Blender."
 ---
 
 ## Dónde Descargar los Assets de Personajes
@@ -11,20 +11,20 @@ Aquí puedes encontrar los lugares donde descargar los assets de los personajes,
 
 - [Assets de Personajes](https://hjtstudio.com/gi) de **[jideeh](https://ko-fi.com/jideeh)**, **hiragara**, **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)**
 - [Assets de Personajes](https://drive.google.com/drive/folders/10Ib8DochTJrYPgygMxgdZXwp7TBiBlA2) de **hiragara**
-- [Assets de Personajes](https://assets.hoyotoon.com/?game=gi&type=characters) de **HoyoToon** · [Discord](https://discord.com/invite/hoyotoon) · **En hiatus hasta nuevo aviso**
-- [SkillObjects](https://genshin-skillobj.pages.dev/) de **[vei](https://x.com/heikzs)**
+- [GI Characters - HoyoToon Assets](https://rehoyotoon.pages.dev/gi/characters/) de **[HoyoToon Assets](https://rehoyotoon.pages.dev/)** · [Discord](https://discord.com/invite/hoyotoon)
+- [SkillObjects](https://vei-z.pages.dev/) de **[vei](https://x.com/heikzs)**
 
 ### HSR
 
 - [Assets de Personajes](https://hjtstudio.com/hsr) de **[jideeh](https://ko-fi.com/jideeh)**, **hiragara**, **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)**
 - [Assets de Personajes](https://drive.google.com/drive/folders/1KTC40gnQPytyrl-7zZm1QJOgQbWIZhOU) de **hiragara**
-- [Assets de Personajes](https://assets.hoyotoon.com/?game=hsr&type=characters) de **HoyoToon** · [Discord](https://discord.com/invite/hoyotoon) · **En hiatus hasta nuevo aviso**
+- [HSR Characters - HoyoToon Assets](https://rehoyotoon.pages.dev/hsr/characters/) de **[HoyoToon Assets](https://rehoyotoon.pages.dev/)** · [Discord](https://discord.com/invite/hoyotoon)
 
 ### ZZZ
 
 - [Assets de Personajes](https://hjtstudio.com/zzz) de **[jideeh](https://ko-fi.com/jideeh)**, **hiragara**, **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)**
 - [Assets de Personajes](https://drive.google.com/drive/folders/1hdXOi_2WFI-ktAt-jpn-b-OKUnQlJCKW) de **hiragara**
-- [Assets de Personajes](https://assets.hoyotoon.com/?game=zzz&type=characters) de **HoyoToon** · [Discord](https://discord.com/invite/hoyotoon) · **En hiatus hasta nuevo aviso**
+- [ZZZ Agents - HoyoToon Assets](https://rehoyotoon.pages.dev/zzz/characters/) de **[HoyoToon Assets](https://rehoyotoon.pages.dev/)** · [Discord](https://discord.com/invite/hoyotoon)
 
 ### NTE
 
@@ -45,7 +45,7 @@ Aquí puedes encontrar los lugares donde descargar los assets de los personajes,
 
 - [Assets de Personajes](https://hjtstudio.com/hi3) de **[jideeh](https://ko-fi.com/jideeh)**, **hiragara**, **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)**
 - [Assets de Personajes](https://drive.google.com/drive/folders/1QjJMSQV2luuHkrh0E5rcdIlKnT4W8LiT?usp=drive_link) de **hiragara**
-- [Assets de Personajes](https://assets.hoyotoon.com/?game=hi3&type=characters) de **HoyoToon** · [Discord](https://discord.com/invite/hoyotoon) · **En hiatus hasta nuevo aviso**
+- [HI3 Companions - HoyoToon Assets](https://rehoyotoon.pages.dev/hi3/companions/) de **[HoyoToon Assets](https://rehoyotoon.pages.dev/)** · [Discord](https://discord.com/invite/hoyotoon)
 
 ### HNA
 
@@ -56,3 +56,7 @@ Aquí puedes encontrar los lugares donde descargar los assets de los personajes,
 
 - [Assets de Personajes](https://hjtstudio.com/ef) de **[jideeh](https://ko-fi.com/jideeh)**, **hiragara**, **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)**
 - [Assets de Personajes](https://drive.google.com/drive/folders/1HhYu3KYx01vCzc_O6Kd4TacP-XCQSLx7?usp=drive_link) de **hiragara**
+
+### Miliastra Wonderland
+
+- [MW Customizer - HoyoToon Assets](https://rehoyotoon.pages.dev/miliastra/customizer/) de **[HoyoToon Assets](https://rehoyotoon.pages.dev/)** · [Discord](https://discord.com/invite/hoyotoon)

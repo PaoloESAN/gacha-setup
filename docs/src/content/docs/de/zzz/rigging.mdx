@@ -1,0 +1,42 @@
+---
+title: "Zenless Zone Zero (ZZZ) in Blender — Rigging & Bone Collections"
+description: "jideeh-Gesichtsausdrucks-Steuerungen, Face-Rig-Setup und Bone Collections für Zenless Zone Zero (ZZZ) in Blender."
+---
+
+import { Image } from 'astro:assets';
+import zzzFacerig from '../../../../assets/content/zzz/zzz-facerig.png';
+import zzzBonecoll from '../../../../assets/content/zzz/zzz-bonecoll.png';
+
+## 1. Jideeh Face Rig
+
+Nach dem Importieren und Einrichten eines Zenless Zone Zero-Charakters konfiguriert das Add-on das **jideeh ZZZ Face Rig**, das direkt in das Haupt-Armature des Charakters integriert ist, um erweiterte Gesichtsausdrucks-Steuerungen bereitzustellen.
+
+<Image src={zzzFacerig} alt="jideeh ZZZ Face Rig 3D-Steuerungsboard und Charakter-Rig" loading="eager" />
+
+### Wichtige Gesichtssteuerungen & Funktionen
+
+- **jideeh Gesichts-Rig-Integration**: Erweiterte Driver für Augenbrauen, Augenlider, Augenverfolgung und Mund-Shape-Keys.
+- **On-Face-Steuerungs-Widgets**: Ermöglicht das intuitive Posen einzelner Gesichtszüge direkt im 3D Viewport.
+
+---
+
+## 2. Bone Collections
+
+Zenless Zone Zero-Armatures sind in strukturierte Gruppen innerhalb des Tabs **Bone Collections** (Blender 5.2+) unterteilt.
+
+<Image src={zzzBonecoll} alt="Armature Properties Bone Collections-Panel für Zenless Zone Zero-Charakter" loading="lazy" />
+
+### Übersicht der Bone Collections
+
+- **Face**: Augenbrauen-, Augen-, Augenlid-, Pupillen-, Nasen- und Mund-Controller.
+- **Torso (IK / FK)**: Wirbelsäulen-, Brust-, Hals-, Kopf- und Brust-/Torso-Dynamik.
+- **Arm.L / Arm.R (IK & FK)**: Linke und rechte Armketten mit individuellen IK-Ziel-Pins und Pole-Targets.
+- **Leg.L / Leg.R (IK & FK)**: Linke und rechte Beinketten mit Foot-Roll- und Knieziel-Steuerungen.
+- **Fingers**: Hand- und Finger-Bone-Controller.
+- **Hair**: Dynamische Sekundär-Bones für Haarsträhnen und Zöpfe.
+- **Clothes**: Dynamische Sekundär-Bones für Jacken, Röcke und Accessoires.
+- **Lighting**: Vektor-Handles und Beleuchtungs-Controller.
+
+:::tip
+Nutze das **Stern-Symbol** im Tab **Bone Collections**, um eine bestimmte Bone Collection zu isolieren (Solo), oder klicke auf die **Augen-Symbole**, um die Sichtbarkeit beim Animieren umzuschalten.
+:::

@@ -1,0 +1,183 @@
+---
+title: "Character Settings & Lights+ trong Blender"
+description: "Tổng quan về bảng Character Settings trong Blender: Lights+, thiết lập sẵn ánh sáng, hướng sáng, Fresnel, đường viền, vật lý và anime toon shaders."
+---
+
+import { Image } from 'astro:assets';
+import Carousel from '../../../components/Carousel.astro';
+import CarouselSlide from '../../../components/CarouselSlide.astro';
+import characterSettingsImg from '../../../assets/content/overview/character_settings.png';
+import animatedModeImg from '../../../assets/content/overview/animated_mode.png';
+import lightPanelImg from '../../../assets/content/overview/light_panel.png';
+import lightDefaultImg from '../../../assets/content/overview/light_default.png';
+import lightSunriseImg from '../../../assets/content/overview/light_sunrise.png';
+import lightDayImg from '../../../assets/content/overview/light_day.png';
+import lightSunsetImg from '../../../assets/content/overview/light_sunset.png';
+import lightNightImg from '../../../assets/content/overview/light_night.png';
+import lightRainyImg from '../../../assets/content/overview/light_rainy.png';
+import lightCustomImg from '../../../assets/content/overview/light_custom.png';
+import fresnelImg from '../../../assets/content/overview/fresnel.png';
+import physicsVideo from '../../../assets/content/overview/physics.mp4';
+import lightsDefaultImg from '../../../assets/content/overview/lights-default.png';
+import lightsDiffuseImg from '../../../assets/content/overview/lights-diffuse.png';
+import lightsLightColorImg from '../../../assets/content/overview/lights-light-color.png';
+import lightDirImg from '../../../assets/content/overview/light-dir.png';
+import lightDir2Img from '../../../assets/content/overview/light-dir2.png';
+
+
+# Character Settings
+
+Bảng **Character Settings** nằm trong tab **Item** của thanh bên 3D Viewport (bảng `N`) khi một armature hoặc mesh của nhân vật được chọn. Ở phía trên cùng, bảng hiển thị tên nhân vật đang hoạt động và cho phép bạn chuyển đổi giữa hai tab **Character** và **Rig Layers**. Tab **Character** cung cấp khả năng điều khiển theo thời gian thực đối với ánh sáng shader, Lights+, đường viền anime, hành vi đổ bóng và vật lý trực tiếp mà không cần mở đồ thị node shader.
+
+<Image src={characterSettingsImg} alt="Bảng Character Settings trong tab Item" loading="eager" />
+
+---
+
+## Animate Mode
+
+**Animate Mode** cho phép phát lại mượt mà và nhẹ nhàng trong viewport bằng cách tạm thời thay thế các vật liệu toon nhiều lớp nặng nề bằng các vật liệu thay thế nhẹ hơn và ẩn các modifier đường viền.
+
+- Nhấp **Enable Animate Mode** khi làm việc với các keyframe hoạt ảnh và nhịp độ chuyển động.
+- Nhấp **Disable Animate Mode** trước khi kết xuất (render) hoặc thiết lập ánh sáng cuối cùng.
+
+<Image src={animatedModeImg} alt="Xem trước Animate Mode trong viewport" loading="lazy" />
+
+---
+
+## Lighting Type & Lighting Mode
+
+Bạn có thể điều khiển ánh sáng nhân vật thông qua gizmo **3D Lighting Panel** trong cảnh hoặc thông qua các thiết lập sẵn trong giao diện **Character Settings**.
+
+### 3D Lighting Panel
+Khi **Lighting Type** được đặt thành **Lighting Panel**, các bánh xe màu 3D và bộ điều khiển hướng trong 3D Viewport sẽ điều khiển tương tác ánh sáng chính, ánh sáng môi trường và màu sắc đổ bóng của nhân vật.
+
+<Image src={lightPanelImg} alt="3D Lighting Panel trong viewport" loading="lazy" />
+
+Để điều chỉnh các giá trị, hãy vào **Pose Mode**, chọn một bộ điều khiển trên bảng và nhấn `G` để di chuyển.
+
+### Thiết lập sẵn ánh sáng (This Panel)
+Khi đặt thành **This Panel**, bạn có thể chọn giữa các thiết lập sẵn ánh sáng tích hợp phù hợp cho nhiều bầu không khí môi trường khác nhau. Sử dụng băng chuyền bên dưới để khám phá các thiết lập sẵn ánh sáng có sẵn:
+
+<Carousel lang="vi">
+  <CarouselSlide title="Default" description="Ánh sáng anime studio trung tính và cân bằng.">
+    <Image src={lightDefaultImg} alt="Thiết lập sẵn ánh sáng Default" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Sunrise" description="Tông màu buổi sáng vàng ấm với độ tương phản dịu nhẹ.">
+    <Image src={lightSunriseImg} alt="Thiết lập sẵn ánh sáng Sunrise" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Day" description="Ánh sáng ban ngày sắc nét với tông màu bóng đổ trong trẻo.">
+    <Image src={lightDayImg} alt="Thiết lập sẵn ánh sáng Day" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Sunset" description="Màu hoàng hôn rực rỡ với vùng sáng ấm và tông màu môi trường sống động.">
+    <Image src={lightSunsetImg} alt="Thiết lập sẵn ánh sáng Sunset" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Night" description="Tông màu ban đêm trầm lắng với ánh trăng môi trường mát mẻ và bóng đổ sâu.">
+    <Image src={lightNightImg} alt="Thiết lập sẵn ánh sáng Night" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Rainy" description="Bầu không khí ngày mưa u ám và khuếch tán với các vùng sáng được làm dịu.">
+    <Image src={lightRainyImg} alt="Thiết lập sẵn ánh sáng Rainy" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Custom Colors" description="Tinh chỉnh riêng lẻ từng kênh màu Ambient, Sharp/Soft Lit, Sharp/Soft Shadow và Rim.">
+    <Image src={lightCustomImg} alt="Thiết lập ánh sáng Custom Colors" loading="lazy" />
+  </CarouselSlide>
+</Carousel>
+
+---
+
+## Lights+
+
+:::note
+**Lights+** chỉ khả dụng cho **Blender 5.3**.
+:::
+
+**Lights+** cho phép nhân vật của bạn phản ứng với các đèn gốc của cảnh Blender (Point, Sun, Spot, Area).
+
+- Nhấp **Setup New Lights** để khởi tạo Lights+ trên các vật liệu của nhân vật.
+- Sau khi bật, sử dụng menu thả xuống **Mode** để chọn cách đèn trong cảnh tác động lên nhân vật:
+  - **Default**: Sử dụng ánh sáng toon tiêu chuẩn của nhân vật mà không bị ghi đè bởi đèn trong cảnh.
+  - **Diffuse**: Áp dụng đổ bóng khuếch tán có hướng và độ suy giảm từ đèn trong cảnh trong khi vẫn giữ độ tương phản cel-shaded.
+  - **Light Color**: Nhuộm màu và chiếu sáng trực tiếp lên nhân vật bằng màu sắc và cường độ của đèn trong cảnh.
+
+<Carousel lang="vi">
+  <CarouselSlide title="Default" description="Ánh sáng nhân vật tiêu chuẩn không chịu ảnh hưởng từ đèn trong cảnh.">
+    <Image src={lightsDefaultImg} alt="Chế độ Default của Lights+" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Diffuse" description="Đèn trong cảnh điều khiển độ đổ bóng khuếch tán có hướng trên nhân vật.">
+    <Image src={lightsDiffuseImg} alt="Chế độ Diffuse của Lights+" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Light Color" description="Đèn trong cảnh nhuộm màu trực tiếp các vùng được chiếu sáng của nhân vật.">
+    <Image src={lightsLightColorImg} alt="Chế độ Light Color của Lights+" loading="lazy" />
+  </CarouselSlide>
+</Carousel>
+
+---
+
+## Hướng sáng & Bóng đổ (Xương Light Direction)
+
+Trong quá trình thiết lập, một xương `Light Direction` chuyên dụng được thêm vào armature của nhân vật (`<Character>Rig`) để điều khiển vị trí mặt trời và bóng đổ chiếu lên mô hình.
+
+<Carousel lang="vi">
+  <CarouselSlide title="Xương Light Direction (0°)" description="Chọn xương Light Direction trong Pose Mode để điều khiển vector ánh sáng.">
+    <Image src={lightDirImg} alt="Xương Light Direction được chọn trong Pose Mode" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Xoay Light Direction (Y: 92°)" description="Xoay xương Light Direction sẽ dịch chuyển ranh giới bóng đổ trên nhân vật theo thời gian thực.">
+    <Image src={lightDir2Img} alt="Xương Light Direction được xoay tới Y 92 độ" loading="lazy" />
+  </CarouselSlide>
+</Carousel>
+
+1. Chọn armature của nhân vật (`<Character>Rig`) và chuyển sang **Pose Mode**.
+2. Chọn xương `Light Direction` (bộ điều khiển hình mũi tên).
+3. Xoay trực tiếp trong 3D Viewport (`R`), hoặc mở **Bone Properties > Transform** và điều chỉnh các giá trị **Rotation** (XYZ Euler):
+   - **Rotation Z**: Xoay góc phương vị của mặt trời theo chiều ngang xung quanh nhân vật.
+   - **Rotation Y**: Điều chỉnh độ nghiêng sang hai bên của vector ánh sáng trên nhân vật.
+   - **Rotation X**: Điều chỉnh độ cao dọc và góc ngẩng của ranh giới bóng đổ.
+
+---
+
+## Fresnel & Outlines
+
+### Fresnel
+Fresnel thêm hiệu ứng viền sáng/phản chiếu ở mép đặc trưng của phong cách cel-shading cao cấp:
+- **Toggle Fresnel**: Bật hoặc tắt hiệu ứng.
+- **Fresnel Color**: Sắc thái màu của viền ngoài.
+- **Fresnel Power**: Độ sắc nét của sự chuyển tiếp trên các bề mặt cong.
+- **Fresnel Scaler**: Hệ số nhân cường độ tổng thể.
+
+<Image src={fresnelImg} alt="Các điều khiển và xem trước hiệu ứng viền Fresnel" loading="lazy" />
+
+### Outlines & Night Soul (Chỉ Natlan)
+- **Enable Outlines**: Bật/tắt nhanh các modifier đường viền inverted-hull trên tất cả các mesh của nhân vật.
+- **Enable Night Soul**: (Nhân vật Natlan trong Genshin Impact) Bật/tắt các đường viền năng lượng phát sáng đặc biệt.
+- **NS Outlines Thickness**: Điều chỉnh độ dày của đường viền Night Soul.
+
+---
+
+## Cài đặt Bóng đổ & Cảnh
+
+- **Shadow Position**: Trượt ngưỡng kết thúc ánh sáng trên các bề mặt cong.
+- **Catch Shadows**: Cho phép hoặc bỏ qua các bóng đổ từ cảnh bên ngoài chiếu lên nhân vật.
+- **Day / Night**: Pha trộn giữa các hiệu chỉnh ramp texture ban ngày và ban đêm.
+- **Blush Strength**: Điều chỉnh cường độ ửng hồng trên khuôn mặt ở những nơi được hỗ trợ.
+
+---
+
+## Vật lý tóc & quần áo
+
+Bạn có thể áp dụng hoặc tinh chỉnh tương tác vật lý động mà không cần chạy lại trình hướng dẫn thiết lập:
+
+- **Hair Physics Slider**: Điều chỉnh độ đàn hồi Damped Track và mức độ ảnh hưởng vật lý lên các lọn tóc.
+- **Clothes Physics Slider**: Điều chỉnh chuyển động động trên trang phục và các phụ kiện váy.
+- **Apply Physics / Remove Physics**: Thêm hoặc xóa hệ thống ràng buộc bất kỳ lúc nào.
+
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={physicsVideo} type="video/mp4" />
+</video>

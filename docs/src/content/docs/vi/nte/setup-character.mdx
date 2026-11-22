@@ -1,0 +1,70 @@
+---
+title: "Neverness to Everness (NTE) trong Blender — Thiết lập nhân vật & Shader"
+description: "Hướng dẫn từng bước thiết lập mô hình nhân vật Neverness to Everness (NTE) trong Blender: anime toon shader, Lights+ và rigging."
+---
+
+import { Image } from 'astro:assets';
+import ntePanel from '../../../../assets/content/nte/nte-panel.png';
+import nteCharacter from '../../../../assets/content/nte/nte-character.png';
+import nteScene from '../../../../assets/content/nte/nte-scene.png';
+import nteComp1 from '../../../../assets/content/nte/nte-comp1.png';
+import nteComp2 from '../../../../assets/content/nte/nte-comp2.png';
+import nteComp3 from '../../../../assets/content/nte/nte-comp3.png';
+
+## 1. Mở Setup Wizard
+
+1. Nhấn `N` trong 3D Viewport để mở thanh bên.
+2. Điều hướng đến tab **Character Setup Wizard**.
+3. Trong menu thả xuống **Game**, chọn **Neverness to Everness**.
+
+<Image src={ntePanel} alt="Bảng N-Panel Setup Wizard cho Neverness to Everness" loading="eager" />
+
+---
+
+## 2. Nhập nhân vật của bạn
+
+Bạn có thể thiết lập mô hình chỉ với một cú nhấp chuột bằng **Run Entire Setup** hoặc từng bước qua **Old Setup**.
+
+1. *(Tùy chọn)* Trong **Setup Settings**, bật **Hair & Clothes Physics** để thêm vật lý động cho tóc và trang phục. Bật **Disable Rigging** để bỏ qua bước tạo rig và chỉ nhập vật liệu + đường viền.
+2. Nhấp **Run Entire Setup** (hoặc **Set Up Character** trong Old Setup).
+3. Một cửa sổ trình duyệt tệp sẽ xuất hiện. Điều hướng đến [thư mục nhân vật](/vi/character-models/#nte) của bạn chứa mô hình `.fbx` và các texture.
+4. Nhấp **Select NTE Character**.
+
+<Image src={nteCharacter} alt="Trình xem tệp Blender đang chọn thư mục mô hình nhân vật NTE" loading="lazy" />
+
+:::note
+Quá trình nhập có thể mất một khoảng thời gian dài để hoàn tất.
+:::
+
+---
+
+## 3. Quy trình thiết lập tự động
+
+Khi chạy thiết lập, add-on sẽ thực thi các bước tự động sau cho Neverness to Everness:
+
+- **Set Up Character**: Nhập mesh `.fbx`, dọn dẹp các vertex group và chuẩn hóa hệ thống phân cấp xương.
+- **Set Up Materials**: Thay thế các vật liệu mặc định của Blender bằng các node **NTE Toon Shader** tùy chỉnh, liên kết các texture khuếch tán, lightmap và color ramp.
+- **Set Up Outlines**: Áp dụng các modifier đường viền inverted-hull bằng geometry-node cho tất cả các mesh của nhân vật để kết xuất nét vẽ sắc nét.
+- **Fix Transformations**: Đặt lại các phép biến đổi vị trí, xoay và tỷ lệ đồng thời liên kết các driver khuôn mặt với vector ánh sáng.
+- **Rig Character**: Cấu hình các hình dạng điều khiển và driver xương khuôn mặt.
+- **Finish Setup**: Chuyển Color Management sang **Standard** để bảo toàn độ chính xác màu sắc gốc của texture.
+
+<Image src={nteScene} alt="Nhân vật Neverness to Everness đã được nhập vào cảnh 3D" loading="lazy" />
+
+---
+
+## 4. Cài đặt Viewport Shading & Compositor
+
+Để hiển thị shader toon NTE và tổng hợp bóng đổ đầu theo thời gian thực trong viewport:
+
+1. Vào không gian làm việc **Compositing** từ thanh menu trên cùng trong Blender.
+
+<Image src={nteComp1} alt="Vào không gian làm việc Compositing từ thanh menu trên cùng trong Blender" loading="lazy" />
+
+2. Di chuyển node **Alpha** để ngắt kết nối nó khỏi **Group Output** và **Viewer**, sau đó kết nối trực tiếp đầu ra của node **Mix** vào **Group Output** và **Viewer**.
+
+<Image src={nteComp2} alt="Ngắt kết nối node Alpha và kết nối node Mix vào Group Output và Viewer" loading="lazy" />
+
+3. Quay lại không gian làm việc **Layout** trên thanh trên cùng, mở menu **Viewport Shading** và đặt **Compositor** thành **Always** (hoặc **Camera**).
+
+<Image src={nteComp3} alt="Chuyển lại không gian làm việc Layout và đặt Viewport Shading Compositor thành Always" loading="lazy" />

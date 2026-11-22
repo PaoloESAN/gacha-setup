@@ -20,6 +20,7 @@
 * **Punishing: Gray Raven (PGR)**
 * **Honkai Impact 3rd (HI3)**
 * **Honkai: Nexus Anima (HNA)**
+* **Miliastra Wonderland**
 * **Silver Palace** *(Soon)*
 
 ---
@@ -130,6 +131,7 @@ Thanks to all those who collaborated on the original project:
 * **Logo Icon**: <a href="https://www.flaticon.com/free-icons/star" title="star icons">Star icons created by Magnific - Flaticon</a>
 * **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)** — HJT Studios · [X](https://x.com/Gladius_Tyrfing)
 * **vei** — SkillObjects
+* **[Michael](https://www.youtube.com/watch?v=EN79SfbcvIE)** — [Instagram](https://www.instagram.com/raphaelgonemad/)
 
 ---
 

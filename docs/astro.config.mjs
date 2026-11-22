@@ -18,7 +18,7 @@ export default defineConfig({
 					description:
 						'Gacha Setup is an open-source Blender add-on. Blender 5.2 is recommended; Blender/Goo Engine 4.1+ are supported. BetterFBX is required for model imports in Blender versions below 4.5. It automates character model importing, anime toon shading (Festivity, StellarToon, ZZZ Shader, NTE Shader, Gustling Waters, Endfield PBRToon), outline setup, facial driver controls, hair & cloth physics, and rigging for Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Neverness to Everness, Wuthering Waves, and Arknights: Endfield.',
 					details: `
-- **Supported Games:** Genshin Impact (GI), Honkai: Star Rail (HSR), Zenless Zone Zero (ZZZ), Neverness to Everness (NTE), Wuthering Waves (WuWa), Arknights: Endfield (AKE), Punishing: Gray Raven (PGR), Honkai Impact 3rd (HI3), and Honkai: Nexus Anima (HNA).
+- **Supported Games:** Genshin Impact (GI), Honkai: Star Rail (HSR), Zenless Zone Zero (ZZZ), Neverness to Everness (NTE), Wuthering Waves (WuWa), Arknights: Endfield (AKE), Punishing: Gray Raven (PGR), Honkai Impact 3rd (HI3), Honkai: Nexus Anima (HNA), and Miliastra Wonderland.
 - **Blender Compatibility:** Blender 5.2 recommended; Blender/Goo Engine 4.1+ supported. BetterFBX is required for model imports below Blender 4.5.
 - **Key Features:** One-click setup wizard, bundled anime toon shaders, hair & cloth physics with Damped Track, 3D facial driver control boards, automated addon dependency installation (ExpyKit, UEFormat), and weapon support.
 `.trim(),
@@ -97,8 +97,20 @@ export default defineConfig({
 					lang: 'es',
 				},
 				id: {
-					label: 'Bahasa Indonesia',
+					label: 'Indonesia',
 					lang: 'id',
+				},
+				fr: {
+					label: 'Français',
+					lang: 'fr',
+				},
+				vi: {
+					label: 'Tiếng Việt',
+					lang: 'vi',
+				},
+				de: {
+					label: 'Deutsch',
+					lang: 'de',
 				},
 			},
 			social: [
@@ -134,19 +146,19 @@ export default defineConfig({
 			sidebar: [
 				{
 					label: 'Overview',
-					translations: { es: 'Visión General', id: 'Gambaran Umum' },
+					translations: { es: 'Visión General', id: 'Gambaran Umum', fr: 'Aperçu', vi: 'Tổng quan', de: 'Übersicht' },
 					items: [
-						{ label: 'Quickstart', slug: 'quickstart', translations: { es: 'Guía Rápida', id: 'Panduan Singkat' } },
-						{ label: 'Character Assets', slug: 'character-models', translations: { es: 'Assets de Personajes', id: 'Aset Karakter' } },
-						{ label: 'Character Settings', slug: 'character-settings', translations: { es: 'Ajustes del Personaje', id: 'Pengaturan Karakter' } },
-						{ label: 'Rigging', slug: 'rigging', translations: { es: 'Rigging', id: 'Rigging' } },
-						{ label: 'Utilities', slug: 'utilities', translations: { es: 'Utilidades', id: 'Utilitas' } },
-						{ label: 'Credits', slug: 'credits', translations: { es: 'Créditos', id: 'Kredit' } },
+						{ label: 'Quickstart', slug: 'quickstart', translations: { es: 'Guía Rápida', id: 'Panduan Singkat', fr: 'Démarrage rapide', vi: 'Bắt đầu nhanh', de: 'Schnellstart' } },
+						{ label: 'Character Assets', slug: 'character-models', translations: { es: 'Assets de Personajes', id: 'Aset Karakter', fr: 'Ressources de personnages', vi: 'Tài nguyên nhân vật', de: 'Charakter-Assets' } },
+						{ label: 'Character Settings', slug: 'character-settings', translations: { es: 'Ajustes del Personaje', id: 'Pengaturan Karakter', fr: 'Paramètres du personnage', vi: 'Cài đặt nhân vật', de: 'Charaktereinstellungen' } },
+						{ label: 'Rigging', slug: 'rigging', translations: { es: 'Rigging', id: 'Rigging', fr: 'Rigging', vi: 'Rigging', de: 'Rigging' } },
+						{ label: 'Utilities', slug: 'utilities', translations: { es: 'Utilidades', id: 'Utilitas', fr: 'Utilitaires', vi: 'Tiện ích', de: 'Dienstprogramme' } },
+						{ label: 'Credits', slug: 'credits', translations: { es: 'Créditos', id: 'Kredit', fr: 'Crédits', vi: 'Ghi công', de: 'Danksagungen' } },
 					],
 				},
 				{
 					label: 'Bugs & Solutions',
-					translations: { es: 'Bugs y Soluciones', id: 'Masalah dan Solusi' },
+					translations: { es: 'Bugs y Soluciones', id: 'Masalah dan Solusi', fr: 'Bugs et solutions', vi: 'Lỗi & Giải pháp', de: 'Fehler & Lösungen' },
 					items: [
 						{ label: 'Genshin Impact', slug: 'genshin/bugs-solutions' },
 						{ label: 'Honkai: Star Rail', slug: 'hsr/bugs-solutions' },
@@ -165,8 +177,10 @@ export default defineConfig({
 			],
 			components: {
 				Head: './src/components/Head.astro',
+				LanguageSelect: './src/components/LanguageSelect.astro',
 				PageFrame: './src/components/PageFrame.astro',
 				Sidebar: './src/components/Sidebar.astro',
+				SiteTitle: './src/components/SiteTitle.astro',
 				ThemeSelect: './src/components/ThemeSelect.astro',
 				Pagination: './src/components/Pagination.astro',
 				PageSidebar: './src/components/PageSidebar.astro',

@@ -1,6 +1,6 @@
 ---
-title: Kontrol Fisika ZZZ
-description: Cara mengonfigurasi fisika dada, driver pernapasan, dan kontrol tulang badan dinamis di ZZZ.
+title: "Kontrol Fisika Zenless Zone Zero (ZZZ) di Blender"
+description: "Cara mengatur fisika karakter Zenless Zone Zero (ZZZ) di Blender: fisika dada, driver pernapasan, dan kontrol tulang torso dinamis."
 chibi: zzz/yuzuha
 ---
 

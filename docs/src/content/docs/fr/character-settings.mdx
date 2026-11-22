@@ -1,0 +1,183 @@
+---
+title: "Character Settings & Lights+ dans Blender"
+description: "Aperçu du panneau Character Settings dans Blender : Lights+, préréglages d'éclairage, direction lumineuse, Fresnel, contours, physique et anime toon shaders."
+---
+
+import { Image } from 'astro:assets';
+import Carousel from '../../../components/Carousel.astro';
+import CarouselSlide from '../../../components/CarouselSlide.astro';
+import characterSettingsImg from '../../../assets/content/overview/character_settings.png';
+import animatedModeImg from '../../../assets/content/overview/animated_mode.png';
+import lightPanelImg from '../../../assets/content/overview/light_panel.png';
+import lightDefaultImg from '../../../assets/content/overview/light_default.png';
+import lightSunriseImg from '../../../assets/content/overview/light_sunrise.png';
+import lightDayImg from '../../../assets/content/overview/light_day.png';
+import lightSunsetImg from '../../../assets/content/overview/light_sunset.png';
+import lightNightImg from '../../../assets/content/overview/light_night.png';
+import lightRainyImg from '../../../assets/content/overview/light_rainy.png';
+import lightCustomImg from '../../../assets/content/overview/light_custom.png';
+import fresnelImg from '../../../assets/content/overview/fresnel.png';
+import physicsVideo from '../../../assets/content/overview/physics.mp4';
+import lightsDefaultImg from '../../../assets/content/overview/lights-default.png';
+import lightsDiffuseImg from '../../../assets/content/overview/lights-diffuse.png';
+import lightsLightColorImg from '../../../assets/content/overview/lights-light-color.png';
+import lightDirImg from '../../../assets/content/overview/light-dir.png';
+import lightDir2Img from '../../../assets/content/overview/light-dir2.png';
+
+
+# Character Settings
+
+Le panneau **Character Settings** se trouve dans l'onglet **Item** de la barre latérale de la vue 3D (panneau `N`) lorsqu'une armature ou un maillage de personnage est sélectionné. En haut, il affiche le nom du personnage actif et vous permet de basculer entre les onglets **Character** et **Rig Layers**. L'onglet **Character** offre un contrôle en temps réel sur l'éclairage du shader, Lights+, les contours anime, le comportement des ombres et la physique, sans avoir à ouvrir les graphiques de nœuds de shader.
+
+<Image src={characterSettingsImg} alt="Panneau Character Settings dans l'onglet Item" loading="eager" />
+
+---
+
+## Animate Mode
+
+**Animate Mode** permet une lecture fluide et légère dans la vue 3D en remplaçant temporairement les matériaux toon multicouches lourds par des alternatives légères et en masquant les modificateurs de contour.
+
+- Cliquez sur **Enable Animate Mode** lorsque vous travaillez sur les images clés et le rythme d'animation.
+- Cliquez sur **Disable Animate Mode** avant le rendu ou la mise en place de l'éclairage final.
+
+<Image src={animatedModeImg} alt="Aperçu d'Animate Mode dans la vue 3D" loading="lazy" />
+
+---
+
+## Lighting Type & Lighting Mode
+
+Vous pouvez contrôler l'éclairage du personnage soit via le gizmo **3D Lighting Panel** dans la scène, soit via les préréglages de l'interface **Character Settings**.
+
+### 3D Lighting Panel
+Lorsque **Lighting Type** est réglé sur **Lighting Panel**, des roues chromatiques tridimensionnelles et des contrôleurs directionnels dans la vue 3D pilotent de manière interactive la lumière principale, la lumière ambiante et les couleurs d'ombre du personnage.
+
+<Image src={lightPanelImg} alt="3D Lighting Panel dans la vue 3D" loading="lazy" />
+
+Pour ajuster les valeurs, passez en **Pose Mode**, sélectionnez un contrôleur du panneau et appuyez sur `G` pour le déplacer.
+
+### Préréglages d'éclairage (This Panel)
+Lorsque l'option est réglée sur **This Panel**, vous pouvez choisir parmi des préréglages d'éclairage intégrés adaptés à différentes ambiances environnementales. Utilisez le carrousel ci-dessous pour explorer les préréglages disponibles :
+
+<Carousel lang="fr">
+  <CarouselSlide title="Default" description="L'éclairage anime de studio neutre et équilibré.">
+    <Image src={lightDefaultImg} alt="Préréglage d'éclairage Default" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Sunrise" description="Teintes matinales chaudes et dorées avec un contraste doux.">
+    <Image src={lightSunriseImg} alt="Préréglage d'éclairage Sunrise" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Day" description="Éclairage de plein jour net avec des tons d'ombre propres.">
+    <Image src={lightDayImg} alt="Préréglage d'éclairage Day" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Sunset" description="Couleurs riches du crépuscule avec des reflets chauds et des tons ambiants vibrants.">
+    <Image src={lightSunsetImg} alt="Préréglage d'éclairage Sunset" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Night" description="Tons nocturnes atmosphériques avec un clair de lune ambiant froid et des ombres profondes.">
+    <Image src={lightNightImg} alt="Préréglage d'éclairage Night" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Rainy" description="Atmosphère pluvieuse couverte et diffuse avec des reflets adoucis.">
+    <Image src={lightRainyImg} alt="Préréglage d'éclairage Rainy" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Custom Colors" description="Ajustez individuellement les canaux de couleur Ambient, Sharp/Soft Lit, Sharp/Soft Shadow et Rim.">
+    <Image src={lightCustomImg} alt="Configuration d'éclairage Custom Colors" loading="lazy" />
+  </CarouselSlide>
+</Carousel>
+
+---
+
+## Lights+
+
+:::note
+**Lights+** est uniquement disponible pour **Blender 5.3**.
+:::
+
+**Lights+** permet à votre personnage de réagir aux lumières natives de la scène Blender (Point, Sun, Spot, Area).
+
+- Cliquez sur **Setup New Lights** pour initialiser Lights+ sur les matériaux du personnage.
+- Une fois activé, utilisez le menu déroulant **Mode** pour choisir comment les lumières de la scène affectent le personnage :
+  - **Default** : Utilise l'éclairage toon standard du personnage sans remplacement par les lumières de la scène.
+  - **Diffuse** : Applique un ombrage diffus directionnel et une atténuation provenant des lumières de la scène tout en préservant le contraste cel-shading.
+  - **Light Color** : Teinte et éclaire directement le personnage à l'aide de la couleur et de la puissance des lumières de la scène.
+
+<Carousel lang="fr">
+  <CarouselSlide title="Default" description="Éclairage standard du personnage sans influence des lumières de la scène.">
+    <Image src={lightsDefaultImg} alt="Mode Lights+ Default" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Diffuse" description="Les lumières de la scène pilotent l'ombrage diffus directionnel sur le personnage.">
+    <Image src={lightsDiffuseImg} alt="Mode Lights+ Diffuse" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Light Color" description="Les lumières de la scène teintent directement les zones éclairées du personnage.">
+    <Image src={lightsLightColorImg} alt="Mode Lights+ Light Color" loading="lazy" />
+  </CarouselSlide>
+</Carousel>
+
+---
+
+## Direction de la lumière et des ombres (os Light Direction)
+
+Lors de la configuration, un os dédié `Light Direction` est ajouté à l'armature du personnage (`<Character>Rig`) pour contrôler l'endroit où le soleil et les ombres frappent le modèle.
+
+<Carousel lang="fr">
+  <CarouselSlide title="Os Light Direction (0°)" description="Sélectionnez l'os Light Direction en Pose Mode pour contrôler le vecteur lumineux.">
+    <Image src={lightDirImg} alt="Os Light Direction sélectionné en Pose Mode" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Light Direction pivoté (Y : 92°)" description="Pivoter l'os Light Direction déplace la ligne d'ombre sur le personnage en temps réel.">
+    <Image src={lightDir2Img} alt="Os Light Direction pivoté à Y 92 degrés" loading="lazy" />
+  </CarouselSlide>
+</Carousel>
+
+1. Sélectionnez l'armature du personnage (`<Character>Rig`) et passez en **Pose Mode**.
+2. Sélectionnez l'os `Light Direction` (le contrôleur en forme de flèche).
+3. Pivotez-le directement dans la vue 3D (`R`), ou ouvrez **Bone Properties > Transform** et ajustez les valeurs **Rotation** (XYZ Euler) :
+   - **Rotation Z** : Fait pivoter l'azimut de l'angle du soleil horizontalement autour du personnage.
+   - **Rotation Y** : Ajuste l'inclinaison latérale du vecteur lumineux sur le personnage.
+   - **Rotation X** : Ajuste l'inclinaison verticale et l'angle d'élévation de la ligne d'ombre.
+
+---
+
+## Fresnel & Contours
+
+### Fresnel
+Le Fresnel ajoute une lueur de contour/spéculaire caractéristique du cel-shading de haute qualité :
+- **Toggle Fresnel** : Active ou désactive l'effet.
+- **Fresnel Color** : Teinte du contour lumineux extérieur.
+- **Fresnel Power** : Netteté de l'atténuation sur les surfaces courbes.
+- **Fresnel Scaler** : Multiplicateur d'intensité global.
+
+<Image src={fresnelImg} alt="Contrôles et aperçu de l'effet de contour Fresnel" loading="lazy" />
+
+### Contours & Night Soul (Natlan uniquement)
+- **Enable Outlines** : Active ou désactive rapidement les modificateurs de contour inverted-hull sur tous les maillages du personnage.
+- **Enable Night Soul** : (Personnages de Natlan dans Genshin Impact) Active ou désactive les contours d'énergie lumineux spéciaux.
+- **NS Outlines Thickness** : Ajuste l'épaisseur des contours Night Soul.
+
+---
+
+## Paramètres d'ombre et de scène
+
+- **Shadow Position** : Déplace le seuil de terminaison lumineuse sur les surfaces courbes.
+- **Catch Shadows** : Autorise ou ignore les ombres externes de la scène projetées sur le personnage.
+- **Day / Night** : Effectue une transition entre les calibrations de rampe de texture de jour et de nuit.
+- **Blush Strength** : Module l'intensité du rougissement facial là où c'est pris en charge.
+
+---
+
+## Physique des cheveux et des vêtements
+
+Vous pouvez appliquer ou ajuster de manière interactive la physique dynamique sans relancer l'assistant de configuration :
+
+- **Hair Physics Slider** : Ajuste l'élasticité Damped Track et l'influence physique sur les mèches de cheveux.
+- **Clothes Physics Slider** : Ajuste le mouvement dynamique des vêtements et des accessoires de jupe.
+- **Apply Physics / Remove Physics** : Ajoute ou supprime le système de contraintes à tout moment.
+
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={physicsVideo} type="video/mp4" />
+</video>

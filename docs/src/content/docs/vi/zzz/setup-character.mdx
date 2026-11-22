@@ -1,0 +1,90 @@
+---
+title: "Zenless Zone Zero (ZZZ) trong Blender — Thiết lập nhân vật & Shader"
+description: "Hướng dẫn từng bước thiết lập mô hình nhân vật Zenless Zone Zero (ZZZ) trong Blender: toon shader Kythera, Lights+ và rigging."
+---
+
+import { Image } from 'astro:assets';
+import zzzPanel from '../../../../assets/content/zzz/zzz-panel.png';
+import zzzKythera from '../../../../assets/content/zzz/zzz-kythera.png';
+import zzzLegacy from '../../../../assets/content/zzz/zzz-legacy.png';
+import zzzCharacter from '../../../../assets/content/zzz/zzz-character.png';
+import zzzScene from '../../../../assets/content/zzz/zzz-scene.png';
+import zzzEyeshadow1 from '../../../../assets/content/zzz/zzz-eyeshadow1.png';
+import zzzEyeshadow2 from '../../../../assets/content/zzz/zzz-eyeshadow2.png';
+import zzzEyeshadow3 from '../../../../assets/content/zzz/zzz-eyeshadow3.png';
+
+## 1. Mở Setup Wizard & Chọn Shader
+
+1. Nhấn `N` trong 3D Viewport để mở thanh bên.
+2. Điều hướng đến tab **Character Setup Wizard**.
+3. Trong menu thả xuống **Game**, chọn **Zenless Zone Zero**.
+4. Trong **Setup Settings**, chọn **Shader** ưa thích của bạn:
+   - **Kythera's Shader** (Khuyên dùng): Shader anime hiện đại hỗ trợ các thiết lập sẵn Lighting Mode theo thời gian thực, ánh sáng viền, fake SSS và các điều khiển sắc thái màu trong bảng Item.
+   - **Legacy Shader**: Shader ZZZ Setup File V2.0 cổ điển với các bảng rig điều khiển trong 3D viewport.
+
+<Image src={zzzPanel} alt="Bảng N-Panel Setup Wizard cho Zenless Zone Zero" loading="eager" />
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; margin: 1.5rem 0;">
+  <div style="background-color: var(--sl-color-black); border: 1px solid var(--sl-color-hairline); border-radius: var(--sl-border-radius-md); padding: 1rem; display: flex; flex-direction: column; text-align: center; margin-top: 0;">
+    <div style="width: 100%; aspect-ratio: 860 / 720; overflow: hidden; border-radius: var(--sl-border-radius-sm); margin: 0 0 0.75rem 0;">
+      <Image src={zzzKythera} alt="Kythera's Shader (Toon)" style="width: 100%; height: 100%; object-fit: cover; margin: 0;" loading="lazy" />
+    </div>
+    <h4 style="margin: 0 0 0.25rem; font-size: 1.05rem;">Kythera's Shader (Toon)</h4>
+    <p style="margin: 0; font-size: 0.875rem; color: var(--sl-color-gray-2); line-height: 1.4; flex-grow: 1;">Phong cách anime toon nhiều hơn với cel-shading rực rỡ, thiết lập sẵn ánh sáng theo thời gian thực và điều khiển trong bảng Item.</p>
+  </div>
+  <div style="background-color: var(--sl-color-black); border: 1px solid var(--sl-color-hairline); border-radius: var(--sl-border-radius-md); padding: 1rem; display: flex; flex-direction: column; text-align: center; margin-top: 0;">
+    <div style="width: 100%; aspect-ratio: 860 / 720; overflow: hidden; border-radius: var(--sl-border-radius-sm); margin: 0 0 0.75rem 0;">
+      <Image src={zzzLegacy} alt="Legacy Shader (Realistic)" style="width: 100%; height: 100%; object-fit: cover; margin: 0;" loading="lazy" />
+    </div>
+    <h4 style="margin: 0 0 0.25rem; font-size: 1.05rem;">Legacy Shader (Realistic)</h4>
+    <p style="margin: 0; font-size: 0.875rem; color: var(--sl-color-gray-2); line-height: 1.4; flex-grow: 1;">Đổ bóng chân thực hơn với độ suy giảm ánh sáng chuyển sắc, chuyển tiếp mềm mại hơn và bảng rig điều khiển trong 3D viewport.</p>
+  </div>
+</div>
+
+---
+
+## 2. Nhập nhân vật của bạn
+
+Bạn có thể thiết lập mô hình chỉ với một cú nhấp chuột bằng **Run Entire Setup** hoặc từng bước qua **Old Setup**.
+
+1. *(Tùy chọn)* Trong **Setup Settings**, bật **Hair & Clothes Physics** để thêm vật lý động cho tóc và trang phục. Bật **Disable Rigging** để bỏ qua bước tạo rig và chỉ nhập vật liệu + đường viền.
+2. Nhấp **Run Entire Setup** (hoặc **Set Up Character** trong Old Setup).
+3. Một cửa sổ trình duyệt tệp sẽ xuất hiện. Điều hướng đến [thư mục nhân vật](/vi/character-models/#zzz) của bạn chứa mô hình `.fbx` và các texture.
+4. Nhấp **Select Character Folder**.
+
+<Image src={zzzCharacter} alt="Trình xem tệp Blender đang chọn thư mục mô hình nhân vật ZZZ" loading="lazy" />
+
+---
+
+## 3. Quy trình thiết lập tự động
+
+Khi chạy thiết lập, add-on sẽ thực thi các bước tự động sau cho Zenless Zone Zero:
+
+- **Set Up Character**: Nhập mesh `.fbx`, dọn dẹp các vertex group và chuẩn hóa hệ thống phân cấp xương.
+- **Set Up Materials**: Thay thế các vật liệu mặc định của Blender bằng các node **ZZZ Toon Shader** bạn đã chọn, tự động liên kết các texture khuếch tán, lightmap, bóng mắt và color ramp.
+- **Set Up Outlines**: Áp dụng các modifier đường viền inverted-hull bằng geometry-node cho tất cả các mesh của nhân vật để kết xuất nét vẽ sắc nét.
+- **Fix Transformations**: Đặt lại các phép biến đổi vị trí, xoay và tỷ lệ.
+- **Rig Character**: Tích hợp **jideeh ZZZ Face Rig** chuyên biệt và cấu hình các điều khiển vật lý ngực/thân.
+- **Finish Setup**: Chuyển Color Management sang **Standard** để bảo toàn độ chính xác màu sắc gốc của texture.
+
+<Image src={zzzScene} alt="Nhân vật Zenless Zone Zero đã được nhập vào cảnh 3D" loading="lazy" />
+
+---
+
+## 4. Tùy chọn: Thêm vật liệu bóng mắt (Eyeshadow)
+
+Nếu nhân vật của bạn cần gán vật liệu bóng mắt thủ công:
+
+1. Chọn mesh khuôn mặt của nhân vật và nhấn `Tab` để vào **Edit Mode**.
+2. Di chuột qua phần hình học bóng mắt và nhấn `L` để chọn các thành phần mesh bóng mắt.
+3. Trong tab **Material Properties**, nhấp vào nút `+` để tạo một khe vật liệu mới.
+
+<Image src={zzzEyeshadow1} alt="Chọn mesh bóng mắt trong Edit Mode và thêm khe vật liệu mới" loading="lazy" />
+
+4. Gán vật liệu **ZZZ Shader Eye** vào khe vừa tạo.
+
+<Image src={zzzEyeshadow2} alt="Gán vật liệu ZZZ Shader Eye vào khe" loading="lazy" />
+
+5. Nhấp vào nút **Assign** để áp dụng vật liệu cho mesh bóng mắt đã chọn.
+
+<Image src={zzzEyeshadow3} alt="Nhấp nút Assign để áp dụng vật liệu bóng mắt" loading="lazy" />

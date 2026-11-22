@@ -1,6 +1,6 @@
 ---
-title: Shader dan Material
-description: Panduan shader toon anime, rendering garis tepi, bayangan mata, dan pengaturan pascapemrosesan.
+title: "Shader dan Material"
+description: "Panduan toon shader anime di Blender: pemetaan tekstur otomatis, gradasi warna Lights+, garis tepi inverted-hull, perbaikan bayangan mata, dan pascapemrosesan di Blender 5.3 dan Goo Engine."
 ---
 
 # Alur Kerja Shader dan Material

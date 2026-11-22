@@ -1,0 +1,42 @@
+---
+title: "Genshin Impact in Blender — Rigging & Bone Collections"
+description: "Gesichtsausdrucks-Steuerungen, Face Rig, Driver-Setup und Bone Collections für Genshin Impact-Modelle in Blender."
+---
+
+import { Image } from 'astro:assets';
+import genshinRigpanel from '../../../../assets/content/genshin/genshin-rigpanel.png';
+import genshinBonecoll from '../../../../assets/content/genshin/genshin-bonecoll.png';
+
+
+## 1. 3D-Gesichtsausdrucks-Steuerungspanel
+
+Hinter dem Kopf des Charakters wird ein benutzerdefiniertes 3D-Driver-Board platziert, um Gesichts-Shape-Keys beim Posen oder Animieren mühelos zu steuern.
+
+<Image src={genshinRigpanel} alt="3D-Gesichts-Rig-Steuerungspanel für Augenbrauen, Augen und Mundformen" loading="eager" />
+
+### Steuerungsbereiche
+- **Brows**: Spezielle Slider und Bone-Widgets zum Auslösen von Shape Keys für Wut, Traurigkeit, Überraschung und Augenbrauenneigung.
+- **Eyes**: Augapfel-Tracking-Gizmos, Augenzusammenkneifen, Blinzel-Trigger und Shape-Key-Misch-Slider. Augen-Driver verfügen über dynamische Y-Positionsgrenzen, um ein Clipping oder Hervortreten des Augen-Meshs zu verhindern.
+- **Mouth**: Ausdrucks-Bone-Slider für offenen Mund, Lächeln, Stirnrunzeln, O-Form und benutzerdefinierte Mund-Phoneme.
+
+---
+
+## 2. Bone Collections
+
+Das Add-on kategorisiert Charakter-Bones automatisch in organisierte Gruppen.
+
+<Image src={genshinBonecoll} alt="Armature Properties Bone Collections-Panel" loading="lazy" />
+
+### Übersicht der Bone-Gruppen
+- **Face**: Augenbrauen-, Augen-, Nasen-, Mund- und Wangen-Controller.
+- **Torso (IK / FK)**: Wirbelsäulen-, Brust-, Hals- und Kopf-FK/IK-Handles.
+- **Arm.L / Arm.R (IK & FK)**: Linke und rechte Armketten mit individuellen IK-Ziel-Pins und Pole-Targets.
+- **Leg.L / Leg.R (IK & FK)**: Linke und rechte Beinketten mit Foot-Roll- und Knieziel-Steuerungen.
+- **Fingers & Fingers (Detail)**: Einzelne Finger-Bone-Steuerungen für das Posen der Hände.
+- **Hair**: Sekundäre dynamische Bones für die Animation von Haarsträhnen.
+- **Clothes**: Sekundäre dynamische Bones für die Animation von Röcken, Umhängen und Bändern.
+- **Lighting**: Benutzerdefinierte Gizmos zum Anpassen von Lichtvektoren und Fresnel-Panels.
+
+:::tip
+Nutze das **Stern-Symbol** im Tab **Bone Collections**, um eine Bone Collection zu isolieren (sodass nur diese Collection sichtbar ist), oder die **Augen-Symbole**, um Bone-Gruppen beim Animieren ein- oder auszublenden.
+:::

@@ -1,0 +1,52 @@
+---
+title: "Honkai: Star Rail (HSR) trong Blender — Rigging & Bộ sưu tập xương"
+description: "Điều khiển biểu cảm khuôn mặt Isaac, thiết lập face rig và bộ sưu tập xương cho Honkai: Star Rail (HSR) trong Blender."
+---
+
+import { Image } from 'astro:assets';
+import hsrFacerig from '../../../../assets/content/hsr/hsr-facerig.png';
+import hsrManualrig from '../../../../assets/content/hsr/hsr-manualrig.png';
+import hsrShapekeys from '../../../../assets/content/hsr/hsr-shapekeys.png';
+import hsrTworigs from '../../../../assets/content/hsr/hsr-tworigs.png';
+import hsrBonecoll from '../../../../assets/content/hsr/hsr-bonecoll.png';
+
+## 1. Bảng điều khiển biểu cảm khuôn mặt 3D & Isaac Face Rig
+
+Sau khi nhập và thiết lập nhân vật, add-on sẽ cấu hình hai rig chính: rig cơ thể thông thường và **Isaac Face Rig** phụ đặt gần đầu để điều khiển biểu cảm khuôn mặt.
+
+<Image src={hsrFacerig} alt="Bảng điều khiển 3D Isaac Face Rig và rig nhân vật" loading="eager" />
+
+<Image src={hsrTworigs} alt="Cấu trúc rig cơ thể thông thường và Isaac face rig trong Blender" loading="lazy" />
+
+### Các chế độ điều khiển khuôn mặt
+
+- **Điều khiển thủ công trên khuôn mặt**: Các widget điều khiển đặt trực tiếp trên mắt, lông mày và miệng cho phép bạn thao tác thủ công từng biểu cảm khuôn mặt.
+
+<Image src={hsrManualrig} alt="Các widget điều khiển thủ công đặt trực tiếp trên khuôn mặt nhân vật" loading="lazy" />
+
+- **Thanh trượt Shapekey thiết lập sẵn bên cạnh**: Các thanh trượt nằm ở hai bên đầu được dùng để dễ dàng kích hoạt và pha trộn các dáng biểu cảm khuôn mặt có sẵn của nhân vật.
+
+<Image src={hsrShapekeys} alt="Các thanh trượt bên cạnh để kích hoạt và pha trộn các shape key thiết lập sẵn" loading="lazy" />
+
+---
+
+## 2. Bộ sưu tập xương (Bone Collections)
+
+Armature nhân vật Honkai: Star Rail được sắp xếp thành các nhóm có cấu trúc trong tab **Bone Collections** (Blender 5.2+).
+
+<Image src={hsrBonecoll} alt="Bảng Bone Collections trong Armature Properties cho nhân vật Honkai Star Rail" loading="lazy" />
+
+### Tổng quan Bone Collections
+
+- **Face**: Bộ điều khiển lông mày, mắt, mí mắt, đồng tử, mũi và miệng.
+- **Torso (IK / FK)**: Tay cầm cột sống, ngực, cổ và đầu.
+- **Arm.L / Arm.R (IK & FK)**: Chuỗi cánh tay trái và phải với các ghim mục tiêu IK và pole target riêng lẻ.
+- **Leg.L / Leg.R (IK & FK)**: Chuỗi chân trái và phải với các điều khiển lăn bàn chân và mục tiêu đầu gối.
+- **Fingers**: Bộ điều khiển xương bàn tay và ngón tay.
+- **Hair**: Các xương phụ động cho lọn tóc và tóc đuôi ngựa.
+- **Clothes**: Các xương phụ động cho áo khoác, váy, áo choàng và tua rua.
+- **Lighting**: Tay cầm vector và bộ điều khiển ánh sáng.
+
+:::tip
+Sử dụng **biểu tượng ngôi sao** trong tab **Bone Collections** để hiển thị riêng/cô lập một bộ sưu tập xương cụ thể, hoặc nhấp vào **biểu tượng con mắt** để bật/tắt hiển thị trong khi diễn hoạt.
+:::

@@ -1,6 +1,6 @@
 ---
-title: Neverness to Everness Quickstart
-description: Automated setup for NTE models via UEFormat importer and anime compositor nodes
+title: "Neverness to Everness (NTE) Quickstart in Blender"
+description: "Quickstart guide for Neverness to Everness (NTE) character setup in Blender using the UEFormat importer, rigging, and anime toon shader compositor nodes."
 chibi: nte/nanally
 ---
 

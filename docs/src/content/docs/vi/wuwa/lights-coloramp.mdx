@@ -1,0 +1,84 @@
+---
+title: "Wuthering Waves (WuWa) trong Blender — Lights+ & Coloramp Toon Shader"
+description: "Điều khiển hướng sáng Lights+, thiết lập sẵn, bảng màu tùy chỉnh và toon shader cho Wuthering Waves (WuWa) trong Blender."
+---
+
+import { Image } from 'astro:assets';
+import wuwaLightdir from '../../../../assets/content/wuwa/wuwa-lightdir.png';
+import wuwaLight1 from '../../../../assets/content/wuwa/wuwa-light1.png';
+import wuwaLight2 from '../../../../assets/content/wuwa/wuwa-light2.png';
+import wuwaLight3 from '../../../../assets/content/wuwa/wuwa-light3.png';
+import wuwaLight4 from '../../../../assets/content/wuwa/wuwa-light4.png';
+import wuwaAnimateMode from '../../../../assets/content/wuwa/wuwa-animate-mode.png';
+
+## 1. Điều khiển hướng sáng & bóng đổ
+
+Trong quá trình thiết lập nhân vật, một đối tượng `Light Direction_<Character>` chuyên dụng sẽ được tạo trong bộ sưu tập cảnh của bạn.
+
+1. Tìm `Light Direction_<Character>` trong bảng **Outliner**.
+2. Mở bảng **Item Transform** trong Object Properties.
+3. Điều chỉnh các giá trị **Rotation** (XYZ Euler) để xoay vector ánh sáng:
+   - **Rotation Z**: Xoay góc mặt trời theo chiều ngang xung quanh nhân vật.
+   - **Rotation Y**: Điều chỉnh độ nghiêng ngang của ánh sáng trên nhân vật.
+   - **Rotation X**: Điều chỉnh độ cao dọc của đường ranh giới bóng đổ.
+
+<Image src={wuwaLightdir} alt="Điều chỉnh góc xoay đối tượng Light Direction trong Outliner cho Wuthering Waves" loading="eager" />
+
+---
+
+## 2. Character Settings (Bảng Item)
+
+Chọn mesh hoặc armature của nhân vật và nhấn `N` trong 3D Viewport. Mở tab **Item** để truy cập bảng **Character Settings**, cung cấp các điều khiển theo thời gian thực mà không cần chỉnh sửa thủ công cây node shader:
+
+- **Animate Mode**: Tạm thời hoán đổi các shader toon phức tạp sang vật liệu nhẹ hơn để đảm bảo phát lại hoạt ảnh mượt mà trong viewport.
+- **Lighting Mode**: Chuyển đổi giữa các thiết lập sẵn ánh sáng môi trường tích hợp hoặc chọn Custom để tinh chỉnh từng kênh màu riêng lẻ.
+- **Blush**: Điều chỉnh cường độ texture ửng hồng trên khuôn mặt nhân vật.
+- **Toggle Resonator Star**: Bật/tắt hiển thị và driver hoạt ảnh cho biểu tượng ngôi sao Resonator của nhân vật.
+- **Use Fresnel**: Bật hiệu ứng viền fresnel trên shader.
+- **Alpha Transparency**: Dễ dàng chuyển đổi độ trong suốt trên các vật liệu alpha (như khăn voan trong suốt, ren vải và ruy băng tóc) giữa độ trong suốt pha trộn và kết xuất đặc.
+- **Outlines**: Chuyển đổi giữa màu đường viền Default và Custom, đồng thời điều chỉnh **Outline Thickness**.
+
+<Image src={wuwaLight1} alt="Bảng Character Settings cho Wuthering Waves" loading="lazy" />
+
+### Các chế độ & Thiết lập sẵn ánh sáng
+
+Bạn có thể chọn từ một số chế độ thiết lập sẵn ánh sáng được tuyển chọn:
+
+- **Default**: Thiết lập ánh sáng gốc của trò chơi.
+- **Sunrise**: Ánh sáng buổi sáng ấm áp, dịu nhẹ với sắc thái bóng đổ xanh tím dịu mắt.
+- **Day**: Ánh sáng ban ngày sắc nét, cân bằng.
+- **Sunset**: Tông màu giờ vàng với vùng sáng hổ phách ấm và bóng đổ đậm nét.
+- **Night**: Tông màu ánh trăng mát mẻ, dịu tối.
+- **Rainy**: Đổ bóng bầu không khí u ám, khuếch tán.
+- **Custom**: Mở khóa điều khiển chi tiết cho các ô chọn màu Ambient, Light, Shadow và Rim.
+
+<Image src={wuwaLight2} alt="Menu thả xuống thiết lập sẵn Lighting Mode của Wuthering Waves" loading="lazy" />
+
+<Image src={wuwaLight3} alt="Tùy chọn Fresnel và Custom Outline Colors trong Character Settings của Wuthering Waves" loading="lazy" />
+
+### Fresnel & Outlines
+
+- **Use Fresnel**: Bật tùy chọn này để hiển thị bảng phụ **Fresnel Options** (**Fresnel Color**, **Fresnel Scale**, **Fresnel Strength**).
+- **Outlines**: Đặt thành **Custom** để hiển thị **Custom Outline Colors** (**Outline Color 1 / 2**) cùng với **Outline Thickness**.
+
+### Custom Colors (Chế độ Custom)
+
+Khi **Lighting Mode** được đặt thành **Custom**, bảng phụ **Custom Colors** sẽ xuất hiện để bạn tinh chỉnh từng kênh của shader Gustling Waters:
+
+- **Ambient**: Điều khiển màu ánh sáng môi trường cơ bản không bị đổ bóng.
+- **Light**: Sắc thái màu áp dụng cho các vùng được chiếu sáng hoàn toàn.
+- **Shadow**: Tông màu áp dụng cho các vùng bị đổ bóng/che khuất.
+- **Rim**: Màu của điểm sáng viền phản chiếu (rim light highlight).
+
+<Image src={wuwaLight4} alt="Bảng chế độ Custom hiển thị bảng màu Custom Colors, Toggle Resonator Star và Alpha Transparency" loading="lazy" />
+
+### Resonator Star & Alpha Transparency
+
+- **Toggle Resonator Star**: Nút bấm một lần để bật/tắt hiển thị và driver hoạt ảnh cho biểu tượng ngôi sao Resonator của nhân vật.
+- **Alpha Transparency**: Hộp kiểm để chuyển đổi độ trong suốt trên các vật liệu dựa trên alpha (như khăn voan trong suốt, ren vải và ruy băng tóc) giữa độ trong suốt pha trộn và kết xuất đặc.
+
+### Animate Mode
+
+Để phát lại hoạt ảnh mượt mà và không bị giật lag trong viewport, hãy nhấp **Enable Animate Mode** trong bảng Character Settings. Thao tác này sẽ tạm thời hoán đổi các cây shader toon phức tạp bằng vật liệu nhẹ ít tốn tài nguyên trong khi bạn diễn hoạt, và bạn có thể chuyển lại chỉ với một cú nhấp chuột khi chuẩn bị kết xuất cuối cùng.
+
+<Image src={wuwaAnimateMode} alt="Enable Animate Mode trong Character Settings của Wuthering Waves" loading="lazy" />

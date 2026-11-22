@@ -1,0 +1,47 @@
+---
+title: "Wuthering Waves (WuWa) trong Blender — Rigging & Bộ sưu tập xương"
+description: "Bảng điều khiển face rig, vật lý tóc và quần áo cùng bộ sưu tập xương cho Wuthering Waves (WuWa) trong Blender."
+---
+
+import { Image } from 'astro:assets';
+import wuwaBonecoll from '../../../../assets/content/wuwa/wuwa-bonecoll.png';
+
+## 1. Bảng điều khiển biểu cảm khuôn mặt 3D
+
+Sau khi nhập và rig nhân vật Wuthering Waves, add-on sẽ xây dựng một **Face Rig Panel** chuyên dụng được trang bị các widget thao tác trực tiếp trực quan và các thanh trượt thiết lập sẵn biểu cảm:
+
+- **Mắt & Lông mày**: Các widget trực tiếp đặt xung quanh khuôn mặt để theo dõi đồng tử, nheo mắt, chớp mắt và tạo góc lông mày.
+- **Hình dạng miệng**: Bộ điều khiển riêng lẻ cho khóe môi, mở miệng, mỉm cười, cau có và âm vị.
+- **Thiết lập sẵn Cutscene**: Các thanh trượt được sắp xếp khoa học trên bảng khuôn mặt để kích hoạt và pha trộn nhanh các dáng biểu cảm có sẵn của nhân vật.
+
+---
+
+## 2. Vật lý tóc & quần áo (Damped Track)
+
+Add-on tự động tạo rig vật lý động bằng các ràng buộc **Damped Track** gốc của Blender:
+
+1. Bật **Hair & Clothes Physics** trong Setup Settings trước khi chạy thiết lập (hoặc áp dụng sau đó thông qua Old Setup > Rig Character).
+2. Điều chỉnh các thanh trượt mức độ ảnh hưởng **Hair** và **Clothes** trong bảng N để tùy chỉnh độ nhạy và lực giảm chấn của chuyển động phụ động.
+
+---
+
+## 3. Bộ sưu tập xương (Bone Collections)
+
+Armature của nhân vật được sắp xếp thành các nhóm có cấu trúc trong tab **Bone Collections** (Blender 5.2+), giúp dễ dàng cô lập và diễn hoạt từng bộ phận cơ thể cụ thể.
+
+<Image src={wuwaBonecoll} alt="Bảng Bone Collections trong Armature Properties cho nhân vật Wuthering Waves" loading="lazy" />
+
+### Tổng quan Bone Collections
+
+- **Face**: Bộ điều khiển lông mày, mắt, mí mắt, đồng tử, mũi và miệng.
+- **Torso (IK / FK)**: Tay cầm cột sống, ngực, cổ và đầu.
+- **Arm.L / Arm.R (IK & FK)**: Chuỗi cánh tay trái và phải với các ghim mục tiêu IK và pole target riêng lẻ.
+- **Leg.L / Leg.R (IK & FK)**: Chuỗi chân trái và phải với các điều khiển lăn bàn chân và mục tiêu đầu gối.
+- **Fingers**: Bộ điều khiển xương bàn tay và ngón tay.
+- **Hair**: Các xương phụ động cho lọn tóc và tóc đuôi ngựa.
+- **Clothes**: Các xương phụ động cho áo khoác, váy, áo choàng và tua rua.
+- **Lighting**: Tay cầm vector và bộ điều khiển ánh sáng.
+
+:::tip
+Sử dụng **biểu tượng ngôi sao** trong tab **Bone Collections** để hiển thị riêng/cô lập một bộ sưu tập xương cụ thể, hoặc nhấp vào **biểu tượng con mắt** để bật/tắt hiển thị trong khi diễn hoạt.
+:::

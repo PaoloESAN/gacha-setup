@@ -1,25 +1,36 @@
 ---
-title: Lights & Coloramp Configuration
-description: Controlling light direction and customizing Festivity toon shader color ramps for Genshin Impact models.
+title: "Genshin Impact Toon Shader, Lights & Coloramp in Blender"
+description: "Configure Genshin Impact toon shader lighting, light direction, and Festivity color ramps in Blender for anime character models."
 ---
 
 import { Image } from 'astro:assets';
-import genshinLightdir from '../../../assets/content/genshin/genshin-lightdir.png';
+import Carousel from '../../../components/Carousel.astro';
+import CarouselSlide from '../../../components/CarouselSlide.astro';
+import lightDirImg from '../../../assets/content/overview/light-dir.png';
+import lightDir2Img from '../../../assets/content/overview/light-dir2.png';
 import genshinLight from '../../../assets/content/genshin/genshin-light.png';
 
 
 ## 1. Controlling Light & Shadow Direction
 
-During character setup, a dedicated `Light Direction_<Character>` object is created in your scene collection.
+During character setup, a dedicated `Light Direction` bone is added inside your character's armature (`<Character>Rig`).
 
-1. Locate `Light Direction_<Character>` in the **Outliner** panel (e.g. `Light Direction_Charlotte`).
-2. Open the **Item Transform** panel in Object Properties.
-3. Adjust the **Rotation** values (XYZ Euler) to rotate the light vector:
+1. Select the character armature (`<Character>Rig`) and switch to **Pose Mode**.
+2. Select the `Light Direction` bone (the arrow controller).
+3. Rotate it directly in the 3D Viewport (`R`), or open **Bone Properties > Transform** and adjust the **Rotation** values (XYZ Euler) to rotate the light vector:
    - **Rotation Z**: Rotates the sun angle horizontally around the character.
    - **Rotation Y**: Adjusts the horizontal tilt of the light across the character.
    - **Rotation X**: Adjusts the vertical pitch of the shadow line.
 
-<Image src={genshinLightdir} alt="Adjusting Light Direction object rotation in Outliner and Item transform" loading="eager" />
+<Carousel>
+  <CarouselSlide title="Light Direction Bone (0°)" description="Default Light Direction bone orientation in Pose Mode.">
+    <Image src={lightDirImg} alt="Light Direction bone selected in Pose Mode" loading="eager" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Rotated Light Direction (Y: 92°)" description="Rotating the bone shifts the shadow terminator across the face and body.">
+    <Image src={lightDir2Img} alt="Light Direction bone rotated to Y 92 degrees" loading="lazy" />
+  </CarouselSlide>
+</Carousel>
 
 ---
 

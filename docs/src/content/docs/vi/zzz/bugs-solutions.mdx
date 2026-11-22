@@ -1,0 +1,40 @@
+---
+title: "Zenless Zone Zero (ZZZ) trong Blender — Lỗi & Cách khắc phục"
+description: "Hướng dẫn khắc phục sự cố cho mô hình, texture, rigging và toon shader của Zenless Zone Zero (ZZZ) trong Blender."
+---
+
+import { Image } from 'astro:assets';
+import zzzEyeshadow1 from '../../../../assets/content/zzz/zzz-eyeshadow1.png';
+import zzzEyeshadow2 from '../../../../assets/content/zzz/zzz-eyeshadow2.png';
+import zzzEyeshadow3 from '../../../../assets/content/zzz/zzz-eyeshadow3.png';
+import zzzShaderEyeVideo from '../../../../assets/content/zzz/zzz-shader-eye.mp4';
+
+:::note
+Phát hiện lỗi hoặc sự cố chưa được ghi nhận? Vui lòng báo cáo bằng cách mở một [issue mới trên GitHub](https://github.com/PaoloESAN/gacha-setup/issues/new).
+:::
+
+## Thiếu vật liệu bóng mắt (Eyeshadow)
+
+Nếu nhân vật của bạn bị thiếu phần gán vật liệu bóng mắt:
+
+### Video hướng dẫn
+
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={zzzShaderEyeVideo} type="video/mp4" />
+</video>
+
+### Giải pháp từng bước
+
+1. Chọn mesh khuôn mặt của nhân vật và nhấn `Tab` để vào **Edit Mode**.
+2. Di chuột qua phần hình học bóng mắt và nhấn `L` để chọn các thành phần mesh bóng mắt.
+3. Trong tab **Material Properties**, nhấp vào nút `+` để tạo một khe vật liệu mới.
+
+<Image src={zzzEyeshadow1} alt="Chọn mesh bóng mắt trong Edit Mode và thêm khe vật liệu mới" loading="lazy" />
+
+4. Gán vật liệu **ZZZ Shader Eye** vào khe vừa tạo.
+
+<Image src={zzzEyeshadow2} alt="Gán vật liệu ZZZ Shader Eye vào khe" loading="lazy" />
+
+5. Nhấp vào nút **Assign** để áp dụng vật liệu cho mesh bóng mắt đã chọn.
+
+<Image src={zzzEyeshadow3} alt="Nhấp nút Assign để áp dụng vật liệu bóng mắt" loading="lazy" />

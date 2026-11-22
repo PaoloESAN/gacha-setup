@@ -1,6 +1,6 @@
 ---
-title: ZZZ Physics Controls
-description: How to configure breast physics, breathing drivers, and dynamic torso bone controls in ZZZ
+title: "Zenless Zone Zero (ZZZ) Physics Controls in Blender"
+description: "How to configure Zenless Zone Zero (ZZZ) character physics in Blender: breast physics, breathing drivers, and dynamic torso bone controls."
 chibi: zzz/yuzuha
 ---
 

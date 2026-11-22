@@ -1,0 +1,79 @@
+---
+title: "Zenless Zone Zero (ZZZ) dans Blender — Lights+ & Coloramp Toon Shader"
+description: "Contrôle de la direction lumineuse Lights+, préréglages du toon shader Kythera, teintes et rim light pour Zenless Zone Zero (ZZZ) dans Blender."
+---
+
+import { Image } from 'astro:assets';
+import zzzLightdir from '../../../../assets/content/zzz/zzz-lightdir.png';
+import zzzLight1 from '../../../../assets/content/zzz/zzz-light1.png';
+import zzzLight2 from '../../../../assets/content/zzz/zzz-light2.png';
+import zzzLightpanel from '../../../../assets/content/zzz/zzz-lightpanel.png';
+import zzzTworigs from '../../../../assets/content/zzz/zzz-tworigs.png';
+
+## 1. Contrôler la direction de la lumière et des ombres
+
+Lors de la configuration du personnage, un objet dédié `Light Direction_<Character>` est créé dans la collection de votre scène.
+
+1. Localisez `Light Direction_<Character>` dans le panneau **Outliner**.
+2. Ouvrez le panneau **Item Transform** dans Object Properties.
+3. Ajustez les valeurs **Rotation** (XYZ Euler) pour faire pivoter le vecteur lumineux :
+   - **Rotation Z** : Fait pivoter l'angle du soleil horizontalement autour du personnage.
+   - **Rotation Y** : Ajuste l'inclinaison horizontale de la lumière sur le personnage.
+   - **Rotation X** : Ajuste l'inclinaison verticale de la ligne d'ombre.
+
+<Image src={zzzLightdir} alt="Ajustement de la rotation de l'objet Light Direction dans l'Outliner pour Zenless Zone Zero" loading="eager" />
+
+---
+
+## 2. Kythera Shader : Character Settings (Panneau Item)
+
+Lorsque vous utilisez **Kythera's Shader**, sélectionnez votre personnage et ouvrez l'onglet **Item** dans la barre latérale de la vue 3D (touche `N`) pour accéder aux contrôles de shader en temps réel.
+
+### Modes d'éclairage et préréglages
+
+Choisissez parmi des environnements d'éclairage prédéfinis ou passez en mode Custom :
+
+- **Default** : Rendu standard du jeu.
+- **Sunrise** : Lumière matinale douce avec des ombres pastel.
+- **Day** : Éclairage de jour net.
+- **Sunset** : Tons chauds de l'heure dorée.
+- **Night** : Palette de clair de lune tamisée.
+- **Rainy** : Éclairage diffus et couvert.
+- **Custom** : Débloque le contrôle granulaire sur les teintes, les ombres et la rim light.
+
+<Image src={zzzLight1} alt="Préréglages Lighting Mode du Kythera Shader dans Zenless Zone Zero" loading="lazy" />
+
+### Ombrage et teintes (Custom Mode)
+
+Lorsqu'il est réglé sur **Custom**, vous pouvez ajuster finement :
+
+- **Ambient** : Ton de couleur ambiante de base.
+- **Lit Tint / Lit Brightness** : Couleur d'illumination directe et intensité de luminosité.
+- **Shadow Tint / Shadow Intensity** : Teinte de couleur des ombres cel et profondeur d'obscurité.
+- **Fake SSS Intensity** : Ajuste la simulation douce d'atténuation de Subsurface Scattering (SSS) sur la peau et les tissus.
+
+<Image src={zzzLight2} alt="Paramètres Shading et Tints dans Character Settings pour ZZZ" loading="lazy" />
+
+### Paramètres Rim Light
+
+Personnalisez l'effet de contour lumineux autour de votre personnage :
+
+- **Enable Rim Light** : Active ou désactive l'effet de rim lighting.
+- **Color** : Teinte de la lueur de la rim light.
+- **Coverage** : Jusqu'où la rim light s'étend sur les silhouettes du maillage.
+- **Brightness** : Intensité globale de la rim light.
+- **Left / Right & Up / Down** : Vecteurs positionnels fins pour décaler la direction du reflet.
+
+---
+
+## 3. Legacy Shader : Rig de contrôle dans la vue 3D
+
+Lorsque vous utilisez le **Legacy Shader**, un panneau de contrôle 3D est généré dans votre vue 3D en tant qu'objet de rig séparé.
+
+<Image src={zzzLightpanel} alt="Panneau de contrôle et d'éclairage 3D dans la vue 3D pour ZZZ Legacy Shader" loading="lazy" />
+
+<Image src={zzzTworigs} alt="Structure de rig d'armature du panneau de contrôle lumineux dans Blender" loading="lazy" />
+
+:::note
+Sélectionnez le rig du panneau lumineux, passez en **Pose Mode** (`Ctrl + Tab`), et transformez les os sélecteurs de couleur et curseurs pour ajuster les paramètres ambient, sharp lit, sharp shadow et rim du Legacy shader.
+:::

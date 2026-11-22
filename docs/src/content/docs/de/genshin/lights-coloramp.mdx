@@ -1,0 +1,56 @@
+---
+title: "Genshin Impact in Blender — Lights+ & Coloramp Toon Shader"
+description: "Steuerung der Lichtrichtung mit Lights+ und Anpassung der Festivity-Toon-Shader-Color-Ramps für Genshin Impact-Modelle in Blender."
+---
+
+import { Image } from 'astro:assets';
+import Carousel from '../../../../components/Carousel.astro';
+import CarouselSlide from '../../../../components/CarouselSlide.astro';
+import lightDirImg from '../../../../assets/content/overview/light-dir.png';
+import lightDir2Img from '../../../../assets/content/overview/light-dir2.png';
+import genshinLight from '../../../../assets/content/genshin/genshin-light.png';
+
+
+## 1. Licht- & Schattenrichtung steuern
+
+Während der Charaktereinrichtung wird ein spezieller `Light Direction`-Bone im Armature deines Charakters (`<Character>Rig`) hinzugefügt.
+
+1. Wähle das Charakter-Armature (`<Character>Rig`) aus und wechsle in den **Pose Mode**.
+2. Wähle den `Light Direction`-Bone (den Pfeil-Controller) aus.
+3. Drehe ihn direkt im 3D Viewport (`R`) oder öffne **Bone Properties > Transform** und passe die **Rotation**-Werte (XYZ Euler) an, um den Lichtvektor zu drehen:
+   - **Rotation Z**: Dreht den Sonnenwinkel horizontal um den Charakter.
+   - **Rotation Y**: Passt die horizontale Neigung des Lichts über den Charakter an.
+   - **Rotation X**: Passt die vertikale Neigung der Schattenlinie an.
+
+<Carousel lang="de">
+  <CarouselSlide title="Light Direction Bone (0°)" description="Standardausrichtung des Light Direction-Bones im Pose Mode.">
+    <Image src={lightDirImg} alt="Light Direction-Bone im Pose Mode ausgewählt" loading="eager" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Gedrehte Light Direction (Y: 92°)" description="Das Drehen des Bones verschiebt die Schattengrenze über Gesicht und Körper.">
+    <Image src={lightDir2Img} alt="Light Direction-Bone auf Y 92 Grad gedreht" loading="lazy" />
+  </CarouselSlide>
+</Carousel>
+
+---
+
+## 2. Character Settings (Item-Panel)
+
+Wähle dein Charakter-Mesh oder -Armature aus und drücke `N` im 3D Viewport. Öffne den Tab **Item**, um auf das Panel **Character Settings** zuzugreifen, das Echtzeit-Anpassungen ermöglicht, ohne im Shader Editor suchen zu müssen:
+
+<Image src={genshinLight} alt="Character Settings-Panel für Genshin Impact im Item-Tab" loading="lazy" />
+
+### Lighting Mode
+- **Lighting Presets**: Wechsle schnell zwischen Umgebungsbeleuchtungs-Voreinstellungen (*Default*, *Sunrise*, *Day*, *Sunset*, *Night*, *Rainy*).
+- **Custom Mode**: Die Auswahl des Modus **Custom** öffnet ein Unterpanel für eine benutzerdefinierte Farbpalette, um einzelne Kanäle manuell feinabzustimmen: **Ambient**, **Sharp Lit**, **Soft Lit**, **Sharp Shadow**, **Soft Shadow**, **Rim Lit** und **Rim Shadow**.
+
+### Fresnel-Optionen
+- **Toggle Fresnel**: Kontrollkästchen zum Ein- oder Ausschalten des äußeren Rim-Glow-Effekts.
+- **Fresnel Color**: Farbwähler zur Anpassung des Rim-Glow-Farbtons.
+- **Fresnel Power**: Slider 0..1 (invertiert). Bei 0 wird Fresnel Power auf 10 gesetzt, bei 1 auf 0.
+- **Fresnel Scaler**: Slider 0..1. Bei 0 wird Fresnel Scaler auf 1 gesetzt, bei 1 auf 10.
+
+### Schatten- & Szeneneinstellungen
+- **Shadow Position**: Slider zur Kalibrierung des Schattenschwellenwerts und der Platzierung auf dem Charakter.
+- **Catch Shadows**: Aktiviere diese Option, um mehr Eigenschatten auf das eigene Mesh des Charakters zu werfen.
+- **Day / Night**: Slider zur Steuerung des Gleichgewichts und Übergangs zwischen Tag- und Nachtbeleuchtung.

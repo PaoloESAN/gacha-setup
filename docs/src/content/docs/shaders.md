@@ -1,6 +1,6 @@
 ---
-title: Shaders & Materials
-description: Overview of anime toon shaders, outline rendering, eyeshadow, and post-processing setups
+title: "Shaders & Materials"
+description: "Overview of anime toon shaders in Blender: automated texture mapping, Lights+ color ramps, inverted-hull outlines, eyeshadow fixes, and post-processing in Blender 5.3 and Goo Engine."
 ---
 
 # Shaders & Material Pipeline

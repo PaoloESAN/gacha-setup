@@ -1,0 +1,54 @@
+---
+title: "Schnellstart — Gacha Setup in Blender"
+description: "Starte in wenigen Minuten mit dem Gacha Setup Add-on in Blender. Importiere Character Models (FBX, VMD), richte Anime Toon Shaders, Lights+ und Rigging für Blender 5.3 und 4.1+ ein."
+---
+
+import QuickstartCards from '../../../components/QuickstartCards.astro';
+import { Image } from 'astro:assets';
+import entireSetupImg from '../../../assets/content/overview/main-panel.png';
+import selectGameImg from '../../../assets/content/overview/select_game.png';
+import selectCharacter from '../../../assets/content/overview/select-character.png';
+import characterEscene from '../../../assets/content/overview/character-escene.png';
+
+## Installationsschritte
+
+1. Lade die neueste `Gacha_Setup-<version>.zip` aus dem [aktuellen GitHub-Release](https://github.com/PaoloESAN/gacha-setup/releases/latest) herunter.
+2. Starte Blender 5.2 (empfohlen) oder Blender/Goo Engine 4.1+. Bei Blender-Versionen unter 4.5 installiere zuerst BetterFBX.
+3. Ziehe die heruntergeladene `.zip`-Datei per Drag-and-drop in das Blender-Fenster.
+4. Aktiviere das Kontrollkästchen **Enable Add-on** und klicke zur Bestätigung auf **OK**.
+5. Falls es nicht automatisch installiert wird, öffne **Edit > Preferences > Add-ons**, klicke auf **Install from Disk...**, wähle die `.zip`-Datei aus und aktiviere das Kontrollkästchen des Add-ons.
+
+## Setup Character
+
+1. Drücke `N` im 3D Viewport und öffne den Seitenleisten-Tab **Gacha Setup** (**Character Setup Wizard**-Panel).
+
+<Image src={entireSetupImg} alt="Gacha Setup Hauptpanel" loading="eager" />
+
+2. Wähle dein Spiel aus.
+
+<Image src={selectGameImg} alt="Dropdown-Menü Select Game" loading="lazy" />
+
+3. Klicke auf **Setup Character**.
+
+4. Wähle deinen [Charakterordner](/de/character-models/) aus, konfiguriere optional die **Setup Settings** in der Seitenleiste des Dateibrowsers (**Shader**, **Disable Rigging**, **Hair & Clothes Physics**) und klicke auf **Select Character Folder** (oder wähle die zugehörige `.zip`- / `.7z`-Datei aus).
+
+<Image src={selectCharacter} alt="Select Character Folder" loading="lazy" />
+
+5. Warte ein paar Sekunden, bis dein Charakter fertig in der Szene erscheint.
+
+<Image src={characterEscene} alt="Charakter fertig in der Szene (Einrichtung erfolgreich abgeschlossen)" loading="lazy" />
+
+---
+
+## Weitere Informationen
+
+<QuickstartCards>
+  <a href="/de/character-settings/" class="quickstart-card">
+    <p class="link-title">Character Settings</p>
+    <p class="link-desc">Beleuchtungsvoreinstellungen, Lichtrichtungsobjekte, Fresnel, Outlines und Physik-Schalter.</p>
+  </a>
+  <a href="/de/rigging/" class="quickstart-card">
+    <p class="link-title">Rigging</p>
+    <p class="link-desc">3D-Gesichtssteuerungsboards, Gesichts-Rigs, Rig-Ebenen-Schalter und Master-Motion-Zahnräder.</p>
+  </a>
+</QuickstartCards>

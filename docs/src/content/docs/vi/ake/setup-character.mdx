@@ -1,0 +1,55 @@
+---
+title: "Arknights: Endfield (AKE) trong Blender — Thiết lập nhân vật & Shader"
+description: "Hướng dẫn từng bước thiết lập mô hình nhân vật Arknights: Endfield (AKE) trong Blender: anime toon shader, Lights+ và rigging."
+---
+
+import { Image } from 'astro:assets';
+import akePanel from '../../../../assets/content/ake/ake-panel.png';
+import akeCharacter from '../../../../assets/content/ake/ake-character.png';
+import akeScene from '../../../../assets/content/ake/ake-scene.png';
+
+## 1. Mở Setup Wizard
+
+1. Nhấn `N` trong 3D Viewport để mở thanh bên.
+2. Điều hướng đến tab **Character Setup Wizard**.
+3. Trong menu thả xuống **Game**, chọn **Arknights: Endfield**.
+
+<Image src={akePanel} alt="Bảng N-Panel Setup Wizard cho Arknights: Endfield (v3.7.1)" loading="eager" />
+
+---
+
+## 2. Nhập nhân vật của bạn
+
+Bạn có thể thiết lập mô hình chỉ với một cú nhấp chuột bằng **Run Entire Setup** hoặc từng bước qua **Old Setup**.
+
+1. *(Tùy chọn)* Trong **Setup Settings**, bật **Hair & Clothes Physics** để thêm vật lý động cho tóc và trang phục. Bật **Disable Rigging** để bỏ qua bước tạo rig và chỉ nhập vật liệu + đường viền.
+2. Nhấp **Run Entire Setup** (hoặc **Set Up Character** trong Old Setup).
+3. Một cửa sổ trình duyệt tệp sẽ xuất hiện. Điều hướng đến [thư mục nhân vật](/vi/character-models/#ake---arknights-endfield) của bạn chứa mô hình `.fbx` (`chr_XXXX_name_uimodel.fbx`, ví dụ `chr_0032_lizhiyan_uimodel.fbx`), thư mục con `Materials` và các texture.
+4. Nhấp **Select Character Folder**.
+
+<Image src={akeCharacter} alt="Trình xem tệp Blender đang chọn thư mục mô hình nhân vật Arknights: Endfield" loading="lazy" />
+
+---
+
+## 3. Quy trình thiết lập tự động
+
+Khi chạy thiết lập, add-on sẽ thực thi các bước tự động sau cho Arknights: Endfield:
+
+- **Set Up Character**: Nhập mesh `.fbx`, dọn dẹp các vertex group và chuẩn hóa hệ thống phân cấp xương.
+- **Set Up Materials**: Thay thế các vật liệu mặc định của Blender bằng các node shader **Arknights: Endfield PBRToon** tùy chỉnh (`Arknights: Endfield_PBRToonBase`, `BaseFace`, `BaseHair`), liên kết các vật liệu cơ thể, quần áo, khuôn mặt, tóc, mống mắt và alpha.
+- **Setup Outlines**: Áp dụng các modifier đường viền inverted-hull (`Dots Stroke`) cho tất cả các mesh của nhân vật để kết xuất nét vẽ sắc nét.
+- **Rig Character**: Cấu hình armature Rigify, bản điều chỉnh **Isaac Face Rig** cho Endfield và hệ thống driver đầu.
+- **Setup Compositor Nodes**: Cấu hình cây node tổng hợp (compositing) để kết xuất bóng đổ đầu theo thời gian thực.
+- **Finish Setup**: Chuyển Color Management sang **Standard** để bảo toàn độ chính xác màu sắc gốc của texture.
+
+<Image src={akeScene} alt="Nhân vật Arknights: Endfield đã được nhập vào cảnh 3D (Thiết lập hoàn tất thành công)" loading="lazy" />
+
+---
+
+## 4. Cài đặt Viewport Shading & Compositor
+
+Để xem shader PBRToon và tổng hợp bóng đổ đầu theo thời gian thực trong viewport:
+
+1. Mở menu **Viewport Shading** (góc trên bên phải của 3D Viewport).
+2. Trong **Lighting**, bật **Scene Lights** và **Scene World**.
+3. Trong **Compositor**, đặt chế độ thả xuống thành **Always** (hoặc **Camera**).

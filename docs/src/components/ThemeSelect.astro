@@ -197,7 +197,16 @@ const id = `moon-mask-${crypto.randomBytes(4).toString('hex')}`;
 					const newTheme = theme === 'dark' ? 'light' : theme === 'light' ? 'dark' : 'auto';
 					onThemeChange(newTheme);
 					const lang = document.documentElement.lang;
-					const names = lang.startsWith('id') ? { auto: 'Tema otomatis', dark: 'Tema gelap', light: 'Tema terang' } : lang.startsWith('es') ? { auto: 'Tema automático', dark: 'Tema oscuro', light: 'Tema claro' } : { auto: 'Automatic theme', dark: 'Dark theme', light: 'Light theme' };
+					const themeNames: Record<string, { auto: string; dark: string; light: string }> = {
+						en: { auto: 'Automatic theme', dark: 'Dark theme', light: 'Light theme' },
+						es: { auto: 'Tema automático', dark: 'Tema oscuro', light: 'Tema claro' },
+						id: { auto: 'Tema otomatis', dark: 'Tema gelap', light: 'Tema terang' },
+						fr: { auto: 'Thème automatique', dark: 'Thème sombre', light: 'Thème clair' },
+						vi: { auto: 'Giao diện tự động', dark: 'Giao diện tối', light: 'Giao diện sáng' },
+						de: { auto: 'Automatisches Design', dark: 'Dunkles Design', light: 'Helles Design' },
+					};
+					const langKey = Object.keys(themeNames).find((k) => lang.startsWith(k)) ?? 'en';
+					const names = themeNames[langKey];
 					button?.setAttribute('aria-label', names[newTheme]);
 				});
 			}

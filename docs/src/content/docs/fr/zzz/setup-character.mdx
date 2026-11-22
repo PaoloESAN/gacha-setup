@@ -1,0 +1,90 @@
+---
+title: "Zenless Zone Zero (ZZZ) dans Blender — Configuration de personnage & Shader"
+description: "Guide étape par étape pour configurer les personnages Zenless Zone Zero (ZZZ) dans Blender : toon shader Kythera, Lights+ et rigging."
+---
+
+import { Image } from 'astro:assets';
+import zzzPanel from '../../../../assets/content/zzz/zzz-panel.png';
+import zzzKythera from '../../../../assets/content/zzz/zzz-kythera.png';
+import zzzLegacy from '../../../../assets/content/zzz/zzz-legacy.png';
+import zzzCharacter from '../../../../assets/content/zzz/zzz-character.png';
+import zzzScene from '../../../../assets/content/zzz/zzz-scene.png';
+import zzzEyeshadow1 from '../../../../assets/content/zzz/zzz-eyeshadow1.png';
+import zzzEyeshadow2 from '../../../../assets/content/zzz/zzz-eyeshadow2.png';
+import zzzEyeshadow3 from '../../../../assets/content/zzz/zzz-eyeshadow3.png';
+
+## 1. Ouvrir l'assistant de configuration & Sélection du Shader
+
+1. Appuyez sur `N` dans la vue 3D pour ouvrir la barre latérale.
+2. Accédez à l'onglet **Character Setup Wizard**.
+3. Dans le menu déroulant **Game**, sélectionnez **Zenless Zone Zero**.
+4. Sous **Setup Settings**, sélectionnez votre **Shader** préféré :
+   - **Kythera's Shader** (Recommandé) : Shader anime moderne prenant en charge les préréglages Lighting Mode en temps réel, la rim light, le faux SSS et les contrôles de teinte dans le panneau Item.
+   - **Legacy Shader** : Shader classique ZZZ Setup File V2.0 avec panneaux de rig de contrôle dans la vue 3D.
+
+<Image src={zzzPanel} alt="Panneau N Setup Wizard de Zenless Zone Zero" loading="eager" />
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.25rem; margin: 1.5rem 0;">
+  <div style="background-color: var(--sl-color-black); border: 1px solid var(--sl-color-hairline); border-radius: var(--sl-border-radius-md); padding: 1rem; display: flex; flex-direction: column; text-align: center; margin-top: 0;">
+    <div style="width: 100%; aspect-ratio: 860 / 720; overflow: hidden; border-radius: var(--sl-border-radius-sm); margin: 0 0 0.75rem 0;">
+      <Image src={zzzKythera} alt="Kythera's Shader (Toon)" style="width: 100%; height: 100%; object-fit: cover; margin: 0;" loading="lazy" />
+    </div>
+    <h4 style="margin: 0 0 0.25rem; font-size: 1.05rem;">Kythera's Shader (Toon)</h4>
+    <p style="margin: 0; font-size: 0.875rem; color: var(--sl-color-gray-2); line-height: 1.4; flex-grow: 1;">Rendu plus typé anime toon avec un cel-shading vibrant, des préréglages d'éclairage en temps réel et des contrôles dans le panneau Item.</p>
+  </div>
+  <div style="background-color: var(--sl-color-black); border: 1px solid var(--sl-color-hairline); border-radius: var(--sl-border-radius-md); padding: 1rem; display: flex; flex-direction: column; text-align: center; margin-top: 0;">
+    <div style="width: 100%; aspect-ratio: 860 / 720; overflow: hidden; border-radius: var(--sl-border-radius-sm); margin: 0 0 0.75rem 0;">
+      <Image src={zzzLegacy} alt="Legacy Shader (Realistic)" style="width: 100%; height: 100%; object-fit: cover; margin: 0;" loading="lazy" />
+    </div>
+    <h4 style="margin: 0 0 0.25rem; font-size: 1.05rem;">Legacy Shader (Realistic)</h4>
+    <p style="margin: 0; font-size: 0.875rem; color: var(--sl-color-gray-2); line-height: 1.4; flex-grow: 1;">Ombrage plus réaliste avec des dégradés d'atténuation lumineuse, des transitions plus douces et des panneaux de rig de contrôle dans la vue 3D.</p>
+  </div>
+</div>
+
+---
+
+## 2. Importer votre personnage
+
+Vous pouvez configurer votre modèle en un clic avec **Run Entire Setup** ou étape par étape via **Old Setup**.
+
+1. *(Optionnel)* Sous **Setup Settings**, activez **Hair & Clothes Physics** pour ajouter une physique dynamique aux cheveux et aux vêtements. Activez **Disable Rigging** pour ignorer la génération du rig et importer uniquement les matériaux + contours.
+2. Cliquez sur **Run Entire Setup** (ou **Set Up Character** sous Old Setup).
+3. Une fenêtre d'explorateur de fichiers apparaîtra. Accédez à votre [dossier de personnage](/fr/character-models/#zzz) contenant le modèle `.fbx` et les textures.
+4. Cliquez sur **Select Character Folder**.
+
+<Image src={zzzCharacter} alt="Vue fichier Blender sélectionnant le dossier du modèle de personnage ZZZ" loading="lazy" />
+
+---
+
+## 3. Pipeline de configuration automatisé
+
+Lors de l'exécution de la configuration, l'add-on effectue les étapes automatisées suivantes pour Zenless Zone Zero :
+
+- **Set Up Character** : Importe le maillage `.fbx`, nettoie les groupes de vertex et standardise les hiérarchies d'os.
+- **Set Up Materials** : Remplace les matériaux Blender par défaut par les nœuds **ZZZ Toon Shader** de votre choix, en associant automatiquement les textures diffuse, lightmap, eyeshadow et color ramp.
+- **Set Up Outlines** : Applique des modificateurs de contour inverted-hull par geometry-node à tous les maillages du personnage pour un rendu de tracé net.
+- **Fix Transformations** : Réinitialise les transformations de position, rotation et échelle.
+- **Rig Character** : Intègre le **jideeh ZZZ Face Rig** spécialisé et configure les contrôles physiques de la poitrine et du torse.
+- **Finish Setup** : Passe Color Management sur **Standard** pour préserver la fidélité des couleurs brutes des textures.
+
+<Image src={zzzScene} alt="Personnage de Zenless Zone Zero importé dans la scène 3D" loading="lazy" />
+
+---
+
+## 4. Optionnel : Ajouter le matériau Eyeshadow
+
+Si votre personnage nécessite une assignation manuelle du matériau d'ombre à paupières (eyeshadow) :
+
+1. Sélectionnez le maillage du visage du personnage et appuyez sur `Tab` pour passer en **Edit Mode**.
+2. Survolez la géométrie de l'eyeshadow et appuyez sur `L` pour sélectionner les composants du maillage de l'eyeshadow.
+3. Dans l'onglet **Material Properties**, cliquez sur le bouton `+` pour créer un nouvel emplacement de matériau.
+
+<Image src={zzzEyeshadow1} alt="Sélection du maillage eyeshadow en Edit Mode et ajout d'un nouvel emplacement de matériau" loading="lazy" />
+
+4. Assignez le matériau **ZZZ Shader Eye** à l'emplacement nouvellement créé.
+
+<Image src={zzzEyeshadow2} alt="Assignation du matériau ZZZ Shader Eye à l'emplacement" loading="lazy" />
+
+5. Cliquez sur le bouton **Assign** pour appliquer le matériau au maillage eyeshadow sélectionné.
+
+<Image src={zzzEyeshadow3} alt="Clic sur le bouton Assign pour appliquer le matériau eyeshadow" loading="lazy" />

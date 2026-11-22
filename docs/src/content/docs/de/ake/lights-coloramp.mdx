@@ -1,0 +1,59 @@
+---
+title: "Arknights: Endfield (AKE) in Blender — Lights+ & Coloramp Toon Shader"
+description: "Steuerung der Lichtrichtung mit Lights+, Voreinstellungen, benutzerdefinierte Palettenfarben und Toon-Shader für Arknights: Endfield (AKE) in Blender."
+---
+
+import { Image } from 'astro:assets';
+import akeLightdir from '../../../../assets/content/ake/ake-lightdir.png';
+import akeLight1 from '../../../../assets/content/ake/ake-light1.png';
+import akeLight2 from '../../../../assets/content/ake/ake-light2.png';
+
+## 1. Licht- & Schattenrichtung steuern
+
+Während der Charaktereinrichtung wird ein spezielles `Light`- / `Light Direction_<Character>`-Objekt in deiner Szenen-Collection erstellt.
+
+1. Suche das Lichtobjekt im **Outliner**-Panel.
+2. Öffne das **Item Transform**-Panel in den Object Properties.
+3. Passe die **Rotation**-Werte (XYZ Euler) an, um den Lichtvektor zu drehen:
+   - **Rotation Z**: Dreht den Sonnenwinkel horizontal um den Charakter.
+   - **Rotation Y**: Passt die horizontale Neigung des Lichts über den Charakter an.
+   - **Rotation X**: Passt die vertikale Neigung der Schattenlinie an.
+
+<Image src={akeLightdir} alt="Anpassen der Rotation des Lichtobjekts im Outliner für Arknights: Endfield" loading="eager" />
+
+---
+
+## 2. Character Settings (Item-Panel)
+
+Wähle dein Charakter-Mesh oder -Armature aus und drücke `N` im 3D Viewport. Öffne den Tab **Item**, um auf das Panel **Character Settings** zuzugreifen, das Echtzeit-Steuerungen bietet, ohne dass du Shader-Node-Trees manuell bearbeiten musst:
+
+- **Lighting Mode**: Wechsle zwischen integrierten Beleuchtungsvoreinstellungen (`Default`, `Sunrise`, `Day`, `Sunset`, `Night`, `Rainy`) oder wähle `Custom`, um einzelne Farbkanäle anzupassen.
+- **General Shading**: `Smoothness Max` (0–2, Standard 2.0) und `Normal Strength` (0–5, Standard 1.5) für Körper-/Kleidungs-/Gesichtsmaterialien.
+- **Hair Shading**: `Hair Smoothness Max` (0–1, Standard 1.0) und `Hair Normal Strength` (0–5, Standard 1.5).
+- **Eyes**: Slider `Eyes Brightness` (1–20, Standard 1.0).
+- **Weather**: `Enable Rain` schaltet den Regen-Shading-Pfad auf Körper und Haut um.
+- **Hair & Clothes Physics**: Schaltfläche **Apply Physics** (oder Einfluss-Slider für Hair/Clothes, sobald Physik vorhanden ist).
+
+<Image src={akeLight1} alt="Character Settings-Panel für Arknights: Endfield" loading="lazy" />
+
+### Beleuchtungsmodi & Voreinstellungen
+
+- **Default**: Ursprüngliche Spielbeleuchtungs-Basis.
+- **Sunrise**: Warmes, weiches Morgenleuchten.
+- **Day**: Klare, ausgewogene Tageslichtbeleuchtung.
+- **Sunset**: Goldene-Stunde-Töne mit warmen Highlights.
+- **Night**: Gedimmte, kühle Mondlichttöne.
+- **Rainy**: Bedeckte, diffuse atmosphärische Schattierung.
+- **Custom**: Schaltet granulare Kontrolle über Ambient-, DirLight-, Specular-, Base-Color- und Fresnel-Farben frei.
+
+<Image src={akeLight2} alt="Arknights: Endfield Dropdown-Menü Lighting Mode (Rainy)" loading="lazy" />
+
+### Benutzerdefinierte Farben (Custom-Modus)
+
+Wenn **Lighting Mode** auf **Custom** eingestellt ist, kannst du jeden Kanal des Endfield-PBRToon-Shaders feinjustieren:
+
+- **Ambient**: Farbton der Basis-Umgebungsbeleuchtung.
+- **Light (DirLight)**: Farbton, der auf vollständig beleuchtete Bereiche angewendet wird.
+- **Specular**: Farbe der Glanzlichter.
+- **Base Color**: Multiplikator für den Basis-Albedo-Farbton.
+- **Fresnel Inside / Outside**: Verlaufsfarben für das Rim-Fresnel.

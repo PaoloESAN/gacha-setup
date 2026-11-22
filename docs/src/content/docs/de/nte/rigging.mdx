@@ -1,0 +1,51 @@
+---
+title: "Neverness to Everness (NTE) in Blender — Rigging & Bone Collections"
+description: "Gesichtsausdrucks-Steuerungen, Face-Rig-Setup und Bone Collections für Neverness to Everness (NTE) in Blender."
+---
+
+import { Image } from 'astro:assets';
+import nteFacerig from '../../../../assets/content/nte/nte-facerig.webp';
+import nteRig from '../../../../assets/content/nte/nte-rig.png';
+import nteBonecoll from '../../../../assets/content/nte/nte-bonecoll.png';
+
+:::note
+Das Bewegen des Rigs kann bei hochauflösenden Meshes zu leichten Viewport-Verzögerungen führen.
+:::
+
+## 1. 3D-Gesichtsausdrucks-Steuerungspanel
+
+Nach dem Importieren und Einrichten eines NTE-Charakters konfiguriert das Add-on das integrierte **NTE Face Rig** (angepasst aus Jideehs Gesichtssteuerungsarchitektur) mit direkten On-Face-Steuerungen und Ausdrucks-Slidern:
+
+- **Augenbrauen- & Augenlid-Steuerungen**: Direkte Widgets über dem Gesicht für präzises Posen von Augenbrauen und Blinzeln.
+- **Pupillen- & Augenverfolgung**: Spezielle Blick-Widgets und dynamische Driver.
+- **Mund- & Lippen-Phoneme**: Controller für Mundöffnung, Lächeln, Stirnrunzeln und Sprach-Phoneme.
+
+<Image src={nteFacerig} alt="NTE 3D-Gesichts-Rig-Steuerungsboard und Widgets" loading="eager" />
+
+---
+
+## 2. Körper-Rigging & Armature-Struktur
+
+Das Körper-Rig nutzt Standard-Rigify-Controller für vollständiges IK/FK-Posing sowie dynamische Haar- & Kleidungsphysik mit Damped-Track-Constraints.
+
+<Image src={nteRig} alt="NTE-Charakter-Armature und Steuerungs-Widgets in Blender" loading="lazy" />
+
+---
+
+## 3. Bone Collections & Armature-Hierarchie
+
+Neverness to Everness-Armatures sind in strukturierte Gruppen innerhalb des Tabs **Bone Collections** (Blender 5.2+) unterteilt, um Posing- und Animations-Workflows zu optimieren.
+
+<Image src={nteBonecoll} alt="Armature Properties Bone Collections-Panel für NTE-Charakter" loading="lazy" />
+
+### Übersicht der Bone-Gruppen
+- **Face**: Augenbrauen-, Augen-, Augenlid-, Pupillen- und Mund-Controller.
+- **Torso & Spine**: Wirbelsäulen-, Brust-, Hals- und Kopf-FK/IK-Handles.
+- **Arms & Hands**: Linke und rechte Armketten mit individuellen IK-Ziel-Pins und Finger-Bone-Steuerungen.
+- **Legs & Feet**: Linke und rechte Beinketten mit Foot-Roll- und Knieziel-Steuerungen.
+- **Hair & Clothes**: Sekundäre dynamische Bones für Röcke, Jacken, Bänder und Haarsträhnen.
+- **Lighting**: Vektor-Gizmos und Beleuchtungs-Controller.
+
+:::tip
+Nutze das **Stern-Symbol** im Tab **Bone Collections**, um eine bestimmte Bone Collection zu isolieren (Solo), oder klicke auf die **Augen-Symbole**, um die Sichtbarkeit beim Animieren umzuschalten.
+:::

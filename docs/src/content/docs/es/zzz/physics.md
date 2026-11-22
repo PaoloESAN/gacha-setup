@@ -1,6 +1,6 @@
 ---
-title: Configuración de Físicas en ZZZ
-description: Cómo configurar físicas de pecho, drivers de respiración y controles de torso IK en ZZZ
+title: "Controles de Físicas de Zenless Zone Zero (ZZZ) en Blender"
+description: "Cómo configurar las físicas de personajes de Zenless Zone Zero (ZZZ) en Blender: físicas de pecho, drivers de respiración y controles dinámicos de torso."
 chibi: zzz/yuzuha
 ---
 

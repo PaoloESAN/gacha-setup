@@ -1,6 +1,6 @@
 ---
-title: Bugs y Soluciones de Zenless Zone Zero
-description: Guía de resolución de problemas para rigs de ZZZ, drivers de físicas y shaders
+title: "Corrección de Errores de Rig y Shader de Zenless Zone Zero (ZZZ) en Blender"
+description: "Guía de solución de problemas y errores para rigs, drivers de físicas y toon shaders de Zenless Zone Zero (ZZZ) en Blender."
 chibi: zzz/jane
 ---
 

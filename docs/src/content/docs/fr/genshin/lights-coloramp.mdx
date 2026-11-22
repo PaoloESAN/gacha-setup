@@ -1,0 +1,56 @@
+---
+title: "Genshin Impact dans Blender — Lights+ & Coloramp Toon Shader"
+description: "Contrôle de la direction lumineuse Lights+ et personnalisation des color ramps du toon shader de Festivity pour Genshin Impact dans Blender."
+---
+
+import { Image } from 'astro:assets';
+import Carousel from '../../../../components/Carousel.astro';
+import CarouselSlide from '../../../../components/CarouselSlide.astro';
+import lightDirImg from '../../../../assets/content/overview/light-dir.png';
+import lightDir2Img from '../../../../assets/content/overview/light-dir2.png';
+import genshinLight from '../../../../assets/content/genshin/genshin-light.png';
+
+
+## 1. Contrôler la direction de la lumière et des ombres
+
+Lors de la configuration du personnage, un os dédié `Light Direction` est ajouté dans l'armature de votre personnage (`<Character>Rig`).
+
+1. Sélectionnez l'armature du personnage (`<Character>Rig`) et passez en **Pose Mode**.
+2. Sélectionnez l'os `Light Direction` (le contrôleur en forme de flèche).
+3. Pivotez-le directement dans la vue 3D (`R`), ou ouvrez **Bone Properties > Transform** et ajustez les valeurs **Rotation** (XYZ Euler) pour faire pivoter le vecteur lumineux :
+   - **Rotation Z** : Fait pivoter l'angle du soleil horizontalement autour du personnage.
+   - **Rotation Y** : Ajuste l'inclinaison horizontale de la lumière sur le personnage.
+   - **Rotation X** : Ajuste l'inclinaison verticale de la ligne d'ombre.
+
+<Carousel lang="fr">
+  <CarouselSlide title="Os Light Direction (0°)" description="Orientation par défaut de l'os Light Direction en Pose Mode.">
+    <Image src={lightDirImg} alt="Os Light Direction sélectionné en Pose Mode" loading="eager" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Light Direction pivoté (Y : 92°)" description="Pivoter l'os déplace la ligne d'ombre sur le visage et le corps.">
+    <Image src={lightDir2Img} alt="Os Light Direction pivoté à Y 92 degrés" loading="lazy" />
+  </CarouselSlide>
+</Carousel>
+
+---
+
+## 2. Character Settings (Panneau Item)
+
+Sélectionnez le maillage ou l'armature de votre personnage et appuyez sur `N` dans la vue 3D. Ouvrez l'onglet **Item** pour accéder au panneau **Character Settings**, permettant des ajustements en temps réel sans passer par le Shader Editor :
+
+<Image src={genshinLight} alt="Panneau Character Settings pour Genshin Impact dans l'onglet Item" loading="lazy" />
+
+### Lighting Mode
+- **Lighting Presets** : Basculez rapidement entre les préréglages d'éclairage environnemental (*Default*, *Sunrise*, *Day*, *Sunset*, *Night*, *Rainy*).
+- **Custom Mode** : Sélectionner le mode **Custom** révèle un sous-panneau de palette de couleurs personnalisée pour ajuster manuellement chaque canal : **Ambient**, **Sharp Lit**, **Soft Lit**, **Sharp Shadow**, **Soft Shadow**, **Rim Lit** et **Rim Shadow**.
+
+### Options Fresnel
+- **Toggle Fresnel** : Case à cocher pour activer ou désactiver l'effet de lueur de contour extérieur.
+- **Fresnel Color** : Sélecteur de couleur pour personnaliser la teinte du contour lumineux.
+- **Fresnel Power** : Curseur 0..1 (inversé). À 0, il règle Fresnel Power sur 10 ; à 1, il le règle sur 0.
+- **Fresnel Scaler** : Curseur 0..1. À 0, il règle Fresnel Scaler sur 1 ; à 1, il le règle sur 10.
+
+### Paramètres d'ombre et de scène
+- **Shadow Position** : Curseur pour calibrer le seuil et le placement de l'ombre sur le personnage.
+- **Catch Shadows** : Activez cette option pour projeter davantage d'auto-ombres sur le maillage du personnage.
+- **Day / Night** : Curseur contrôlant l'équilibre et la transition entre l'éclairage de jour et de nuit.

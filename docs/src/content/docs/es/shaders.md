@@ -1,6 +1,6 @@
 ---
-title: Shaders y Materiales
-description: Visión general de shaders toon anime, renderizado de delineados (outlines) y post-procesado
+title: "Shaders y Materiales"
+description: "Visión general de toon shaders anime en Blender: mapeo automático de texturas, rampas de color Lights+, contornos inverted-hull, corrección de ojos y post-procesado en Blender 5.3 y Goo Engine."
 ---
 
 # Pipeline de Shaders y Materiales

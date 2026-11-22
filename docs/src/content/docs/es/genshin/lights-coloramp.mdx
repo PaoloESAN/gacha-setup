@@ -1,24 +1,35 @@
 ---
-title: Configuración de Luces y Coloramp
-description: Control de dirección de luz y personalización de rampas de color del Festivity toon shader para modelos de Genshin Impact.
+title: "Toon Shader, Luces y Coloramp de Genshin Impact en Blender"
+description: "Configura la iluminación, dirección de luz y rampas de color del toon shader de Festivity para Genshin Impact en Blender."
 ---
 
 import { Image } from 'astro:assets';
-import genshinLightdir from '../../../../assets/content/genshin/genshin-lightdir.png';
+import Carousel from '../../../../components/Carousel.astro';
+import CarouselSlide from '../../../../components/CarouselSlide.astro';
+import lightDirImg from '../../../../assets/content/overview/light-dir.png';
+import lightDir2Img from '../../../../assets/content/overview/light-dir2.png';
 import genshinLight from '../../../../assets/content/genshin/genshin-light.png';
 
 ## 1. Controlar la Dirección de Luz y Sombras
 
-Durante la configuración del personaje, se genera un objeto especializado llamado `Light Direction_<Personaje>` en tu colección de la escena.
+Durante la configuración del personaje, se añade un hueso dedicado llamado `Light Direction` dentro de la armadura del personaje (`<Personaje>Rig`).
 
-1. Selecciona `Light Direction_<Personaje>` en el panel **Outliner** (por ejemplo, `Light Direction_Charlotte`).
-2. Abre la pestaña **Transformar** en las Propiedades del Objeto.
-3. Modifica los valores de **Rotación** (XYZ Euler) para orientar el vector de luz:
+1. Selecciona la armadura del personaje (`<Personaje>Rig`) y entra en **Pose Mode**.
+2. Selecciona el hueso `Light Direction` (el controlador con forma de flecha).
+3. Rótalo directamente en el 3D Viewport (`R`), o abre **Bone Properties > Transform** y modifica los valores de **Rotación** (XYZ Euler) para orientar el vector de luz:
    - **Rotación Z**: Gira horizontalmente la inclinación del sol alrededor del personaje.
    - **Rotación Y**: Ajusta la inclinación horizontal de la luz a través del personaje.
    - **Rotación X**: Ajusta la altura e inclinación vertical de la línea de sombra.
 
-<Image src={genshinLightdir} alt="Ajuste de rotación del objeto Light Direction en el Outliner y transformaciones" loading="eager" />
+<Carousel lang="es">
+  <CarouselSlide title="Hueso Light Direction (0°)" description="Orientación inicial del hueso Light Direction en Pose Mode.">
+    <Image src={lightDirImg} alt="Hueso Light Direction seleccionado en Pose Mode" loading="eager" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Light Direction Rotado (Y: 92°)" description="Rotar el hueso desplaza la línea de sombra sobre el rostro y cuerpo.">
+    <Image src={lightDir2Img} alt="Hueso Light Direction rotado a Y 92 grados" loading="lazy" />
+  </CarouselSlide>
+</Carousel>
 
 ---
 

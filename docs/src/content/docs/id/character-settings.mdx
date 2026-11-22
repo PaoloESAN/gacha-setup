@@ -1,6 +1,6 @@
 ---
-title: Pengaturan Karakter
-description: Panduan panel Character Settings di Blender, preset pencahayaan, arah cahaya, Fresnel, garis tepi, dan fisika.
+title: "Pengaturan Karakter"
+description: "Panduan panel Character Settings dan Lights+ di Blender: preset pencahayaan, arah cahaya, Fresnel, toon shader anime, garis tepi, dan fisika untuk model karakter."
 ---
 
 import { Image } from 'astro:assets';
@@ -18,12 +18,16 @@ import lightRainyImg from '../../../assets/content/overview/light_rainy.png';
 import lightCustomImg from '../../../assets/content/overview/light_custom.png';
 import fresnelImg from '../../../assets/content/overview/fresnel.png';
 import physicsVideo from '../../../assets/content/overview/physics.mp4';
-import genshinLightdir from '../../../assets/content/genshin/genshin-lightdir.png';
+import lightsDefaultImg from '../../../assets/content/overview/lights-default.png';
+import lightsDiffuseImg from '../../../assets/content/overview/lights-diffuse.png';
+import lightsLightColorImg from '../../../assets/content/overview/lights-light-color.png';
+import lightDirImg from '../../../assets/content/overview/light-dir.png';
+import lightDir2Img from '../../../assets/content/overview/light-dir2.png';
 
 
 # Pengaturan Karakter
 
-Panel **Character Settings** tersedia di tab **Item** pada bilah samping 3D Viewport (panel `N`) saat armature atau mesh karakter dipilih. Panel ini memungkinkan Anda mengatur pencahayaan shader, garis tepi anime, efek tepi Fresnel, perilaku bayangan, dan fisika secara langsung tanpa membuka grafik node shader.
+Panel **Character Settings** tersedia di tab **Item** pada bilah samping 3D Viewport (panel `N`) saat armature atau mesh karakter dipilih. Di bagian atas, panel ini menampilkan nama karakter aktif serta tombol untuk berpindah antara tab **Character** dan **Rig Layers**. Tab **Character** memungkinkan Anda mengatur pencahayaan shader, Lights+, garis tepi anime, perilaku bayangan, dan fisika secara langsung tanpa membuka grafik node shader.
 
 <Image src={characterSettingsImg} alt="Panel Character Settings di tab Item" loading="eager" />
 
@@ -86,15 +90,53 @@ Saat diatur ke **This Panel**, Anda dapat memilih preset pencahayaan bawaan untu
 
 ---
 
-## Arah Cahaya dan Bayangan (Objek Light Direction)
+## Lights+
 
-Selama penyiapan, objek empty khusus bernama `Light Direction_<Character>` (misalnya `Light Direction_Charlotte`) dibuat di koleksi adegan untuk mengatur arah sinar matahari dan bayangan pada model.
+:::note
+**Lights+** hanya tersedia untuk **Blender 5.3**.
+:::
 
-<Image src={genshinLightdir} alt="Objek Light Direction Genshin Impact di Outliner dan Item Transform" loading="lazy" />
+**Lights+** membuat karakter Anda bereaksi terhadap lampu adegan asli Blender (Point, Sun, Spot, Area).
 
-1. Pilih `Light Direction_<Character>` di 3D Viewport atau **Outliner**.
-2. Buka panel **Item Transform** di bilah samping (tombol `N`).
-3. Sesuaikan nilai **Rotation** (XYZ Euler):
+- Klik **Setup New Lights** untuk menginisialisasi Lights+ pada material karakter.
+- Setelah aktif, gunakan menu dropdown **Mode** untuk memilih bagaimana lampu adegan memengaruhi karakter:
+  - **Default**: Menggunakan pencahayaan toon standar karakter tanpa pengaruh lampu adegan.
+  - **Diffuse**: Menerapkan bayangan difus terarah dan peluruhan cahaya dari lampu adegan sambil mempertahankan kontras cel-shaded.
+  - **Light Color**: Mewarnai dan menerangi karakter secara langsung menggunakan warna serta kekuatan lampu adegan.
+
+<Carousel lang="id">
+  <CarouselSlide title="Default" description="Pencahayaan karakter standar tanpa pengaruh lampu adegan.">
+    <Image src={lightsDefaultImg} alt="Mode Default Lights+" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Diffuse" description="Lampu adegan menghasilkan bayangan difus terarah pada karakter.">
+    <Image src={lightsDiffuseImg} alt="Mode Diffuse Lights+" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Light Color" description="Lampu adegan mewarnai langsung area karakter yang terkena cahaya.">
+    <Image src={lightsLightColorImg} alt="Mode Light Color Lights+" loading="lazy" />
+  </CarouselSlide>
+</Carousel>
+
+---
+
+## Arah Cahaya dan Bayangan (Tulang Light Direction)
+
+Selama penyiapan, tulang khusus bernama `Light Direction` ditambahkan ke dalam armature karakter (`<Character>Rig`) untuk mengatur arah sinar matahari dan bayangan pada model.
+
+<Carousel lang="id">
+  <CarouselSlide title="Tulang Light Direction (0°)" description="Pilih tulang Light Direction di Pose Mode untuk mengatur vektor cahaya.">
+    <Image src={lightDirImg} alt="Tulang Light Direction dipilih di Pose Mode" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Light Direction Diputar (Y: 92°)" description="Memutar tulang Light Direction menggeser garis bayangan pada karakter secara langsung.">
+    <Image src={lightDir2Img} alt="Tulang Light Direction diputar ke Y 92 derajat" loading="lazy" />
+  </CarouselSlide>
+</Carousel>
+
+1. Pilih armature karakter (`<Character>Rig`) dan masuk ke **Pose Mode**.
+2. Pilih tulang `Light Direction` (pengontrol berbentuk panah).
+3. Putar langsung di 3D Viewport (`R`), atau buka **Bone Properties > Transform** dan sesuaikan nilai **Rotation** (XYZ Euler):
    - **Rotation Z**: Memutar sudut azimut matahari secara horizontal mengelilingi karakter.
    - **Rotation Y**: Menyesuaikan kemiringan lateral vektor cahaya pada karakter.
    - **Rotation X**: Menyesuaikan kemiringan vertikal dan sudut elevasi batas bayangan.
@@ -112,9 +154,10 @@ Fresnel menambahkan kilau tepi atau spekular yang khas pada cel-shading berkuali
 
 <Image src={fresnelImg} alt="Kontrol dan pratinjau efek tepi Fresnel" loading="lazy" />
 
-### Garis Tepi
+### Garis Tepi & Night Soul (Khusus Natlan)
 - **Enable Outlines**: Mengaktifkan atau menonaktifkan modifier garis tepi inverted-hull pada semua mesh karakter dengan cepat.
 - **Enable Night Soul**: Mengaktifkan atau menonaktifkan garis energi bercahaya khusus untuk karakter Natlan di Genshin Impact.
+- **NS Outlines Thickness**: Menyesuaikan ketebalan garis tepi Night Soul.
 
 ---
 

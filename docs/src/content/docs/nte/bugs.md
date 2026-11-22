@@ -1,6 +1,6 @@
 ---
-title: Neverness to Everness Bugs & Solutions
-description: Troubleshooting guide and solutions for NTE model importing and missing face rig issues
+title: "Neverness to Everness (NTE) Import & Face Rig Bug Fixes in Blender"
+description: "Troubleshooting guide and bug fixes for Neverness to Everness (NTE) model importing, missing face rig, and shader issues in Blender."
 chibi: nte/edgar
 ---
 

@@ -1,0 +1,56 @@
+---
+title: "Genshin Impact trong Blender — Lights+ & Coloramp Toon Shader"
+description: "Điều khiển hướng sáng Lights+ và tùy chỉnh color ramp của toon shader Festivity cho mô hình Genshin Impact trong Blender."
+---
+
+import { Image } from 'astro:assets';
+import Carousel from '../../../../components/Carousel.astro';
+import CarouselSlide from '../../../../components/CarouselSlide.astro';
+import lightDirImg from '../../../../assets/content/overview/light-dir.png';
+import lightDir2Img from '../../../../assets/content/overview/light-dir2.png';
+import genshinLight from '../../../../assets/content/genshin/genshin-light.png';
+
+
+## 1. Điều khiển hướng sáng & bóng đổ
+
+Trong quá trình thiết lập nhân vật, một xương `Light Direction` chuyên dụng sẽ được thêm vào bên trong armature của nhân vật (`<Character>Rig`).
+
+1. Chọn armature của nhân vật (`<Character>Rig`) và chuyển sang **Pose Mode**.
+2. Chọn xương `Light Direction` (bộ điều khiển hình mũi tên).
+3. Xoay trực tiếp trong 3D Viewport (`R`), hoặc mở **Bone Properties > Transform** và điều chỉnh các giá trị **Rotation** (XYZ Euler) để xoay vector ánh sáng:
+   - **Rotation Z**: Xoay góc mặt trời theo chiều ngang xung quanh nhân vật.
+   - **Rotation Y**: Điều chỉnh độ nghiêng ngang của ánh sáng trên nhân vật.
+   - **Rotation X**: Điều chỉnh độ cao dọc của đường ranh giới bóng đổ.
+
+<Carousel lang="vi">
+  <CarouselSlide title="Xương Light Direction (0°)" description="Hướng mặc định của xương Light Direction trong Pose Mode.">
+    <Image src={lightDirImg} alt="Xương Light Direction được chọn trong Pose Mode" loading="eager" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Xoay Light Direction (Y: 92°)" description="Xoay xương sẽ dịch chuyển ranh giới bóng đổ trên khuôn mặt và cơ thể.">
+    <Image src={lightDir2Img} alt="Xương Light Direction được xoay tới Y 92 độ" loading="lazy" />
+  </CarouselSlide>
+</Carousel>
+
+---
+
+## 2. Character Settings (Bảng Item)
+
+Chọn mesh hoặc armature của nhân vật và nhấn `N` trong 3D Viewport. Mở tab **Item** để truy cập bảng **Character Settings**, cho phép điều chỉnh theo thời gian thực mà không cần tìm sâu vào Shader Editor:
+
+<Image src={genshinLight} alt="Bảng Character Settings cho Genshin Impact trong tab Item" loading="lazy" />
+
+### Lighting Mode
+- **Lighting Presets**: Chuyển đổi nhanh giữa các thiết lập sẵn ánh sáng môi trường (*Default*, *Sunrise*, *Day*, *Sunset*, *Night*, *Rainy*).
+- **Custom Mode**: Chọn chế độ **Custom** sẽ hiển thị bảng phụ bảng màu tùy chỉnh để tinh chỉnh thủ công từng kênh riêng lẻ: **Ambient**, **Sharp Lit**, **Soft Lit**, **Sharp Shadow**, **Soft Shadow**, **Rim Lit** và **Rim Shadow**.
+
+### Tùy chọn Fresnel
+- **Toggle Fresnel**: Hộp kiểm để bật hoặc tắt hiệu ứng viền sáng bên ngoài.
+- **Fresnel Color**: Bộ chọn màu để tùy chỉnh sắc thái viền sáng.
+- **Fresnel Power**: Thanh trượt 0..1 (đảo ngược). Ở 0 sẽ đặt Fresnel Power thành 10, ở 1 sẽ đặt thành 0.
+- **Fresnel Scaler**: Thanh trượt 0..1. Ở 0 sẽ đặt Fresnel Scaler thành 1, ở 1 sẽ đặt thành 10.
+
+### Cài đặt Bóng đổ & Cảnh
+- **Shadow Position**: Thanh trượt để hiệu chỉnh ngưỡng và vị trí bóng đổ trên nhân vật.
+- **Catch Shadows**: Bật tùy chọn này để đổ thêm bóng tự thân lên chính mesh của nhân vật.
+- **Day / Night**: Thanh trượt điều khiển sự cân bằng và chuyển tiếp giữa ánh sáng ban ngày và ban đêm.

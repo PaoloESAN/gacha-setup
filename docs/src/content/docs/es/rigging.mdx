@@ -1,6 +1,6 @@
 ---
-title: Rigging
-description: Visión general del sistema de rigging, colecciones de huesos, Rig Layers, paneles de expresión facial, engranajes IK/FK y controladores de cabeza.
+title: "Rigging"
+description: "Visión general del rigging de personajes en Blender: colecciones de huesos, Rig Layers, paneles de expresiones faciales, ajustes IK/FK y controladores de cabeza para modelos anime."
 ---
 
 import { Image } from 'astro:assets';
@@ -54,15 +54,15 @@ Estructura facial avanzada integrada en la armadura para lograr expresiones buca
 
 ## Rig Layers (Colecciones de Huesos)
 
-En Blender 5.2+ y 4.x, las armaduras están organizadas en colecciones de huesos. El panel **Rig Layers** en la barra lateral del 3D Viewport permite activar y desactivar partes del cuerpo mientras animas, o aislar capas individuales con los botones de estrella (<Icon name="star" class="inline-icon" />):
+En Blender 5.2+ y 4.x, las armaduras están organizadas en colecciones de huesos. La pestaña **Rig Layers** dentro de **Character Settings** (en la pestaña **Item** de la barra lateral del 3D Viewport) permite activar y desactivar partes del cuerpo mientras animas, o aislar capas individuales con los botones de estrella (<Icon name="star" class="inline-icon" />):
 
-<Image src={rigLayersImg} alt="Panel Rig Layers en Blender" loading="lazy" />
+<Image src={rigLayersImg} alt="Pestaña Rig Layers en Character Settings" loading="lazy" />
 
 ### Categorías Estándar de Rig Layers
 
-1. **Rostro y Detalles (Face & Detail)**:
-   - `Face`, `Face (Detail)`: Huesos de expresión, comisuras de boca y cejas.
-   - `Face (Primary)`, `Face (Secondary)`: Controles faciales maestros y deformadores secundarios.
+1. **Iluminación y Rostro**:
+   - `Lighting`: Panel de iluminación 3D y control del hueso `Light Direction`.
+   - `Face`: Huesos de expresión, formas de boca, cejas y seguimiento de ojos.
 2. **Torso y Columna**:
    - `Torso (IK)`: Controles de cinemática inversa del tronco.
    - `Torso (FK)`: Rotación secuencial de las vértebras y columna.
@@ -77,6 +77,7 @@ En Blender 5.2+ y 4.x, las armaduras están organizadas en colecciones de huesos
    - `Offsets`: Desplazamientos de accesorios o raíz.
    - `Weapon`: Armas equipadas y accesorios dinámicos.
    - `Root`: Hueso maestro de posicionamiento global del personaje.
+   - `Hair`, `Clothes`, `Cage`, `Other`: Cadenas secundarias de cabello y ropa, jaulas de deformación y huesos adicionales.
 
 ---
 

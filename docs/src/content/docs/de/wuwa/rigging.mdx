@@ -1,0 +1,47 @@
+---
+title: "Wuthering Waves (WuWa) in Blender — Rigging & Bone Collections"
+description: "Face-Rig-Panel, Haar- & Kleidungsphysik und Bone Collections für Wuthering Waves (WuWa)-Modelle in Blender."
+---
+
+import { Image } from 'astro:assets';
+import wuwaBonecoll from '../../../../assets/content/wuwa/wuwa-bonecoll.png';
+
+## 1. 3D-Gesichtsausdrucks-Steuerungspanel
+
+Nach dem Importieren und Riggen eines Wuthering Waves-Charakters erstellt das Add-on ein spezielles **Face Rig Panel** mit intuitiven Widgets zur direkten Manipulation und Slidern für Ausdrucks-Presets:
+
+- **Augen & Augenbrauen**: Direkte Widgets rund um das Gesicht für Pupillenverfolgung, Zusammenkneifen, Blinzeln und Neigen der Augenbrauen.
+- **Mundformen**: Individuelle Controller für Mundwinkel, offenen Mund, Lächeln, Stirnrunzeln und Phoneme.
+- **Cutscene-Presets**: Strukturierte Slider auf dem Gesichts-Board zum schnellen Auslösen und Mischen der integrierten Ausdrucksposen des Charakters.
+
+---
+
+## 2. Haar- & Kleidungsphysik (Damped Track)
+
+Das Add-on generiert automatisch ein dynamisches Physik-Rig mithilfe von Blenders nativen **Damped Track**-Constraints:
+
+1. Aktiviere **Hair & Clothes Physics** in den **Setup Settings**, bevor du das Setup startest (oder wende es nachträglich über **Old Setup > Rig Character** an).
+2. Passe die Einfluss-Slider **Hair** und **Clothes** im N-Panel an, um die Reaktionsfähigkeit und Dämpfungsstärke der dynamischen Sekundärbewegung einzustellen.
+
+---
+
+## 3. Bone Collections
+
+Charakter-Armatures sind in strukturierte Gruppen innerhalb des Tabs **Bone Collections** (Blender 5.2+) unterteilt, sodass sich bestimmte Körperteile leicht isolieren und animieren lassen.
+
+<Image src={wuwaBonecoll} alt="Armature Properties Bone Collections-Panel für Wuthering Waves-Charakter" loading="lazy" />
+
+### Übersicht der Bone Collections
+
+- **Face**: Augenbrauen-, Augen-, Augenlid-, Pupillen-, Nasen- und Mund-Controller.
+- **Torso (IK / FK)**: Wirbelsäulen-, Brust-, Hals- und Kopf-Handles.
+- **Arm.L / Arm.R (IK & FK)**: Linke und rechte Armketten mit individuellen IK-Ziel-Pins und Pole-Targets.
+- **Leg.L / Leg.R (IK & FK)**: Linke und rechte Beinketten mit Foot-Roll- und Knieziel-Steuerungen.
+- **Fingers**: Hand- und Finger-Bone-Controller.
+- **Hair**: Dynamische Sekundär-Bones für Haarsträhnen und Zöpfe.
+- **Clothes**: Dynamische Sekundär-Bones für Mäntel, Röcke, Umhänge und Quasten.
+- **Lighting**: Vektor-Handles und Beleuchtungs-Controller.
+
+:::tip
+Nutze das **Stern-Symbol** im Tab **Bone Collections**, um eine bestimmte Bone Collection zu isolieren (Solo), oder klicke auf die **Augen-Symbole**, um die Sichtbarkeit beim Animieren umzuschalten.
+:::

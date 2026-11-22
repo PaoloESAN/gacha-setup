@@ -1,6 +1,6 @@
 ---
-title: Guía de Instalación
-description: Cómo instalar Gacha Setup. Se recomienda Blender 5.2; también funciona con Blender/Goo Engine 4.1+.
+title: "Guía de Instalación"
+description: "Cómo instalar el add-on Gacha Setup para Blender y BetterFBX. Compatible con Blender 5.3 (recomendado) y Blender/Goo Engine 4.1+ para modelos FBX y toon shaders anime."
 ---
 
 :::note[Compatibilidad de Blender]

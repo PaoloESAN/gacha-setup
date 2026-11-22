@@ -1,0 +1,40 @@
+---
+title: "Zenless Zone Zero (ZZZ) dans Blender — Bugs et solutions"
+description: "Guide de dépannage et correctifs pour les modèles, textures, rigging et toon shaders de Zenless Zone Zero (ZZZ) dans Blender."
+---
+
+import { Image } from 'astro:assets';
+import zzzEyeshadow1 from '../../../../assets/content/zzz/zzz-eyeshadow1.png';
+import zzzEyeshadow2 from '../../../../assets/content/zzz/zzz-eyeshadow2.png';
+import zzzEyeshadow3 from '../../../../assets/content/zzz/zzz-eyeshadow3.png';
+import zzzShaderEyeVideo from '../../../../assets/content/zzz/zzz-shader-eye.mp4';
+
+:::note
+Vous avez trouvé un bug ou un problème non documenté ? Veuillez le signaler en ouvrant une [nouvelle issue sur GitHub](https://github.com/PaoloESAN/gacha-setup/issues/new).
+:::
+
+## Matériau Eyeshadow manquant
+
+S'il manque l'assignation du matériau d'ombre à paupières (eyeshadow) à votre personnage :
+
+### Guide vidéo
+
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={zzzShaderEyeVideo} type="video/mp4" />
+</video>
+
+### Solution étape par étape
+
+1. Sélectionnez le maillage du visage du personnage et appuyez sur `Tab` pour passer en **Edit Mode**.
+2. Survolez la géométrie de l'eyeshadow et appuyez sur `L` pour sélectionner les composants du maillage de l'eyeshadow.
+3. Dans l'onglet **Material Properties**, cliquez sur le bouton `+` pour créer un nouvel emplacement de matériau.
+
+<Image src={zzzEyeshadow1} alt="Sélection du maillage eyeshadow en Edit Mode et ajout d'un nouvel emplacement de matériau" loading="lazy" />
+
+4. Assignez le matériau **ZZZ Shader Eye** à l'emplacement nouvellement créé.
+
+<Image src={zzzEyeshadow2} alt="Assignation du matériau ZZZ Shader Eye à l'emplacement" loading="lazy" />
+
+5. Cliquez sur le bouton **Assign** pour appliquer le matériau au maillage eyeshadow sélectionné.
+
+<Image src={zzzEyeshadow3} alt="Clic sur le bouton Assign pour appliquer le matériau eyeshadow" loading="lazy" />

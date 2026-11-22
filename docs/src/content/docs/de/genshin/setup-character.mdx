@@ -1,0 +1,70 @@
+---
+title: "Genshin Impact in Blender — Charakter-Setup & Shader"
+description: "Schritt-für-Schritt-Anleitung für Genshin Impact-Charaktermodelle in Blender: FBX-Import, Anime-Toon-Shader, Lights+ und automatisches Rigging."
+---
+
+import { Image } from 'astro:assets';
+import genshinPanel from '../../../../assets/content/genshin/genshin-panel.png';
+import genshinCharacter from '../../../../assets/content/genshin/genshin-character.png';
+import genshinScene from '../../../../assets/content/genshin/genshin-scene.png';
+import genshinCompositor from '../../../../assets/content/genshin/genshin-compositor.png';
+import genshinFaceVideo from '../../../../assets/content/genshin/genshin-face.mp4';
+
+
+## 1. Den Setup Wizard öffnen
+
+1. Drücke `N` im 3D Viewport, um die Seitenleiste zu öffnen.
+2. Navigiere zum Tab **Character Setup Wizard**.
+3. Wähle im Dropdown-Menü **Game** den Eintrag **Genshin Impact**.
+
+<Image src={genshinPanel} alt="Genshin Impact Setup Wizard N-Panel" loading="eager" />
+
+---
+
+## 2. Deinen Charakter importieren
+
+Du kannst dein Modell mit einem Klick über **Run Entire Setup** oder schrittweise über **Old Setup** einrichten.
+
+1. *(Optional)* Aktiviere unter **Setup Settings** die Option **Hair & Clothes Physics**, um Haaren und Kleidung dynamische Physik hinzuzufügen. Aktiviere **Disable Rigging**, um die Rig-Generierung zu überspringen und nur Materialien + Outlines zu importieren.
+2. Klicke auf **Run Entire Setup** (oder **Set Up Character** unter **Old Setup**).
+3. Ein Dateibrowser-Fenster öffnet sich. Navigiere zu deinem [Charakterordner](/de/character-models/#genshin), der das `.fbx`-Modell und die Texturen enthält (z. B. `Avatar_Girl_Catalyst_Charlotte.fbx`).
+4. Klicke auf **Select Character Folder**.
+
+<Image src={genshinCharacter} alt="Blender-Dateiansicht bei der Auswahl des Charaktermodellordners" loading="lazy" />
+
+---
+
+## 3. Automatisierte Setup-Pipeline
+
+Beim Ausführen des Setups führt das Add-on die folgenden automatisierten Schritte aus:
+
+- **Set Up Character**: Importiert das `.fbx`-Mesh, bereinigt Vertex-Gruppen und standardisiert Bone-Hierarchien.
+- **Set Up Materials**: Ersetzt Standard-Blender-Materialien durch benutzerdefinierte **Festivity Toon Shader**-Nodes und verknüpft automatisch Diffuse- (`_fuse`), Lightmap- (`_map`) und Color-Ramp-Texturen (`_amp`).
+- **Set Up Outlines**: Wendet Geometry-Node-Inverted-Hull-Outline-Modifier auf alle Charakter-Meshes an, um gestochen scharfe Linien zu rendern.
+- **Fix Transformations**: Setzt Positions-, Rotations- und Skalierungstransformationen zurück und verknüpft Gesichts-Driver mit Lichtvektoren.
+- **Rig Character**: Konfiguriert Steuerungsformen und Gesichts-Bone-Driver.
+- **Finish Setup**: Schaltet das Color Management auf **Standard** um, um die unverfälschte Farbgenauigkeit der Texturen zu erhalten.
+
+<Image src={genshinScene} alt="Genshin Impact-Charakter in die 3D-Szene importiert" loading="lazy" />
+
+---
+
+## 4. Viewport Shading & Compositor-Einstellungen
+
+Um Festivity-Shader und das Echtzeit-Kopfschatten-Compositing im Viewport anzuzeigen:
+
+1. Öffne das Menü **Viewport Shading** (oben rechts im 3D Viewport).
+2. Aktiviere unter **Lighting** die Optionen **Scene Lights** und **Scene World**.
+3. Stelle unter **Compositor** das Dropdown-Menü auf **Always** (oder **Camera**).
+
+<Image src={genshinCompositor} alt="Viewport Shading Compositor-Einstellungen auf Always gesetzt" loading="lazy" />
+
+---
+
+## 5. Optional: Gesichts-Fix für neue Charaktere
+
+Einige neuere Charaktere werden mit einer zusätzlichen Gesichts-Mesh-Ebene importiert, die die Augen verdeckt, wie im Video gezeigt:
+
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={genshinFaceVideo} type="video/mp4" />
+</video>

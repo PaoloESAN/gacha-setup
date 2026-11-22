@@ -1,0 +1,42 @@
+---
+title: "Zenless Zone Zero (ZZZ) trong Blender — Rigging & Bộ sưu tập xương"
+description: "Điều khiển biểu cảm khuôn mặt jideeh, thiết lập face rig và bộ sưu tập xương cho Zenless Zone Zero (ZZZ) trong Blender."
+---
+
+import { Image } from 'astro:assets';
+import zzzFacerig from '../../../../assets/content/zzz/zzz-facerig.png';
+import zzzBonecoll from '../../../../assets/content/zzz/zzz-bonecoll.png';
+
+## 1. Jideeh Face Rig
+
+Sau khi nhập và thiết lập nhân vật Zenless Zone Zero, add-on sẽ cấu hình **jideeh ZZZ Face Rig** được tích hợp trực tiếp bên trong armature chính của nhân vật để điều khiển biểu cảm khuôn mặt nâng cao.
+
+<Image src={zzzFacerig} alt="Bảng điều khiển 3D jideeh ZZZ Face Rig và rig nhân vật" loading="eager" />
+
+### Các điều khiển & tính năng khuôn mặt chính
+
+- **Tích hợp jideeh Facial Rig**: Các driver nâng cao cho lông mày, mí mắt, theo dõi mắt và các shape key miệng.
+- **Widget điều khiển trên khuôn mặt**: Cho phép tạo dáng trực quan từng đường nét khuôn mặt trực tiếp trong 3D viewport.
+
+---
+
+## 2. Bộ sưu tập xương (Bone Collections)
+
+Armature của Zenless Zone Zero được sắp xếp thành các nhóm có cấu trúc trong tab **Bone Collections** (Blender 5.2+).
+
+<Image src={zzzBonecoll} alt="Bảng Bone Collections trong Armature Properties cho nhân vật Zenless Zone Zero" loading="lazy" />
+
+### Tổng quan Bone Collections
+
+- **Face**: Bộ điều khiển lông mày, mắt, mí mắt, đồng tử, mũi và miệng.
+- **Torso (IK / FK)**: Cột sống, ngực, cổ, đầu và động lực học ngực/thân.
+- **Arm.L / Arm.R (IK & FK)**: Chuỗi cánh tay trái và phải với các ghim mục tiêu IK và pole target riêng lẻ.
+- **Leg.L / Leg.R (IK & FK)**: Chuỗi chân trái và phải với các điều khiển lăn bàn chân và mục tiêu đầu gối.
+- **Fingers**: Bộ điều khiển xương bàn tay và ngón tay.
+- **Hair**: Các xương phụ động cho lọn tóc và đuôi tóc.
+- **Clothes**: Các xương phụ động cho áo khoác, váy và phụ kiện.
+- **Lighting**: Tay cầm vector và bộ điều khiển ánh sáng.
+
+:::tip
+Sử dụng **biểu tượng ngôi sao** trong tab **Bone Collections** để hiển thị riêng/cô lập một bộ sưu tập xương cụ thể, hoặc nhấp vào **biểu tượng con mắt** để bật/tắt hiển thị trong khi diễn hoạt.
+:::

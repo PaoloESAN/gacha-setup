@@ -1074,6 +1074,7 @@ body:has(#starlight__sidebar:popover-open) .mobile-header .sl-menu-button {
 }
 
 .credits-card {
+	position: relative;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
@@ -1084,6 +1085,17 @@ body:has(#starlight__sidebar:popover-open) .mobile-header .sl-menu-button {
 	border: 1px solid rgba(255, 255, 255, 0.06);
 	height: 100%;
 	transition: border-color 0.25s ease, background 0.25s ease;
+}
+
+.credits-card--full .credits-name a::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+}
+
+.credits-card--full .credits-links {
+	position: relative;
+	z-index: 1;
 }
 
 .credits-card:hover {

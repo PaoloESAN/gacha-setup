@@ -1,0 +1,51 @@
+---
+title: "Neverness to Everness (NTE) dans Blender — Rigging & Bone Collections"
+description: "Contrôles d'expressions faciales, face rig et collections d'os pour Neverness to Everness (NTE) dans Blender."
+---
+
+import { Image } from 'astro:assets';
+import nteFacerig from '../../../../assets/content/nte/nte-facerig.webp';
+import nteRig from '../../../../assets/content/nte/nte-rig.png';
+import nteBonecoll from '../../../../assets/content/nte/nte-bonecoll.png';
+
+:::note
+Déplacer le rig peut provoquer un léger ralentissement dans la vue 3D sur les maillages à haute densité.
+:::
+
+## 1. Panneau de contrôle d'expressions faciales 3D
+
+Lors de l'importation et de la configuration d'un personnage NTE, l'add-on configure le **NTE Face Rig** intégré (adapté de l'architecture de contrôle facial de Jideeh) avec des contrôles directs sur le visage et des curseurs d'expression :
+
+- **Contrôles des sourcils et paupières** : Widgets directs positionnés sur le visage pour une pose précise des sourcils et du clignement.
+- **Suivi des pupilles et des yeux** : Widgets de regard dédiés et pilotes dynamiques.
+- **Phonèmes de la bouche et des lèvres** : Contrôleurs pour l'ouverture de la bouche, les sourires, les moues et les phonèmes de parole.
+
+<Image src={nteFacerig} alt="Panneau de contrôle et widgets 3D Facial Rig NTE" loading="eager" />
+
+---
+
+## 2. Rigging du corps & Structure de l'armature
+
+Le rig corporel s'appuie sur les contrôleurs standard de Rigify pour une pose complète en IK/FK et une physique dynamique Hair & Clothes avec contraintes Damped Track.
+
+<Image src={nteRig} alt="Armature et widgets de contrôle d'un personnage NTE dans Blender" loading="lazy" />
+
+---
+
+## 3. Bone Collections & Hiérarchie de l'armature
+
+Les armatures de Neverness to Everness sont organisées en groupes structurés dans l'onglet **Bone Collections** (Blender 5.2+) pour fluidifier les workflows de pose et d'animation.
+
+<Image src={nteBonecoll} alt="Panneau Bone Collections dans Armature Properties pour un personnage NTE" loading="lazy" />
+
+### Aperçu des groupes d'os
+- **Face** : Contrôleurs des sourcils, yeux, paupières, pupilles et bouche.
+- **Torso & Spine** : Poignées FK/IK de la colonne vertébrale, du torse, du cou et de la tête.
+- **Arms & Hands** : Chaînes des bras gauche et droit avec cibles IK individuelles et contrôles d'os des doigts.
+- **Legs & Feet** : Chaînes des jambes gauche et droite avec déroulement du pied et contrôles de cible du genou.
+- **Hair & Clothes** : Os secondaires dynamiques pour les jupes, vestes, rubans et mèches de cheveux.
+- **Lighting** : Gizmos vectoriels et contrôleurs d'éclairage.
+
+:::tip
+Utilisez l'**icône étoile** dans l'onglet **Bone Collections** pour isoler une collection d'os spécifique, ou cliquez sur les **icônes œil** pour afficher ou masquer des calques pendant l'animation.
+:::

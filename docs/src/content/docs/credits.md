@@ -56,6 +56,7 @@ description: Acknowledgements, contributors, and assets credits.
 - **scheinze** — WuWa Rig
 - **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)** — HJT Studios · [X](https://x.com/Gladius_Tyrfing)
 - **[vei](https://x.com/heikzs)** — SkillObjects · [X](https://x.com/heikzs)
+- **[Michael](https://www.youtube.com/watch?v=EN79SfbcvIE)** — [Instagram](https://www.instagram.com/raphaelgonemad/)
 
 <div class="disclaimer-text">
   <strong>Disclaimer:</strong> This tool is an independent, open-source project and is not affiliated with, endorsed, or sponsored by HoYoverse, Kuro Games, Hotta Studio, Perfect World Games, or Hypergryph. All game assets, trademarks, and character names belong to their respective owners. No copyrighted assets or models are included with this addon.

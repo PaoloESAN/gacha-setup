@@ -1,0 +1,70 @@
+---
+title: "Genshin Impact trong Blender — Thiết lập nhân vật & Shader"
+description: "Hướng dẫn từng bước thiết lập mô hình nhân vật Genshin Impact trong Blender: nhập FBX, anime toon shader, Lights+ và rigging tự động."
+---
+
+import { Image } from 'astro:assets';
+import genshinPanel from '../../../../assets/content/genshin/genshin-panel.png';
+import genshinCharacter from '../../../../assets/content/genshin/genshin-character.png';
+import genshinScene from '../../../../assets/content/genshin/genshin-scene.png';
+import genshinCompositor from '../../../../assets/content/genshin/genshin-compositor.png';
+import genshinFaceVideo from '../../../../assets/content/genshin/genshin-face.mp4';
+
+
+## 1. Mở Setup Wizard
+
+1. Nhấn `N` trong 3D Viewport để mở thanh bên.
+2. Điều hướng đến tab **Character Setup Wizard**.
+3. Trong menu thả xuống **Game**, chọn **Genshin Impact**.
+
+<Image src={genshinPanel} alt="Bảng N-Panel Setup Wizard cho Genshin Impact" loading="eager" />
+
+---
+
+## 2. Nhập nhân vật của bạn
+
+Bạn có thể thiết lập mô hình chỉ với một cú nhấp chuột bằng **Run Entire Setup** hoặc từng bước qua **Old Setup**.
+
+1. *(Tùy chọn)* Trong **Setup Settings**, bật **Hair & Clothes Physics** để thêm vật lý động cho tóc và trang phục. Bật **Disable Rigging** để bỏ qua bước tạo rig và chỉ nhập vật liệu + đường viền.
+2. Nhấp **Run Entire Setup** (hoặc **Set Up Character** trong Old Setup).
+3. Một cửa sổ trình duyệt tệp sẽ xuất hiện. Điều hướng đến [thư mục nhân vật](/vi/character-models/#genshin) của bạn chứa mô hình `.fbx` và các texture (chẳng hạn như `Avatar_Girl_Catalyst_Charlotte.fbx`).
+4. Nhấp **Select Character Folder**.
+
+<Image src={genshinCharacter} alt="Trình xem tệp Blender đang chọn thư mục mô hình nhân vật" loading="lazy" />
+
+---
+
+## 3. Quy trình thiết lập tự động
+
+Khi chạy thiết lập, add-on sẽ thực thi các bước tự động sau:
+
+- **Set Up Character**: Nhập mesh `.fbx`, dọn dẹp các vertex group và chuẩn hóa hệ thống phân cấp xương.
+- **Set Up Materials**: Thay thế các vật liệu mặc định của Blender bằng các node **Festivity Toon Shader** tùy chỉnh, tự động liên kết các texture khuếch tán (`_fuse`), lightmap (`_map`) và color ramp (`_amp`).
+- **Set Up Outlines**: Áp dụng các modifier đường viền inverted-hull bằng geometry-node cho tất cả các mesh của nhân vật để kết xuất nét vẽ sắc nét.
+- **Fix Transformations**: Đặt lại các phép biến đổi vị trí, xoay và tỷ lệ đồng thời liên kết các driver khuôn mặt với vector ánh sáng.
+- **Rig Character**: Cấu hình các hình dạng điều khiển và driver xương khuôn mặt.
+- **Finish Setup**: Chuyển Color Management sang **Standard** để bảo toàn độ chính xác màu sắc gốc của texture.
+
+<Image src={genshinScene} alt="Nhân vật Genshin Impact đã được nhập vào cảnh 3D" loading="lazy" />
+
+---
+
+## 4. Cài đặt Viewport Shading & Compositor
+
+Để xem shader Festivity và tổng hợp bóng đổ đầu theo thời gian thực trong viewport:
+
+1. Mở menu **Viewport Shading** (góc trên bên phải của 3D Viewport).
+2. Trong **Lighting**, bật **Scene Lights** và **Scene World**.
+3. Trong **Compositor**, đặt chế độ thả xuống thành **Always** (hoặc **Camera**).
+
+<Image src={genshinCompositor} alt="Cài đặt compositor trong Viewport Shading được đặt thành Always" loading="lazy" />
+
+---
+
+## 5. Tùy chọn: Sửa khuôn mặt cho nhân vật mới
+
+Một số nhân vật mới hơn khi nhập vào sẽ có thêm một lớp mesh khuôn mặt thừa che mất phần mắt, như minh họa trong video:
+
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={genshinFaceVideo} type="video/mp4" />
+</video>

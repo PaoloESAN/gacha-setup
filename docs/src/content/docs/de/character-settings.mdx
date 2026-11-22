@@ -1,0 +1,183 @@
+---
+title: "Character Settings & Lights+ in Blender"
+description: "Übersicht über das Character Settings-Panel in Blender: Lights+, Beleuchtungsvoreinstellungen, Lichtrichtung, Fresnel, Outlines, Physik und Anime Toon Shaders."
+---
+
+import { Image } from 'astro:assets';
+import Carousel from '../../../components/Carousel.astro';
+import CarouselSlide from '../../../components/CarouselSlide.astro';
+import characterSettingsImg from '../../../assets/content/overview/character_settings.png';
+import animatedModeImg from '../../../assets/content/overview/animated_mode.png';
+import lightPanelImg from '../../../assets/content/overview/light_panel.png';
+import lightDefaultImg from '../../../assets/content/overview/light_default.png';
+import lightSunriseImg from '../../../assets/content/overview/light_sunrise.png';
+import lightDayImg from '../../../assets/content/overview/light_day.png';
+import lightSunsetImg from '../../../assets/content/overview/light_sunset.png';
+import lightNightImg from '../../../assets/content/overview/light_night.png';
+import lightRainyImg from '../../../assets/content/overview/light_rainy.png';
+import lightCustomImg from '../../../assets/content/overview/light_custom.png';
+import fresnelImg from '../../../assets/content/overview/fresnel.png';
+import physicsVideo from '../../../assets/content/overview/physics.mp4';
+import lightsDefaultImg from '../../../assets/content/overview/lights-default.png';
+import lightsDiffuseImg from '../../../assets/content/overview/lights-diffuse.png';
+import lightsLightColorImg from '../../../assets/content/overview/lights-light-color.png';
+import lightDirImg from '../../../assets/content/overview/light-dir.png';
+import lightDir2Img from '../../../assets/content/overview/light-dir2.png';
+
+
+# Character Settings
+
+Das Panel **Character Settings** befindet sich im Tab **Item** der Seitenleiste des 3D Viewports (`N`-Panel), wenn ein Charakter-Armature oder -Mesh ausgewählt ist. Oben wird der Name des aktiven Charakters angezeigt, und du kannst zwischen den Tabs **Character** und **Rig Layers** wechseln. Der Tab **Character** bietet Echtzeit-Kontrolle über Shader-Beleuchtung, Lights+, Anime-Outlines, Schattenverhalten und Physik, ohne dass du Shader-Node-Graphen öffnen musst.
+
+<Image src={characterSettingsImg} alt="Character Settings Panel im Item-Tab" loading="eager" />
+
+---
+
+## Animate Mode
+
+Der **Animate Mode** ermöglicht eine flüssige, ressourcenschonende Viewport-Wiedergabe, indem aufwendige mehrschichtige Toon-Materialien vorübergehend durch leichtere Alternativen ersetzt und Outline-Modifier ausgeblendet werden.
+
+- Klicke auf **Enable Animate Mode**, wenn du an Animations-Keyframes und dem Timing arbeitest.
+- Klicke vor dem Rendern oder der finalen Lichtsetzung auf **Disable Animate Mode**.
+
+<Image src={animatedModeImg} alt="Animate Mode Viewport-Vorschau" loading="lazy" />
+
+---
+
+## Lighting Type & Lighting Mode
+
+Du kannst die Charakterbeleuchtung entweder über das Gizmo **3D Lighting Panel** in der Szene oder über die UI-Voreinstellungen in **Character Settings** steuern.
+
+### 3D Lighting Panel
+Wenn **Lighting Type** auf **Lighting Panel** eingestellt ist, steuern dreidimensionale Farbräder und Richtungsregler im 3D Viewport interaktiv das Hauptlicht, das Umgebungslicht und die Schattenfarben des Charakters.
+
+<Image src={lightPanelImg} alt="3D Lighting Panel im Viewport" loading="lazy" />
+
+Um die Werte anzupassen, wechsle in den **Pose Mode**, wähle einen Regler des Panels aus und drücke `G`, um ihn zu verschieben.
+
+### Beleuchtungsvoreinstellungen (This Panel)
+Wenn **This Panel** eingestellt ist, kannst du zwischen integrierten Beleuchtungsvoreinstellungen für verschiedene Lichtstimmungen wählen. Nutze das Karussell unten, um die verfügbaren Beleuchtungsvoreinstellungen zu erkunden:
+
+<Carousel lang="de">
+  <CarouselSlide title="Default" description="Die neutrale, ausgewogene Studio-Anime-Beleuchtung.">
+    <Image src={lightDefaultImg} alt="Beleuchtungsvoreinstellung Default" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Sunrise" description="Warme, goldene Morgentöne mit weichem Kontrast.">
+    <Image src={lightSunriseImg} alt="Beleuchtungsvoreinstellung Sunrise" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Day" description="Klare Tageslichtbeleuchtung mit sauberen Schattentönen.">
+    <Image src={lightDayImg} alt="Beleuchtungsvoreinstellung Day" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Sunset" description="Satte Abendrotfarben mit warmen Lichtern und kräftigen Umgebungstönen.">
+    <Image src={lightSunsetImg} alt="Beleuchtungsvoreinstellung Sunset" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Night" description="Stimmungsvolle Nachttöne mit kühlem Mondlicht-Ambiente und tiefen Schatten.">
+    <Image src={lightNightImg} alt="Beleuchtungsvoreinstellung Night" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Rainy" description="Bedeckte und diffuse Regenatmosphäre mit abgemilderten Highlights.">
+    <Image src={lightRainyImg} alt="Beleuchtungsvoreinstellung Rainy" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Custom Colors" description="Passe die Farbkanäle Ambient, Sharp/Soft Lit, Sharp/Soft Shadow und Rim individuell an.">
+    <Image src={lightCustomImg} alt="Beleuchtungseinrichtung Custom Colors" loading="lazy" />
+  </CarouselSlide>
+</Carousel>
+
+---
+
+## Lights+
+
+:::note
+**Lights+** ist nur für **Blender 5.3** verfügbar.
+:::
+
+**Lights+** lässt deinen Charakter auf native Blender-Szenenlichter (Point, Sun, Spot, Area) reagieren.
+
+- Klicke auf **Setup New Lights**, um Lights+ für die Materialien des Charakters zu initialisieren.
+- Sobald es aktiviert ist, wähle über das Dropdown-Menü **Mode**, wie Szenenlichter den Charakter beeinflussen:
+  - **Default**: Verwendet die Standard-Toon-Beleuchtung des Charakters ohne Überschreibung durch Szenenlichter.
+  - **Diffuse**: Wendet gerichtete diffuse Schattierung und Lichtabfall von Szenenlichtern an und bewahrt dabei den Cel-Shading-Kontrast.
+  - **Light Color**: Färbt und beleuchtet den Charakter direkt anhand der Farbe und Stärke der Szenenlichter.
+
+<Carousel lang="de">
+  <CarouselSlide title="Default" description="Standard-Charakterbeleuchtung ohne Einfluss von Szenenlichtern.">
+    <Image src={lightsDefaultImg} alt="Lights+ Modus Default" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Diffuse" description="Szenenlichter steuern die gerichtete diffuse Schattierung auf dem Charakter.">
+    <Image src={lightsDiffuseImg} alt="Lights+ Modus Diffuse" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Light Color" description="Szenenlichter färben die beleuchteten Bereiche des Charakters direkt ein.">
+    <Image src={lightsLightColorImg} alt="Lights+ Modus Light Color" loading="lazy" />
+  </CarouselSlide>
+</Carousel>
+
+---
+
+## Licht- & Schattenrichtung (Light Direction Bone)
+
+Während der Einrichtung wird dem Armature des Charakters (`<Character>Rig`) ein spezieller `Light Direction`-Bone hinzugefügt, mit dem gesteuert wird, wo Sonne und Schatten auf das Modell treffen.
+
+<Carousel lang="de">
+  <CarouselSlide title="Light Direction Bone (0°)" description="Wähle den Light Direction-Bone im Pose Mode aus, um den Lichtvektor zu steuern.">
+    <Image src={lightDirImg} alt="Light Direction-Bone im Pose Mode ausgewählt" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Gedrehte Light Direction (Y: 92°)" description="Das Drehen des Light Direction-Bones verschiebt die Schattengrenze auf dem Charakter in Echtzeit.">
+    <Image src={lightDir2Img} alt="Light Direction-Bone auf Y 92 Grad gedreht" loading="lazy" />
+  </CarouselSlide>
+</Carousel>
+
+1. Wähle das Charakter-Armature (`<Character>Rig`) aus und wechsle in den **Pose Mode**.
+2. Wähle den `Light Direction`-Bone (den Pfeil-Controller) aus.
+3. Drehe ihn direkt im 3D Viewport (`R`) oder öffne **Bone Properties > Transform** und passe die **Rotation**-Werte (XYZ Euler) an:
+   - **Rotation Z**: Dreht den Sonnenwinkel horizontal (Azimut) um den Charakter.
+   - **Rotation Y**: Passt die seitliche Neigung des Lichtvektors über den Charakter an.
+   - **Rotation X**: Passt die vertikale Neigung und den Höhenwinkel der Schattengrenze an.
+
+---
+
+## Fresnel & Outlines
+
+### Fresnel
+Fresnel fügt ein Kanten-Rim-/Glanzleuchten hinzu, das typisch für hochwertiges Cel-Shading ist:
+- **Toggle Fresnel**: Effekt aktivieren oder deaktivieren.
+- **Fresnel Color**: Farbton des äußeren Rands.
+- **Fresnel Power**: Schärfe des Abfalls über gekrümmte Oberflächen.
+- **Fresnel Scaler**: Gesamter Intensitätsmultiplikator.
+
+<Image src={fresnelImg} alt="Steuerelemente und Vorschau des Fresnel-Rim-Effekts" loading="lazy" />
+
+### Outlines & Night Soul (nur Natlan)
+- **Enable Outlines**: Schaltet Inverted-Hull-Outline-Modifier für alle Charakter-Meshes schnell um.
+- **Enable Night Soul**: (Natlan-Charaktere in Genshin Impact) Schaltet spezielle leuchtende Energie-Outlines um.
+- **NS Outlines Thickness**: Passt die Dicke der Night-Soul-Outlines an.
+
+---
+
+## Schatten- & Szeneneinstellungen
+
+- **Shadow Position**: Verschiebt den Schwellenwert des Lichtübergangs auf gekrümmten Oberflächen.
+- **Catch Shadows**: Erlaubt oder ignoriert externe Szenenschatten, die auf den Charakter geworfen werden.
+- **Day / Night**: Mischt zwischen Tag- und Nacht-Kalibrierungen der Textur-Ramp.
+- **Blush Strength**: Regelt die Intensität der Gesichtsröte, sofern unterstützt.
+
+---
+
+## Haar- & Kleidungsphysik
+
+Du kannst dynamische Physik interaktiv anwenden oder feinjustieren, ohne den Setup-Assistenten erneut auszuführen:
+
+- **Hair Physics Slider**: Passt die Damped-Track-Federung und den Physikeinfluss auf Haarsträhnen an.
+- **Clothes Physics Slider**: Passt die dynamische Bewegung von Kleidung und Rock-Accessoires an.
+- **Apply Physics / Remove Physics**: Fügt das Constraint-System jederzeit hinzu oder entfernt es.
+
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={physicsVideo} type="video/mp4" />
+</video>

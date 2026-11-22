@@ -1,0 +1,128 @@
+---
+title: "Utilitaires, FBX & VMD dans Blender"
+description: "Outils utiles, guides, tutoriels et ressources pour importer des character models (FBX, VMD), configurer Lights+ et optimiser les anime toon shaders dans Blender."
+---
+
+import { Image } from 'astro:assets';
+import vmdMotionImg from '../../../assets/content/utilities/vmd_motion.png';
+import eyeThroughHair1 from '../../../assets/content/utilities/eye-through-hair1.mp4';
+import eyeThroughHair2 from '../../../assets/content/utilities/eye-through-hair2.mp4';
+import hairShadowImg from '../../../assets/content/utilities/hair-shadow.png';
+
+## Jideeh's Camera
+
+### Comment l'utiliser
+
+- **Coins L jaunes / AIM** : Redimensionnable. La caméra suit ce widget pour viser. S'il est redimensionné, le FOV est ajusté.
+- **Cercle orange / FOCUS** : Contrôle la profondeur de champ — où et à quelle distance la caméra doit faire la mise au point.
+- **Cercle violet / PIVOT** : Contrôle l'endroit autour duquel la caméra orbite.
+- **Ligne jaune courbée / FREQ** : Contrôle la fréquence de votre tremblement (shake).
+- **Curseur jaune vertical / SHAKE_Y** : Contrôle l'intensité du tremblement sur l'axe Y.
+- **Curseur jaune horizontal / SHAKE_X** : Contrôle l'intensité du tremblement sur l'axe X.
+- **Celui avec le widget F / DOF** : Active ou désactive la profondeur de champ.
+- **ROOT** : Contrôleur maître de la caméra.
+- **CAM (derrière la caméra)** : Agit comme un stabilisateur de caméra. Vous pouvez déplacer la caméra sans changer ce qu'elle vise.
+
+### Vidéo de référence
+
+<div class="video-container">
+  <iframe loading="lazy"
+    src="https://www.youtube-nocookie.com/embed/uU-YNxzpVE8"
+    title="Référence Jideeh's Camera"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    referrerpolicy="strict-origin-when-cross-origin"
+    allowfullscreen>
+  </iframe>
+</div>
+
+---
+
+## Eye Through Hair
+
+Rend les yeux et les sourcils du personnage visibles à travers la géométrie des cheveux.
+
+### Automatique :
+
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={eyeThroughHair1} type="video/mp4" />
+</video>
+
+### Comment contrôler l'opacité :
+
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={eyeThroughHair2} type="video/mp4" />
+</video>
+
+### Manuel
+
+Pour ceux qui ont besoin de le configurer manuellement ou qui souhaitent comprendre étape par étape comment fonctionnent le Shader to RGB et les passes AOV :
+
+<div class="video-container">
+  <iframe loading="lazy"
+    src="https://www.youtube-nocookie.com/embed/ZEjIt1ubZKU"
+    title="How to see the eyes through the hair [Blender 5.2] - Blender Tutorial"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    referrerpolicy="strict-origin-when-cross-origin"
+    allowfullscreen>
+  </iframe>
+</div>
+
+---
+
+## Hair Shadows
+
+:::caution[Expérimental]
+Cette fonctionnalité est expérimentale et peut produire des résultats inattendus.
+
+**Hair Shadows ne peut pas être utilisé en même temps que See Eye Through.**
+:::
+
+Ajoute les ombres des cheveux d'un personnage sur son visage dans Blender 5.2 ou plus récent.
+
+1. En **Object Mode**, sélectionnez un maillage de personnage ou son armature. Le personnage doit avoir des matériaux nommés Face et Hair ou Bangs pour que l'outil puisse identifier le visage et les cheveux.
+2. Dans **Gacha Setup → Utilities**, cliquez sur **Hair Shadows**.
+3. Ouvrez le **Compositor** et sélectionnez le groupe **Hair Shadows** du personnage. Ajustez **Offset X** et **Offset Y** pour positionner l'ombre, **Shadow Tint** pour sa couleur, et **Strength** pour son intensité.
+
+<Image src={hairShadowImg} alt="Groupe Hair Shadows dans le compositeur et effet sur le visage du personnage" loading="lazy" />
+
+L'outil active automatiquement le compositeur de la vue 3D. Vérifiez le résultat en ombrage rendu (Rendered) ou dans un rendu. Relancez l'outil sur le même personnage pour mettre à jour son effet existant.
+
+---
+
+## Apply VMD Motion
+
+:::caution[MMD Tools requis]
+Vous devez avoir l'add-on **MMD Tools** installé dans Blender pour importer des animations VMD Motion.
+:::
+
+1. Sélectionnez l'armature du personnage.
+2. Cliquez sur **Gacha Setup → Utilities → Apply VMD Motion** et sélectionnez votre fichier `.vmd`.
+
+   <Image src={vmdMotionImg} alt="Sélection et options d'importation VMD motion" loading="lazy" />
+
+3. Ajustez les options en haut à droite si nécessaire, puis confirmez avec **Apply VMD Motion**.
+
+:::caution
+Le processus peut prendre un peu de temps, en particulier lors de l'importation d'expressions faciales. Attendez qu'il se termine.
+:::
+
+---
+
+## Tutoriels & Guides
+
+### Physique des cheveux et des vêtements (Damped Track)
+
+Grâce à cette vidéo, le système de physique des cheveux et des vêtements a été implémenté pour cet add-on.
+
+<div class="video-container">
+  <iframe loading="lazy"
+    src="https://www.youtube-nocookie.com/embed/tQV_wPQ8rBk"
+    title="Movimiento de cabello/ropa - Damped Track"
+    frameborder="0"
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+    referrerpolicy="strict-origin-when-cross-origin"
+    allowfullscreen>
+  </iframe>
+</div>

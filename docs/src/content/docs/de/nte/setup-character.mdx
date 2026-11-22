@@ -1,0 +1,70 @@
+---
+title: "Neverness to Everness (NTE) in Blender — Charakter-Setup & Shader"
+description: "Schritt-für-Schritt-Anleitung für Neverness to Everness (NTE)-Charaktermodelle in Blender: Anime-Toon-Shader, Lights+ und Rigging."
+---
+
+import { Image } from 'astro:assets';
+import ntePanel from '../../../../assets/content/nte/nte-panel.png';
+import nteCharacter from '../../../../assets/content/nte/nte-character.png';
+import nteScene from '../../../../assets/content/nte/nte-scene.png';
+import nteComp1 from '../../../../assets/content/nte/nte-comp1.png';
+import nteComp2 from '../../../../assets/content/nte/nte-comp2.png';
+import nteComp3 from '../../../../assets/content/nte/nte-comp3.png';
+
+## 1. Den Setup Wizard öffnen
+
+1. Drücke `N` im 3D Viewport, um die Seitenleiste zu öffnen.
+2. Navigiere zum Tab **Character Setup Wizard**.
+3. Wähle im Dropdown-Menü **Game** den Eintrag **Neverness to Everness**.
+
+<Image src={ntePanel} alt="Neverness to Everness Setup Wizard N-Panel" loading="eager" />
+
+---
+
+## 2. Deinen Charakter importieren
+
+Du kannst dein Modell mit einem Klick über **Run Entire Setup** oder schrittweise über **Old Setup** einrichten.
+
+1. *(Optional)* Aktiviere unter **Setup Settings** die Option **Hair & Clothes Physics**, um Haaren und Kleidung dynamische Physik hinzuzufügen. Aktiviere **Disable Rigging**, um die Rig-Generierung zu überspringen und nur Materialien + Outlines zu importieren.
+2. Klicke auf **Run Entire Setup** (oder **Set Up Character** unter **Old Setup**).
+3. Ein Dateibrowser-Fenster öffnet sich. Navigiere zu deinem [Charakterordner](/de/character-models/#nte), der das `.fbx`-Modell und die Texturen enthält.
+4. Klicke auf **Select NTE Character**.
+
+<Image src={nteCharacter} alt="Blender-Dateiansicht bei der Auswahl des NTE-Charaktermodellordners" loading="lazy" />
+
+:::note
+Der Importvorgang kann längere Zeit in Anspruch nehmen.
+:::
+
+---
+
+## 3. Automatisierte Setup-Pipeline
+
+Beim Ausführen des Setups führt das Add-on die folgenden automatisierten Schritte für Neverness to Everness aus:
+
+- **Set Up Character**: Importiert das `.fbx`-Mesh, bereinigt Vertex-Gruppen und standardisiert Bone-Hierarchien.
+- **Set Up Materials**: Ersetzt Standard-Blender-Materialien durch benutzerdefinierte **NTE Toon Shader**-Nodes und verknüpft Diffuse-, Lightmap- und Color-Ramp-Texturen.
+- **Set Up Outlines**: Wendet Geometry-Node-Inverted-Hull-Outline-Modifier auf alle Charakter-Meshes an, um gestochen scharfe Linien zu rendern.
+- **Fix Transformations**: Setzt Positions-, Rotations- und Skalierungstransformationen zurück und verknüpft Gesichts-Driver mit Lichtvektoren.
+- **Rig Character**: Konfiguriert Steuerungsformen und Gesichts-Bone-Driver.
+- **Finish Setup**: Schaltet das Color Management auf **Standard** um, um die unverfälschte Farbgenauigkeit der Texturen zu erhalten.
+
+<Image src={nteScene} alt="Neverness to Everness-Charakter in die 3D-Szene importiert" loading="lazy" />
+
+---
+
+## 4. Viewport Shading & Compositor-Einstellungen
+
+Um NTE-Toon-Shader und das Echtzeit-Kopfschatten-Compositing im Viewport anzuzeigen:
+
+1. Wechsle über die obere Menüleiste in Blender in den Arbeitsbereich **Compositing**.
+
+<Image src={nteComp1} alt="Wechseln in den Compositing-Arbeitsbereich über die obere Menüleiste in Blender" loading="lazy" />
+
+2. Verschiebe den **Alpha**-Node, um ihn von **Group Output** und **Viewer** zu trennen, und verbinde den Ausgang des **Mix**-Nodes direkt mit **Group Output** und **Viewer**.
+
+<Image src={nteComp2} alt="Trennen des Alpha-Nodes und Verbinden des Mix-Nodes mit Group Output und Viewer" loading="lazy" />
+
+3. Kehre in der oberen Leiste zum Arbeitsbereich **Layout** zurück, öffne das Menü **Viewport Shading** und stelle **Compositor** auf **Always** (oder **Camera**).
+
+<Image src={nteComp3} alt="Zurückwechseln zum Layout-Arbeitsbereich und Einstellen von Viewport Shading Compositor auf Always" loading="lazy" />

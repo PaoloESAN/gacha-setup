@@ -1,0 +1,52 @@
+---
+title: "Honkai: Star Rail (HSR) in Blender — Rigging & Bone Collections"
+description: "Isaac-Gesichtsausdrucks-Steuerungen, Face-Rig-Setup und Bone Collections für Honkai: Star Rail (HSR) in Blender."
+---
+
+import { Image } from 'astro:assets';
+import hsrFacerig from '../../../../assets/content/hsr/hsr-facerig.png';
+import hsrManualrig from '../../../../assets/content/hsr/hsr-manualrig.png';
+import hsrShapekeys from '../../../../assets/content/hsr/hsr-shapekeys.png';
+import hsrTworigs from '../../../../assets/content/hsr/hsr-tworigs.png';
+import hsrBonecoll from '../../../../assets/content/hsr/hsr-bonecoll.png';
+
+## 1. 3D-Gesichtsausdrucks-Steuerungsboard & Isaac Face Rig
+
+Nach dem Importieren und Einrichten des Charakters konfiguriert das Add-on zwei Haupt-Rigs: das normale Körper-Rig und das sekundäre **Isaac Face Rig** in der Nähe des Kopfes zur Steuerung der Gesichtsausdrücke.
+
+<Image src={hsrFacerig} alt="Isaac Face Rig 3D-Steuerungsboard und Charakter-Rig" loading="eager" />
+
+<Image src={hsrTworigs} alt="Normales Körper-Rig und Isaac-Gesichts-Rig-Struktur in Blender" loading="lazy" />
+
+### Gesichtssteuerungsmodi
+
+- **Manuelle On-Face-Steuerungen**: Die direkt über Augen, Augenbrauen und Mund platzierten Steuerungs-Widgets ermöglichen es dir, einzelne Gesichtsausdrücke manuell zu manipulieren.
+
+<Image src={hsrManualrig} alt="Manuelle Steuerungs-Widgets direkt auf dem Charaktergesicht platziert" loading="lazy" />
+
+- **Seitliche Preset-Shapekey-Slider**: Die Slider an den Seiten des Kopfes dienen dazu, die integrierten Preset-Gesichtszüge des Charakters einfach auszulösen und zu mischen.
+
+<Image src={hsrShapekeys} alt="Seitliche Slider zum Auslösen und Mischen integrierter Preset-Shape-Keys" loading="lazy" />
+
+---
+
+## 2. Bone Collections
+
+Charakter-Armatures von Honkai: Star Rail sind in strukturierte Gruppen innerhalb des Tabs **Bone Collections** (Blender 5.2+) unterteilt.
+
+<Image src={hsrBonecoll} alt="Armature Properties Bone Collections-Panel für Honkai: Star Rail-Charakter" loading="lazy" />
+
+### Übersicht der Bone Collections
+
+- **Face**: Augenbrauen-, Augen-, Augenlid-, Pupillen-, Nasen- und Mund-Controller.
+- **Torso (IK / FK)**: Wirbelsäulen-, Brust-, Hals- und Kopf-Handles.
+- **Arm.L / Arm.R (IK & FK)**: Linke und rechte Armketten mit individuellen IK-Ziel-Pins und Pole-Targets.
+- **Leg.L / Leg.R (IK & FK)**: Linke und rechte Beinketten mit Foot-Roll- und Knieziel-Steuerungen.
+- **Fingers**: Hand- und Finger-Bone-Controller.
+- **Hair**: Dynamische Sekundär-Bones für Haarsträhnen und Zöpfe.
+- **Clothes**: Dynamische Sekundär-Bones für Mäntel, Röcke, Umhänge und Quasten.
+- **Lighting**: Vektor-Handles und Beleuchtungs-Controller.
+
+:::tip
+Nutze das **Stern-Symbol** im Tab **Bone Collections**, um eine bestimmte Bone Collection zu isolieren (Solo), oder klicke auf die **Augen-Symbole**, um die Sichtbarkeit beim Animieren umzuschalten.
+:::

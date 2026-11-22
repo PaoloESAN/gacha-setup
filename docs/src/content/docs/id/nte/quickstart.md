@@ -1,6 +1,6 @@
 ---
-title: "Panduan Singkat Neverness to Everness"
-description: Penyiapan otomatis model NTE melalui pengimpor UEFormat dan node compositor anime.
+title: "Panduan Singkat Neverness to Everness (NTE) di Blender"
+description: "Panduan singkat penyiapan karakter Neverness to Everness (NTE) di Blender menggunakan pengimpor UEFormat, rigging, dan node compositor toon shader anime."
 chibi: nte/nanally
 ---
 

@@ -1,0 +1,70 @@
+---
+title: "Neverness to Everness (NTE) dans Blender — Configuration de personnage & Shader"
+description: "Guide étape par étape pour configurer les personnages Neverness to Everness (NTE) dans Blender : toon shader, Lights+ et rigging."
+---
+
+import { Image } from 'astro:assets';
+import ntePanel from '../../../../assets/content/nte/nte-panel.png';
+import nteCharacter from '../../../../assets/content/nte/nte-character.png';
+import nteScene from '../../../../assets/content/nte/nte-scene.png';
+import nteComp1 from '../../../../assets/content/nte/nte-comp1.png';
+import nteComp2 from '../../../../assets/content/nte/nte-comp2.png';
+import nteComp3 from '../../../../assets/content/nte/nte-comp3.png';
+
+## 1. Ouvrir l'assistant de configuration
+
+1. Appuyez sur `N` dans la vue 3D pour ouvrir la barre latérale.
+2. Accédez à l'onglet **Character Setup Wizard**.
+3. Dans le menu déroulant **Game**, sélectionnez **Neverness to Everness**.
+
+<Image src={ntePanel} alt="Panneau N Setup Wizard de Neverness to Everness" loading="eager" />
+
+---
+
+## 2. Importer votre personnage
+
+Vous pouvez configurer votre modèle en un clic avec **Run Entire Setup** ou étape par étape via **Old Setup**.
+
+1. *(Optionnel)* Sous **Setup Settings**, activez **Hair & Clothes Physics** pour ajouter une physique dynamique aux cheveux et aux vêtements. Activez **Disable Rigging** pour ignorer la génération du rig et importer uniquement les matériaux + contours.
+2. Cliquez sur **Run Entire Setup** (ou **Set Up Character** sous Old Setup).
+3. Une fenêtre d'explorateur de fichiers apparaîtra. Accédez à votre [dossier de personnage](/fr/character-models/#nte) contenant le modèle `.fbx` et les textures.
+4. Cliquez sur **Select NTE Character**.
+
+<Image src={nteCharacter} alt="Vue fichier Blender sélectionnant le dossier du modèle de personnage NTE" loading="lazy" />
+
+:::note
+Le processus d'importation peut prendre un certain temps avant de se terminer.
+:::
+
+---
+
+## 3. Pipeline de configuration automatisé
+
+Lors de l'exécution de la configuration, l'add-on effectue les étapes automatisées suivantes pour Neverness to Everness :
+
+- **Set Up Character** : Importe le maillage `.fbx`, nettoie les groupes de vertex et standardise les hiérarchies d'os.
+- **Set Up Materials** : Remplace les matériaux Blender par défaut par des nœuds personnalisés **NTE Toon Shader**, en associant les textures diffuse, lightmap et color ramp.
+- **Set Up Outlines** : Applique des modificateurs de contour inverted-hull par geometry-node à tous les maillages du personnage pour un rendu de tracé net.
+- **Fix Transformations** : Réinitialise les transformations de position, rotation et échelle tout en liant les pilotes faciaux aux vecteurs lumineux.
+- **Rig Character** : Configure les formes de contrôle et les pilotes d'os faciaux.
+- **Finish Setup** : Passe Color Management sur **Standard** pour préserver la fidélité des couleurs brutes des textures.
+
+<Image src={nteScene} alt="Personnage de Neverness to Everness importé dans la scène 3D" loading="lazy" />
+
+---
+
+## 4. Paramètres de Viewport Shading & Compositor
+
+Pour afficher les toon shaders NTE et la composition d'ombres de la tête en temps réel dans la vue 3D :
+
+1. Passez dans l'espace de travail **Compositing** depuis la barre de menu supérieure de Blender.
+
+<Image src={nteComp1} alt="Accès à l'espace de travail Compositing depuis la barre de menu supérieure dans Blender" loading="lazy" />
+
+2. Déplacez le nœud **Alpha** pour le déconnecter de **Group Output** et **Viewer**, et connectez la sortie du nœud **Mix** directement à **Group Output** et **Viewer**.
+
+<Image src={nteComp2} alt="Déconnexion du nœud Alpha et connexion du nœud Mix à Group Output et Viewer" loading="lazy" />
+
+3. Revenez à l'espace de travail **Layout** dans la barre supérieure, ouvrez le menu **Viewport Shading**, et réglez **Compositor** sur **Always** (ou **Camera**).
+
+<Image src={nteComp3} alt="Retour à l'espace de travail Layout et réglage de Viewport Shading Compositor sur Always" loading="lazy" />

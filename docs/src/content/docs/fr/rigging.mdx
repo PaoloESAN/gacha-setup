@@ -1,0 +1,128 @@
+---
+title: "Rigging, Face Rig & VMD dans Blender"
+description: "Aperçu du rigging de personnages dans Blender : collections d'os, Rig Layers, panneaux de contrôle facial, IK/FK, contrôleurs de tête et animations VMD/FBX."
+---
+
+import { Image } from 'astro:assets';
+import { Icon } from '@astrojs/starlight/components';
+import rigLayersImg from '../../../assets/content/overview/rig_layers.png';
+import headControllerVideo from '../../../assets/content/overview/head-controller.mp4';
+import armCogImg from '../../../assets/content/overview/arm_cog.png';
+import legCogImg from '../../../assets/content/overview/leg_cog.png';
+import topCogImg from '../../../assets/content/overview/top_cog.png';
+import genshinRigpanel from '../../../assets/content/genshin/genshin-rigpanel.png';
+import hsrFacerig from '../../../assets/content/hsr/hsr-facerig.png';
+import zzzFacerig from '../../../assets/content/zzz/zzz-facerig.png';
+
+
+# Aperçu de la suite de Rigging
+
+Le module de rigging de **Gacha Setup** unifie les correctifs de hiérarchie d'os, la création de pilotes faciaux, les collections d'os et la génération Rigify sur les modèles anime. Il fournit des contrôles d'animation spécialisés, le verrouillage IK/FK des membres, le changement de parent, des panneaux de pilotes faciaux et des calques de visibilité des os.
+
+---
+
+## Panneaux de Rig Facial 3D (Face Panels)
+
+Selon le modèle de personnage et la configuration, l'add-on configure des panneaux de contrôle de pilotes faciaux 3D spécialisés positionnés près de la tête du personnage. Ces panneaux permettent de manipuler les shape keys, les déclencheurs de clignement, les phonèmes de la bouche et le suivi des yeux directement dans la vue 3D sans ajustements manuels de curseurs. Les principaux types de rigs faciaux inclus sont :
+
+### Panneau de pilotes 3D personnalisé
+Un panneau de pilotes positionné derrière la tête du personnage pour coordonner les expressions faciales, le regard et les visèmes de la bouche :
+
+<Image src={genshinRigpanel} alt="Panneau de pilotes 3D Facial Rig" loading="eager" />
+
+- **Sourcils (Brows)** : Curseurs dédiés et widgets d'os pour déclencher les shape keys de colère, tristesse, surprise et inclinaison des sourcils.
+- **Yeux (Eyes)** : Gizmos de suivi des globes oculaires, plissement des yeux, déclencheurs de clignement et curseurs de mélange de shape keys avec limites dynamiques pour éviter que le maillage des yeux ne dépasse.
+- **Bouche (Mouth)** : Curseurs d'os d'expression pour bouche ouverte, sourire, moue, forme en O et phonèmes de bouche personnalisés.
+
+### Système Isaac Face Rig
+Un système de contrôle facial à double mode comprenant à la fois des widgets sur le visage et des panneaux de préréglages externes :
+
+<Image src={hsrFacerig} alt="Panneau de contrôle 3D Isaac Face Rig" loading="lazy" />
+
+- **Contrôles manuels sur le visage** : Widgets d'os directs positionnés sur les yeux, les sourcils et la bouche pour des micro-expressions détaillées.
+- **Curseurs de préréglages de shape keys latéraux** : Curseurs situés à côté du panneau de tête pour déclencher et mélanger des préréglages d'expressions préconfigurés.
+
+### Jideeh Face Rig
+Une structure de rig facial intégrée conçue pour une articulation expressive des yeux et de la bouche anime :
+
+<Image src={zzzFacerig} alt="Panneau de contrôle 3D et rig de personnage jideeh Face Rig" loading="lazy" />
+
+- **Intégration du rig facial jideeh** : Pilotes avancés pour les sourcils, les paupières, le suivi des yeux et des shape keys de bouche nuancées.
+- **Widgets de contrôle sur le visage** : Permet une pose intuitive des traits faciaux individuels directement dans la vue 3D.
+
+---
+
+## Rig Layers (Collections d'os)
+
+Dans Blender 5.2+ et 4.x, les armatures utilisent des collections d'os organisées. L'onglet **Rig Layers** dans **Character Settings** (dans l'onglet **Item** de la barre latérale de la vue 3D) vous permet d'activer ou de désactiver des parties du corps pendant l'animation, ou d'isoler des calques individuels à l'aide des boutons étoile solo (<Icon name="star" class="inline-icon" />) :
+
+<Image src={rigLayersImg} alt="Onglet Rig Layers dans Character Settings" loading="lazy" />
+
+### Catégories standard de Rig Layers
+
+1. **Lighting & Face** :
+   - `Lighting` : Panneau d'éclairage 3D et contrôles de l'os `Light Direction`.
+   - `Face` : Os d'expression, formes de bouche, sourcils et suivi des yeux.
+2. **Torso & Spine** :
+   - `Torso (IK)` : Contrôles de cinématique inverse du torse.
+   - `Torso (FK)` : Os de rotation de la colonne vertébrale en cinématique directe.
+3. **Fingers & Hands** :
+   - `Fingers`, `Fingers (Detail)` : Courbure, écartement des doigts et ajustements individuels des articulations.
+4. **Limbs (Bras & Jambes)** :
+   - `Arm.L (IK)` / `Arm.R (IK)` et `Arm.L (FK)` / `Arm.R (FK)` : Double configuration pour les bras.
+   - `Leg.L (IK)` / `Leg.R (IK)` et `Leg.L (FK)` / `Leg.R (FK)` : Double configuration pour les jambes et les pieds.
+5. **Tweaks, Pivots & Secondary** :
+   - `Tweaks` : Contrôles de courbure et d'ajustement fin de la déformation.
+   - `Pivots & Pins` : Pivots de rotation des mains et des pieds, verrouillage des coudes/genoux.
+   - `Offsets` : Décalages de position pour la racine et les accessoires attachés.
+   - `Weapon` : Accessoires et armes équipées du personnage.
+   - `Root` : Os maître de placement du personnage.
+   - `Hair`, `Clothes`, `Cage`, `Other` : Chaînes physiques secondaires, cages de déformation et os divers.
+
+---
+
+## Head Controller & Head Tracker
+
+Le rig inclut une configuration de suivi dédiée **Head Controller**. Lorsqu'il est sélectionné, vous pouvez contrôler la dynamique de suivi de la tête et afficher les contraintes :
+
+<video loop muted playsinline controls preload="none" aria-label="Curseur de suivi Head Controller" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={headControllerVideo} type="video/mp4" />
+</video>
+
+- **Use Head Tracker Controller** : Bascule l'orientation de la tête entre la rotation manuelle FK et l'os cible automatisé de suivi du regard.
+
+---
+
+## Gizmos d'engrenage des membres & Contrôles IK / FK
+
+Les rigs Gacha disposent de gizmos d'os en forme d'engrenage (cog) intuitifs sur les membres et les pivots pour configurer l'accrochage IK/FK, l'étirement et le changement d'espace à la volée.
+
+### Master Settings (Top Cog / Plate Settings)
+Le contrôleur de paramètres maîtres fournit des curseurs globaux pour le personnage :
+
+<Image src={topCogImg} alt="Propriétés globales du rig Top Cog / Plate Settings" loading="lazy" />
+
+- **Use Head Tracker Controller** : Contrôle à quel point la tête suit le tracker de tête au lieu de la rotation manuelle de la tête.
+- **Head Follow** : Ajuste à quel point la tête suit la rotation du torse.
+- **Neck Follow** : Ajuste à quel point le cou suit la rotation du torse.
+- **Skirt Auto** : Contrôle l'influence du mouvement automatique de la jupe avec les jambes.
+- **Skirt Follow** : Ajuste à quel point la jupe suit le torse.
+- **Adjust Pupil Wink Distance** : Ajuste la correction des pupilles lors des clins d'œil et clignements pour réduire le clipping.
+
+### Arm Settings & Elbow Pin
+La sélection du contrôleur d'engrenage du bras affiche les propriétés pour la cinématique du bras :
+
+<Image src={armCogImg} alt="Arm Cog et contrôles IK/FK" loading="lazy" />
+
+- **IK / FK Switch** : Basculez facilement entre la cinématique inverse (cibles de main IK) et la cinématique directe (angles épaule-main FK).
+- **Elbow Pin (Tweak Pin)** : Verrouille la position du coude dans l'espace indépendamment des rotations de l'avant-bras.
+- **Parent Switch** : Bascule les cibles IK pour suivre `root`, `torso` ou `chest` avec baking optionnel.
+
+### Leg Settings & Knee Pin
+La sélection du contrôleur d'engrenage du pied ou de la jambe fournit la configuration de la jambe :
+
+<Image src={legCogImg} alt="Leg Cog et contrôles Knee Pin" loading="lazy" />
+
+- **IK / FK Switch** : Bascule le mode d'animation de la jambe entre l'ancrage du pied IK et le balancement de la hanche FK.
+- **Knee Pin** : Verrouille ou relâche la direction de flexion du genou.
+- **Foot Roll & Hinge** : Contrôle le déroulement talon-pointe et la flexion des orteils pendant la marche et la course.

@@ -1,0 +1,79 @@
+---
+title: "Zenless Zone Zero (ZZZ) trong Blender — Lights+ & Coloramp Toon Shader"
+description: "Điều khiển hướng sáng Lights+, thiết lập sẵn toon shader Kythera, sắc thái tùy chỉnh và ánh sáng viền cho Zenless Zone Zero (ZZZ) trong Blender."
+---
+
+import { Image } from 'astro:assets';
+import zzzLightdir from '../../../../assets/content/zzz/zzz-lightdir.png';
+import zzzLight1 from '../../../../assets/content/zzz/zzz-light1.png';
+import zzzLight2 from '../../../../assets/content/zzz/zzz-light2.png';
+import zzzLightpanel from '../../../../assets/content/zzz/zzz-lightpanel.png';
+import zzzTworigs from '../../../../assets/content/zzz/zzz-tworigs.png';
+
+## 1. Điều khiển hướng sáng & bóng đổ
+
+Trong quá trình thiết lập nhân vật, một đối tượng `Light Direction_<Character>` chuyên dụng sẽ được tạo trong bộ sưu tập cảnh của bạn.
+
+1. Tìm `Light Direction_<Character>` trong bảng **Outliner**.
+2. Mở bảng **Item Transform** trong Object Properties.
+3. Điều chỉnh các giá trị **Rotation** (XYZ Euler) để xoay vector ánh sáng:
+   - **Rotation Z**: Xoay góc mặt trời theo chiều ngang xung quanh nhân vật.
+   - **Rotation Y**: Điều chỉnh độ nghiêng ngang của ánh sáng trên nhân vật.
+   - **Rotation X**: Điều chỉnh độ cao dọc của đường ranh giới bóng đổ.
+
+<Image src={zzzLightdir} alt="Điều chỉnh góc xoay đối tượng Light Direction trong Outliner cho Zenless Zone Zero" loading="eager" />
+
+---
+
+## 2. Kythera Shader: Character Settings (Bảng Item)
+
+Khi sử dụng **Kythera's Shader**, hãy chọn nhân vật của bạn và mở tab **Item** trong thanh bên 3D Viewport (phím `N`) để truy cập các điều khiển shader theo thời gian thực.
+
+### Các chế độ & Thiết lập sẵn ánh sáng
+
+Chọn từ các môi trường ánh sáng thiết lập sẵn hoặc chuyển sang chế độ Custom:
+
+- **Default**: Giao diện tiêu chuẩn của trò chơi.
+- **Sunrise**: Ánh sáng buổi sáng dịu nhẹ với bóng đổ màu pastel.
+- **Day**: Ánh sáng ban ngày sắc nét.
+- **Sunset**: Tông màu giờ vàng ấm áp.
+- **Night**: Bảng màu ánh trăng dịu tối.
+- **Rainy**: Ánh sáng khuếch tán trời âm u.
+- **Custom**: Mở khóa điều khiển chi tiết cho sắc thái màu, bóng đổ và ánh sáng viền.
+
+<Image src={zzzLight1} alt="Các thiết lập sẵn Lighting Mode của Kythera Shader trong Zenless Zone Zero" loading="lazy" />
+
+### Shading & Tints (Chế độ Custom)
+
+Khi đặt thành **Custom**, bạn có thể tinh chỉnh:
+
+- **Ambient**: Tông màu môi trường cơ bản.
+- **Lit Tint / Lit Brightness**: Màu sắc chiếu sáng trực tiếp và cường độ sáng.
+- **Shadow Tint / Shadow Intensity**: Sắc thái màu bóng cel và độ sâu tối.
+- **Fake SSS Intensity**: Điều chỉnh mô phỏng suy giảm Subsurface Scattering (SSS) mềm mại trên da và vải.
+
+<Image src={zzzLight2} alt="Cài đặt Shading và Tints trong Character Settings cho ZZZ" loading="lazy" />
+
+### Cài đặt Rim Light
+
+Tùy chỉnh hiệu ứng viền sáng xung quanh nhân vật của bạn:
+
+- **Enable Rim Light**: Bật/tắt hiệu ứng ánh sáng viền.
+- **Color**: Sắc thái của ánh sáng viền phát sáng.
+- **Coverage**: Phạm vi ánh sáng viền trải rộng trên đường viền mesh.
+- **Brightness**: Cường độ tổng thể của ánh sáng viền.
+- **Left / Right & Up / Down**: Các vector vị trí tinh chỉnh để dịch chuyển hướng điểm sáng.
+
+---
+
+## 3. Legacy Shader: Rig điều khiển 3D Viewport
+
+Khi sử dụng **Legacy Shader**, một bảng điều khiển 3D được tạo trong viewport của bạn dưới dạng một đối tượng rig riêng biệt.
+
+<Image src={zzzLightpanel} alt="Bảng điều khiển và ánh sáng 3D trong viewport cho ZZZ Legacy Shader" loading="lazy" />
+
+<Image src={zzzTworigs} alt="Cấu trúc rig armature bảng điều khiển ánh sáng trong Blender" loading="lazy" />
+
+:::note
+Chọn rig bảng ánh sáng, vào **Pose Mode** (`Ctrl + Tab`) và biến đổi các xương chọn màu và thanh trượt để điều chỉnh các tham số ambient, sharp lit, sharp shadow và rim của Legacy shader.
+:::

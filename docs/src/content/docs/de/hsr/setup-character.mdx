@@ -1,0 +1,45 @@
+---
+title: "Honkai: Star Rail (HSR) in Blender — Charakter-Setup & Shader"
+description: "Schritt-für-Schritt-Anleitung für Honkai: Star Rail (HSR)-Charaktermodelle in Blender: Anime-Toon-Shader, Lights+ und automatisches Rigging."
+---
+
+import { Image } from 'astro:assets';
+import hsrPanel from '../../../../assets/content/hsr/hsr-panel.png';
+import hsrCharacter from '../../../../assets/content/hsr/hsr-character.png';
+import hsrScene from '../../../../assets/content/hsr/hsr-scene.png';
+
+## 1. Den Setup Wizard öffnen
+
+1. Drücke `N` im 3D Viewport, um die Seitenleiste zu öffnen.
+2. Navigiere zum Tab **Character Setup Wizard**.
+3. Wähle im Dropdown-Menü **Game** den Eintrag **Honkai: Star Rail**.
+
+<Image src={hsrPanel} alt="Honkai: Star Rail Setup Wizard N-Panel" loading="eager" />
+
+---
+
+## 2. Deinen Charakter importieren
+
+Du kannst dein Modell mit einem Klick über **Run Entire Setup** oder schrittweise über **Old Setup** einrichten.
+
+1. *(Optional)* Aktiviere unter **Setup Settings** die Option **Hair & Clothes Physics**, um Haaren und Kleidung dynamische Physik hinzuzufügen. Aktiviere **Disable Rigging**, um die Rig-Generierung zu überspringen und nur Materialien + Outlines zu importieren.
+2. Klicke auf **Run Entire Setup** (oder **Set Up Character** unter **Old Setup**).
+3. Ein Dateibrowser-Fenster öffnet sich. Navigiere zu deinem [Charakterordner](/de/character-models/#hsr), der das `.fbx`-Modell und die Texturen enthält (z. B. `Avatar_Girl_March7th.fbx`).
+4. Klicke auf **Select Character Folder**.
+
+<Image src={hsrCharacter} alt="Blender-Dateiansicht bei der Auswahl des HSR-Charaktermodellordners" loading="lazy" />
+
+---
+
+## 3. Automatisierte Setup-Pipeline
+
+Beim Ausführen des Setups führt das Add-on die folgenden automatisierten Schritte aus:
+
+- **Set Up Character**: Importiert das `.fbx`-Mesh, bereinigt Vertex-Gruppen und standardisiert Bone-Hierarchien für Honkai: Star Rail.
+- **Set Up Materials**: Ersetzt Standard-Blender-Materialien durch benutzerdefinierte **StellarToon Shader**-Nodes und verknüpft automatisch Diffuse- (`_fuse`), Lightmap- (`_map`) und Color-Ramp-Texturen (`_amp`).
+- **Set Up Outlines**: Wendet Geometry-Node-Inverted-Hull-Outline-Modifier auf alle Charakter-Meshes an, um gestochen scharfe Linien zu rendern.
+- **Fix Transformations**: Setzt Positions-, Rotations- und Skalierungstransformationen zurück.
+- **Rig Character**: Integriert das **Isaac Face Rig** und konfiguriert Augen-Y-Driver, um eine Verschiebung der Pupillen bei Blinzel- oder Shape-Key-Animationen zu verhindern.
+- **Finish Setup**: Schaltet das Color Management auf **Standard** um, um die unverfälschte Farbgenauigkeit der Texturen zu erhalten.
+
+<Image src={hsrScene} alt="Honkai: Star Rail-Charakter in die 3D-Szene importiert" loading="lazy" />

@@ -1,0 +1,42 @@
+---
+title: "Genshin Impact trong Blender — Rigging & Bộ sưu tập xương"
+description: "Điều khiển biểu cảm khuôn mặt, face rig, thiết lập driver và bộ sưu tập xương cho nhân vật Genshin Impact trong Blender."
+---
+
+import { Image } from 'astro:assets';
+import genshinRigpanel from '../../../../assets/content/genshin/genshin-rigpanel.png';
+import genshinBonecoll from '../../../../assets/content/genshin/genshin-bonecoll.png';
+
+
+## 1. Bảng điều khiển biểu cảm khuôn mặt 3D
+
+Một bảng driver 3D tùy chỉnh được đặt phía sau đầu nhân vật để thao tác các shape key khuôn mặt một cách dễ dàng khi tạo dáng hoặc diễn hoạt.
+
+<Image src={genshinRigpanel} alt="Bảng điều khiển Rig khuôn mặt 3D cho lông mày, mắt và hình dạng miệng" loading="eager" />
+
+### Các phần điều khiển
+- **Brows**: Các thanh trượt và widget xương chuyên dụng để kích hoạt shape key tức giận, buồn bã, ngạc nhiên và nghiêng lông mày.
+- **Eyes**: Các gizmo theo dõi nhãn cầu, nheo mắt, kích hoạt chớp mắt và thanh trượt pha trộn shape key. Các driver mắt có giới hạn vị trí Y động để ngăn hiện tượng mesh mắt bị xuyên thấu hoặc lồi ra ngoài.
+- **Mouth**: Các thanh trượt xương biểu cảm để mở miệng, cười, cau có, hình chữ O và các âm vị miệng tùy chỉnh.
+
+---
+
+## 2. Bộ sưu tập xương (Bone Collections)
+
+Add-on tự động phân loại xương nhân vật thành các nhóm có tổ chức.
+
+<Image src={genshinBonecoll} alt="Bảng Bone Collections trong Armature Properties" loading="lazy" />
+
+### Tổng quan các nhóm xương
+- **Face**: Bộ điều khiển lông mày, mắt, mũi, miệng và má.
+- **Torso (IK / FK)**: Tay cầm FK/IK cột sống, ngực, cổ và đầu.
+- **Arm.L / Arm.R (IK & FK)**: Chuỗi cánh tay trái và phải với các ghim mục tiêu IK và pole target riêng lẻ.
+- **Leg.L / Leg.R (IK & FK)**: Chuỗi chân trái và phải với các điều khiển lăn bàn chân và mục tiêu đầu gối.
+- **Fingers & Fingers (Detail)**: Điều khiển từng xương ngón tay để tạo dáng bàn tay.
+- **Hair**: Các xương động phụ để diễn hoạt lọn tóc.
+- **Clothes**: Các xương động phụ để diễn hoạt váy, áo choàng và ruy băng.
+- **Lighting**: Các gizmo tùy chỉnh để điều chỉnh vector ánh sáng và bảng Fresnel.
+
+:::tip
+Sử dụng **biểu tượng ngôi sao** trong tab **Bone Collections** để cô lập một bộ sưu tập xương, chỉ hiển thị bộ sưu tập đó, hoặc **biểu tượng con mắt** để hiện hoặc ẩn các nhóm xương trong khi diễn hoạt.
+:::

@@ -1,6 +1,6 @@
 ---
-title: Character Settings
-description: Overview of the Character Settings panel in Blender, lighting presets, light direction, Fresnel, outlines, and physics.
+title: "Character Settings"
+description: "Overview of the Character Settings panel and Lights+ in Blender: lighting presets, light direction, Fresnel, anime toon shaders, outlines, and physics for character models."
 ---
 
 import { Image } from 'astro:assets';
@@ -18,12 +18,16 @@ import lightRainyImg from '../../assets/content/overview/light_rainy.png';
 import lightCustomImg from '../../assets/content/overview/light_custom.png';
 import fresnelImg from '../../assets/content/overview/fresnel.png';
 import physicsVideo from '../../assets/content/overview/physics.mp4';
-import genshinLightdir from '../../assets/content/genshin/genshin-lightdir.png';
+import lightsDefaultImg from '../../assets/content/overview/lights-default.png';
+import lightsDiffuseImg from '../../assets/content/overview/lights-diffuse.png';
+import lightsLightColorImg from '../../assets/content/overview/lights-light-color.png';
+import lightDirImg from '../../assets/content/overview/light-dir.png';
+import lightDir2Img from '../../assets/content/overview/light-dir2.png';
 
 
 # Character Settings
 
-The **Character Settings** panel is located in the **Item** tab of the 3D Viewport sidebar (`N` panel) when a character armature or mesh is selected. It provides real-time control over shader lighting, anime outlines, Fresnel rim effects, shadow behavior, and physics directly without opening shader node graphs.
+The **Character Settings** panel is located in the **Item** tab of the 3D Viewport sidebar (`N` panel) when a character armature or mesh is selected. At the top, it displays the active character name and lets you switch between the **Character** and **Rig Layers** tabs. The **Character** tab provides real-time control over shader lighting, Lights+, anime outlines, shadow behavior, and physics directly without opening shader node graphs.
 
 <Image src={characterSettingsImg} alt="Character Settings Panel in Item Tab" loading="eager" />
 
@@ -86,15 +90,53 @@ When set to **This Panel**, you can choose between built-in lighting presets tai
 
 ---
 
-## Light & Shadow Direction (Light Direction Object)
+## Lights+
 
-During setup, a dedicated empty object named `Light Direction_<Character>` (e.g., `Light Direction_Charlotte`) is generated in the scene collection to control where the sun and shadows strike the model.
+:::note
+**Lights+** is only available for **Blender 5.3**.
+:::
 
-<Image src={genshinLightdir} alt="Genshin Impact Light Direction object in Outliner and Item Transform" loading="lazy" />
+**Lights+** lets your character react to native Blender scene lights (Point, Sun, Spot, Area).
 
-1. Select `Light Direction_<Character>` from the 3D Viewport or **Outliner**.
-2. Open the **Item Transform** panel in the sidebar (`N` key).
-3. Adjust the **Rotation** values (XYZ Euler):
+- Click **Setup New Lights** to initialize Lights+ on the character's materials.
+- Once enabled, use the **Mode** dropdown to choose how scene lights affect the character:
+  - **Default**: Uses the character's standard toon lighting without scene light overrides.
+  - **Diffuse**: Applies directional diffuse shading and falloff from scene lights while preserving cel-shaded contrast.
+  - **Light Color**: Tints and illuminates the character directly using the color and power of scene lights.
+
+<Carousel>
+  <CarouselSlide title="Default" description="Standard character lighting without scene light influence.">
+    <Image src={lightsDefaultImg} alt="Lights+ Default mode" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Diffuse" description="Scene lights drive directional diffuse shading across the character.">
+    <Image src={lightsDiffuseImg} alt="Lights+ Diffuse mode" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Light Color" description="Scene lights directly tint the illuminated areas of the character.">
+    <Image src={lightsLightColorImg} alt="Lights+ Light Color mode" loading="lazy" />
+  </CarouselSlide>
+</Carousel>
+
+---
+
+## Light & Shadow Direction (Light Direction Bone)
+
+During setup, a dedicated `Light Direction` bone is added to the character's armature (`<Character>Rig`) to control where the sun and shadows strike the model.
+
+<Carousel>
+  <CarouselSlide title="Light Direction Bone (0°)" description="Select the Light Direction bone in Pose Mode to control the light vector.">
+    <Image src={lightDirImg} alt="Light Direction bone selected in Pose Mode" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Rotated Light Direction (Y: 92°)" description="Rotating the Light Direction bone shifts the shadow terminator across the character in real time.">
+    <Image src={lightDir2Img} alt="Light Direction bone rotated to Y 92 degrees" loading="lazy" />
+  </CarouselSlide>
+</Carousel>
+
+1. Select the character armature (`<Character>Rig`) and switch to **Pose Mode**.
+2. Select the `Light Direction` bone (the arrow controller).
+3. Rotate it directly in the 3D Viewport (`R`), or open **Bone Properties > Transform** and adjust the **Rotation** values (XYZ Euler):
    - **Rotation Z**: Rotates the sun angle azimuth horizontally around the character.
    - **Rotation Y**: Adjusts the lateral tilt of the light vector across the character.
    - **Rotation X**: Adjusts the vertical pitch and elevation angle of the shadow terminator.
@@ -112,9 +154,10 @@ Fresnel adds an edge rim/specular glow characteristic of high-end cel-shading:
 
 <Image src={fresnelImg} alt="Fresnel rim effect controls and preview" loading="lazy" />
 
-### Outlines
+### Outlines & Night Soul (Natlan Only)
 - **Enable Outlines**: Quickly toggle inverted-hull outline modifiers across all character meshes.
 - **Enable Night Soul**: (Natlan Characters in Genshin Impact) Toggles special glowing energy outlines.
+- **NS Outlines Thickness**: Adjusts the thickness of the Night Soul outlines.
 
 ---
 

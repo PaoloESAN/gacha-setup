@@ -2,21 +2,90 @@
 import Default from '@astrojs/starlight/components/Head.astro';
 import { ClientRouter } from 'astro:transitions';
 
-const isHomepage = /^\/(?:es\/?|id\/?)?$/.test(Astro.url.pathname);
+const pathname = Astro.url.pathname;
+const isHomepage = /^\/(?:(?:es|id|fr|vi|de)\/?)?$/.test(pathname);
+const locale = Astro.locals.starlightRoute.locale ?? 'en';
+const entry = Astro.locals.starlightRoute.entry?.data;
+const pageTitle = entry?.title ? `${entry.title} | Gacha Setup for Blender` : 'Gacha Setup for Blender';
+const pageDescription =
+	entry?.description ??
+	'Free Blender add-on for importing and setting up Genshin Impact, Honkai: Star Rail, Zenless Zone Zero, Wuthering Waves, Neverness to Everness, and Arknights: Endfield characters in Blender.';
+
+const gameKeywords: Record<string, string> = {
+	genshin: 'Genshin Impact in Blender, Genshin Blender addon, Festivity shader Blender, Genshin 3D model setup',
+	hsr: 'Honkai Star Rail in Blender, HSR Blender addon, StellarToon shader Blender, HSR 3D model setup',
+	zzz: 'Zenless Zone Zero in Blender, ZZZ Blender addon, ZZZ shader Blender, jideeh face rig',
+	wuwa: 'Wuthering Waves in Blender, WuWa Blender addon, Gustling Waters shader Blender',
+	nte: 'Neverness to Everness in Blender, NTE Blender addon, NTE shader Blender, UEFormat Blender',
+	ake: 'Arknights Endfield in Blender, Endfield Blender addon, Endfield PBRToon shader',
+};
+
+const matchedGame = Object.keys(gameKeywords).find((g) => pathname.includes(`/${g}/`));
+const metaKeywords = [
+	'Gacha Setup',
+	'Blender add-on',
+	'anime character setup Blender',
+	'toon shader Blender',
+	'gacha models in Blender',
+	...(matchedGame ? [gameKeywords[matchedGame]] : ['Genshin in Blender, HSR in Blender, ZZZ in Blender, WuWa in Blender, NTE in Blender, Arknights Endfield in Blender']),
+].join(', ');
+
+const canonicalUrl = new URL(pathname, Astro.site ?? 'https://gacha-setup.pages.dev').toString();
+
+const softwareSchema = {
+	'@context': 'https://schema.org',
+	'@type': 'SoftwareApplication',
+	name: 'Gacha Setup for Blender',
+	alternateName: ['Gacha Setup', 'Character Setup Wizard for Blender'],
+	applicationCategory: 'DesignApplication',
+	operatingSystem: 'Windows, macOS, Linux',
+	softwareRequirements: 'Blender 4.1+ (Blender 5.2 / 5.3 recommended)',
+	url: 'https://gacha-setup.pages.dev/',
+	downloadUrl: 'https://github.com/PaoloESAN/gacha-setup/releases/latest',
+	sameAs: ['https://github.com/PaoloESAN/gacha-setup'],
+	inLanguage: ['en', 'es', 'id', 'fr', 'vi', 'de'],
+	offers: {
+		'@type': 'Offer',
+		price: '0',
+		priceCurrency: 'USD',
+	},
+	description: pageDescription,
+};
+
+const webPageSchema = {
+	'@context': 'https://schema.org',
+	'@type': 'TechArticle',
+	headline: pageTitle,
+	description: pageDescription,
+	url: canonicalUrl,
+	inLanguage: locale,
+	about: {
+		'@type': 'SoftwareApplication',
+		name: 'Gacha Setup for Blender',
+	},
+};
 ---
 
 <Default {...Astro.props } transition:animate="none">
     <slot />
 </Default>
 
-{isHomepage && (
-	<script type="application/ld+json" set:html={JSON.stringify({
-		'@context': 'https://schema.org',
-		'@type': 'WebSite',
-		name: 'Gacha Setup for Blender',
-		alternateName: 'Gacha Setup',
-		url: 'https://gacha-setup.pages.dev/',
-	})} />
+<meta name="keywords" content={metaKeywords} />
+
+{isHomepage ? (
+	<>
+		<script type="application/ld+json" set:html={JSON.stringify({
+			'@context': 'https://schema.org',
+			'@type': 'WebSite',
+			name: 'Gacha Setup for Blender',
+			alternateName: 'Gacha Setup',
+			url: 'https://gacha-setup.pages.dev/',
+			inLanguage: locale,
+		})} />
+		<script type="application/ld+json" set:html={JSON.stringify(softwareSchema)} />
+	</>
+) : (
+	<script type="application/ld+json" set:html={JSON.stringify(webPageSchema)} />
 )}
 
 <ClientRouter fallback="swap" />
@@ -37,8 +106,17 @@ const isHomepage = /^\/(?:es\/?|id\/?)?$/.test(Astro.url.pathname);
 		event.stopImmediatePropagation();
 		if (document.querySelector('.profile-notice')) return;
 
-		const spanish = document.documentElement.lang.startsWith('es');
-		const indonesian = document.documentElement.lang.startsWith('id');
+		const lang = document.documentElement.lang.toLowerCase();
+		const dialogCopy: Record<string, { title: string; body: string; cancel: string; proceed: string }> = {
+			en: { title: 'Adult content', body: 'The following profile contains 18+ content. Do you wish to continue?', cancel: 'Cancel', proceed: 'Continue' },
+			es: { title: 'Contenido para adultos', body: 'El siguiente perfil contiene contenido +18. ¿Deseas continuar?', cancel: 'Cancelar', proceed: 'Continuar' },
+			id: { title: 'Konten dewasa', body: 'Profil berikut berisi konten 18+. Apakah Anda ingin melanjutkan?', cancel: 'Batal', proceed: 'Lanjutkan' },
+			fr: { title: 'Contenu pour adultes', body: 'Le profil suivant contient du contenu 18+. Voulez-vous continuer ?', cancel: 'Annuler', proceed: 'Continuer' },
+			vi: { title: 'Nội dung người lớn', body: 'Hồ sơ sau chứa nội dung 18+. Bạn có muốn tiếp tục không?', cancel: 'Hủy', proceed: 'Tiếp tục' },
+			de: { title: 'Inhalt für Erwachsene', body: 'Das folgende Profil enthält Inhalte ab 18 Jahren. Möchten Sie fortfahren?', cancel: 'Abbrechen', proceed: 'Fortfahren' },
+		};
+		const copyKey = Object.keys(dialogCopy).find((k) => lang.startsWith(k)) ?? 'en';
+		const copy = dialogCopy[copyKey];
 		const dialog = document.createElement('dialog');
 		dialog.className = 'profile-notice';
 		dialog.setAttribute('aria-labelledby', 'profile-notice-title');
@@ -51,14 +129,12 @@ const isHomepage = /^\/(?:es\/?|id\/?)?$/.test(Astro.url.pathname);
 				<button type="button" data-cancel autofocus></button>
 				<button type="button" data-continue></button>
 			</div>`;
-		dialog.querySelector('h2')!.textContent = indonesian ? 'Konten dewasa' : spanish ? 'Contenido para adultos' : 'Adult content';
-		dialog.querySelector('p')!.textContent = spanish
-			? 'El siguiente perfil contiene contenido +18. ¿Deseas continuar?'
-			: indonesian ? 'Profil berikut berisi konten 18+. Apakah Anda ingin melanjutkan?' : 'The following profile contains 18+ content. Do you wish to continue?';
+		dialog.querySelector('h2')!.textContent = copy.title;
+		dialog.querySelector('p')!.textContent = copy.body;
 		const cancel = dialog.querySelector<HTMLButtonElement>('[data-cancel]')!;
 		const proceed = dialog.querySelector<HTMLButtonElement>('[data-continue]')!;
-		cancel.textContent = indonesian ? 'Batal' : spanish ? 'Cancelar' : 'Cancel';
-		proceed.textContent = indonesian ? 'Lanjutkan' : spanish ? 'Continuar' : 'Continue';
+		cancel.textContent = copy.cancel;
+		proceed.textContent = copy.proceed;
 		cancel.addEventListener('click', () => dialog.close());
 		const openNewTab = link.target === '_blank' || event.ctrlKey || event.metaKey || event.shiftKey || event.button === 1;
 		proceed.addEventListener('click', () => {

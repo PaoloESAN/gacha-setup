@@ -1,6 +1,6 @@
 ---
 title: "Rigging"
-description: Panduan rigging karakter, koleksi tulang, Rig Layers, panel kontrol wajah, pengaturan IK/FK, dan pengontrol kepala.
+description: "Panduan rigging karakter di Blender: koleksi tulang, Rig Layers, panel kontrol ekspresi wajah, pengaturan IK/FK, dan pengontrol kepala untuk model karakter anime."
 ---
 
 import { Image } from 'astro:assets';
@@ -54,15 +54,15 @@ Struktur rig wajah terintegrasi untuk menggerakkan mulut dan mata anime secara e
 
 ## Rig Layers (Koleksi Tulang)
 
-Di Blender 5.2+ dan 4.x, armature menggunakan koleksi tulang yang terorganisasi. Panel **Rig Layers** di bilah samping 3D Viewport memungkinkan Anda menampilkan atau menyembunyikan bagian tubuh saat membuat animasi, atau mengisolasi satu lapisan dengan tombol bintang solo (<Icon name="star" class="inline-icon" />):
+Di Blender 5.2+ dan 4.x, armature menggunakan koleksi tulang yang terorganisasi. Tab **Rig Layers** di dalam **Character Settings** (pada tab **Item** bilah samping 3D Viewport) memungkinkan Anda menampilkan atau menyembunyikan bagian tubuh saat membuat animasi, atau mengisolasi satu lapisan dengan tombol bintang solo (<Icon name="star" class="inline-icon" />):
 
-<Image src={rigLayersImg} alt="Panel Rig Layers di Blender" loading="lazy" />
+<Image src={rigLayersImg} alt="Tab Rig Layers di Character Settings" loading="lazy" />
 
 ### Kategori Lapisan Rig Standar
 
-1. **Wajah dan Detail**:
-   - `Face`, `Face (Detail)`: Tulang ekspresi, bentuk mulut, dan alis.
-   - `Face (Primary)`, `Face (Secondary)`: Pengontrol wajah utama dan driver kulit sekunder.
+1. **Pencahayaan dan Wajah**:
+   - `Lighting`: Panel pencahayaan 3D dan kontrol tulang `Light Direction`.
+   - `Face`: Tulang ekspresi, bentuk mulut, alis, dan pelacakan mata.
 2. **Badan dan Tulang Belakang**:
    - `Torso (IK)`: Kontrol kinematika invers badan.
    - `Torso (FK)`: Tulang rotasi tulang belakang dengan kinematika maju.
@@ -77,6 +77,7 @@ Di Blender 5.2+ dan 4.x, armature menggunakan koleksi tulang yang terorganisasi.
    - `Offsets`: Pergeseran posisi root dan aksesori yang terpasang.
    - `Weapon`: Properti dan senjata yang digunakan karakter.
    - `Root`: Tulang utama untuk menentukan posisi karakter.
+   - `Hair`, `Clothes`, `Cage`, `Other`: Rantai fisika rambut dan pakaian, cage deformasi, dan tulang tambahan.
 
 ---
 

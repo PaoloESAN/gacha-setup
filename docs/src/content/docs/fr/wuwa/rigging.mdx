@@ -1,0 +1,47 @@
+---
+title: "Wuthering Waves (WuWa) dans Blender — Rigging & Bone Collections"
+description: "Panneau de face rig, physique des cheveux et des vêtements, et collections d'os pour Wuthering Waves (WuWa) dans Blender."
+---
+
+import { Image } from 'astro:assets';
+import wuwaBonecoll from '../../../../assets/content/wuwa/wuwa-bonecoll.png';
+
+## 1. Panneau de contrôle d'expressions faciales 3D
+
+Lors de l'importation et du rigging d'un personnage de Wuthering Waves, l'add-on génère un **Face Rig Panel** dédié équipé de widgets de manipulation directe intuitifs et de curseurs de préréglages d'expressions :
+
+- **Yeux & Sourcils** : Widgets directs positionnés autour du visage pour le suivi des pupilles, le plissement des yeux, le clignement et l'inclinaison des sourcils.
+- **Formes de bouche** : Contrôleurs individuels pour les commissures des lèvres, l'ouverture de la bouche, le sourire, la moue et les phonèmes.
+- **Préréglages de cinématique** : Curseurs organisés sur le panneau facial pour déclencher et mélanger rapidement les poses d'expressions intégrées du personnage.
+
+---
+
+## 2. Physique des cheveux et des vêtements (Damped Track)
+
+L'add-on génère automatiquement un rig physique dynamique à l'aide des contraintes natives **Damped Track** de Blender :
+
+1. Activez **Hair & Clothes Physics** dans les Setup Settings avant de lancer la configuration (ou appliquez-la ensuite via Old Setup > Rig Character).
+2. Ajustez les curseurs d'influence **Hair** et **Clothes** dans le panneau N pour personnaliser la réactivité et la force d'amortissement du mouvement secondaire dynamique.
+
+---
+
+## 3. Bone Collections
+
+Les armatures des personnages sont organisées en groupes structurés dans l'onglet **Bone Collections** (Blender 5.2+), ce qui facilite l'isolation et l'animation de parties spécifiques du corps.
+
+<Image src={wuwaBonecoll} alt="Panneau Bone Collections dans Armature Properties pour un personnage Wuthering Waves" loading="lazy" />
+
+### Aperçu des Bone Collections
+
+- **Face** : Contrôleurs des sourcils, yeux, paupières, pupilles, nez et bouche.
+- **Torso (IK / FK)** : Poignées de la colonne vertébrale, du torse, du cou et de la tête.
+- **Arm.L / Arm.R (IK & FK)** : Chaînes des bras gauche et droit avec cibles IK individuelles et pole targets.
+- **Leg.L / Leg.R (IK & FK)** : Chaînes des jambes gauche et droite avec déroulement du pied et contrôles de cible du genou.
+- **Fingers** : Contrôleurs d'os des mains et des doigts.
+- **Hair** : Os secondaires dynamiques pour les mèches de cheveux et queues de cheval.
+- **Clothes** : Os secondaires dynamiques pour les manteaux, jupes, capes et glands.
+- **Lighting** : Poignées vectorielles et contrôleurs d'éclairage.
+
+:::tip
+Utilisez l'**icône étoile** dans l'onglet **Bone Collections** pour isoler une collection d'os spécifique, ou cliquez sur les **icônes œil** pour afficher ou masquer des calques pendant l'animation.
+:::

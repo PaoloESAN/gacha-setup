@@ -1,0 +1,49 @@
+---
+title: "Arknights: Endfield (AKE) in Blender — Rigging & Bone Collections"
+description: "Face-Rig-Panel, Haar- & Kleidungsphysik und Bone Collections für Arknights: Endfield (AKE) in Blender."
+---
+
+import { Image } from 'astro:assets';
+import akeFacerig from '../../../../assets/content/ake/ake-facerig.png';
+import akeBonecoll from '../../../../assets/content/ake/ake-bonecoll.png';
+
+## 1. 3D-Gesichtsausdrucks-Steuerungspanel
+
+Nach dem Importieren und Riggen eines Arknights: Endfield-Charakters erstellt das Add-on das angepasste **Isaac Face Rig** mit direkten On-Face-Manipulations-Widgets:
+
+- **Augenbrauen- & Augenlid-Steuerungen**: Direkte Widgets über dem Gesicht für präzises Posen von Augenbrauen und Blinzeln.
+- **Pupillen- & Augenverfolgung**: Spezielle Blick-Widgets und dynamische Driver.
+- **Mund- & Lippen-Phoneme**: Controller für Mundöffnung, Lächeln, Stirnrunzeln und Sprach-Phoneme.
+
+<Image src={akeFacerig} alt="Arknights: Endfield 3D-Gesichts-Rig-Steuerungs-Widgets" loading="eager" />
+
+---
+
+## 2. Haar- & Kleidungsphysik (Damped Track)
+
+Das Add-on generiert automatisch ein dynamisches Physik-Rig mithilfe von Blenders nativen **Damped Track**-Constraints:
+
+1. Aktiviere **Hair & Clothes Physics** in den **Setup Settings**, bevor du das Setup startest (oder wende es nachträglich über das Character Settings-Panel > **Apply Physics** an).
+2. Passe die Einfluss-Slider **Hair** und **Clothes** im N-Panel an, um die Reaktionsfähigkeit und Dämpfungsstärke der dynamischen Sekundärbewegung einzustellen.
+
+---
+
+## 3. Bone Collections & Rig Layers
+
+Charakter-Armatures sind in strukturierte Gruppen innerhalb des Tabs **Bone Collections / Rig Layers** (Blender 5.2+) unterteilt, sodass sich bestimmte Körperteile leicht isolieren und animieren lassen.
+
+<Image src={akeBonecoll} alt="Rig Layers-Panel für Arknights: Endfield-Charakter (Face, Torso IK/FK, Fingers, Arm IK/FK, Leg IK/FK, Hair, Clothes)" loading="lazy" />
+
+### Übersicht der Rig Layers
+
+- **Face (Primary / Secondary)**: Augenbrauen-, Augen-, Augenlid-, Pupillen-, Nasen- und Mund-Controller.
+- **Torso (IK / FK)**: Wirbelsäulen-, Brust-, Hals- und Kopf-Handles.
+- **Arm.L / Arm.R (IK & FK)**: Linke und rechte Armketten mit individuellen IK-Ziel-Pins.
+- **Leg.L / Leg.R (IK & FK)**: Linke und rechte Beinketten mit Foot-Roll- und Knieziel-Steuerungen.
+- **Fingers (Detail)**: Hand- und Finger-Bone-Controller.
+- **Hair / Clothes / Cage / Other**: Dynamische Sekundär-Bones für Haarsträhnen, Mäntel und Accessoires.
+- **Lighting / Tweaks / Pivots & Pins / Offsets / Weapon**: Hilfs- und Waffen-Steuerungsebenen.
+
+:::tip
+Nutze das **Stern-Symbol** im Tab **Rig Layers**, um eine bestimmte Collection zu isolieren (Solo), oder klicke auf die **Augen-Symbole**, um die Sichtbarkeit beim Animieren umzuschalten.
+:::

@@ -1,0 +1,40 @@
+---
+title: "Zenless Zone Zero (ZZZ) in Blender — Fehler & Lösungen"
+description: "Anleitung zur Fehlerbehebung und Fixes für Zenless Zone Zero (ZZZ)-Modelle, -Texturen, -Rigging und -Toon-Shader in Blender."
+---
+
+import { Image } from 'astro:assets';
+import zzzEyeshadow1 from '../../../../assets/content/zzz/zzz-eyeshadow1.png';
+import zzzEyeshadow2 from '../../../../assets/content/zzz/zzz-eyeshadow2.png';
+import zzzEyeshadow3 from '../../../../assets/content/zzz/zzz-eyeshadow3.png';
+import zzzShaderEyeVideo from '../../../../assets/content/zzz/zzz-shader-eye.mp4';
+
+:::note
+Einen undokumentierten Fehler oder ein Problem gefunden? Bitte melde es, indem du ein [neues Issue auf GitHub](https://github.com/PaoloESAN/gacha-setup/issues/new) eröffnest.
+:::
+
+## Fehlendes Lidschatten-Material (Eyeshadow)
+
+Wenn deinem Charakter die Zuweisung des Lidschatten-Materials fehlt:
+
+### Video-Anleitung
+
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={zzzShaderEyeVideo} type="video/mp4" />
+</video>
+
+### Schritt-für-Schritt-Lösung
+
+1. Wähle das Gesichts-Mesh des Charakters aus und drücke `Tab`, um in den **Edit Mode** zu wechseln.
+2. Fahre mit dem Mauszeiger über die Lidschatten-Geometrie und drücke `L`, um die Lidschatten-Mesh-Komponenten auszuwählen.
+3. Klicke im Tab **Material Properties** auf die Schaltfläche `+`, um einen neuen Material-Slot zu erstellen.
+
+<Image src={zzzEyeshadow1} alt="Auswählen des Lidschatten-Meshs im Edit Mode und Hinzufügen eines neuen Material-Slots" loading="lazy" />
+
+4. Weise dem neu erstellten Slot das Material **ZZZ Shader Eye** zu.
+
+<Image src={zzzEyeshadow2} alt="Zuweisen des Materials ZZZ Shader Eye zum Slot" loading="lazy" />
+
+5. Klicke auf die Schaltfläche **Assign**, um das Material auf das ausgewählte Lidschatten-Mesh anzuwenden.
+
+<Image src={zzzEyeshadow3} alt="Klicken auf Assign, um das Lidschatten-Material anzuwenden" loading="lazy" />

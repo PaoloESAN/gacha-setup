@@ -1,0 +1,79 @@
+---
+title: "Zenless Zone Zero (ZZZ) in Blender — Lights+ & Coloramp Toon Shader"
+description: "Steuerung der Lichtrichtung mit Lights+, Kythera-Toon-Shader-Presets, Farbtöne und Rim Light für Zenless Zone Zero (ZZZ) in Blender."
+---
+
+import { Image } from 'astro:assets';
+import zzzLightdir from '../../../../assets/content/zzz/zzz-lightdir.png';
+import zzzLight1 from '../../../../assets/content/zzz/zzz-light1.png';
+import zzzLight2 from '../../../../assets/content/zzz/zzz-light2.png';
+import zzzLightpanel from '../../../../assets/content/zzz/zzz-lightpanel.png';
+import zzzTworigs from '../../../../assets/content/zzz/zzz-tworigs.png';
+
+## 1. Licht- & Schattenrichtung steuern
+
+Während der Charaktereinrichtung wird ein spezielles `Light Direction_<Character>`-Objekt in deiner Szenen-Collection erstellt.
+
+1. Suche `Light Direction_<Character>` im **Outliner**-Panel.
+2. Öffne das **Item Transform**-Panel in den Object Properties.
+3. Passe die **Rotation**-Werte (XYZ Euler) an, um den Lichtvektor zu drehen:
+   - **Rotation Z**: Dreht den Sonnenwinkel horizontal um den Charakter.
+   - **Rotation Y**: Passt die horizontale Neigung des Lichts über den Charakter an.
+   - **Rotation X**: Passt die vertikale Neigung der Schattenlinie an.
+
+<Image src={zzzLightdir} alt="Anpassen der Rotation des Light Direction-Objekts im Outliner für Zenless Zone Zero" loading="eager" />
+
+---
+
+## 2. Kythera-Shader: Character Settings (Item-Panel)
+
+Wenn du **Kythera's Shader** verwendest, wähle deinen Charakter aus und öffne den Tab **Item** in der Seitenleiste des 3D Viewports (`N`-Taste), um auf Echtzeit-Shader-Steuerungen zuzugreifen.
+
+### Beleuchtungsmodi & Voreinstellungen
+
+Wähle aus voreingestellten Lichtumgebungen oder wechsle in den **Custom**-Modus:
+
+- **Default**: Standard-Spiellook.
+- **Sunrise**: Weiches Morgenlicht mit Pastellschatten.
+- **Day**: Klare Tageslichtbeleuchtung.
+- **Sunset**: Warme Goldene-Stunde-Töne.
+- **Night**: Gedimmte Mondlichtpalette.
+- **Rainy**: Diffuse bedeckte Beleuchtung.
+- **Custom**: Schaltet granulare Kontrolle über Farbtöne, Schatten und Rim Light frei.
+
+<Image src={zzzLight1} alt="Kythera Shader Lighting Mode-Voreinstellungen in Zenless Zone Zero" loading="lazy" />
+
+### Schattierung & Farbtöne (Custom-Modus)
+
+Wenn **Custom** eingestellt ist, kannst du Folgendes feinjustieren:
+
+- **Ambient**: Basis-Umgebungsfarbton.
+- **Lit Tint / Lit Brightness**: Farbe und Helligkeitsintensität der direkten Beleuchtung.
+- **Shadow Tint / Shadow Intensity**: Farbton und Dunkelheitstiefe der Cel-Schatten.
+- **Fake SSS Intensity**: Passt die weiche Subsurface-Scattering-Simulation (SSS) über Haut und Stoff an.
+
+<Image src={zzzLight2} alt="Shading- und Tints-Einstellungen in Character Settings für ZZZ" loading="lazy" />
+
+### Rim Light-Einstellungen
+
+Passe den Kanten-Highlight-Effekt um deinen Charakter herum an:
+
+- **Enable Rim Light**: Schaltet den Rim-Lighting-Effekt um.
+- **Color**: Farbton des Rim-Light-Leuchtens.
+- **Coverage**: Wie weit sich das Rim Light über die Mesh-Silhouetten erstreckt.
+- **Brightness**: Gesamtintensität des Rim Lights.
+- **Left / Right & Up / Down**: Feine Positionsvektoren zum Verschieben der Highlight-Richtung.
+
+---
+
+## 3. Legacy-Shader: 3D-Viewport-Steuerungs-Rig
+
+Wenn du den **Legacy Shader** verwendest, wird ein 3D-Steuerungsboard als separates Rig-Objekt in deinem Viewport generiert.
+
+<Image src={zzzLightpanel} alt="3D-Beleuchtungs- und Steuerungsboard im Viewport für ZZZ Legacy Shader" loading="lazy" />
+
+<Image src={zzzTworigs} alt="Armature-Rig-Struktur des Lichtsteuerungspanels in Blender" loading="lazy" />
+
+:::note
+Wähle das Lichtpanel-Rig aus, wechsle in den **Pose Mode** (`Ctrl + Tab`) und transformiere die Farbwähler-Bones und Slider, um die Ambient-, Sharp-Lit-, Sharp-Shadow- und Rim-Parameter des Legacy-Shaders anzupassen.
+:::

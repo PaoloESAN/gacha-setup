@@ -1,6 +1,6 @@
 ---
-title: Ajustes del Personaje
-description: Visión general del panel de Ajustes del Personaje (Character Settings) en Blender, presets de iluminación en carrusel, dirección de luz, Fresnel, contornos y físicas.
+title: "Ajustes del Personaje"
+description: "Visión general del panel Character Settings y Lights+ en Blender: presets de iluminación, dirección de luz, Fresnel, toon shaders anime, contornos y físicas para modelos de personajes."
 ---
 
 import { Image } from 'astro:assets';
@@ -18,12 +18,16 @@ import lightRainyImg from '../../../assets/content/overview/light_rainy.png';
 import lightCustomImg from '../../../assets/content/overview/light_custom.png';
 import fresnelImg from '../../../assets/content/overview/fresnel.png';
 import physicsVideo from '../../../assets/content/overview/physics.mp4';
-import genshinLightdir from '../../../assets/content/genshin/genshin-lightdir.png';
+import lightsDefaultImg from '../../../assets/content/overview/lights-default.png';
+import lightsDiffuseImg from '../../../assets/content/overview/lights-diffuse.png';
+import lightsLightColorImg from '../../../assets/content/overview/lights-light-color.png';
+import lightDirImg from '../../../assets/content/overview/light-dir.png';
+import lightDir2Img from '../../../assets/content/overview/light-dir2.png';
 
 
 # Ajustes del Personaje (Character Settings)
 
-El panel **Character Settings** se encuentra en la pestaña **Item** de la barra lateral del 3D Viewport (panel `N`) cuando seleccionas la armadura o una malla del personaje. Te permite ajustar en tiempo real la iluminación del shader, los contornos anime, efectos de Fresnel, sombras y físicas sin tener que abrir árboles de nodos.
+El panel **Character Settings** se encuentra en la pestaña **Item** de la barra lateral del 3D Viewport (panel `N`) cuando seleccionas la armadura o una malla del personaje. En la parte superior muestra el nombre del personaje activo y permite alternar entre las pestañas **Character** y **Rig Layers**. La pestaña **Character** te permite ajustar en tiempo real la iluminación del shader, Lights+, los contornos anime, sombras y físicas sin tener que abrir árboles de nodos.
 
 <Image src={characterSettingsImg} alt="Panel Character Settings en la pestaña Item" loading="eager" />
 
@@ -86,15 +90,53 @@ Al elegir **This Panel**, puedes cambiar entre presets integrados adaptados a di
 
 ---
 
-## Control de Dirección de Luz (Light Direction Object)
+## Lights+
 
-Durante el setup se genera automáticamente en la escena un objeto vacío llamado `Light Direction_<Personaje>` (por ejemplo, `Light Direction_Charlotte`), el cual define el vector de luz y sombras sobre el modelo.
+:::note
+**Lights+** es exclusivo para **Blender 5.3**.
+:::
 
-<Image src={genshinLightdir} alt="Objeto Light Direction en el Outliner y pestaña Item Transform" loading="lazy" />
+**Lights+** permite que tu personaje reaccione a las luces nativas de la escena de Blender (Point, Sun, Spot, Area).
 
-1. Selecciona el objeto `Light Direction_<Personaje>` en la escena o desde el **Outliner**.
-2. Abre la pestaña **Item Transform** en el panel lateral (`N`).
-3. Modifica los valores de **Rotation** (XYZ Euler):
+- Haz clic en **Setup New Lights** para inicializar Lights+ en los materiales del personaje.
+- Una vez activado, usa el menú desplegable **Mode** para elegir cómo afectan las luces de la escena al personaje:
+  - **Default**: Usa la iluminación toon estándar del personaje sin influencia de las luces de la escena.
+  - **Diffuse**: Aplica sombreado difuso direccional y atenuación desde las luces de la escena manteniendo el contraste cel-shaded.
+  - **Light Color**: Tiñe e ilumina directamente al personaje usando el color y la potencia de las luces de la escena.
+
+<Carousel lang="es">
+  <CarouselSlide title="Default" description="Iluminación estándar del personaje sin influencia de luces de escena.">
+    <Image src={lightsDefaultImg} alt="Modo Default de Lights+" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Diffuse" description="Las luces de la escena generan sombreado difuso direccional sobre el personaje.">
+    <Image src={lightsDiffuseImg} alt="Modo Diffuse de Lights+" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Light Color" description="Las luces de la escena tiñen directamente las zonas iluminadas del personaje.">
+    <Image src={lightsLightColorImg} alt="Modo Light Color de Lights+" loading="lazy" />
+  </CarouselSlide>
+</Carousel>
+
+---
+
+## Control de Dirección de Luz (Hueso Light Direction)
+
+Durante el setup se añade un hueso dedicado llamado `Light Direction` dentro de la armadura del personaje (`<Personaje>Rig`) para controlar el vector de luz y sombras sobre el modelo.
+
+<Carousel lang="es">
+  <CarouselSlide title="Hueso Light Direction (0°)" description="Selecciona el hueso Light Direction en Pose Mode para controlar el vector de luz.">
+    <Image src={lightDirImg} alt="Hueso Light Direction seleccionado en Pose Mode" loading="lazy" />
+  </CarouselSlide>
+
+  <CarouselSlide title="Light Direction Rotado (Y: 92°)" description="Rotar el hueso Light Direction desplaza la línea de sombra sobre el personaje en tiempo real.">
+    <Image src={lightDir2Img} alt="Hueso Light Direction rotado a Y 92 grados" loading="lazy" />
+  </CarouselSlide>
+</Carousel>
+
+1. Selecciona la armadura del personaje (`<Personaje>Rig`) y entra en **Pose Mode**.
+2. Selecciona el hueso `Light Direction` (el controlador con forma de flecha).
+3. Rótalo directamente en el 3D Viewport (`R`), o abre **Bone Properties > Transform** y modifica los valores de **Rotation** (XYZ Euler):
    - **Rotation Z**: Rota el ángulo del sol horizontalmente alrededor del personaje.
    - **Rotation Y**: Modifica la inclinación lateral del vector de luz sobre el modelo.
    - **Rotation X**: Ajusta la elevación o altura vertical de la terminación de sombra.
@@ -112,9 +154,10 @@ El Fresnel añade un resplandor en los bordes característico del render anime m
 
 <Image src={fresnelImg} alt="Opciones y previsualización de Fresnel" loading="lazy" />
 
-### Contornos (Outlines)
+### Contornos (Outlines) y Night Soul (Solo Natlan)
 - **Enable Outlines**: Conmuta rápidamente los modificadores de contorno invertido en todas las piezas del personaje.
 - **Enable Night Soul**: (Personajes de Natlan en Genshin Impact) Activa el contorno de energía elemental especial de Natlan.
+- **NS Outlines Thickness**: Ajusta el grosor de los contornos de Night Soul.
 
 ---
 

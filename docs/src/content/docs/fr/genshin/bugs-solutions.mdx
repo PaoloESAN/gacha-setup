@@ -1,0 +1,22 @@
+---
+title: "Genshin Impact dans Blender — Bugs et solutions"
+description: "Guide de dépannage et correctifs pour les modèles, textures, rigging et toon shaders de Genshin Impact dans Blender."
+---
+
+import genshinFaceVideo from '../../../../assets/content/genshin/genshin-face.mp4';
+
+:::note
+Vous avez trouvé un bug ou un problème non documenté ? Veuillez le signaler en ouvrant une [nouvelle issue sur GitHub](https://github.com/PaoloESAN/gacha-setup/issues/new).
+:::
+
+## Maillage de visage supplémentaire recouvrant les yeux
+
+Certains personnages récents s'importent avec une couche de maillage facial supplémentaire qui recouvre les yeux.
+
+### Solution
+
+Supprimez le maillage supplémentaire en suivant la procédure montrée dans la vidéo :
+
+<video loop muted playsinline controls preload="none" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={genshinFaceVideo} type="video/mp4" />
+</video>

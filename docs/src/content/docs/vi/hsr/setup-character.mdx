@@ -1,0 +1,45 @@
+---
+title: "Honkai: Star Rail (HSR) trong Blender — Thiết lập nhân vật & Shader"
+description: "Hướng dẫn từng bước thiết lập mô hình nhân vật Honkai: Star Rail (HSR) trong Blender: anime toon shader, Lights+ và rigging tự động."
+---
+
+import { Image } from 'astro:assets';
+import hsrPanel from '../../../../assets/content/hsr/hsr-panel.png';
+import hsrCharacter from '../../../../assets/content/hsr/hsr-character.png';
+import hsrScene from '../../../../assets/content/hsr/hsr-scene.png';
+
+## 1. Mở Setup Wizard
+
+1. Nhấn `N` trong 3D Viewport để mở thanh bên.
+2. Điều hướng đến tab **Character Setup Wizard**.
+3. Trong menu thả xuống **Game**, chọn **Honkai: Star Rail**.
+
+<Image src={hsrPanel} alt="Bảng N-Panel Setup Wizard cho Honkai: Star Rail" loading="eager" />
+
+---
+
+## 2. Nhập nhân vật của bạn
+
+Bạn có thể thiết lập mô hình chỉ với một cú nhấp chuột bằng **Run Entire Setup** hoặc từng bước qua **Old Setup**.
+
+1. *(Tùy chọn)* Trong **Setup Settings**, bật **Hair & Clothes Physics** để thêm vật lý động cho tóc và trang phục. Bật **Disable Rigging** để bỏ qua bước tạo rig và chỉ nhập vật liệu + đường viền.
+2. Nhấp **Run Entire Setup** (hoặc **Set Up Character** trong Old Setup).
+3. Một cửa sổ trình duyệt tệp sẽ xuất hiện. Điều hướng đến [thư mục nhân vật](/vi/character-models/#hsr) của bạn chứa mô hình `.fbx` và các texture (chẳng hạn như `Avatar_Girl_March7th.fbx`).
+4. Nhấp **Select Character Folder**.
+
+<Image src={hsrCharacter} alt="Trình xem tệp Blender đang chọn thư mục mô hình nhân vật HSR" loading="lazy" />
+
+---
+
+## 3. Quy trình thiết lập tự động
+
+Khi chạy thiết lập, add-on sẽ thực thi các bước tự động sau:
+
+- **Set Up Character**: Nhập mesh `.fbx`, dọn dẹp các vertex group và chuẩn hóa hệ thống phân cấp xương cho Honkai: Star Rail.
+- **Set Up Materials**: Thay thế các vật liệu mặc định của Blender bằng các node **StellarToon Shader** tùy chỉnh, tự động liên kết các texture khuếch tán (`_fuse`), lightmap (`_map`) và color ramp (`_amp`).
+- **Set Up Outlines**: Áp dụng các modifier đường viền inverted-hull bằng geometry-node cho tất cả các mesh của nhân vật để kết xuất nét vẽ sắc nét.
+- **Fix Transformations**: Đặt lại các phép biến đổi vị trí, xoay và tỷ lệ.
+- **Rig Character**: Tích hợp **Isaac Face Rig** và cấu hình các Y-driver cho mắt để ngăn đồng tử bị lệch khi nháy mắt hoặc diễn hoạt shape key.
+- **Finish Setup**: Chuyển Color Management sang **Standard** để bảo toàn độ chính xác màu sắc gốc của texture.
+
+<Image src={hsrScene} alt="Nhân vật Honkai: Star Rail đã được nhập vào cảnh 3D" loading="lazy" />

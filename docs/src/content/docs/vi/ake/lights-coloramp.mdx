@@ -1,0 +1,59 @@
+---
+title: "Arknights: Endfield (AKE) trong Blender — Lights+ & Coloramp Toon Shader"
+description: "Điều khiển hướng sáng Lights+, thiết lập sẵn, bảng màu tùy chỉnh và toon shader cho Arknights: Endfield (AKE) trong Blender."
+---
+
+import { Image } from 'astro:assets';
+import akeLightdir from '../../../../assets/content/ake/ake-lightdir.png';
+import akeLight1 from '../../../../assets/content/ake/ake-light1.png';
+import akeLight2 from '../../../../assets/content/ake/ake-light2.png';
+
+## 1. Điều khiển hướng sáng & bóng đổ
+
+Trong quá trình thiết lập nhân vật, một đối tượng `Light` / `Light Direction_<Character>` chuyên dụng sẽ được tạo trong bộ sưu tập cảnh của bạn.
+
+1. Tìm đối tượng ánh sáng trong bảng **Outliner**.
+2. Mở bảng **Item Transform** trong Object Properties.
+3. Điều chỉnh các giá trị **Rotation** (XYZ Euler) để xoay vector ánh sáng:
+   - **Rotation Z**: Xoay góc mặt trời theo chiều ngang xung quanh nhân vật.
+   - **Rotation Y**: Điều chỉnh độ nghiêng ngang của ánh sáng trên nhân vật.
+   - **Rotation X**: Điều chỉnh độ cao dọc của đường ranh giới bóng đổ.
+
+<Image src={akeLightdir} alt="Điều chỉnh góc xoay đối tượng Light trong Outliner cho Arknights: Endfield" loading="eager" />
+
+---
+
+## 2. Character Settings (Bảng Item)
+
+Chọn mesh hoặc armature của nhân vật và nhấn `N` trong 3D Viewport. Mở tab **Item** để truy cập bảng **Character Settings**, cung cấp các điều khiển theo thời gian thực mà không cần chỉnh sửa thủ công cây node shader:
+
+- **Lighting Mode**: Chuyển đổi giữa các thiết lập sẵn ánh sáng tích hợp (`Default`, `Sunrise`, `Day`, `Sunset`, `Night`, `Rainy`) hoặc chọn `Custom` để tinh chỉnh từng kênh màu riêng lẻ.
+- **General Shading**: `Smoothness Max` (0–2, mặc định 2.0) và `Normal Strength` (0–5, mặc định 1.5) cho vật liệu cơ thể/quần áo/khuôn mặt.
+- **Hair Shading**: `Hair Smoothness Max` (0–1, mặc định 1.0) và `Hair Normal Strength` (0–5, mặc định 1.5).
+- **Eyes**: Thanh trượt `Eyes Brightness` (1–20, mặc định 1.0).
+- **Weather**: `Enable Rain` bật/tắt luồng đổ bóng trời mưa trên cơ thể và da.
+- **Hair & Clothes Physics**: Nút `Apply Physics` (hoặc các thanh trượt mức độ ảnh hưởng Hair/Clothes sau khi đã có vật lý).
+
+<Image src={akeLight1} alt="Bảng Character Settings cho Arknights: Endfield" loading="lazy" />
+
+### Các chế độ & Thiết lập sẵn ánh sáng
+
+- **Default**: Thiết lập ánh sáng gốc của trò chơi.
+- **Sunrise**: Ánh sáng buổi sáng ấm áp, dịu nhẹ.
+- **Day**: Ánh sáng ban ngày sắc nét, cân bằng.
+- **Sunset**: Tông màu giờ vàng với vùng sáng ấm.
+- **Night**: Tông màu ánh trăng mát mẻ, dịu tối.
+- **Rainy**: Đổ bóng bầu không khí u ám, khuếch tán.
+- **Custom**: Mở khóa điều khiển chi tiết cho các màu Ambient, DirLight, Specular, Base Color và Fresnel.
+
+<Image src={akeLight2} alt="Menu thả xuống thiết lập sẵn Lighting Mode của Arknights: Endfield (Rainy)" loading="lazy" />
+
+### Custom Colors (Chế độ Custom)
+
+Khi **Lighting Mode** được đặt thành **Custom**, hãy tinh chỉnh từng kênh của shader Endfield PBRToon:
+
+- **Ambient**: Sắc thái ánh sáng môi trường cơ bản.
+- **Light (DirLight)**: Sắc thái màu áp dụng cho các vùng được chiếu sáng hoàn toàn.
+- **Specular**: Màu điểm phản chiếu sáng (specular highlight).
+- **Base Color**: Hệ số nhân sắc thái màu gốc (albedo).
+- **Fresnel Inside / Outside**: Các màu chuyển sắc viền fresnel.

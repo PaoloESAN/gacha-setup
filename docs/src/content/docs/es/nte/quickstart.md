@@ -1,6 +1,6 @@
 ---
-title: Guía Rápida de Neverness to Everness
-description: Configuración automatizada de modelos NTE mediante el importador UEFormat y nodos del compositor
+title: "Guía Rápida de Neverness to Everness (NTE) en Blender"
+description: "Guía rápida para configurar personajes de Neverness to Everness (NTE) en Blender mediante el importador UEFormat, rigging y nodos del compositor para toon shaders anime."
 chibi: nte/nanally
 ---
 

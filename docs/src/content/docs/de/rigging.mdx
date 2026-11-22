@@ -1,0 +1,128 @@
+---
+title: "Rigging, Face Rig & VMD in Blender"
+description: "Übersicht über Charakter-Rigging in Blender: Bone-Sammlungen, Rig Layers, Gesichtssteuerungsboards, IK/FK, Kopf-Controller sowie VMD- und FBX-Animationen."
+---
+
+import { Image } from 'astro:assets';
+import { Icon } from '@astrojs/starlight/components';
+import rigLayersImg from '../../../assets/content/overview/rig_layers.png';
+import headControllerVideo from '../../../assets/content/overview/head-controller.mp4';
+import armCogImg from '../../../assets/content/overview/arm_cog.png';
+import legCogImg from '../../../assets/content/overview/leg_cog.png';
+import topCogImg from '../../../assets/content/overview/top_cog.png';
+import genshinRigpanel from '../../../assets/content/genshin/genshin-rigpanel.png';
+import hsrFacerig from '../../../assets/content/hsr/hsr-facerig.png';
+import zzzFacerig from '../../../assets/content/zzz/zzz-facerig.png';
+
+
+# Rigging-Suite-Übersicht
+
+Das Rigging-Modul von **Gacha Setup** vereint Korrekturen der Bone-Hierarchie, die Erstellung von Gesichts-Drivern, Bone-Sammlungen und die Rigify-Generierung für Anime-Modelle. Es bietet spezialisierte Animationssteuerungen, Gliedmaßen-IK/FK-Pinning, Parent-Switching, Gesichts-Driver-Panels und Ebenen für die Bone-Sichtbarkeit.
+
+---
+
+## 3D-Gesichts-Rig-Panels (Face Panels)
+
+Je nach Charaktermodell und Setup konfiguriert das Add-on spezialisierte 3D-Gesichts-Driver-Steuerungsboards in der Nähe des Charakterkopfes. Mit diesen Boards lassen sich Shape Keys, Blinzel-Trigger, Mund-Phoneme und Augenverfolgung direkt im 3D Viewport steuern, ohne manuell Slider anpassen zu müssen. Die wichtigsten enthaltenen Gesichts-Rig-Typen sind:
+
+### Custom 3D Driver Board
+Ein Driver-Board hinter dem Kopf des Charakters zur Koordination von Gesichtsausdrücken, Blickrichtung und Mund-Visemen:
+
+<Image src={genshinRigpanel} alt="3D-Gesichts-Rig-Driver-Board" loading="eager" />
+
+- **Brows**: Spezielle Slider und Bone-Widgets zum Auslösen von Shape Keys für Wut, Traurigkeit, Überraschung und Augenbrauenneigung.
+- **Eyes**: Augapfel-Tracking-Gizmos, Augenzusammenkneifen, Blinzel-Trigger und Shape-Key-Misch-Slider mit dynamischen Grenzen, um ein Hervortreten des Augen-Meshs zu verhindern.
+- **Mouth**: Ausdrucks-Bone-Slider für offenen Mund, Lächeln, Stirnrunzeln, O-Form und benutzerdefinierte Mund-Phoneme.
+
+### Isaac Face Rig System
+Ein duales Gesichtssteuerungssystem mit Widgets direkt im Gesicht und externen Preset-Boards:
+
+<Image src={hsrFacerig} alt="Isaac Face Rig 3D-Steuerungsboard" loading="lazy" />
+
+- **Manuelle On-Face-Steuerungen**: Direkte Bone-Widgets über Augen, Augenbrauen und Mund für detaillierte Mikroausdrücke.
+- **Seitliche Preset-Shape-Key-Slider**: Slider neben dem Kopf-Board zum Auslösen und Mischen vorkonfigurierter Charakterausdrucks-Presets.
+
+### Jideeh Face Rig
+Eine integrierte Gesichts-Rig-Struktur für ausdrucksstarke Anime-Mund- und Augenartikulation:
+
+<Image src={zzzFacerig} alt="jideeh Face Rig 3D-Steuerungsboard und Charakter-Rig" loading="lazy" />
+
+- **jideeh Gesichts-Rig-Integration**: Erweiterte Driver für Augenbrauen, Augenlider, Augenverfolgung und fein abgestufte Mund-Shape-Keys.
+- **On-Face-Steuerungs-Widgets**: Ermöglicht das intuitive Posen einzelner Gesichtszüge direkt im 3D Viewport.
+
+---
+
+## Rig Layers (Bone-Sammlungen)
+
+In Blender 5.2+ und 4.x verwenden Armatures organisierte Bone-Sammlungen. Über den Tab **Rig Layers** in **Character Settings** (im Tab **Item** der 3D-Viewport-Seitenleiste) kannst du Körperteile während des Animierens ein- und ausblenden oder einzelne Ebenen über die Solo-Stern-Schaltflächen (<Icon name="star" class="inline-icon" />) isolieren:
+
+<Image src={rigLayersImg} alt="Tab Rig Layers in Character Settings" loading="lazy" />
+
+### Standard-Kategorien der Rig Layers
+
+1. **Lighting & Face**:
+   - `Lighting`: 3D-Beleuchtungspanel und Steuerungen des `Light Direction`-Bones.
+   - `Face`: Ausdrucks-Bones, Mundformen, Augenbrauen und Augenverfolgung.
+2. **Torso & Spine**:
+   - `Torso (IK)`: Inverse-Kinematics-Steuerungen für den Torso.
+   - `Torso (FK)`: Forward-Kinematics-Rotations-Bones für die Wirbelsäule.
+3. **Fingers & Hands**:
+   - `Fingers`, `Fingers (Detail)`: Fingerkrümmung, Spreizung und Feinanpassung einzelner Gelenke.
+4. **Limbs (Arme & Beine)**:
+   - `Arm.L (IK)` / `Arm.R (IK)` und `Arm.L (FK)` / `Arm.R (FK)`: Duales Setup für Arme.
+   - `Leg.L (IK)` / `Leg.R (IK)` und `Leg.L (FK)` / `Leg.R (FK)`: Duales Setup für Beine und Füße.
+5. **Tweaks, Pivots & Sekundär**:
+   - `Tweaks`: Feineinstellungen für Biegungen und Verformungen.
+   - `Pivots & Pins`: Hand- und Fuß-Drehpunkte sowie Ellbogen-/Knie-Pinning.
+   - `Offsets`: Positionsversätze für Root und angehängte Accessoires.
+   - `Weapon`: Requisiten und ausgerüstete Charakterwaffen.
+   - `Root`: Haupt-Bone für die Charakterplatzierung.
+   - `Hair`, `Clothes`, `Cage`, `Other`: Sekundäre Physik-Ketten, Deformationskäfige und sonstige Bones.
+
+---
+
+## Head Controller & Head Tracker
+
+Das Rig enthält ein spezielles Tracking-Setup für den **Head Controller**. Wenn es ausgewählt ist, kannst du die Kopf-Folge-Dynamik und Ansichts-Constraints steuern:
+
+<video loop muted playsinline controls preload="none" aria-label="Head Controller Tracking-Slider" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={headControllerVideo} type="video/mp4" />
+</video>
+
+- **Use Head Tracker Controller**: Schaltet die Kopfausrichtung zwischen manueller FK-Rotation und dem automatisierten Look-at-Ziel-Bone um.
+
+---
+
+## Gliedmaßen-Zahnrad-Gizmos & IK / FK-Steuerungen
+
+Gacha-Rigs verfügen über intuitive Zahnrad-/Cog-Bone-Gizmos an Gliedmaßen und Drehpunkten, um IK/FK-Snapping, Dehnung und Space-Switching im laufenden Betrieb zu konfigurieren.
+
+### Master-Einstellungen (Top Cog / Plate Settings)
+Der Master-Einstellungs-Controller bietet globale Slider für den Charakter:
+
+<Image src={topCogImg} alt="Globale Rig-Eigenschaften unter Top Cog / Plate Settings" loading="lazy" />
+
+- **Use Head Tracker Controller**: Steuert, wie stark der Kopf dem Head Tracker statt der manuellen Kopfrotation folgt.
+- **Head Follow**: Passt an, wie stark der Kopf der Drehung des Torsos folgt.
+- **Neck Follow**: Passt an, wie stark der Hals der Drehung des Torsos folgt.
+- **Skirt Auto**: Steuert den Einfluss der automatischen Rockbewegung mit den Beinen.
+- **Skirt Follow**: Passt an, wie stark der Rock dem Torso folgt.
+- **Adjust Pupil Wink Distance**: Passt die Pupillenkorrektur beim Zwinkern und Blinzeln an, um Clipping zu reduzieren.
+
+### Arm-Einstellungen & Elbow Pin
+Durch Auswahl des Arm-Zahnrad-Controllers werden Eigenschaften für die Armkinematik angezeigt:
+
+<Image src={armCogImg} alt="Arm Cog und IK/FK-Steuerungen" loading="lazy" />
+
+- **IK / FK Switch**: Wechselt nahtlos zwischen Inverse Kinematics (IK-Handziele) und Forward Kinematics (FK-Winkel von Schulter zu Hand).
+- **Elbow Pin (Tweak Pin)**: Fixiert die Ellbogenposition im Raum unabhängig von Unterarmdrehungen.
+- **Parent Switch**: Schaltet IK-Ziele so um, dass sie `root`, `torso` oder `chest` folgen, mit optionalem Baking.
+
+### Bein-Einstellungen & Knee Pin
+Durch Auswahl des Fuß- oder Bein-Zahnrad-Controllers wird die Beinkonfiguration bereitgestellt:
+
+<Image src={legCogImg} alt="Leg Cog und Knee Pin Steuerungen" loading="lazy" />
+
+- **IK / FK Switch**: Schaltet den Beinanimationsmodus zwischen IK-Fußfixierung und FK-Hüftschwung um.
+- **Knee Pin**: Sperrt oder lockert die Biegerichtung des Knies.
+- **Foot Roll & Hinge**: Steuert das Abrollen von der Ferse bis zu den Zehen sowie die Zehenbeugung beim Gehen und Laufen.

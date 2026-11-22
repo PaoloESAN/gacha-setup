@@ -1,0 +1,54 @@
+---
+title: "Bắt đầu nhanh — Gacha Setup trong Blender"
+description: "Bắt đầu với add-on Gacha Setup trong Blender chỉ trong vài phút. Nhập character models (FBX, VMD), thiết lập anime toon shaders, Lights+ và rigging trên Blender 5.3 và 4.1+."
+---
+
+import QuickstartCards from '../../../components/QuickstartCards.astro';
+import { Image } from 'astro:assets';
+import entireSetupImg from '../../../assets/content/overview/main-panel.png';
+import selectGameImg from '../../../assets/content/overview/select_game.png';
+import selectCharacter from '../../../assets/content/overview/select-character.png';
+import characterEscene from '../../../assets/content/overview/character-escene.png';
+
+## Các bước cài đặt
+
+1. Tải xuống tệp `Gacha_Setup-<version>.zip` mới nhất từ [bản phát hành GitHub mới nhất](https://github.com/PaoloESAN/gacha-setup/releases/latest).
+2. Khởi chạy Blender 5.2 (khuyên dùng), Blender/Goo Engine 4.1+. Trên các phiên bản Blender dưới 4.5, hãy cài đặt BetterFBX trước.
+3. Kéo và thả tệp `.zip` vừa tải vào cửa sổ Blender.
+4. Bật hộp kiểm **Enable Add-on** và nhấp **OK** để xác nhận.
+5. Nếu add-on không tự động cài đặt, hãy mở **Edit > Preferences > Add-ons**, nhấp **Install from Disk...**, chọn tệp `.zip` và bật hộp kiểm của add-on.
+
+## Thiết lập nhân vật
+
+1. Nhấn `N` trong 3D Viewport và mở tab thanh bên **Gacha Setup** (bảng **Character Setup Wizard**).
+
+<Image src={entireSetupImg} alt="Bảng chính Gacha Setup" loading="eager" />
+
+2. Chọn trò chơi của bạn.
+
+<Image src={selectGameImg} alt="Menu thả xuống Select Game" loading="lazy" />
+
+3. Nhấp **Setup Character**.
+
+4. Chọn [thư mục nhân vật](/vi/character-models/) của bạn, tùy chọn cấu hình **Setup Settings** trong thanh bên trình duyệt tệp (**Shader**, **Disable Rigging**, **Hair & Clothes Physics**), và nhấp **Select Character Folder** (hoặc chọn tệp `.zip` / `.7z` của nhân vật).
+
+<Image src={selectCharacter} alt="Select Character Folder" loading="lazy" />
+
+5. Đợi vài giây và nhân vật của bạn sẽ sẵn sàng trong cảnh.
+
+<Image src={characterEscene} alt="Nhân vật đã sẵn sàng trong cảnh (Thiết lập hoàn tất thành công)" loading="lazy" />
+
+---
+
+## Thông tin bổ sung
+
+<QuickstartCards>
+  <a href="/vi/character-settings/" class="quickstart-card">
+    <p class="link-title">Character Settings</p>
+    <p class="link-desc">Thiết lập sẵn ánh sáng, đối tượng hướng sáng, fresnel, đường viền và các nút bật/tắt vật lý.</p>
+  </a>
+  <a href="/vi/rigging/" class="quickstart-card">
+    <p class="link-title">Rigging</p>
+    <p class="link-desc">Bảng điều khiển khuôn mặt 3D, rig khuôn mặt, nút bật/tắt lớp rig và bánh răng chuyển động tổng thể.</p>
+  </a>
+</QuickstartCards>

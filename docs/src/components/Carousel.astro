@@ -5,8 +5,16 @@ interface Props {
 }
 
 const { id, lang = 'en' } = Astro.props;
-const isSpanish = lang.startsWith('es');
-const isIndonesian = lang.startsWith('id');
+const labels: Record<string, { prev: string; next: string }> = {
+  en: { prev: 'Previous slide', next: 'Next slide' },
+  es: { prev: 'Diapositiva anterior', next: 'Diapositiva siguiente' },
+  id: { prev: 'Slide sebelumnya', next: 'Slide berikutnya' },
+  fr: { prev: 'Diapositive précédente', next: 'Diapositive suivante' },
+  vi: { prev: 'Trang trước', next: 'Trang tiếp theo' },
+  de: { prev: 'Vorherige Folie', next: 'Nächste Folie' },
+};
+const langKey = Object.keys(labels).find((k) => lang.startsWith(k)) ?? 'en';
+const { prev: prevLabel, next: nextLabel } = labels[langKey];
 ---
 
 <div class="custom-carousel" id={id}>
@@ -16,12 +24,12 @@ const isIndonesian = lang.startsWith('id');
     </div>
 
     <!-- Navigation Arrows overlaid on the image -->
-    <button type="button" class="carousel-arrow prev" aria-label={isIndonesian ? 'Slide sebelumnya' : isSpanish ? 'Diapositiva anterior' : 'Previous slide'}>
+    <button type="button" class="carousel-arrow prev" aria-label={prevLabel}>
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="15 18 9 12 15 6"></polyline>
       </svg>
     </button>
-    <button type="button" class="carousel-arrow next" aria-label={isIndonesian ? 'Slide berikutnya' : isSpanish ? 'Diapositiva siguiente' : 'Next slide'}>
+    <button type="button" class="carousel-arrow next" aria-label={nextLabel}>
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
         <polyline points="9 18 15 12 9 6"></polyline>
       </svg>

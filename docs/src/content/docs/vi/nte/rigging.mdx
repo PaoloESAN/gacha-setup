@@ -1,0 +1,51 @@
+---
+title: "Neverness to Everness (NTE) trong Blender — Rigging & Bộ sưu tập xương"
+description: "Điều khiển biểu cảm khuôn mặt, thiết lập face rig và bộ sưu tập xương cho Neverness to Everness (NTE) trong Blender."
+---
+
+import { Image } from 'astro:assets';
+import nteFacerig from '../../../../assets/content/nte/nte-facerig.webp';
+import nteRig from '../../../../assets/content/nte/nte-rig.png';
+import nteBonecoll from '../../../../assets/content/nte/nte-bonecoll.png';
+
+:::note
+Di chuyển rig có thể gây giật lag nhẹ trong viewport đối với các mesh có mật độ đa giác cao.
+:::
+
+## 1. Bảng điều khiển biểu cảm khuôn mặt 3D
+
+Sau khi nhập và thiết lập nhân vật NTE, add-on sẽ cấu hình **NTE Face Rig** tích hợp (được điều chỉnh từ kiến trúc điều khiển khuôn mặt của Jideeh) với các điều khiển trực tiếp trên khuôn mặt và thanh trượt biểu cảm:
+
+- **Điều khiển lông mày & mí mắt**: Các widget trực tiếp đặt trên khuôn mặt để tạo dáng lông mày và chớp mắt chính xác.
+- **Theo dõi đồng tử & mắt**: Các gizmo nhìn và driver động chuyên dụng.
+- **Âm vị miệng & môi**: Bộ điều khiển cho việc mở miệng, mỉm cười, cau có và các âm vị lời nói.
+
+<Image src={nteFacerig} alt="Bảng điều khiển và widget Rig khuôn mặt 3D NTE" loading="eager" />
+
+---
+
+## 2. Rigging cơ thể & Cấu trúc Armature
+
+Rig cơ thể tận dụng các bộ điều khiển Rigify tiêu chuẩn để tạo dáng IK/FK đầy đủ và vật lý Hair & Clothes động với các ràng buộc Damped Track.
+
+<Image src={nteRig} alt="Armature nhân vật NTE và các widget điều khiển trong Blender" loading="lazy" />
+
+---
+
+## 3. Bộ sưu tập xương & Hệ thống phân cấp Armature
+
+Armature của Neverness to Everness được sắp xếp thành các nhóm có cấu trúc trong tab **Bone Collections** (Blender 5.2+) để tối ưu quy trình tạo dáng và diễn hoạt.
+
+<Image src={nteBonecoll} alt="Bảng Bone Collections trong Armature Properties cho nhân vật NTE" loading="lazy" />
+
+### Tổng quan các nhóm xương
+- **Face**: Bộ điều khiển lông mày, mắt, mí mắt, đồng tử và miệng.
+- **Torso & Spine**: Tay cầm FK/IK cột sống, ngực, cổ và đầu.
+- **Arms & Hands**: Chuỗi cánh tay trái và phải với các ghim mục tiêu IK và điều khiển xương ngón tay riêng lẻ.
+- **Legs & Feet**: Chuỗi chân trái và phải với các điều khiển lăn bàn chân và mục tiêu đầu gối.
+- **Hair & Clothes**: Các xương động phụ cho váy, áo khoác, ruy băng và lọn tóc.
+- **Lighting**: Các gizmo vector và bộ điều khiển ánh sáng.
+
+:::tip
+Sử dụng **biểu tượng ngôi sao** trong tab **Bone Collections** để hiển thị riêng/cô lập một bộ sưu tập xương cụ thể, hoặc nhấp vào **biểu tượng con mắt** để bật/tắt hiển thị trong khi diễn hoạt.
+:::

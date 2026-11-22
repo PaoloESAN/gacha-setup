@@ -1,6 +1,6 @@
 ---
-title: Aset Karakter
-description: Tempat mengunduh aset karakter (model, tekstur, dan material) untuk setiap gim yang didukung.
+title: "Aset Karakter"
+description: "Tempat mengunduh model karakter FBX dan UEFormat, tekstur, dan material untuk Genshin Impact, HSR, ZZZ, WuWa, NTE, dan Arknights: Endfield di Blender."
 ---
 
 ## Tempat Mengunduh Aset Karakter
@@ -11,20 +11,20 @@ Di sini Anda dapat menemukan sumber unduhan aset karakter, termasuk model, tekst
 
 - [Aset Karakter](https://hjtstudio.com/gi) oleh **[jideeh](https://ko-fi.com/jideeh)**, **hiragara**, **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)**
 - [Aset Karakter](https://drive.google.com/drive/folders/10Ib8DochTJrYPgygMxgdZXwp7TBiBlA2) oleh **hiragara**
-- [Aset Karakter](https://assets.hoyotoon.com/?game=gi&type=characters) oleh **HoyoToon** · [Discord](https://discord.com/invite/hoyotoon) · **Ditangguhkan hingga pemberitahuan lebih lanjut**
-- [SkillObjects](https://genshin-skillobj.pages.dev/) oleh **[vei](https://x.com/heikzs)**
+- [GI Characters - HoyoToon Assets](https://rehoyotoon.pages.dev/gi/characters/) oleh **[HoyoToon Assets](https://rehoyotoon.pages.dev/)** · [Discord](https://discord.com/invite/hoyotoon)
+- [SkillObjects](https://vei-z.pages.dev/) oleh **[vei](https://x.com/heikzs)**
 
 ### HSR
 
 - [Aset Karakter](https://hjtstudio.com/hsr) oleh **[jideeh](https://ko-fi.com/jideeh)**, **hiragara**, **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)**
 - [Aset Karakter](https://drive.google.com/drive/folders/1KTC40gnQPytyrl-7zZm1QJOgQbWIZhOU) oleh **hiragara**
-- [Aset Karakter](https://assets.hoyotoon.com/?game=hsr&type=characters) oleh **HoyoToon** · [Discord](https://discord.com/invite/hoyotoon) · **Ditangguhkan hingga pemberitahuan lebih lanjut**
+- [HSR Characters - HoyoToon Assets](https://rehoyotoon.pages.dev/hsr/characters/) oleh **[HoyoToon Assets](https://rehoyotoon.pages.dev/)** · [Discord](https://discord.com/invite/hoyotoon)
 
 ### ZZZ
 
 - [Aset Karakter](https://hjtstudio.com/zzz) oleh **[jideeh](https://ko-fi.com/jideeh)**, **hiragara**, **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)**
 - [Aset Karakter](https://drive.google.com/drive/folders/1hdXOi_2WFI-ktAt-jpn-b-OKUnQlJCKW) oleh **hiragara**
-- [Aset Karakter](https://assets.hoyotoon.com/?game=zzz&type=characters) oleh **HoyoToon** · [Discord](https://discord.com/invite/hoyotoon) · **Ditangguhkan hingga pemberitahuan lebih lanjut**
+- [ZZZ Agents - HoyoToon Assets](https://rehoyotoon.pages.dev/zzz/characters/) oleh **[HoyoToon Assets](https://rehoyotoon.pages.dev/)** · [Discord](https://discord.com/invite/hoyotoon)
 
 ### NTE
 
@@ -45,7 +45,7 @@ Di sini Anda dapat menemukan sumber unduhan aset karakter, termasuk model, tekst
 
 - [Aset Karakter](https://hjtstudio.com/hi3) oleh **[jideeh](https://ko-fi.com/jideeh)**, **hiragara**, **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)**
 - [Aset Karakter](https://drive.google.com/drive/folders/1QjJMSQV2luuHkrh0E5rcdIlKnT4W8LiT?usp=drive_link) oleh **hiragara**
-- [Aset Karakter](https://assets.hoyotoon.com/?game=hi3&type=characters) oleh **HoyoToon** · [Discord](https://discord.com/invite/hoyotoon) · **Ditangguhkan hingga pemberitahuan lebih lanjut**
+- [HI3 Companions - HoyoToon Assets](https://rehoyotoon.pages.dev/hi3/companions/) oleh **[HoyoToon Assets](https://rehoyotoon.pages.dev/)** · [Discord](https://discord.com/invite/hoyotoon)
 
 ### HNA
 
@@ -56,3 +56,7 @@ Di sini Anda dapat menemukan sumber unduhan aset karakter, termasuk model, tekst
 
 - [Aset Karakter](https://hjtstudio.com/ef) oleh **[jideeh](https://ko-fi.com/jideeh)**, **hiragara**, **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)**
 - [Aset Karakter](https://drive.google.com/drive/folders/1HhYu3KYx01vCzc_O6Kd4TacP-XCQSLx7?usp=drive_link) oleh **hiragara**
+
+### Miliastra Wonderland
+
+- [MW Customizer - HoyoToon Assets](https://rehoyotoon.pages.dev/miliastra/customizer/) oleh **[HoyoToon Assets](https://rehoyotoon.pages.dev/)** · [Discord](https://discord.com/invite/hoyotoon)

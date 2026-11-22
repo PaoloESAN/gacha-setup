@@ -1,0 +1,49 @@
+---
+title: "Arknights: Endfield (AKE) trong Blender — Rigging & Bộ sưu tập xương"
+description: "Bảng điều khiển face rig, vật lý tóc & quần áo và bộ sưu tập xương cho Arknights: Endfield (AKE) trong Blender."
+---
+
+import { Image } from 'astro:assets';
+import akeFacerig from '../../../../assets/content/ake/ake-facerig.png';
+import akeBonecoll from '../../../../assets/content/ake/ake-bonecoll.png';
+
+## 1. Bảng điều khiển biểu cảm khuôn mặt 3D
+
+Sau khi nhập và rig nhân vật Arknights: Endfield, add-on sẽ xây dựng **Isaac Face Rig** đã được điều chỉnh với các widget thao tác trực tiếp trên khuôn mặt:
+
+- **Điều khiển lông mày & mí mắt**: Các widget trực tiếp đặt trên khuôn mặt để tạo dáng lông mày và chớp mắt chính xác.
+- **Theo dõi đồng tử & mắt**: Các gizmo nhìn và driver động chuyên dụng.
+- **Âm vị miệng & môi**: Bộ điều khiển cho việc mở miệng, mỉm cười, cau có và các âm vị lời nói.
+
+<Image src={akeFacerig} alt="Các widget điều khiển Rig khuôn mặt 3D Arknights: Endfield" loading="eager" />
+
+---
+
+## 2. Vật lý tóc & quần áo (Damped Track)
+
+Add-on tự động tạo rig vật lý động bằng các ràng buộc **Damped Track** gốc của Blender:
+
+1. Bật **Hair & Clothes Physics** trong Setup Settings trước khi chạy thiết lập (hoặc áp dụng sau đó thông qua bảng Character Settings > **Apply Physics**).
+2. Điều chỉnh các thanh trượt mức độ ảnh hưởng **Hair** và **Clothes** trong bảng N để tùy chỉnh độ nhạy và lực giảm chấn của chuyển động phụ động.
+
+---
+
+## 3. Bộ sưu tập xương & Rig Layers
+
+Armature của nhân vật được sắp xếp thành các nhóm có cấu trúc trong tab **Bone Collections / Rig Layers** (Blender 5.2+), giúp dễ dàng cô lập và diễn hoạt từng bộ phận cơ thể cụ thể.
+
+<Image src={akeBonecoll} alt="Bảng Rig Layers cho nhân vật Arknights: Endfield (Face, Torso IK/FK, Fingers, Arm IK/FK, Leg IK/FK, Hair, Clothes)" loading="lazy" />
+
+### Tổng quan Rig Layers
+
+- **Face (Primary / Secondary)**: Bộ điều khiển lông mày, mắt, mí mắt, đồng tử, mũi và miệng.
+- **Torso (IK / FK)**: Tay cầm cột sống, ngực, cổ và đầu.
+- **Arm.L / Arm.R (IK & FK)**: Chuỗi cánh tay trái và phải với các ghim mục tiêu IK riêng lẻ.
+- **Leg.L / Leg.R (IK & FK)**: Chuỗi chân trái và phải với các điều khiển lăn bàn chân và mục tiêu đầu gối.
+- **Fingers (Detail)**: Bộ điều khiển xương bàn tay và ngón tay.
+- **Hair / Clothes / Cage / Other**: Các xương phụ động cho lọn tóc, áo khoác và phụ kiện.
+- **Lighting / Tweaks / Pivots & Pins / Offsets / Weapon**: Các lớp tiện ích và điều khiển vũ khí.
+
+:::tip
+Sử dụng **biểu tượng ngôi sao** trong tab Rig Layers để hiển thị riêng/cô lập một bộ sưu tập cụ thể, hoặc nhấp vào **biểu tượng con mắt** để bật/tắt hiển thị trong khi diễn hoạt.
+:::

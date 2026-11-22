@@ -1,0 +1,128 @@
+---
+title: "Rigging, Face Rig & VMD trong Blender"
+description: "Tổng quan về rigging nhân vật trong Blender: bộ sưu tập xương, Rig Layers, bảng điều khiển khuôn mặt, IK/FK, bộ điều khiển đầu và chuyển động VMD/FBX."
+---
+
+import { Image } from 'astro:assets';
+import { Icon } from '@astrojs/starlight/components';
+import rigLayersImg from '../../../assets/content/overview/rig_layers.png';
+import headControllerVideo from '../../../assets/content/overview/head-controller.mp4';
+import armCogImg from '../../../assets/content/overview/arm_cog.png';
+import legCogImg from '../../../assets/content/overview/leg_cog.png';
+import topCogImg from '../../../assets/content/overview/top_cog.png';
+import genshinRigpanel from '../../../assets/content/genshin/genshin-rigpanel.png';
+import hsrFacerig from '../../../assets/content/hsr/hsr-facerig.png';
+import zzzFacerig from '../../../assets/content/zzz/zzz-facerig.png';
+
+
+# Tổng quan bộ công cụ Rigging
+
+Mô-đun rigging của **Gacha Setup** thống nhất việc sửa hệ thống phân cấp xương, tạo driver khuôn mặt, bộ sưu tập xương và tạo Rigify cho các mô hình anime. Nó cung cấp các điều khiển hoạt ảnh chuyên biệt, ghim IK/FK cho tay chân, chuyển đổi đối tượng cha, bảng driver khuôn mặt và các lớp hiển thị xương.
+
+---
+
+## Bảng Rig khuôn mặt 3D (Face Panels)
+
+Tùy thuộc vào mô hình nhân vật và thiết lập, add-on sẽ cấu hình các bảng điều khiển driver khuôn mặt 3D chuyên biệt đặt gần đầu nhân vật. Các bảng này cho phép thao tác các shape key, kích hoạt chớp mắt, âm vị miệng và theo dõi ánh nhìn trực tiếp trong 3D Viewport mà không cần điều chỉnh thanh trượt thủ công. Các loại rig khuôn mặt chính bao gồm:
+
+### Bảng Driver 3D tùy chỉnh
+Một bảng driver đặt phía sau đầu nhân vật để điều phối biểu cảm khuôn mặt, ánh nhìn và khẩu hình miệng:
+
+<Image src={genshinRigpanel} alt="Bảng driver Rig khuôn mặt 3D" loading="eager" />
+
+- **Brows**: Các thanh trượt và widget xương chuyên dụng để kích hoạt shape key tức giận, buồn bã, ngạc nhiên và nghiêng lông mày.
+- **Eyes**: Các gizmo theo dõi nhãn cầu, nheo mắt, kích hoạt chớp mắt và thanh trượt pha trộn shape key với giới hạn động để tránh mesh mắt bị lồi ra ngoài.
+- **Mouth**: Các thanh trượt xương biểu cảm để mở miệng, cười, cau có, hình chữ O và các âm vị miệng tùy chỉnh.
+
+### Hệ thống Isaac Face Rig
+Hệ thống điều khiển khuôn mặt hai chế độ với cả widget trực tiếp trên mặt và bảng thiết lập sẵn bên ngoài:
+
+<Image src={hsrFacerig} alt="Bảng điều khiển 3D Isaac Face Rig" loading="lazy" />
+
+- **Điều khiển thủ công trên khuôn mặt**: Các widget xương trực tiếp đặt trên mắt, lông mày và miệng để tinh chỉnh vi biểu cảm chi tiết.
+- **Thanh trượt Shape Key thiết lập sẵn bên cạnh**: Các thanh trượt nằm kế bên bảng đầu để kích hoạt và pha trộn các biểu cảm nhân vật đã cấu hình sẵn.
+
+### Jideeh Face Rig
+Cấu trúc rig khuôn mặt tích hợp được thiết kế cho khả năng diễn đạt miệng và mắt anime giàu cảm xúc:
+
+<Image src={zzzFacerig} alt="Bảng điều khiển 3D jideeh Face Rig và rig nhân vật" loading="lazy" />
+
+- **Tích hợp jideeh Facial Rig**: Các driver nâng cao cho lông mày, mí mắt, theo dõi mắt và các shape key miệng tinh tế.
+- **Widget điều khiển trên khuôn mặt**: Cho phép tạo dáng trực quan từng đường nét khuôn mặt trực tiếp trong 3D viewport.
+
+---
+
+## Rig Layers (Bộ sưu tập xương)
+
+Trong Blender 5.2+ và 4.x, các armature sử dụng bộ sưu tập xương được tổ chức khoa học. Tab **Rig Layers** bên trong **Character Settings** (trong tab **Item** của thanh bên 3D Viewport) cho phép bạn bật/tắt các bộ phận cơ thể trong khi diễn hoạt, hoặc hiển thị riêng từng lớp bằng các nút ngôi sao (<Icon name="star" class="inline-icon" />):
+
+<Image src={rigLayersImg} alt="Tab Rig Layers trong Character Settings" loading="lazy" />
+
+### Các danh mục Rig Layer tiêu chuẩn
+
+1. **Lighting & Face**:
+   - `Lighting`: Bảng ánh sáng 3D và các điều khiển xương `Light Direction`.
+   - `Face`: Xương biểu cảm, hình dạng miệng, lông mày và theo dõi mắt.
+2. **Torso & Spine**:
+   - `Torso (IK)`: Điều khiển động học nghịch (IK) phần thân.
+   - `Torso (FK)`: Xương xoay cột sống động học thuận (FK).
+3. **Fingers & Hands**:
+   - `Fingers`, `Fingers (Detail)`: Co duỗi ngón tay, xòe ngón và tinh chỉnh từng khớp ngón tay.
+4. **Limbs (Arms & Legs)**:
+   - `Arm.L (IK)` / `Arm.R (IK)` và `Arm.L (FK)` / `Arm.R (FK)`: Thiết lập kép cho cánh tay.
+   - `Leg.L (IK)` / `Leg.R (IK)` và `Leg.L (FK)` / `Leg.R (FK)`: Thiết lập kép cho chân và bàn chân.
+5. **Tweaks, Pivots & Secondary**:
+   - `Tweaks`: Các điều khiển tinh chỉnh độ uốn cong và biến dạng.
+   - `Pivots & Pins`: Điểm xoay bàn tay và bàn chân, ghim khuỷu tay/đầu gối.
+   - `Offsets`: Bù trừ vị trí cho xương gốc và các phụ kiện đính kèm.
+   - `Weapon`: Đạo cụ và vũ khí trang bị của nhân vật.
+   - `Root`: Xương đặt vị trí tổng thể của nhân vật.
+   - `Hair`, `Clothes`, `Cage`, `Other`: Chuỗi vật lý phụ, lồng biến dạng và các xương khác.
+
+---
+
+## Head Controller & Head Tracker
+
+Rig bao gồm một thiết lập theo dõi **Head Controller** chuyên dụng. Khi được chọn, bạn có thể điều khiển động lực học đi theo đầu và các ràng buộc góc nhìn:
+
+<video loop muted playsinline controls preload="none" aria-label="Thanh trượt theo dõi Head Controller" style="width: 100%; border-radius: var(--sl-border-radius-md, 8px); margin: 1rem 0;">
+  <source src={headControllerVideo} type="video/mp4" />
+</video>
+
+- **Use Head Tracker Controller**: Chuyển đổi hướng nhìn của đầu giữa xoay FK thủ công và xương mục tiêu tự động nhìn theo.
+
+---
+
+## Gizmo bánh răng tay chân & Điều khiển IK / FK
+
+Rig Gacha có các gizmo xương hình bánh răng trực quan trên tay chân và các điểm trục để cấu hình chuyển đổi IK/FK, co giãn và chuyển đổi không gian ngay lập tức.
+
+### Master Settings (Top Cog / Plate Settings)
+Bộ điều khiển thiết lập tổng thể cung cấp các thanh trượt toàn cục cho nhân vật:
+
+<Image src={topCogImg} alt="Thuộc tính rig toàn cục Top Cog / Plate Settings" loading="lazy" />
+
+- **Use Head Tracker Controller**: Điều khiển mức độ đầu đi theo bộ theo dõi đầu thay vì xoay đầu thủ công.
+- **Head Follow**: Điều chỉnh mức độ đầu xoay theo phần thân.
+- **Neck Follow**: Điều chỉnh mức độ cổ xoay theo phần thân.
+- **Skirt Auto**: Điều khiển mức độ ảnh hưởng của chuyển động váy tự động theo chân.
+- **Skirt Follow**: Điều chỉnh mức độ váy đi theo phần thân.
+- **Adjust Pupil Wink Distance**: Điều chỉnh phần bù đồng tử khi nháy mắt và chớp mắt để giảm hiện tượng xuyên thấu.
+
+### Arm Settings & Elbow Pin
+Chọn bộ điều khiển bánh răng cánh tay sẽ hiển thị các thuộc tính cho động học cánh tay:
+
+<Image src={armCogImg} alt="Bánh răng cánh tay và các điều khiển IK/FK" loading="lazy" />
+
+- **IK / FK Switch**: Chuyển đổi mượt mà giữa Inverse Kinematics (mục tiêu tay IK) và Forward Kinematics (góc vai đến tay FK).
+- **Elbow Pin (Tweak Pin)**: Ghim vị trí khuỷu tay trong không gian bất kể chuyển động xoay của cẳng tay.
+- **Parent Switch**: Chuyển đổi mục tiêu IK để đi theo `root`, `torso` hoặc `chest` với tùy chọn bake.
+
+### Leg Settings & Knee Pin
+Chọn bộ điều khiển bánh răng bàn chân hoặc chân sẽ cung cấp cấu hình cho chân:
+
+<Image src={legCogImg} alt="Bánh răng chân và các điều khiển Knee Pin" loading="lazy" />
+
+- **IK / FK Switch**: Chuyển đổi chế độ diễn hoạt chân giữa ghim bàn chân IK và vung hông FK.
+- **Knee Pin**: Khóa hoặc nới lỏng hướng gập đầu gối.
+- **Foot Roll & Hinge**: Điều khiển chuyển động lăn từ gót đến mũi chân và gập ngón chân khi đi bộ và chạy.
