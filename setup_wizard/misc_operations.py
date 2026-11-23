@@ -583,7 +583,7 @@ class ZZZ_OT_RenameCollectionAndRig(Operator, CustomOperatorProperties):
         char_name = self._get_character_name()
         if char_name and char_name.lower() not in ["character", "eye", "eyes", "wgt", "lights"]:
             target_coll = self._find_character_collection()
-            if target_coll:
+            if target_coll and target_coll != context.scene.collection:
                 target_coll.name = char_name
 
             arm_obj = self._find_character_armature()
@@ -655,7 +655,7 @@ def get_clean_character_name():
         c_low = coll.name.lower()
         if c_low.startswith("wgt") or (c_low.startswith("wgts_") and c_low != "wgts_facerig"):
             continue
-        if coll.name.lower() not in ["lights", "wgt", "wgts", "collection", "master collection", "eye", "eyes"]:
+        if coll.name.lower() not in ["lights", "wgt", "wgts", "collection", "master collection", "scene collection", "eye", "eyes"]:
             extracted = extract_clean_character_name(coll.name)
             if extracted and extracted.lower() not in ["character", "eye", "eyes", "lighting", "panel", "wgt", "lights"]:
                 return extracted
@@ -720,7 +720,7 @@ def find_zzz_character_armature():
 def _is_wgt_or_lights_collection(name):
     n_low = name.lower()
     return (
-        n_low in ["lights", "wgt", "wgts", "collection", "master collection", "eye", "eyes", "widgets", "widget"]
+        n_low in ["lights", "wgt", "wgts", "collection", "master collection", "scene collection", "eye", "eyes", "widgets", "widget"]
         or n_low.startswith("wgt")
         or n_low.startswith("wgts_")
         or n_low.startswith("kythera light receivers")
@@ -728,23 +728,26 @@ def _is_wgt_or_lights_collection(name):
 
 
 def find_zzz_character_collection():
+    scene_coll = getattr(bpy.context.scene, "collection", None) if hasattr(bpy, "context") and bpy.context.scene else None
     main_rig = find_zzz_character_armature()
     if main_rig:
         for coll in main_rig.users_collection:
-            if not _is_wgt_or_lights_collection(coll.name):
+            if coll != scene_coll and not _is_wgt_or_lights_collection(coll.name):
                 return coll
     for coll in bpy.data.collections:
-        if coll.name.lower() not in ["lights", "wgt", "wgts", "collection", "master collection", "eye", "eyes", "widgets", "widget"] and ("Avatar_" in coll.name or "Size" in coll.name):
+        if coll != scene_coll and not _is_wgt_or_lights_collection(coll.name) and ("Avatar_" in coll.name or "Size" in coll.name):
             return coll
     for coll in bpy.data.collections:
-        if _is_wgt_or_lights_collection(coll.name):
+        if coll == scene_coll or _is_wgt_or_lights_collection(coll.name):
             continue
         return coll
     for coll in bpy.data.collections:
+        if coll == scene_coll:
+            continue
         c_low = coll.name.lower()
         if c_low.startswith("wgt") or (c_low.startswith("wgts_") and c_low != "wgts_facerig"):
             continue
-        if coll.name.lower() not in ["lights", "wgt", "wgts", "eye", "eyes", "widgets", "widget"]:
+        if coll.name.lower() not in ["lights", "wgt", "wgts", "eye", "eyes", "widgets", "widget", "scene collection", "master collection"]:
             return coll
     return None
 
@@ -907,8 +910,9 @@ class ZZZ_OT_MoveLightingPanelToCharacterCollection(Operator, CustomOperatorProp
         return {'FINISHED'}
 
     def _find_target_collection(self):
+        scene_coll = getattr(bpy.context.scene, "collection", None) if hasattr(bpy, "context") and bpy.context.scene else None
         for coll in bpy.data.collections:
-            if coll.name not in ["lights", "wgt", "WGTS", "Collection", "Master Collection"]:
+            if coll != scene_coll and coll.name not in ["lights", "wgt", "WGTS", "Collection", "Master Collection", "Scene Collection"]:
                 return coll
         return None
 
