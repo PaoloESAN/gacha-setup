@@ -1737,6 +1737,25 @@ class StellarToonDefaultMaterialReplacer(HonkaiStarRailDefaultMaterialReplacer):
 
     def replace_default_materials(self):
         super().replace_default_materials()
+        try:
+            from setup_wizard.optimization.blender_rimlight_patch import patch_all_rimlight_groups_for_blender
+            patch_all_rimlight_groups_for_blender()
+        except Exception:
+            pass
+        for ng in bpy.data.node_groups:
+            if "globalproperties" in ng.name.lower():
+                gnode = ng.nodes.get("Group")
+                if gnode and "Scale" in gnode.inputs:
+                    try:
+                        gnode.inputs["Scale"].default_value = (0.0, 0.0, 0.0)
+                    except Exception:
+                        pass
+                out_node = ng.nodes.get("Group Output")
+                if out_node and "Scale" in out_node.inputs and not out_node.inputs["Scale"].is_linked:
+                    try:
+                        out_node.inputs["Scale"].default_value = (0.0, 0.0, 0.0)
+                    except Exception:
+                        pass
 
     def _is_trans_material(self, name: str) -> bool:
         n_low = name.lower()

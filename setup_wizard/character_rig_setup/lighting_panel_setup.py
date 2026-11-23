@@ -1048,3 +1048,304 @@ def is_zzz_lighting_panel_connected(target_materials=None) -> bool:
                     if out_sock.links:
                         return True
     return False
+
+
+HSR_LIGHT_PANEL_GN_NAME = "HSR Light Panel"
+HSR_LIGHT_PANEL_MODIFIER_NAME = "Lighting Panel"
+HSR_LIGHT_PANEL_ATTR_NAME = "ZZZLightPanelAttr"
+
+HSR_LIGHT_PANEL_SOCKET_LINKS = (
+    ("Ambient", "Custom Ambient Color"),
+    ("Lit", "Custom Lit Color"),
+    ("Lit", "Custom Sharp Lit Color"),
+    ("Shad", "Custom Shadow Color"),
+    ("Shad", "Custom Sharp Shadow Color"),
+    ("RimLit", "Tint Lit"),
+    ("RimShad", "Tint Shadow"),
+)
+
+
+def _get_zzz_setup_blend_path():
+    from setup_wizard.import_order import get_shader_file_path
+    from setup_wizard.domain.game_types import GameType
+
+    setup_blend = get_shader_file_path(GameType.ZENLESS_ZONE_ZERO.name, file_type='outlines')
+    if setup_blend and os.path.isfile(setup_blend):
+        return setup_blend
+    addon_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    for filename in ("ZZZ Setup v7.blend", "ZZZ Setup File V2.0.blend"):
+        cand = os.path.join(addon_dir, "shaders", "zzz", filename)
+        if os.path.isfile(cand):
+            return cand
+    return None
+
+
+def _ensure_zzz_light_panel_attr_group():
+    lp_attr_group = bpy.data.node_groups.get(HSR_LIGHT_PANEL_ATTR_NAME)
+    if lp_attr_group:
+        return lp_attr_group
+    setup_blend = _get_zzz_setup_blend_path()
+    if setup_blend and os.path.isfile(setup_blend):
+        try:
+            bpy.ops.wm.append(
+                filepath=os.path.join(setup_blend, "NodeTree", HSR_LIGHT_PANEL_ATTR_NAME),
+                directory=os.path.join(setup_blend, "NodeTree"),
+                filename=HSR_LIGHT_PANEL_ATTR_NAME,
+            )
+            lp_attr_group = bpy.data.node_groups.get(HSR_LIGHT_PANEL_ATTR_NAME)
+        except Exception as e:
+            print(f"[HSR Lighting Panel] Failed to append {HSR_LIGHT_PANEL_ATTR_NAME}: {e}")
+    return lp_attr_group
+
+
+def import_hsr_lighting_panel():
+    """Import ZZZ's 3D Lighting Panel, ZZZLightPanelAttr, and attribute-only Light Vectors GN for HSR."""
+    setup_blend = _get_zzz_setup_blend_path()
+    if not setup_blend or not os.path.isfile(setup_blend):
+        print("[HSR Lighting Panel] ZZZ setup blend not found; skipping Lighting Panel import.")
+        return False
+
+    _ensure_zzz_light_panel_attr_group()
+
+    # Load ZZZ's Light Vectors node group under a dedicated name so HSR's Light Vectors stays intact.
+    if not bpy.data.node_groups.get(HSR_LIGHT_PANEL_GN_NAME):
+        try:
+            with bpy.data.libraries.load(setup_blend, link=False) as (data_from, data_to):
+                if "Light Vectors" in data_from.node_groups:
+                    data_to.node_groups = ["Light Vectors"]
+            if data_to.node_groups and data_to.node_groups[0]:
+                data_to.node_groups[0].name = HSR_LIGHT_PANEL_GN_NAME
+        except Exception as e:
+            print(f"[HSR Lighting Panel] Failed to load {HSR_LIGHT_PANEL_GN_NAME} GN: {e}")
+
+    try:
+        lighting_panel_keywords = (
+            "colorwheel", "colorpicker", "slider-rim", "origin-rim",
+            "lightpanelwgtplane", "lightpanelselectorwgt", "lighting panel",
+        )
+        excluded_kw = ("face", "phoneme", "mouth", "eyebrow", "expression", "facerig", "facrig")
+
+        with bpy.data.libraries.load(setup_blend, link=False) as (data_from, data_to):
+            target_objs = [
+                o for o in data_from.objects
+                if not any(kw in o.lower() for kw in excluded_kw)
+                and any(kw in o.lower() for kw in lighting_panel_keywords)
+                and o not in bpy.data.objects
+            ]
+            data_to.objects = target_objs
+
+        target_wgt_coll = next((c for c in bpy.data.collections if c.name.startswith("WGTS_")), None)
+        if not target_wgt_coll:
+            target_wgt_coll = bpy.data.collections.get("wgt") or bpy.data.collections.get("WGTS")
+        if not target_wgt_coll:
+            target_wgt_coll = bpy.data.collections.new("wgt")
+            if target_wgt_coll.name not in [c.name for c in bpy.context.scene.collection.children]:
+                bpy.context.scene.collection.children.link(target_wgt_coll)
+
+        for obj in data_to.objects:
+            if not obj:
+                continue
+            o_low = obj.name.lower()
+            is_widget = any(k in o_low for k in ("colorpicker", "slider-rim", "origin-rim", "lightpanelwgt", "lightpanelselector"))
+            dest_coll = target_wgt_coll if is_widget else bpy.context.scene.collection
+            if obj.name not in dest_coll.objects:
+                dest_coll.objects.link(obj)
+            if "colorwheel" in o_low:
+                obj.hide_viewport = False
+                obj.hide_render = True
+            elif is_widget:
+                obj.hide_render = True
+
+        wgt_plane = bpy.data.objects.get("LightPanelWGTPlane")
+        wgt_selector = bpy.data.objects.get("LightPanelSelectorWGT")
+        if wgt_plane:
+            wgt_plane.hide_viewport = False
+            wgt_plane.hide_render = True
+        if wgt_selector:
+            wgt_selector.hide_viewport = False
+            wgt_selector.hide_render = True
+
+        lp_arm = bpy.data.objects.get(LightingPanelNames.Objects.LIGHTING_PANEL)
+        if lp_arm and lp_arm.type == 'ARMATURE':
+            for pb in lp_arm.pose.bones:
+                if pb.name == "Lighting Panel" and wgt_plane:
+                    pb.custom_shape = wgt_plane
+                    pb.custom_shape_scale_xyz = (1.0, 1.0, 1.0)
+                    pb.use_custom_shape_bone_size = True
+                    pb.bone.hide = False
+                elif pb.name in ("Rim Lit", "Shadow", "Lit", "Ambient", "RimShadow", "Rim.R", "Rim.L", "RimX", "RimY") and wgt_selector:
+                    pb.custom_shape = wgt_selector
+                    pb.custom_shape_scale_xyz = (0.15, 0.15, 0.15)
+                    pb.use_custom_shape_bone_size = True
+                    pb.bone.hide = False
+            from setup_wizard.utils.zzz_lighting_panel import bake_zzz_rim_slider_defaults
+            bake_zzz_rim_slider_defaults(lp_arm, force=True)
+    except Exception as e:
+        print(f"[HSR Lighting Panel] Failed to import Lighting Panel objects from {setup_blend}: {e}")
+        return False
+    return True
+
+
+def _collect_hsr_global_property_trees(target_materials=None):
+    """Return dict[NodeTree, list[Node]] for HSR GlobalProperties groups used by target_materials."""
+    grouped_nodes = {}
+    mats = (
+        list(target_materials)
+        if target_materials is not None
+        else [m for m in bpy.data.materials if getattr(m, "use_nodes", False) and m.node_tree]
+    )
+    for mat in set(mats):
+        if getattr(mat, "use_nodes", False) and mat.node_tree:
+            for node in mat.node_tree.nodes:
+                if node.type == 'GROUP' and node.node_tree:
+                    if "globalproperties" in node.node_tree.name.lower():
+                        grouped_nodes.setdefault(node.node_tree, []).append(node)
+
+    if not grouped_nodes and target_materials is None:
+        for ng in bpy.data.node_groups:
+            if "globalproperties" in ng.name.lower():
+                grouped_nodes.setdefault(ng, [])
+
+    return grouped_nodes
+
+
+def _find_hsr_lp_attr_node(tree):
+    return next(
+        (
+            n for n in tree.nodes
+            if n.type == 'GROUP' and n.node_tree
+            and "zzzlightpanelattr" in n.node_tree.name.lower()
+        ),
+        None,
+    )
+
+
+def connect_hsr_lighting_panel(target_materials=None):
+    """Connect ZZZLightPanelAttr colors and RimScale (X, Y, Z=1.0) to HSR GlobalProperties."""
+    lp_attr_group = _ensure_zzz_light_panel_attr_group()
+    if not lp_attr_group:
+        return False
+
+    grouped_nodes = _collect_hsr_global_property_trees(target_materials)
+    connected_any = False
+
+    for tree, group_nodes in grouped_nodes.items():
+        if group_nodes and tree.users - int(tree.use_fake_user) > len(group_nodes):
+            tree = tree.copy()
+            for node in group_nodes:
+                node.node_tree = tree
+
+        out_node = tree.nodes.get("Group Output") or tree.nodes.get("Global Properties")
+        if not out_node:
+            continue
+
+        lp_node = _find_hsr_lp_attr_node(tree)
+        if not lp_node:
+            lp_node = tree.nodes.new("ShaderNodeGroup")
+            lp_node.name = HSR_LIGHT_PANEL_ATTR_NAME
+            lp_node.label = HSR_LIGHT_PANEL_ATTR_NAME
+            lp_node.location = (out_node.location.x - 420, out_node.location.y - 180)
+        if lp_node.node_tree != lp_attr_group:
+            lp_node.node_tree = lp_attr_group
+
+        for out_name, inp_name in HSR_LIGHT_PANEL_SOCKET_LINKS:
+            if out_name in lp_node.outputs and inp_name in out_node.inputs:
+                target_sock = out_node.inputs[inp_name]
+                for l in list(target_sock.links):
+                    tree.links.remove(l)
+                tree.links.new(lp_node.outputs[out_name], target_sock)
+                connected_any = True
+
+        # Connect RimScale.X and RimScale.Y (scaled x2 -> 0..20) to Scale, keeping Z = 0.0
+        scale_sock = out_node.inputs.get("Scale")
+        if scale_sock and "RimScale" in lp_node.outputs:
+            scale_2x = tree.nodes.get("HSR_Rim_Scale2x")
+            if not scale_2x or scale_2x.type != 'VECT_MATH':
+                scale_2x = tree.nodes.new("ShaderNodeVectorMath")
+                scale_2x.name = "HSR_Rim_Scale2x"
+                scale_2x.location = (lp_node.location.x + 150, lp_node.location.y - 140)
+            scale_2x.operation = 'SCALE'
+            scale_2x.inputs["Scale"].default_value = 2.0
+
+            sep = tree.nodes.get("HSR_Rim_SepXYZ")
+            if not sep or sep.type != 'SEPXYZ':
+                sep = tree.nodes.new("ShaderNodeSeparateXYZ")
+                sep.name = "HSR_Rim_SepXYZ"
+                sep.location = (scale_2x.location.x + 160, scale_2x.location.y)
+            comb = tree.nodes.get("HSR_Rim_CombXYZ")
+            if not comb or comb.type != 'COMBXYZ':
+                comb = tree.nodes.new("ShaderNodeCombineXYZ")
+                comb.name = "HSR_Rim_CombXYZ"
+                comb.location = (sep.location.x + 160, sep.location.y)
+
+            for l in list(scale_2x.inputs[0].links):
+                tree.links.remove(l)
+            tree.links.new(lp_node.outputs["RimScale"], scale_2x.inputs[0])
+
+            for l in list(sep.inputs["Vector"].links):
+                tree.links.remove(l)
+            tree.links.new(scale_2x.outputs["Vector"], sep.inputs["Vector"])
+
+            for axis in ("X", "Y"):
+                for l in list(comb.inputs[axis].links):
+                    tree.links.remove(l)
+                tree.links.new(sep.outputs[axis], comb.inputs[axis])
+            for l in list(comb.inputs["Z"].links):
+                tree.links.remove(l)
+            comb.inputs["Z"].default_value = 0.0
+
+            for l in list(scale_sock.links):
+                tree.links.remove(l)
+            tree.links.new(comb.outputs["Vector"], scale_sock)
+            connected_any = True
+
+        tree.update_tag()
+
+    return connected_any
+
+
+def disconnect_hsr_lighting_panel(target_materials=None):
+    """Disconnect ZZZLightPanelAttr from HSR GlobalProperties."""
+    grouped_nodes = _collect_hsr_global_property_trees(target_materials)
+
+    for tree, group_nodes in grouped_nodes.items():
+        if group_nodes and tree.users - int(tree.use_fake_user) > len(group_nodes):
+            tree = tree.copy()
+            for node in group_nodes:
+                node.node_tree = tree
+
+        out_node = tree.nodes.get("Group Output") or tree.nodes.get("Global Properties")
+        lp_node = _find_hsr_lp_attr_node(tree)
+        if lp_node:
+            for out_sock in lp_node.outputs:
+                for l in list(out_sock.links):
+                    tree.links.remove(l)
+
+        if out_node:
+            scale_sock = out_node.inputs.get("Scale")
+            if scale_sock:
+                for l in list(scale_sock.links):
+                    if l.from_node.name == "HSR_Rim_CombXYZ":
+                        tree.links.remove(l)
+
+        tree.update_tag()
+
+
+def is_hsr_lighting_panel_connected(target_materials=None) -> bool:
+    """Return True if HSR GlobalProperties has ZZZLightPanelAttr linked to Group Output."""
+    grouped_nodes = _collect_hsr_global_property_trees(target_materials)
+    for tree in grouped_nodes:
+        out_node = tree.nodes.get("Group Output") or tree.nodes.get("Global Properties")
+        if not out_node:
+            continue
+        lp_node = _find_hsr_lp_attr_node(tree)
+        if not lp_node:
+            continue
+        for out_sock in lp_node.outputs:
+            for l in out_sock.links:
+                if l.to_node == out_node:
+                    return True
+        scale_sock = out_node.inputs.get("Scale")
+        if scale_sock and any(l.from_node.name == "HSR_Rim_CombXYZ" for l in scale_sock.links):
+            return True
+    return False

@@ -3,6 +3,48 @@ import bpy
 _PATCHED_FLAG = "_gacha_rim_patched"
 _PATCH_VERSION = 1
 _GENSHIN_RIM_COLOR_GAIN = 2.0
+_HSR_RIM_COLOR_GAIN = 3.0
+
+
+def _apply_rim_color_gain(ng, gain_scale, label='Blender Rim Brightness'):
+    """Raise only the rim contribution before it is added to the base color."""
+    output = next((n for n in ng.nodes if n.type == 'GROUP_OUTPUT' and n.is_active_output), None)
+    color = output.inputs.get('Color') if output else None
+    if color is None or not color.is_linked:
+        return False
+    gain = ng.nodes.get('Blender_Rim_ColorBoost')
+    # Version 1 put the gain on Color, but that output includes the base
+    # surface. Restore that connection when upgrading an existing file.
+    changed = False
+    if gain and color.links[0].from_node == gain:
+        if not gain.inputs[0].is_linked:
+            return False
+        ng.links.new(gain.inputs[0].links[0].from_socket, color)
+        changed = True
+    final_add = color.links[0].from_node
+    if final_add.bl_idname != 'ShaderNodeMix' or final_add.blend_type != 'ADD':
+        return changed
+    rim_input = next((s for s in final_add.inputs if s.identifier == 'A_Color'), None)
+    base_input = next((s for s in final_add.inputs if s.identifier == 'B_Color'), None)
+    if (rim_input is None or not rim_input.is_linked or base_input is None
+            or not base_input.is_linked or base_input.links[0].from_node.type != 'GROUP_INPUT'):
+        return changed
+    source = rim_input.links[0].from_socket
+    if gain and source.node == gain:
+        if gain.inputs['Scale'].default_value != gain_scale:
+            gain.inputs['Scale'].default_value = gain_scale
+            changed = True
+        return changed
+    if not gain:
+        gain = ng.nodes.new('ShaderNodeVectorMath')
+        gain.name = 'Blender_Rim_ColorBoost'
+    gain.operation = 'SCALE'
+    gain.label = label
+    gain.location = (final_add.location.x - 180, final_add.location.y + 180)
+    gain.inputs['Scale'].default_value = gain_scale
+    ng.links.new(source, gain.inputs[0])
+    ng.links.new(gain.outputs['Vector'], rim_input)
+    return True
 
 
 def _boost_genshin_rim_colors():
@@ -19,42 +61,8 @@ def _boost_genshin_rim_colors():
         roots.extend(n.node_tree for n in ng.nodes if n.type == 'GROUP' and n.node_tree)
         if 'rim' not in ng.name.lower() or not ng.nodes.get('Blender_LayerWeight_Rim'):
             continue
-        output = next((n for n in ng.nodes if n.type == 'GROUP_OUTPUT' and n.is_active_output), None)
-        color = output.inputs.get('Color') if output else None
-        if color is None or not color.is_linked:
-            continue
-        gain = ng.nodes.get('Blender_Rim_ColorBoost')
-        # Version 1 put the gain on Color, but that output includes the base
-        # surface. Restore that connection when upgrading an existing file.
-        if gain and color.links[0].from_node == gain:
-            if not gain.inputs[0].is_linked:
-                continue
-            ng.links.new(gain.inputs[0].links[0].from_socket, color)
+        if _apply_rim_color_gain(ng, _GENSHIN_RIM_COLOR_GAIN, 'Blender Genshin Rim Brightness x2'):
             changed = True
-        final_add = color.links[0].from_node
-        if final_add.bl_idname != 'ShaderNodeMix' or final_add.blend_type != 'ADD':
-            continue
-        rim_input = next((s for s in final_add.inputs if s.identifier == 'A_Color'), None)
-        base_input = next((s for s in final_add.inputs if s.identifier == 'B_Color'), None)
-        if (rim_input is None or not rim_input.is_linked or base_input is None
-                or not base_input.is_linked or base_input.links[0].from_node.type != 'GROUP_INPUT'):
-            continue
-        source = rim_input.links[0].from_socket
-        if gain and source.node == gain:
-            if gain.inputs['Scale'].default_value != _GENSHIN_RIM_COLOR_GAIN:
-                gain.inputs['Scale'].default_value = _GENSHIN_RIM_COLOR_GAIN
-                changed = True
-            continue
-        if not gain:
-            gain = ng.nodes.new('ShaderNodeVectorMath')
-            gain.name = 'Blender_Rim_ColorBoost'
-        gain.operation = 'SCALE'
-        gain.label = 'Blender Genshin Rim Brightness x2'
-        gain.location = (final_add.location.x - 180, final_add.location.y + 180)
-        gain.inputs['Scale'].default_value = _GENSHIN_RIM_COLOR_GAIN
-        ng.links.new(source, gain.inputs[0])
-        ng.links.new(gain.outputs['Vector'], rim_input)
-        changed = True
     return changed
 
 def is_blender_official():
@@ -265,6 +273,8 @@ def patch_depth_based_rim_group(ng):
         for out in curv.outputs:
             for l in list(out.links):
                 ng.links.remove(l)
+
+    _apply_rim_color_gain(ng, _HSR_RIM_COLOR_GAIN, 'Blender HSR Rim Brightness x3')
 
     return True
 
