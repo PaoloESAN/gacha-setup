@@ -755,14 +755,16 @@ def rig_character(
     bpy.ops.object.mode_set(mode='EDIT')
     armature = bpy.data.objects[obj.name].data
 
+    mat_to_meta = (metarig_obj.matrix_world.inverted() @ obj.matrix_world) if metarig_obj else obj.matrix_world.copy()
+
     def getboob(bone, tip):
-        if tip == "head":
-            return armature.edit_bones[bone].head.x, armature.edit_bones[bone].head.y, armature.edit_bones[bone].head.z
-        else:
-            return armature.edit_bones[bone].tail.x, armature.edit_bones[bone].tail.y, armature.edit_bones[bone].tail.z
+        pt = armature.edit_bones[bone].head if tip == "head" else armature.edit_bones[bone].tail
+        p = mat_to_meta @ pt
+        return p.x, p.y, p.z
 
     try:
         src_breast_l = "DEF-breast.L" if "DEF-breast.L" in armature.edit_bones else generic_breast_pair[0]
+        src_breast_r = "DEF-breast.R" if "DEF-breast.R" in armature.edit_bones else generic_breast_pair[1]
         if not src_breast_l or src_breast_l not in armature.edit_bones:
             raise KeyError("DEF-breast.L")
         xh, yh, zh = getboob(src_breast_l, "head")
@@ -779,10 +781,15 @@ def rig_character(
         boobL = metarm.edit_bones["breast.L"]
         fixboob(boobL, xh, yh, zh, xt, yt, zt)
         boobR = metarm.edit_bones["breast.R"]
-        fixboob(boobR, -xh, yh, zh, -xt, yt, zt)
+        if src_breast_r and src_breast_r in armature.edit_bones:
+            rxh, ryh, rzh = getboob(src_breast_r, "head")
+            rxt, ryt, rzt = getboob(src_breast_r, "tail")
+            fixboob(boobR, rxh, ryh, rzh, rxt, ryt, rzt)
+        else:
+            fixboob(boobR, -xh, yh, zh, -xt, yt, zt)
 
-        boobL.roll = armature.edit_bones[src_breast_l].roll
-        boobR.roll = -boobL.roll
+        boobL.roll = 0.0
+        boobR.roll = 0.0
     except Exception:
         if "breast.L" in metarm.edit_bones:
             if "spine.003" in metarm.edit_bones:
@@ -4241,7 +4248,11 @@ def rig_character(
                 pass
         breast_meshes = [
             m for m in bpy.context.scene.objects
-            if m.type == 'MESH' and any(
+            if m.type == 'MESH'
+            and not m.hide_viewport
+            and not m.hide_get()
+            and 'shadow' not in m.name.lower()
+            and any(
                 mod.type == 'ARMATURE' and mod.object == our_char
                 for mod in m.modifiers
             )
@@ -4268,7 +4279,6 @@ def rig_character(
                     if weight > 0.1:
                         point = to_rig @ vertex.co
                         samples.append((point, weight))
-                        target.y = min(target.y, point.y - clearance)
                 total_weight = sum(w for _, w in samples)
                 if total_weight > region_weight:
                     region, region_weight = samples, total_weight
@@ -4276,6 +4286,7 @@ def rig_character(
             if region:
                 center = sum((p * w for p, w in region), Vector()) / region_weight
                 target.x, target.z = center.x, center.z
+                target.y = min(p.y for p, _ in region) - clearance
                 width = max(p.x for p, _ in region) - min(p.x for p, _ in region)
                 height = max(p.z for p, _ in region) - min(p.z for p, _ in region)
                 display_size = max(0.06, min(width, height) * 0.85)
