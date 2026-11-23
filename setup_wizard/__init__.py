@@ -576,6 +576,8 @@ else:
         register_hi3_properties()
         from setup_wizard.ui.pgr_character_settings import register_pgr_properties
         register_pgr_properties()
+        from setup_wizard.ui.nte_character_settings import register_nte_properties
+        register_nte_properties()
         register_hna_properties()
         setup_wizard.services.isolation.register()
         if wuwa_frame_change_handler not in bpy.app.handlers.render_init:
@@ -607,6 +609,8 @@ else:
         unregister_genshin_engine_nodes()
         from setup_wizard.ui.pgr_character_settings import unregister_pgr_properties
         unregister_pgr_properties()
+        from setup_wizard.ui.nte_character_settings import unregister_nte_properties
+        unregister_nte_properties()
         unregister_hna_properties()
         unregister_hi3_properties()
         addon_icon_manager.unregister_icons()

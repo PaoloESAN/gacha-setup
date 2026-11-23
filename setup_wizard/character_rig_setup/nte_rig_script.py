@@ -1577,14 +1577,6 @@ def rig_character(
     except Exception as ex_final_pkg:
         print(f"[NTE RIG] final collection packaging notice: {ex_final_pkg}")
 
-    # NTE no usa Light Direction por ahora: eliminarlo del todo para que no
-    # salga duplicado en la coleccion del personaje.
-    try:
-        if rigifyr is not None:
-            delete_nte_light_empties(context, rigifyr, char_name)
-    except Exception as ex_light:
-        print(f"[NTE RIG] light empties delete notice: {ex_light}")
-
     from setup_wizard.character_rig_setup.pole_targets import setup_pole_targets
     setup_pole_targets(rigifyr, use_arm_ik_poles, use_leg_ik_poles)
 

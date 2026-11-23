@@ -1795,41 +1795,43 @@ class NevernessToEvernessCharacterRigger(CharacterRigger):
         except Exception as e:
             print(f"NTE face rig skipped/notice: {e}")
 
+        # Attach ZZZ/HSR-style 3D Lighting Panel to NTE rig & connect to Global Material Properties
         try:
-            from setup_wizard.replace_default_materials_setup.game_default_material_replacers import NevernessToEvernessDefaultMaterialReplacer
-            # Run the face SDF node fix
-            trees_to_check = set()
-            for ng in list(bpy.data.node_groups):
-                if ng and hasattr(ng, 'nodes'):
-                    trees_to_check.add(ng)
-            for mat in list(bpy.data.materials):
-                if mat and mat.use_nodes and mat.node_tree:
-                    trees_to_check.add(mat.node_tree)
+            from setup_wizard.character_rig_setup.rig_ui_utils import find_target_armature
+            from setup_wizard.character_rig_setup.lighting_panel_setup import (
+                import_nte_lighting_panel,
+                attach_nte_lighting_panel_to_rig,
+                connect_nte_lighting_panel,
+                disconnect_nte_lighting_panel,
+                set_lighting_panel_visibility,
+            )
+            from setup_wizard.ui.character_settings_utils import (
+                get_character_materials,
+                ensure_character_node_trees_isolated,
+            )
 
-            for tree in trees_to_check:
-                ff_nodes = [
-                    n for n in tree.nodes
-                    if (n.type == 'GROUP' and n.node_tree and 'face factor' in n.node_tree.name.lower())
-                    or '面部因子' in getattr(n, 'label', '')
-                    or 'face factor' in n.name.lower()
-                ]
-                for ff in ff_nodes:
-                    for link in list(tree.links):
-                        if link.from_node == ff:
-                            target_node = link.to_node
-                            tree.links.remove(link)
-                            if target_node.type in ['MIX', 'MIX_RGB']:
-                                try:
-                                    if 'Factor' in target_node.inputs:
-                                        target_node.inputs['Factor'].default_value = 1.0
-                                    elif 'Fac' in target_node.inputs:
-                                        target_node.inputs['Fac'].default_value = 1.0
-                                    else:
-                                        target_node.inputs[0].default_value = 1.0
-                                except Exception:
-                                    pass
-        except Exception as e_sdf:
-            print(f"[NTE Face SDF Fix Notice] {e_sdf}")
+            active_rig = find_target_armature(self.context, armature) or armature
+            if active_rig and active_rig.type == 'ARMATURE':
+                if import_nte_lighting_panel():
+                    attached = attach_nte_lighting_panel_to_rig(self.context, active_rig)
+                    if attached:
+                        _, nte_mats = get_character_materials(self.context, active_rig)
+                        if nte_mats:
+                            ensure_character_node_trees_isolated(active_rig, nte_mats)
+                        ctrl_type = getattr(self.context.scene, "nte_lighting_control_type", "PANEL")
+                        if ctrl_type not in ("PANEL", "THIS_PANEL"):
+                            ctrl_type = "PANEL"
+                        active_rig["nte_lighting_control_type"] = ctrl_type
+                        if hasattr(self.context.scene, "nte_lighting_control_type"):
+                            self.context.scene.nte_lighting_control_type = ctrl_type
+                        if ctrl_type == "PANEL":
+                            connect_nte_lighting_panel(target_materials=nte_mats or None)
+                            set_lighting_panel_visibility(active_rig, True)
+                        else:
+                            disconnect_nte_lighting_panel(target_materials=nte_mats or None)
+                            set_lighting_panel_visibility(active_rig, False)
+        except Exception as e_lp:
+            print(f"[NTE RIG] Lighting Panel setup notice: {e_lp}")
 
         character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
         if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):

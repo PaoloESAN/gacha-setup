@@ -496,12 +496,21 @@ def copy_nte_modifiers_to_character_models():
             if not mod_l.node_group and ng_light:
                 mod_l.node_group = ng_light
             mod_l.name = "Light Vectors - 灯光矢量"
-            set_nte_gn_input(mod_l, ["Input_3", "光照方向", "Light Direction"], light_dir)
-            set_nte_gn_input(mod_l, ["Input_4", "头部原点", "Head Origin"], head_orig)
-            set_nte_gn_input(mod_l, ["Input_5", "头部前向", "Head Forward"], head_fwd)
-            set_nte_gn_input(mod_l, ["Input_6", "头部上向", "Head Up"], head_up)
-            for output_attr in ["FM", "FR", "LR"]:
-                set_modifier_property(mod_l, output_attr, output_attr)
+            set_nte_gn_input(mod_l, ["Input_3", "Light Direction", "光照方向"], light_dir)
+            set_nte_gn_input(mod_l, ["Input_4", "Head Origin", "头部原点"], head_orig)
+            set_nte_gn_input(mod_l, ["Input_5", "Head Forward", "头部前向"], head_fwd)
+            set_nte_gn_input(mod_l, ["Input_6", "Head Up", "头部上向"], head_up)
+            # Bind all vector output sockets by socket identifier so shader Attribute nodes
+            # ('lightDir', 'headForward', 'headUp', 'FM', 'FR', 'LR') receive live values.
+            if mod_l.node_group and hasattr(mod_l.node_group, "interface"):
+                for item in mod_l.node_group.interface.items_tree:
+                    if (
+                        getattr(item, "item_type", "") == "SOCKET"
+                        and getattr(item, "in_out", "") == "OUTPUT"
+                        and getattr(item, "socket_type", "") != "NodeSocketGeometry"
+                    ):
+                        set_modifier_property(mod_l, f"{item.identifier}_attribute_name", item.name)
+            for output_attr in ["lightDir", "headForward", "headUp", "FM", "FR", "LR"]:
                 set_modifier_property(mod_l, f"{output_attr}_attribute_name", output_attr)
 
         # Ensure only 1 Outline modifier remains
@@ -584,8 +593,20 @@ class NTE_OT_SetUpOutlines(Operator, BasicSetupUIOperator, CustomOperatorPropert
                     if 'ViewDir V' in aniso_node.inputs and not aniso_node.inputs['ViewDir V'].is_linked:
                         links.new(geom_node.outputs['Incoming'], aniso_node.inputs['ViewDir V'])
 
-                # Hair Mask Texture (Hair M R Mask & Hair M G Offset)
-                mask_tex_node = next((n for n in nodes if n.type == 'TEX_IMAGE' and n.image and ('hair' in n.image.name.lower() or 'mask' in n.image.name.lower()) and ('_m' in n.image.name.lower() or 'm_' in n.image.name.lower())), None)
+                # Hair Mask Texture (prefer labeled NTE_Hair_Lightmap node, fallback to image name)
+                mask_tex_node = next(
+                    (
+                        n for n in nodes
+                        if n.type == 'TEX_IMAGE'
+                        and (
+                            (getattr(n, 'label', '') or '').split('.')[0] in ('NTE_Hair_Lightmap', 'NTE_Hair_Lightmap_UV1')
+                            or n.name.split('.')[0] in ('NTE_Hair_Lightmap', 'NTE_Hair_Lightmap_UV1')
+                        )
+                    ),
+                    None,
+                )
+                if not mask_tex_node:
+                    mask_tex_node = next((n for n in nodes if n.type == 'TEX_IMAGE' and n.image and ('hair' in n.image.name.lower() or 'mask' in n.image.name.lower()) and ('_m' in n.image.name.lower() or 'm_' in n.image.name.lower())), None)
                 if not mask_tex_node:
                     mask_tex_node = next((n for n in nodes if n.type == 'TEX_IMAGE' and n.image and '_m' in n.image.name.lower()), None)
 

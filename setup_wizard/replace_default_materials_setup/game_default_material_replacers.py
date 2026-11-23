@@ -2517,9 +2517,71 @@ def ensure_hair_white_texture(folder=None, image_files=None):
                                     sub_node.image = img
 
 
+NTE_TEX_NODE_TAG_MAP = {
+    'nte_body_diffuse': 'body_diffuse',
+    'nte_body_normal': 'body_normal',
+    'nte_body_lightmap': 'body_lightmap',
+    'nte_body_id': 'body_id',
+    'nte_body_mask': 'body_mask',
+    'nte_hair_diffuse': 'hair_diffuse',
+    'nte_hair_lightmap': 'hair_lightmap',
+    'nte_hair_lightmap_uv1': 'hair_lightmap',
+    'nte_hair_ramp': 'hair_ramp',
+    'nte_face_diffuse': 'face_diffuse',
+    'nte_face_shadowmap': 'face_shadowmap',
+    'nte_face_ramp': 'face_ramp',
+    'nte_eye_diffuse': 'eye_diffuse',
+    'nte_eyehi_diffuse': 'eyehi_diffuse',
+    'nte_commonface_diffuse': 'commonface_diffuse',
+}
+
+NTE_NON_COLOR_SLOTS = {
+    'body_normal', 'body_lightmap', 'body_id', 'body_mask',
+    'hair_lightmap', 'face_shadowmap', 'face_ramp',
+}
+
+
+def _resolve_nte_tex_slot(tex_node):
+    """Identify an NTE ShaderNodeTexImage slot via its semantic label/name or target socket."""
+    for raw in (getattr(tex_node, 'label', '') or '', getattr(tex_node, 'name', '') or ''):
+        key = raw.strip().lower().split('.')[0]
+        if key in NTE_TEX_NODE_TAG_MAP:
+            return NTE_TEX_NODE_TAG_MAP[key]
+
+    # Secondary fallback: inspect the destination socket name in the owning node tree
+    nt = getattr(tex_node, 'id_data', None)
+    if nt and hasattr(nt, 'links'):
+        for link in nt.links:
+            if link.from_node != tex_node:
+                continue
+            to_node = link.to_node
+            sock_name = getattr(link.to_socket, 'name', '')
+            ng_name = to_node.node_tree.name if (to_node.type == 'GROUP' and to_node.node_tree) else ''
+            if ng_name == '异环-身体':
+                return {
+                    'Input': 'body_diffuse',
+                    'N': 'body_normal',
+                    'M': 'body_lightmap',
+                    'ID': 'body_id',
+                    'MASK': 'body_mask',
+                }.get(sock_name)
+            if ng_name == '异环-头发':
+                return {
+                    '基础色': 'hair_diffuse',
+                    'M': 'hair_lightmap',
+                    'M-UV1': 'hair_lightmap',
+                }.get(sock_name)
+            if ng_name == '异环-面部' and sock_name == 'Color':
+                return 'face_diffuse'
+    return None
+
+
 def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="", json_database=None):
     from setup_wizard.utils.texture_utils import load_or_get_image
-    if not tex_node.image:
+
+    tex_slot = _resolve_nte_tex_slot(tex_node)
+
+    if not tex_node.image and not tex_slot:
         is_inside_hair = any(k in slot_mat_name.lower() for k in ['异环-头发', 'hair', '前发', '后发', 'toufa'])
         is_combine_xyz = any(
             link.from_node.type == 'COMBINE_XYZ' or 'Combine' in getattr(link.from_node, 'name', '')
@@ -2537,12 +2599,29 @@ def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="",
                     tex_node.image = img
         return
 
-    old_img_name = tex_node.image.name.lower()
+    old_img_name = tex_node.image.name.lower() if tex_node.image else ''
     mat_name_lower = slot_mat_name.lower()
     replacement_file = None
 
-    # Material 'gaoguang' always gets face_d texture assigned
-    if 'gaoguang' in mat_name_lower:
+    def _assign_image(filename):
+        img_path = os.path.join(folder, filename)
+        img = load_or_get_image(img_path, filename)
+        if not img:
+            return False
+        try:
+            img.alpha_mode = 'CHANNEL_PACKED'
+        except Exception:
+            pass
+        if tex_slot in NTE_NON_COLOR_SLOTS:
+            try:
+                img.colorspace_settings.name = 'Non-Color'
+            except Exception:
+                pass
+        tex_node.image = img
+        return True
+
+    # Material 'gaoguang' / EyeHi always gets face_d texture assigned
+    if 'gaoguang' in mat_name_lower or tex_slot == 'eyehi_diffuse':
         candidates = [f for f in image_files if 'face' in f.lower() and any(dk in f.lower() for dk in ['_d.', '_d_', '_diff', 'face_d', 'd_01', 'd_02'])]
         specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
         face_d_file = specific_candidates[0] if specific_candidates else (candidates[0] if candidates else None)
@@ -2550,18 +2629,10 @@ def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="",
             candidates = [f for f in image_files if 'face' in f.lower()]
             specific_candidates = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
             face_d_file = specific_candidates[0] if specific_candidates else (candidates[0] if candidates else None)
-        if face_d_file and folder:
-            img_path = os.path.join(folder, face_d_file)
-            img = load_or_get_image(img_path, face_d_file)
-            if img:
-                try:
-                    img.alpha_mode = 'CHANNEL_PACKED'
-                except Exception:
-                    pass
-                tex_node.image = img
-                return
+        if face_d_file and folder and _assign_image(face_d_file):
+            return
 
-    # 1. First priority: Check exact JSON texture mapping for this material
+    # 1. First priority: Check exact JSON texture mapping for this material (using node label first, then image name)
     if json_database:
         from setup_wizard.utils.nte_json_parser import get_nte_material_data
         mat_info = get_nte_material_data(slot_mat_name, json_database)
@@ -2569,7 +2640,33 @@ def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="",
             textures = mat_info.get("textures", {})
             handled_slot = False
 
-            if any(dk in old_img_name for dk in ['_d.', '_d_', '_diff', 'd_0', 'd_1', 'd_2', 'mint_01_d', 'mint_02_d', 'hair_01_d', 'hair_02_d', 'hair_d']) or 'diffuse' in old_img_name or 'basecolor' in old_img_name or '基础色' in old_img_name:
+            if tex_slot in ('body_diffuse', 'hair_diffuse', 'face_diffuse', 'eye_diffuse'):
+                handled_slot = True
+                replacement_file = textures.get("diffuse")
+            elif tex_slot in ('body_lightmap', 'hair_lightmap'):
+                handled_slot = True
+                replacement_file = textures.get("lightmap")
+            elif tex_slot == 'body_normal':
+                handled_slot = True
+                replacement_file = textures.get("normal")
+            elif tex_slot == 'body_id':
+                handled_slot = True
+                replacement_file = textures.get("id")
+            elif tex_slot == 'body_mask':
+                handled_slot = True
+                replacement_file = textures.get("mask") or textures.get("lightmap")
+            elif tex_slot == 'face_shadowmap':
+                handled_slot = True
+                replacement_file = textures.get("lightmap") or textures.get("face_mask")
+            elif tex_slot == 'face_ramp':
+                handled_slot = True
+                replacement_file = textures.get("face_mask") or textures.get("ramp")
+            elif tex_slot == 'hair_ramp':
+                handled_slot = True
+                replacement_file = textures.get("ramp") or (json_database.get("ramp_atlas_file") if json_database else None)
+                if not replacement_file:
+                    return  # Preserve built-in ramp texture if JSON doesn't specify one
+            elif any(dk in old_img_name for dk in ['_d.', '_d_', '_diff', 'd_0', 'd_1', 'd_2', 'mint_01_d', 'mint_02_d', 'hair_01_d', 'hair_02_d', 'hair_d']) or 'diffuse' in old_img_name or 'basecolor' in old_img_name or '基础色' in old_img_name:
                 handled_slot = True
                 replacement_file = textures.get("diffuse")
 
@@ -2607,20 +2704,14 @@ def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="",
 
             if handled_slot:
                 if replacement_file:
-                    img_path = os.path.join(folder, replacement_file)
-                    img = load_or_get_image(img_path, replacement_file)
-                    if img:
-                        try:
-                            img.alpha_mode = 'CHANNEL_PACKED'
-                        except Exception:
-                            pass
-                        tex_node.image = img
+                    if _assign_image(replacement_file):
                         return
                 else:
                     # JSON explicitly does NOT have this texture (e.g. No ID mask on Nitsa 03) -> clear template texture
                     tex_node.image = None
                     return
 
+    # 2. Label-based heuristic fallback when JSON has no entry for this material/node group
     hair_sub_idx = '01'
     if any(k in mat_name_lower for k in ['hair_2', 'hair_02', 'hair2', '后发', 'back']):
         hair_sub_idx = '02'
@@ -2628,6 +2719,68 @@ def replace_template_image_node(tex_node, image_files, folder, slot_mat_name="",
         hair_sub_idx = '03'
     elif '02' in old_img_name or '2' in old_img_name:
         hair_sub_idx = '02'
+
+    if tex_slot == 'face_ramp':
+        candidates = [f for f in image_files if 'face' in f.lower() and any(rk in f.lower() for rk in ['_r.', '_r_', '_r1', '_r_1', '_ramp', 'face_r', 'blush'])]
+        specific = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
+        replacement_file = specific[0] if specific else (candidates[0] if candidates else None)
+    elif tex_slot == 'face_shadowmap':
+        candidates = [f for f in image_files if 'face' in f.lower() and ('_m' in f.lower() or 'm_' in f.lower() or '_mask' in f.lower() or 'm.' in f.lower())]
+        specific = [f for f in candidates if not any(k in f.lower() for k in ['common', 'touming', 'default', 'dummy', 'transparent', 'bantou'])]
+        replacement_file = specific[0] if specific else (candidates[0] if candidates else None)
+    elif tex_slot == 'face_diffuse':
+        candidates = [f for f in image_files if 'face' in f.lower() and ('_d' in f.lower() or 'd_' in f.lower() or 'd1' in f.lower())]
+        specific = [f for f in candidates if 'common' not in f.lower()]
+        replacement_file = specific[0] if specific else (candidates[0] if candidates else None)
+    elif tex_slot == 'commonface_diffuse':
+        candidates = [f for f in image_files if 'common_face' in f.lower()]
+        replacement_file = candidates[0] if candidates else None
+    elif tex_slot == 'eye_diffuse':
+        candidates = [
+            f for f in image_files
+            if ('eyes' in f.lower() or 'eye' in f.lower())
+            and not any(bg in f.lower() for bg in ['bantou', 'gaoguang', 'eyelash', 'eyebrow', 'shadow', 'white'])
+            and any(dk in f.lower() for dk in ['_d.', '_d_', '_d1', '_diff', 'd_0'])
+        ]
+        specific = [f for f in candidates if not any(k in f.lower() for k in ['touming', 'common', 'default', 'dummy', 'transparent'])]
+        replacement_file = specific[0] if specific else (candidates[0] if candidates else None)
+    elif tex_slot == 'hair_diffuse':
+        candidates = [f for f in image_files if 'hair' in f.lower() and ('_d' in f.lower() or 'd_' in f.lower()) and hair_sub_idx in f.lower()]
+        if not candidates:
+            candidates = [f for f in image_files if 'hair' in f.lower() and ('_d' in f.lower() or 'd_' in f.lower())]
+        replacement_file = candidates[0] if candidates else None
+    elif tex_slot == 'hair_lightmap':
+        candidates = [f for f in image_files if 'hair' in f.lower() and ('_m' in f.lower() or 'm_' in f.lower()) and hair_sub_idx in f.lower()]
+        if not candidates:
+            candidates = [f for f in image_files if 'hair' in f.lower() and ('_m' in f.lower() or 'm_' in f.lower())]
+        replacement_file = candidates[0] if candidates else None
+    elif tex_slot == 'hair_ramp':
+        return  # Keep built-in hair ramp texture unless JSON overrides it
+    elif tex_slot in ('body_diffuse', 'body_lightmap', 'body_normal', 'body_id', 'body_mask'):
+        suffix_map = {
+            'body_diffuse': ['_d.', '_d_', '_d1', '_diff', 'd_0', 'd_1', 'd_2'],
+            'body_lightmap': ['_m.', '_m_', '_mask'],
+            'body_normal': ['_n.', '_n_', '_norm'],
+            'body_id': ['_id.', '_id_'],
+            'body_mask': ['_mask.', '_mask_', '_m.', '_m_'],
+        }
+        suffixes = suffix_map[tex_slot]
+        replacement_file = find_nte_body_texture_by_material_name(mat_name_lower, suffixes, image_files)
+        if not replacement_file:
+            body_sub_idx = '02' if any(k in mat_name_lower for k in ['_2', '_02', 'chastener_2', 'down', 'bottom', 'leg', 'skirt', 'body_2', 'body2']) else '01'
+            candidates = [
+                f for f in image_files
+                if (f'_{body_sub_idx}_' in f.lower() or f'_{int(body_sub_idx)}_' in f.lower() or (body_sub_idx == '02' and 'down' in f.lower()) or (body_sub_idx == '01' and 'up' in f.lower()) or 'cloth' in f.lower() or 'clothing' in f.lower() or '衣服' in f.lower())
+                and any(sk in f.lower() for sk in suffixes)
+                and 'hair' not in f.lower() and 'face' not in f.lower()
+                and not any(k in f.lower() for k in ['eye', 'eyes', 'bantou', '目', '睫毛', '眉毛', 'eyelash', 'eyebrow'])
+            ]
+            if candidates:
+                replacement_file = candidates[0]
+
+    if replacement_file:
+        _assign_image(replacement_file)
+        return
 
     if any(fk in mat_name_lower for fk in ['面部因子', 'face factor', 'face_factor']):
         is_r_node = any(rk in old_img_name for rk in ['_r.', '_r_', 'r_1', 'r_2', 'face_r', 'ramp', 'blush'])
@@ -3186,42 +3339,11 @@ class NevernessToEvernessDefaultMaterialReplacer(GameDefaultMaterialReplacer):
             except Exception:
                 pass
 
-        def fix_nte_face_sdf_node():
-            trees_to_check = set()
-            for ng in list(bpy.data.node_groups):
-                if ng and hasattr(ng, 'nodes'):
-                    trees_to_check.add(ng)
-            for mat in list(bpy.data.materials):
-                if mat and mat.use_nodes and mat.node_tree:
-                    trees_to_check.add(mat.node_tree)
-
-            for tree in trees_to_check:
-                ff_nodes = [
-                    n for n in tree.nodes
-                    if (n.type == 'GROUP' and n.node_tree and 'face factor' in n.node_tree.name.lower())
-                    or '面部因子' in getattr(n, 'label', '')
-                    or 'face factor' in n.name.lower()
-                ]
-                for ff in ff_nodes:
-                    for link in list(tree.links):
-                        if link.from_node == ff:
-                            target_node = link.to_node
-                            tree.links.remove(link)
-                            if target_node.type in ['MIX', 'MIX_RGB']:
-                                try:
-                                    if 'Factor' in target_node.inputs:
-                                        target_node.inputs['Factor'].default_value = 1.0
-                                    elif 'Fac' in target_node.inputs:
-                                        target_node.inputs['Fac'].default_value = 1.0
-                                    else:
-                                        target_node.inputs[0].default_value = 1.0
-                                except Exception:
-                                    pass
-
         try:
-            fix_nte_face_sdf_node()
-        except Exception as e_sdf:
-            print(f"[NTE Face SDF Fix Notice] {e_sdf}")
+            from setup_wizard.optimization.blender_rimlight_patch import patch_all_rimlight_groups_for_blender
+            patch_all_rimlight_groups_for_blender()
+        except Exception as ex_rim:
+            print(f"[NTE Replace Default Materials] Rimlight patch notice: {ex_rim}")
 
         self.blender_operator.report({'INFO'}, 'Replaced default materials with NTE template materials from nteTodo.md...')
         NextStepInvoker().invoke(

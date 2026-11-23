@@ -1016,14 +1016,8 @@ class NTE_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorPropertie
                 return
             from setup_wizard.character_rig_setup.nte_rig_script import (
                 ensure_nte_character_collection,
-                delete_nte_light_empties,
             )
             ensure_nte_character_collection(context, rig, char_name)
-            # NTE no usa Light Direction por ahora: eliminarlo del todo.
-            try:
-                delete_nte_light_empties(context, rig, char_name)
-            except Exception as e_light:
-                print(f"[NTE FINISH] Light empties delete notice: {e_light}")
         except Exception:
             # Fallback minimo: mete lo suelto de la raiz en la coleccion del rig
             try:

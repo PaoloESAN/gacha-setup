@@ -327,8 +327,6 @@ def setup_light_direction_bone(context, game_type, rig_obj=None):
     if not rig_obj or rig_obj.type != "ARMATURE":
         return None
 
-    if game_type == GameType.NEVERNESS_TO_EVERNESS.name:
-        return None
     if game_type == GameType.ZENLESS_ZONE_ZERO.name and _is_zzz_kythera_v2(context, rig_obj):
         return None
 

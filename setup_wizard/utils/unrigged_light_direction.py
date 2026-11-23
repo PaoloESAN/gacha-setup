@@ -6,9 +6,9 @@ from setup_wizard.utils.modifier_utils import get_modifier_property, set_modifie
 LIGHT_DIRECTION_GAMES = {
     'GENSHIN_IMPACT', 'HONKAI_STAR_RAIL', 'ZENLESS_ZONE_ZERO',
     'WUTHERING_WAVES', 'PUNISHING_GRAY_RAVEN', 'HONKAI_IMPACT_3RD',
+    'NEVERNESS_TO_EVERNESS',
 }
-# NTE deliberately removes this control; Endfield uses Sun, and HNA's
-# outline-only geometry setup does not expose a Light Vectors direction input.
+# Endfield uses Sun, and HNA's outline-only geometry setup does not expose a Light Vectors direction input.
 
 
 def setup_unrigged_light_direction(context, game_type, target_object=None):

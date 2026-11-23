@@ -400,26 +400,6 @@ def draw_lights_plus(layout, context):
         box.prop(owner, 'gacha_lights_plus_mode', text='Mode')
 
 
-class GACHA_PT_NTELightsCharacterSettings(Panel):
-    """NTE has no separate Character Settings panel yet."""
-    bl_label = 'Character Settings'
-    bl_idname = 'GACHA_PT_NTELightsCharacterSettings'
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'UI'
-    bl_category = 'Item'
-    bl_order = 1
-
-    @classmethod
-    def poll(cls, context):
-        if not supported():
-            return False
-        from setup_wizard.ui.character_settings_utils import is_game_armature
-        return is_game_armature(context, 'NEVERNESS_TO_EVERNESS')
-
-    def draw(self, context):
-        draw_lights_plus(self.layout, context)
-
-
 def register():
     bpy.types.Object.gacha_lights_plus_mode = EnumProperty(
         name='Mode', items=[('DEFAULT', 'Default', '', 0),
@@ -428,10 +408,8 @@ def register():
         get=get_mode, set=set_mode,
     )
     bpy.utils.register_class(GACHA_OT_SetupNewLights)
-    bpy.utils.register_class(GACHA_PT_NTELightsCharacterSettings)
 
 
 def unregister():
-    bpy.utils.unregister_class(GACHA_PT_NTELightsCharacterSettings)
     bpy.utils.unregister_class(GACHA_OT_SetupNewLights)
     del bpy.types.Object.gacha_lights_plus_mode
