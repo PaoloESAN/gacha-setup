@@ -2509,6 +2509,17 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
 
                 _configure_outline_mat_nodes(part_ol_mat, ld_img, id_img, d_img=d_img, ftm_img=ftm_img)
 
+        try:
+            from setup_wizard.character_custom_setups import run_character_setup_stage
+            run_character_setup_stage(
+                "after_materials",
+                context=self.context,
+                game_type=GameType.WUTHERING_WAVES.name,
+                char_dir=folder,
+            )
+        except Exception as exc_cs:
+            print(f"[WW TEXTURES] Notice in character custom setup (after_materials): {exc_cs}")
+
         self.blender_operator.report({'INFO'}, 'Successfully imported and assigned Wuthering Waves textures!')
         NextStepInvoker().invoke(
             self.blender_operator.next_step_idx, 

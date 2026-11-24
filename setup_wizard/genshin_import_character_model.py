@@ -1069,6 +1069,75 @@ class NTE_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
         return {"FINISHED"}
 
 
+def _import_wuwa_uemodels_with_profiles(context, folder, primary_uemodel_path):
+    """Imports the primary WuWa .uemodel, and if a matching character profile
+    requests ``import_all_uemodels=True`` (e.g. Denia), imports all remaining
+    ``.uemodel`` files in ``folder`` (minus any excluded substrings) and unifies
+    their secondary meshes onto the primary skeleton so a single rig drives all variants."""
+    try:
+        from setup_wizard.character_custom_setups import get_uemodel_import_config
+        import_all, exclude_subs = get_uemodel_import_config(GameType.WUTHERING_WAVES.name, folder, context=context)
+    except Exception:
+        import_all, exclude_subs = False, ()
+
+    if not import_all:
+        _import_wuwa_uemodel(context, primary_uemodel_path)
+        return
+
+    all_uemodels = find_all_uemodel_files(folder)
+    if not all_uemodels:
+        _import_wuwa_uemodel(context, primary_uemodel_path)
+        return
+
+    # Ensure primary_uemodel_path is imported first, filtering out any excluded variants
+    primary_abs = os.path.normcase(os.path.abspath(primary_uemodel_path))
+    ordered = [primary_uemodel_path] + [
+        p for p in all_uemodels
+        if os.path.normcase(os.path.abspath(p)) != primary_abs
+        and not any(sub in os.path.basename(p).lower() for sub in exclude_subs)
+    ]
+    print(f"[WW IMPORT] Profile requested all .uemodel files ({len(ordered)} found): {[os.path.basename(p) for p in ordered]}")
+
+    before_primary = set(context.scene.objects)
+    _import_wuwa_uemodel(context, ordered[0])
+    primary_new = [o for o in context.scene.objects if o not in before_primary]
+    primary_arm = next((o for o in primary_new if o.type == 'ARMATURE'), None)
+
+    for sec_path in ordered[1:]:
+        before_sec = set(context.scene.objects)
+        try:
+            _import_wuwa_uemodel(context, sec_path)
+        except Exception as exc:
+            print(f"[WW IMPORT] Warning importing secondary .uemodel {os.path.basename(sec_path)}: {exc}")
+            continue
+        sec_new = [o for o in context.scene.objects if o not in before_sec]
+        sec_arms = [o for o in sec_new if o.type == 'ARMATURE']
+        sec_meshes = [o for o in sec_new if o.type == 'MESH']
+
+        if primary_arm is not None:
+            for mesh in sec_meshes:
+                mesh.parent = primary_arm
+                mesh.matrix_parent_inverse.identity()
+                arm_mod = next((m for m in mesh.modifiers if m.type == 'ARMATURE'), None)
+                if arm_mod is None:
+                    arm_mod = mesh.modifiers.new(name=primary_arm.name, type='ARMATURE')
+                arm_mod.object = primary_arm
+
+            # Remove duplicate secondary skeletons now that meshes share primary_arm
+            for sec_arm in sec_arms:
+                if sec_arm != primary_arm:
+                    arm_data = sec_arm.data
+                    try:
+                        bpy.data.objects.remove(sec_arm, do_unlink=True)
+                    except Exception:
+                        pass
+                    if arm_data and arm_data.users == 0:
+                        try:
+                            bpy.data.armatures.remove(arm_data)
+                        except Exception:
+                            pass
+
+
 class WW_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
     """Sets Up Character for Wuthering Waves"""
 
@@ -1139,7 +1208,7 @@ class WW_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
 
         if uemodel_path:
             try:
-                _import_wuwa_uemodel(context, uemodel_path)
+                _import_wuwa_uemodels_with_profiles(context, folder, uemodel_path)
             except Exception as exc:
                 self.report({'ERROR'}, f'Error importing .uemodel: {exc}')
                 return {'CANCELLED'}
@@ -1189,6 +1258,19 @@ class WW_OT_SetUpCharacter(Operator, ImportHelper, CustomOperatorProperties):
             for col in list(obj.users_collection):
                 if col != char_col:
                     col.objects.unlink(obj)
+
+        try:
+            from setup_wizard.character_custom_setups import run_character_setup_stage
+            run_character_setup_stage(
+                "after_import",
+                context=context,
+                game_type=GameType.WUTHERING_WAVES.name,
+                char_dir=folder,
+                meshes=meshes,
+                armature=armatures[0] if armatures else None,
+            )
+        except Exception as exc_cs:
+            print(f"[WW SETUP] Notice in character custom setup (after_import): {exc_cs}")
 
         self.report({"INFO"}, f"Imported Wuthering Waves character: {char_name}")
         if self.next_step_idx:
@@ -1876,7 +1958,7 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
 
             existing_objects = set(bpy.context.scene.objects)
             if uemodel_path:
-                _import_wuwa_uemodel(bpy.context, uemodel_path)
+                _import_wuwa_uemodels_with_profiles(bpy.context, folder, uemodel_path)
             elif fbx_path:
                 _execute_fbx_import(fbx_path)
 
@@ -1920,6 +2002,19 @@ class GI_OT_GenshinImportModel(Operator, ImportHelper, CustomOperatorProperties)
                 for col in list(obj.users_collection):
                     if col != char_col:
                         col.objects.unlink(obj)
+
+            try:
+                from setup_wizard.character_custom_setups import run_character_setup_stage
+                run_character_setup_stage(
+                    "after_import",
+                    context=bpy.context,
+                    game_type=GameType.WUTHERING_WAVES.name,
+                    char_dir=folder,
+                    meshes=meshes,
+                    armature=armatures[0] if armatures else None,
+                )
+            except Exception as exc_cs:
+                print(f"[WW IMPORT] Notice in character custom setup (after_import): {exc_cs}")
 
             self.report({"INFO"}, f"Imported Wuthering Waves character: {char_name}")
             return

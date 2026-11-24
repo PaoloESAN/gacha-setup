@@ -2470,6 +2470,8 @@ class WutheringWavesGeometryNodesSetup(GameGeometryNodesSetup):
                 char_materials = []
                 for slot in mesh.material_slots:
                     if slot.material and slot.material not in char_materials:
+                        if slot.material.get("ww_no_outline"):
+                            continue
                         mat_low = slot.material.name.lower()
                         if not any(ign in mat_low for ign in ["eye", "star", "highlight", "outline"]):
                             char_materials.append(slot.material)
@@ -2556,6 +2558,16 @@ class WutheringWavesGeometryNodesSetup(GameGeometryNodesSetup):
                 if not mod:
                     mod = mesh.modifiers.new(name=mod_name, type='NODES')
                 mod.node_group = star_group
+
+        try:
+            from setup_wizard.character_custom_setups import run_character_setup_stage
+            run_character_setup_stage(
+                "after_outlines",
+                context=self.context,
+                game_type=GameType.WUTHERING_WAVES.name,
+            )
+        except Exception as exc_cs:
+            print(f"[WW OUTLINES] Notice in character custom setup (after_outlines): {exc_cs}")
 
         self.blender_operator.report({'INFO'}, 'Configured Geometry Nodes and Outlines for Wuthering Waves.')
 

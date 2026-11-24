@@ -1399,37 +1399,10 @@ def pull_gi_panel_values(scene, context, force=False):
                 except Exception:
                     pass
 
-            # 6. Durin Dark Eyes (pulled directly from second slot material Mix Shader)
+            # 6. Character-specific profile UI sync (e.g. Durin Dark Eyes, etc.)
             try:
-                if is_durin(context):
-                    d_mesh, d_mat1, d_mat2 = get_durin_pupil_materials(context, arm)
-                    target_mat = d_mat2
-                    if not target_mat or not getattr(target_mat, 'node_tree', None):
-                        if d_mesh and len(d_mesh.material_slots) > 1 and d_mesh.material_slots[1].material:
-                            target_mat = d_mesh.material_slots[1].material
-                        else:
-                            target_mat = bpy.data.materials.get(DURIN_NORMAL_EYE_MATERIAL_NAME)
-                            if target_mat is not None and not getattr(target_mat, 'node_tree', None):
-                                target_mat = None
-                            if target_mat is None:
-                                for m in bpy.data.materials:
-                                    m_low = m.name.lower()
-                                    if ('pupil' in m_low or 'pupila' in m_low) and (m.name.endswith('.001') or 'two' in m_low) and getattr(m, 'node_tree', None):
-                                        target_mat = m
-                                        break
-                    if target_mat and getattr(target_mat, 'node_tree', None):
-                        mix_n = target_mat.node_tree.nodes.get('Mix Shader')
-                        if not mix_n:
-                            for n in target_mat.node_tree.nodes:
-                                if n.type == 'MIX_SHADER':
-                                    mix_n = n
-                                    break
-                        if mix_n and len(mix_n.inputs) > 0:
-                            scene.gi_dark_eyes = bool(mix_n.inputs[0].default_value > 0.5)
-                        else:
-                            scene.gi_dark_eyes = False
-                    else:
-                        scene.gi_dark_eyes = False
+                from setup_wizard.character_custom_setups import sync_character_profile_ui
+                sync_character_profile_ui(scene, context, game_type=GameType.GENSHIN_IMPACT.name)
             except Exception:
                 pass
 
@@ -1666,47 +1639,20 @@ def update_gi_clothes_physics(self, context):
 
 
 def is_durin(context):
+    """Backward-compatible wrapper delegating to the character_custom_setups profile registry."""
     try:
-        from setup_wizard.ui.character_settings_utils import resolve_settings_armature, resolve_character_name, _iter_rig_meshes
+        from setup_wizard.character_custom_setups import detect_character_profiles
+        from setup_wizard.ui.character_settings_utils import resolve_settings_armature
         arm = resolve_settings_armature(context)
-        if arm is not None:
-            cached = arm.get("gacha_is_durin")
-            if cached is not None:
-                return bool(cached)
-            char_name = resolve_character_name(arm, "")
-            if char_name and "durin" in str(char_name).lower():
-                arm["gacha_is_durin"] = True
-                return True
-            if "durin" in arm.name.lower():
-                arm["gacha_is_durin"] = True
-                return True
-            for mesh in _iter_rig_meshes(arm):
-                if "durin" in mesh.name.lower():
-                    arm["gacha_is_durin"] = True
-                    return True
-                for slot in getattr(mesh, "material_slots", []):
-                    if slot.material and "durin" in slot.material.name.lower():
-                        arm["gacha_is_durin"] = True
-                        return True
-            for mesh in _iter_rig_meshes(arm):
-                for slot in getattr(mesh, "material_slots", []):
-                    if slot.material and "pupil" in slot.material.name.lower():
-                        import bpy
-                        if any("durin" in m.name.lower() for m in bpy.data.materials) or any("durin" in o.name.lower() for o in bpy.data.objects) or any("durin" in img.name.lower() for img in bpy.data.images):
-                            arm["gacha_is_durin"] = True
-                            return True
-            arm["gacha_is_durin"] = False
-            return False
-        import bpy
-        obj = getattr(context, "active_object", None) or getattr(context, "object", None)
-        if obj and "durin" in obj.name.lower():
-            return True
-        for m in bpy.data.materials:
-            if "durin" in m.name.lower():
-                return True
+        profiles = detect_character_profiles(
+            game_type=GameType.GENSHIN_IMPACT.name,
+            arm=arm,
+            context=context,
+            allow_context=(arm is None),
+        )
+        return any(p.id == "genshin_durin" for p in profiles)
     except Exception:
-        pass
-    return False
+        return False
 
 
 def get_durin_pupil_materials(context=None, arm=None):
@@ -2267,12 +2213,12 @@ class GI_PT_Rig_Character_Settings(Panel):
             col_ns.prop(scene, "gi_enable_night_soul", text="Enable Night Soul")
             col_ns.prop(scene, "gi_ns_outline_thickness", text="NS Outlines Thickness", slider=True)
 
-        # Dark Eyes (Durin Only)
-        if is_durin(context):
-            box_durin = layout.box()
-            box_durin.label(text="Durin Settings", icon="HIDE_OFF")
-            col_durin = box_durin.column(align=True)
-            col_durin.prop(scene, "gi_dark_eyes", text="Dark Eyes")
+        # Character-specific custom profile settings (e.g. Durin, etc.)
+        try:
+            from setup_wizard.character_custom_setups import draw_character_profile_ui
+            draw_character_profile_ui(layout, context, game_type=GameType.GENSHIN_IMPACT.name)
+        except Exception:
+            pass
 
         # 5. Shadows & Scene Settings (At the bottom)
         box_shadow = layout.box()

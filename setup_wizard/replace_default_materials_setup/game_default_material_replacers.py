@@ -320,7 +320,13 @@ CHARACTER_SHADER_OVERRIDES = {
 
 
 def apply_character_shader_overrides(material=None, mesh=None, char_name=None):
-    """Scalable applier for character-specific shader overrides from CHARACTER_SHADER_OVERRIDES registry."""
+    """Scalable applier for character-specific shader overrides via the character_custom_setups registry."""
+    try:
+        from setup_wizard.character_custom_setups import apply_profile_shader_overrides
+        apply_profile_shader_overrides(material=material, mesh=mesh, char_name=char_name)
+    except Exception:
+        pass
+    # Also apply any legacy entries in CHARACTER_SHADER_OVERRIDES if not already covered by a profile
     for character, parts_config in CHARACTER_SHADER_OVERRIDES.items():
         if char_name:
             if char_name.lower() != character:
@@ -601,7 +607,8 @@ def setup_durin_pupil_materials(mesh, new_pupil_mat, material_names=None):
     arm = mesh.find_armature() or getattr(mesh, "parent", None)
     if arm and arm.type == 'ARMATURE':
         try:
-            arm["gacha_is_durin"] = True
+            from setup_wizard.character_custom_setups import stamp_character_profile
+            stamp_character_profile(arm, "genshin_durin")
         except Exception:
             pass
 
