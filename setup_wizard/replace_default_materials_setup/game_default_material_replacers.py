@@ -535,6 +535,10 @@ def setup_durin_pupil_materials(mesh, new_pupil_mat, material_names=None):
             hair_img.colorspace_settings.name = 'sRGB'
 
         primo_node = nt.nodes.get('PrimoToon') or nt.nodes.get('HoYoToon') or nt.nodes.get('Body Shader')
+        if primo_node:
+            lightmap_ao = primo_node.inputs.get('Toggle Lightmap AO')
+            if lightmap_ao is not None:
+                lightmap_ao.default_value = False
         if primo_node and diffuse_node:
             diffuse_sock = primo_node.inputs.get('Diffuse Color') or primo_node.inputs.get('Color')
             if diffuse_sock:
