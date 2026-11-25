@@ -1,5 +1,7 @@
 # Gacha Setup for Blender
 
+[![Listed in Awesome NTE](https://raw.githubusercontent.com/zzstar101/awesome-nte/main/assets/badge-listed.svg)](https://github.com/zzstar101/awesome-nte)
+
 ![Gacha Setup](image.jpg)
 *Reference: The Quintessential Quintuplets*
 

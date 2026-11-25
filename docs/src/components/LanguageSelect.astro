@@ -48,13 +48,14 @@ const activeLabel = locales.find((l) => l.active)?.label ?? 'English';
 					<Icon name="down-caret" class="lang-caret" size="0.95rem" />
 				</button>
 
-				<ul class="lang-menu" role="menu">
+				<ul class="lang-menu" role="menu" inert>
 					{locales.map((locale) => (
 						<li role="none">
 							<a
 								href={locale.href}
 								role="menuitemradio"
 								aria-checked={locale.active ? 'true' : 'false'}
+								aria-label={locale.label}
 								class:list={['lang-option', { 'is-active': locale.active }]}
 							>
 								<span>{locale.label}</span>
@@ -74,11 +75,13 @@ const activeLabel = locales.find((l) => l.active)?.label ?? 'English';
 			super();
 			const trigger = this.querySelector<HTMLButtonElement>('.lang-trigger');
 			const dropdown = this.querySelector<HTMLDivElement>('.lang-dropdown');
-			if (!trigger || !dropdown) return;
+			const menu = this.querySelector<HTMLUListElement>('.lang-menu');
+			if (!trigger || !dropdown || !menu) return;
 
 			const setOpen = (open: boolean) => {
 				dropdown.classList.toggle('is-open', open);
 				trigger.setAttribute('aria-expanded', String(open));
+				menu.inert = !open;
 			};
 
 			trigger.addEventListener('click', (e) => {

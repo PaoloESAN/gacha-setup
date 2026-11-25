@@ -57,6 +57,7 @@ description: Lời cảm ơn, những người đóng góp và ghi công tài ng
 - **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)** — HJT Studios · [X](https://x.com/Gladius_Tyrfing)
 - **[vei](https://x.com/heikzs)** — SkillObjects · [X](https://x.com/heikzs)
 - **[Michael](https://www.youtube.com/watch?v=EN79SfbcvIE)** — [Instagram](https://www.instagram.com/raphaelgonemad/)
+- **Yolu**
 
 <div class="disclaimer-text">
   <strong>Tuyên bố miễn trừ trách nhiệm:</strong> Công cụ này là một dự án mã nguồn mở độc lập và không liên kết, không được chứng thực hay tài trợ bởi HoYoverse, Kuro Games, Hotta Studio, Perfect World Games hoặc Hypergryph. Tất cả tài nguyên trò chơi, nhãn hiệu và tên nhân vật đều thuộc về chủ sở hữu tương ứng. Không có tài nguyên hay mô hình có bản quyền nào được đính kèm trong add-on này.

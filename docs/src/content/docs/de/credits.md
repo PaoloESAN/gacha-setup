@@ -57,6 +57,7 @@ description: Danksagungen, Mitwirkende und Asset-Credits.
 - **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)** — HJT Studios · [X](https://x.com/Gladius_Tyrfing)
 - **[vei](https://x.com/heikzs)** — SkillObjects · [X](https://x.com/heikzs)
 - **[Michael](https://www.youtube.com/watch?v=EN79SfbcvIE)** — [Instagram](https://www.instagram.com/raphaelgonemad/)
+- **Yolu**
 
 <div class="disclaimer-text">
   <strong>Haftungsausschluss:</strong> Dieses Tool ist ein unabhängiges Open-Source-Projekt und steht in keiner Verbindung zu HoYoverse, Kuro Games, Hotta Studio, Perfect World Games oder Hypergryph und wird von diesen weder unterstützt noch gesponsert. Alle Spiel-Assets, Marken und Charakternamen gehören ihren jeweiligen Eigentümern. Dieses Add-on enthält keine urheberrechtlich geschützten Assets oder Modelle.

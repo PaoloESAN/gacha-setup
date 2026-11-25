@@ -57,6 +57,7 @@ description: Ucapan terima kasih, kontributor, dan kredit aset.
 - **[Gladius Tyrfing](https://www.patreon.com/cw/GladiusTyrfing)** — HJT Studios · [X](https://x.com/Gladius_Tyrfing)
 - **[vei](https://x.com/heikzs)** — SkillObjects · [X](https://x.com/heikzs)
 - **[Michael](https://www.youtube.com/watch?v=EN79SfbcvIE)** — [Instagram](https://www.instagram.com/raphaelgonemad/)
+- **Yolu**
 
 <div class="disclaimer-text">
   <strong>Pernyataan:</strong> Alat ini merupakan proyek sumber terbuka independen dan tidak berafiliasi dengan, didukung, atau disponsori oleh HoYoverse, Kuro Games, Hotta Studio, Perfect World Games, maupun Hypergryph. Seluruh aset gim, merek dagang, dan nama karakter merupakan milik pemiliknya masing-masing. Add-on ini tidak menyertakan aset atau model berhak cipta.
