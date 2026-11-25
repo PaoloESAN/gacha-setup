@@ -896,6 +896,13 @@ class GenshinImpactDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                     from setup_wizard.milastra.milastra_utils import parse_milastra_part_name
                     mesh_body_part_name = parse_milastra_part_name(material_name) or material_name.split('_')[-1]
                     character_type = TextureImporterType.AVATAR
+                elif material_name.startswith('AvatarItem_') and material_name.endswith('_Eff'):
+                    # Keep distinct part names for AvatarItem_*_Eff materials (e.g. Cloak_Eff,
+                    # Foot_Eff, Skate_Eff on Xilonen) so transparent VFX overlays and opaque
+                    # item meshes do not collide on a single 'Eff' material.
+                    parts = material_name.split('_')
+                    mesh_body_part_name = '_'.join(parts[-2:]) if len(parts) >= 2 else 'Eff'
+                    character_type = TextureImporterType.AVATAR
                 else:
                     mesh_body_part_name = material_name.split('_')[-1]
                     character_type = TextureImporterType.AVATAR

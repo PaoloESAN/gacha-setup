@@ -152,6 +152,22 @@ def is_night_soul_mask_file(filename):
     return False
 
 
+def is_night_soul_noise_file(filename):
+    """
+    True only for Night Soul outline noise textures (e.g. Eff_Avatar_NyxState.png,
+    Eff_Avatar_NyxState_Bit.png, *_nyx_noise.*).
+    Must NOT match AvatarItem_*_NyxState_*_Mask or *_Diffuse or *_Ramp files,
+    otherwise those overwrite Eff_Avatar_NyxState.png in Night Soul Blessing.
+    """
+    try:
+        f_low = str(filename).lower()
+    except Exception:
+        return False
+    if any(k in f_low for k in ('avataritem_', 'mask', 'diffuse', 'ramp', 'lightmap', 'normal')):
+        return False
+    return 'nyx_noise' in f_low or f_low.startswith('eff_avatar_nyxstate')
+
+
 def find_all_image_nodes_by_category(node_tree, category):
     """
     Recursively finds ALL Image Texture nodes in node_tree and nested GROUP node_trees (e.g. Textures)
@@ -1783,8 +1799,7 @@ class GenshinTextureImporter:
 
         # Fallback for Night Soul Outline Noise
         for fname, fpath in image_files:
-            f_low = fname.lower()
-            if 'nyxstate' in f_low or 'nyx_noise' in f_low or 'eff_avatar_nyxstate' in f_low:
+            if is_night_soul_noise_file(fname):
                 noise_img = resolve_img(os.path.splitext(fname)[0])
                 if noise_img:
                     self.set_nyx_noise_texture(noise_img)
@@ -2655,7 +2670,7 @@ class GenshinAvatarTextureImporter(GenshinTextureImporter):
                 elif self._is_night_soul_mask_file(file):
                     for material in bpy.data.materials.values():
                         self.set_up_night_soul_mask_texture(material, img)
-                elif 'nyxstate' in file.lower() or 'nyx_noise' in file.lower():
+                elif is_night_soul_noise_file(file):
                     self.set_nyx_noise_texture(img)
                 elif self.is_texture_identifiers_in_texture_name([ShaderMaterialNameKeywords.STOCKINGS_DETAILMAP], file):
                     self.set_stocking_texture(img)

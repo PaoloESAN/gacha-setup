@@ -343,6 +343,10 @@ class GenshinImpactMaterialDataImporter(GameMaterialDataImporter):
                 from setup_wizard.milastra.milastra_utils import parse_milastra_part_name
                 body_part = parse_milastra_part_name(file.name) or PurePosixPath(file.name).stem.split('_')[-1]
                 character_type = CharacterType.UNKNOWN
+            elif file.name.startswith('AvatarItem_') and PurePosixPath(file.name).stem.endswith('_Eff'):
+                parts = PurePosixPath(file.name).stem.split('_')
+                body_part = '_'.join(parts[-2:]) if len(parts) >= 2 else 'Eff'
+                character_type = CharacterType.UNKNOWN
             else:
                 stem = PurePosixPath(file.name).stem
                 if stem.endswith('_D') or stem.endswith('_S'):
