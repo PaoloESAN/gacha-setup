@@ -962,6 +962,8 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
                         except Exception:
                             pass
                         try:
+                            if ('lighting' in o_low or 'panel' in o_low) and abs(obj.location.x) < 0.01:
+                                obj.location.x -= 0.25
                             bpy.ops.object.select_all(action='DESELECT')
                             obj.select_set(True)
                             body_rig.select_set(True)
@@ -1483,6 +1485,8 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
                         except Exception:
                             pass
                         try:
+                            if ('lighting' in o_low or 'panel' in o_low) and abs(obj.location.x) < 0.01:
+                                obj.location.x -= 0.25
                             bpy.ops.object.select_all(action='DESELECT')
                             obj.select_set(True)
                             body_rig.select_set(True)

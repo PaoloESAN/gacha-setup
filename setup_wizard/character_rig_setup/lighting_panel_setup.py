@@ -1167,6 +1167,8 @@ def import_hsr_lighting_panel():
 
         lp_arm = bpy.data.objects.get(LightingPanelNames.Objects.LIGHTING_PANEL)
         if lp_arm and lp_arm.type == 'ARMATURE':
+            if abs(lp_arm.location.x) < 0.01:
+                lp_arm.location.x -= 0.25
             for pb in lp_arm.pose.bones:
                 if pb.name == "Lighting Panel" and wgt_plane:
                     pb.custom_shape = wgt_plane
