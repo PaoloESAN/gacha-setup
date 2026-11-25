@@ -194,7 +194,7 @@ def _get_parent_switch_targets(rig_obj):
 
 
 def _get_default_parent_switch_index(sw_targets):
-    for preferred in ("root.002", "root.001", "root", "Root"):
+    for preferred in ("root", "Root", "root.001", "root.002"):
         if preferred in sw_targets:
             return sw_targets.index(preferred) + 1
     return 0
