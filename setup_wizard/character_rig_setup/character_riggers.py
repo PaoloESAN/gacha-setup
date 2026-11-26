@@ -794,11 +794,42 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
                     con.target_space = 'LOCAL'
 
             # 6. Ensure all meshes with Armature modifiers point to body_rig
+            # and restore eye vertex groups renamed to DEF-eye.L/R before Isaac FaceRig replaced those bones with eye_L/R
+            eye_vg_remap = {
+                "DEF-eye.L": "eye_L",
+                "DEF-eye.R": "eye_R",
+                "eye.L": "eye_L",
+                "eye.R": "eye_R",
+            }
             for obj in bpy.data.objects:
                 if obj.type == 'MESH':
+                    has_body_arm = False
                     for mod in obj.modifiers:
                         if mod.type == 'ARMATURE':
                             mod.object = body_rig
+                            has_body_arm = True
+                    if has_body_arm and obj.vertex_groups:
+                        for src_name, dst_name in eye_vg_remap.items():
+                            if dst_name not in body_rig.data.bones or src_name in body_rig.data.bones:
+                                continue
+                            vg_src = obj.vertex_groups.get(src_name)
+                            if not vg_src:
+                                continue
+                            vg_dst = obj.vertex_groups.get(dst_name)
+                            if vg_dst:
+                                for v in obj.data.vertices:
+                                    try:
+                                        w_src = vg_src.weight(v.index)
+                                    except RuntimeError:
+                                        continue
+                                    try:
+                                        w_dst = vg_dst.weight(v.index)
+                                    except RuntimeError:
+                                        w_dst = 0.0
+                                    vg_dst.add([v.index], min(1.0, w_dst + w_src), 'REPLACE')
+                                obj.vertex_groups.remove(vg_src)
+                            else:
+                                vg_src.name = dst_name
 
             # 7. Setup Eye Correction (Adjust Pupil Distance) on eye_L and eye_R
             has_plate = "plate-settings" in body_rig.pose.bones
