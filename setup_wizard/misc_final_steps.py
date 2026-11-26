@@ -1112,8 +1112,8 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
             return 0.0, 0.0
         bones = armature.data.bones
         mat = armature.matrix_world if world_space else None
-        head = next((bones.get(n) for n in ('Bip001 Head', 'Bone_Head01_M', 'Head', 'head') if bones.get(n)), None)
-        pelvis = next((bones.get(n) for n in ('Bip001 Pelvis', 'Bone_Pelvis01_M', 'Pelvis', 'Bip001') if bones.get(n)), None)
+        head = next((bones.get(n) for n in ('Bip001 Head', 'Bone_Head01_M', 'Head_M', 'Head', 'head') if bones.get(n)), None)
+        pelvis = next((bones.get(n) for n in ('Bip001 Pelvis', 'Bone_Pelvis01_M', 'Root_M', 'Pelvis', 'Bip001') if bones.get(n)), None)
         if head and pelvis:
             p_head = (mat @ head.head_local) if mat else head.head_local
             p_pelvis = (mat @ pelvis.head_local) if mat else pelvis.head_local
