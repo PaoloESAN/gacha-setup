@@ -1057,23 +1057,16 @@ def rig_character(
             o.select_set(True)
 
     bpy.ops.object.mode_set(mode="EDIT")
-    # Align hand.L and hand.R metarig bones straight along forearm vector so hand_ik widget is centered on wrist
-    forearm_R = metarm.edit_bones.get("forearm.R")
-    hand_R = metarm.edit_bones.get("hand.R")
-    if forearm_R and hand_R:
-        arm_vec_R = (forearm_R.tail - forearm_R.head).normalized()
-        hand_R.tail = hand_R.head + arm_vec_R * 0.05
-        hand_R.roll = forearm_R.roll
-
-    forearm_L = metarm.edit_bones.get("forearm.L")
-    hand_L = metarm.edit_bones.get("hand.L")
-    if forearm_L and hand_L:
-        arm_vec_L = (forearm_L.tail - forearm_L.head).normalized()
-        hand_L.tail = hand_L.head + arm_vec_L * 0.05
-        if hand_R:
-            hand_L.roll = -hand_R.roll
-        elif forearm_L:
-            hand_L.roll = -forearm_L.roll
+    # Align hand.L and hand.R metarig bones straight along forearm vector and face local +Z forward (-Y)
+    # so hand_ik widgets stay centered and consistently oriented even when forearm roll varies.
+    forward_target = Vector((0.0, -1.0, 0.0))
+    for side in (".R", ".L"):
+        forearm_b = metarm.edit_bones.get(f"forearm{side}")
+        hand_b = metarm.edit_bones.get(f"hand{side}")
+        if forearm_b and hand_b:
+            arm_vec = (forearm_b.tail - forearm_b.head).normalized()
+            hand_b.tail = hand_b.head + arm_vec * 0.05
+            hand_b.align_roll(forward_target)
 
     for side in [".L", ".R"]:
         hand_mb = metarm.edit_bones.get("hand" + side)
@@ -2403,8 +2396,11 @@ def rig_character(
     armature.edit_bones["shin_tweak-pin.R"].length -= 0.15
 
     # HAND POS Fixing
-    if "hand_ik.R" in armature.edit_bones:
-        armature.edit_bones["hand_ik.L"].roll = -armature.edit_bones["hand_ik.R"].roll
+    forward_target = Vector((0.0, -1.0, 0.0))
+    for side in (".R", ".L"):
+        hand_ik_b = armature.edit_bones.get(f"hand_ik{side}")
+        if hand_ik_b:
+            hand_ik_b.align_roll(forward_target)
 
     armature.edit_bones["hand-ik-L"].head = armature.edit_bones["hand_ik.L"].head.copy()
     armature.edit_bones["hand-ik-L"].tail = armature.edit_bones["hand_ik.L"].tail.copy()
