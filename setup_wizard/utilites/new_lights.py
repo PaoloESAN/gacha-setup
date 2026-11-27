@@ -11,7 +11,7 @@ TAG = '_gacha_lights_plus'
 MODE = '_gacha_lights_plus_mode'
 VERSION = '_gacha_lights_plus_version'
 COLOR_VERSION = '_gacha_lights_plus_color_version'
-CURRENT_COLOR_VERSION = 3
+CURRENT_COLOR_VERSION = 4
 
 
 def supported():
