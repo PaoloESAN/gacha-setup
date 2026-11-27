@@ -1,6 +1,7 @@
 import json
+from math import pi
 import bpy
-from mathutils import Matrix, Vector
+from mathutils import Euler, Matrix, Vector
 
 from setup_wizard.domain.game_types import GameType
 
@@ -346,9 +347,18 @@ def setup_light_direction_bone(context, game_type, rig_obj=None):
     )
 
     arm_local_mat = rig_obj.matrix_world.inverted() @ source_empty.matrix_world
-    loc = arm_local_mat.translation.copy()
-    init_euler = arm_local_mat.to_euler("XYZ")
-    bone_scale = tuple(arm_local_mat.to_scale())
+    loc = Vector((0.0, 0.0, 0.0))
+    if game_type == GameType.ZENLESS_ZONE_ZERO.name:
+        # ZZZ Legacy Light Vectors negates only Euler X ((-rx, ry, rz)); starting from
+        # (-90, 0, 0) like Genshin avoids the gimbal-locked ry=-91.7deg rest pose from
+        # ZZZ Setup v7.blend so pointing backward (+Y) lights the front cleanly.
+        init_euler = Euler((-pi / 2.0, 0.0, 0.0), "XYZ")
+    elif arm_local_mat.determinant() < 0.0:
+        rot_3x3 = rig_obj.matrix_world.inverted().to_3x3().normalized() @ source_empty.rotation_euler.to_matrix()
+        init_euler = rot_3x3.to_euler("XYZ")
+    else:
+        init_euler = arm_local_mat.to_euler("XYZ")
+    bone_scale = tuple(abs(s) for s in arm_local_mat.to_scale())
     bone_mat = Matrix.Translation(loc)
     eb_mat = Matrix.Translation(loc) @ init_euler.to_matrix().to_4x4()
 
@@ -410,6 +420,7 @@ def setup_light_direction_bone(context, game_type, rig_obj=None):
         for emp in (light_dir, main_light_dir, ake_light):
             if emp is None:
                 continue
+            emp.delta_scale = (1.0, 1.0, 1.0)
             for con in list(emp.constraints):
                 if con.type in ("CHILD_OF", "COPY_TRANSFORMS"):
                     emp.constraints.remove(con)

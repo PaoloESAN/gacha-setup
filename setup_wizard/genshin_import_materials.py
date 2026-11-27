@@ -413,7 +413,7 @@ def copy_nte_modifiers_to_character_models():
     if not light_dir:
         light_dir = bpy.data.objects.new("Light Direction", None)
         light_dir.empty_display_type = 'SINGLE_ARROW'
-        light_dir.location = (0, -2, 1.5)
+        light_dir.location = (0.0, 0.0, 0.0)
         bpy.context.scene.collection.objects.link(light_dir)
 
     head_orig = bpy.data.objects.get("Head Origin")
