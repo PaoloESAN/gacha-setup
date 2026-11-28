@@ -92,6 +92,12 @@ class NTE_PT_Basic_Setup_Wizard_UI_Layout(Panel, NevernessToEvernessUIRenderChec
         # Step 4: Rig Character button
         OperatorFactory.create_rig_character_ui(sub_layout)
 
+        sub_layout.operator(
+            "neverness_to_everness.create_shapekey_panel",
+            text="Create Shapekey Panel",
+            icon="FACE_MAPS",
+        )
+
         # Step 5: Finish Setup button
         OperatorFactory.create(
             sub_layout,
@@ -200,6 +206,13 @@ class NTE_PT_UI_Rig_Character_Menu(Panel, NevernessToEvernessUIRenderChecker):
         OperatorFactory.create_rig_character_ui(sub_layout)
         OperatorFactory.create(
             sub_layout,
+            "hoyoverse.fix_light_direction",
+            "Fix Light Direction",
+            "LIGHT_SUN",
+            game_type=GameType.NEVERNESS_TO_EVERNESS.name,
+        )
+        OperatorFactory.create(
+            sub_layout,
             "hoyoverse.apply_hair_clothes_physics",
             "Apply Hair & Clothes Physics",
             "PHYSICS",
@@ -264,24 +277,8 @@ class NTE_PT_Rig_Character_Settings(Panel):
         from setup_wizard.ui.character_settings_tabs import draw_character_settings_tabs
         if draw_character_settings_tabs(self.layout, context):
             return
-        arm = None
-        try:
-            from setup_wizard.ui.character_settings_utils import resolve_settings_armature
-            arm = resolve_settings_armature(context)
-        except Exception:
-            pass
-
-        # 0. Animate Mode (fast playback: lightweight materials, no outlines)
-        from setup_wizard.genshin_animate_mode import is_genshin_animate_mode
-        is_anim = is_genshin_animate_mode(arm, context=context)
-        self.layout.operator(
-            "genshin.toggle_animate_mode",
-            text="Disable Animate Mode" if is_anim else "Enable Animate Mode",
-            icon="SHADING_TEXTURE" if is_anim else "RESTRICT_RENDER_OFF"
-        )
-
-        from setup_wizard.ui.hi3_character_settings import _draw_physics
-        _draw_physics(self.layout, context)
+        from setup_wizard.ui.nte_character_settings import draw_nte_character_settings
+        draw_nte_character_settings(self.layout, context)
 
 
 classes = (

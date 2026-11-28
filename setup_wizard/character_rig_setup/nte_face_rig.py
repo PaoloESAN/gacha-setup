@@ -2,9 +2,22 @@
 # Face Rig Logic for Neverness to Everness (NTE)
 # Integrates Isaac/ZZZ direct face widgets and controls with HSR-style side panel expression sliders
 
+import re
 import bpy
 import math
 from mathutils import Vector, Matrix
+
+from setup_wizard.character_rig_setup.shape_keys_panel import (
+    build_shape_keys_panel,
+    COL_BROW as PANEL_COL_BROW,
+    COL_EYE as PANEL_COL_EYE,
+    COL_EYELID as PANEL_COL_EYELID,
+    COL_MOUTH as PANEL_COL_MOUTH,
+    COL_VISEME as PANEL_COL_VISEME,
+    COL_EXPRESSION as PANEL_COL_EXPRESSION,
+    COL_VFX as PANEL_COL_VFX,
+    COL_EXTRA as PANEL_COL_EXTRA,
+)
 
 HEAD_BONE_NAME   = None
 CLEAN_REBUILD    = True
@@ -46,20 +59,39 @@ def is_blender_3():
     return bpy.app.version[0] == 3
 
 
-def find_face_mesh():
+def find_face_mesh(armature=None):
     nte_signatures = ["look_U", "EL_", "EB_", "jawOpen", "biyan", "TD_", "TDS_", "mouthPucker"]
-    for obj in bpy.data.objects:
-        if obj.type == 'MESH' and obj.data and obj.data.shape_keys:
-            kb = obj.data.shape_keys.key_blocks
-            if any(any(sig in k for sig in nte_signatures) for k in kb.keys()):
-                return obj
 
-    for obj in bpy.data.objects:
-        if obj.type == 'MESH' and obj.data and obj.data.shape_keys:
-            n = obj.name.lower()
-            if any(k in n for k in ["face", "head", "skin", "player_", "npc_"]):
-                if not any(ign in n for ign in ["weapon", "gun", "sword"]):
+    def _search(candidates):
+        for obj in candidates:
+            if obj.type == 'MESH' and obj.data and obj.data.shape_keys:
+                kb = obj.data.shape_keys.key_blocks
+                if any(any(sig in k for sig in nte_signatures) for k in kb.keys()):
                     return obj
+
+        for obj in candidates:
+            if obj.type == 'MESH' and obj.data and obj.data.shape_keys:
+                n = obj.name.lower()
+                if any(k in n for k in ["face", "head", "skin", "player_", "npc_"]):
+                    if not any(ign in n for ign in ["weapon", "gun", "sword"]):
+                        return obj
+        return None
+
+    if armature is not None:
+        arm_meshes = [
+            obj for obj in bpy.data.objects
+            if obj.type == 'MESH' and obj.data and obj.data.shape_keys
+            and (obj.parent == armature or any(m.type == 'ARMATURE' and m.object == armature for m in obj.modifiers))
+        ]
+        found = _search(arm_meshes)
+        if found is not None:
+            return found
+        if arm_meshes:
+            return arm_meshes[0]
+
+    found = _search(bpy.data.objects)
+    if found is not None:
+        return found
 
     for obj in bpy.context.view_layer.objects:
         if obj.type == 'MESH' and obj.data and obj.data.shape_keys:
@@ -222,7 +254,68 @@ def pick_primary_key(keyblock, candidates):
     return None
 
 
-def plan_nte_controls(mesh_obj, armature, head_name, keyblock):
+_NTE_VFX_LABEL_MAP = {
+    "lianhong": "Blush",
+    "haixiu": "Shy",
+    "heixian": "Gloomy",
+    "liuhan2": "Sweat 2",
+    "liuhan": "Sweat",
+    "gandonglei": "TouchCry",
+    "yankuanglei": "TearEye",
+    "leizhu": "Tear",
+    "liulei": "Cry",
+    "shengluehao": "Dots",
+    "tanqi": "Sigh",
+    "xianquan": "Spiral",
+    "yunxuan": "Dizzy",
+}
+
+
+def _nte_clean_label(raw_name, strip_prefix_re=None):
+    s = raw_name
+    if strip_prefix_re:
+        s = re.sub(strip_prefix_re, '', s, flags=re.IGNORECASE)
+    # Translate common Chinese pinyin VFX tags into readable English labels
+    s_low = s.lower()
+    for py_key, en_val in _NTE_VFX_LABEL_MAP.items():
+        if s_low.startswith(py_key):
+            rest = s[len(py_key):]
+            s = en_val + rest
+            break
+    s = s.replace("_01_", " ").replace("_01", "").replace("_", " ").strip()
+    return s or raw_name
+
+
+def _nte_pair_op_clo_keys(keys):
+    """Order _OP and _CLO expression keys so matching pairs sit side by side in 2 columns."""
+    op_map = {}
+    clo_map = {}
+    singles = []
+    for k in sorted(keys):
+        if k.endswith("_OP"):
+            op_map[k[:-3]] = k
+        elif k.endswith("_CLO"):
+            clo_map[k[:-4]] = k
+        else:
+            singles.append(k)
+
+    paired = []
+    seen_bases = set()
+    for base in sorted(set(op_map.keys()) | set(clo_map.keys())):
+        if base in seen_bases:
+            continue
+        seen_bases.add(base)
+        if base in op_map and base in clo_map:
+            paired.append(op_map[base])
+            paired.append(clo_map[base])
+        elif base in op_map:
+            singles.append(op_map[base])
+        elif base in clo_map:
+            singles.append(clo_map[base])
+    return paired + singles
+
+
+def plan_nte_controls(mesh_obj, armature, head_name, keyblock, wgt_coll=None, unique_tag=""):
     fwd, right, up, face_size, fcx = get_face_metrics(mesh_obj, armature, head_name)
 
     OFFSET  = face_size * OFFSET_F
@@ -565,151 +658,209 @@ def plan_nte_controls(mesh_obj, armature, head_name, keyblock):
         })
 
     # =========================================================================
-    # 2. SIDE PANELS: HSR-STYLE LATERAL CONTROLLERS
+    # 2. GENSHIN-STYLE FRAMED CONTROL PANEL (to the viewer's right of the head)
     # =========================================================================
+    main_sections = []   # Column 1: Brows + Eyes
+    mouth_sections = []  # Column 2: Mouth
+    vfx_sections = []    # Column 3: 2D VFX + Extra
 
-    MAX_PER_ROW = 10
-    ROW_Z_GAP = 0.155
-    ITEM_SP = 0.075
+    all_keys = list(keyblock.keys())
 
-    slider_shape_scale = Vector((face_size * 0.035, face_size * 0.035, face_size * 0.035))
-    label_scale = Vector((face_size * 0.045, face_size * 0.045, face_size * 0.045))
-
-    # -------------------------------------------------------------------------
-    # LEFT PANEL (A la IZQUIERDA de la cabeza, -right)
-    # -------------------------------------------------------------------------
-    left_panel_origin = fcx - right * (face_size * 0.72) + up * (face_size * 0.12)
-    current_left_v = 0.0
-
-    def add_left_panel_grid(items_list, group_name, color, widget_type='slider'):
-        nonlocal current_left_v
-        if not items_list:
-            return
-        total = len(items_list)
-        for i, item in enumerate(items_list):
-            if isinstance(item, tuple):
-                c_name, drv_list = item[0], item[1]
-            else:
-                c_name = item.get('name') if isinstance(item, dict) else f"CTRL-{item}"
-                drv_list = item.get('drivers') if isinstance(item, dict) else [{'key': item, 'axis': 'Z', 'dir': +1}]
-                if isinstance(item, str):
-                    handled_keys.add(item)
-
-            row_idx = i // MAX_PER_ROW
-            col_idx = i % MAX_PER_ROW
-
-            h = -col_idx * (face_size * ITEM_SP)
-            v = current_left_v - row_idx * (face_size * ROW_Z_GAP)
-
-            controls.append({
-                'name': c_name,
-                'collection': FACERIG_SECONDARY_COLLECTION,
-                'color': color,
-                'group': group_name,
-                'head': place(left_panel_origin, h=h, v=v),
-                'widget': widget_type,
-                'lim': LIM,
-                'free': ('Z',),
+    # --- 2.A BROWS SECTION ---
+    brow_rows = []
+    brow_vsliders = []
+    if eb_k_posX:
+        brow_vsliders.append({
+            'name': 'CTRL-Panel_Brow_L',
+            'label': 'L',
+            'color': PANEL_COL_BROW,
+            'group': 'Face Eyebrow',
+            'range': 'both',
+            'drivers': [{'key': eb_k_posX, 'axis': 'Z', 'dir': +1, 'bidir': True}],
+        })
+    if eb_k_negX:
+        brow_vsliders.append({
+            'name': 'CTRL-Panel_Brow_R',
+            'label': 'R',
+            'color': PANEL_COL_BROW,
+            'group': 'Face Eyebrow',
+            'range': 'both',
+            'drivers': [{'key': eb_k_negX, 'axis': 'Z', 'dir': +1, 'bidir': True}],
+        })
+    for rot_k, rot_lbl in (("EB_Rotate_01", "Rot1"), ("EB_Rotate_02", "Rot2")):
+        if rot_k in keyblock and rot_k not in handled_keys:
+            handled_keys.add(rot_k)
+            brow_vsliders.append({
+                'name': f'CTRL-Panel_{rot_k}',
+                'label': rot_lbl,
+                'color': PANEL_COL_BROW,
+                'group': 'Face Eyebrow',
                 'range': 'pos',
-                'shape_scale': slider_shape_scale,
-                'drivers': drv_list
+                'drivers': [{'key': rot_k, 'axis': 'Z', 'dir': +1}],
             })
+    if brow_vsliders:
+        brow_rows.append({'type': 'vsliders_and_pad', 'pad': None, 'vsliders': brow_vsliders, 'v_height': face_size * 0.25})
 
-        num_rows = (total + MAX_PER_ROW - 1) // MAX_PER_ROW
-        current_left_v -= num_rows * (face_size * ROW_Z_GAP) + (face_size * 0.015)
-
-    # 2.A Eyebrows Grid (Cejas - Verde)
-    unhandled_eb = [k for k in keyblock.keys() if (k.startswith("EB_") or "eyebrow" in k.lower() or "brow" in k.lower()) and k not in handled_keys]
+    unhandled_eb = [
+        k for k in all_keys
+        if (k.startswith("EB_") or "eyebrow" in k.lower() or "brow" in k.lower())
+        and k not in handled_keys
+    ]
     if unhandled_eb:
         eb_items = []
-        for k in unhandled_eb:
+        for k in sorted(unhandled_eb):
+            handled_keys.add(k)
+            lbl = _nte_clean_label(k, r'^(?:EB_|Eyebrow_|brow_)')
             clean_k = k.replace("EB_", "").replace("Eyebrow_", "").replace("brow_", "")
-            c_name = f"CTRL-EB_{clean_k}"
-            handled_keys.add(k)
-            eb_items.append((c_name, [{'key': k, 'axis': 'Z', 'dir': +1}]))
-        add_left_panel_grid(eb_items, 'Face Eyebrows', (0.30, 0.80, 0.35))
+            eb_items.append({
+                'name': f"CTRL-EB_{clean_k}",
+                'label': lbl,
+                'color': PANEL_COL_BROW,
+                'group': 'Face Eyebrows',
+                'drivers': [{'key': k, 'axis': 'X', 'dir': +1}],
+            })
+        brow_rows.append({'type': 'grid', 'cols': 2, 'items': eb_items})
 
-    # 2.B Eye Expressions Grid (Ojos - Cyan / Azul)
-    unhandled_el = [k for k in keyblock.keys() if (k.startswith("EL_") or "eye" in k.lower() or "biyan" in k.lower()) and k not in handled_keys]
-    if unhandled_el:
-        el_items = []
-        for k in unhandled_el:
-            clean_k = k.replace("EL_", "").replace("Eye_", "")
-            c_name = f"CTRL-EL_{clean_k}"
-            handled_keys.add(k)
-            el_items.append((c_name, [{'key': k, 'axis': 'Z', 'dir': +1}]))
-        add_left_panel_grid(el_items, 'Face Eye Expressions', COL_EYEAIM)
+    if brow_rows:
+        main_sections.append({'title': 'Brows', 'rows': brow_rows})
 
-    # Add Left Panel Header Label
-    if unhandled_eb or unhandled_el:
-        controls.append({
-            'name': 'LABEL-Brows_Eyes',
-            'collection': FACERIG_SECONDARY_COLLECTION,
-            'color': COL_LABEL,
-            'group': 'Face Labels',
-            'head': place(left_panel_origin, h=-4.5 * (face_size * ITEM_SP), v=face_size * 0.075),
-            'widget': 'text:BROWS & EYES',
-            'lim': 0.0,
-            'free': (),
-            'range': 'pos',
-            'shape_scale': label_scale,
-            'is_label': True,
-            'drivers': []
+    # --- 2.B EYES SECTION (8-way Aim Pad + Wink/Blink/Lid/Corner/Light V-Sliders + EL_* OP/CLO Grid) ---
+    eye_rows = []
+    panel_eye_pad = None
+    if aim_drv:
+        # In panel space local +X == +right (viewer right), opposite of face-space (-X == +right)
+        panel_aim_drv = []
+        for d in aim_drv:
+            nd = dict(d)
+            if nd['axis'] == 'X':
+                nd['dir'] = -nd['dir']
+            if nd.get('extra_axis') == 'X':
+                nd['extra_dir'] = -nd['extra_dir']
+            panel_aim_drv.append(nd)
+        panel_eye_pad = {
+            'name': 'CTRL-Panel_EyeAim',
+            'label': 'Aim',
+            'edge_labels': ('R', 'L', 'U', 'D'),
+            'color': PANEL_COL_EYE,
+            'group': 'Face Eye-Aim',
+            'drivers': panel_aim_drv,
+        }
+
+    eye_vsliders = []
+    if wdrv_posX:
+        eye_vsliders.append({
+            'name': 'CTRL-Panel_Wink_L',
+            'label': 'Wink L',
+            'color': PANEL_COL_EYELID,
+            'group': 'Face Eyelid',
+            'range': 'both',
+            'drivers': list(wdrv_posX),
+        })
+    if wdrv_negX:
+        eye_vsliders.append({
+            'name': 'CTRL-Panel_Wink_R',
+            'label': 'Wink R',
+            'color': PANEL_COL_EYELID,
+            'group': 'Face Eyelid',
+            'range': 'both',
+            'drivers': list(wdrv_negX),
+        })
+    if biyan_all:
+        b_drv = [{'key': biyan_all, 'axis': 'Z', 'dir': -1}]
+        if "biyan1" in keyblock and "biyan1" != biyan_all:
+            b_drv.append({'key': "biyan1", 'axis': 'Z', 'dir': +1})
+            handled_keys.add("biyan1")
+        eye_vsliders.append({
+            'name': 'CTRL-Panel_Blink',
+            'label': 'Blink',
+            'color': PANEL_COL_EYELID,
+            'group': 'Face Eyelid',
+            'range': 'both' if len(b_drv) > 1 else 'neg',
+            'drivers': b_drv,
         })
 
-    # -------------------------------------------------------------------------
-    # RIGHT PANEL (A la DERECHA de la cabeza, +right)
-    # -------------------------------------------------------------------------
-    right_panel_origin = fcx + right * (face_size * 0.72) + up * (face_size * 0.12)
-    current_right_v_col1 = 0.0
-    current_right_v_col2 = 0.0
-    col2_offset = face_size * (ITEM_SP * MAX_PER_ROW + 0.06)
+    el_up_k = pick_primary_key(keyblock, ["EL_Up"])
+    el_dn_k = pick_primary_key(keyblock, ["EL_Down"])
+    lid_drv = []
+    if el_up_k:
+        lid_drv.append({'key': el_up_k, 'axis': 'Z', 'dir': +1})
+        handled_keys.add(el_up_k)
+    if el_dn_k:
+        lid_drv.append({'key': el_dn_k, 'axis': 'Z', 'dir': -1})
+        handled_keys.add(el_dn_k)
+    if lid_drv:
+        eye_vsliders.append({
+            'name': 'CTRL-Panel_EyeLid',
+            'label': 'Lid',
+            'color': PANEL_COL_EYE,
+            'group': 'Face Eye Expressions',
+            'range': 'both' if len(lid_drv) > 1 else ('pos' if lid_drv[0]['dir'] > 0 else 'neg'),
+            'drivers': lid_drv,
+        })
 
-    def add_right_panel_grid(items_list, group_name, color, widget_type='slider', is_col2=False):
-        nonlocal current_right_v_col1, current_right_v_col2
-        if not items_list:
-            return
-        col_offset = col2_offset if is_col2 else 0.0
-        v_base = current_right_v_col2 if is_col2 else current_right_v_col1
+    cor_drv = []
+    if corner_up and "Corner" in corner_up:
+        cor_drv.append({'key': corner_up, 'axis': 'Z', 'dir': +1})
+        handled_keys.add(corner_up)
+    if corner_down and "Corner" in corner_down:
+        cor_drv.append({'key': corner_down, 'axis': 'Z', 'dir': -1})
+        handled_keys.add(corner_down)
+    if cor_drv:
+        eye_vsliders.append({
+            'name': 'CTRL-Panel_EyeCorner',
+            'label': 'Corn',
+            'color': PANEL_COL_EYE,
+            'group': 'Face Eye Expressions',
+            'range': 'both' if len(cor_drv) > 1 else 'pos',
+            'drivers': cor_drv,
+        })
 
-        total = len(items_list)
-        for i, item in enumerate(items_list):
-            if isinstance(item, tuple):
-                c_name, drv_list = item[0], item[1]
-            else:
-                c_name = item.get('name') if isinstance(item, dict) else f"CTRL-{item}"
-                drv_list = item.get('drivers') if isinstance(item, dict) else [{'key': item, 'axis': 'Z', 'dir': +1}]
-                if isinstance(item, str):
-                    handled_keys.add(item)
+    if panel_eye_pad or eye_vsliders:
+        eye_rows.append({
+            'type': 'vsliders_and_pad',
+            'pad': panel_eye_pad,
+            'vsliders': eye_vsliders,
+            'v_height': face_size * 0.30,
+            'pad_size': face_size * 0.30,
+        })
 
-            row_idx = i // MAX_PER_ROW
-            col_idx = i % MAX_PER_ROW
-
-            h = col_idx * (face_size * ITEM_SP) + col_offset
-            v = v_base - row_idx * (face_size * ROW_Z_GAP)
-
-            controls.append({
-                'name': c_name,
-                'collection': FACERIG_SECONDARY_COLLECTION,
-                'color': color,
-                'group': group_name,
-                'head': place(right_panel_origin, h=h, v=v),
-                'widget': widget_type,
-                'lim': LIM,
-                'free': ('Z',),
-                'range': 'pos',
-                'shape_scale': slider_shape_scale,
-                'drivers': drv_list
+    unhandled_el = [
+        k for k in all_keys
+        if (k.startswith("EL_") or k.startswith("El_") or "eye" in k.lower() or "biyan" in k.lower())
+        and not k.startswith(("TD_", "TDS_"))
+        and k not in handled_keys
+    ]
+    if unhandled_el:
+        el_items = []
+        for k in _nte_pair_op_clo_keys(unhandled_el):
+            handled_keys.add(k)
+            lbl = _nte_clean_label(k, r'^(?:EL_|El_|Eye_)')
+            clean_k = k.replace("EL_", "").replace("El_", "").replace("Eye_", "")
+            el_items.append({
+                'name': f"CTRL-EL_{clean_k}",
+                'label': lbl,
+                'color': PANEL_COL_EYE,
+                'group': 'Face Eye Expressions',
+                'drivers': [{'key': k, 'axis': 'X', 'dir': +1}],
             })
+        eye_rows.append({'type': 'grid', 'cols': 2, 'items': el_items})
 
-        num_rows = (total + MAX_PER_ROW - 1) // MAX_PER_ROW
-        v_drop = num_rows * (face_size * ROW_Z_GAP) + (face_size * 0.015)
-        if is_col2:
-            current_right_v_col2 -= v_drop
-        else:
-            current_right_v_col1 -= v_drop
+    if eye_rows:
+        main_sections.append({'title': 'Eyes', 'rows': eye_rows})
 
-    # 2.C Visemes (jawOpen_a, jawOpen_yi, jawOpen_wu, jawOpen_ei, jawOpen_o - Amarillo, Columna 1)
+    # --- 2.C MOUTH SECTION (2D Pad + Visemes/Rolls + jawOpen_* OP/CLO Grid) ---
+    mouth_rows = []
+    panel_mouth_pad = None
+    if mouth_drv:
+        panel_mouth_pad = {
+            'name': 'CTRL-Panel_MouthPad',
+            'label': 'Shape',
+            'edge_labels': ('Puck', 'Funn', 'Yi', 'Open'),
+            'color': PANEL_COL_MOUTH,
+            'group': 'Face Mouth',
+            'drivers': list(mouth_drv),
+        }
+
     viseme_map = [
         ("A", ["jawOpen_a", "jawOpen_A"]),
         ("I", ["jawOpen_yi", "jawOpen_i", "jawOpen_I"]),
@@ -717,78 +868,124 @@ def plan_nte_controls(mesh_obj, armature, head_name, keyblock):
         ("E", ["jawOpen_ei", "jawOpen_e", "jawOpen_E"]),
         ("O", ["jawOpen_o", "jawOpen_O"]),
     ]
-    viseme_items = []
+    viseme_sliders = []
     for label, cands in viseme_map:
         pk = pick_primary_key(keyblock, cands)
         if pk and pk not in handled_keys:
             handled_keys.add(pk)
-            viseme_items.append((f"CTRL-Viseme_{label}", [{'key': pk, 'axis': 'Z', 'dir': +1}]))
-    if viseme_items:
-        add_right_panel_grid(viseme_items, 'Face Visemes', COL_VISEME, is_col2=False)
+            viseme_sliders.append({
+                'name': f"CTRL-Viseme_{label}",
+                'label': label,
+                'color': PANEL_COL_VISEME,
+                'group': 'Face Visemes',
+                'drivers': [{'key': pk, 'axis': 'X', 'dir': +1}],
+            })
 
-    # 2.D Mouth Expressions (jawOpen_*_OP, jawOpen_*_CLO, mouth* - Púrpura, Columna 1)
-    unhandled_mouth = [k for k in keyblock.keys() if (k.startswith("jawOpen_") or "mouth" in k.lower() or "jaw" in k.lower()) and k not in handled_keys]
+    for roll_k, roll_lbl in (("mouthRollUpper", "Roll Up"), ("mouthRollLower", "Roll Dn")):
+        if roll_k in keyblock and roll_k not in handled_keys:
+            handled_keys.add(roll_k)
+            viseme_sliders.append({
+                'name': f"CTRL-Mth_{roll_k}",
+                'label': roll_lbl,
+                'color': PANEL_COL_VISEME,
+                'group': 'Face Visemes',
+                'drivers': [{'key': roll_k, 'axis': 'X', 'dir': +1}],
+            })
+
+    if panel_mouth_pad or viseme_sliders:
+        mouth_rows.append({
+            'type': 'pad_and_sliders',
+            'pad': panel_mouth_pad,
+            'sliders': viseme_sliders,
+            'slider_cols': 1,
+        })
+
+    unhandled_mouth = [
+        k for k in all_keys
+        if (k.startswith("jawOpen_") or "mouth" in k.lower() or "jaw" in k.lower())
+        and not k.startswith(("TD_", "TDS_"))
+        and k not in handled_keys
+    ]
     if unhandled_mouth:
         m_items = []
-        for k in unhandled_mouth:
-            clean_k = k.replace("jawOpen_", "").replace("mouth", "")
-            c_name = f"CTRL-Mth_{clean_k}" if clean_k else f"CTRL-{k}"
+        for k in _nte_pair_op_clo_keys(unhandled_mouth):
             handled_keys.add(k)
-            m_items.append((c_name, [{'key': k, 'axis': 'Z', 'dir': +1}]))
-        add_right_panel_grid(m_items, 'Face Mouth Expressions', COL_EXPRESSION, is_col2=False)
+            lbl = _nte_clean_label(k, r'^(?:jawOpen_|mouth)')
+            clean_k = k.replace("jawOpen_", "").replace("mouth", "")
+            m_items.append({
+                'name': f"CTRL-Mth_{clean_k}" if clean_k else f"CTRL-{k}",
+                'label': lbl,
+                'color': PANEL_COL_EXPRESSION,
+                'group': 'Face Mouth Expressions',
+                'drivers': [{'key': k, 'axis': 'X', 'dir': +1}],
+            })
+        mouth_rows.append({'type': 'grid', 'cols': 2, 'items': m_items})
 
-    # Add Right Panel Col 1 Header Label (Mouth)
-    if viseme_items or unhandled_mouth:
-        controls.append({
-            'name': 'LABEL-Mouth',
-            'collection': FACERIG_SECONDARY_COLLECTION,
-            'color': COL_LABEL,
-            'group': 'Face Labels',
-            'head': place(right_panel_origin, h=2.0 * (face_size * ITEM_SP), v=face_size * 0.075),
-            'widget': 'text:MOUTH',
-            'lim': 0.0,
-            'free': (),
-            'range': 'pos',
-            'shape_scale': label_scale,
-            'is_label': True,
-            'drivers': []
-        })
+    if mouth_rows:
+        mouth_sections.append({'title': 'Mouth', 'rows': mouth_rows})
 
-    # 2.E 2D Special Manga Symbols (TDS_ & TD_ - Naranja / Magenta, Columna 2)
-    td_keys = [k for k in keyblock.keys() if (k.startswith("TDS_") or k.startswith("TD_")) and k not in handled_keys]
+    # --- 2.D ADJACENT PANEL: 2D VFX & MANGA SYMBOLS (TD_* and TDS_*) ---
+    td_keys = [k for k in all_keys if (k.startswith("TDS_") or k.startswith("TD_")) and k not in handled_keys]
     if td_keys:
         td_items = []
-        for k in td_keys:
-            c_name = f"CTRL-{k}"
+        for k in sorted(td_keys):
             handled_keys.add(k)
-            td_items.append((c_name, [{'key': k, 'axis': 'Z', 'dir': +1}]))
-        add_right_panel_grid(td_items, 'Face 2D TDS Effects', COL_TD_SPECIAL, is_col2=True)
+            lbl = _nte_clean_label(k, r'^(?:TDS_|TD_)')
+            td_items.append({
+                'name': f"CTRL-{k}",
+                'label': lbl,
+                'color': PANEL_COL_VFX,
+                'group': 'Face 2D TDS Effects',
+                'drivers': [{'key': k, 'axis': 'X', 'dir': +1}],
+            })
+        vfx_sections.append({
+            'title': '2D VFX',
+            'rows': [{'type': 'grid', 'cols': 2, 'items': td_items}],
+        })
 
-    # 2.F Extra Shapekeys Fallback (Cualquier otro shapekey no categorizado - Columna 2)
-    remaining = [k for k in keyblock.keys() if k not in handled_keys]
+    # --- 2.E EXTRA SHAPEKEYS FALLBACK (100% coverage for Breathe_*, character uniques, etc.) ---
+    remaining = [k for k in all_keys if k not in handled_keys]
     if remaining:
         rem_items = []
-        for k in remaining:
+        for k in sorted(remaining):
             handled_keys.add(k)
-            rem_items.append((f"CTRL-{k}", [{'key': k, 'axis': 'Z', 'dir': +1}]))
-        add_right_panel_grid(rem_items, 'Face Extra Keys', (0.25, 0.75, 0.35), is_col2=True)
-
-    # Add Right Panel Col 2 Header Label (2D VFX)
-    if td_keys or remaining:
-        controls.append({
-            'name': 'LABEL-2D_VFX',
-            'collection': FACERIG_SECONDARY_COLLECTION,
-            'color': COL_LABEL,
-            'group': 'Face Labels',
-            'head': place(right_panel_origin, h=col2_offset + 4.5 * (face_size * ITEM_SP), v=face_size * 0.075),
-            'widget': 'text:2D VFX',
-            'lim': 0.0,
-            'free': (),
-            'range': 'pos',
-            'shape_scale': label_scale,
-            'is_label': True,
-            'drivers': []
+            rem_items.append({
+                'name': f"CTRL-{k}",
+                'label': _nte_clean_label(k),
+                'color': PANEL_COL_EXTRA,
+                'group': 'Face Extra Keys',
+                'drivers': [{'key': k, 'axis': 'X', 'dir': +1}],
+            })
+        vfx_sections.append({
+            'title': 'Extra',
+            'rows': [{'type': 'grid', 'cols': 2, 'items': rem_items}],
         })
+
+    panel_columns = []
+    if main_sections:
+        panel_columns.append({'title': 'Brows & Eyes', 'sections': main_sections})
+    if mouth_sections:
+        panel_columns.append({'title': 'Mouth', 'sections': mouth_sections})
+    if vfx_sections:
+        panel_columns.append({'title': '2D VFX', 'sections': vfx_sections})
+
+    if panel_columns and wgt_coll is not None:
+        panel_origin = fcx + right * (face_size * 2.35) + up * (face_size * 0.85) + fwd * (face_size * 0.05)
+        _, panel_ctrls = build_shape_keys_panel(
+            panel_columns=panel_columns,
+            origin_world=panel_origin,
+            right=right,
+            up=up,
+            fwd=fwd,
+            face_size=face_size,
+            wgt_coll=wgt_coll,
+            game_tag="NTE",
+            unique_tag=unique_tag,
+            collection_name=FACERIG_SECONDARY_COLLECTION,
+            armature=armature,
+            face_center=fcx,
+        )
+        controls.extend(panel_ctrls)
 
     return controls
 
@@ -996,7 +1193,7 @@ def purge_previous(armature):
     bpy.ops.object.mode_set(mode='EDIT')
     eb = armature.data.edit_bones
     for b in list(eb):
-        if b.name.startswith("CTRL-") or b.name.startswith("LABEL-") or b.name == "Face-Root":
+        if b.name.startswith("CTRL-") or b.name.startswith("LABEL-") or b.name in ("Face-Root", "FacePanel-Root", "FacePanel-Board"):
             eb.remove(b)
     bpy.ops.object.mode_set(mode='OBJECT')
     for o in list(bpy.data.objects):
@@ -1046,13 +1243,15 @@ def setup_nte_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_si
         b = eb.get(c['name']) or eb.new(c['name'])
         h = to_arm_point(c['head'])
         b.head = h
-        b.tail = h + fwd_arm * bone_len
+        axis_dir = (-fwd_arm) if c.get('panel_space') else fwd_arm
+        b.tail = h + axis_dir * bone_len
         b.use_deform = False
         try:
             b.align_roll(up_arm)
         except Exception:
             pass
-        b.parent = root
+        par_name = c.get('parent_bone')
+        b.parent = (eb.get(par_name) if par_name else None) or root
         b.use_connect = False
 
     bpy.ops.object.mode_set(mode='OBJECT')
@@ -1105,14 +1304,24 @@ def setup_nte_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_si
             continue
 
         is_lbl = c.get('is_label', False)
+        is_panel_root = c.get('is_panel_root', False)
+        is_panel_board = c.get('is_panel_board', False)
 
-        if is_lbl:
-            # Lock all transforms for header label bones
+        if is_panel_root:
+            pb.lock_location = (False, False, False)
+            pb.lock_rotation = (True, True, True)
+            pb.lock_rotation_w = True
+            pb.lock_scale = (False, False, False)
+        elif is_lbl or is_panel_board:
             for i in range(3):
                 pb.lock_location[i] = True
                 pb.lock_rotation[i] = True
                 pb.lock_scale[i] = True
             pb.lock_rotation_w = True
+            if is_panel_board:
+                b_data = armature.data.bones.get(c['name'])
+                if b_data:
+                    b_data.hide_select = True
         else:
             lim = c['lim']
             free = c['free']
@@ -1144,7 +1353,9 @@ def setup_nte_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_si
             con.min_z = lo if 'Z' in free else 0.0
             con.max_z = hi if 'Z' in free else 0.0
 
-        if c['widget'].startswith('text:'):
+        if c.get('widget_obj') is not None:
+            pb.custom_shape = c['widget_obj']
+        elif c.get('widget', '').startswith('text:'):
             text_str = c['widget'].split(':', 1)[1]
             pb.custom_shape = make_text_widget(text_str, wgt_coll)
         else:
@@ -1154,6 +1365,11 @@ def setup_nte_face_rig(mesh_obj, controls, armature, head_name, fwd, up, face_si
             pb.use_custom_shape_bone_size = False
         except Exception:
             pass
+        if c.get('custom_shape_translation') is not None:
+            try:
+                pb.custom_shape_translation = c['custom_shape_translation']
+            except Exception:
+                pass
         ss = c.get('shape_scale')
         pb.custom_shape_scale_xyz = ss if ss is not None else Vector((c.get('lim', 0.02) * WIDGET_F,) * 3)
 
@@ -1330,36 +1546,75 @@ def cleanup_head_driver_to_wgts_if_present(armature=None, head_name=None):
         pass
 
 
-def nte_face_rig_main():
-    faceobj = find_face_mesh()
+def nte_face_rig_main(armature=None, faceobj=None):
+    if faceobj is None:
+        faceobj = find_face_mesh(armature=armature)
     if faceobj is None:
         print("NTE Face Rig: No face mesh found.")
-        return
+        return 0
     if faceobj.data.shape_keys is None:
         print("NTE Face Rig: Face mesh has no shape keys.")
-        return
+        return 0
 
     keyblock = faceobj.data.shape_keys.key_blocks
-    armature, head_name = find_armature_and_head(faceobj)
+    resolved_armature, head_name = find_armature_and_head(faceobj)
+    if armature is None:
+        armature = resolved_armature
     fwd, right, up, face_size, fcx = get_face_metrics(faceobj, armature, head_name)
-    controls = plan_nte_controls(faceobj, armature, head_name, keyblock)
-
-    if not controls:
-        print("NTE Face Rig: No drivable shape keys found.")
-        return
 
     if CLEAN_REBUILD:
         purge_previous(armature)
 
+    wgt_coll = get_widget_collection()
+    controls = plan_nte_controls(faceobj, armature, head_name, keyblock, wgt_coll=wgt_coll, unique_tag=armature.name)
+
+    if not controls:
+        print("NTE Face Rig: No drivable shape keys found.")
+        return 0
+
     setup_nte_face_rig(faceobj, controls, armature, head_name, fwd, up, face_size, keyblock)
 
-    wgt_coll = get_widget_collection()
     finalize_widget_collection(wgt_coll)
 
     setup_common_face_materials_if_present()
     cleanup_head_driver_to_wgts_if_present(armature, head_name)
 
     print(f"\nNTE Face Rig complete: {len(controls)} controls built on '{armature.name}'.\n")
+    return len(controls)
+
+
+class NTE_OT_CreateShapekeyPanel(bpy.types.Operator):
+    """Creates or rebuilds the 3D facial shapekey control panel for an NTE character"""
+    bl_idname = "neverness_to_everness.create_shapekey_panel"
+    bl_label = "Create Shapekey Panel"
+    bl_description = "Creates or rebuilds the 3D facial shapekey control panel for the selected NTE character"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        from setup_wizard.character_rig_setup.rig_ui_utils import find_target_armature
+        armature = find_target_armature(context)
+        faceobj = None
+        active = context.active_object
+        if active and active.type == 'MESH' and active.data and active.data.shape_keys:
+            faceobj = active
+            if armature is None:
+                for m in active.modifiers:
+                    if m.type == 'ARMATURE' and m.object:
+                        armature = m.object
+                        break
+
+        try:
+            count = nte_face_rig_main(armature=armature, faceobj=faceobj)
+        except Exception as ex:
+            self.report({'ERROR'}, f"Failed to create NTE Shapekey Panel: {ex}")
+            return {'CANCELLED'}
+
+        if not count:
+            self.report({'WARNING'}, "No NTE face mesh with drivable shape keys found.")
+            return {'CANCELLED'}
+
+        self.report({'INFO'}, f"Created NTE Shapekey Panel ({count} controls).")
+        return {'FINISHED'}
 
 
 if __name__ == "__main__":

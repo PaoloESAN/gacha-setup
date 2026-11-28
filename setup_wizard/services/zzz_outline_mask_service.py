@@ -2,6 +2,7 @@
 #          so that outline modifiers (Geometry Nodes 'Outlines' or 'Solidify') only extrude the face skin
 #          and exclude the eyes, eyebrows, teeth, and interior mouth details, preventing weird duplicates or clipping.
 
+import re
 import bpy
 import bmesh
 
@@ -12,18 +13,28 @@ NON_SKIN_KEYWORDS = (
 )
 
 
+def _matches_non_skin_keyword(text: str, keywords=NON_SKIN_KEYWORDS) -> bool:
+    for keyword in keywords:
+        if keyword == "iris":
+            if re.search(r'(?:^|[^a-z])iris(?:$|[^a-z])', text):
+                return True
+        elif keyword in text:
+            return True
+    return False
+
+
 def is_face_detail_material(material):
     """Keep exclusions after shader replacement or user material renaming."""
     if material is None:
         return False
     names = (material.name, material.get('_original_material_name', ''))
-    return any(keyword in name.lower() for name in names for keyword in NON_SKIN_KEYWORDS)
+    return any(_matches_non_skin_keyword(name.lower()) for name in names)
 
 
 def is_face_detail_object(obj):
     """Separate eye/mouth meshes must not receive the general body hull."""
     name = obj.name.lower()
-    if 'face' not in name and any(keyword in name for keyword in NON_SKIN_KEYWORDS):
+    if 'face' not in name and _matches_non_skin_keyword(name):
         return True
     materials = [slot.material for slot in obj.material_slots if slot.material]
     if materials:
@@ -63,9 +74,9 @@ def _exclude_facial_openings(face_obj, bm, skin):
 
     if not eye_surfaces:
         eye_slots = {i for i, slot in enumerate(face_obj.material_slots)
-                     if slot.material and any(word in (
+                     if slot.material and _matches_non_skin_keyword((
                          slot.material.name + ' ' + slot.material.get('_original_material_name', '')
-                     ).lower() for word in ('eye', 'pupil', 'iris'))
+                     ).lower(), ('eye', 'pupil', 'iris'))
                      and not any(word in slot.material.name.lower() for word in ('brow', 'shadow'))}
         points = {vertex for face in bm.faces if face.material_index in eye_slots for vertex in face.verts}
         if points:

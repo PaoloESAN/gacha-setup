@@ -107,11 +107,12 @@ def isolate_wgts_for_character(rig_obj, char_name, char_coll=None, extra_keyword
     ]
     if extra_keywords:
         keywords.extend(list(extra_keywords))
-    # Head-driver empties (NOT Light Direction: that stays with the character).
+    # Head-driver and lighting-panel empties (NOT Light Direction: that stays with the character).
     # startswith match covers per-character renames like "Head Origin_Char".
     head_empty_prefixes = (
         "Head Origin", "Head Driver", "Head Forward", "Head Up", "Face Light Direction",
-        "Head_Pole", "Head Pole", "head_pole"
+        "Head_Pole", "Head Pole", "head_pole",
+        "ColorPicker-", "Origin-Rim", "Slider-Rim",
     )
 
     def _move(c_obj):
@@ -199,11 +200,20 @@ def isolate_wgts_for_character(rig_obj, char_name, char_coll=None, extra_keyword
                     pass
                 if not used_by_other:
                     _move(w_obj)
-                    for flag in ("hide_viewport", "hide_render"):
+                    w_low = w_obj.name.lower()
+                    is_lp_custom_shape = any(k in w_low for k in ("lightpanelwgt", "lightpanelselector"))
+                    if is_lp_custom_shape:
                         try:
-                            setattr(w_obj, flag, True)
+                            w_obj.hide_viewport = False
+                            w_obj.hide_render = True
                         except Exception:
                             pass
+                    else:
+                        for flag in ("hide_viewport", "hide_render"):
+                            try:
+                                setattr(w_obj, flag, True)
+                            except Exception:
+                                pass
         except Exception:
             continue
 
@@ -227,8 +237,12 @@ def isolate_wgts_for_character(rig_obj, char_name, char_coll=None, extra_keyword
             for c_obj in list(coll.objects):
                 try:
                     _move(c_obj)
-                    for flag in ("hide_viewport", "hide_render"):
-                        setattr(c_obj, flag, True)
+                    if any(k in c_obj.name.lower() for k in ("lightpanelwgt", "lightpanelselector")):
+                        c_obj.hide_viewport = False
+                        c_obj.hide_render = True
+                    else:
+                        for flag in ("hide_viewport", "hide_render"):
+                            setattr(c_obj, flag, True)
                 except Exception:
                     pass
             for child_c in list(coll.children):

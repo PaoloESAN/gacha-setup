@@ -73,16 +73,17 @@ def update_alpha_transparency(self, context=None):
                 if (node.type == 'GROUP' and node.node_tree and "alpha transparency" in node.node_tree.name.lower()) or "alpha transparency" in node.name.lower():
                     node.mute = not enabled
             if enabled:
-                if hasattr(mat, "surface_render_method"):
-                    try:
-                        mat.surface_render_method = 'BLENDED'
-                    except Exception:
-                        pass
-                if hasattr(mat, "blend_method"):
-                    try:
-                        mat.blend_method = 'BLEND'
-                    except Exception:
-                        pass
+                if not mat.get("ww_keep_dithered"):
+                    if hasattr(mat, "surface_render_method"):
+                        try:
+                            mat.surface_render_method = 'BLENDED'
+                        except Exception:
+                            pass
+                    if hasattr(mat, "blend_method"):
+                        try:
+                            mat.blend_method = 'BLEND'
+                        except Exception:
+                            pass
                 if hasattr(mat, "shadow_method"):
                     try:
                         mat.shadow_method = 'HASHED'

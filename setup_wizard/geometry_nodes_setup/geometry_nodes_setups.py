@@ -1286,7 +1286,13 @@ class HonkaiStarRailGeometryNodesSetup(GameGeometryNodesSetup):
             print(f"[HSR outlines] Notice: could not scale outline depth offset on {mesh.name}: {ex}")
 
     def apply_hsr_hair_cleanup_and_vertex_paint(self):
-        hair_objs = [obj for obj in bpy.context.scene.objects if obj.type == 'MESH' and 'hair' in obj.name.lower()]
+        hair_objs = [
+            obj for obj in bpy.context.scene.objects
+            if obj.type == 'MESH'
+            and 'hair' in obj.name.lower()
+            and not any(k in obj.name.lower() for k in ("lightpanel", "colorwheel", "wgt"))
+            and not obj.name.startswith("WGT-")
+        ]
         for obj in hair_objs:
             mesh = obj.data
 
@@ -1310,6 +1316,13 @@ class HonkaiStarRailGeometryNodesSetup(GameGeometryNodesSetup):
 
             if bpy.context.mode != 'OBJECT':
                 bpy.ops.object.mode_set(mode='OBJECT')
+
+            try:
+                bpy.ops.object.select_all(action='DESELECT')
+                obj.select_set(True)
+                bpy.context.view_layer.objects.active = obj
+            except Exception:
+                pass
 
             try:
                 bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
@@ -1446,24 +1459,50 @@ class StellarToonGeometryNodesSetup(HonkaiStarRailGeometryNodesSetup):
     def setup_geometry_nodes(self):
         self.clone_outlines(self.material_names)
 
+        from setup_wizard.character_rig_setup.lighting_panel_setup import (
+            HSR_LIGHT_PANEL_GN_NAME,
+            HSR_LIGHT_PANEL_MODIFIER_NAME,
+        )
+        lp_gn = bpy.data.node_groups.get(HSR_LIGHT_PANEL_GN_NAME)
+
+        def _is_lp_or_wgt_mesh(obj):
+            o_low = obj.name.lower()
+            return (
+                any(k in o_low for k in (
+                    "colorwheel", "colorpicker", "slider", "origin-rim",
+                    "lightpanel", "selector", "wgtplane", "face widget",
+                    "limitdistance", "facerig", "wgt", "controls", "panel",
+                ))
+                or obj.name.startswith("WGT-")
+            )
+
         if self.light_vectors_node_group_names:
-            armatures = [obj for obj in bpy.context.selected_objects if obj.type == 'ARMATURE']
+            armatures = [obj for obj in bpy.context.selected_objects if obj.type == 'ARMATURE' and 'lighting panel' not in obj.name.lower()]
+            if not armatures:
+                armatures = [obj for obj in bpy.data.objects if obj.type == 'ARMATURE' and 'lighting panel' not in obj.name.lower()]
             character_armature = armatures[0] if armatures else [obj for obj in bpy.data.objects if obj.type == 'ARMATURE'][0]
-            character_armature_mesh_names = [obj.name for obj in character_armature.children if obj.type == 'MESH']
+            character_armature_mesh_names = [
+                obj.name for obj in character_armature.children
+                if obj.type == 'MESH' and not _is_lp_or_wgt_mesh(obj)
+            ]
             for mesh_name in character_armature_mesh_names:  # It is important that this is created and placed before Outlines!!
                 for object_name, object_data in bpy.context.scene.objects.items():
-                    if object_data.type == 'MESH' and (mesh_name == object_name or f'_{mesh_name}' in object_name):
+                    if object_data.type == 'MESH' and not _is_lp_or_wgt_mesh(object_data) and (mesh_name == object_name or f'_{mesh_name}' in object_name):
                         light_vectors_modifier = self.create_light_vectors_modifier(f'{object_name}{BODY_PART_SUFFIX}')
                         self.__set_light_vectors_default_output_attributes(light_vectors_modifier)
+                        if lp_gn:
+                            self.__setup_hsr_light_panel_modifier(object_data, lp_gn, HSR_LIGHT_PANEL_MODIFIER_NAME)
         for mesh_name in meshes_to_create_outlines_on:
             for object_name, object_data in bpy.context.scene.objects.items():
+                if object_data.type != 'MESH' or _is_lp_or_wgt_mesh(object_data):
+                    continue
                 object_name_matches = (
                     mesh_name.lower() == object_name.lower()
                     or object_name.lower().startswith(f"{mesh_name.lower()}.")
                     or f'_{mesh_name.lower()}' in object_name.lower()
                     or object_name.lower().startswith(f"{mesh_name.lower()}_")
                 )
-                if object_data.type == 'MESH' and object_name_matches:
+                if object_name_matches:
                     self.create_geometry_nodes_modifier(f'{object_name}{BODY_PART_SUFFIX}')
                     self.fix_meshes_by_setting_genshin_materials(object_name)
 
@@ -1471,6 +1510,84 @@ class StellarToonGeometryNodesSetup(HonkaiStarRailGeometryNodesSetup):
         self.fix_face_outlines_by_reordering_material_slots(face_meshes)
         self.apply_hsr_hair_cleanup_and_vertex_paint()
         self.configure_hair_outlines_transparency()
+
+    def __setup_hsr_light_panel_modifier(self, obj, lp_gn, mod_name):
+        mod = next(
+            (m for m in obj.modifiers if m.type == 'NODES' and (m.name == mod_name or (m.node_group and m.node_group.name == lp_gn.name))),
+            None,
+        )
+        if not mod:
+            mod = obj.modifiers.new(name=mod_name, type='NODES')
+        mod.node_group = lp_gn
+
+        socket_mapping = {
+            "Ambient Color Wheel": "ColorWheel-Ambient",
+            "Ambient Color Picker": "ColorPicker-Ambient",
+            "Lit Color Wheel": "ColorWheel-Lit",
+            "Lit Color Picker": "ColorPicker-Lit",
+            "Shadow Color Wheel": "ColorWheel-Shadow",
+            "Shadow Color Picker": "ColorPicker-Shadow",
+            "Rim Lit Color Wheel": "ColorWheel-RimLit",
+            "Rim Lit Color Picker": "ColorPicker-RimLit",
+            "Rim Shadow Color Wheel": "ColorWheel-RimShadow",
+            "Rim Shadow Color Picker": "ColorPicker-RimShadow",
+            "Rim X Size Origin": "Origin-RimX",
+            "Rim X Size Slider": "Slider-RimX",
+            "Rim Y Size Origin": "Origin-RimY",
+            "Rim Y Size Slider": "Slider-RimY",
+            "Socket_0": "ColorWheel-Ambient",
+            "Socket_1": "ColorPicker-Ambient",
+            "Socket_2": "ColorWheel-Lit",
+            "Socket_3": "ColorPicker-Lit",
+            "Socket_4": "ColorWheel-Shadow",
+            "Socket_5": "ColorPicker-Shadow",
+            "Socket_6": "ColorWheel-RimLit",
+            "Socket_7": "ColorPicker-RimLit",
+            "Socket_8": "ColorWheel-RimShadow",
+            "Socket_9": "ColorPicker-RimShadow",
+            "Socket_26": "Origin-RimX",
+            "Socket_27": "Slider-RimX",
+            "Socket_28": "Origin-RimY",
+            "Socket_29": "Slider-RimY",
+        }
+        for socket_name, target_name in socket_mapping.items():
+            target_obj = bpy.data.objects.get(target_name)
+            if target_obj:
+                set_modifier_property(mod, socket_name, target_obj)
+
+        # Leave lightDir/headForward/headUp attribute names empty so HSR's Light Vectors stays authoritative.
+        clear_outputs = ("Output_2", "Output_7", "Output_8", "lightDir", "headForward", "headUp")
+        outputs = get_modifier_outputs(mod)
+        for sock_ident in clear_outputs:
+            set_modifier_property(mod, f"{sock_ident}_attribute_name", "")
+            if outputs is not None:
+                if hasattr(outputs, "keys") and sock_ident in outputs.keys():
+                    set_property_field(outputs[sock_ident], "attribute_name", "")
+                elif hasattr(outputs, sock_ident):
+                    set_property_field(getattr(outputs, sock_ident), "attribute_name", "")
+
+        lp_output_mapping = {
+            "Socket_10": "Ambient",
+            "Socket_11": "Lit",
+            "Socket_12": "Shadow",
+            "Socket_13": "RimLit",
+            "Socket_14": "RimShadow",
+            "Socket_30": "Rim",
+            "Ambient": "Ambient",
+            "Lit": "Lit",
+            "Shadow": "Shadow",
+            "Rim Lit": "RimLit",
+            "Rim Shadow": "RimShadow",
+            "Rim": "Rim",
+        }
+        for sock_ident, attr_name in lp_output_mapping.items():
+            set_modifier_property(mod, sock_ident, attr_name)
+            set_modifier_property(mod, f"{sock_ident}_attribute_name", attr_name)
+            if outputs is not None:
+                if hasattr(outputs, "keys") and sock_ident in outputs.keys():
+                    set_property_field(outputs[sock_ident], "attribute_name", attr_name)
+                elif hasattr(outputs, sock_ident):
+                    set_property_field(getattr(outputs, sock_ident), "attribute_name", attr_name)
 
     def __set_light_vectors_default_output_attributes(self, light_vectors_modifier):
         set_modifier_property(light_vectors_modifier, self.LIGHTDIR_OUTPUT_ATTRIBUTE, 'lightDir')
@@ -2353,6 +2470,8 @@ class WutheringWavesGeometryNodesSetup(GameGeometryNodesSetup):
                 char_materials = []
                 for slot in mesh.material_slots:
                     if slot.material and slot.material not in char_materials:
+                        if slot.material.get("ww_no_outline"):
+                            continue
                         mat_low = slot.material.name.lower()
                         if not any(ign in mat_low for ign in ["eye", "star", "highlight", "outline"]):
                             char_materials.append(slot.material)
@@ -2439,6 +2558,16 @@ class WutheringWavesGeometryNodesSetup(GameGeometryNodesSetup):
                 if not mod:
                     mod = mesh.modifiers.new(name=mod_name, type='NODES')
                 mod.node_group = star_group
+
+        try:
+            from setup_wizard.character_custom_setups import run_character_setup_stage
+            run_character_setup_stage(
+                "after_outlines",
+                context=self.context,
+                game_type=GameType.WUTHERING_WAVES.name,
+            )
+        except Exception as exc_cs:
+            print(f"[WW OUTLINES] Notice in character custom setup (after_outlines): {exc_cs}")
 
         self.blender_operator.report({'INFO'}, 'Configured Geometry Nodes and Outlines for Wuthering Waves.')
 

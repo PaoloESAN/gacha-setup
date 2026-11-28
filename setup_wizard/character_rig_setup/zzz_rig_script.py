@@ -79,6 +79,11 @@ def rig_character(
                     if bip_pattern.match(vg.name) and not vg.name.startswith("Bip001"):
                         vg.name = re.sub(r'^Bip\d{3}', 'Bip001', vg.name)
 
+    # Prune any completely unskinned duplicate Bip001 Pelvis subtree (e.g. Cecilia)
+    # and strip leftover '.001' suffixes from the surviving skinned skeleton.
+    from setup_wizard.character_rig_setup.armature_unification import prune_unskinned_duplicate_pelvis_subtree
+    prune_unskinned_duplicate_pelvis_subtree(head_bone_arm_target)
+
     # Some exports (SPBilly) leave part of the hair without any skin weights.
     # Repair before bone renaming so Blender carries the group into Rigify.
     from setup_wizard.utils.zzz_hair_weights import bind_unweighted_hair
@@ -604,6 +609,42 @@ def rig_character(
         armature.edit_bones[foot].tail.y = armature.edit_bones[toe].head.y
         armature.edit_bones[foot].tail.z = armature.edit_bones[toe].head.z
 
+    # Native FBX import (Blender 4.5+/5.x) can leave unskinned Bip001 Forearm
+    # bones shifted forward off the true elbow bind pose while their skinned
+    # child bones (Skn_*_Elbow01 / Skn_*_ForeArm_Twist01) sit at the real
+    # elbow joint, inverting Rigify's automatic arm IK bend direction.
+    _arm_mw = head_bone_arm_target.matrix_world
+    for _side_dot, _side_tag in (('.L', 'L'), ('.R', 'R')):
+        _ua = armature.edit_bones.get('upper_arm' + _side_dot)
+        _fa = armature.edit_bones.get('forearm' + _side_dot)
+        _ha = armature.edit_bones.get('hand' + _side_dot)
+        if not (_ua and _fa and _ha):
+            continue
+        _p_ua = _arm_mw @ _ua.head
+        _p_fa = _arm_mw @ _fa.head
+        _p_ha = _arm_mw @ _ha.head
+        _span = _p_ha - _p_ua
+        if _span.length < 1e-4:
+            continue
+        _dir = _span.normalized()
+        _bend_y = (_p_fa - (_p_ua + _dir * (_p_fa - _p_ua).dot(_dir))).y
+        if _bend_y <= 0.0005:
+            for _cand_name in (
+                f'Skn_{_side_tag}_ForeArm_Twist01',
+                f'Skn_{_side_tag}_Elbow01',
+                f'Skn_{_side_tag}_Elbow02',
+            ):
+                _cand = armature.edit_bones.get(_cand_name)
+                if not _cand or _cand.parent != _fa:
+                    continue
+                _p_cand = _arm_mw @ _cand.head
+                if (_p_cand - _p_fa).length >= 0.03:
+                    continue
+                _cand_bend_y = (_p_cand - (_p_ua + _dir * (_p_cand - _p_ua).dot(_dir))).y
+                if _cand_bend_y > 0.001:
+                    _fa.head = _cand.head.copy()
+                    break
+
     if toe_bones_exist:
         attachfeets('foot.L', 'toe.L')
         attachfeets('foot.R', 'toe.R')
@@ -811,6 +852,28 @@ def rig_character(
             o.select_set(True)
 
     bpy.ops.object.mode_set(mode='EDIT')
+    # Guarantee a slight backward (+Y) elbow bend on the metarig so Rigify's
+    # automatic arm IK never flips the pole target forward (-Y) or bends the
+    # elbow to the opposite side.
+    _meta_mw = metarig_obj.matrix_world
+    _meta_mw_inv = _meta_mw.inverted()
+    for side in [".L", ".R"]:
+        upper_eb = metarm.edit_bones.get("upper_arm" + side)
+        forearm_eb = metarm.edit_bones.get("forearm" + side)
+        hand_eb = metarm.edit_bones.get("hand" + side)
+        if upper_eb and forearm_eb and hand_eb:
+            _p_ua = _meta_mw @ upper_eb.head
+            _p_el = _meta_mw @ forearm_eb.head
+            _p_ha = _meta_mw @ hand_eb.head
+            _span = _p_ha - _p_ua
+            if _span.length > 1e-4:
+                _dir = _span.normalized()
+                _proj = _p_ua + _dir * (_p_el - _p_ua).dot(_dir)
+                if (_p_el - _proj).y < 0.003:
+                    _fixed_el = _meta_mw_inv @ Vector((_p_el.x, _proj.y + 0.005, _p_el.z))
+                    upper_eb.tail = _fixed_el
+                    forearm_eb.head = _fixed_el
+
     # Align hand.L and hand.R metarig bones straight along forearm vector so hand_ik widget is centered on wrist
     for side in [".L", ".R"]:
         forearm_eb = metarm.edit_bones.get("forearm" + side)
@@ -835,12 +898,6 @@ def rig_character(
                 bone.roll = armature.edit_bones[def_name].roll
             elif bone.name in armature.edit_bones:
                 bone.roll = armature.edit_bones[bone.name].roll
-
-
-    # Fix hand bones being rotated 90 degrees sideways and arm deformation bones being wonky
-    if "Loli" in obj.name:
-        metarm.edit_bones["upper_arm.L"].tail.y += .003
-        metarm.edit_bones["upper_arm.R"].tail.y += .003
 
     ##########  DETACH PHYSICS BONES,  
 
@@ -1627,6 +1684,11 @@ def rig_character(
             any(k in b_low for k in weapon_keywords)
             or ("prop" in b_low and "parent" not in b_low)
             or "_wpn_" in b_low
+            or b_low.endswith("_wpn")
+            or b_low.startswith("wpn_")
+            or "_wp_" in b_low
+            or b_low.endswith("_wp")
+            or b_low.startswith("wp_")
             or "_weapon_" in b_low
             or "_garape_" in b_low
             or "_grape_" in b_low
@@ -4267,7 +4329,7 @@ def rig_character(
         b_low = b.name.lower()
         if "box" in b_low or "weaponbox" in b_low:
             continue
-        if any(k in b_low for k in ["prop1", "prop2", "weapon", "garape", "grape", "equip"]) or "_wpn_" in b_low or "_weapon_" in b_low or "_garape_" in b_low or "_grape_" in b_low or "garape" in b_low or "grape" in b_low:
+        if any(k in b_low for k in ["prop1", "prop2", "weapon", "garape", "grape", "equip"]) or "_wpn_" in b_low or b_low.endswith(("_wpn", "_wp")) or b_low.startswith(("wpn_", "wp_")) or "_wp_" in b_low or "_weapon_" in b_low or "_garape_" in b_low or "_grape_" in b_low or "garape" in b_low or "grape" in b_low:
             bone_to_layer(b.name, 21, "Weapon")
 
     # Ensure all face bones (slider-, frame-, eyetrack, plate-, Face-, Wink, etc.) are in Face (excluding plate-settings which is Root)
@@ -4550,6 +4612,111 @@ def rig_character(
 
     from setup_wizard.character_rig_setup.pole_targets import setup_pole_targets
     setup_pole_targets(this_obj, use_arm_ik_poles, use_leg_ik_poles)
+    position_zzz_weapons_below_lighting_panel(this_obj)
+
+
+def position_zzz_weapons_below_lighting_panel(rig):
+    """Park ZZZ weapon prop controls on the viewer's left (-X) and low (near floor)
+    in Pose Mode so weapons do not overlap the large ZZZ shapekeys panel on +X.
+    Idempotent: resets prop.L/prop.R pose translation before computing the offset,
+    preserving the rest pose (Alt+G snaps weapons back to the character's hand).
+    """
+    if not rig or rig.type != 'ARMATURE' or not getattr(rig, 'pose', None):
+        return
+
+    prop_names = [n for n in ('prop.R', 'prop.L') if n in rig.pose.bones]
+    if not prop_names:
+        return
+
+    orig_active = bpy.context.view_layer.objects.active
+    orig_mode = orig_active.mode if orig_active else 'OBJECT'
+    try:
+        if orig_active and orig_mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+        # Reset prop pose locations first so repeated calls never double-offset.
+        for pname in prop_names:
+            rig.pose.bones[pname].location = (0.0, 0.0, 0.0)
+        rig.update_tag()
+        bpy.context.view_layer.update()
+
+        mw = rig.matrix_world
+        # Fixed placement on the viewer's left (-X), down near the floor.
+        base_x = -1.10
+        base_y = 0.0
+        z_floor = 0.05
+        z_ceiling = 1.05
+
+        depsgraph = bpy.context.evaluated_depsgraph_get()
+        rig_meshes = [
+            o for o in bpy.data.objects
+            if o.type == 'MESH' and (
+                o.parent == rig
+                or any(m.type == 'ARMATURE' and m.object == rig for m in o.modifiers)
+            )
+        ]
+
+        x_offsets = [0.0] if len(prop_names) == 1 else [0.15, -0.25]
+
+        for idx, pname in enumerate(prop_names):
+            pb_prop = rig.pose.bones[pname]
+            b_prop = rig.data.bones[pname]
+            subtree_names = {b_prop.name} | {c.name for c in b_prop.children_recursive}
+
+            pts = []
+            for m_obj in rig_meshes:
+                vg_indices = {vg.index for vg in m_obj.vertex_groups if vg.name in subtree_names}
+                if not vg_indices:
+                    continue
+                eval_obj = m_obj.evaluated_get(depsgraph)
+                eval_mesh = eval_obj.data
+                m_mw = m_obj.matrix_world
+                for v in eval_mesh.vertices:
+                    if any(g.group in vg_indices and g.weight > 0.25 for g in v.groups):
+                        pts.append(m_mw @ v.co)
+
+            if not pts:
+                pts = [mw @ rig.data.bones[n].head_local for n in subtree_names if n in rig.data.bones]
+            if not pts:
+                continue
+
+            min_x = min(p.x for p in pts)
+            max_x = max(p.x for p in pts)
+            min_y = min(p.y for p in pts)
+            max_y = max(p.y for p in pts)
+            min_z = min(p.z for p in pts)
+            max_z = max(p.z for p in pts)
+
+            cur_cx = (min_x + max_x) * 0.5
+            cur_cy = (min_y + max_y) * 0.5
+            height = max_z - min_z
+            avail_h = z_ceiling - z_floor
+            if height <= avail_h:
+                target_cz = (z_floor + z_ceiling) * 0.5
+                cur_cz = (min_z + max_z) * 0.5
+                delta_z = target_cz - cur_cz
+            else:
+                delta_z = z_floor - min_z
+
+            target_cx = base_x + x_offsets[idx]
+            delta_world = Vector((target_cx - cur_cx, base_y - cur_cy, delta_z))
+
+            mat = pb_prop.matrix.copy()
+            mat.translation += mw.inverted().to_3x3() @ delta_world
+            pb_prop.matrix = mat
+
+        rig.update_tag()
+        bpy.context.view_layer.update()
+    except Exception as e:
+        print(f"[ZZZ RIG] Weapon placement notice: {e}")
+    finally:
+        try:
+            if orig_active and orig_active.name in bpy.context.view_layer.objects:
+                bpy.context.view_layer.objects.active = orig_active
+                if orig_mode != 'OBJECT':
+                    bpy.ops.object.mode_set(mode=orig_mode)
+        except Exception:
+            pass
     
 def setup_neck_and_head_follow(neck_follow_value=1.0, head_follow_value=1.0):
     if bpy.context.object and hasattr(bpy.context.object, "pose") and bpy.context.object.pose:

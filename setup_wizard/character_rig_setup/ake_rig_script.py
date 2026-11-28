@@ -506,18 +506,6 @@ def rig_character(
                 meta_boob_R.head = Vector((-meta_boob_L.head.x, meta_boob_L.head.y, meta_boob_L.head.z))
                 meta_boob_R.tail = meta_boob_R.head + Vector((0, -0.06, 0))
                 meta_boob_R.roll = 0.0
-
-            # Empujar controles al frente del volumen (paridad NTE/ZZZ): el hueso
-            # nace dentro del pecho y el circulo queda enterrado. Push proporcional
-            # al halfwidth en -Y (frente), pre-generate para no desplazar el deform.
-            for _bb in [meta_boob_L, meta_boob_R]:
-                try:
-                    _push = abs(_bb.head.x) * 2.0
-                    _d = _bb.tail - _bb.head
-                    _bb.head.y -= _push
-                    _bb.tail = _bb.head + _d
-                except Exception as ex_push:
-                    print(f"[AKE RIG] breast push notice: {ex_push}")
         else:
             if meta_boob_L:
                 metarig_obj.data.edit_bones.remove(meta_boob_L)
@@ -848,6 +836,12 @@ def rig_character(
     align_ake_chest_widget(rigifyr)
     safe_set_custom_shape("breast.L", rotation_euler=(0, 0, 0), scale=(0.07, 0.07, 0.07), disable_bone_size=True)
     safe_set_custom_shape("breast.R", rotation_euler=(0, 0, 0), scale=(0.07, 0.07, 0.07), disable_bone_size=True)
+    # Desplazar solo el widget hacia adelante (+Y local del hueso = -Y mundo)
+    # para mantener el pivote de rotacion en el hueso original del pecho.
+    for _b_name in ("breast.L", "breast.R"):
+        _pb = rigifyr.pose.bones.get(_b_name)
+        if _pb:
+            _pb.custom_shape_translation = (0.0, abs(_pb.bone.head_local.x) * 2.0, 0.0)
     safe_set_custom_shape("hand_ik.L", "hand", scale=(1.0, 1.0, 1.0), disable_bone_size=True)
     safe_set_custom_shape("hand_ik.R", "hand", scale=(1.0, 1.0, 1.0), disable_bone_size=True)
 

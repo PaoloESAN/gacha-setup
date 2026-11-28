@@ -186,11 +186,9 @@ def _eye_masks(obj, components, overlay, fit):
     return left, right
 
 
-def _eye_hole_edges(obj, polygons, fit):
-    """Find only the two eye openings; never fill the outer face boundary."""
+def _boundary_loops(mesh, polygons):
+    """Return connected boundary vertex loops and their boundary edges."""
     from collections import Counter
-    center, spacing, height, width, window_height = fit
-    mesh = obj.data
     counts = Counter(tuple(sorted(edge)) for index in polygons
                      for edge in mesh.polygons[index].edge_keys)
     boundary = [edge for edge, count in counts.items() if count == 1]
@@ -199,7 +197,7 @@ def _eye_hole_edges(obj, polygons, fit):
         neighbors.setdefault(a, set()).add(b)
         neighbors.setdefault(b, set()).add(a)
     remaining = set(neighbors)
-    holes = []
+    loops = []
     while remaining:
         pending = [remaining.pop()]
         vertices = set(pending)
@@ -209,6 +207,17 @@ def _eye_hole_edges(obj, polygons, fit):
                     remaining.remove(index)
                     vertices.add(index)
                     pending.append(index)
+        loops.append(vertices)
+    return loops, boundary
+
+
+def _eye_hole_edges(obj, polygons, fit):
+    """Find only the two eye openings; never fill the outer face boundary."""
+    center, spacing, height, width, window_height = fit
+    mesh = obj.data
+    loops, boundary = _boundary_loops(mesh, polygons)
+    holes = []
+    for vertices in loops:
         points = [obj.matrix_world @ mesh.vertices[i].co for i in vertices]
         midpoint = sum(point.x for point in points) / len(points) - center
         if abs(midpoint) < spacing * .18:
@@ -477,9 +486,11 @@ def _detached_eye_covers(face, components, cover, fit):
         # extends that cleanup to zero without changing any active expression.
         if not other_polygons or not set(other_polygons) <= active_masks:
             continue
-        # Neutral eye-socket / eyelid rings have an eye-opening boundary of
-        # their own; deleting them at Expression == 0 leaves holes around the eyes.
-        if _eye_hole_edges(face, other_polygons, fit):
+        # Neutral eye-socket / eyelid rings have both an inner eye-opening
+        # boundary and an outer boundary; deleting them at Expression == 0
+        # leaves holes around the eyes. Solid skin caps have a single perimeter.
+        loops, _ = _boundary_loops(mesh, other_polygons)
+        if len(loops) > 1:
             continue
         tree = KDTree(len(other_vertices))
         for number, index in enumerate(other_vertices):

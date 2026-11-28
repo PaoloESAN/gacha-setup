@@ -1,4 +1,5 @@
 """Blender 5.3 light shaders scoped to the selected character."""
+import json
 from pathlib import Path
 
 import bpy
@@ -11,7 +12,7 @@ TAG = '_gacha_lights_plus'
 MODE = '_gacha_lights_plus_mode'
 VERSION = '_gacha_lights_plus_version'
 COLOR_VERSION = '_gacha_lights_plus_color_version'
-CURRENT_COLOR_VERSION = 3
+CURRENT_COLOR_VERSION = 4
 
 
 def supported():
@@ -237,6 +238,92 @@ def light_group():
     return updated
 
 
+def _is_expression_selector(node):
+    if node.type != 'GROUP' or node.node_tree is None:
+        return False
+    original = node.inputs.get('Original Skin')
+    shader_out = node.outputs.get('Shader')
+    return (
+        original is not None and original.type == 'SHADER'
+        and shader_out is not None and shader_out.type == 'SHADER'
+        and ('expression' in node.name.lower() or 'expression' in node.node_tree.name.lower())
+    )
+
+
+def _target_shader_input(output):
+    """Return the shader input socket where Lights+ should be inserted.
+
+    For facial expression overlay materials, insert before the expression
+    selector (into 'Original Skin') so the overlay's transparency mask stays
+    intact across all lighting modes.
+    """
+    surface = output.inputs.get('Surface')
+    if not surface or not surface.is_linked:
+        return None
+    src_node = surface.links[0].from_node
+    if _is_expression_selector(src_node):
+        original = src_node.inputs.get('Original Skin')
+        if original and original.is_linked:
+            return original
+    return surface
+
+
+def _unwrap_goo_links(tree, removed_names):
+    """Collapse any gacha_goo_links entries routed through removed Lights+ nodes."""
+    raw = tree.get('gacha_goo_links')
+    if not raw or not removed_names:
+        return
+    try:
+        variants = json.loads(raw)
+    except (TypeError, ValueError):
+        return
+    changed = False
+    for mode, links in variants.items():
+        new_links = list(links)
+        for name in removed_names:
+            incoming = [l for l in new_links if l[2] == name]
+            outgoing = [l for l in new_links if l[0] == name]
+            if not incoming and not outgoing:
+                continue
+            changed = True
+            new_links = [l for l in new_links if l[0] != name and l[2] != name]
+            if incoming and outgoing:
+                src_node, src_sock = incoming[0][0], incoming[0][1]
+                for out_l in outgoing:
+                    new_links.append([src_node, src_sock, out_l[2], out_l[3]])
+        variants[mode] = new_links
+    if changed:
+        tree['gacha_goo_links'] = json.dumps(variants)
+
+
+def _wrap_goo_links(tree, source_socket, light_node, target_socket):
+    """Keep gacha_goo_links portable paths routed through the installed Lights+ node."""
+    raw = tree.get('gacha_goo_links')
+    if not raw:
+        return
+    try:
+        variants = json.loads(raw)
+    except (TypeError, ValueError):
+        return
+    src_sig = (source_socket.node.name, source_socket.identifier)
+    dst_sig = (target_socket.node.name, target_socket.identifier)
+    in_sig = (light_node.name, light_node.inputs['Shader'].identifier)
+    out_sig = (light_node.name, light_node.outputs['Shader'].identifier)
+    changed = False
+    for mode, links in variants.items():
+        updated = []
+        for l in links:
+            if (l[0], l[1]) == src_sig and (l[2], l[3]) == dst_sig:
+                updated.append([src_sig[0], src_sig[1], in_sig[0], in_sig[1]])
+                updated.append([out_sig[0], out_sig[1], dst_sig[0], dst_sig[1]])
+                changed = True
+            else:
+                updated.append(l)
+        variants[mode] = updated
+    if changed:
+        tree['gacha_goo_links'] = json.dumps(variants)
+
+
 def setup_material(material, owner, group, exclusions=None):
     if material.is_grease_pencil:
         return 0
@@ -249,9 +336,11 @@ def setup_material(material, owner, group, exclusions=None):
         return 0
     # Bypass the previous Lights+ nodes first, so repeated setup stays at the
     # very end even if the user has added another effect after the previous one.
+    removed_names = []
     for node in list(tree.nodes):
         if not is_light_node(node):
             continue
+        removed_names.append(node.name)
         shader = node.inputs.get('Shader')
         source = shader.links[0].from_socket if shader and shader.is_linked else None
         if source:
@@ -259,6 +348,8 @@ def setup_material(material, owner, group, exclusions=None):
                 for link in list(output.links):
                     tree.links.new(source, link.to_socket)
         tree.nodes.remove(node)
+    if removed_names:
+        _unwrap_goo_links(tree, removed_names)
     if excluded:
         tree.update_tag()
         material.update_tag()
@@ -267,17 +358,19 @@ def setup_material(material, owner, group, exclusions=None):
     for output in list(tree.nodes):
         if output.type != 'OUTPUT_MATERIAL':
             continue
-        surface = output.inputs.get('Surface')
-        if not surface or not surface.is_linked:
+        target_socket = _target_shader_input(output)
+        if not target_socket or not target_socket.is_linked:
             continue
-        source = surface.links[0].from_socket
+        source = target_socket.links[0].from_socket
         node = tree.nodes.new('ShaderNodeGroup')
         node.node_tree = group
         node[TAG] = True
-        node.location = (output.location.x - 220, output.location.y)
+        anchor = target_socket.node
+        node.location = (anchor.location.x - 220, anchor.location.y)
         node.width = 200
         tree.links.new(source, node.inputs['Shader'])
-        tree.links.new(node.outputs['Shader'], surface)
+        tree.links.new(node.outputs['Shader'], target_socket)
+        _wrap_goo_links(tree, source, node, target_socket)
         for socket in node.inputs:
             if socket.name != 'Shader':
                 socket.hide = True
@@ -372,10 +465,10 @@ def _needs_setup_uncached(owner):
         for output in material.node_tree.nodes:
             if output.type != 'OUTPUT_MATERIAL':
                 continue
-            surface = output.inputs.get('Surface')
-            if not surface or not surface.is_linked:
+            target_socket = _target_shader_input(output)
+            if not target_socket or not target_socket.is_linked:
                 continue
-            node = surface.links[0].from_node
+            node = target_socket.links[0].from_node
             if not (node.type == 'GROUP' and node.node_tree and is_light_node(node)
                     and node.node_tree.get(COLOR_VERSION) == CURRENT_COLOR_VERSION
                     and node.inputs.get('Index') and node.inputs.get('Shader')
@@ -400,26 +493,6 @@ def draw_lights_plus(layout, context):
         box.prop(owner, 'gacha_lights_plus_mode', text='Mode')
 
 
-class GACHA_PT_NTELightsCharacterSettings(Panel):
-    """NTE has no separate Character Settings panel yet."""
-    bl_label = 'Character Settings'
-    bl_idname = 'GACHA_PT_NTELightsCharacterSettings'
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'UI'
-    bl_category = 'Item'
-    bl_order = 1
-
-    @classmethod
-    def poll(cls, context):
-        if not supported():
-            return False
-        from setup_wizard.ui.character_settings_utils import is_game_armature
-        return is_game_armature(context, 'NEVERNESS_TO_EVERNESS')
-
-    def draw(self, context):
-        draw_lights_plus(self.layout, context)
-
-
 def register():
     bpy.types.Object.gacha_lights_plus_mode = EnumProperty(
         name='Mode', items=[('DEFAULT', 'Default', '', 0),
@@ -428,10 +501,8 @@ def register():
         get=get_mode, set=set_mode,
     )
     bpy.utils.register_class(GACHA_OT_SetupNewLights)
-    bpy.utils.register_class(GACHA_PT_NTELightsCharacterSettings)
 
 
 def unregister():
-    bpy.utils.unregister_class(GACHA_PT_NTELightsCharacterSettings)
     bpy.utils.unregister_class(GACHA_OT_SetupNewLights)
     del bpy.types.Object.gacha_lights_plus_mode

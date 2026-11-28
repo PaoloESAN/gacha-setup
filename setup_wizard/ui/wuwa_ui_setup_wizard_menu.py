@@ -212,6 +212,13 @@ class WW_PT_UI_Rig_Character_Menu(Panel, WutheringWavesUIRenderChecker):
         OperatorFactory.create_rig_character_ui(box, game_type=GameType.WUTHERING_WAVES.name)
         OperatorFactory.create(
             box,
+            "hoyoverse.fix_light_direction",
+            "Fix Light Direction",
+            "LIGHT_SUN",
+            game_type=GameType.WUTHERING_WAVES.name,
+        )
+        OperatorFactory.create(
+            box,
             'hoyoverse.apply_hair_clothes_physics',
             'Apply Hair & Clothes Physics',
             'PHYSICS',
@@ -371,6 +378,13 @@ class WW_PT_Rig_Character_Settings(Panel):
 
         # 8. Outline Thickness Slider
         layout.prop(scene, "ww_outline_thickness", text="Outline Thickness", slider=True)
+
+        # Character-specific custom profile settings (e.g. Denia Variant Switcher)
+        try:
+            from setup_wizard.character_custom_setups import draw_character_profile_ui
+            draw_character_profile_ui(layout, context, game_type=GameType.WUTHERING_WAVES.name)
+        except Exception:
+            pass
 
         # 9. Hair & Clothes Physics
         box_physics = layout.box()

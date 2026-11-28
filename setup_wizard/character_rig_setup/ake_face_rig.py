@@ -953,9 +953,581 @@ def setup_endfield_isaac_face_rig(body_rig, context=None, face_mapping=None, eye
             face_coll.is_visible = False
             print("[AKE FACE RIG] Hidden 'Face' bone collection on body rig.")
 
+    if is_endfield:
+        try:
+            setup_ake_shapekey_panel(body_rig, context)
+        except Exception as sk_err:
+            print(f"[AKE FACE RIG] Shapekey panel notice: {sk_err}")
+
     print(f"[AKE FACE RIG] Successfully constrained {assigned_count} Endfield face bones to the fused rig!")
     context.view_layer.update()
     return body_rig
+
+
+# =============================================================================
+# GENSHIN-STYLE SHAPEKEY CONTROL PANEL FOR AKE (Estella, Fluorite, Zhuang Fangyi, etc.)
+# =============================================================================
+
+def _ake_collect_shapekey_meshes(armature):
+    """Return (meshes, sk_to_meshes) for all meshes deformed by or parented to ``armature``."""
+    meshes = []
+    sk_to_meshes = {}
+    for obj in bpy.data.objects:
+        if obj.type != 'MESH' or not obj.data or not obj.data.shape_keys:
+            continue
+        bound = (obj.parent == armature) or any(
+            m.type == 'ARMATURE' and m.object == armature for m in obj.modifiers
+        )
+        if not bound:
+            continue
+        kb = obj.data.shape_keys.key_blocks
+        if not kb or len(kb) <= 1:
+            continue
+        meshes.append(obj)
+        for sk in kb:
+            if sk.name == "Basis":
+                continue
+            sk_to_meshes.setdefault(sk.name, []).append(obj)
+    return meshes, sk_to_meshes
+
+
+def _ake_clean_label(name, strip_prefix=""):
+    s = name
+    if strip_prefix and s.lower().startswith(strip_prefix.lower()):
+        s = s[len(strip_prefix):]
+    s = s.replace("_a_", " ").replace("_a", "")
+    s = s.replace("_M", "").replace("_", " ").strip()
+    return s or name
+
+
+def _ake_pair_lr_keys(keys):
+    """Order _R and _L keys side by side (Viewer Left = _R, Viewer Right = _L)."""
+    r_map = {}
+    l_map = {}
+    singles = []
+    for k in sorted(keys):
+        if k.endswith("_R"):
+            r_map[k[:-2]] = k
+        elif k.endswith("_L"):
+            l_map[k[:-2]] = k
+        else:
+            singles.append(k)
+    paired = []
+    for base in sorted(set(r_map.keys()) | set(l_map.keys())):
+        if base in r_map and base in l_map:
+            paired.append(r_map[base])
+            paired.append(l_map[base])
+        elif base in r_map:
+            singles.append(r_map[base])
+        elif base in l_map:
+            singles.append(l_map[base])
+    return paired + singles
+
+
+def _ake_get_widget_collection(armature):
+    try:
+        from setup_wizard.ui.character_settings_utils import resolve_character_name
+        char_name = resolve_character_name(armature)
+        if char_name:
+            per_char = bpy.data.collections.get(f"WGTS_{char_name}")
+            if per_char is not None:
+                return per_char
+            try:
+                from setup_wizard.character_rig_setup.wgts_isolation import get_or_create_char_wgts, get_char_collection
+                char_coll = get_char_collection(armature, char_name)
+                if char_coll is not None:
+                    return get_or_create_char_wgts(char_coll, char_name)
+            except Exception:
+                pass
+    except Exception:
+        pass
+    for name_cand in ("WGTS", "wgt", "WGTS_FaceRig"):
+        coll = bpy.data.collections.get(name_cand)
+        if coll:
+            return coll
+    coll = bpy.data.collections.new("WGTS_AKE_FacePanel")
+    return coll
+
+
+def setup_ake_shapekey_panel(armature, context=None):
+    """Build a Genshin-style framed shapekey control panel for AKE models that have facial shape keys.
+
+    Synchronizes drivers across all character meshes sharing each shapekey name
+    (face, eyebrow/brow, eyeshadow, iris, cloth/body). Skips silently on AKE models
+    that have no facial expression shape keys.
+    """
+    from setup_wizard.character_rig_setup.shape_keys_panel import (
+        build_shape_keys_panel,
+        COL_BROW,
+        COL_EYE,
+        COL_EYELID,
+        COL_MOUTH,
+        COL_VISEME,
+        COL_EXPRESSION,
+        COL_EXTRA,
+    )
+
+    if context is None:
+        context = bpy.context
+
+    meshes, sk_to_meshes = _ake_collect_shapekey_meshes(armature)
+    if not sk_to_meshes:
+        return 0
+
+    # Filter out rest/default and corrective _ctrl_ keys
+    valid_keys = [
+        k for k in sk_to_meshes.keys()
+        if k.lower() not in ("basis", "default")
+        and "_ctrl_" not in k.lower()
+    ]
+    # Guard: only build panel if character actually has facial expression shapekeys
+    facial_hits = [
+        k for k in valid_keys
+        if k in ("Blink", "Blink_L", "Blink_R", "A", "I", "U", "E", "O")
+        or k.lower().startswith(("eye_", "brow_", "mouth_"))
+    ]
+    if len(facial_hits) < 5:
+        print(f"[AKE FACE PANEL] Skipping shapekey panel on '{armature.name}' ({len(facial_hits)} facial keys).")
+        return 0
+
+    # Resolve head bone & face frame
+    head_candidates = ["head", "Head", "DEF-spine.006", "ORG-spine.006", "spine.006", "headJoint", "Bip001 Head", "Bip001_Head"]
+    head_name = next((c for c in head_candidates if c in armature.data.bones), None)
+    if head_name is None:
+        head_name = next((b.name for b in armature.data.bones if "head" in b.name.lower()), armature.data.bones[0].name)
+
+    fwd = Vector((0.0, -1.0, 0.0))
+    world_up = Vector((0.0, 0.0, 1.0))
+    right = world_up.cross(fwd).normalized()
+    up = fwd.cross(right).normalized()
+
+    face_mesh = next((m for m in meshes if "face" in m.name.lower()), meshes[0])
+    corners = [face_mesh.matrix_world @ Vector(c) for c in face_mesh.bound_box]
+    mn = Vector((min(c.x for c in corners), min(c.y for c in corners), min(c.z for c in corners)))
+    mx = Vector((max(c.x for c in corners), max(c.y for c in corners), max(c.z for c in corners)))
+    face_size = max(0.18, min(0.32, (mx - mn).length))
+    fcx = 0.5 * (mn + mx)
+
+    key_set = set(valid_keys)
+    handled = set()
+
+    def _make_2d_offset_pad(name, label, prefix, suffix, color, group):
+        u_k = f"{prefix}_u{suffix}"
+        d_k = f"{prefix}_d{suffix}"
+        l_k = f"{prefix}_l{suffix}"
+        r_k = f"{prefix}_r{suffix}"
+        drvs = []
+        # AKE _l = character's left (viewer's right, +X); _r = character's right (viewer's left, -X)
+        if l_k in key_set and l_k not in handled:
+            drvs.append({'key': l_k, 'axis': 'X', 'dir': +1})
+            handled.add(l_k)
+        if r_k in key_set and r_k not in handled:
+            drvs.append({'key': r_k, 'axis': 'X', 'dir': -1})
+            handled.add(r_k)
+        if u_k in key_set and u_k not in handled:
+            drvs.append({'key': u_k, 'axis': 'Z', 'dir': +1})
+            handled.add(u_k)
+        if d_k in key_set and d_k not in handled:
+            drvs.append({'key': d_k, 'axis': 'Z', 'dir': -1})
+            handled.add(d_k)
+        if not drvs:
+            return None
+        return {
+            'name': name,
+            'label': label,
+            'edge_labels': ('R', 'L', 'U', 'D'),
+            'color': color,
+            'group': group,
+            'drivers': drvs,
+        }
+
+    main_sections = []
+    side_sections = []
+
+    # -------------------------------------------------------------------------
+    # 1. BROWS SECTION (2D Brow R & Brow L offset pads + brow_* R/L expressions)
+    # -------------------------------------------------------------------------
+    brow_rows = []
+    brow_pads = []
+    bp_r = _make_2d_offset_pad("CTRL-AKE_BrowOffset_R", "Brow R", "brow_offset", "_R", COL_BROW, "Face Eyebrow")
+    bp_l = _make_2d_offset_pad("CTRL-AKE_BrowOffset_L", "Brow L", "brow_offset", "_L", COL_BROW, "Face Eyebrow")
+    if bp_r:
+        brow_pads.append(bp_r)
+    if bp_l:
+        brow_pads.append(bp_l)
+    if brow_pads:
+        brow_rows.append({'type': 'pads_row', 'pads': brow_pads, 'pad_size': face_size * 0.30})
+
+    brow_exprs = [k for k in valid_keys if k.lower().startswith("brow_") and k not in handled]
+    if brow_exprs:
+        b_items = []
+        for k in _ake_pair_lr_keys(brow_exprs):
+            handled.add(k)
+            b_items.append({
+                'name': f"CTRL-AKE_{k}",
+                'label': _ake_clean_label(k, "brow_"),
+                'color': COL_BROW,
+                'group': 'Face Eyebrow',
+                'drivers': [{'key': k, 'axis': 'X', 'dir': +1}],
+            })
+        brow_rows.append({'type': 'grid', 'cols': 2, 'items': b_items})
+
+    if brow_rows:
+        main_sections.append({'title': 'Brows', 'rows': brow_rows})
+
+    # -------------------------------------------------------------------------
+    # 2. EYES SECTION (Blink R/L/Both + Scale V-Sliders + Iris/HL 2D Pads + eye_* R/L)
+    # -------------------------------------------------------------------------
+    eye_rows = []
+    eye_vsliders = []
+    for bk, blbl in (("Blink_R", "Blink R"), ("Blink_L", "Blink L"), ("Blink", "Blink")):
+        if bk in key_set and bk not in handled:
+            handled.add(bk)
+            eye_vsliders.append({
+                'name': f"CTRL-AKE_{bk}",
+                'label': blbl,
+                'color': COL_EYELID,
+                'group': 'Face Eyelid',
+                'range': 'neg',
+                'drivers': [{'key': bk, 'axis': 'Z', 'dir': -1}],
+            })
+
+    # Iris & Highlight scale vertical sliders (Fluorite / Zhuang Fangyi)
+    for sc_prefix, sc_lbl in (("eye_scale", "Sc"), ("eye_highlighscale", "HLSc"), ("eye_highlighscale_b", "HL2")):
+        for side in ("R", "L"):
+            u_k = f"{sc_prefix}_u_{side}"
+            d_k = f"{sc_prefix}_d_{side}"
+            drvs = []
+            if u_k in key_set and u_k not in handled:
+                drvs.append({'key': u_k, 'axis': 'Z', 'dir': +1})
+                handled.add(u_k)
+            if d_k in key_set and d_k not in handled:
+                drvs.append({'key': d_k, 'axis': 'Z', 'dir': -1})
+                handled.add(d_k)
+            if drvs:
+                eye_vsliders.append({
+                    'name': f"CTRL-AKE_{sc_prefix}_{side}",
+                    'label': f"{sc_lbl} {side}",
+                    'color': COL_EYE,
+                    'group': 'Face Eye Scale',
+                    'range': 'both' if len(drvs) > 1 else ('pos' if drvs[0]['dir'] > 0 else 'neg'),
+                    'drivers': drvs,
+                })
+
+    if eye_vsliders:
+        eye_rows.append({'type': 'vsliders_and_pad', 'pad': None, 'vsliders': eye_vsliders, 'v_height': face_size * 0.28})
+
+    iris_pads = []
+    ip_r = _make_2d_offset_pad("CTRL-AKE_EyeOffset_R", "Iris R", "eye_offset", "_R", COL_EYE, "Face Eye Aim")
+    ip_l = _make_2d_offset_pad("CTRL-AKE_EyeOffset_L", "Iris L", "eye_offset", "_L", COL_EYE, "Face Eye Aim")
+    if ip_r:
+        iris_pads.append(ip_r)
+    if ip_l:
+        iris_pads.append(ip_l)
+    if iris_pads:
+        eye_rows.append({'type': 'pads_row', 'pads': iris_pads, 'pad_size': face_size * 0.30})
+
+    hl_pads = []
+    hl_r = _make_2d_offset_pad("CTRL-AKE_HLOffset_R", "HL R", "eye_highlightoffset", "_R", COL_EYE, "Face Eye Highlight")
+    hl_l = _make_2d_offset_pad("CTRL-AKE_HLOffset_L", "HL L", "eye_highlightoffset", "_L", COL_EYE, "Face Eye Highlight")
+    if hl_r:
+        hl_pads.append(hl_r)
+    if hl_l:
+        hl_pads.append(hl_l)
+    if hl_pads:
+        eye_rows.append({'type': 'pads_row', 'pads': hl_pads, 'pad_size': face_size * 0.26})
+
+    eye_exprs = [k for k in valid_keys if k.lower().startswith("eye_") and k not in handled]
+    if eye_exprs:
+        e_items = []
+        for k in _ake_pair_lr_keys(eye_exprs):
+            handled.add(k)
+            e_items.append({
+                'name': f"CTRL-AKE_{k}",
+                'label': _ake_clean_label(k, "eye_"),
+                'color': COL_EYE,
+                'group': 'Face Eye Expressions',
+                'drivers': [{'key': k, 'axis': 'X', 'dir': +1}],
+            })
+        # If very large set (Fluorite / Zhuang Fangyi), place eye expressions in side column so main panel stays compact
+        if len(e_items) > 24:
+            side_sections.append({'title': 'Eye Expr', 'rows': [{'type': 'grid', 'cols': 2, 'items': e_items}]})
+        else:
+            eye_rows.append({'type': 'grid', 'cols': 2, 'items': e_items})
+
+    if eye_rows:
+        main_sections.append({'title': 'Eyes', 'rows': eye_rows})
+
+    # -------------------------------------------------------------------------
+    # 3. MOUTH SECTION (2D Mouth Offset Pad + A/I/U/E/O Visemes + mouth_* expressions)
+    # -------------------------------------------------------------------------
+    mouth_rows = []
+    mpad = _make_2d_offset_pad("CTRL-AKE_MouthOffset", "Shape", "mouth_offset", "", COL_MOUTH, "Face Mouth")
+
+    viseme_sliders = []
+    for letter in ("A", "I", "U", "E", "O"):
+        if letter in key_set and letter not in handled:
+            handled.add(letter)
+            viseme_sliders.append({
+                'name': f"CTRL-AKE_Viseme_{letter}",
+                'label': letter,
+                'color': COL_VISEME,
+                'group': 'Face Visemes',
+                'drivers': [{'key': letter, 'axis': 'X', 'dir': +1}],
+            })
+
+    if mpad or viseme_sliders:
+        mouth_rows.append({
+            'type': 'pad_and_sliders',
+            'pad': mpad,
+            'sliders': viseme_sliders,
+            'slider_cols': 1,
+        })
+
+    mouth_exprs = [k for k in valid_keys if k.lower().startswith("mouth_") and k not in handled]
+    if mouth_exprs:
+        m_items = []
+        for k in sorted(mouth_exprs):
+            handled.add(k)
+            m_items.append({
+                'name': f"CTRL-AKE_{k}",
+                'label': _ake_clean_label(k, "mouth_"),
+                'color': COL_EXPRESSION,
+                'group': 'Face Mouth Expressions',
+                'drivers': [{'key': k, 'axis': 'X', 'dir': +1}],
+            })
+        if len(m_items) > 28:
+            side_sections.append({'title': 'Mouth Expr', 'rows': [{'type': 'grid', 'cols': 2, 'items': m_items}]})
+        else:
+            mouth_rows.append({'type': 'grid', 'cols': 2, 'items': m_items})
+
+    if mouth_rows:
+        # Place Mouth in the right-hand column when no other side column is populated,
+        # keeping the panel compact and balanced side-by-side instead of overly tall.
+        if not side_sections:
+            side_sections.append({'title': 'Mouth', 'rows': mouth_rows})
+        else:
+            main_sections.append({'title': 'Mouth', 'rows': mouth_rows})
+
+    # -------------------------------------------------------------------------
+    # 4. EXTRA FALLBACK (any remaining non-corrective shapekeys)
+    # -------------------------------------------------------------------------
+    remaining = [k for k in valid_keys if k not in handled]
+    if remaining:
+        rem_items = []
+        for k in sorted(remaining):
+            handled.add(k)
+            rem_items.append({
+                'name': f"CTRL-AKE_{k}",
+                'label': _ake_clean_label(k),
+                'color': COL_EXTRA,
+                'group': 'Face Extra Keys',
+                'drivers': [{'key': k, 'axis': 'X', 'dir': +1}],
+            })
+        (side_sections if side_sections else main_sections).append({
+            'title': 'Extra',
+            'rows': [{'type': 'grid', 'cols': 2, 'items': rem_items}],
+        })
+
+    panel_columns = []
+    if main_sections:
+        panel_columns.append({'title': 'Main', 'sections': main_sections})
+    if side_sections:
+        panel_columns.append({'title': 'Extra', 'sections': side_sections})
+    if not panel_columns:
+        return 0
+
+    wgt_coll = _ake_get_widget_collection(armature)
+    panel_coll_name = "Face"
+    panel_origin = fcx + right * (face_size * 2.35) + up * (face_size * 0.78) + fwd * (face_size * 0.05)
+
+    _, panel_ctrls = build_shape_keys_panel(
+        panel_columns=panel_columns,
+        origin_world=panel_origin,
+        right=right,
+        up=up,
+        fwd=fwd,
+        face_size=face_size,
+        wgt_coll=wgt_coll,
+        game_tag="AKE",
+        unique_tag=armature.name,
+        collection_name=panel_coll_name,
+        root_name="FacePanel-Root",
+        board_name="FacePanel-Board",
+        armature=armature,
+        face_center=fcx,
+    )
+
+    # Create panel bones on armature
+    amw_inv = armature.matrix_world.inverted()
+    fwd_arm = (amw_inv.to_3x3() @ fwd).normalized()
+    up_arm = (amw_inv.to_3x3() @ up).normalized()
+    bone_len = face_size * 0.025
+
+    prev_active = context.view_layer.objects.active
+    if context.object and context.object.mode != 'OBJECT':
+        bpy.ops.object.mode_set(mode='OBJECT')
+    context.view_layer.objects.active = armature
+    bpy.ops.object.mode_set(mode='EDIT')
+    eb = armature.data.edit_bones
+
+    # Purge any previous AKE shapekey panel bones for clean rebuilds
+    for b in list(eb):
+        if b.name.startswith("CTRL-AKE_") or b.name in ("FacePanel-Root", "FacePanel-Board"):
+            eb.remove(b)
+
+    head_eb = eb.get(head_name)
+    for c in panel_ctrls:
+        b = eb.get(c['name']) or eb.new(c['name'])
+        h = amw_inv @ c['head']
+        b.head = h
+        b.tail = h - fwd_arm * bone_len
+        b.use_deform = False
+        try:
+            b.align_roll(up_arm)
+        except Exception:
+            pass
+        par_name = c.get('parent_bone')
+        if par_name == 'Face-Root':
+            b.parent = eb.get("joint_face") or head_eb
+        else:
+            b.parent = (eb.get(par_name) if par_name else None) or head_eb
+        b.use_connect = False
+
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Assign panel bones to a visible Rigify bone collection
+    if hasattr(armature.data, "collections"):
+        coll = armature.data.collections.get(panel_coll_name) or armature.data.collections.new(panel_coll_name)
+        try:
+            coll.is_visible = True
+            coll.rigify_ui_row = 1
+        except Exception:
+            pass
+        for c in panel_ctrls:
+            b = armature.data.bones.get(c['name'])
+            if b:
+                coll.assign(b)
+                b.hide = False
+
+    # Pose Mode: constraints, custom shapes, colors
+    bpy.ops.object.mode_set(mode='POSE')
+    for c in panel_ctrls:
+        pb = armature.pose.bones.get(c['name'])
+        if not pb:
+            continue
+        if c.get('is_panel_root'):
+            pb.lock_location = (False, False, False)
+            pb.lock_rotation = (True, True, True)
+            pb.lock_rotation_w = True
+            pb.lock_scale = (False, False, False)
+        elif c.get('is_panel_board'):
+            pb.lock_location = (True, True, True)
+            pb.lock_rotation = (True, True, True)
+            pb.lock_rotation_w = True
+            pb.lock_scale = (True, True, True)
+            b_data = armature.data.bones.get(c['name'])
+            if b_data:
+                b_data.hide_select = True
+        else:
+            lim = c['lim']
+            free = c['free']
+            rng = c['range']
+            lo, hi = (-lim, lim) if rng == 'both' else ((-lim, 0.0) if rng == 'neg' else (0.0, lim))
+            pb.lock_location = ('X' not in free, True, 'Z' not in free)
+            pb.lock_rotation = (True, True, True)
+            pb.lock_rotation_w = True
+            pb.lock_scale = (True, True, True)
+            con = pb.constraints.new(type='LIMIT_LOCATION')
+            con.owner_space = 'LOCAL'
+            con.use_transform_limit = True
+            con.use_min_x = con.use_max_x = True
+            con.use_min_y = con.use_max_y = True
+            con.use_min_z = con.use_max_z = True
+            con.min_y = con.max_y = 0.0
+            con.min_x = lo if 'X' in free else 0.0
+            con.max_x = hi if 'X' in free else 0.0
+            con.min_z = lo if 'Z' in free else 0.0
+            con.max_z = hi if 'Z' in free else 0.0
+
+        if c.get('widget_obj') is not None:
+            pb.custom_shape = c['widget_obj']
+        try:
+            pb.use_custom_shape_bone_size = False
+        except Exception:
+            pass
+        if c.get('custom_shape_translation') is not None:
+            try:
+                pb.custom_shape_translation = c['custom_shape_translation']
+            except Exception:
+                pass
+        if c.get('shape_scale') is not None:
+            pb.custom_shape_scale_xyz = c['shape_scale']
+        try:
+            rgb = c['color']
+            pb.color.palette = 'CUSTOM'
+            pb.color.custom.normal = rgb
+            pb.color.custom.select = tuple(min(1.0, v + 0.25) for v in rgb)
+            pb.color.custom.active = tuple(min(1.0, v + 0.50) for v in rgb)
+        except Exception:
+            pass
+
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Attach synchronized drivers across ALL meshes sharing each shapekey name
+    agg = {}
+    for c in panel_ctrls:
+        for d in c.get('drivers', []):
+            agg.setdefault(d['key'], []).append({
+                'bone': c['name'],
+                'axis': d['axis'],
+                'dir': d['dir'],
+                'lim': c['lim'],
+            })
+
+    driven_count = 0
+    for key_name, entries in agg.items():
+        for m_obj in sk_to_meshes.get(key_name, []):
+            sk = m_obj.data.shape_keys.key_blocks.get(key_name)
+            if sk is None:
+                continue
+            sk.slider_min = 0.0
+            try:
+                sk.driver_remove("value")
+            except Exception:
+                pass
+            drv = sk.driver_add("value").driver
+            drv.type = 'SCRIPTED'
+            terms = []
+            for i, e in enumerate(entries):
+                vn = f"v{i}"
+                var = drv.variables.new()
+                var.name = vn
+                var.type = 'TRANSFORMS'
+                tgt = var.targets[0]
+                tgt.id = armature
+                tgt.bone_target = e['bone']
+                tgt.transform_type = 'LOC_' + e['axis']
+                tgt.transform_space = 'LOCAL_SPACE'
+                sign = '' if e['dir'] > 0 else '-'
+                terms.append(f"max(0.0, {sign}{vn} / {e['lim']!r})")
+            drv.expression = terms[0] if len(terms) == 1 else "max(" + ", ".join(terms) + ")"
+            driven_count += 1
+
+    try:
+        wgt_coll.hide_viewport = True
+        if wgt_coll.name in context.scene.collection.children:
+            context.scene.collection.children.unlink(wgt_coll)
+    except Exception:
+        pass
+    if prev_active:
+        try:
+            context.view_layer.objects.active = prev_active
+        except Exception:
+            pass
+
+    print(f"[AKE FACE PANEL] Built Genshin-style shapekey panel: {len(panel_ctrls)} controls, {driven_count} synced mesh drivers across {len(meshes)} meshes.")
+    return len(panel_ctrls)
 
 
 class AKE_OT_SetUpIsaacFaceRig(Operator, BasicSetupUIOperator):
@@ -976,4 +1548,32 @@ class AKE_OT_SetUpIsaacFaceRig(Operator, BasicSetupUIOperator):
             return {'CANCELLED'}
 
         self.report({'INFO'}, 'Successfully set up Isaac Face Rig for Arknights: Endfield character!')
+        return {'FINISHED'}
+
+
+class AKE_OT_CreateShapekeyPanel(Operator):
+    """Creates or rebuilds the 3D facial shapekey control panel for an Arknights: Endfield character"""
+    bl_idname = "arknights_endfield.create_shapekey_panel"
+    bl_label = "Create Shapekey Panel"
+    bl_description = "Creates or rebuilds the 3D facial shapekey control panel for the selected Arknights: Endfield character"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        from setup_wizard.character_rig_setup.rig_ui_utils import find_target_armature
+        armature = find_target_armature(context)
+        if not armature:
+            self.report({'ERROR'}, 'No character armature found. Please select or rig a character first.')
+            return {'CANCELLED'}
+
+        try:
+            count = setup_ake_shapekey_panel(armature, context)
+        except Exception as ex:
+            self.report({'ERROR'}, f"Failed to create AKE Shapekey Panel: {ex}")
+            return {'CANCELLED'}
+
+        if not count:
+            self.report({'WARNING'}, 'No facial expression shape keys found on this character.')
+            return {'CANCELLED'}
+
+        self.report({'INFO'}, f"Created AKE Shapekey Panel ({count} controls).")
         return {'FINISHED'}

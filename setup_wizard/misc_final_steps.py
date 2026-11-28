@@ -377,6 +377,36 @@ class WW_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties
                 except Exception:
                     pass
 
+            # Merge duplicate WGTS* child collections inside char_coll into a single WGTS collection
+            wgts_children = [c for c in list(char_coll.children) if c.name.startswith("WGTS")]
+            if len(wgts_children) > 1:
+                primary_wgts = next((c for c in wgts_children if c.name.startswith("WGTS_RIG")), wgts_children[0])
+                for extra_wgts in wgts_children:
+                    if extra_wgts == primary_wgts:
+                        continue
+                    for obj_w in list(extra_wgts.objects):
+                        if obj_w.name not in primary_wgts.objects:
+                            primary_wgts.objects.link(obj_w)
+                        try:
+                            extra_wgts.objects.unlink(obj_w)
+                        except Exception:
+                            pass
+                    for sub_w in list(extra_wgts.children):
+                        if sub_w.name not in primary_wgts.children:
+                            primary_wgts.children.link(sub_w)
+                        try:
+                            extra_wgts.children.unlink(sub_w)
+                        except Exception:
+                            pass
+                    try:
+                        char_coll.children.unlink(extra_wgts)
+                    except Exception:
+                        pass
+                    try:
+                        bpy.data.collections.remove(extra_wgts, do_unlink=True)
+                    except Exception:
+                        pass
+
         # Delete duplicate .001 control objects
         for base_name in ['Head Origin', 'Head Forward', 'Head Up', 'Light Direction', 'Sun', 'Eye Highlight', 'Highlight Top', 'Highlight Bottom']:
             orig_obj = bpy.data.objects.get(base_name)
@@ -394,6 +424,17 @@ class WW_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorProperties
                     stamp_rig_game(obj, GameType.WUTHERING_WAVES.name)
         except Exception:
             pass
+
+        try:
+            from setup_wizard.character_custom_setups import run_character_setup_stage
+            run_character_setup_stage(
+                "finish_setup",
+                context=context,
+                game_type=GameType.WUTHERING_WAVES.name,
+                armature=target_rig,
+            )
+        except Exception as exc_cs:
+            print(f"[WUWA FINISH] Notice in character custom setup (finish_setup): {exc_cs}")
 
         self.report({'INFO'}, "Finished Wuthering Waves setup successfully!")
         return result
@@ -1016,14 +1057,8 @@ class NTE_OT_FinishSetup(Operator, BasicSetupUIOperator, CustomOperatorPropertie
                 return
             from setup_wizard.character_rig_setup.nte_rig_script import (
                 ensure_nte_character_collection,
-                delete_nte_light_empties,
             )
             ensure_nte_character_collection(context, rig, char_name)
-            # NTE no usa Light Direction por ahora: eliminarlo del todo.
-            try:
-                delete_nte_light_empties(context, rig, char_name)
-            except Exception as e_light:
-                print(f"[NTE FINISH] Light empties delete notice: {e_light}")
         except Exception:
             # Fallback minimo: mete lo suelto de la raiz en la coleccion del rig
             try:
@@ -1077,8 +1112,8 @@ class GI_OT_FixTransformations(Operator, CustomOperatorProperties):
             return 0.0, 0.0
         bones = armature.data.bones
         mat = armature.matrix_world if world_space else None
-        head = next((bones.get(n) for n in ('Bip001 Head', 'Bone_Head01_M', 'Head', 'head') if bones.get(n)), None)
-        pelvis = next((bones.get(n) for n in ('Bip001 Pelvis', 'Bone_Pelvis01_M', 'Pelvis', 'Bip001') if bones.get(n)), None)
+        head = next((bones.get(n) for n in ('Bip001 Head', 'Bone_Head01_M', 'Head_M', 'Head', 'head') if bones.get(n)), None)
+        pelvis = next((bones.get(n) for n in ('Bip001 Pelvis', 'Bone_Pelvis01_M', 'Root_M', 'Pelvis', 'Bip001') if bones.get(n)), None)
         if head and pelvis:
             p_head = (mat @ head.head_local) if mat else head.head_local
             p_pelvis = (mat @ pelvis.head_local) if mat else pelvis.head_local

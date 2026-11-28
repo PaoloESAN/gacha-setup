@@ -25,7 +25,7 @@ def build():
         ('Threshold', 'NodeSocketFloat', .006),
         ('Fadeout', 'NodeSocketFloat', .2),
         ('Strength', 'NodeSocketFloat', 1),
-        ('Shadow Tint', 'NodeSocketColor', (.64, .57, .66, 1)),
+        ('Shadow Tint', 'NodeSocketColor', (.95, .69, .65, 1)),
         ('Camera Distance', 'NodeSocketFloat', 0),
         ('Distance Fade Start', 'NodeSocketFloat', .7),
         ('Distance Fade End', 'NodeSocketFloat', 1),

@@ -371,6 +371,14 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                         tokens.add(sub)
         return tokens
 
+    @staticmethod
+    def _has_zzz_face_keyword(text: str, extra_keywords=()) -> bool:
+        import re
+        base_keywords = ('face', 'eyebrow', 'brow', 'eye', 'cara', 'head', 'rostro', 'pupil')
+        if any(k in text for k in base_keywords) or any(k in text for k in extra_keywords):
+            return True
+        return bool(re.search(r'(?:^|[^a-z])iris(?:$|[^a-z])', text))
+
     def _find_best_texture(self, mat_name, mesh_names, tex_type, image_files, char_prefix=''):
         suf = f'_{tex_type.lower()}'
         candidates = [
@@ -395,7 +403,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         is_body3 = (any(k in combined_lower for k in ['body 3', 'body3', 'body 3', 'map3', 'map_3', 'leg', 'shoe', 'boot', 'foot', 'sock', 'stocking', 'thigh', 'tail', 'cola']) or '3' in mat_tokens) and not is_weapon
         is_body2 = ((any(k in combined_lower for k in ['body 2', 'body2', 'body 2', 'map2', 'map_2', 'wing', 'ala', 'feather', 'dress', 'cape', 'cloak', 'coat', 'jacket', 'acc', 'deco', 'extra', 'outer']) or '2' in mat_tokens) and not (is_body3 or is_weapon))
         is_body1 = ((any(k in combined_lower for k in ['body 1', 'body1', 'body 1', 'map1', 'torso', 'chest', 'main', 'skin', 'cloth', 'shirt']) or '1' in mat_tokens) and not (is_body2 or is_body3 or is_weapon))
-        is_face = any(k in combined_lower for k in ['face', 'eyebrow', 'brow', 'eye', 'cara', 'head', 'rostro', 'pupil', 'iris'])
+        is_face = self._has_zzz_face_keyword(combined_lower)
         is_hair = any(k in combined_lower for k in ['hair', 'pelo', 'cabello', 'bang', 'ponytail', 'twintail', 'ahoge'])
         is_sticker = any(k in combined_lower for k in ['sticker', 'decal', 'ui', 'logo', 'badge'])
         is_swimwear = 'swimwear' in mat_clean
@@ -491,11 +499,11 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
             # Category affinity (face, hair, sticker)
             for cat in ['face', 'hair', 'sticker']:
                 keywords = categories[cat]
-                mat_in_cat = any(k in combined_lower for k in keywords)
-                file_in_cat = any(k in f_lower for k in keywords)
+                mat_in_cat = self._has_zzz_face_keyword(combined_lower) if cat == 'face' else any(k in combined_lower for k in keywords)
+                file_in_cat = self._has_zzz_face_keyword(f_lower) if cat == 'face' else any(k in f_lower for k in keywords)
                 if mat_in_cat and file_in_cat:
                     score += 150
-                elif mat_in_cat and not file_in_cat and any(any(k in other.lower() for k in keywords) for other in candidates):
+                elif mat_in_cat and not file_in_cat and any((self._has_zzz_face_keyword(other.lower()) if cat == 'face' else any(k in other.lower() for k in keywords)) for other in candidates):
                     score -= 150
 
             if score > best_score:
@@ -734,7 +742,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         # 2. Category & Index Match
         m_tokens = set(re.split(r'[^a-zA-Z0-9]+', clean_key(m_clean))) - {'', 'mat', 'ui'}
         is_weapon = any(k in m_clean for k in ['weapon', 'wpn', 'equip', 'sword', 'gun', 'blade', 'spear', 'prop', 'arma', 'katana'])
-        is_face = any(k in m_clean for k in ['face', 'eyebrow', 'brow', 'eye', 'cara', 'head', 'rostro', 'pupil', 'iris'])
+        is_face = self._has_zzz_face_keyword(m_clean)
         is_hair = any(k in m_clean for k in ['hair', 'pelo', 'cabello', 'bang', 'ponytail', 'twintail', 'ahoge'])
         is_body3 = (any(k in m_clean for k in ['body_3', 'body3', 'body 3', 'map3', 'map_3', 'leg', 'shoe', 'boot', 'foot', 'sock', 'stocking', 'thigh', 'tail', 'cola']) or '3' in m_tokens) and not is_weapon
         is_body2 = ((any(k in m_clean for k in ['body_2', 'body2', 'body 2', 'map2', 'map_2', 'wing', 'ala', 'feather', 'dress', 'cape', 'cloak', 'coat', 'jacket', 'acc', 'deco', 'extra', 'outer']) or '2' in m_tokens) and not (is_body3 or is_weapon))
@@ -749,7 +757,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
             score = 0
 
             j_is_weapon = any(k in j_clean for k in ['weapon', 'wpn', 'equip', 'sword', 'gun', 'blade', 'spear', 'prop', 'arma', 'katana'])
-            j_is_face = any(k in j_clean for k in ['face', 'eyebrow', 'brow', 'eye', 'cara', 'head', 'rostro', 'pupil', 'iris'])
+            j_is_face = self._has_zzz_face_keyword(j_clean)
             j_is_hair = any(k in j_clean for k in ['hair', 'pelo', 'cabello', 'bang', 'ponytail', 'twintail', 'ahoge'])
             j_is_body3 = any(k in j_clean for k in ['body_3', 'body3', 'body 3', 'map3', 'map_3']) or '3' in j_tokens
             j_is_body2 = (any(k in j_clean for k in ['body_2', 'body2', 'body 2', 'map2', 'map_2']) or '2' in j_tokens) and not j_is_body3
@@ -803,7 +811,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
         matname = mat.name.lower()
         is_eyeglass = "eyeglass" in matname or "glasses" in matname or any("eyeglass" in m or "glasses" in m for m in mesh_names)
         is_face = not is_eyeglass and (
-            any(k in matname for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight", "cara", "head", "rostro"]) or
+            self._has_zzz_face_keyword(matname, ('眉', 'eyelash', 'highlight')) or
             any(any(k in m for k in ["face", "eyebrow", "brow", "eye"]) for m in mesh_names)
         )
 
@@ -1137,7 +1145,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                     continue
 
                 is_eyeglass = "eyeglass" in combined_names or "glasses" in combined_names
-                is_face = (not is_eyeglass and any(k in combined_names for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight", "cara", "head", "rostro"])) or \
+                is_face = (not is_eyeglass and self._has_zzz_face_keyword(combined_names, ('眉', 'eyelash', 'highlight'))) or \
                     (kythera_group_node.node_tree and "face" in kythera_group_node.node_tree.name.lower())
 
                 if is_face:
@@ -1246,7 +1254,7 @@ class ZenlessZoneZeroTextureImporterFacade(GameTextureImporter):
                     continue
 
                 is_eyeglass = "eyeglass" in combined_names or "glasses" in combined_names
-                is_face = not is_eyeglass and any(k in combined_names for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight", "cara", "head", "rostro"])
+                is_face = not is_eyeglass and self._has_zzz_face_keyword(combined_names, ('眉', 'eyelash', 'highlight'))
 
                 if is_face:
                     face_d = res_textures.get('d')
@@ -2508,6 +2516,17 @@ class WutheringWavesTextureImporterFacade(GameTextureImporter):
                     ftm_img = d_img
 
                 _configure_outline_mat_nodes(part_ol_mat, ld_img, id_img, d_img=d_img, ftm_img=ftm_img)
+
+        try:
+            from setup_wizard.character_custom_setups import run_character_setup_stage
+            run_character_setup_stage(
+                "after_materials",
+                context=self.context,
+                game_type=GameType.WUTHERING_WAVES.name,
+                char_dir=folder,
+            )
+        except Exception as exc_cs:
+            print(f"[WW TEXTURES] Notice in character custom setup (after_materials): {exc_cs}")
 
         self.blender_operator.report({'INFO'}, 'Successfully imported and assigned Wuthering Waves textures!')
         NextStepInvoker().invoke(

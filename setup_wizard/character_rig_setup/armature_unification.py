@@ -7,6 +7,96 @@ import re
 import bpy
 
 
+def prune_unskinned_duplicate_pelvis_subtree(armature_obj):
+    """Remove a completely unskinned duplicate Bip001 Pelvis subtree (e.g. Cecilia)
+    and strip leftover '.001' suffixes from the surviving skinned subtree.
+
+    Must run before unify_multi_branch_armature() merges Bip001 Pelvis.001 into
+    an unskinned ghost Bip001 Pelvis, which would otherwise leave ghost limb/weapon
+    bones claiming the unsuffixed names (Bip001 L Thigh/Calf/Foot/Hand, Ctr_Wp_*).
+    """
+    if not armature_obj or armature_obj.type != 'ARMATURE':
+        return False
+    if armature_obj.name not in bpy.context.view_layer.objects:
+        return False
+
+    arm = armature_obj.data
+    if any(b.name.startswith(("DEF-", "MCH-", "ORG-", "WGT-")) for b in arm.bones):
+        return False
+
+    pelvis_a = arm.bones.get("Bip001 Pelvis")
+    pelvis_b = arm.bones.get("Bip001 Pelvis.001")
+    if not (pelvis_a and pelvis_b):
+        return False
+
+    skinned_meshes = [
+        o for o in bpy.data.objects
+        if o.type == 'MESH' and (
+            o.parent == armature_obj
+            or any(m.type == 'ARMATURE' and m.object == armature_obj for m in o.modifiers)
+        )
+    ]
+    used_vgs = {vg.name for m in skinned_meshes for vg in m.vertex_groups}
+    used_parent_bones = {
+        o.parent_bone for o in bpy.data.objects
+        if o.parent == armature_obj and o.parent_bone
+    }
+    used_bones = used_vgs | used_parent_bones
+
+    def _collect_subtree(root_bone):
+        out = []
+        stack = [root_bone]
+        while stack:
+            cur = stack.pop()
+            out.append(cur.name)
+            stack.extend(cur.children)
+        return out
+
+    sub_a = _collect_subtree(pelvis_a)
+    sub_b = _collect_subtree(pelvis_b)
+    used_a = sum(1 for n in sub_a if n in used_bones)
+    used_b = sum(1 for n in sub_b if n in used_bones)
+
+    dead_subtree = None
+    live_subtree = None
+    if used_a == 0 and used_b > 0:
+        dead_subtree, live_subtree = sub_a, sub_b
+    elif used_b == 0 and used_a > 0:
+        dead_subtree, live_subtree = sub_b, sub_a
+    else:
+        return False
+
+    orig_mode = bpy.context.object.mode if bpy.context.object else 'OBJECT'
+    try:
+        if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+            bpy.ops.object.mode_set(mode='OBJECT')
+    except Exception:
+        pass
+
+    bpy.context.view_layer.objects.active = armature_obj
+    armature_obj.select_set(True)
+    bpy.ops.object.mode_set(mode='EDIT')
+    ebones = arm.edit_bones
+    for bn in dead_subtree:
+        eb = ebones.get(bn)
+        if eb:
+            ebones.remove(eb)
+    bpy.ops.object.mode_set(mode='POSE')
+    for bn in live_subtree:
+        if bn.endswith(".001"):
+            clean = bn[:-4]
+            pb = armature_obj.pose.bones.get(bn)
+            if pb and clean not in arm.bones:
+                pb.name = clean
+    bpy.ops.object.mode_set(mode='OBJECT')
+    try:
+        bpy.ops.object.mode_set(mode=orig_mode if orig_mode in ('OBJECT', 'EDIT', 'POSE') else 'OBJECT')
+    except Exception:
+        pass
+    print(f"[ARMATURE UNIFY] Pruned unskinned duplicate Pelvis subtree ({len(dead_subtree)} bones)")
+    return True
+
+
 def unify_multi_branch_armature(armature_obj):
     """
     Detects and unifies multi-branch armatures resulting from FBX models exported with
@@ -32,6 +122,9 @@ def unify_multi_branch_armature(armature_obj):
     # Never touch already-generated Rigify or control rigs
     if any(b.name.startswith(("DEF-", "MCH-", "ORG-", "WGT-")) for b in arm.bones):
         return False
+
+    if prune_unskinned_duplicate_pelvis_subtree(armature_obj):
+        return True
 
     # Identify duplicate skeleton bones:
     # A bone matching name.001, name.002 where base 'name' exists in armature

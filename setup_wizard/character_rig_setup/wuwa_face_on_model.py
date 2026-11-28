@@ -110,7 +110,7 @@ def build_wuwa_face_on_model(context, rig, primary, head_name):
     inv3 = inv.to_3x3()
     legacy = set(shared.WUWA_FACE_PANEL_BONE_NAMES) - GAZE - HIGHLIGHTS
     remove = {b.name for b in rig.data.bones if b.name in legacy
-              or b.name.startswith(('fp.key.', 'fp.label.'))}
+              or b.name.startswith(('fp.key.', 'fp.label.', 'fp.ex.'))}
     # Remove obsolete panel drivers before deleting their target bones.
     for mesh in meshes:
         keys = mesh.data.shape_keys
@@ -365,20 +365,58 @@ def build_wuwa_face_on_model(context, rig, primary, head_name):
 
         for name in (*BROWS, *MOUTHS):
             linear(name, name)
-        hi3_mouth_map = {'M_Anger': 'Mouth_Angry01', 'M_Laugh': 'Mouth_Smile02', 'M_O': 'Mouth_O02'}
-        for ctrl, hi3_key in hi3_mouth_map.items():
-            if ctrl not in keys.key_blocks and hi3_key in keys.key_blocks:
-                linear(hi3_key, ctrl)
+
+        # HI3 Brow triangle mappings (when WuWa B_* keys are absent)
+        hi3_brow_map = {
+            'B_Anger': ('Eyebrow_Angry',),
+            'B_Happy': ('Eyebrow_Smily', 'Eyebrow_Smile'),
+            'B_Cheerful': ('Eyebrow_Surprise', 'Eyebrow_Surprised'),
+            'B_Sad': ('Eyebrow_Trouble', 'Eyebrow_Trouble02'),
+            'B_Flat': ('Eyebrow_Serious',),
+            'B_Inside_Add': ('Eyebrow_Shy', 'Eyebrow_Shy02'),
+        }
+        hi3_mapped_keys = set()
+        for ctrl, cands in hi3_brow_map.items():
+            if ctrl not in keys.key_blocks:
+                hit = first_key(*cands)
+                if hit and hit not in hi3_mapped_keys:
+                    linear(hit, ctrl)
+                    hi3_mapped_keys.add(hit)
+
+        # HI3 Mouth triangle mappings (covers Sparkle, Mei, Kiana, etc.)
+        hi3_mouth_map = {
+            'Aa': ('Mouth_Laugh01',),
+            'M_OpenSmall': ('Mouth_Delta01', 'Mouth_N01'),
+            'M_Laugh': ('Mouth_Smile02', 'Mouth_Smile04', 'Mouth_Smile03'),
+            'M_Scared': ('Mouth_Angry02', 'Mouth_Angry03'),
+            'M_ScaredTooth': ('Mouth_Angry04', 'Mouth_Angry05'),
+            'M_Anger': ('Mouth_Angry01', 'Mouth_Angry03'),
+            'M_Trapezoid': ('Mouth_Proud01', 'Mouth_Line01'),
+            'M_Nutcracker': ('Mouth_Twisted01', 'Mouth_Line02'),
+            'M_O': ('Mouth_O02',),
+            'M_A': ('Mouth_TongueOut01_100', 'Mouth_Proud02'),
+        }
+        for ctrl, cands in hi3_mouth_map.items():
+            if ctrl not in keys.key_blocks:
+                hit = first_key(*cands)
+                if hit and hit not in hi3_mapped_keys:
+                    linear(hit, ctrl)
+                    hi3_mapped_keys.add(hit)
 
         for side in ('L', 'R'):
             for name in FANS:
                 key = f'E_Smile_{side}' if name == 'Smile' else f'E_{name}.{side}'
-                linear(key, f'{name}.{side}')
+                if key in keys.key_blocks:
+                    linear(key, f'{name}.{side}')
+                elif name == 'Smile' and f'Eye_Wink02_{side}' in keys.key_blocks:
+                    linear(f'Eye_Wink02_{side}', f'{name}.{side}')
+                    hi3_mapped_keys.add(f'Eye_Wink02_{side}')
             for key, sign in [(f'M_Smile_{side}', 1), (f'M_Ennui_{side}', -1)]:
                 linear(key, f'Mouth.{side}', sign=sign)
             close_side = first_key(f'E_Close.{side}', f'Eye_Wink01_{side}', f'Eye_Wink02_{side}')
             if close_side:
                 drive(close_side, 'max(0,min(1,(1-v)*2))', [('v', f'Eye.{side}', 'scale.y')])
+                hi3_mapped_keys.add(close_side)
 
         def reset_global(key):
             if key in keys.key_blocks:
@@ -399,15 +437,20 @@ def build_wuwa_face_on_model(context, rig, primary, head_name):
                     reset_global(hit)
                     for side in ('L', 'R'):
                         linear(f'{hit}.{side}', f'{fan_name}.{side}')
+                    hi3_mapped_keys.add(hit)
                 elif hit:
                     drive_shared(hit, f'{fan_name}.L', f'{fan_name}.R')
-        if 'M_Smile_L' not in keys.key_blocks and 'Mouth_Smile01' in keys.key_blocks:
-            if all(f'Mouth_Smile01.{s}' in keys.key_blocks for s in ('L', 'R')):
-                reset_global('Mouth_Smile01')
-                for side in ('L', 'R'):
-                    linear(f'Mouth_Smile01.{side}', f'Mouth.{side}')
-            else:
-                drive_shared('Mouth_Smile01', 'Mouth.L', 'Mouth.R')
+                    hi3_mapped_keys.add(hit)
+        if 'M_Smile_L' not in keys.key_blocks:
+            hi3_smile = first_key('Mouth_Smile01', 'Mouth_Smile03', 'Mouth_Smile04')
+            if hi3_smile and hi3_smile not in hi3_mapped_keys:
+                if all(f'{hi3_smile}.{s}' in keys.key_blocks for s in ('L', 'R')):
+                    reset_global(hi3_smile)
+                    for side in ('L', 'R'):
+                        linear(f'{hi3_smile}.{side}', f'Mouth.{side}')
+                else:
+                    drive_shared(hi3_smile, 'Mouth.L', 'Mouth.R')
+                hi3_mapped_keys.add(hi3_smile)
 
         close_all = first_key('E_Close', 'Eye_Lookat_Close')
         if close_all:
@@ -449,8 +492,12 @@ def build_wuwa_face_on_model(context, rig, primary, head_name):
             drive('Pupil_Scale', 'max(-1,min(1,(1-m*(l+r)/2)*2+max(0,min(1,(1-s)*2))))',
                   [('m', 'EyeTracker', 'scale.x'), ('l', 'Eye.L', 'scale.x'),
                    ('r', 'Eye.R', 'scale.x'), ('s', 'EyeScale', 'scale.x')])
-        linear('B_Up_Add', 'Eyebrows', distance=.01)
-        linear('B_Down_Add', 'Eyebrows', distance=.01, sign=-1)
+        b_up = first_key('B_Up_Add', 'Eyebrow_Up')
+        if b_up:
+            linear(b_up, 'Eyebrows', distance=.01)
+        b_dn = first_key('B_Down_Add', 'Eyebrow_Down')
+        if b_dn:
+            linear(b_dn, 'Eyebrows', distance=.01, sign=-1)
         for side, sign in [('L', -1), ('R', 1)]:
             drive(f'B_AH_{side}', f'max(0,min(1,{sign}*v/{math.radians(10)!r}))', [('v', 'Eyebrows', 'rotation_euler.z')])
         for key, bone, sign in [('P_M_Scale_Add.L', 'Mouth.L', -1), ('P_M_L_Add', 'Mouth.L', 1),
@@ -475,6 +522,116 @@ def build_wuwa_face_on_model(context, rig, primary, head_name):
             drive(target_vowel, expression, channels)
         mesh['ww_face_panel_armature'] = rig.name
         mesh['ww_face_panel_assigned'] = True
+
+    # For HI3 characters (e.g. Sparkle, Raiden Mei, Kiana), add neat extra on-face
+    # WuWa-style triangle controls for any remaining undriven expression shapekeys
+    # right above the brow row, below the eye/brow row, and below the mouth row.
+    is_hi3_face = any(
+        any(sig in m.data.shape_keys.key_blocks for sig in ('Eyebrow_Angry', 'Eye_Wink01_L', 'Mouth_A01'))
+        for m in meshes
+    )
+    if is_hi3_face:
+        driven_by_mesh = {}
+        all_driven_names = set()
+        for m in meshes:
+            sk_data = m.data.shape_keys
+            drvs = {
+                fc.data_path
+                for fc in (sk_data.animation_data.drivers if sk_data.animation_data else [])
+            }
+            driven_by_mesh[m] = drvs
+            for kb in sk_data.key_blocks:
+                if f'key_blocks["{kb.name}"].value' in drvs:
+                    all_driven_names.add(kb.name)
+
+        extra_sk_to_meshes = {}
+        for m in meshes:
+            sk_data = m.data.shape_keys
+            for kb in sk_data.key_blocks:
+                kn = kb.name
+                kl = kn.lower()
+                if kl in ('basis', 'default') or '_inbetween_' in kl:
+                    continue
+                if kn.endswith(('.L', '.R')) or kn.startswith('Pupil_Scale'):
+                    continue
+                if f'key_blocks["{kn}"].value' in driven_by_mesh[m]:
+                    continue
+                # Skip global base keys whose split .L/.R copies are already driven (avoids double-deform)
+                if f'key_blocks["{kn}.L"].value' in driven_by_mesh[m] or f'key_blocks["{kn}.R"].value' in driven_by_mesh[m]:
+                    continue
+                # Skip single-sided _L/_R eyebrow copies when bilateral Eyebrow_* is already present
+                if kn.endswith(('_L', '_R')) and kn[:-2] in sk_data.key_blocks and kl.startswith('eyebrow_'):
+                    continue
+                extra_sk_to_meshes.setdefault(kn, []).append(m)
+
+        if extra_sk_to_meshes:
+            extra_brows = sorted(k for k in extra_sk_to_meshes if 'brow' in k.lower())
+            extra_eyes = sorted(k for k in extra_sk_to_meshes if 'eye' in k.lower() and 'brow' not in k.lower())
+            extra_mouths = sorted(k for k in extra_sk_to_meshes if k not in extra_brows and k not in extra_eyes)
+
+            extra_specs = []
+            for i, k in enumerate(extra_brows):
+                offset_x = (i - (len(extra_brows) - 1) * 0.5) * 0.014 * unit
+                extra_specs.append((f'fp.ex.{k}', k, brow + Vector((offset_x, 0, .024 * unit)), 'Eyebrows', Vector((0, 0, 1)), 'THEME01'))
+            for i, k in enumerate(extra_eyes):
+                offset_x = (i - (len(extra_eyes) - 1) * 0.5) * 0.012 * unit
+                extra_specs.append((f'fp.ex.{k}', k, eye_center + Vector((offset_x, 0, .042 * unit)), 'FacePanel', Vector((0, 0, 1)), 'THEME09'))
+            for i, k in enumerate(extra_mouths):
+                offset_x = (i - (len(extra_mouths) - 1) * 0.5) * 0.011 * unit
+                extra_specs.append((f'fp.ex.{k}', k, mouth + Vector((offset_x, 0, -.050 * unit)), 'MouthPanel', Vector((0, 0, -1)), 'THEME03'))
+
+            context.view_layer.objects.active = rig
+            bpy.ops.object.mode_set(mode='EDIT')
+            eb = rig.data.edit_bones
+            for bname, _, pt, parent_name, direction, _ in extra_specs:
+                b = eb.get(bname) or eb.new(bname)
+                b.head = inv @ pt
+                b.tail = b.head + inv3 @ (direction.normalized() * .018 * unit)
+                b.align_roll(inv3 @ Vector((0, -1, 0)))
+                b.use_deform = False
+                b.use_connect = False
+                b.parent = eb.get(parent_name)
+                created.append(bname)
+            bpy.ops.object.mode_set(mode='OBJECT')
+
+            for bname, sk_name, _, _, _, color in extra_specs:
+                pb = rig.pose.bones[bname]
+                for old in list(pb.bone.collections):
+                    old.unassign(pb.bone)
+                coll.assign(pb.bone)
+                pb.bone.hide = False
+                pb.bone.hide_select = False
+                pb.lock_location = (True, False, True)
+                pb.lock_rotation = (True, True, True)
+                pb.lock_scale = (True, True, True)
+                pb.custom_shape = widget('triangle')
+                pb.use_custom_shape_bone_size = False
+                pb.custom_shape_scale_xyz = (.0035 * unit, .0035 * unit, .0035 * unit)
+                pb.color.palette = color
+                lim = pb.constraints.new('LIMIT_LOCATION')
+                lim.owner_space = 'LOCAL'
+                lim.use_transform_limit = True
+                for axis in 'xyz':
+                    setattr(lim, 'use_min_' + axis, True)
+                    setattr(lim, 'use_max_' + axis, True)
+                lim.min_x = lim.max_x = lim.min_y = lim.min_z = lim.max_z = 0.0
+                lim.max_y = .02 * unit
+
+                for m_obj in extra_sk_to_meshes[sk_name]:
+                    sk = m_obj.data.shape_keys.key_blocks.get(sk_name)
+                    if not sk:
+                        continue
+                    sk.driver_remove('value')
+                    drv = sk.driver_add('value').driver
+                    drv.type = 'SCRIPTED'
+                    var = drv.variables.new()
+                    var.name = 'v'
+                    var.type = 'SINGLE_PROP'
+                    var.targets[0].id = rig
+                    var.targets[0].data_path = f'pose.bones["{bname}"].location.y'
+                    drv.expression = f'max(0,min(1,v/{.02 * unit!r}))'
+                    linked += 1
+
     if not HIGHLIGHTS.intersection(rig.pose.bones.keys()):
         shared.merge_eye_highlight_into_armature(context, rig, head_name)
     shared.setup_outline_drivers_from_face_panel(rig, context)

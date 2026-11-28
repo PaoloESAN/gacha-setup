@@ -3,6 +3,48 @@ import bpy
 _PATCHED_FLAG = "_gacha_rim_patched"
 _PATCH_VERSION = 1
 _GENSHIN_RIM_COLOR_GAIN = 2.0
+_HSR_RIM_COLOR_GAIN = 3.0
+
+
+def _apply_rim_color_gain(ng, gain_scale, label='Blender Rim Brightness'):
+    """Raise only the rim contribution before it is added to the base color."""
+    output = next((n for n in ng.nodes if n.type == 'GROUP_OUTPUT' and n.is_active_output), None)
+    color = output.inputs.get('Color') if output else None
+    if color is None or not color.is_linked:
+        return False
+    gain = ng.nodes.get('Blender_Rim_ColorBoost')
+    # Version 1 put the gain on Color, but that output includes the base
+    # surface. Restore that connection when upgrading an existing file.
+    changed = False
+    if gain and color.links[0].from_node == gain:
+        if not gain.inputs[0].is_linked:
+            return False
+        ng.links.new(gain.inputs[0].links[0].from_socket, color)
+        changed = True
+    final_add = color.links[0].from_node
+    if final_add.bl_idname != 'ShaderNodeMix' or final_add.blend_type != 'ADD':
+        return changed
+    rim_input = next((s for s in final_add.inputs if s.identifier == 'A_Color'), None)
+    base_input = next((s for s in final_add.inputs if s.identifier == 'B_Color'), None)
+    if (rim_input is None or not rim_input.is_linked or base_input is None
+            or not base_input.is_linked or base_input.links[0].from_node.type != 'GROUP_INPUT'):
+        return changed
+    source = rim_input.links[0].from_socket
+    if gain and source.node == gain:
+        if gain.inputs['Scale'].default_value != gain_scale:
+            gain.inputs['Scale'].default_value = gain_scale
+            changed = True
+        return changed
+    if not gain:
+        gain = ng.nodes.new('ShaderNodeVectorMath')
+        gain.name = 'Blender_Rim_ColorBoost'
+    gain.operation = 'SCALE'
+    gain.label = label
+    gain.location = (final_add.location.x - 180, final_add.location.y + 180)
+    gain.inputs['Scale'].default_value = gain_scale
+    ng.links.new(source, gain.inputs[0])
+    ng.links.new(gain.outputs['Vector'], rim_input)
+    return True
 
 
 def _boost_genshin_rim_colors():
@@ -19,42 +61,8 @@ def _boost_genshin_rim_colors():
         roots.extend(n.node_tree for n in ng.nodes if n.type == 'GROUP' and n.node_tree)
         if 'rim' not in ng.name.lower() or not ng.nodes.get('Blender_LayerWeight_Rim'):
             continue
-        output = next((n for n in ng.nodes if n.type == 'GROUP_OUTPUT' and n.is_active_output), None)
-        color = output.inputs.get('Color') if output else None
-        if color is None or not color.is_linked:
-            continue
-        gain = ng.nodes.get('Blender_Rim_ColorBoost')
-        # Version 1 put the gain on Color, but that output includes the base
-        # surface. Restore that connection when upgrading an existing file.
-        if gain and color.links[0].from_node == gain:
-            if not gain.inputs[0].is_linked:
-                continue
-            ng.links.new(gain.inputs[0].links[0].from_socket, color)
+        if _apply_rim_color_gain(ng, _GENSHIN_RIM_COLOR_GAIN, 'Blender Genshin Rim Brightness x2'):
             changed = True
-        final_add = color.links[0].from_node
-        if final_add.bl_idname != 'ShaderNodeMix' or final_add.blend_type != 'ADD':
-            continue
-        rim_input = next((s for s in final_add.inputs if s.identifier == 'A_Color'), None)
-        base_input = next((s for s in final_add.inputs if s.identifier == 'B_Color'), None)
-        if (rim_input is None or not rim_input.is_linked or base_input is None
-                or not base_input.is_linked or base_input.links[0].from_node.type != 'GROUP_INPUT'):
-            continue
-        source = rim_input.links[0].from_socket
-        if gain and source.node == gain:
-            if gain.inputs['Scale'].default_value != _GENSHIN_RIM_COLOR_GAIN:
-                gain.inputs['Scale'].default_value = _GENSHIN_RIM_COLOR_GAIN
-                changed = True
-            continue
-        if not gain:
-            gain = ng.nodes.new('ShaderNodeVectorMath')
-            gain.name = 'Blender_Rim_ColorBoost'
-        gain.operation = 'SCALE'
-        gain.label = 'Blender Genshin Rim Brightness x2'
-        gain.location = (final_add.location.x - 180, final_add.location.y + 180)
-        gain.inputs['Scale'].default_value = _GENSHIN_RIM_COLOR_GAIN
-        ng.links.new(source, gain.inputs[0])
-        ng.links.new(gain.outputs['Vector'], rim_input)
-        changed = True
     return changed
 
 def is_blender_official():
@@ -266,6 +274,8 @@ def patch_depth_based_rim_group(ng):
             for l in list(out.links):
                 ng.links.remove(l)
 
+    _apply_rim_color_gain(ng, _HSR_RIM_COLOR_GAIN, 'Blender HSR Rim Brightness x3')
+
     return True
 
 
@@ -429,6 +439,162 @@ def patch_lit_rimlight_custom_group(ng):
     return True
 
 
+def patch_nte_depth_rim_group(ng):
+    """
+    Patches NTE's '深度边缘光' node group in memory for official Blender (4.x / 5.x).
+    Replaces undefined Goo Engine Curvature node with LayerWeight (Facing) + anisotropic
+    X/Y scale from '缩放', feeding into Math.005 so Rim Intensity, Rim Scale, Rim Lit,
+    and Rim Shadow all work natively in standard Blender.
+    """
+    if not ng:
+        return False
+
+    math_node = ng.nodes.get('Math.005')
+    if not math_node:
+        return False
+
+    g_in = next((n for n in ng.nodes if n.type == 'GROUP_INPUT' and '缩放' in n.outputs), None)
+    if not g_in:
+        g_in = next((n for n in ng.nodes if n.type == 'GROUP_INPUT'), None)
+
+    lw = ng.nodes.get('Blender_LayerWeight_Rim')
+    if not lw:
+        lw = ng.nodes.new('ShaderNodeLayerWeight')
+        lw.name = 'Blender_LayerWeight_Rim'
+        lw.label = 'Blender Native Rim (Layer Weight)'
+        lw.location = (math_node.location.x - 600, math_node.location.y)
+    lw.inputs['Blend'].default_value = 0.5
+
+    scale_out = None
+    if g_in:
+        for out in g_in.outputs:
+            if out.name == '缩放' or 'scale' in out.name.lower():
+                scale_out = out
+                break
+
+    scale_sock = None
+    if scale_out:
+        if scale_out.type == 'VECTOR':
+            sep_xyz = ng.nodes.get('Blender_Rim_SepScale')
+            if not sep_xyz:
+                sep_xyz = ng.nodes.new('ShaderNodeSeparateXYZ')
+                sep_xyz.name = 'Blender_Rim_SepScale'
+                sep_xyz.location = (math_node.location.x - 700, math_node.location.y - 150)
+            ng.links.new(scale_out, sep_xyz.inputs['Vector'])
+
+            geom = ng.nodes.get('Blender_Rim_Geom')
+            if not geom:
+                geom = ng.nodes.new('ShaderNodeNewGeometry')
+                geom.name = 'Blender_Rim_Geom'
+                geom.location = (math_node.location.x - 900, math_node.location.y - 300)
+
+            vtrans = ng.nodes.get('Blender_Rim_VTrans')
+            if not vtrans:
+                vtrans = ng.nodes.new('ShaderNodeVectorTransform')
+                vtrans.name = 'Blender_Rim_VTrans'
+                vtrans.vector_type = 'NORMAL'
+                vtrans.convert_from = 'WORLD'
+                vtrans.convert_to = 'CAMERA'
+                vtrans.location = (math_node.location.x - 700, math_node.location.y - 300)
+            ng.links.new(geom.outputs['Normal'], vtrans.inputs['Vector'])
+
+            sep_norm = ng.nodes.get('Blender_Rim_SepNorm')
+            if not sep_norm:
+                sep_norm = ng.nodes.new('ShaderNodeSeparateXYZ')
+                sep_norm.name = 'Blender_Rim_SepNorm'
+                sep_norm.location = (math_node.location.x - 550, math_node.location.y - 300)
+            ng.links.new(vtrans.outputs['Vector'], sep_norm.inputs['Vector'])
+
+            nx_sq = ng.nodes.get('Blender_Rim_NxSq')
+            if not nx_sq:
+                nx_sq = ng.nodes.new('ShaderNodeMath')
+                nx_sq.name = 'Blender_Rim_NxSq'
+                nx_sq.operation = 'MULTIPLY'
+                nx_sq.location = (math_node.location.x - 400, math_node.location.y - 250)
+            ng.links.new(sep_norm.outputs['X'], nx_sq.inputs[0])
+            ng.links.new(sep_norm.outputs['X'], nx_sq.inputs[1])
+
+            ny_sq = ng.nodes.get('Blender_Rim_NySq')
+            if not ny_sq:
+                ny_sq = ng.nodes.new('ShaderNodeMath')
+                ny_sq.name = 'Blender_Rim_NySq'
+                ny_sq.operation = 'MULTIPLY'
+                ny_sq.location = (math_node.location.x - 400, math_node.location.y - 350)
+            ng.links.new(sep_norm.outputs['Y'], ny_sq.inputs[0])
+            ng.links.new(sep_norm.outputs['Y'], ny_sq.inputs[1])
+
+            x_eff = ng.nodes.get('Blender_Rim_XEff')
+            if not x_eff:
+                x_eff = ng.nodes.new('ShaderNodeMath')
+                x_eff.name = 'Blender_Rim_XEff'
+                x_eff.operation = 'MULTIPLY'
+                x_eff.location = (math_node.location.x - 250, math_node.location.y - 200)
+            ng.links.new(sep_xyz.outputs['X'], x_eff.inputs[0])
+            ng.links.new(nx_sq.outputs['Value'], x_eff.inputs[1])
+
+            y_eff = ng.nodes.get('Blender_Rim_YEff')
+            if not y_eff:
+                y_eff = ng.nodes.new('ShaderNodeMath')
+                y_eff.name = 'Blender_Rim_YEff'
+                y_eff.operation = 'MULTIPLY'
+                y_eff.location = (math_node.location.x - 250, math_node.location.y - 300)
+            ng.links.new(sep_xyz.outputs['Y'], y_eff.inputs[0])
+            ng.links.new(ny_sq.outputs['Value'], y_eff.inputs[1])
+
+            eff_scale = ng.nodes.get('Blender_Rim_EffScale')
+            if not eff_scale:
+                eff_scale = ng.nodes.new('ShaderNodeMath')
+                eff_scale.name = 'Blender_Rim_EffScale'
+                eff_scale.operation = 'ADD'
+                eff_scale.location = (math_node.location.x - 100, math_node.location.y - 250)
+            ng.links.new(x_eff.outputs['Value'], eff_scale.inputs[0])
+            ng.links.new(y_eff.outputs['Value'], eff_scale.inputs[1])
+
+            scale_sock = eff_scale.outputs['Value']
+        else:
+            scale_sock = scale_out
+
+    # Map NTE Rim Scale (default ~0.5..0.75, up to ~2.0) into silhouette width (0..0.60)
+    smul = ng.nodes.get('Blender_Rim_ScaleMul')
+    if not smul:
+        smul = ng.nodes.new('ShaderNodeMath')
+        smul.name = 'Blender_Rim_ScaleMul'
+        smul.location = (math_node.location.x - 400, math_node.location.y - 150)
+    smul.operation = 'MULTIPLY'
+    smul.use_clamp = True
+    smul.inputs[1].default_value = 0.35
+    if scale_sock:
+        ng.links.new(scale_sock, smul.inputs[0])
+    else:
+        smul.inputs[0].default_value = 0.6
+
+    thresh = ng.nodes.get('Blender_Rim_Thresh')
+    if not thresh:
+        thresh = ng.nodes.new('ShaderNodeMath')
+        thresh.name = 'Blender_Rim_Thresh'
+        thresh.location = (math_node.location.x - 200, math_node.location.y - 100)
+    thresh.operation = 'SUBTRACT'
+    thresh.inputs[0].default_value = 1.0
+    ng.links.new(smul.outputs['Value'], thresh.inputs[1])
+
+    # Greater than: Facing > Threshold -> feeds Math.003 and Mix.Factor just like native Curvature
+    math_node.operation = 'GREATER_THAN'
+    for idx in (0, 1):
+        for l in list(math_node.inputs[idx].links):
+            ng.links.remove(l)
+    ng.links.new(lw.outputs['Facing'], math_node.inputs[0])
+    ng.links.new(thresh.outputs['Value'], math_node.inputs[1])
+
+    # Unlink undefined Curvature node if present
+    curv = next((n for n in ng.nodes if 'curvature' in n.name.lower() or n.type in ('CURVATURE', 'CUSTOM')), None)
+    if curv:
+        for out in curv.outputs:
+            for l in list(out.links):
+                ng.links.remove(l)
+
+    return True
+
+
 def patch_all_rimlight_groups_for_blender():
     """
     Checks all node groups in bpy.data.node_groups and patches Rim Light groups
@@ -453,6 +619,8 @@ def patch_all_rimlight_groups_for_blender():
         done = False
         if 'depth-based rim' in ng_low or ng.name == 'Depth-based Rim':
             done = patch_depth_based_rim_group(ng)
+        elif '深度边缘光' in ng.name:
+            done = patch_nte_depth_rim_group(ng)
         elif 'genshin impact - rimlight' in ng_low or (('rimlight' in ng_low or 'rim light' in ng_low) and 'depth' not in ng_low and 'lit rimlight' not in ng_low):
             done = patch_genshin_rimlight_group(ng)
         elif 'lit rimlight' in ng_low:

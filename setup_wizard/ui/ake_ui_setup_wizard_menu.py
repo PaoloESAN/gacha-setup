@@ -92,6 +92,12 @@ class AKE_PT_Basic_Setup_Wizard_UI_Layout(Panel, ArknightsEndfieldUIRenderChecke
         # Step 4: Rig Character
         OperatorFactory.create_rig_character_ui(sub_layout, game_type=GameType.ARKNIGHTS_ENDFIELD.name)
 
+        sub_layout.operator(
+            "arknights_endfield.create_shapekey_panel",
+            text="Create Shapekey Panel",
+            icon="FACE_MAPS",
+        )
+
         # Step 5: Setup Compositor Nodes
         OperatorFactory.create(
             sub_layout,
@@ -234,6 +240,13 @@ class AKE_PT_UI_Rig_Character_Menu(Panel, ArknightsEndfieldUIRenderChecker):
         layout = self.layout
         sub_layout = layout.column(align=True)
         OperatorFactory.create_rig_character_ui(sub_layout, game_type=GameType.ARKNIGHTS_ENDFIELD.name)
+        OperatorFactory.create(
+            sub_layout,
+            "hoyoverse.fix_light_direction",
+            "Fix Light Direction",
+            "LIGHT_SUN",
+            game_type=GameType.ARKNIGHTS_ENDFIELD.name,
+        )
         OperatorFactory.create(
             sub_layout,
             "arknights_endfield.setup_face_rig",

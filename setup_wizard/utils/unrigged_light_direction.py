@@ -6,9 +6,9 @@ from setup_wizard.utils.modifier_utils import get_modifier_property, set_modifie
 LIGHT_DIRECTION_GAMES = {
     'GENSHIN_IMPACT', 'HONKAI_STAR_RAIL', 'ZENLESS_ZONE_ZERO',
     'WUTHERING_WAVES', 'PUNISHING_GRAY_RAVEN', 'HONKAI_IMPACT_3RD',
+    'NEVERNESS_TO_EVERNESS',
 }
-# NTE deliberately removes this control; Endfield uses Sun, and HNA's
-# outline-only geometry setup does not expose a Light Vectors direction input.
+# Endfield uses Sun, and HNA's outline-only geometry setup does not expose a Light Vectors direction input.
 
 
 def setup_unrigged_light_direction(context, game_type, target_object=None):
@@ -65,12 +65,16 @@ def setup_unrigged_light_direction(context, game_type, target_object=None):
         light.animation_data_clear()
     if light is None:
         light = bpy.data.objects.new('Light Direction', None)
-        light.location = (0.0, -2.0, 1.5)
     light.name = f'Light Direction_{owner.name}'
     if light.parent:
         matrix = light.matrix_world.copy()
         light.parent = None
         light.matrix_world = matrix
+    light.location = (0.0, 0.0, 0.0)
+    light.delta_scale = (1.0, 1.0, 1.0)
+    if game_type == 'ZENLESS_ZONE_ZERO':
+        from math import pi
+        light.rotation_euler = (-pi / 2.0, 0.0, 0.0)
     light.empty_display_type = 'SINGLE_ARROW'
     light.empty_display_size = 0.5
     destination = next((coll for coll in owner.users_collection

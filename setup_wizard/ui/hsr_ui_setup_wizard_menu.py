@@ -95,6 +95,12 @@ class HSR_PT_Basic_Setup_Wizard_UI_Layout(Panel, HonkaiStarRailUIRenderChecker):
 
         OperatorFactory.create_rig_character_ui(sub_layout)
 
+        sub_layout.operator(
+            "honkai_star_rail.create_shapekey_panel",
+            text="Create Shapekey Panel",
+            icon="FACE_MAPS",
+        )
+
         OperatorFactory.create(
             sub_layout,
             "honkai_star_rail.finish_setup",
@@ -314,6 +320,13 @@ class HSR_PT_UI_Character_Rig_Setup_Menu(Panel, HonkaiStarRailUIRenderChecker):
         character_rigger_props = context.scene.character_rigger_props
 
         OperatorFactory.create_rig_character_ui(box)
+        OperatorFactory.create(
+            box,
+            "hoyoverse.fix_light_direction",
+            "Fix Light Direction",
+            "LIGHT_SUN",
+            game_type=GameType.HONKAI_STAR_RAIL.name,
+        )
         OperatorFactory.create(
             box,
             "hoyoverse.apply_hair_clothes_physics",
@@ -554,19 +567,8 @@ def update_hsr_stellartoon_props(self, context=None):
     sharp_shadow = list(getattr(scene, "hsr_sharp_shadow_color", (1.0, 1.0, 1.0)))
     if len(sharp_shadow) == 3: sharp_shadow.append(1.0)
 
-    prop_map = {
-        "Expression Cheek Intensity": exp_cheek,
-        "Expression Shy Intensity": exp_shy,
-        "Expression Shadow Intensity": exp_shadow,
-        "Eye Can't Be Tinted?": eye_cant_tint,
-        "Custom Ambient Color": amb_color,
-        "Custom Lit Color": lit_color,
-        "Custom Shadow Color": shadow_color,
-        "Custom Sharp Lit Color": sharp_lit,
-        "Custom Sharp Shadow Color": sharp_shadow,
-    }
-
-    # 1. Update inside GlobalProperties node group (both its internal nodes and interface)
+    # 1. Resolve character armature & materials and isolate GlobalProperties
+    arm = None
     try:
         from setup_wizard.ui.character_settings_utils import (
             get_character_materials,
@@ -577,6 +579,46 @@ def update_hsr_stellartoon_props(self, context=None):
             ensure_character_node_trees_isolated(arm, target_materials)
     except Exception:
         target_materials = []
+
+    is_lp_active = False
+    try:
+        from setup_wizard.character_rig_setup.lighting_panel_setup import armature_has_lighting_panel
+        if arm and armature_has_lighting_panel(arm):
+            ctrl_type = arm.get("hsr_lighting_control_type")
+            if ctrl_type not in ("PANEL", "THIS_PANEL"):
+                ctrl_type = getattr(scene, "hsr_lighting_control_type", "PANEL")
+            is_lp_active = (ctrl_type == "PANEL")
+    except Exception:
+        is_lp_active = False
+
+    prop_map = {
+        "Expression Cheek Intensity": exp_cheek,
+        "Expression Shy Intensity": exp_shy,
+        "Expression Shadow Intensity": exp_shadow,
+        "Eye Can't Be Tinted?": eye_cant_tint,
+    }
+    if not is_lp_active:
+        rim_x = max(0.0, min(20.0, float(getattr(scene, "hsr_rim_x", 0.0))))
+        rim_y = max(0.0, min(20.0, float(getattr(scene, "hsr_rim_y", 0.0))))
+
+        rim_lit = list(getattr(scene, "hsr_rim_lit_color", (1.0, 1.0, 1.0)))
+        if len(rim_lit) == 3:
+            rim_lit.append(1.0)
+
+        rim_shadow = list(getattr(scene, "hsr_rim_shadow_color", (0.0, 0.0, 0.0)))
+        if len(rim_shadow) == 3:
+            rim_shadow.append(1.0)
+
+        prop_map.update({
+            "Custom Ambient Color": amb_color,
+            "Custom Lit Color": lit_color,
+            "Custom Shadow Color": shadow_color,
+            "Custom Sharp Lit Color": sharp_lit,
+            "Custom Sharp Shadow Color": sharp_shadow,
+            "Scale": (rim_x, rim_y, 0.0),
+            "Tint Lit": rim_lit,
+            "Tint Shadow": rim_shadow,
+        })
 
     # 2. Find target GlobalProperties node group(s)
     target_trees = set()
@@ -825,6 +867,72 @@ def update_hsr_outline_thickness(self, context):
     _redraw_view3d()
 
 
+def update_hsr_lighting_control_type(self, context=None):
+    global _is_updating_hsr_props
+    if _is_updating_hsr_props:
+        return
+    ctrl_type = getattr(self, "hsr_lighting_control_type", "PANEL")
+    arm = None
+    mats = []
+    try:
+        from setup_wizard.ui.character_settings_utils import (
+            resolve_settings_armature,
+            get_character_materials,
+            ensure_character_node_trees_isolated,
+        )
+        arm = resolve_settings_armature(context)
+        if arm:
+            arm["hsr_lighting_control_type"] = str(ctrl_type)
+            _, mats = get_character_materials(context, arm)
+            if mats:
+                ensure_character_node_trees_isolated(arm, mats)
+    except Exception:
+        arm = None
+        mats = []
+
+    from setup_wizard.character_rig_setup.lighting_panel_setup import (
+        connect_hsr_lighting_panel,
+        disconnect_hsr_lighting_panel,
+        set_lighting_panel_visibility,
+    )
+
+    if ctrl_type == "PANEL":
+        connect_hsr_lighting_panel(target_materials=mats or None)
+        if arm:
+            set_lighting_panel_visibility(arm, True)
+    else:
+        if arm:
+            set_lighting_panel_visibility(arm, False)
+        disconnect_hsr_lighting_panel(target_materials=mats or None)
+
+        current_mode = arm.get("hsr_light_mode", "0") if arm else getattr(self, "hsr_light_mode", "0")
+        if str(current_mode) not in HSR_LIGHT_PRESETS and str(current_mode) != "6":
+            current_mode = "0"
+            if arm:
+                arm["hsr_light_mode"] = "0"
+            _is_updating_hsr_props = True
+            try:
+                self.hsr_light_mode = "0"
+            finally:
+                _is_updating_hsr_props = False
+
+        if str(current_mode) in HSR_LIGHT_PRESETS:
+            preset = HSR_LIGHT_PRESETS[str(current_mode)]
+            _is_updating_hsr_props = True
+            try:
+                self.hsr_amb_color = preset["ambient"]
+                self.hsr_lit_color = preset["lit"]
+                self.hsr_shadow_color = preset["shadow"]
+                self.hsr_sharp_lit_color = preset["sharp_lit"]
+                self.hsr_sharp_shadow_color = preset["sharp_shadow"]
+            finally:
+                _is_updating_hsr_props = False
+
+        update_hsr_stellartoon_props(self, context)
+
+    _redraw_view3d()
+
+
 def pull_hsr_panel_values(scene, context, force=False):
     """Synchronizes UI sliders and lighting mode with the selected character's materials and rig."""
     global _is_updating_hsr_props
@@ -845,6 +953,33 @@ def pull_hsr_panel_values(scene, context, force=False):
         return
 
     ensure_character_node_trees_isolated(arm, mats)
+
+    # Ensure color wheels are never visible in render
+    for o in bpy.data.objects:
+        if "colorwheel" in o.name.lower() and not getattr(o, "hide_render", False):
+            try:
+                o.hide_render = True
+            except Exception:
+                pass
+
+    # 0. Pull lighting control type (Light Panel vs This Panel)
+    from setup_wizard.character_rig_setup.lighting_panel_setup import (
+        is_hsr_lighting_panel_connected,
+        armature_has_lighting_panel,
+    )
+    has_lp = armature_has_lighting_panel(arm)
+    if has_lp:
+        ctrl_type = arm.get("hsr_lighting_control_type")
+        if ctrl_type not in ("PANEL", "THIS_PANEL"):
+            lp_connected = is_hsr_lighting_panel_connected(target_materials=mats)
+            ctrl_type = "PANEL" if lp_connected else "THIS_PANEL"
+        if getattr(scene, "hsr_lighting_control_type", "") != ctrl_type:
+            _is_updating_hsr_props = True
+            try:
+                scene.hsr_lighting_control_type = ctrl_type
+                arm["hsr_lighting_control_type"] = ctrl_type
+            finally:
+                _is_updating_hsr_props = False
 
     # 1. Pull lighting mode saved on this armature
     saved_mode = arm.get("hsr_light_mode", "0")
@@ -901,6 +1036,15 @@ def pull_hsr_panel_values(scene, context, force=False):
             scene.hsr_sharp_lit_color = tuple(inputs["Custom Sharp Lit Color"].default_value)[:3]
         if "Custom Sharp Shadow Color" in inputs:
             scene.hsr_sharp_shadow_color = tuple(inputs["Custom Sharp Shadow Color"].default_value)[:3]
+        if "Scale" in inputs:
+            sc = tuple(inputs["Scale"].default_value)
+            if len(sc) >= 2:
+                scene.hsr_rim_x = max(0.0, min(20.0, float(sc[0])))
+                scene.hsr_rim_y = max(0.0, min(20.0, float(sc[1])))
+        if "Tint Lit" in inputs:
+            scene.hsr_rim_lit_color = tuple(inputs["Tint Lit"].default_value)[:3]
+        if "Tint Shadow" in inputs:
+            scene.hsr_rim_shadow_color = tuple(inputs["Tint Shadow"].default_value)[:3]
 
         saved_ol_color = arm.get("hsr_outline_color")
         if saved_ol_color is not None and len(saved_ol_color) >= 3:
@@ -945,6 +1089,105 @@ def pull_hsr_panel_values(scene, context, force=False):
         pass
     finally:
         _is_updating_hsr_props = False
+
+
+class HSR_OT_SelectLightingPanel(bpy.types.Operator):
+    bl_idname = "honkai_star_rail.select_lighting_panel"
+    bl_label = "Select 3D Lighting Panel"
+    bl_description = "Selects the Lighting Panel controls in Pose Mode in the 3D viewport"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        try:
+            from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+            from setup_wizard.character_rig_setup.lighting_panel_setup import armature_has_lighting_panel
+            arm = resolve_settings_armature(context)
+            return bool(arm and armature_has_lighting_panel(arm))
+        except Exception:
+            return False
+
+    def execute(self, context):
+        from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+        from setup_wizard.geometry_nodes_setup.lighting_panel_names import LightingPanelNames
+        arm = resolve_settings_armature(context)
+        if not arm:
+            return {'CANCELLED'}
+        try:
+            if context.object and context.object.mode != 'OBJECT':
+                bpy.ops.object.mode_set(mode='OBJECT')
+        except Exception:
+            pass
+        bpy.ops.object.select_all(action='DESELECT')
+        arm.select_set(True)
+        context.view_layer.objects.active = arm
+        bpy.ops.object.mode_set(mode='POSE')
+        for b in arm.data.bones:
+            b.select = False
+        lp_b = arm.data.bones.get(LightingPanelNames.Bones.LIGHTING_PANEL)
+        if lp_b:
+            lp_b.select = True
+            arm.data.bones.active = lp_b
+        for pin in ("Ambient", "Lit", "Shadow", "Rim Lit", "RimShadow", "Rim.L", "Rim.R", "RimX", "RimY"):
+            b = arm.data.bones.get(pin)
+            if b:
+                b.select = True
+        return {'FINISHED'}
+
+
+class HSR_OT_ToggleLightingPanelVisibility(bpy.types.Operator):
+    bl_idname = "honkai_star_rail.toggle_lighting_panel_visibility"
+    bl_label = "Toggle Lighting Panel Visibility"
+    bl_description = "Shows or hides the Lighting Panel controls in the viewport"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        try:
+            from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+            from setup_wizard.character_rig_setup.lighting_panel_setup import armature_has_lighting_panel
+            arm = resolve_settings_armature(context)
+            return bool(arm and armature_has_lighting_panel(arm))
+        except Exception:
+            return False
+
+    def execute(self, context):
+        from setup_wizard.ui.character_settings_utils import resolve_settings_armature
+        from setup_wizard.character_rig_setup.lighting_panel_setup import is_lighting_panel_visible, set_lighting_panel_visibility
+        arm = resolve_settings_armature(context)
+        if not arm:
+            return {'CANCELLED'}
+        vis = is_lighting_panel_visible(arm)
+        set_lighting_panel_visibility(arm, not vis)
+        _redraw_view3d()
+        return {'FINISHED'}
+
+
+def _draw_hsr_this_panel_controls(layout, context, scene):
+    """Draw This Panel lighting presets and custom color controls for HSR."""
+    col_light = layout.column(align=True)
+    col_light.label(text="Lighting Mode:")
+    col_light.prop(scene, "hsr_light_mode", text="")
+
+    if getattr(scene, "hsr_light_mode", "0") == "6":
+        box_col = col_light.box()
+        box_col.label(text="Custom Colors", icon="COLOR")
+        col_colors = box_col.column(align=True)
+        col_colors.prop(scene, "hsr_amb_color", text="Ambient")
+        col_colors.prop(scene, "hsr_lit_color", text="Lit")
+        col_colors.prop(scene, "hsr_shadow_color", text="Shadow")
+        col_colors.prop(scene, "hsr_sharp_lit_color", text="Sharp Lit")
+        col_colors.prop(scene, "hsr_sharp_shadow_color", text="Sharp Shadow")
+
+    draw_lights_plus(layout, context)
+
+    box_rim = layout.box()
+    box_rim.label(text="Rim Light", icon="LIGHT_SUN")
+    col_rim = box_rim.column(align=True)
+    col_rim.prop(scene, "hsr_rim_x", text="Rim Light X", slider=True)
+    col_rim.prop(scene, "hsr_rim_y", text="Rim Light Y", slider=True)
+    col_rim.prop(scene, "hsr_rim_lit_color", text="Rim Lit")
+    col_rim.prop(scene, "hsr_rim_shadow_color", text="Rim Shadow")
 
 
 class HSR_PT_Rig_Character_Settings(Panel):
@@ -998,23 +1241,23 @@ class HSR_PT_Rig_Character_Settings(Panel):
             icon="SHADING_TEXTURE" if is_anim else "RESTRICT_RENDER_OFF"
         )
 
-        # 1. Lighting Mode / Presets
-        col_light = layout.column(align=True)
-        col_light.label(text="Lighting Mode:")
-        col_light.prop(scene, "hsr_light_mode", text="")
+        # 1. Lighting Type (Light Panel vs This Panel) & Lighting Mode / Presets
+        from setup_wizard.character_rig_setup.lighting_panel_setup import armature_has_lighting_panel
+        has_lp = armature_has_lighting_panel(arm)
 
-        # 2. Custom Colors (Shown ONLY when in Custom mode "6")
-        if getattr(scene, "hsr_light_mode", "0") == "6":
-            box_col = col_light.box()
-            box_col.label(text="Custom Colors", icon="COLOR")
-            col_colors = box_col.column(align=True)
-            col_colors.prop(scene, "hsr_amb_color", text="Ambient")
-            col_colors.prop(scene, "hsr_lit_color", text="Lit")
-            col_colors.prop(scene, "hsr_shadow_color", text="Shadow")
-            col_colors.prop(scene, "hsr_sharp_lit_color", text="Sharp Lit")
-            col_colors.prop(scene, "hsr_sharp_shadow_color", text="Sharp Shadow")
+        if has_lp:
+            col_type = layout.column(align=False)
+            col_type.label(text="Lighting Type:")
+            row_btn = col_type.row(align=True)
+            row_btn.prop(scene, "hsr_lighting_control_type", expand=True)
 
-        draw_lights_plus(layout, context)
+            is_lp_mode = (getattr(scene, "hsr_lighting_control_type", "PANEL") == "PANEL")
+            if not is_lp_mode:
+                _draw_hsr_this_panel_controls(layout, context, scene)
+            else:
+                draw_lights_plus(layout, context)
+        else:
+            _draw_hsr_this_panel_controls(layout, context, scene)
 
         # 3. Expressions (3 sliders)
         box_exp = layout.box()
@@ -1055,6 +1298,26 @@ class HSR_PT_Rig_Character_Settings(Panel):
 
 def register_hsr_properties():
     from bpy.props import EnumProperty, FloatProperty, FloatVectorProperty, BoolProperty
+
+    try:
+        bpy.utils.register_class(HSR_OT_SelectLightingPanel)
+    except Exception:
+        pass
+    try:
+        bpy.utils.register_class(HSR_OT_ToggleLightingPanelVisibility)
+    except Exception:
+        pass
+
+    bpy.types.Scene.hsr_lighting_control_type = EnumProperty(
+        name="Lighting Control",
+        description="Choose how lighting colors and tints are controlled for HSR",
+        items=[
+            ("PANEL", "Light Panel", "Use 3D Lighting Panel in viewport"),
+            ("THIS_PANEL", "This Panel", "Use Character Settings panel controls"),
+        ],
+        default="PANEL",
+        update=update_hsr_lighting_control_type,
+    )
 
     bpy.types.Scene.hsr_light_mode = EnumProperty(
         name="Light Mode",
@@ -1167,6 +1430,50 @@ def register_hsr_properties():
         update=update_hsr_stellartoon_props,
     )
 
+    bpy.types.Scene.hsr_rim_x = FloatProperty(
+        name="Rim Light X",
+        description="HSR Rim Light X scale",
+        min=0.0,
+        max=20.0,
+        default=0.0,
+        step=10,
+        precision=2,
+        update=update_hsr_stellartoon_props,
+    )
+
+    bpy.types.Scene.hsr_rim_y = FloatProperty(
+        name="Rim Light Y",
+        description="HSR Rim Light Y scale",
+        min=0.0,
+        max=20.0,
+        default=0.0,
+        step=10,
+        precision=2,
+        update=update_hsr_stellartoon_props,
+    )
+
+    bpy.types.Scene.hsr_rim_lit_color = FloatVectorProperty(
+        name="Rim Lit",
+        description="HSR Rim Lit tint color",
+        subtype='COLOR',
+        size=3,
+        min=0.0,
+        max=1.0,
+        default=(1.0, 1.0, 1.0),
+        update=update_hsr_stellartoon_props,
+    )
+
+    bpy.types.Scene.hsr_rim_shadow_color = FloatVectorProperty(
+        name="Rim Shadow",
+        description="HSR Rim Shadow tint color",
+        subtype='COLOR',
+        size=3,
+        min=0.0,
+        max=1.0,
+        default=(0.0, 0.0, 0.0),
+        update=update_hsr_stellartoon_props,
+    )
+
     bpy.types.Scene.hsr_outline_color = FloatVectorProperty(
         name="Outline Color",
         description="Override outline color for Honkai Star Rail outlines",
@@ -1202,7 +1509,17 @@ def register_hsr_properties():
 
 
 def unregister_hsr_properties():
+    try:
+        bpy.utils.unregister_class(HSR_OT_SelectLightingPanel)
+    except Exception:
+        pass
+    try:
+        bpy.utils.unregister_class(HSR_OT_ToggleLightingPanelVisibility)
+    except Exception:
+        pass
+
     props = [
+        "hsr_lighting_control_type",
         "hsr_light_mode",
         "hsr_exp_cheek",
         "hsr_exp_shy",
@@ -1213,6 +1530,10 @@ def unregister_hsr_properties():
         "hsr_shadow_color",
         "hsr_sharp_lit_color",
         "hsr_sharp_shadow_color",
+        "hsr_rim_x",
+        "hsr_rim_y",
+        "hsr_rim_lit_color",
+        "hsr_rim_shadow_color",
         "hsr_outline_color",
         "hsr_outline_color_mix",
         "hsr_outline_thickness",

@@ -113,6 +113,18 @@ class HonkaiStarRailOutlineNodeGroupImporter(GameOutlineNodeGroupImporter):
                     except Exception as e:
                         print(f"Notice: Failed appending outline node group {outline_node_group_name}: {e}")
 
+        # Import HSR's 3D Lighting Panel (not HNA) when rigging & lighting panel are enabled
+        if (self.blender_operator.game_type or GameType.HONKAI_STAR_RAIL.name) == GameType.HONKAI_STAR_RAIL.name:
+            rigger_props = getattr(self.context.scene, "character_rigger_props", None)
+            disable_rigging = getattr(rigger_props, "disable_rigging", False) if rigger_props else False
+            use_lighting_panel = getattr(rigger_props, "set_up_lighting_panel", True) if rigger_props else True
+            if not disable_rigging and use_lighting_panel:
+                try:
+                    from setup_wizard.character_rig_setup.lighting_panel_setup import import_hsr_lighting_panel
+                    import_hsr_lighting_panel()
+                except Exception as e:
+                    print(f"[HSR Outline Import] Lighting Panel import notice: {e}")
+
         NextStepInvoker().invoke(
             self.blender_operator.next_step_idx, 
             self.blender_operator.invoker_type,

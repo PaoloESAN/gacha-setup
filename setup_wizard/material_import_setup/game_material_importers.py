@@ -526,6 +526,7 @@ class NevernessToEvernessMaterialImporterFacade(GameMaterialImporter):
     ]
 
     NTE_NODE_GROUPS = [
+        {'name': 'Global Material Properties'},
         {'name': '异环-头发'},
         {'name': '异环-身体'},
         {'name': '异环-面部'},
@@ -586,6 +587,20 @@ class NevernessToEvernessMaterialImporterFacade(GameMaterialImporter):
         orig_head = bpy.data.objects.get('Head Origin')
         orig_light = bpy.data.objects.get('Light Direction')
 
+        # Remove any Sun lamp attached to Light Direction (NTE uses Light Direction empty/bone only)
+        for obj in list(bpy.data.objects):
+            try:
+                if obj.type == 'LIGHT' and (
+                    obj.name == 'Sun' or obj.name.startswith('Sun.')
+                    or (obj.parent and 'light direction' in obj.parent.name.lower())
+                ):
+                    ldata = obj.data
+                    bpy.data.objects.remove(obj, do_unlink=True)
+                    if ldata and ldata.users == 0:
+                        bpy.data.lights.remove(ldata)
+            except Exception:
+                pass
+
         head_dupes = []
         light_dupes = []
 
@@ -634,43 +649,6 @@ class NevernessToEvernessMaterialImporterFacade(GameMaterialImporter):
                 bpy.data.objects.remove(obj, do_unlink=True)
             except Exception:
                 pass
-
-        def fix_nte_face_sdf_node():
-            trees_to_check = set()
-            for ng in list(bpy.data.node_groups):
-                if ng and hasattr(ng, 'nodes'):
-                    trees_to_check.add(ng)
-            for mat in list(bpy.data.materials):
-                if mat and mat.use_nodes and mat.node_tree:
-                    trees_to_check.add(mat.node_tree)
-
-            for tree in trees_to_check:
-                ff_nodes = [
-                    n for n in tree.nodes
-                    if (n.type == 'GROUP' and n.node_tree and 'face factor' in n.node_tree.name.lower())
-                    or '面部因子' in getattr(n, 'label', '')
-                    or 'face factor' in n.name.lower()
-                ]
-                for ff in ff_nodes:
-                    for link in list(tree.links):
-                        if link.from_node == ff:
-                            target_node = link.to_node
-                            tree.links.remove(link)
-                            if target_node.type in ['MIX', 'MIX_RGB']:
-                                try:
-                                    if 'Factor' in target_node.inputs:
-                                        target_node.inputs['Factor'].default_value = 1.0
-                                    elif 'Fac' in target_node.inputs:
-                                        target_node.inputs['Fac'].default_value = 1.0
-                                    else:
-                                        target_node.inputs[0].default_value = 1.0
-                                except Exception:
-                                    pass
-
-        try:
-            fix_nte_face_sdf_node()
-        except Exception as e_sdf:
-            print(f"[NTE Face SDF Fix Notice] {e_sdf}")
 
         cache_enabled = getattr(self.blender_operator, 'cache_enabled', True)
         project_root_directory_file_path = self.blender_operator.file_directory \

@@ -946,7 +946,12 @@ class V4_MaterialDataApplier(V3_MaterialDataApplier):
         global_properties_inputs_node = global_properties_interface_node.node_tree.nodes.get(ShaderNodeNames.INTERNAL_GLOBAL_PROPERTIES) if global_properties_interface_node and global_properties_interface_node.node_tree else None
 
         if shader_node:
+            if self._is_transparent_eff_overlay():
+                self._apply_transparent_eff_overlay(shader_node)
+                return
             self.set_up_mesh_material_data_with_tooltips(shader_node, shader_node)
+            self._apply_nyx_mask_channel_swizzle(shader_node)
+            self._adjust_nyx_skate_eff(shader_node)
         if outline_shader_node:
             # Clear only old automatic fallback links before importing JSON;
             # otherwise linked color inputs would skip their authored values.
@@ -1111,6 +1116,171 @@ class V4_MaterialDataApplier(V3_MaterialDataApplier):
                 toggle_alpha_node.default_value = True
             if transparency_clip_node:
                 transparency_clip_node.default_value = 1.0
+
+    def _apply_nyx_mask_channel_swizzle(self, shader_node):
+        """Route the JSON-specified NYX paint mask channel into Night Soul Mask.
+
+        Night Soul Blessing reads R for Body (0), G for Hair (1), and B for Face (2),
+        but some characters (e.g. Xilonen, Kinich) pack Body/Face in different channels
+        via _TempNyxStatePaintMaskChannel / _NyxStatePaintMaskChannel.
+        """
+        if not self.material or not self.material.node_tree or not shader_node:
+            return
+        ch_raw = self.get_value_in_json_parser(self.material_data_parser, '_TempNyxStatePaintMaskChannel')
+        if ch_raw is None:
+            ch_raw = self.get_value_in_json_parser(self.material_data_parser, '_NyxStatePaintMaskChannel')
+        if ch_raw is None:
+            return
+        try:
+            desired_ch = int(round(float(ch_raw)))
+        except (TypeError, ValueError):
+            return
+        if desired_ch not in (0, 1, 2):
+            return
+
+        bh_inp = shader_node.inputs.get('Body / Hair')
+        shader_ch = 2 if 'face' in self.material.name.lower() else 0
+        if bh_inp is not None:
+            try:
+                shader_ch = int(round(float(bh_inp.default_value)))
+            except (TypeError, ValueError):
+                pass
+        if desired_ch == shader_ch:
+            return
+
+        mask_inp = shader_node.inputs.get('Night Soul Mask')
+        if not mask_inp or not mask_inp.links:
+            return
+        nt = self.material.node_tree
+        sep = nt.nodes.get('NYX_Mask_Sep')
+        comb = nt.nodes.get('NYX_Mask_Comb')
+        if sep and comb:
+            src_sock = sep.inputs['Color'].links[0].from_socket if sep.inputs['Color'].links else None
+        else:
+            src_sock = mask_inp.links[0].from_socket
+            nt.links.remove(mask_inp.links[0])
+            sep = nt.nodes.new('ShaderNodeSeparateColor')
+            sep.name = 'NYX_Mask_Sep'
+            sep.location = (shader_node.location.x - 420, shader_node.location.y - 260)
+            comb = nt.nodes.new('ShaderNodeCombineColor')
+            comb.name = 'NYX_Mask_Comb'
+            comb.location = (shader_node.location.x - 220, shader_node.location.y - 260)
+            if src_sock:
+                nt.links.new(src_sock, sep.inputs['Color'])
+            nt.links.new(comb.outputs['Color'], mask_inp)
+        for ch_name in ('Red', 'Green', 'Blue'):
+            for link in list(comb.inputs[ch_name].links):
+                nt.links.remove(link)
+            nt.links.new(sep.outputs[desired_ch], comb.inputs[ch_name])
+
+    def _is_transparent_eff_overlay(self):
+        """True for AvatarItem_*_Eff VFX overlays (e.g. Cloak_Eff, Foot_Eff) that use
+        _BaseTex + alpha blending instead of the standard Avatar _MainTex shader."""
+        if not self.material:
+            return False
+        m_low = self.material.name.lower()
+        if not m_low.endswith('_eff') or 'glass_eff' in m_low:
+            return False
+        has_main_tex = self.get_value_in_json_parser(self.material_data_parser, '_MainTex') is not None
+        has_base_tex = self.get_value_in_json_parser(self.material_data_parser, '_BaseTex') is not None
+        return has_base_tex and not has_main_tex
+
+    def _apply_transparent_eff_overlay(self, shader_node):
+        """Convert transparent VFX overlay materials (Cloak_Eff, Foot_Eff) from opaque
+        Body shaders to alpha-blended emissive shaders using their Main_Diffuse texture."""
+        nt = self.material.node_tree
+        diffuse_node = nt.nodes.get('Main_Diffuse')
+        diffuse_img = diffuse_node.image if diffuse_node else None
+        if not diffuse_img:
+            base_tex_env = self.get_value_in_json_parser(self.material_data_parser, '_BaseTex')
+            base_tex_name = base_tex_env.get('m_Texture', {}).get('Name', '') if isinstance(base_tex_env, dict) else ''
+            if base_tex_name:
+                diffuse_img = next(
+                    (img for img in bpy.data.images if img.name.rsplit('.', 1)[0].lower() == base_tex_name.lower()),
+                    None,
+                )
+            if diffuse_img and diffuse_node:
+                diffuse_node.image = diffuse_img
+        out_node = next((n for n in nt.nodes if n.type == 'OUTPUT_MATERIAL'), None)
+        if not diffuse_img or not out_node:
+            return
+
+        tint = self.get_value_in_json_parser(self.material_data_parser, '_TintColor') or \
+               self.get_value_in_json_parser(self.material_data_parser, '_DayColor')
+        tint_rgb = (1.0, 1.0, 1.0, 1.0)
+        alpha_mult = 1.0
+        if isinstance(tint, dict):
+            tint_rgb = (float(tint.get('r', 1.0)), float(tint.get('g', 1.0)), float(tint.get('b', 1.0)), 1.0)
+            alpha_mult = float(tint.get('a', 1.0))
+
+        for link in list(out_node.inputs['Surface'].links):
+            nt.links.remove(link)
+
+        tex = nt.nodes.get('Eff_BaseTex') or nt.nodes.new('ShaderNodeTexImage')
+        tex.name = 'Eff_BaseTex'
+        tex.image = diffuse_img
+        tex.location = (out_node.location.x - 650, out_node.location.y)
+
+        tint_mul = nt.nodes.get('Eff_TintMul') or nt.nodes.new('ShaderNodeVectorMath')
+        tint_mul.name = 'Eff_TintMul'
+        tint_mul.operation = 'MULTIPLY'
+        tint_mul.inputs[1].default_value = tint_rgb[:3]
+        tint_mul.location = (out_node.location.x - 420, out_node.location.y + 80)
+
+        alpha_mul = nt.nodes.get('Eff_AlphaMul') or nt.nodes.new('ShaderNodeMath')
+        alpha_mul.name = 'Eff_AlphaMul'
+        alpha_mul.operation = 'MULTIPLY'
+        alpha_mul.inputs[1].default_value = alpha_mult
+        alpha_mul.location = (out_node.location.x - 420, out_node.location.y - 120)
+
+        em = nt.nodes.get('Eff_Emission') or nt.nodes.new('ShaderNodeEmission')
+        em.name = 'Eff_Emission'
+        em.location = (out_node.location.x - 220, out_node.location.y + 60)
+
+        nt.links.new(tex.outputs['Color'], tint_mul.inputs[0])
+        nt.links.new(tint_mul.outputs['Vector'], em.inputs['Color'])
+
+        if 'foot_eff' in self.material.name.lower():
+            # Foot_Eff is the opaque sock mesh above the skates
+            em.inputs['Strength'].default_value = 0.85
+            nt.links.new(em.outputs['Emission'], out_node.inputs['Surface'])
+            return
+
+        em.inputs['Strength'].default_value = 2.0
+        transp = nt.nodes.get('Eff_Transparent') or nt.nodes.new('ShaderNodeBsdfTransparent')
+        transp.name = 'Eff_Transparent'
+        transp.location = (out_node.location.x - 220, out_node.location.y - 80)
+
+        mix = nt.nodes.get('Eff_MixShader') or nt.nodes.new('ShaderNodeMixShader')
+        mix.name = 'Eff_MixShader'
+        mix.location = (out_node.location.x - 40, out_node.location.y)
+
+        nt.links.new(tex.outputs['Alpha'], alpha_mul.inputs[0])
+        nt.links.new(alpha_mul.outputs['Value'], mix.inputs['Fac'])
+        nt.links.new(transp.outputs['BSDF'], mix.inputs[1])
+        nt.links.new(em.outputs['Emission'], mix.inputs[2])
+        nt.links.new(mix.outputs['Shader'], out_node.inputs['Surface'])
+
+        try:
+            self.material.blend_method = 'BLEND'
+        except Exception:
+            pass
+        try:
+            self.material.surface_render_method = 'BLENDED'
+        except Exception:
+            pass
+
+    def _adjust_nyx_skate_eff(self, shader_node):
+        """Prevent Skate_Eff (NyxState boots) from blowing out to pure white when
+        _MainTexAlphaUse=2 and _EmissionScaler=3 on a pale texture without a lightmap."""
+        if not self.material or 'skate_eff' not in self.material.name.lower():
+            return
+        emit_scaler = shader_node.inputs.get('Emit Scaler')
+        if emit_scaler is not None and emit_scaler.default_value > 0.25:
+            emit_scaler.default_value = 0.2
+        tint_inp = shader_node.inputs.get('Tint')
+        if tint_inp is not None and list(tint_inp.default_value)[:3] == [1.0, 1.0, 1.0]:
+            tint_inp.default_value = (1.0, 0.85, 0.45, 1.0)
 
     def __manipulate_material_data_to_shader_value(self, material_data_key, material_json_value, node_interface_input, inputs_node=None):
         input_object = inputs_node.inputs.get(node_interface_input.name) if inputs_node else node_interface_input
@@ -1496,7 +1666,101 @@ class V2_WeaponMaterialDataApplier(V2_MaterialDataApplier):
         )
 
 
-class V2_HSR_MaterialDataApplier(V2_MaterialDataApplier):
+class HSROutlineColorTexMixin:
+    def _find_hsr_outline_color_image(self, tex_name):
+        """Locate an already-loaded or on-disk HSR _OutlineColorTex image."""
+        import os
+        tex_low = tex_name.lower()
+        for img in bpy.data.images:
+            stem = os.path.splitext(img.name)[0].lower()
+            if img.name.lower() == tex_low or stem == tex_low:
+                return img
+
+        from setup_wizard.import_order import get_active_character_directory
+        char_dir = get_active_character_directory()
+        if not char_dir or not os.path.isdir(char_dir):
+            return None
+
+        exts = ('.png', '.tga', '.dds', '.webp', '.jpg', '.jpeg')
+        for root, _, files in os.walk(char_dir):
+            for fname in files:
+                stem, ext = os.path.splitext(fname)
+                if stem.lower() == tex_low and ext.lower() in exts:
+                    try:
+                        img = bpy.data.images.load(os.path.join(root, fname), check_existing=True)
+                        try:
+                            img.colorspace_settings.name = 'sRGB'
+                        except Exception:
+                            pass
+                        return img
+                    except Exception:
+                        return None
+        return None
+
+    def _apply_hsr_outline_color_tex(self):
+        """Wire _OutlineColorTex * _OutlineColor0 into the HSR outline shader when present."""
+        if not self.outline_material or not self.outline_material.node_tree or self.material_data_parser is None:
+            return
+        tex_env = self.get_value_in_json_parser(self.material_data_parser, '_OutlineColorTex')
+        if not isinstance(tex_env, dict):
+            return
+        tex_info = tex_env.get('m_Texture')
+        if not isinstance(tex_info, dict) or tex_info.get('IsNull', False):
+            return
+        tex_name = tex_info.get('Name')
+        if not tex_name:
+            return
+
+        outline_node = self._get_outline_shader_node()
+        if not outline_node:
+            return
+        target_name = self.outline_mapping.get('_OutlineColor0') or self.outline_mapping.get('_OutlineColor')
+        target_input = outline_node.inputs.get(target_name) if target_name else None
+        if target_input is None:
+            return
+
+        img = self._find_hsr_outline_color_image(tex_name)
+        if img is None:
+            return
+
+        tree = self.outline_material.node_tree
+        nodes = tree.nodes
+        links = tree.links
+
+        tex_node = nodes.get('HSR_OutlineColorTex')
+        if tex_node is None:
+            tex_node = nodes.new('ShaderNodeTexImage')
+            tex_node.name = 'HSR_OutlineColorTex'
+            tex_node.label = 'Outline Color Texture'
+            tex_node.location = (outline_node.location.x - 520, outline_node.location.y - 120)
+        tex_node.image = img
+
+        mul_node = nodes.get('HSR_OutlineColorTex_Mul')
+        if mul_node is None:
+            mul_node = nodes.new('ShaderNodeMix')
+            mul_node.name = 'HSR_OutlineColorTex_Mul'
+            mul_node.label = 'Outline Color Multiply'
+            mul_node.data_type = 'RGBA'
+            mul_node.blend_type = 'MULTIPLY'
+            mul_node.clamp_factor = True
+            mul_node.location = (outline_node.location.x - 240, outline_node.location.y - 120)
+        mul_node.inputs[0].default_value = 1.0
+        try:
+            mul_node.inputs[7].default_value = tuple(target_input.default_value)
+        except Exception:
+            pass
+
+        for lk in list(target_input.links):
+            links.remove(lk)
+        links.new(tex_node.outputs['Color'], mul_node.inputs[6])
+        links.new(mul_node.outputs[2], target_input)
+
+    def set_up_outline_colors(self):
+        super().set_up_outline_colors()
+        self._apply_hsr_outline_color_tex()
+
+
+class V2_HSR_MaterialDataApplier(HSROutlineColorTexMixin, V2_MaterialDataApplier):
     outline_mapping = {
         '_OutlineColor0': 'Outline Color 0',
         '_OutlineColor1': 'Outline Color 1',
@@ -1579,7 +1843,7 @@ class V2_HSR_MaterialDataApplier(V2_MaterialDataApplier):
         )
 
 
-class StellarToon_MaterialDataApplier(V2_MaterialDataApplier):
+class StellarToon_MaterialDataApplier(HSROutlineColorTexMixin, V2_MaterialDataApplier):
     outline_mapping = {
         # '_OutlineColorIntensity': 'Outline Intensity',
         '_OutlineColor0': 'Outline Color 1',

@@ -251,7 +251,8 @@ class GenshinImpactCharacterRigger(CharacterRigger):
         number_of_hand_bone_children = max([len(hand_bone.children) for hand_bone in hand_bones]) if hand_bones else 0
         is_player_hand = number_of_hand_bone_children >= 5
         avatar_in_texture_name = self.__get_body_diffuse_texture_name().startswith('Avatar')
-        is_playable_character = avatar_in_texture_name or is_player_hand
+        has_spine2 = 'Bip001 Spine2' in armature.data.bones
+        is_playable_character = has_spine2 and (avatar_in_texture_name or is_player_hand)
 
         # Lighting Panel is an Armature, so it's important this goes after the armature variable initialization above
         # Genshin Shader >= v3.4
@@ -793,11 +794,42 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
                     con.target_space = 'LOCAL'
 
             # 6. Ensure all meshes with Armature modifiers point to body_rig
+            # and restore eye vertex groups renamed to DEF-eye.L/R before Isaac FaceRig replaced those bones with eye_L/R
+            eye_vg_remap = {
+                "DEF-eye.L": "eye_L",
+                "DEF-eye.R": "eye_R",
+                "eye.L": "eye_L",
+                "eye.R": "eye_R",
+            }
             for obj in bpy.data.objects:
                 if obj.type == 'MESH':
+                    has_body_arm = False
                     for mod in obj.modifiers:
                         if mod.type == 'ARMATURE':
                             mod.object = body_rig
+                            has_body_arm = True
+                    if has_body_arm and obj.vertex_groups:
+                        for src_name, dst_name in eye_vg_remap.items():
+                            if dst_name not in body_rig.data.bones or src_name in body_rig.data.bones:
+                                continue
+                            vg_src = obj.vertex_groups.get(src_name)
+                            if not vg_src:
+                                continue
+                            vg_dst = obj.vertex_groups.get(dst_name)
+                            if vg_dst:
+                                for v in obj.data.vertices:
+                                    try:
+                                        w_src = vg_src.weight(v.index)
+                                    except RuntimeError:
+                                        continue
+                                    try:
+                                        w_dst = vg_dst.weight(v.index)
+                                    except RuntimeError:
+                                        w_dst = 0.0
+                                    vg_dst.add([v.index], min(1.0, w_dst + w_src), 'REPLACE')
+                                obj.vertex_groups.remove(vg_src)
+                            else:
+                                vg_src.name = dst_name
 
             # 7. Setup Eye Correction (Adjust Pupil Distance) on eye_L and eye_R
             has_plate = "plate-settings" in body_rig.pose.bones
@@ -961,6 +993,8 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
                         except Exception:
                             pass
                         try:
+                            if ('lighting' in o_low or 'panel' in o_low) and abs(obj.location.x) < 0.01:
+                                obj.location.x -= 0.25
                             bpy.ops.object.select_all(action='DESELECT')
                             obj.select_set(True)
                             body_rig.select_set(True)
@@ -1037,6 +1071,126 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
 
         cleanup_facerig_and_props_collections(armature)
 
+        active_rig = target_rig or armature
+        # Configure HSR Lighting Panel bones, Child Of constraint, and GlobalProperties links
+        if active_rig and active_rig.type == 'ARMATURE' and active_rig.data.bones.get("Lighting Panel"):
+            try:
+                if bpy.context.object and bpy.context.object.mode != 'OBJECT':
+                    bpy.ops.object.mode_set(mode='OBJECT')
+                self.context.view_layer.objects.active = active_rig
+                bpy.ops.object.mode_set(mode='EDIT')
+                eb_lp = active_rig.data.edit_bones.get("Lighting Panel")
+                if eb_lp:
+                    eb_lp.parent = None
+                bpy.ops.object.mode_set(mode='POSE')
+                lp_pb = active_rig.pose.bones.get("Lighting Panel")
+                if lp_pb:
+                    target_lp = None
+                    for cand in ("DEF-spine.006", "head", "Head", "root.002", "root_2", "root002", "root.001", "root"):
+                        if cand in active_rig.pose.bones:
+                            target_lp = cand
+                            break
+                    if target_lp:
+                        con_lp = lp_pb.constraints.get("Child Of") or lp_pb.constraints.new('CHILD_OF')
+                        con_lp.name = "Child Of"
+                        con_lp.target = active_rig
+                        con_lp.subtarget = target_lp
+                        active_rig.data.bones.active = active_rig.data.bones["Lighting Panel"]
+                        try:
+                            bpy.ops.constraint.childof_set_inverse(constraint=con_lp.name, owner='BONE')
+                        except Exception:
+                            r_bone = active_rig.data.bones.get(target_lp)
+                            p_bone = active_rig.data.bones.get("Lighting Panel")
+                            if r_bone and p_bone:
+                                con_lp.inverse_matrix = r_bone.matrix_local.inverted() @ p_bone.matrix_local
+                bpy.ops.object.mode_set(mode='OBJECT')
+            except Exception as e_lp_con:
+                print(f"[HSR Rig Warning] Ensure Lighting Panel Child Of: {e_lp_con}")
+
+            try:
+                wgt_selector = bpy.data.objects.get("LightPanelSelectorWGT")
+                wgt_plane = bpy.data.objects.get("LightPanelWGTPlane")
+
+                lighting_coll = None
+                if hasattr(active_rig.data, "collections"):
+                    lighting_coll = active_rig.data.collections.get("Lighting") or active_rig.data.collections.get("Light Panel")
+                    if not lighting_coll:
+                        lighting_coll = active_rig.data.collections.new("Lighting")
+                    lighting_coll.is_visible = True
+                    lp_extras = active_rig.data.collections.get("Light Panel Extras")
+                    if lp_extras:
+                        lp_extras.is_visible = False
+
+                other_coll = active_rig.data.collections.get("Other") if hasattr(active_rig.data, "collections") else None
+                panel_bones = ("Lighting Panel", "Rim Lit", "Shadow", "Lit", "Ambient", "RimShadow", "Rim.L", "Rim.R", "RimX", "RimY")
+                for pb_name in panel_bones:
+                    b = active_rig.data.bones.get(pb_name)
+                    pb = active_rig.pose.bones.get(pb_name)
+                    if b and pb:
+                        b.hide = False
+                        b.hide_select = False
+                        if lighting_coll:
+                            lighting_coll.assign(b)
+                            if other_coll:
+                                try:
+                                    other_coll.unassign(b)
+                                except Exception:
+                                    pass
+                        if pb_name == "Lighting Panel" and wgt_plane:
+                            pb.custom_shape = wgt_plane
+                            pb.custom_shape_scale_xyz = (1.0, 1.0, 1.0)
+                            pb.use_custom_shape_bone_size = True
+                        elif pb_name != "Lighting Panel" and wgt_selector:
+                            pb.custom_shape = wgt_selector
+                            pb.custom_shape_scale_xyz = (0.15, 0.15, 0.15)
+                            pb.use_custom_shape_bone_size = True
+
+                from setup_wizard.utils.zzz_lighting_panel import bake_zzz_rim_slider_defaults
+                bake_zzz_rim_slider_defaults(active_rig, force=True)
+
+                # Keep ColorWheels in the character collection and hidden from render
+                char_coll = next((c for c in active_rig.users_collection if not c.name.startswith("WGTS") and c.name.lower() != "wgt"), None)
+                for obj in bpy.data.objects:
+                    if "colorwheel" in obj.name.lower():
+                        obj.hide_render = True
+                        if char_coll and obj.name not in char_coll.objects:
+                            for c in list(obj.users_collection):
+                                try:
+                                    c.objects.unlink(obj)
+                                except Exception:
+                                    pass
+                            char_coll.objects.link(obj)
+            except Exception as e_lp_bones:
+                print(f"[HSR Rig Warning] Configure Lighting Panel bones: {e_lp_bones}")
+
+            try:
+                from setup_wizard.character_rig_setup.lighting_panel_setup import (
+                    connect_hsr_lighting_panel,
+                    disconnect_hsr_lighting_panel,
+                    set_lighting_panel_visibility,
+                )
+                from setup_wizard.ui.character_settings_utils import get_character_materials, ensure_character_node_trees_isolated
+
+                _, hsr_mats = get_character_materials(self.context, active_rig)
+                if hsr_mats:
+                    ensure_character_node_trees_isolated(active_rig, hsr_mats)
+
+                ctrl_type = getattr(self.context.scene, "hsr_lighting_control_type", "PANEL")
+                if ctrl_type not in ("PANEL", "THIS_PANEL"):
+                    ctrl_type = "PANEL"
+                active_rig["hsr_lighting_control_type"] = ctrl_type
+                if hasattr(self.context.scene, "hsr_lighting_control_type"):
+                    self.context.scene.hsr_lighting_control_type = ctrl_type
+
+                if ctrl_type == "PANEL":
+                    connect_hsr_lighting_panel(target_materials=hsr_mats or None)
+                    set_lighting_panel_visibility(active_rig, True)
+                else:
+                    disconnect_hsr_lighting_panel(target_materials=hsr_mats or None)
+                    set_lighting_panel_visibility(active_rig, False)
+            except Exception as e_lp_conn:
+                print(f"[HSR Rig Warning] Connect HSR Lighting Panel: {e_lp_conn}")
+
         # Final sweep: planes (Plane.001...) + Head Origin into WGTS_<Char>
         try:
             from setup_wizard.character_rig_setup.wgts_isolation import isolate_wgts_for_character
@@ -1044,9 +1198,20 @@ class HonkaiStarRailCharacterRigger(CharacterRigger):
                 _cn = armature.get("gacha_character")
             except Exception:
                 _cn = None
-            isolate_wgts_for_character(armature, _cn or armature.name.replace("Rig", ""))
+            isolate_wgts_for_character(active_rig, _cn or active_rig.name.replace("Rig", ""))
         except Exception as e_iso:
             print(f"[HSR RIG] Final WGTS sweep notice: {e_iso}")
+
+        # Keep LightPanelWGTPlane / LightPanelSelectorWGT viewport-enabled inside excluded WGTS_<Char>
+        # so Blender draws the Lighting Panel frame, text, and selector bone custom shapes.
+        for wgt_name in ("LightPanelWGTPlane", "LightPanelSelectorWGT"):
+            wgt_obj = bpy.data.objects.get(wgt_name)
+            if wgt_obj:
+                try:
+                    wgt_obj.hide_viewport = False
+                    wgt_obj.hide_render = True
+                except Exception:
+                    pass
 
         def refresh_light_vectors_modifiers():
             char_name = armature.name.replace("Rig", "")
@@ -1351,6 +1516,8 @@ class ZenlessZoneZeroCharacterRigger(CharacterRigger):
                         except Exception:
                             pass
                         try:
+                            if ('lighting' in o_low or 'panel' in o_low) and abs(obj.location.x) < 0.01:
+                                obj.location.x -= 0.25
                             bpy.ops.object.select_all(action='DESELECT')
                             obj.select_set(True)
                             body_rig.select_set(True)
@@ -1663,41 +1830,43 @@ class NevernessToEvernessCharacterRigger(CharacterRigger):
         except Exception as e:
             print(f"NTE face rig skipped/notice: {e}")
 
+        # Attach ZZZ/HSR-style 3D Lighting Panel to NTE rig & connect to Global Material Properties
         try:
-            from setup_wizard.replace_default_materials_setup.game_default_material_replacers import NevernessToEvernessDefaultMaterialReplacer
-            # Run the face SDF node fix
-            trees_to_check = set()
-            for ng in list(bpy.data.node_groups):
-                if ng and hasattr(ng, 'nodes'):
-                    trees_to_check.add(ng)
-            for mat in list(bpy.data.materials):
-                if mat and mat.use_nodes and mat.node_tree:
-                    trees_to_check.add(mat.node_tree)
+            from setup_wizard.character_rig_setup.rig_ui_utils import find_target_armature
+            from setup_wizard.character_rig_setup.lighting_panel_setup import (
+                import_nte_lighting_panel,
+                attach_nte_lighting_panel_to_rig,
+                connect_nte_lighting_panel,
+                disconnect_nte_lighting_panel,
+                set_lighting_panel_visibility,
+            )
+            from setup_wizard.ui.character_settings_utils import (
+                get_character_materials,
+                ensure_character_node_trees_isolated,
+            )
 
-            for tree in trees_to_check:
-                ff_nodes = [
-                    n for n in tree.nodes
-                    if (n.type == 'GROUP' and n.node_tree and 'face factor' in n.node_tree.name.lower())
-                    or '面部因子' in getattr(n, 'label', '')
-                    or 'face factor' in n.name.lower()
-                ]
-                for ff in ff_nodes:
-                    for link in list(tree.links):
-                        if link.from_node == ff:
-                            target_node = link.to_node
-                            tree.links.remove(link)
-                            if target_node.type in ['MIX', 'MIX_RGB']:
-                                try:
-                                    if 'Factor' in target_node.inputs:
-                                        target_node.inputs['Factor'].default_value = 1.0
-                                    elif 'Fac' in target_node.inputs:
-                                        target_node.inputs['Fac'].default_value = 1.0
-                                    else:
-                                        target_node.inputs[0].default_value = 1.0
-                                except Exception:
-                                    pass
-        except Exception as e_sdf:
-            print(f"[NTE Face SDF Fix Notice] {e_sdf}")
+            active_rig = find_target_armature(self.context, armature) or armature
+            if active_rig and active_rig.type == 'ARMATURE':
+                if import_nte_lighting_panel():
+                    attached = attach_nte_lighting_panel_to_rig(self.context, active_rig)
+                    if attached:
+                        _, nte_mats = get_character_materials(self.context, active_rig)
+                        if nte_mats:
+                            ensure_character_node_trees_isolated(active_rig, nte_mats)
+                        ctrl_type = getattr(self.context.scene, "nte_lighting_control_type", "PANEL")
+                        if ctrl_type not in ("PANEL", "THIS_PANEL"):
+                            ctrl_type = "PANEL"
+                        active_rig["nte_lighting_control_type"] = ctrl_type
+                        if hasattr(self.context.scene, "nte_lighting_control_type"):
+                            self.context.scene.nte_lighting_control_type = ctrl_type
+                        if ctrl_type == "PANEL":
+                            connect_nte_lighting_panel(target_materials=nte_mats or None)
+                            set_lighting_panel_visibility(active_rig, True)
+                        else:
+                            disconnect_nte_lighting_panel(target_materials=nte_mats or None)
+                            set_lighting_panel_visibility(active_rig, False)
+        except Exception as e_lp:
+            print(f"[NTE RIG] Lighting Panel setup notice: {e_lp}")
 
         character_rigger_props: CharacterRiggerPropertyGroup = self.context.scene.character_rigger_props
         if getattr(character_rigger_props, "enable_hair_clothes_physics", False) or getattr(character_rigger_props, "enable_hair_dress_physics", False) or getattr(self.context.scene, "enable_hair_clothes_physics", False) or getattr(self.context.scene, "enable_hair_dress_physics", False):

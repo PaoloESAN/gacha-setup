@@ -341,6 +341,13 @@ class ZZZ_PT_UI_Character_Rig_Setup_Menu(Panel, ZenlessZoneZeroUIRenderChecker):
         OperatorFactory.create_rig_character_ui(sub_layout)
         OperatorFactory.create(
             sub_layout,
+            "hoyoverse.fix_light_direction",
+            "Fix Light Direction",
+            "LIGHT_SUN",
+            game_type=GameType.ZENLESS_ZONE_ZERO.name,
+        )
+        OperatorFactory.create(
+            sub_layout,
             "hoyoverse.apply_hair_clothes_physics",
             "Apply Hair & Clothes Physics",
             "PHYSICS",
