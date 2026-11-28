@@ -1684,7 +1684,10 @@ def rig_character(
             any(k in b_low for k in weapon_keywords)
             or ("prop" in b_low and "parent" not in b_low)
             or "_wpn_" in b_low
+            or b_low.endswith("_wpn")
+            or b_low.startswith("wpn_")
             or "_wp_" in b_low
+            or b_low.endswith("_wp")
             or b_low.startswith("wp_")
             or "_weapon_" in b_low
             or "_garape_" in b_low
@@ -4326,7 +4329,7 @@ def rig_character(
         b_low = b.name.lower()
         if "box" in b_low or "weaponbox" in b_low:
             continue
-        if any(k in b_low for k in ["prop1", "prop2", "weapon", "garape", "grape", "equip"]) or "_wpn_" in b_low or "_wp_" in b_low or b_low.startswith("wp_") or "_weapon_" in b_low or "_garape_" in b_low or "_grape_" in b_low or "garape" in b_low or "grape" in b_low:
+        if any(k in b_low for k in ["prop1", "prop2", "weapon", "garape", "grape", "equip"]) or "_wpn_" in b_low or b_low.endswith(("_wpn", "_wp")) or b_low.startswith(("wpn_", "wp_")) or "_wp_" in b_low or "_weapon_" in b_low or "_garape_" in b_low or "_grape_" in b_low or "garape" in b_low or "grape" in b_low:
             bone_to_layer(b.name, 21, "Weapon")
 
     # Ensure all face bones (slider-, frame-, eyetrack, plate-, Face-, Wink, etc.) are in Face (excluding plate-settings which is Root)
