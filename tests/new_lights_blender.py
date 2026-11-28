@@ -263,3 +263,76 @@ for mode in ('DEFAULT', 'LIGHT_COLOR', 'DIFFUSE'):
 assert bpy.ops.gacha.setup_new_lights('EXEC_DEFAULT') == {'FINISHED'}
 assert not needs_setup(arm_a)
 print('PASS: ColorWheel materials, groups and objects stay unchanged across all modes; old wrappers restored; shared body materials and other characters isolated', flush=True)
+
+# Regression: Facial Expressions overlay material must keep Lights+ BEFORE
+# Genshin Face Expressions (into 'Original Skin') so the overlay's transparency
+# mask stays intact, and gacha_goo_links must stay updated so engine repair does
+# not disconnect Lights+ on reload.
+import json
+from setup_wizard.utils.genshin_engine_nodes import configure_genshin_engine_nodes
+
+expr_group = bpy.data.node_groups.new('Genshin - Face Expressions', 'ShaderNodeTree')
+expr_group.interface.new_socket('Shader', in_out='OUTPUT', socket_type='NodeSocketShader')
+expr_group.interface.new_socket('Original Skin', in_out='INPUT', socket_type='NodeSocketShader')
+eg_in = expr_group.nodes.new('NodeGroupInput')
+eg_out = expr_group.nodes.new('NodeGroupOutput')
+expr_group.links.new(eg_in.outputs['Original Skin'], eg_out.inputs['Shader'])
+
+expr_mat = bpy.data.materials.new('HoYoverse - Test Face - Expressions')
+expr_mat.use_nodes = True
+et = expr_mat.node_tree
+et.nodes.clear()
+e_out = et.nodes.new('ShaderNodeOutputMaterial')
+e_out.location = (600, 0)
+e_bsdf = et.nodes.new('ShaderNodeBsdfPrincipled')
+e_bsdf.name = 'PrimoToon'
+e_bsdf.location = (0, 0)
+e_sel = et.nodes.new('ShaderNodeGroup')
+e_sel.node_tree = expr_group
+e_sel.name = 'Genshin Face Expressions'
+e_sel.location = (300, 0)
+et.links.new(e_bsdf.outputs['BSDF'], e_sel.inputs['Original Skin'])
+et.links.new(e_sel.outputs['Shader'], e_out.inputs['Surface'])
+et['gacha_goo_links'] = json.dumps({
+    'portable': [
+        [e_bsdf.name, e_bsdf.outputs['BSDF'].identifier, e_sel.name, e_sel.inputs['Original Skin'].identifier],
+        [e_sel.name, e_sel.outputs['Shader'].identifier, e_out.name, e_out.inputs['Surface'].identifier],
+    ],
+    'native': [
+        [e_bsdf.name, e_bsdf.outputs['BSDF'].identifier, e_sel.name, e_sel.inputs['Original Skin'].identifier],
+        [e_sel.name, e_sel.outputs['Shader'].identifier, e_out.name, e_out.inputs['Surface'].identifier],
+    ],
+})
+
+bpy.ops.mesh.primitive_plane_add(location=(5, 0, 0))
+expr_face = bpy.context.active_object
+expr_face.name = 'Face_Expr'
+expr_face.data.materials.append(expr_mat)
+expr_face.parent = arm_a
+
+bpy.ops.object.select_all(action='DESELECT')
+arm_a.select_set(True)
+bpy.context.view_layer.objects.active = arm_a
+assert needs_setup(arm_a)
+assert bpy.ops.gacha.setup_new_lights('EXEC_DEFAULT') == {'FINISHED'}
+assert not needs_setup(arm_a)
+
+# Lights+ must be inserted into Original Skin, NOT after Genshin Face Expressions
+assert e_out.inputs['Surface'].links[0].from_node == e_sel, 'Material Output must stay connected to Genshin Face Expressions'
+lights_node = e_sel.inputs['Original Skin'].links[0].from_node
+assert lights_node.get(TAG), 'Lights+ must feed Original Skin before Genshin Face Expressions'
+assert lights_node.inputs['Shader'].links[0].from_node == e_bsdf
+
+# Engine node repair on load must NOT disconnect Lights+
+configure_genshin_engine_nodes([expr_mat])
+assert e_out.inputs['Surface'].links[0].from_node == e_sel
+assert e_sel.inputs['Original Skin'].links[0].from_node == lights_node
+
+# Mode switching and repeated setup stay clean and idempotent
+arm_a.gacha_lights_plus_mode = 'DIFFUSE'
+assert lights_node.inputs['Index'].default_value == 2
+assert bpy.ops.gacha.setup_new_lights('EXEC_DEFAULT') == {'FINISHED'}
+assert not needs_setup(arm_a)
+assert e_out.inputs['Surface'].links[0].from_node == e_sel
+assert e_sel.inputs['Original Skin'].links[0].from_node.get(TAG)
+print('PASS: Face Expressions overlay keeps Lights+ before Genshin Face Expressions and survives engine node repair', flush=True)
