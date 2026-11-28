@@ -1666,7 +1666,101 @@ class V2_WeaponMaterialDataApplier(V2_MaterialDataApplier):
         )
 
 
-class V2_HSR_MaterialDataApplier(V2_MaterialDataApplier):
+class HSROutlineColorTexMixin:
+    def _find_hsr_outline_color_image(self, tex_name):
+        """Locate an already-loaded or on-disk HSR _OutlineColorTex image."""
+        import os
+        tex_low = tex_name.lower()
+        for img in bpy.data.images:
+            stem = os.path.splitext(img.name)[0].lower()
+            if img.name.lower() == tex_low or stem == tex_low:
+                return img
+
+        from setup_wizard.import_order import get_active_character_directory
+        char_dir = get_active_character_directory()
+        if not char_dir or not os.path.isdir(char_dir):
+            return None
+
+        exts = ('.png', '.tga', '.dds', '.webp', '.jpg', '.jpeg')
+        for root, _, files in os.walk(char_dir):
+            for fname in files:
+                stem, ext = os.path.splitext(fname)
+                if stem.lower() == tex_low and ext.lower() in exts:
+                    try:
+                        img = bpy.data.images.load(os.path.join(root, fname), check_existing=True)
+                        try:
+                            img.colorspace_settings.name = 'sRGB'
+                        except Exception:
+                            pass
+                        return img
+                    except Exception:
+                        return None
+        return None
+
+    def _apply_hsr_outline_color_tex(self):
+        """Wire _OutlineColorTex * _OutlineColor0 into the HSR outline shader when present."""
+        if not self.outline_material or not self.outline_material.node_tree or self.material_data_parser is None:
+            return
+        tex_env = self.get_value_in_json_parser(self.material_data_parser, '_OutlineColorTex')
+        if not isinstance(tex_env, dict):
+            return
+        tex_info = tex_env.get('m_Texture')
+        if not isinstance(tex_info, dict) or tex_info.get('IsNull', False):
+            return
+        tex_name = tex_info.get('Name')
+        if not tex_name:
+            return
+
+        outline_node = self._get_outline_shader_node()
+        if not outline_node:
+            return
+        target_name = self.outline_mapping.get('_OutlineColor0') or self.outline_mapping.get('_OutlineColor')
+        target_input = outline_node.inputs.get(target_name) if target_name else None
+        if target_input is None:
+            return
+
+        img = self._find_hsr_outline_color_image(tex_name)
+        if img is None:
+            return
+
+        tree = self.outline_material.node_tree
+        nodes = tree.nodes
+        links = tree.links
+
+        tex_node = nodes.get('HSR_OutlineColorTex')
+        if tex_node is None:
+            tex_node = nodes.new('ShaderNodeTexImage')
+            tex_node.name = 'HSR_OutlineColorTex'
+            tex_node.label = 'Outline Color Texture'
+            tex_node.location = (outline_node.location.x - 520, outline_node.location.y - 120)
+        tex_node.image = img
+
+        mul_node = nodes.get('HSR_OutlineColorTex_Mul')
+        if mul_node is None:
+            mul_node = nodes.new('ShaderNodeMix')
+            mul_node.name = 'HSR_OutlineColorTex_Mul'
+            mul_node.label = 'Outline Color Multiply'
+            mul_node.data_type = 'RGBA'
+            mul_node.blend_type = 'MULTIPLY'
+            mul_node.clamp_factor = True
+            mul_node.location = (outline_node.location.x - 240, outline_node.location.y - 120)
+        mul_node.inputs[0].default_value = 1.0
+        try:
+            mul_node.inputs[7].default_value = tuple(target_input.default_value)
+        except Exception:
+            pass
+
+        for lk in list(target_input.links):
+            links.remove(lk)
+        links.new(tex_node.outputs['Color'], mul_node.inputs[6])
+        links.new(mul_node.outputs[2], target_input)
+
+    def set_up_outline_colors(self):
+        super().set_up_outline_colors()
+        self._apply_hsr_outline_color_tex()
+
+
+class V2_HSR_MaterialDataApplier(HSROutlineColorTexMixin, V2_MaterialDataApplier):
     outline_mapping = {
         '_OutlineColor0': 'Outline Color 0',
         '_OutlineColor1': 'Outline Color 1',
@@ -1749,7 +1843,7 @@ class V2_HSR_MaterialDataApplier(V2_MaterialDataApplier):
         )
 
 
-class StellarToon_MaterialDataApplier(V2_MaterialDataApplier):
+class StellarToon_MaterialDataApplier(HSROutlineColorTexMixin, V2_MaterialDataApplier):
     outline_mapping = {
         # '_OutlineColorIntensity': 'Outline Intensity',
         '_OutlineColor0': 'Outline Color 1',
