@@ -322,6 +322,13 @@ class HSR_PT_UI_Character_Rig_Setup_Menu(Panel, HonkaiStarRailUIRenderChecker):
         OperatorFactory.create_rig_character_ui(box)
         OperatorFactory.create(
             box,
+            "hoyoverse.fix_light_direction",
+            "Fix Light Direction",
+            "LIGHT_SUN",
+            game_type=GameType.HONKAI_STAR_RAIL.name,
+        )
+        OperatorFactory.create(
+            box,
             "hoyoverse.apply_hair_clothes_physics",
             "Apply Hair & Clothes Physics",
             "PHYSICS",

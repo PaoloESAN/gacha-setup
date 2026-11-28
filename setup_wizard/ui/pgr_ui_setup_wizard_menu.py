@@ -303,6 +303,13 @@ class PGR_PT_UI_Character_Rig_Setup_Menu(Panel, PunishingGrayRavenUIRenderChecke
         OperatorFactory.create_rig_character_ui(box)
         OperatorFactory.create(
             box,
+            'hoyoverse.fix_light_direction',
+            'Fix Light Direction',
+            'LIGHT_SUN',
+            game_type=GameType.PUNISHING_GRAY_RAVEN.name,
+        )
+        OperatorFactory.create(
+            box,
             "punishing_gray_raven.setup_face_rig",
             "Set Up Face Rig",
             "FACE_MAPS",

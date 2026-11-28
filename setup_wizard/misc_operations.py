@@ -948,8 +948,25 @@ class HNA_OT_ApplyMaterialSettings(Operator, CustomOperatorProperties):
         return {'FINISHED'}
 
 
+class HYV_OT_FixLightDirection(Operator, CustomOperatorProperties):
+    """Centers Light Direction at (0, 0, 0) and fixes ZZZ Legacy light orientation on saved setups"""
+    bl_idname = 'hoyoverse.fix_light_direction'
+    bl_label = 'Fix Light Direction'
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        from setup_wizard.character_rig_setup.light_direction_bone import fix_existing_light_direction
+        fixed_rigs, fixed_empties = fix_existing_light_direction(context, self.game_type)
+        if fixed_rigs or fixed_empties:
+            self.report({'INFO'}, f'Fixed Light Direction ({fixed_rigs} rig(s), {fixed_empties} empty(s)).')
+        else:
+            self.report({'WARNING'}, 'No Light Direction bone or empty found in scene.')
+        return {'FINISHED'}
+
+
 register, unregister = bpy.utils.register_classes_factory([
     HNA_OT_ApplyMaterialSettings,
+    HYV_OT_FixLightDirection,
     GI_OT_SetColorManagementToStandard,
     HYV_OT_SetUpScreenSpaceReflections,
     HYV_OT_VertexPaintFaceSeeThroughEffect,

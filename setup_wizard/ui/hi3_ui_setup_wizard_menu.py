@@ -214,6 +214,13 @@ class HI3_PT_UI_Character_Rig_Setup_Menu(Panel, HonkaiImpact3rdUIRenderChecker):
         OperatorFactory.create_rig_character_ui(box)
         OperatorFactory.create(
             box,
+            "hoyoverse.fix_light_direction",
+            "Fix Light Direction",
+            "LIGHT_SUN",
+            game_type=GameType.HONKAI_IMPACT_3RD.name,
+        )
+        OperatorFactory.create(
+            box,
             "honkai_impact_3rd.setup_face_rig",
             "Set Up Face Rig",
             "FACE_MAPS",

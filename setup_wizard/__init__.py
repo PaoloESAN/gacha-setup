@@ -139,6 +139,7 @@ else:
     )
     from setup_wizard.misc_operations import (
         HNA_OT_ApplyMaterialSettings,
+        HYV_OT_FixLightDirection,
         ZZZ_OT_RenameCollectionAndRig,
         ZZZ_OT_MoveLightingPanelToCharacterCollection,
         ZZZ_OT_SetupBloom,
@@ -434,6 +435,7 @@ else:
         ZZZ_OT_RenameCollectionAndRig,
         ZZZ_OT_MoveLightingPanelToCharacterCollection,
         ZZZ_OT_SetupBloom,
+        HYV_OT_FixLightDirection,
         ZZZ_OT_CreateFaceOutlineMask,
         ZZZ_OT_SelectLightingPanel,
         ZZZ_OT_ToggleLightingPanelVisibility,

@@ -242,6 +242,13 @@ class AKE_PT_UI_Rig_Character_Menu(Panel, ArknightsEndfieldUIRenderChecker):
         OperatorFactory.create_rig_character_ui(sub_layout, game_type=GameType.ARKNIGHTS_ENDFIELD.name)
         OperatorFactory.create(
             sub_layout,
+            "hoyoverse.fix_light_direction",
+            "Fix Light Direction",
+            "LIGHT_SUN",
+            game_type=GameType.ARKNIGHTS_ENDFIELD.name,
+        )
+        OperatorFactory.create(
+            sub_layout,
             "arknights_endfield.setup_face_rig",
             "Set Up Isaac Face Rig",
             "ARMATURE_DATA",

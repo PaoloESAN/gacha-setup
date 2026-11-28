@@ -212,6 +212,13 @@ class WW_PT_UI_Rig_Character_Menu(Panel, WutheringWavesUIRenderChecker):
         OperatorFactory.create_rig_character_ui(box, game_type=GameType.WUTHERING_WAVES.name)
         OperatorFactory.create(
             box,
+            "hoyoverse.fix_light_direction",
+            "Fix Light Direction",
+            "LIGHT_SUN",
+            game_type=GameType.WUTHERING_WAVES.name,
+        )
+        OperatorFactory.create(
+            box,
             'hoyoverse.apply_hair_clothes_physics',
             'Apply Hair & Clothes Physics',
             'PHYSICS',

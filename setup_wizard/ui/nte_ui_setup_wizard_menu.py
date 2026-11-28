@@ -206,6 +206,13 @@ class NTE_PT_UI_Rig_Character_Menu(Panel, NevernessToEvernessUIRenderChecker):
         OperatorFactory.create_rig_character_ui(sub_layout)
         OperatorFactory.create(
             sub_layout,
+            "hoyoverse.fix_light_direction",
+            "Fix Light Direction",
+            "LIGHT_SUN",
+            game_type=GameType.NEVERNESS_TO_EVERNESS.name,
+        )
+        OperatorFactory.create(
+            sub_layout,
             "hoyoverse.apply_hair_clothes_physics",
             "Apply Hair & Clothes Physics",
             "PHYSICS",

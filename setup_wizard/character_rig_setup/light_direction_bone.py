@@ -442,3 +442,115 @@ def setup_light_direction_bone(context, game_type, rig_obj=None):
             pass
 
     return rig_obj.pose.bones.get(BONE_NAME)
+
+
+def fix_existing_light_direction(context, game_type=""):
+    """Center existing Light Direction bones/empties at (0, 0, 0) and fix ZZZ Legacy reflection/gimbal lock."""
+    if game_type == GameType.ZENLESS_ZONE_ZERO.name and _is_zzz_kythera_v2(context, None):
+        return 0, 0
+
+    prev_active = getattr(context.view_layer.objects, "active", None)
+    prev_mode = prev_active.mode if prev_active else "OBJECT"
+    fixed_rigs = 0
+    fixed_empties = 0
+
+    try:
+        if prev_active and prev_active.mode != "OBJECT" and bpy.ops.object.mode_set.poll():
+            bpy.ops.object.mode_set(mode="OBJECT")
+
+        for rig in list(bpy.data.objects):
+            if rig.type != "ARMATURE" or BONE_NAME not in rig.data.bones:
+                continue
+
+            was_hidden = rig.hide_viewport
+            try:
+                rig.hide_viewport = False
+                rig.hide_set(False)
+                for o in list(context.selected_objects):
+                    o.select_set(False)
+                rig.select_set(True)
+                context.view_layer.objects.active = rig
+
+                pb = rig.pose.bones.get(BONE_NAME)
+                has_neg_scale = bool(pb and any(s < 0.0 for s in pb.custom_shape_scale_xyz))
+                has_neg_emp = any(
+                    o.type == "EMPTY"
+                    and any(
+                        c.type == "COPY_TRANSFORMS" and c.target == rig and getattr(c, "subtarget", "") == BONE_NAME
+                        for c in getattr(o, "constraints", []) or []
+                    )
+                    and (any(s < 0.0 for s in o.delta_scale) or any(s < 0.0 for s in o.scale))
+                    for o in bpy.data.objects
+                )
+                fix_zzz = (game_type == GameType.ZENLESS_ZONE_ZERO.name) or has_neg_scale or has_neg_emp
+
+                bpy.ops.object.mode_set(mode="EDIT")
+                ebs = rig.data.edit_bones
+                loc = Vector((0.0, 0.0, 0.0))
+
+                mch_eb = ebs.get(MCH_PARENT_BONE_NAME)
+                if mch_eb is not None:
+                    mch_len = max(mch_eb.length, 0.25)
+                    mch_eb.head = loc
+                    mch_eb.tail = loc + Vector((0.0, mch_len, 0.0))
+                    mch_eb.matrix = Matrix.Translation(loc)
+
+                eb = ebs.get(BONE_NAME)
+                if eb is not None:
+                    eb_len = max(eb.length, 0.25)
+                    if fix_zzz:
+                        rot_mat = Euler((-pi / 2.0, 0.0, 0.0), "XYZ").to_matrix().to_4x4()
+                    else:
+                        rot_mat = eb.matrix.to_3x3().normalized().to_4x4()
+                    eb.head = loc
+                    eb.tail = loc + Vector((0.0, eb_len, 0.0))
+                    eb.matrix = Matrix.Translation(loc) @ rot_mat
+
+                bpy.ops.object.mode_set(mode="OBJECT")
+
+                pb = rig.pose.bones.get(BONE_NAME)
+                if pb is not None:
+                    pb.custom_shape_scale_xyz = tuple(abs(s) for s in pb.custom_shape_scale_xyz)
+                    if fix_zzz:
+                        pb.location = (0.0, 0.0, 0.0)
+                        pb.rotation_euler = (0.0, 0.0, 0.0)
+
+                fixed_rigs += 1
+            finally:
+                rig.hide_viewport = was_hidden
+
+        for emp in list(bpy.data.objects):
+            if emp.type != "EMPTY":
+                continue
+            low = emp.name.lower()
+            is_light_empty = (
+                "light direction" in low
+                or "main light direction" in low
+                or (game_type == GameType.ARKNIGHTS_ENDFIELD.name and (low == "light" or low.startswith("light_")))
+            )
+            if not is_light_empty or "face light direction" in low:
+                continue
+
+            has_neg = any(s < 0.0 for s in emp.delta_scale) or any(s < 0.0 for s in emp.scale)
+            emp.delta_scale = (1.0, 1.0, 1.0)
+            emp.scale = tuple(abs(s) for s in emp.scale)
+            is_constrained = any(c.type == "COPY_TRANSFORMS" for c in getattr(emp, "constraints", []) or [])
+            if not is_constrained:
+                emp.location = (0.0, 0.0, 0.0)
+                if game_type == GameType.ZENLESS_ZONE_ZERO.name or has_neg:
+                    emp.rotation_euler = (-pi / 2.0, 0.0, 0.0)
+            fixed_empties += 1
+    finally:
+        try:
+            if prev_active and prev_active.name in bpy.data.objects:
+                context.view_layer.objects.active = prev_active
+                if prev_mode != "OBJECT" and bpy.ops.object.mode_set.poll():
+                    bpy.ops.object.mode_set(mode=prev_mode)
+        except Exception:
+            pass
+        try:
+            context.view_layer.update()
+        except Exception:
+            pass
+
+    return fixed_rigs, fixed_empties
