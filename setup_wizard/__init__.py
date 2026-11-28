@@ -23,10 +23,19 @@ if is_test_env:
     pytest_version = os.environ.get("PYTEST_VERSION")
     print(f"Pytest version: {pytest_version}")
 else:
-    import importlib
     import os
+    import sys
 
     import bpy
+
+    # Clear cached submodules when Blender reloads/upgrades the addon in place
+    # so updated modules never import from stale submodule versions in sys.modules.
+    _pkg_prefixes = (f"{__name__}.", "setup_wizard.")
+    for _mod_name in [
+        name for name in list(sys.modules)
+        if name.startswith(_pkg_prefixes)
+    ]:
+        sys.modules.pop(_mod_name, None)
 
     import setup_wizard.addon_updater.addon_updater_ops as addon_updater_ops
     import setup_wizard.genshin_setup_wizard
@@ -296,20 +305,6 @@ else:
 
     setup_dependencies()
 
-    modules = [
-        setup_wizard.ui.gi_ui_setup_wizard_menu,
-        setup_wizard.ui.hsr_ui_setup_wizard_menu,
-        setup_wizard.ui.pgr_ui_setup_wizard_menu,
-        setup_wizard.ui.hi3_ui_setup_wizard_menu,
-        setup_wizard.ui.hna_ui_setup_wizard_menu,
-        setup_wizard.ui.zzz_ui_setup_wizard_menu,
-        setup_wizard.ui.nte_ui_setup_wizard_menu,
-        setup_wizard.ui.wuwa_ui_setup_wizard_menu,
-        setup_wizard.ui.ake_ui_setup_wizard_menu,
-        setup_wizard.genshin_setup_wizard,
-        addon_updater_ops,
-    ]
-
     classes = [
         HNA_PT_CharacterSettings,
         HNA_OT_ApplyMaterialSettings,
@@ -502,12 +497,6 @@ else:
         MILASTRA_OT_SetupWizardUI,
     ]
 
-    for module in modules:
-        try:
-            importlib.reload(module)
-        except ModuleNotFoundError:
-            pass  # likely new class
-
     _register_classes, _unregister_classes = bpy.utils.register_classes_factory(classes)
     UI_Properties.create_custom_ui_properties()
 
@@ -580,14 +569,22 @@ else:
         register_nte_properties()
         register_hna_properties()
         setup_wizard.services.isolation.register()
-        if wuwa_frame_change_handler not in bpy.app.handlers.render_init:
-            bpy.app.handlers.render_init.append(wuwa_frame_change_handler)
+        bpy.app.handlers.render_init[:] = [
+            h for h in bpy.app.handlers.render_init
+            if getattr(h, "__name__", None) not in {
+                wuwa_frame_change_handler.__name__,
+                ake_frame_change_handler.__name__,
+            }
+        ]
+        bpy.app.handlers.render_init.append(wuwa_frame_change_handler)
         # Genshin controls write through their property update callbacks.
         # Rendering must preserve values and links authored in shader nodes.
-        if ake_frame_change_handler not in bpy.app.handlers.render_init:
-            bpy.app.handlers.render_init.append(ake_frame_change_handler)
-        if gacha_rig_ui_load_post_handler not in bpy.app.handlers.load_post:
-            bpy.app.handlers.load_post.append(gacha_rig_ui_load_post_handler)
+        bpy.app.handlers.render_init.append(ake_frame_change_handler)
+        bpy.app.handlers.load_post[:] = [
+            h for h in bpy.app.handlers.load_post
+            if getattr(h, "__name__", None) != gacha_rig_ui_load_post_handler.__name__
+        ]
+        bpy.app.handlers.load_post.append(gacha_rig_ui_load_post_handler)
         try:
             bpy.app.timers.register(_gacha_prewarm, first_interval=1.0)
         except Exception:
