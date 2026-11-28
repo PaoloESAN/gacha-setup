@@ -2203,7 +2203,10 @@ class ZenlessZoneZeroDefaultMaterialReplacer(GameDefaultMaterialReplacer):
                         continue
 
                     is_eyeglass = "eyeglass" in matname or "glasses" in matname
-                    is_face = not is_eyeglass and any(k in matname for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "iris", "highlight"])
+                    is_face = not is_eyeglass and (
+                        any(k in matname for k in ["face", "eyebrow", "brow", "眉", "eye", "eyelash", "pupil", "highlight"])
+                        or bool(re.search(r'(?:^|[^a-z])iris(?:$|[^a-z])', matname))
+                    )
                     template_mat = (highlight_template if 'highlight' in matname and highlight_template and not is_eyeglass
                                     else face_template if is_face else shader_template)
 
