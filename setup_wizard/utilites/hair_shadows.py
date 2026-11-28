@@ -23,11 +23,12 @@ def character_meshes(context):
     if rig:
         descendants = set(rig.children_recursive)
         meshes = [o for o in context.scene.objects if o.type == 'MESH'
+                  and not o.get('csw_hair_shadow_proxy')
                   and (o.find_armature() == rig or o in descendants)]
         return rig, meshes
     if obj.type == 'EMPTY' or obj.parent:
-        return parent, [o for o in parent.children_recursive if o.type == 'MESH']
-    return obj, [o for o in context.selected_objects if o.type == 'MESH']
+        return parent, [o for o in parent.children_recursive if o.type == 'MESH' and not o.get('csw_hair_shadow_proxy')]
+    return obj, [o for o in context.selected_objects if o.type == 'MESH' and not o.get('csw_hair_shadow_proxy')]
 
 
 def material_role(obj, mat):
@@ -70,13 +71,13 @@ def character_masks(obj):
     mesh = obj.data
     face = [0.0] * len(mesh.polygons)
     hair = face.copy()
-    if obj.hide_render or any(k in obj.name.lower() for k in ('outline', 'hairshadow', 'hair_shadow', 'hair shadow', 'wgt-', 'colorwheel')):
+    if obj.hide_render or obj.get('csw_hair_shadow_proxy') or any(k in obj.name.lower() for k in ('outline', 'hairshadow', 'hair_shadow', 'hair shadow', 'wgt-', 'colorwheel')):
         return face, hair
     roles = {i: material_role(obj, slot.material) for i, slot in enumerate(obj.material_slots)}
     hair_groups, protected_groups = set(), set()
     for group in obj.vertex_groups:
         name = group.name.lower()
-        if any(k in name for k in ('hair', 'bang', 'pelo')) and 'shadow' not in name:
+        if any(k in name for k in ('hair', 'hari', 'bang', 'pelo')) and 'shadow' not in name:
             hair_groups.add(group.index)
         if (any(k in name for k in ('pupil', 'iris', 'highlight', 'teeth', 'tongue', 'mouth', 'brow'))
                 or re.search(r'(?:^|[_. -])eye(?:[_. -]?[lr]|lf|rt)?(?:joint)?$', name)):
@@ -246,6 +247,201 @@ def _aov_material(mat, aovs, attributes, constants, renamed):
     tree.links.new(camera.outputs['View Z Depth'], depth.inputs['Value'])
 
 
+HAIR_SHADOW_LAYER_NAME = 'Hair Shadows'
+HAIR_SHADOW_BLENDED_COL = 'Hair Shadows - Blended Hair'
+HAIR_SHADOW_DITHERED_COL = 'Hair Shadows - Dithered Hair'
+
+
+def _find_layer_collection(layer_col, col_name):
+    if layer_col.collection.name == col_name:
+        return layer_col
+    for child in layer_col.children:
+        found = _find_layer_collection(child, col_name)
+        if found is not None:
+            return found
+    return None
+
+
+def _detect_goo_face_shadow_tint(meshes, masks):
+    """Read the character's Face shader shadow color (matching Goo Engine PrimoToon)."""
+    for obj in meshes:
+        face_mask = masks[obj][0]
+        if not any(face_mask):
+            continue
+        for slot in obj.material_slots:
+            mat = slot.material
+            if not mat or not mat.node_tree:
+                continue
+            if material_role(obj, mat) != 'face':
+                continue
+            for n in mat.node_tree.nodes:
+                if n.type != 'GROUP' or not n.node_tree:
+                    continue
+                use_cold = False
+                wc = n.inputs.get('Warm / Cold Ramps')
+                if wc is not None and not wc.is_linked:
+                    use_cold = bool(wc.default_value)
+                preferred = ('Cold Shadow Color', 'Warm Shadow Color') if use_cold else ('Warm Shadow Color', 'Cold Shadow Color')
+                sock = next((n.inputs.get(k) for k in preferred if n.inputs.get(k) is not None), None)
+                if sock is None or sock.is_linked:
+                    continue
+                col = tuple(sock.default_value)
+                if len(col) < 3 or (col[0] == 0.0 and col[1] == 0.0 and col[2] == 0.0):
+                    continue
+                # Goo Engine PrimoToon v4.0 applies Gamma 2.2 (Linear -> sRGB) before Multiply
+                has_gamma = any(
+                    sub.type == 'GROUP' and sub.node_tree and sub.node_tree.name == 'Linear -> sRGB'
+                    for sub in n.node_tree.nodes
+                )
+                if has_gamma:
+                    return (
+                        max(0.0, min(1.0, col[0])) ** 2.2,
+                        max(0.0, min(1.0, col[1])) ** 2.2,
+                        max(0.0, min(1.0, col[2])) ** 2.2,
+                        1.0,
+                    )
+                return (col[0], col[1], col[2], 1.0)
+    return None
+
+
+def _ensure_dithered_material(mat, scope):
+    """Create or update a DITHERED copy of a hair material for the Hair Shadows View Layer."""
+    if not mat:
+        return None
+    target_name = f'{mat.name}_HairShadowDithered'
+    dithered = bpy.data.materials.get(target_name)
+    if dithered is None:
+        dithered = mat.copy()
+        dithered.name = target_name
+        dithered['csw_hair_shadow_dithered'] = scope
+    else:
+        # Keep AOV outputs synced with the source material
+        if mat.node_tree and dithered.node_tree:
+            src_aovs = {n.aov_name: n for n in mat.node_tree.nodes if n.type == 'OUTPUT_AOV' and n.get('csw_hair_shadow_output')}
+            for name, src_node in src_aovs.items():
+                dst_node = next((n for n in dithered.node_tree.nodes if n.type == 'OUTPUT_AOV' and n.aov_name == name), None)
+                if dst_node is None:
+                    dst_node = dithered.node_tree.nodes.new('ShaderNodeOutputAOV')
+                    dst_node.aov_name = name
+                    dst_node.label = src_node.label
+                    dst_node['csw_hair_shadow_output'] = True
+                val_in = src_node.inputs.get('Value')
+                if val_in is not None and not val_in.is_linked:
+                    dst_node.inputs['Value'].default_value = val_in.default_value
+    if hasattr(dithered, 'surface_render_method'):
+        dithered.surface_render_method = 'DITHERED'
+    if hasattr(dithered, 'blend_method'):
+        try:
+            dithered.blend_method = 'HASHED'
+        except Exception:
+            pass
+    return dithered
+
+
+def _ensure_hair_shadow_render_layer(scene, main_view_layer, aovs, renamed, meshes, masks, scope):
+    """Create/update a dedicated Hair Shadows View Layer with DITHERED hair shadow casters.
+
+    This allows Eye Through Hair (which requires BLENDED hair on the main View Layer)
+    and Hair Shadows (which requires DITHERED hair for Hair Mask + View Depth + Depth)
+    to work simultaneously without conflicting.
+    """
+    col_blended = bpy.data.collections.get(HAIR_SHADOW_BLENDED_COL)
+    if col_blended is None:
+        col_blended = bpy.data.collections.new(HAIR_SHADOW_BLENDED_COL)
+        scene.collection.children.link(col_blended)
+    elif col_blended.name not in scene.collection.children:
+        scene.collection.children.link(col_blended)
+
+    col_dithered = bpy.data.collections.get(HAIR_SHADOW_DITHERED_COL)
+    if col_dithered is None:
+        col_dithered = bpy.data.collections.new(HAIR_SHADOW_DITHERED_COL)
+        scene.collection.children.link(col_dithered)
+    elif col_dithered.name not in scene.collection.children:
+        scene.collection.children.link(col_dithered)
+
+    hair_objs = [o for o in meshes if any(masks[o][1])]
+    dithered_mat_cache = {}
+    for src_obj in hair_objs:
+        # Move original hair mesh into Blended Hair collection (visible on main layer, excluded on Hair Shadows layer)
+        if src_obj.name not in col_blended.objects:
+            for c in list(src_obj.users_collection):
+                c.objects.unlink(src_obj)
+            col_blended.objects.link(src_obj)
+
+        # Create or reuse DITHERED shadow-caster copy in Dithered Hair collection
+        proxy_name = f'{src_obj.name}_HairShadowLayer'
+        proxy = next((o for o in bpy.data.objects if o.get('csw_hair_shadow_proxy_for') == src_obj.name), None)
+        if proxy is None:
+            proxy = bpy.data.objects.get(proxy_name)
+        if proxy is None:
+            proxy = src_obj.copy()
+            proxy.name = proxy_name
+            proxy.data = src_obj.data.copy()
+            proxy.data.name = f'{proxy_name}_Mesh'
+            proxy['csw_hair_shadow_proxy'] = True
+            proxy['csw_hair_shadow_proxy_for'] = src_obj.name
+            proxy['csw_scope'] = scope
+            col_dithered.objects.link(proxy)
+            for m in list(proxy.modifiers):
+                if 'outline' in m.name.lower():
+                    proxy.modifiers.remove(m)
+        else:
+            proxy['csw_hair_shadow_proxy'] = True
+            proxy['csw_hair_shadow_proxy_for'] = src_obj.name
+            proxy['csw_scope'] = scope
+            if proxy.name not in col_dithered.objects:
+                col_dithered.objects.link(proxy)
+            # Sync face/hair mask attributes from source mesh
+            for attr_name in [a.name for a in src_obj.data.attributes if a.name.startswith('csw_hs_')]:
+                src_attr = src_obj.data.attributes[attr_name]
+                if src_attr.domain == 'FACE' and src_attr.data_type == 'FLOAT':
+                    vals = [0.0] * len(src_attr.data)
+                    src_attr.data.foreach_get('value', vals)
+                    if len(vals) == len(proxy.data.polygons):
+                        _attribute(proxy.data, attr_name, vals)
+
+        proxy.hide_viewport = False
+        proxy.hide_render = False
+        for idx, slot in enumerate(src_obj.material_slots):
+            mat = slot.material
+            if mat is None or idx >= len(proxy.material_slots):
+                continue
+            if mat not in dithered_mat_cache:
+                dithered_mat_cache[mat] = _ensure_dithered_material(mat, scope)
+            proxy.material_slots[idx].material = dithered_mat_cache[mat]
+
+    hs_vl = scene.view_layers.get(HAIR_SHADOW_LAYER_NAME)
+    if hs_vl is None:
+        hs_vl = scene.view_layers.new(HAIR_SHADOW_LAYER_NAME)
+    hs_vl.use_pass_z = True
+
+    for before, after in renamed.items():
+        aov = next((a for a in hs_vl.aovs if a.name == before), None)
+        if aov:
+            aov.name = after
+    for name in aovs:
+        aov = next((a for a in hs_vl.aovs if a.name == name), None) or hs_vl.aovs.add()
+        aov.name, aov.type = name, 'VALUE'
+    order_aov_passes(scene, hs_vl)
+
+    # Configure collection exclusions on every View Layer
+    for vl in scene.view_layers:
+        lc_blended = _find_layer_collection(vl.layer_collection, HAIR_SHADOW_BLENDED_COL)
+        lc_dithered = _find_layer_collection(vl.layer_collection, HAIR_SHADOW_DITHERED_COL)
+        if vl == hs_vl:
+            if lc_blended is not None:
+                lc_blended.exclude = True
+            if lc_dithered is not None:
+                lc_dithered.exclude = False
+        else:
+            if lc_blended is not None:
+                lc_blended.exclude = False
+            if lc_dithered is not None:
+                lc_dithered.exclude = True
+
+    return hs_vl
+
+
 def execute_hair_shadows(context):
     if not supports_eye_through_hair():
         return False, 'Hair Shadows requires Blender 5.2 or newer.'
@@ -315,13 +511,21 @@ def execute_hair_shadows(context):
         aov.name, aov.type = name, 'VALUE'
     order_aov_passes(context.scene, context.view_layer)
     context.view_layer.use_pass_z = True
+    hs_vl = _ensure_hair_shadow_render_layer(
+        context.scene, context.view_layer, aovs, renamed, meshes, masks, scope
+    )
     tree = get_or_create_compositor_tree(context.scene)
     rl = render_layer(tree, context.scene, context.view_layer)
+    rl_hs = render_layer(tree, context.scene, hs_vl)
+    rl_hs.label = 'Render Layers (Hair Shadows)'
+    rl_hs.location = (rl.location.x, rl.location.y - 420)
     node = next((n for n in tree.nodes if n.get('csw_effect') == 'hair' and n.get('csw_scope') == scope), None)
     # Upgrade the reference setup rather than applying the effect twice.
     reference = next((n for n in tree.nodes if n.type == 'GROUP' and n.node_tree
                       and n.node_tree.name == 'Sandrone Hair Shadow - Danica'), None) if any(o.data.attributes.get('hair_shadow_face') for o in meshes) else None
+    created_new = False
     if node is None:
+        created_new = True
         if reference:
             node = reference
             _replace_group(node, _group(scope, context.scene))
@@ -331,20 +535,23 @@ def execute_hair_shadows(context):
         node.name = 'Hair Shadows - ' + owner.name
         node.label, node['csw_effect'], node['csw_scope'] = 'Hair Shadows', 'hair', scope
         node['csw_owner'] = owner
+        goo_tint = _detect_goo_face_shadow_tint(meshes, masks)
+        if goo_tint is not None and 'Shadow Tint' in node.inputs:
+            node.inputs['Shadow Tint'].default_value = goo_tint
     elif node.node_tree.get('csw_version', 0) < 4:
         _replace_group(node, _group(scope, context.scene))
     for pass_name, input_name in zip(aovs, ('face_mask', 'hair_mask', 'Depth')):
-        output = rl.outputs.get(pass_name)
+        output = rl_hs.outputs.get(pass_name)
         if output is None:
             return False, 'Could not expose the hair-shadow render passes.'
         tree.links.new(output, node.inputs[input_name])
-    tree.links.new(rl.outputs['Depth'], node.inputs['Camera Distance'])
+    tree.links.new(rl_hs.outputs['Depth'], node.inputs['Camera Distance'])
     insert_effect(tree, context.scene, rl, node)
     for s in node.inputs:
         s.hide = s.name not in ('Offset X', 'Offset Y', 'Shadow Tint', 'Strength')
     node.outputs['Shadow Mask'].hide = True
     set_viewport_compositor_always(context)
-    return True, f'Hair Shadows applied to {owner.name}. Adjust Offset X, Offset Y, Shadow Tint and Strength in the compositor group.'
+    return True, f'Hair Shadows applied to {owner.name} (using Render Layer "{hs_vl.name}"). Adjust Offset X, Offset Y, Shadow Tint and Strength in the compositor group.'
 
 
 class CSW_OT_HairShadows(bpy.types.Operator):
