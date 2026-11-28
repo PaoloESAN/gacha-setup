@@ -92,6 +92,12 @@ class AKE_PT_Basic_Setup_Wizard_UI_Layout(Panel, ArknightsEndfieldUIRenderChecke
         # Step 4: Rig Character
         OperatorFactory.create_rig_character_ui(sub_layout, game_type=GameType.ARKNIGHTS_ENDFIELD.name)
 
+        sub_layout.operator(
+            "arknights_endfield.create_shapekey_panel",
+            text="Create Shapekey Panel",
+            icon="FACE_MAPS",
+        )
+
         # Step 5: Setup Compositor Nodes
         OperatorFactory.create(
             sub_layout,

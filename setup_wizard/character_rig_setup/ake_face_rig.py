@@ -1355,6 +1355,7 @@ def setup_ake_shapekey_panel(armature, context=None):
         root_name="FacePanel-Root",
         board_name="FacePanel-Board",
         armature=armature,
+        face_center=fcx,
     )
 
     # Create panel bones on armature
@@ -1547,4 +1548,32 @@ class AKE_OT_SetUpIsaacFaceRig(Operator, BasicSetupUIOperator):
             return {'CANCELLED'}
 
         self.report({'INFO'}, 'Successfully set up Isaac Face Rig for Arknights: Endfield character!')
+        return {'FINISHED'}
+
+
+class AKE_OT_CreateShapekeyPanel(Operator):
+    """Creates or rebuilds the 3D facial shapekey control panel for an Arknights: Endfield character"""
+    bl_idname = "arknights_endfield.create_shapekey_panel"
+    bl_label = "Create Shapekey Panel"
+    bl_description = "Creates or rebuilds the 3D facial shapekey control panel for the selected Arknights: Endfield character"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        from setup_wizard.character_rig_setup.rig_ui_utils import find_target_armature
+        armature = find_target_armature(context)
+        if not armature:
+            self.report({'ERROR'}, 'No character armature found. Please select or rig a character first.')
+            return {'CANCELLED'}
+
+        try:
+            count = setup_ake_shapekey_panel(armature, context)
+        except Exception as ex:
+            self.report({'ERROR'}, f"Failed to create AKE Shapekey Panel: {ex}")
+            return {'CANCELLED'}
+
+        if not count:
+            self.report({'WARNING'}, 'No facial expression shape keys found on this character.')
+            return {'CANCELLED'}
+
+        self.report({'INFO'}, f"Created AKE Shapekey Panel ({count} controls).")
         return {'FINISHED'}

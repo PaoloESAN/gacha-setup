@@ -92,6 +92,12 @@ class NTE_PT_Basic_Setup_Wizard_UI_Layout(Panel, NevernessToEvernessUIRenderChec
         # Step 4: Rig Character button
         OperatorFactory.create_rig_character_ui(sub_layout)
 
+        sub_layout.operator(
+            "neverness_to_everness.create_shapekey_panel",
+            text="Create Shapekey Panel",
+            icon="FACE_MAPS",
+        )
+
         # Step 5: Finish Setup button
         OperatorFactory.create(
             sub_layout,

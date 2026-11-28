@@ -329,6 +329,7 @@ def build_shape_keys_panel(
     root_name="FacePanel-Root",
     board_name="FacePanel-Board",
     armature=None,
+    face_center=None,
 ):
     """Lay out a Genshin-style framed panel and return (board_widget, panel_controls).
 
@@ -517,37 +518,125 @@ def build_shape_keys_panel(
             'parent_bone': root_name,
         })
 
-    # Compute each panel column's inner width first so frames fit tightly
+    # Compute each panel column's inner width and outer height first so frames
+    # fit tightly and panel placement adapts to how many shapekeys the character has.
     def _measure_col_inner_width(col):
-        max_w = HSLIDER_W * 2.0 + COL_GAP
+        max_w = u * 0.28
         for sec in col['sections']:
+            sec_title = sec.get('title', '')
+            if sec_title:
+                title_w = min(HSLIDER_W * 2.0 + COL_GAP, len(sec_title) * HEADER_H * 0.42)
+                max_w = max(max_w, title_w)
             for row in sec['rows']:
                 rtype = row.get('type', 'grid')
                 if rtype == 'grid':
+                    items = row.get('items', [])
                     ncols = max(1, int(row.get('cols', 2)))
-                    w = ncols * HSLIDER_W + (ncols - 1) * COL_GAP
+                    eff_cols = min(ncols, len(items)) if items else ncols
+                    w = eff_cols * HSLIDER_W + (eff_cols - 1) * COL_GAP
                     max_w = max(max_w, w)
                 elif rtype == 'pad_and_sliders':
                     s_cols = max(1, int(row.get('slider_cols', 1)))
-                    w = PAD2D_SIZE + COL_GAP * 1.4 + s_cols * HSLIDER_W + (s_cols - 1) * COL_GAP
+                    pad_sz = row.get('pad_size', PAD2D_SIZE)
+                    pad_w = (pad_sz + COL_GAP * 1.4) if row.get('pad') else 0.0
+                    w = pad_w + s_cols * HSLIDER_W + (s_cols - 1) * COL_GAP
                     max_w = max(max_w, w)
                 elif rtype == 'vsliders_and_pad':
                     nv = len(row.get('vsliders', []))
                     vw = nv * VSLIDER_W + max(0, nv - 1) * (COL_GAP * 0.65)
-                    pw = (PAD2D_SIZE + COL_GAP * 1.4) if row.get('pad') else 0.0
+                    pad_sz = row.get('pad_size', row.get('v_height', VSLIDER_H))
+                    pw = (pad_sz + COL_GAP * 1.4) if row.get('pad') else 0.0
                     max_w = max(max_w, pw + vw)
                 elif rtype == 'pads_row':
                     npads = len(row.get('pads', []))
-                    psize = row.get('pad_size', u * 0.30)
+                    psize = row.get('pad_size', u * 0.28)
                     w = npads * psize + max(0, npads - 1) * COL_GAP * 1.5
                     max_w = max(max_w, w)
         return max_w
+
+    def _measure_col_height(col):
+        h = PAD_OUTER
+        for sec_idx, sec in enumerate(col['sections']):
+            if sec_idx > 0:
+                h += SEC_GAP
+            if sec.get('title', ''):
+                h += HEADER_H + HEADER_GAP
+            for row_idx, row in enumerate(sec['rows']):
+                if row_idx > 0:
+                    h += ROW_GAP * 1.4
+                rtype = row.get('type', 'grid')
+                if rtype == 'grid':
+                    items = row.get('items', [])
+                    if not items:
+                        continue
+                    ncols = max(1, int(row.get('cols', 2)))
+                    nrows = (len(items) + ncols - 1) // ncols
+                    h += nrows * HSLIDER_H + max(0, nrows - 1) * ROW_GAP
+                elif rtype == 'pad_and_sliders':
+                    pad = row.get('pad')
+                    sliders = row.get('sliders', [])
+                    s_cols = max(1, int(row.get('slider_cols', 1)))
+                    pad_sz = row.get('pad_size', PAD2D_SIZE)
+                    pad_bottom_extra = u * 0.055 if (pad and pad.get('label')) else 0.0
+                    s_rows = (len(sliders) + s_cols - 1) // s_cols if sliders else 0
+                    s_h = (s_rows * HSLIDER_H + max(0, s_rows - 1) * ROW_GAP) if s_rows else 0.0
+                    p_h = (pad_sz + pad_bottom_extra) if pad else 0.0
+                    h += max(p_h, s_h)
+                elif rtype == 'vsliders_and_pad':
+                    pad = row.get('pad')
+                    v_h = row.get('v_height', VSLIDER_H)
+                    pad_sz = row.get('pad_size', v_h)
+                    h += max(pad_sz if pad else 0.0, v_h) + u * 0.060
+                elif rtype == 'pads_row':
+                    pads = row.get('pads', [])
+                    if not pads:
+                        continue
+                    psize = row.get('pad_size', u * 0.28)
+                    has_lbl = any(p.get('label') for p in pads)
+                    h += psize + (u * 0.055 if has_lbl else 0.0)
+        return h + PAD_OUTER
+
+    col_inner_widths = [_measure_col_inner_width(col) for col in cleaned_cols]
+    col_heights = [_measure_col_height(col) for col in cleaned_cols]
+
+    # Adaptive positioning: bring compact panels (few shapekeys / short left column,
+    # e.g. HSR Evernight) closer to the face, while keeping tall multi-section panels
+    # (e.g. HSR Robin) far enough right and high enough to clear the character's arms.
+    if face_center is not None:
+        max_h = max(col_heights)
+        tall_z = origin_world.z
+        compact_z = face_center.z + u * 0.38
+        t_z = max(0.0, min(1.0, (max_h - u * 0.90) / (u * 2.70 - u * 0.90)))
+        if compact_z < tall_z:
+            origin_world.z = compact_z + (tall_z - compact_z) * t_z
+
+        current_x_off = (origin_world - face_center).dot(right)
+        min_x_off = u * 1.15
+        max_x_off = max(min_x_off, current_x_off)
+        z_top_rel = origin_world.z - face_center.z
+
+        col_x0 = 0.0
+        req_x_off = min_x_off
+        for inner_w, ch in zip(col_inner_widths, col_heights):
+            drop = max(0.0, ch - z_top_rel)
+            if drop <= u * 0.65:
+                clearance = min_x_off
+            elif drop >= u * 2.60:
+                clearance = max_x_off
+            else:
+                t_x = (drop - u * 0.65) / (u * 2.60 - u * 0.65)
+                clearance = min_x_off + (max_x_off - min_x_off) * t_x
+            req_x_off = max(req_x_off, clearance - col_x0)
+            col_x0 += inner_w + 2.0 * PAD_OUTER + PANEL_COL_GAP
+
+        target_x_off = max(min_x_off, min(max_x_off, req_x_off))
+        origin_world = origin_world + right * (target_x_off - current_x_off)
 
     cursor_x = 0.0
     total_width = 0.0
 
     for col_idx, col in enumerate(cleaned_cols):
-        inner_w = _measure_col_inner_width(col)
+        inner_w = col_inner_widths[col_idx]
         frame_x0 = cursor_x
         frame_x1 = frame_x0 + inner_w + 2.0 * PAD_OUTER
         content_x0 = frame_x0 + PAD_OUTER

@@ -608,6 +608,7 @@ def plan_hsr_controls(mesh_obj, fwd, right, up, face_size, keyblock, wgt_coll=No
             unique_tag=unique_tag,
             collection_name=FACERIG_COLLECTION,
             armature=armature,
+            face_center=fcx,
         )
         controls.extend(panel_ctrls)
 
@@ -1143,21 +1144,51 @@ def setup_dynamic_eye_y_drivers(mesh_obj, armature, max_offset=-0.0040):
         attach_driver(eye_R_pbone, eye_sk_R)
 
 
-def hsr_face_rig_main():
-    faceobj = None
+def _find_hsr_face_mesh(armature=None):
+    def _is_hsr_face(obj):
+        if obj.type != 'MESH' or obj.name not in bpy.context.view_layer.objects:
+            return False
+        if not obj.data or not obj.data.shape_keys:
+            return False
+        n = obj.name.lower()
+        return "face" in n or any(
+            k.startswith(("Mouth_", "Brow_", "Eye_"))
+            for k in obj.data.shape_keys.key_blocks.keys()
+        )
+
+    if armature is not None:
+        # Prefer meshes directly deformed by or parented to the target armature
+        arm_meshes = []
+        for obj in bpy.data.objects:
+            if not _is_hsr_face(obj):
+                continue
+            has_mod = any(m.type == 'ARMATURE' and m.object == armature for m in obj.modifiers)
+            if has_mod or obj.parent == armature:
+                arm_meshes.append(obj)
+        if arm_meshes:
+            return next((o for o in arm_meshes if "face" in o.name.lower()), arm_meshes[0])
+
+        arm_colls = set(armature.users_collection)
+        for obj in bpy.data.objects:
+            if _is_hsr_face(obj) and (arm_colls & set(obj.users_collection)):
+                return obj
+
     for obj in bpy.data.objects:
-        if obj.type == 'MESH' and obj.name in bpy.context.view_layer.objects:
-            n = obj.name.lower()
-            if "face" in n or (obj.data.shape_keys and any(k.startswith("Mouth_") or k.startswith("Brow_") or k.startswith("Eye_") for k in obj.data.shape_keys.key_blocks.keys())):
-                faceobj = obj
-                break
+        if _is_hsr_face(obj):
+            return obj
+    return None
+
+
+def hsr_face_rig_main(armature=None, faceobj=None):
+    if faceobj is None:
+        faceobj = _find_hsr_face_mesh(armature=armature)
 
     if faceobj is None:
         print("HSR Face Rig: No face mesh found.")
-        return
+        return 0
     if faceobj.data.shape_keys is None:
         print("HSR Face Rig: Face mesh has no shape keys.")
-        return
+        return 0
 
     from setup_wizard.utils.hsr_expression_reference import rebase_baked_expressions
     rebased = rebase_baked_expressions(faceobj)
@@ -1165,7 +1196,9 @@ def hsr_face_rig_main():
         print(f'HSR Face Rig: restored neutral references for {rebased} baked expressions.')
 
     keyblock = faceobj.data.shape_keys.key_blocks
-    armature, head_name = find_armature_and_head(faceobj)
+    resolved_armature, head_name = find_armature_and_head(faceobj)
+    if armature is None:
+        armature = resolved_armature
     fwd, right, up, face_size = face_frame(faceobj)
 
     if CLEAN_REBUILD:
@@ -1176,10 +1209,46 @@ def hsr_face_rig_main():
 
     if not controls:
         print("HSR Face Rig: No drivable shape keys found.")
-        return
+        return 0
 
     setup_hsr_face_rig(faceobj, controls, armature, head_name, fwd, up, face_size, keyblock)
 
     finalize_widget_collection(wgt_coll)
 
     print(f"\nHSR Face Rig complete: {len(controls)} controls built on '{armature.name}'.\n")
+    return len(controls)
+
+
+class HSR_OT_CreateShapekeyPanel(bpy.types.Operator):
+    """Creates or rebuilds the 3D facial shapekey control panel for an HSR character"""
+    bl_idname = "honkai_star_rail.create_shapekey_panel"
+    bl_label = "Create Shapekey Panel"
+    bl_description = "Creates or rebuilds the 3D facial shapekey control panel for the selected HSR character"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        from setup_wizard.character_rig_setup.rig_ui_utils import find_target_armature
+        armature = find_target_armature(context)
+        faceobj = None
+        active = context.active_object
+        if active and active.type == 'MESH' and active.data and active.data.shape_keys:
+            if "face" in active.name.lower():
+                faceobj = active
+                if armature is None:
+                    for m in active.modifiers:
+                        if m.type == 'ARMATURE' and m.object:
+                            armature = m.object
+                            break
+
+        try:
+            count = hsr_face_rig_main(armature=armature, faceobj=faceobj)
+        except Exception as ex:
+            self.report({'ERROR'}, f"Failed to create HSR Shapekey Panel: {ex}")
+            return {'CANCELLED'}
+
+        if not count:
+            self.report({'WARNING'}, "No HSR face mesh with drivable shape keys found.")
+            return {'CANCELLED'}
+
+        self.report({'INFO'}, f"Created HSR Shapekey Panel ({count} controls).")
+        return {'FINISHED'}

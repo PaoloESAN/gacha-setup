@@ -59,20 +59,39 @@ def is_blender_3():
     return bpy.app.version[0] == 3
 
 
-def find_face_mesh():
+def find_face_mesh(armature=None):
     nte_signatures = ["look_U", "EL_", "EB_", "jawOpen", "biyan", "TD_", "TDS_", "mouthPucker"]
-    for obj in bpy.data.objects:
-        if obj.type == 'MESH' and obj.data and obj.data.shape_keys:
-            kb = obj.data.shape_keys.key_blocks
-            if any(any(sig in k for sig in nte_signatures) for k in kb.keys()):
-                return obj
 
-    for obj in bpy.data.objects:
-        if obj.type == 'MESH' and obj.data and obj.data.shape_keys:
-            n = obj.name.lower()
-            if any(k in n for k in ["face", "head", "skin", "player_", "npc_"]):
-                if not any(ign in n for ign in ["weapon", "gun", "sword"]):
+    def _search(candidates):
+        for obj in candidates:
+            if obj.type == 'MESH' and obj.data and obj.data.shape_keys:
+                kb = obj.data.shape_keys.key_blocks
+                if any(any(sig in k for sig in nte_signatures) for k in kb.keys()):
                     return obj
+
+        for obj in candidates:
+            if obj.type == 'MESH' and obj.data and obj.data.shape_keys:
+                n = obj.name.lower()
+                if any(k in n for k in ["face", "head", "skin", "player_", "npc_"]):
+                    if not any(ign in n for ign in ["weapon", "gun", "sword"]):
+                        return obj
+        return None
+
+    if armature is not None:
+        arm_meshes = [
+            obj for obj in bpy.data.objects
+            if obj.type == 'MESH' and obj.data and obj.data.shape_keys
+            and (obj.parent == armature or any(m.type == 'ARMATURE' and m.object == armature for m in obj.modifiers))
+        ]
+        found = _search(arm_meshes)
+        if found is not None:
+            return found
+        if arm_meshes:
+            return arm_meshes[0]
+
+    found = _search(bpy.data.objects)
+    if found is not None:
+        return found
 
     for obj in bpy.context.view_layer.objects:
         if obj.type == 'MESH' and obj.data and obj.data.shape_keys:
@@ -964,6 +983,7 @@ def plan_nte_controls(mesh_obj, armature, head_name, keyblock, wgt_coll=None, un
             unique_tag=unique_tag,
             collection_name=FACERIG_SECONDARY_COLLECTION,
             armature=armature,
+            face_center=fcx,
         )
         controls.extend(panel_ctrls)
 
@@ -1526,17 +1546,20 @@ def cleanup_head_driver_to_wgts_if_present(armature=None, head_name=None):
         pass
 
 
-def nte_face_rig_main():
-    faceobj = find_face_mesh()
+def nte_face_rig_main(armature=None, faceobj=None):
+    if faceobj is None:
+        faceobj = find_face_mesh(armature=armature)
     if faceobj is None:
         print("NTE Face Rig: No face mesh found.")
-        return
+        return 0
     if faceobj.data.shape_keys is None:
         print("NTE Face Rig: Face mesh has no shape keys.")
-        return
+        return 0
 
     keyblock = faceobj.data.shape_keys.key_blocks
-    armature, head_name = find_armature_and_head(faceobj)
+    resolved_armature, head_name = find_armature_and_head(faceobj)
+    if armature is None:
+        armature = resolved_armature
     fwd, right, up, face_size, fcx = get_face_metrics(faceobj, armature, head_name)
 
     if CLEAN_REBUILD:
@@ -1547,7 +1570,7 @@ def nte_face_rig_main():
 
     if not controls:
         print("NTE Face Rig: No drivable shape keys found.")
-        return
+        return 0
 
     setup_nte_face_rig(faceobj, controls, armature, head_name, fwd, up, face_size, keyblock)
 
@@ -1557,6 +1580,41 @@ def nte_face_rig_main():
     cleanup_head_driver_to_wgts_if_present(armature, head_name)
 
     print(f"\nNTE Face Rig complete: {len(controls)} controls built on '{armature.name}'.\n")
+    return len(controls)
+
+
+class NTE_OT_CreateShapekeyPanel(bpy.types.Operator):
+    """Creates or rebuilds the 3D facial shapekey control panel for an NTE character"""
+    bl_idname = "neverness_to_everness.create_shapekey_panel"
+    bl_label = "Create Shapekey Panel"
+    bl_description = "Creates or rebuilds the 3D facial shapekey control panel for the selected NTE character"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        from setup_wizard.character_rig_setup.rig_ui_utils import find_target_armature
+        armature = find_target_armature(context)
+        faceobj = None
+        active = context.active_object
+        if active and active.type == 'MESH' and active.data and active.data.shape_keys:
+            faceobj = active
+            if armature is None:
+                for m in active.modifiers:
+                    if m.type == 'ARMATURE' and m.object:
+                        armature = m.object
+                        break
+
+        try:
+            count = nte_face_rig_main(armature=armature, faceobj=faceobj)
+        except Exception as ex:
+            self.report({'ERROR'}, f"Failed to create NTE Shapekey Panel: {ex}")
+            return {'CANCELLED'}
+
+        if not count:
+            self.report({'WARNING'}, "No NTE face mesh with drivable shape keys found.")
+            return {'CANCELLED'}
+
+        self.report({'INFO'}, f"Created NTE Shapekey Panel ({count} controls).")
+        return {'FINISHED'}
 
 
 if __name__ == "__main__":

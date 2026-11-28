@@ -95,6 +95,12 @@ class HSR_PT_Basic_Setup_Wizard_UI_Layout(Panel, HonkaiStarRailUIRenderChecker):
 
         OperatorFactory.create_rig_character_ui(sub_layout)
 
+        sub_layout.operator(
+            "honkai_star_rail.create_shapekey_panel",
+            text="Create Shapekey Panel",
+            icon="FACE_MAPS",
+        )
+
         OperatorFactory.create(
             sub_layout,
             "honkai_star_rail.finish_setup",

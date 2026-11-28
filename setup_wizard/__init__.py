@@ -58,6 +58,13 @@ else:
     )
     from setup_wizard.character_rig_setup.ake_face_rig import (
         AKE_OT_SetUpIsaacFaceRig,
+        AKE_OT_CreateShapekeyPanel,
+    )
+    from setup_wizard.character_rig_setup.hsr_face_rig import (
+        HSR_OT_CreateShapekeyPanel,
+    )
+    from setup_wizard.character_rig_setup.nte_face_rig import (
+        NTE_OT_CreateShapekeyPanel,
     )
     from setup_wizard.character_rig_setup.character_rigger_props import (
         CharacterRiggerPropertyGroup,
@@ -488,6 +495,9 @@ else:
         AKE_OT_FinishSetup,
         AKE_OT_SetupCompositorNodes,
         AKE_OT_SetUpIsaacFaceRig,
+        AKE_OT_CreateShapekeyPanel,
+        HSR_OT_CreateShapekeyPanel,
+        NTE_OT_CreateShapekeyPanel,
         PGR_OT_FinishSetup,
         HI3_OT_FinishSetup,
         HNA_OT_FinishSetup,
