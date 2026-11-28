@@ -1,13 +1,16 @@
 import bpy
 import bmesh
-from typing import List, Tuple, Set
+from mathutils import Vector
+from mathutils.bvhtree import BVHTree
+from typing import List, Tuple, Set, Optional
 
 try:
-    from ..utils.modifier_utils import set_modifier_property
+    from ..utils.modifier_utils import get_modifier_property, set_modifier_property
 except ImportError:
     try:
-        from setup_wizard.utils.modifier_utils import set_modifier_property
+        from setup_wizard.utils.modifier_utils import get_modifier_property, set_modifier_property
     except ImportError:
+        get_modifier_property = None
         set_modifier_property = None
 
 
@@ -218,6 +221,13 @@ def configure_material_eye_through_hair_nodes(mat: bpy.types.Material) -> bool:
     if "Value" in aov_mask.inputs:
         aov_mask.inputs["Value"].default_value = 0.0
 
+    # Prevent duplicated EyeThroughHair materials from writing Hair Shadows face/hair masks
+    for n in list(nodes):
+        if n.type == 'OUTPUT_AOV' and n.get('csw_hair_shadow_output'):
+            aov_lower = (getattr(n, "aov_name", "") or "").lower()
+            if "face mask" in aov_lower or "hair mask" in aov_lower:
+                nodes.remove(n)
+
     return True
 
 
@@ -381,25 +391,186 @@ def isolate_and_assign_eye_through_hair_materials(obj: bpy.types.Object) -> List
     return created_materials
 
 
-def configure_hair_materials_blended(context: bpy.types.Context) -> int:
+def _collect_selected_face_rays(objs: List[bpy.types.Object]) -> List[Tuple[Vector, Vector]]:
+    """Collect world-space (center, normal) rays from selected faces on target meshes."""
+    rays: List[Tuple[Vector, Vector]] = []
+    for obj in objs:
+        if not obj or obj.type != 'MESH' or not obj.data:
+            continue
+        mw = obj.matrix_world
+        try:
+            nm = mw.to_3x3().inverted().transposed()
+        except ValueError:
+            nm = mw.to_3x3()
+        if obj.mode == 'EDIT':
+            bm = bmesh.from_edit_mesh(obj.data)
+            bm.faces.ensure_lookup_table()
+            faces = [f for f in bm.faces if f.select]
+            if not faces:
+                faces = [f for f in bm.faces if any(v.select for v in f.verts)]
+            for f in faces:
+                n = (nm @ f.normal)
+                if n.length > 1e-6:
+                    rays.append((mw @ f.calc_center_median(), n.normalized()))
+        else:
+            for p in obj.data.polygons:
+                if p.select:
+                    n = (nm @ p.normal)
+                    if n.length > 1e-6:
+                        rays.append((mw @ p.center, n.normalized()))
+    return rays
+
+
+def _collect_paired_outline_materials(obj: bpy.types.Object, hair_mats: Set[bpy.types.Material]) -> List[bpy.types.Material]:
+    """Find outline materials paired with hair_mats in Geometry Nodes Outlines modifiers."""
+    if not obj or not getattr(obj, "modifiers", None) or not hair_mats or not get_modifier_property:
+        return []
+    paired: List[bpy.types.Material] = []
+    for mod in obj.modifiers:
+        if getattr(mod, "type", None) != 'NODES' or not getattr(mod, "node_group", None):
+            continue
+        ng = mod.node_group
+        if "outline" not in (mod.name or "").lower() and "outline" not in (ng.name or "").lower():
+            continue
+        sockets_by_name = {}
+        for item in ng.interface.items_tree:
+            if item.item_type == 'SOCKET' and item.in_out == 'INPUT' and item.socket_type == 'NodeSocketMaterial':
+                sockets_by_name[item.name] = item.identifier
+        for s_name, s_id in sockets_by_name.items():
+            if s_name.lower().endswith("outline"):
+                continue
+            val = get_modifier_property(mod, s_id)
+            if val in hair_mats:
+                ol_id = sockets_by_name.get(f"{s_name} Outline")
+                if ol_id:
+                    ol_mat = get_modifier_property(mod, ol_id)
+                    if isinstance(ol_mat, bpy.types.Material) and ol_mat not in paired:
+                        paired.append(ol_mat)
+    return paired
+
+
+def _detect_occluding_hair_materials(
+    context: bpy.types.Context,
+    target_objs: List[bpy.types.Object],
+    selected_eye_rays: List[Tuple[Vector, Vector]],
+) -> List[Tuple[bpy.types.Object, bpy.types.Material]]:
     """
-    Finds hair objects and materials in the scene (including NTE 'mrim' material)
+    Detect hair materials that don't have 'hair' in their mesh/material name
+    (e.g. ZZZ characters like Rina/Belle/Wise/Robin/Vivian whose hair lives in Body_2).
+    Uses:
+    1. Forward raycasts from selected eye/eyebrow faces onto visible non-target meshes.
+    2. Hair-bone vertex-group fallback on meshes sharing the same armature.
+    """
+    detected: List[Tuple[bpy.types.Object, bpy.types.Material]] = []
+    seen: Set[Tuple[str, str]] = set()
+    target_set = set(target_objs or [])
+    target_armatures = {o.find_armature() for o in target_set if o.type == 'MESH' and o.find_armature()}
+    ignored_obj_keywords = ("hairshadow", "wgt", "colorwheel", "panel", "widget", "eyeglass", "glasses")
+    hair_vg_keywords = ("hair", "hari", "pelo", "bang", "ahoge", "ponytail", "twintail")
+
+    # Subsample rays if there are many selected faces to keep it fast
+    rays = selected_eye_rays or []
+    if len(rays) > 256:
+        step = max(1, len(rays) // 256)
+        rays = rays[::step]
+    eye_center = (sum((pt for pt, _ in rays), Vector()) / len(rays)) if rays else None
+
+    def add_mat(obj: bpy.types.Object, mat: Optional[bpy.types.Material]):
+        if not mat or _is_eye_through_hair_material(mat):
+            return
+        m_low = mat.name.lower()
+        if any(k in m_low for k in ("eye transparent", "eyeglass", "glasses", "transp ol")):
+            return
+        key = (obj.name, mat.name)
+        if key not in seen:
+            seen.add(key)
+            detected.append((obj, mat))
+
+    for obj in context.scene.objects:
+        if obj.type != 'MESH' or obj in target_set or not obj.data or not obj.data.polygons:
+            continue
+        if obj.hide_viewport or obj.hide_render or obj.get("csw_hair_shadow_proxy"):
+            continue
+        o_low = obj.name.lower()
+        if any(k in o_low for k in ignored_obj_keywords) or "face" in o_low or "weapon" in o_low:
+            continue
+
+        # 1. Geometric raycast in front of selected eye/eyebrow faces
+        if rays:
+            mw = obj.matrix_world
+            verts = [mw @ v.co for v in obj.data.vertices]
+            polys = [list(p.vertices) for p in obj.data.polygons]
+            try:
+                bvh = BVHTree.FromPolygons(verts, polys)
+            except Exception:
+                bvh = None
+            if bvh:
+                hit_slots: Set[int] = set()
+                for pt, n in rays:
+                    loc, _norm, idx, _dist = bvh.ray_cast(pt + n * 0.001, n, 0.25)
+                    if loc is not None and 0 <= idx < len(obj.data.polygons):
+                        hit_slots.add(obj.data.polygons[idx].material_index)
+                for slot_idx in hit_slots:
+                    if 0 <= slot_idx < len(obj.material_slots):
+                        add_mat(obj, obj.material_slots[slot_idx].material)
+
+        # 2. Hair-bone vertex group fallback for same-character meshes near the eyes/head
+        if target_armatures and obj.find_armature() in target_armatures and obj.vertex_groups:
+            hair_vg_indices = {
+                vg.index for vg in obj.vertex_groups
+                if any(k in vg.name.lower() for k in hair_vg_keywords)
+            }
+            if hair_vg_indices:
+                mw = obj.matrix_world
+                hair_verts = {
+                    v.index for v in obj.data.vertices
+                    if any(g.group in hair_vg_indices and g.weight > 0.2 for g in v.groups)
+                    and (eye_center is None or ((mw @ v.co) - eye_center).length < 0.35)
+                }
+                if hair_verts:
+                    slot_hits: Set[int] = set()
+                    for p in obj.data.polygons:
+                        if any(vi in hair_verts for vi in p.vertices):
+                            slot_hits.add(p.material_index)
+                    for slot_idx in slot_hits:
+                        if 0 <= slot_idx < len(obj.material_slots):
+                            add_mat(obj, obj.material_slots[slot_idx].material)
+
+    return detected
+
+
+def _is_hair_shadow_dithered_material(mat: bpy.types.Material) -> bool:
+    if not mat:
+        return False
+    return bool(mat.get("csw_hair_shadow_dithered")) or "_hairshadowdithered" in mat.name.lower()
+
+
+def configure_hair_materials_blended(
+    context: bpy.types.Context,
+    target_objs: Optional[List[bpy.types.Object]] = None,
+    selected_eye_rays: Optional[List[Tuple[Vector, Vector]]] = None,
+) -> int:
+    """
+    Finds hair objects and materials in the scene (including NTE 'mrim' material
+    and ZZZ characters whose hair is inside a Body_* mesh)
     and ensures they use 'BLENDED' (Eevee Next) / 'BLEND' (legacy Eevee) render method.
-    Disables use_transparency_overlap on hair mesh materials and HSR outlines.
+    Disables use_transparency_overlap on hair mesh materials and HSR/ZZZ hair outlines.
     Other games' outline settings are preserved.
-    Explicitly ignores eye-through-hair materials (_EyeThroughHair, _SeeThrough) so they
+    Explicitly ignores eye-through-hair materials (_EyeThroughHair, _SeeThrough)
+    and Hair Shadows render-layer dithered copies (_HairShadowDithered) so they
     remain DITHERED.
     """
     count = 0
     hair_keywords = ("hair", "pelo", "bangs", "mrim")
     outline_keywords = ("outline", "_ol", "mrim")
     processed_materials = set()
+    blended_hair_mats_by_obj: dict = {}
 
-    def process_material(mat: bpy.types.Material, is_hair_mesh_obj: bool, is_outline_obj: bool):
+    def process_material(mat: bpy.types.Material, is_hair_mesh_obj: bool, is_outline_obj: bool, force_no_overlap: bool = False):
         nonlocal count
         if not mat or mat.name in processed_materials:
             return
-        if "_eyethroughhair" in mat.name.lower() or "_seethrough" in mat.name.lower():
+        if _is_eye_through_hair_material(mat) or _is_hair_shadow_dithered_material(mat):
             return
         processed_materials.add(mat.name)
 
@@ -414,7 +585,8 @@ def configure_hair_materials_blended(context: bpy.types.Context) -> int:
             modified = True
 
         is_hsr_outline = is_outline and mat.name.lower().startswith(('stellartoon', 'hsr -'))
-        if not is_outline or is_hsr_outline:
+        is_zzz_outline = is_outline and mat.name.lower().startswith('zzz ')
+        if not is_outline or is_hsr_outline or is_zzz_outline or force_no_overlap:
             if hasattr(mat, "use_transparency_overlap") and mat.use_transparency_overlap:
                 mat.use_transparency_overlap = False
                 modified = True
@@ -425,24 +597,39 @@ def configure_hair_materials_blended(context: bpy.types.Context) -> int:
     # 1. Check all mesh objects with hair in their name
     for o in context.scene.objects:
         if o.type == 'MESH':
+            if o.get("csw_hair_shadow_proxy"):
+                continue
             is_hair_obj = any(k in o.name.lower() for k in hair_keywords)
             is_outline_obj = any(k in o.name.lower() for k in outline_keywords)
             for slot in o.material_slots:
                 mat = slot.material
                 if not mat:
                     continue
-                if "_eyethroughhair" in mat.name.lower() or "_seethrough" in mat.name.lower():
+                if _is_eye_through_hair_material(mat) or _is_hair_shadow_dithered_material(mat):
                     continue
                 is_hair_mat = any(k in mat.name.lower() for k in hair_keywords)
                 if is_hair_obj or is_hair_mat:
                     process_material(mat, is_hair_mesh_obj=is_hair_obj and not is_outline_obj, is_outline_obj=is_outline_obj)
+                    if not is_outline_obj:
+                        blended_hair_mats_by_obj.setdefault(o, set()).add(mat)
 
     # 2. Check all materials in bpy.data.materials as fallback
     for mat in bpy.data.materials:
-        if "_eyethroughhair" in mat.name.lower() or "_seethrough" in mat.name.lower():
+        if _is_eye_through_hair_material(mat) or _is_hair_shadow_dithered_material(mat):
             continue
         if any(k in mat.name.lower() for k in hair_keywords):
             process_material(mat, is_hair_mesh_obj=True, is_outline_obj=False)
+
+    # 3. Geometric & hair-bone detection for characters whose hair is inside Body_* meshes (e.g. ZZZ Rina/Belle/Wise/Vivian)
+    if target_objs or selected_eye_rays:
+        for obj, mat in _detect_occluding_hair_materials(context, target_objs or [], selected_eye_rays or []):
+            process_material(mat, is_hair_mesh_obj=True, is_outline_obj=False)
+            blended_hair_mats_by_obj.setdefault(obj, set()).add(mat)
+
+    # 4. Also set paired Geometry Nodes outline materials (e.g. ZZZ Body 2 Outlines) to BLENDED
+    for obj, mats in blended_hair_mats_by_obj.items():
+        for ol_mat in _collect_paired_outline_materials(obj, mats):
+            process_material(ol_mat, is_hair_mesh_obj=False, is_outline_obj=True)
 
     return count
 
@@ -541,6 +728,9 @@ def execute_eye_through_hair(context: bpy.types.Context) -> Tuple[bool, str]:
     view_layer = context.view_layer
     ensure_aov_passes(view_layer)
 
+    # Collect world-space rays from selected faces before duplication alters selection
+    selected_eye_rays = _collect_selected_face_rays(target_objs)
+
     # Step 2: Isolate materials & configure shader nodes across all target objects
     all_created_materials = []
     processed_objects = []
@@ -555,7 +745,9 @@ def execute_eye_through_hair(context: bpy.types.Context) -> Tuple[bool, str]:
         return False, "No faces were selected on any target mesh. Please select eye/eyebrow faces in Edit Mode."
 
     # Step 3: Hair materials to BLENDED
-    hair_count = configure_hair_materials_blended(context)
+    hair_count = configure_hair_materials_blended(
+        context, target_objs=target_objs, selected_eye_rays=selected_eye_rays
+    )
 
     # Step 3b: Ensure all eye through hair materials are set to DITHERED
     for mat in all_created_materials:
