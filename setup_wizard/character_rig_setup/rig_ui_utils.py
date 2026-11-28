@@ -860,6 +860,8 @@ def distribute_standard_rig_bones(
             or any(k in b_low for k in weapon_keywords)
             or (detect_prop_keyword and "prop" in b_low and "parent" not in b_low)
             or "_wpn_" in b_low
+            or "_wp_" in b_low
+            or b_low.startswith("wp_")
             or "_weapon_" in b_low
             or "_garape_" in b_low
             or "_grape_" in b_low
